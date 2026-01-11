@@ -12,7 +12,7 @@
     "dev:cloudflare": "pnpm --filter cloudflare-workers dev",
     "dev": "concurrently \"pnpm dev:vercel\" \"pnpm dev:widget\"",
     "changeset": "changeset",
-    "release": "pnpm build && changeset publish"
+    "release": "changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
