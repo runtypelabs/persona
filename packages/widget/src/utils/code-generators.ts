@@ -1,4 +1,5 @@
 import type { AgentWidgetConfig } from "../types";
+import { VERSION } from "../version";
 
 type ParserType = "plain" | "json" | "regex-json" | "xml";
 export type CodeFormat = "esm" | "script-installer" | "script-manual" | "script-advanced" | "react-component" | "react-advanced";
@@ -1351,7 +1352,7 @@ function generateScriptInstallerCode(config: any): string {
   // Escape single quotes in JSON for HTML attribute
   const configJson = JSON.stringify(serializableConfig, null, 0).replace(/'/g, "&#39;");
   
-  return `<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js" data-config='${configJson}'></script>`;
+  return `<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist/install.global.js" data-config='${configJson}'></script>`;
 }
 
 function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): string {
@@ -1361,10 +1362,10 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
 
   const lines: string[] = [
     "<!-- Load CSS -->",
-    "<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/widget.css\" />",
+    `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist/widget.css" />`,
     "",
     "<!-- Load JavaScript -->",
-    "<script src=\"https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/index.global.js\"></script>",
+    `<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist/index.global.js"></script>`,
     "",
     "<!-- Initialize widget -->",
     "<script>",
@@ -1523,7 +1524,7 @@ function generateScriptAdvancedCode(config: any, options?: CodeGeneratorOptions)
     `  var CONFIG = ${configJson.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n')};`,
     "",
     "  // Constants",
-    "  var CDN_BASE = 'https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist';",
+    `  var CDN_BASE = 'https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist';`,
     "  var STORAGE_KEY = 'chat-widget-state';",
     "  var PROCESSED_ACTIONS_KEY = 'chat-widget-processed-actions';",
     "",
