@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateCodeSnippet, type CodeFormat, type CodeGeneratorHooks, type CodeGeneratorOptions as _CodeGeneratorOptions } from "./code-generators";
+import { VERSION } from "../version";
 
 // =============================================================================
 // Test Fixtures
@@ -496,5 +497,38 @@ describe("Backward Compatibility", () => {
 
     expect(code).toContain("import");
     expect(code).toContain("from");
+  });
+});
+
+// =============================================================================
+// CDN Version Tests
+// =============================================================================
+
+describe("CDN Version", () => {
+  it("should use package version instead of @latest in script-installer format", () => {
+    const code = generateCodeSnippet(minimalConfig, "script-installer");
+
+    expect(code).toContain(`@runtypelabs/persona@${VERSION}`);
+    expect(code).not.toContain("@latest");
+  });
+
+  it("should use package version instead of @latest in script-manual format", () => {
+    const code = generateCodeSnippet(minimalConfig, "script-manual");
+
+    expect(code).toContain(`@runtypelabs/persona@${VERSION}/dist/widget.css`);
+    expect(code).toContain(`@runtypelabs/persona@${VERSION}/dist/index.global.js`);
+    expect(code).not.toContain("@latest");
+  });
+
+  it("should use package version instead of @latest in script-advanced format", () => {
+    const code = generateCodeSnippet(minimalConfig, "script-advanced");
+
+    expect(code).toContain(`@runtypelabs/persona@${VERSION}/dist`);
+    expect(code).not.toContain("@latest");
+  });
+
+  it("should have a valid semver version format", () => {
+    // Verify VERSION looks like a semver (e.g., "1.36.1")
+    expect(VERSION).toMatch(/^\d+\.\d+\.\d+/);
   });
 });
