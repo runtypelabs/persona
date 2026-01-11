@@ -1618,7 +1618,120 @@ export type AgentWidgetMessage = {
    * Populated automatically when structured parsers run.
    */
   rawContent?: string;
+  /**
+   * LLM-specific content for API requests.
+   * When present, this is sent to the LLM instead of `content`.
+   *
+   * Priority for API payload:
+   * 1. `contentParts` (if present, used as-is for multi-modal)
+   * 2. `llmContent` (if present, sent as string)
+   * 3. `rawContent` (backward compatibility with structured parsers)
+   * 4. `content` (fallback - display content)
+   *
+   * The `content` field is always used for UI display.
+   *
+   * @example
+   * // Show full details to user, send summary to LLM
+   * {
+   *   content: "**Product:** iPhone 15 Pro\n**Price:** $1,199\n**SKU:** IP15P-256",
+   *   llmContent: "[Product search: iPhone 15 Pro, $1199]"
+   * }
+   */
+  llmContent?: string;
 };
+
+// ============================================================================
+// Message Injection Types
+// ============================================================================
+
+/**
+ * Options for injecting a message into the conversation.
+ * Supports dual-content where UI display differs from LLM context.
+ *
+ * @example
+ * // Same content for user and LLM
+ * {
+ *   role: 'assistant',
+ *   content: 'Here are your search results...'
+ * }
+ *
+ * @example
+ * // Different content: user sees full details, LLM sees summary
+ * {
+ *   role: 'assistant',
+ *   content: '**Found 3 products:**\n- iPhone 15 Pro ($1,199)\n- iPhone 15 ($999)',
+ *   llmContent: '[Search results: 3 iPhones, $999-$1199]'
+ * }
+ */
+export type InjectMessageOptions = {
+  /**
+   * Message role: "assistant", "user", or "system"
+   */
+  role: AgentWidgetMessageRole;
+
+  /**
+   * Content displayed to the user in the chat UI.
+   * This is what appears in the message bubble.
+   */
+  content: string;
+
+  /**
+   * Content sent to the LLM in API requests.
+   * When omitted, `content` is used for both display and LLM.
+   *
+   * Use cases:
+   * - Redacted content: Show full product details to user, send summary to LLM
+   * - Structured data: Show formatted markdown to user, send JSON to LLM
+   * - Token optimization: Show verbose content to user, send concise version to LLM
+   */
+  llmContent?: string;
+
+  /**
+   * Multi-modal content parts for the LLM (images, files).
+   * Takes precedence over `llmContent` when present.
+   * The `content` field is still used for UI display.
+   */
+  contentParts?: ContentPart[];
+
+  /**
+   * Optional message ID. If omitted, auto-generated based on role.
+   */
+  id?: string;
+
+  /**
+   * Optional creation timestamp (ISO string). If omitted, uses current time.
+   */
+  createdAt?: string;
+
+  /**
+   * Optional sequence number for ordering.
+   */
+  sequence?: number;
+
+  /**
+   * Whether the message is still streaming (for incremental updates).
+   * @default false
+   */
+  streaming?: boolean;
+};
+
+/**
+ * Options for injecting assistant messages (most common case).
+ * Role defaults to 'assistant'.
+ */
+export type InjectAssistantMessageOptions = Omit<InjectMessageOptions, "role">;
+
+/**
+ * Options for injecting user messages.
+ * Role defaults to 'user'.
+ */
+export type InjectUserMessageOptions = Omit<InjectMessageOptions, "role">;
+
+/**
+ * Options for injecting system messages.
+ * Role defaults to 'system'.
+ */
+export type InjectSystemMessageOptions = Omit<InjectMessageOptions, "role">;
 
 export type AgentWidgetEvent =
   | { type: "message"; message: AgentWidgetMessage }

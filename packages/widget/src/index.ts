@@ -48,7 +48,12 @@ export type {
   ClientInitResponse,
   ClientChatRequest,
   ClientFeedbackRequest,
-  ClientFeedbackType
+  ClientFeedbackType,
+  // Message injection types
+  InjectMessageOptions,
+  InjectAssistantMessageOptions,
+  InjectUserMessageOptions,
+  InjectSystemMessageOptions
 } from "./types";
 
 export { initAgentWidgetFn as initAgentWidget };

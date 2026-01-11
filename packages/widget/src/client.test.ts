@@ -193,6 +193,192 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
   });
 });
 
+describe('AgentWidgetClient - llmContent Priority', () => {
+  let client: AgentWidgetClient;
+  let capturedPayload: any = null;
+
+  beforeEach(() => {
+    capturedPayload = null;
+    client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+    });
+  });
+
+  it('should use llmContent instead of content when provided', async () => {
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const messages: AgentWidgetMessage[] = [
+      {
+        id: 'usr_1',
+        role: 'user',
+        content: 'Display content for user',
+        llmContent: 'LLM-specific content with more context',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      },
+    ];
+
+    await client.dispatch({ messages }, () => {});
+
+    expect(capturedPayload).toBeDefined();
+    expect(capturedPayload.messages).toHaveLength(1);
+    // Should use llmContent, not content
+    expect(capturedPayload.messages[0].content).toBe('LLM-specific content with more context');
+  });
+
+  it('should fall back to content when llmContent is not provided', async () => {
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const messages: AgentWidgetMessage[] = [
+      {
+        id: 'usr_1',
+        role: 'user',
+        content: 'Regular content without llmContent',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      },
+    ];
+
+    await client.dispatch({ messages }, () => {});
+
+    expect(capturedPayload).toBeDefined();
+    expect(capturedPayload.messages).toHaveLength(1);
+    expect(capturedPayload.messages[0].content).toBe('Regular content without llmContent');
+  });
+
+  it('should prioritize contentParts over llmContent', async () => {
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const messages: AgentWidgetMessage[] = [
+      {
+        id: 'usr_1',
+        role: 'user',
+        content: 'Display content',
+        llmContent: 'LLM content (should be ignored)',
+        contentParts: [{ type: 'text', text: 'Multi-modal text' }] as any,
+        createdAt: '2025-01-01T00:00:00.000Z',
+      },
+    ];
+
+    await client.dispatch({ messages }, () => {});
+
+    expect(capturedPayload).toBeDefined();
+    expect(capturedPayload.messages).toHaveLength(1);
+    // Should use contentParts, not llmContent
+    expect(capturedPayload.messages[0].content).toEqual([{ type: 'text', text: 'Multi-modal text' }]);
+  });
+
+  it('should preserve messages with valid llmContent even if content is empty', async () => {
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const messages: AgentWidgetMessage[] = [
+      {
+        id: 'ast_1',
+        role: 'assistant',
+        content: '', // Empty display content
+        llmContent: '[Context: User viewing product details]', // But has llmContent
+        createdAt: '2025-01-01T00:00:00.000Z',
+      },
+    ];
+
+    await client.dispatch({ messages }, () => {});
+
+    expect(capturedPayload.messages).toHaveLength(1);
+    expect(capturedPayload.messages[0].content).toBe('[Context: User viewing product details]');
+  });
+
+  it('should support dual-content pattern for redaction', async () => {
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    // Simulate a conversation with dual-content messages
+    const messages: AgentWidgetMessage[] = [
+      {
+        id: 'usr_1',
+        role: 'user',
+        content: 'Search for iPhones',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'ast_1',
+        role: 'assistant',
+        // User sees full product details
+        content: '**Found 3 products:**\n- iPhone 15 Pro - $1,199\n- iPhone 15 - $999\n- iPhone 14 - $799',
+        // LLM receives concise summary
+        llmContent: '[Search results: 3 iPhones found, $799-$1199]',
+        createdAt: '2025-01-01T00:00:01.000Z',
+      },
+      {
+        id: 'usr_2',
+        role: 'user',
+        content: 'Tell me more about the first one',
+        createdAt: '2025-01-01T00:00:02.000Z',
+      },
+    ];
+
+    await client.dispatch({ messages }, () => {});
+
+    expect(capturedPayload).toBeDefined();
+    expect(capturedPayload.messages).toHaveLength(3);
+
+    // First message: regular user message
+    expect(capturedPayload.messages[0].content).toBe('Search for iPhones');
+
+    // Second message: assistant with llmContent (should use redacted version)
+    expect(capturedPayload.messages[1].content).toBe('[Search results: 3 iPhones found, $799-$1199]');
+
+    // Third message: regular user message
+    expect(capturedPayload.messages[2].content).toBe('Tell me more about the first one');
+  });
+});
+
 describe('AgentWidgetClient - JSON Streaming', () => {
   let client: AgentWidgetClient;
   let events: AgentWidgetEvent[] = [];
