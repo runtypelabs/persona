@@ -1,5 +1,29 @@
 # @runtypelabs/persona-proxy
 
+## 1.37.0
+
+### Minor Changes
+
+- 28132f6: Rename travrse to runtype and update API URLs
+
+  - Update all references from "travrse" to "runtype" throughout codebase
+  - Change API endpoint from api.travrse.ai to api.runtype.com
+  - Update environment variable names (TRAVRSE_API_KEY -> RUNTYPE_API_KEY)
+  - Update data attribute from data-travrse-token to data-runtype-token
+  - Update CSS variable names from --travrse-_ to --runtype-_
+  - Rename types TravrseFlowConfig -> RuntypeFlowConfig (with deprecated aliases)
+
+  **Breaking Changes:**
+
+  - Default API endpoint changed to `api.runtype.com`
+  - Data attribute changed from `data-travrse-token` to `data-runtype-token`
+  - CSS variables renamed from `--travrse-*` to `--runtype-*`
+
+  **Backwards Compatibility:**
+
+  - `TRAVRSE_API_KEY` environment variable is still supported as a fallback
+  - `TravrseFlowStep` and `TravrseFlowConfig` types are exported as deprecated aliases
+
 ## 1.36.1
 
 ### Patch Changes
