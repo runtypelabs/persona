@@ -1,0 +1,18 @@
+# Copy this file to .dev.vars and fill in your actual values
+# .dev.vars is gitignored and used for local development
+
+# Required: Your Travrse API key
+TRAVRSE_API_KEY=tv_test_your_api_key_here
+
+# Optional: Flow IDs for specific chat endpoints
+# If set, these will be used instead of the hardcoded flow configurations
+# FLOW_ID_FORM_DIRECTIVE=flow_your_form_directive_flow_id_here
+# FLOW_ID_SHOPPING_ASSISTANT=flow_your_shopping_assistant_flow_id_here
+# FLOW_ID_SHOPPING_ASSISTANT_METADATA=flow_your_shopping_metadata_flow_id_here
+
+# Optional: Stripe secret key for checkout functionality
+# Required for /api/checkout endpoint and shopping assistant checkout actions
+# STRIPE_SECRET_KEY=sk_test_your_stripe_key_here
+
+# Optional: Allowed origins for CORS (comma-separated or "*" for all)
+# ALLOWED_ORIGINS=http://localhost:5173,http://localhost:4173

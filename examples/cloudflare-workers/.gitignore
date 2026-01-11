@@ -1,0 +1,13 @@
+# Environment variables
+.dev.vars
+
+# Wrangler
+.wrangler/
+wrangler.toml.backup
+
+# Build output
+dist/
+.cache/
+
+# Dependencies
+node_modules/

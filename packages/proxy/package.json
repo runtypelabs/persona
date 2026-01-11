@@ -1,0 +1,60 @@
+{
+  "name": "@runtypelabs/persona-proxy",
+  "version": "1.36.0",
+  "description": "Proxy server for @runtypelabs/persona widget - handles flow configuration and forwards requests to AI backends.",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "rimraf dist && tsup src/index.ts --format esm,cjs --dts --sourcemap",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.4.9"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "rimraf": "^5.0.5",
+    "tsup": "^8.0.1",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "proxy",
+    "server",
+    "persona",
+    "chat",
+    "typescript",
+    "agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/runtypelabs/persona.git",
+    "directory": "packages/proxy"
+  },
+  "bugs": {
+    "url": "https://github.com/runtypelabs/persona/issues"
+  },
+  "homepage": "https://github.com/runtypelabs/persona/tree/main/packages/proxy#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}

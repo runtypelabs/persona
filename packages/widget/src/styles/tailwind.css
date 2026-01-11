@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Widget CSS Variables - scoped to widget root to avoid polluting global namespace */
+  #persona-root {
+    --travrse-primary: #111827;
+    --travrse-secondary: #4338ca;
+    --travrse-surface: #ffffff;
+    --travrse-muted: #6b7280;
+    --travrse-accent: #1d4ed8;
+  }
+}
+
+@layer components {
+  .tvw-widget-shadow {
+    box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35);
+  }
+}

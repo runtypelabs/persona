@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Client Token Feedback Demo - Automatic Feedback Submission</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0d9488;
+      --primary-dark: #0f766e;
+      --secondary: #8b5cf6;
+      --dark: #0f172a;
+      --dark-2: #1e293b;
+      --body-color: #64748b;
+      --body-bg: #f8fafc;
+      --white: #ffffff;
+      --border: #e2e8f0;
+      --success: #10b981;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--body-bg);
+      color: var(--body-color);
+      line-height: 1.6;
+      font-size: 16px;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, var(--dark) 0%, var(--dark-2) 100%);
+      padding: 40px 24px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 50%, rgba(13, 148, 136, 0.15) 0%, transparent 50%),
+        radial-gradient(circle at 80% 50%, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .header-content {
+      position: relative;
+      z-index: 1;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--white);
+      margin-bottom: 20px;
+      backdrop-filter: blur(8px);
+    }
+
+    .badge-icon {
+      font-size: 16px;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 16px;
+      line-height: 1.2;
+    }
+
+    h1 span {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-description {
+      font-size: 17px;
+      color: rgba(255, 255, 255, 0.7);
+      max-width: 600px;
+      margin: 0 auto 24px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .back-link:hover {
+      color: var(--white);
+    }
+
+    /* Main Layout */
+    .main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 32px;
+      align-items: start;
+    }
+
+    @media (max-width: 968px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--white);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, rgba(13, 148, 136, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--dark);
+    }
+
+    .card-content {
+      padding: 24px;
+    }
+
+    /* Highlight Box */
+    .highlight-box {
+      background: linear-gradient(135deg, rgba(13, 148, 136, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+      border: 1px solid rgba(13, 148, 136, 0.2);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .highlight-box h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--dark);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .highlight-box p {
+      font-size: 14px;
+      color: var(--body-color);
+      margin: 0;
+    }
+
+    .highlight-box code {
+      background: rgba(13, 148, 136, 0.15);
+      color: var(--primary-dark);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    }
+
+    /* Code Comparison */
+    .comparison {
+      display: grid;
+      gap: 16px;
+    }
+
+    .comparison-item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .comparison-header {
+      padding: 12px 16px;
+      background: var(--body-bg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .comparison-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--dark);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .comparison-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 100px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .comparison-badge.before {
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+    }
+
+    .comparison-badge.after {
+      background: rgba(16, 185, 129, 0.1);
+      color: #059669;
+    }
+
+    .comparison-code {
+      padding: 16px;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      overflow-x: auto;
+      background: var(--white);
+    }
+
+    .comparison-code .comment { color: #64748b; }
+    .comparison-code .keyword { color: #8b5cf6; }
+    .comparison-code .string { color: #059669; }
+    .comparison-code .property { color: #0d9488; }
+    .comparison-code .strikethrough { 
+      text-decoration: line-through; 
+      opacity: 0.5;
+    }
+
+    /* Feature List */
+    .feature-list {
+      list-style: none;
+      margin: 24px 0 0 0;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      color: var(--dark-2);
+    }
+
+    .feature-list li:last-child {
+      border-bottom: none;
+    }
+
+    .feature-icon {
+      width: 24px;
+      height: 24px;
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 14px;
+    }
+
+    /* Widget Container */
+    .widget-card {
+      position: sticky;
+      top: 24px;
+    }
+
+    .widget-container {
+      height: 550px;
+      background: var(--white);
+    }
+
+    .widget-footer {
+      padding: 16px 20px;
+      background: var(--body-bg);
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--body-color);
+      text-align: center;
+    }
+
+    .widget-footer code {
+      background: rgba(13, 148, 136, 0.1);
+      color: var(--primary-dark);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', monospace;
+    }
+
+    /* Form Elements */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--dark-2);
+      margin-bottom: 8px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-family: 'SF Mono', monospace;
+      background: var(--body-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--dark);
+      transition: all 0.2s ease;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+    }
+
+    .form-group input::placeholder {
+      color: #94a3b8;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: var(--white);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Mode Toggle */
+    .mode-toggle {
+      margin-bottom: 20px;
+      padding: 16px;
+      background: linear-gradient(135deg, rgba(13, 148, 136, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+      border: 1px solid rgba(13, 148, 136, 0.2);
+      border-radius: 8px;
+    }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .toggle-label input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--primary);
+    }
+
+    .toggle-text {
+      font-size: 14px;
+      color: var(--dark-2);
+    }
+
+    .toggle-text strong {
+      color: var(--dark);
+    }
+
+    .demo-note {
+      margin-top: 8px;
+      padding: 12px;
+      background: rgba(251, 191, 36, 0.1);
+      border-radius: 6px;
+      font-size: 13px;
+      color: #92400e;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Status Indicator */
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--body-bg);
+      border-radius: 8px;
+      margin-top: 16px;
+      font-size: 14px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #94a3b8;
+    }
+
+    .status.connected .status-dot {
+      background: var(--success);
+    }
+
+    .status.error .status-dot {
+      background: #ef4444;
+    }
+
+    .status.initializing .status-dot {
+      background: #f59e0b;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* API Log */
+    .api-log {
+      margin-top: 24px;
+    }
+
+    .api-log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .api-log-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--dark);
+    }
+
+    .api-log-clear {
+      font-size: 12px;
+      color: var(--body-color);
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .api-log-clear:hover {
+      color: var(--dark);
+    }
+
+    .api-log-container {
+      background: var(--dark);
+      border-radius: 8px;
+      padding: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'SF Mono', monospace;
+      font-size: 12px;
+      line-height: 1.8;
+    }
+
+    .api-log-empty {
+      color: #64748b;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .api-log-entry {
+      display: flex;
+      gap: 12px;
+      padding: 4px 0;
+    }
+
+    .api-log-time {
+      color: #64748b;
+      flex-shrink: 0;
+    }
+
+    .api-log-method {
+      color: #22c55e;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .api-log-endpoint {
+      color: #60a5fa;
+    }
+
+    .api-log-body {
+      color: #f59e0b;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <div class="badge">
+        <span class="badge-icon">✨</span>
+        Zero-config Feedback
+      </div>
+      <h1>
+        <span>Automatic</span> Feedback with Client Tokens
+      </h1>
+      <p class="header-description">
+        When using a client token, feedback (upvotes, downvotes, copies) is automatically 
+        sent to your Travrse backend. No custom code needed!
+      </p>
+      <a href="/" class="back-link">
+        ← Back to examples
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main">
+    <div class="grid">
+      <!-- Left Column: Info & Code -->
+      <div>
+        <!-- Key Feature Card -->
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-header">
+            <div class="card-icon">⚡</div>
+            <h2 class="card-title">The Magic</h2>
+          </div>
+          <div class="card-content">
+            <div class="highlight-box">
+              <h3>🎯 Just Enable the Buttons</h3>
+              <p>
+                With <code>clientToken</code> mode, simply set <code>showUpvote: true</code> 
+                and <code>showDownvote: true</code>. The SDK handles sending feedback to 
+                your backend automatically!
+              </p>
+            </div>
+
+            <div class="comparison">
+              <!-- Before -->
+              <div class="comparison-item">
+                <div class="comparison-header">
+                  <span class="comparison-label">❌ Without Client Token (Manual)</span>
+                  <span class="comparison-badge before">More Code</span>
+                </div>
+                <div class="comparison-code">
+<span class="property">messageActions</span>: {
+  <span class="property">showUpvote</span>: <span class="keyword">true</span>,
+  <span class="property">showDownvote</span>: <span class="keyword">true</span>,
+  <span class="comment">// You must implement this yourself:</span>
+  <span class="property">onFeedback</span>: <span class="keyword">async</span> (feedback) => {
+    <span class="keyword">await</span> fetch(<span class="string">'/api/feedback'</span>, {
+      method: <span class="string">'POST'</span>,
+      body: JSON.stringify({
+        type: feedback.type,
+        messageId: feedback.messageId,
+      })
+    });
+  }
+}
+                </div>
+              </div>
+
+              <!-- After -->
+              <div class="comparison-item">
+                <div class="comparison-header">
+                  <span class="comparison-label">✅ With Client Token (Automatic)</span>
+                  <span class="comparison-badge after">That's It!</span>
+                </div>
+                <div class="comparison-code">
+<span class="property">clientToken</span>: <span class="string">'ct_live_...'</span>,
+<span class="property">messageActions</span>: {
+  <span class="property">showUpvote</span>: <span class="keyword">true</span>,
+  <span class="property">showDownvote</span>: <span class="keyword">true</span>,
+  <span class="comment">// That's it! Feedback is sent automatically.</span>
+  <span class="comment">// onFeedback is optional for extra handling.</span>
+}
+                </div>
+              </div>
+            </div>
+
+            <ul class="feature-list">
+              <li>
+                <span class="feature-icon">✓</span>
+                <span><strong>Upvote/Downvote</strong> – Automatically POSTs to <code>/v1/client/feedback</code></span>
+              </li>
+              <li>
+                <span class="feature-icon">✓</span>
+                <span><strong>Copy</strong> – Copy events are tracked too, helping you understand engagement</span>
+              </li>
+              <li>
+                <span class="feature-icon">✓</span>
+                <span><strong>Optional Override</strong> – Add <code>onFeedback</code> callback for additional local handling</span>
+              </li>
+              <li>
+                <span class="feature-icon">✓</span>
+                <span><strong>Session Aware</strong> – Feedback includes session ID for proper attribution</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Configuration Card -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">🔑</div>
+            <h2 class="card-title">Try It</h2>
+          </div>
+          <div class="card-content">
+            <div class="mode-toggle">
+              <label class="toggle-label">
+                <input type="checkbox" id="demo-mode" checked />
+                <span class="toggle-text">
+                  <strong>Demo Mode</strong> (uses local proxy - no token needed)
+                </span>
+              </label>
+            </div>
+
+            <div class="form-group hidden" id="token-group">
+              <label for="client-token">Client Token</label>
+              <input 
+                type="text" 
+                id="client-token" 
+                placeholder="ct_live_flow01k7_..."
+              />
+            </div>
+
+            <div class="form-group hidden" id="api-url-group">
+              <label for="api-url">API URL <span style="color: var(--body-color); font-weight: 400;">(optional)</span></label>
+              <input 
+                type="text" 
+                id="api-url" 
+                placeholder="https://api.travrse.ai"
+              />
+            </div>
+
+            <button class="btn btn-primary" id="init-btn">
+              Initialize Widget
+            </button>
+
+            <div class="status" id="status">
+              <span class="status-dot"></span>
+              <span id="status-text">Enter a client token to begin</span>
+            </div>
+
+            <!-- API Log -->
+            <div class="api-log">
+              <div class="api-log-header">
+                <span class="api-log-title">API Requests (feedback)</span>
+                <button class="api-log-clear" id="clear-log">Clear</button>
+              </div>
+              <div class="api-log-container" id="api-log">
+                <div class="api-log-empty">
+                  Feedback requests will appear here when you upvote, downvote, or copy messages.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Widget -->
+      <div class="widget-card">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon">💬</div>
+            <h2 class="card-title">Live Demo</h2>
+          </div>
+          <div class="widget-container" id="widget-root">
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--body-color); text-align: center; padding: 40px;">
+              <div>
+                <div style="font-size: 48px; margin-bottom: 16px;">💬</div>
+                <div>Enter a client token and click "Initialize Widget" to start</div>
+              </div>
+            </div>
+          </div>
+          <div class="widget-footer">
+            Hover over assistant messages to see <code>👍</code> <code>👎</code> <code>📋</code> buttons
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="/src/client-token-feedback-demo.ts"></script>
+</body>
+</html>
+

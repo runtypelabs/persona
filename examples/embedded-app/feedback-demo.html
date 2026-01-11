@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Message Feedback Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      color: #1e293b;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 1.5rem;
+      padding: 1.5rem;
+      max-width: 1400px;
+      margin: 0 auto;
+      margin-top: 2rem;
+      margin-bottom: 2rem;
+      min-height: 100vh;
+    }
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .panel {
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      overflow: hidden;
+    }
+    .panel-header {
+      background: #0f172a;
+      color: white;
+      padding: 1rem 1.5rem;
+    }
+    .panel-header h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .panel-content {
+      padding: 1.5rem;
+    }
+    .info-section {
+      background: #f8fafc;
+      border-radius: 4px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .info-section h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.9rem;
+      color: #475569;
+    }
+    .info-section p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+    .feedback-log {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .log-entry {
+      padding: 0.75rem;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+      word-break: break-all;
+    }
+    .log-entry.upvote { background: #dcfce7; color: #166534; border-left: 3px solid #22c55e; }
+    .log-entry.downvote { background: #fee2e2; color: #991b1b; border-left: 3px solid #ef4444; }
+    .log-entry.copy { background: #dbeafe; color: #1e40af; border-left: 3px solid #3b82f6; }
+    .log-time { color: #94a3b8; font-size: 0.75rem; }
+    .empty-state {
+      text-align: center;
+      padding: 2rem;
+      color: #94a3b8;
+    }
+    .widget-container {
+      height: 600px;
+    }
+    #feedback-widget {
+      height: 100%;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .stat-card {
+      background: #f1f5f9;
+      padding: 0.75rem;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+    .stat-card.upvotes .stat-value { color: #22c55e; }
+    .stat-card.downvotes .stat-value { color: #ef4444; }
+    .stat-card.copies .stat-value { color: #3b82f6; }
+    .back-link {
+      position: relative;
+      top: 2rem;
+      left: 1rem;
+      background: rgba(255,255,255,0.9);
+      padding: 0.5rem 1rem;
+      margin: 1rem 1rem 3rem 1rem;
+      border-radius: 4px;
+      text-decoration: none;
+      color: #0f172a;
+      font-size: 0.9rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .back-link:hover {
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <a href="/" class="back-link">&larr; Back to examples</a>
+  
+  <div class="layout">
+    <!-- Left: Widget -->
+    <div class="panel widget-container">
+      <div id="feedback-widget"></div>
+    </div>
+
+    <!-- Right: Feedback Log -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Feedback Analytics</h2>
+      </div>
+      <div class="panel-content">
+        <div class="info-section">
+          <h3>How it works</h3>
+          <p>Hover over any assistant message to reveal action buttons. Click to copy, upvote, or downvote. All events are logged below and could be sent to your analytics backend.</p>
+        </div>
+
+        <div class="stats">
+          <div class="stat-card upvotes">
+            <div class="stat-value" id="upvote-count">0</div>
+            <div class="stat-label">Upvotes</div>
+          </div>
+          <div class="stat-card downvotes">
+            <div class="stat-value" id="downvote-count">0</div>
+            <div class="stat-label">Downvotes</div>
+          </div>
+          <div class="stat-card copies">
+            <div class="stat-value" id="copy-count">0</div>
+            <div class="stat-label">Copies</div>
+          </div>
+        </div>
+
+        <h3 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; color: #475569;">Event Log</h3>
+        <div class="feedback-log" id="log-container">
+          <div class="empty-state">
+            <p>No events yet</p>
+            <p style="font-size: 0.75rem;">Interact with assistant messages to see feedback events</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/feedback-demo.ts"></script>
+</body>
+</html>
+

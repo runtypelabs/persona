@@ -1,0 +1,18 @@
+{
+  "name": "embedded-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "partial-json": "^0.1.7",
+    "@runtypelabs/persona": "workspace:^"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.4.1"
+  }
+}

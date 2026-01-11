@@ -1,0 +1,79 @@
+{
+  "name": "@runtypelabs/persona",
+  "version": "1.36.0",
+  "description": "Themeable, plugable streaming agent widget for websites, in plain JS with support for voice input and reasoning / tool output.",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./widget.css": {
+      "import": "./widget.css",
+      "default": "./dist/widget.css"
+    }
+  },
+  "files": [
+    "dist",
+    "widget.css",
+    "src"
+  ],
+  "scripts": {
+    "build": "rimraf dist && npm run build:styles && npm run build:client && npm run build:installer",
+    "build:styles": "node -e \"const fs=require('fs');fs.mkdirSync('dist',{recursive:true});fs.copyFileSync('src/styles/widget.css','dist/widget.css');\"",
+    "build:client": "tsup src/index.ts --format esm,cjs,iife --global-name AgentWidget --minify --sourcemap --splitting false --dts --loader \".css=text\"",
+    "build:installer": "tsup src/install.ts --format iife --global-name SiteAgentInstaller --out-dir dist --minify --sourcemap --no-splitting",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run"
+  },
+  "dependencies": {
+    "idiomorph": "^0.7.4",
+    "lucide": "^0.552.0",
+    "marked": "^12.0.2",
+    "partial-json": "^0.1.7",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@vitest/ui": "^4.0.9",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "postcss": "^8.4.38",
+    "rimraf": "^5.0.5",
+    "tailwindcss": "^3.4.10",
+    "tsup": "^8.0.1",
+    "typescript": "^5.4.5",
+    "vitest": "^4.0.9"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "chat",
+    "widget",
+    "streaming",
+    "typescript",
+    "persona",
+    "agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/runtypelabs/persona.git",
+    "directory": "packages/widget"
+  },
+  "bugs": {
+    "url": "https://github.com/runtypelabs/persona/issues"
+  },
+  "homepage": "https://github.com/runtypelabs/persona/tree/main/packages/widget#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}

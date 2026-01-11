@@ -1,0 +1,20 @@
+{
+  "name": "cloudflare-workers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@runtypelabs/persona-proxy": "workspace:^",
+    "hono": "^4.4.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250107.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^4.46.0"
+  }
+}
