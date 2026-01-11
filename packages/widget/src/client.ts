@@ -432,8 +432,8 @@ export class AgentWidgetClient {
         messages: options.messages.filter(hasValidContent).map(m => ({
           id: m.id, // Include message ID for tracking
           role: m.role,
-          // Use contentParts for multi-modal messages, otherwise fall back to string content
-          content: m.contentParts ?? m.rawContent ?? m.content,
+          // Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
+          content: m.contentParts ?? m.llmContent ?? m.rawContent ?? m.content,
         })),
         // Include pre-generated assistant message ID if provided
         ...(options.assistantMessageId && { assistant_message_id: options.assistantMessageId }),
