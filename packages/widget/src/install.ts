@@ -4,6 +4,8 @@
  * if configuration is provided via window.siteAgentConfig
  */
 
+export {};
+
 interface SiteAgentInstallConfig {
   version?: string;
   cdn?: "unpkg" | "jsdelivr";

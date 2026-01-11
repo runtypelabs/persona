@@ -25,7 +25,7 @@ export const renderLucideIcon = (
       .join("");
     
     // Lucide's icons object contains IconNode data directly, not functions
-    const iconData = (icons as Record<string, IconNode>)[pascalName] as IconNode;
+    const iconData = (icons as unknown as Record<string, IconNode>)[pascalName] as IconNode;
     
     if (!iconData) {
       console.warn(`Lucide icon "${iconName}" not found (tried "${pascalName}"). Available icons: https://lucide.dev/icons`);

@@ -46,7 +46,9 @@ describe("JSON Stream Parser", () => {
       const result = parser.processChunk(accumulatedContent);
       
       // Extract text from result (can be string or object with text property)
-      const text = typeof result === 'string' ? result : result?.text ?? null;
+      // JSON parser is synchronous so result is never a Promise
+      const syncResult = result as Exclude<typeof result, Promise<any>>;
+      const text = typeof syncResult === 'string' ? syncResult : syncResult?.text ?? null;
       if (text !== null) {
         extractedTexts.push(text);
       }
@@ -104,7 +106,9 @@ describe("JSON Stream Parser", () => {
     const result = parser.processChunk(completeJson);
     
     // Extract text from result (can be string or object with text property)
-    const text = typeof result === 'string' ? result : result?.text ?? null;
+    // JSON parser is synchronous so result is never a Promise
+    const syncResult = result as Exclude<typeof result, Promise<any>>;
+    const text = typeof syncResult === 'string' ? syncResult : syncResult?.text ?? null;
     expect(text).toBe("Hello world!");
     expect(parser.getExtractedText()).toBe("Hello world!");
   });
@@ -151,7 +155,9 @@ describe("JSON Stream Parser", () => {
       accumulated += chunk;
       const result = parser.processChunk(accumulated);
       // Extract text from result (can be string or object with text property)
-      const text = typeof result === 'string' ? result : result?.text ?? null;
+      // JSON parser is synchronous so result is never a Promise
+      const syncResult = result as Exclude<typeof result, Promise<any>>;
+      const text = typeof syncResult === 'string' ? syncResult : syncResult?.text ?? null;
       allExtractedTexts.push(text);
     }
 

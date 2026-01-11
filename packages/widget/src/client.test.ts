@@ -301,7 +301,7 @@ describe('AgentWidgetClient - JSON Streaming', () => {
     // Dispatch and collect events
     await client.dispatch(
       {
-        messages: [{ role: 'user', content: 'ok' }]
+        messages: [{ role: 'user', content: 'ok', id: 'test-1', createdAt: new Date().toISOString() }]
       },
       (event) => {
         events.push(event);
