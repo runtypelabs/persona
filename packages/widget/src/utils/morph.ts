@@ -21,7 +21,7 @@ export const morphMessages = (
   Idiomorph.morph(container, newContent.innerHTML, {
     morphStyle: "innerHTML",
     callbacks: {
-      beforeNodeMorphed(oldNode: Node, newNode: Node): boolean | void {
+      beforeNodeMorphed(oldNode: Node, _newNode: Node): boolean | void {
         if (!(oldNode instanceof HTMLElement)) return;
 
         // Preserve typing indicator dots to maintain animation continuity

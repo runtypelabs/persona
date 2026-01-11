@@ -9,7 +9,7 @@ import {
   AgentWidgetCustomFetch,
   AgentWidgetSSEEventParser,
   AgentWidgetHeadersFunction,
-  AgentWidgetSSEEventResult,
+  AgentWidgetSSEEventResult as _AgentWidgetSSEEventResult,
   ClientSession,
   ClientInitResponse,
   ClientChatRequest,
@@ -977,6 +977,7 @@ export class AgentWidgetClient {
     // Track accumulated raw content for structured formats (JSON, XML, etc.)
     const rawContentBuffers = new Map<string, string>();
 
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;

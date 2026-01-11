@@ -26,7 +26,7 @@ import { createLauncherButton } from "./components/launcher";
 import { createWrapper, buildPanel, buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
-import type { HeaderElements, ComposerElements } from "./components/panel";
+import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
 import { MessageTransform, MessageActionCallbacks } from "./components/message-bubble";
 import { createStandardBubble, createTypingIndicator } from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
@@ -280,7 +280,7 @@ export const createAgentExperience = (
   
   // Get status indicator config
   const statusConfig = config.statusIndicator ?? {};
-  const getStatusText = (status: AgentWidgetSessionStatus): string => {
+  const _getStatusText = (status: AgentWidgetSessionStatus): string => {
     if (status === "idle") return statusConfig.idleText ?? statusCopy.idle;
     if (status === "connecting") return statusConfig.connectingText ?? statusCopy.connecting;
     if (status === "connected") return statusConfig.connectedText ?? statusCopy.connected;
@@ -308,7 +308,7 @@ export const createAgentExperience = (
     headerSubtitle,
     header,
     footer,
-    actionsRow,
+    actionsRow: _actionsRow,
     leftActions,
     rightActions
   } = panelElements;
@@ -429,7 +429,7 @@ export const createAgentExperience = (
             }
           }
           break;
-        case "body-top":
+        case "body-top": {
           // Replace or prepend to body
           const introCard = body.querySelector(".tvw-rounded-2xl.tvw-bg-cw-surface.tvw-p-6");
           if (introCard) {
@@ -438,6 +438,7 @@ export const createAgentExperience = (
             body.insertBefore(element, body.firstChild);
           }
           break;
+        }
         case "body-bottom":
           // Append after messages wrapper
           body.appendChild(element);

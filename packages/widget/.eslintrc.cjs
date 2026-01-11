@@ -5,6 +5,10 @@ module.exports = {
     es2020: true,
     node: true,
   },
+  globals: {
+    RequestInit: "readonly",
+    HTMLElementTagNameMap: "readonly",
+  },
   extends: [
     "eslint:recommended",
     "prettier",
@@ -17,7 +21,7 @@ module.exports = {
   plugins: ["@typescript-eslint"],
   rules: {
     "no-unused-vars": "off",
-    "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+    "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
   },
   ignorePatterns: ["dist/", "node_modules/"],
 };

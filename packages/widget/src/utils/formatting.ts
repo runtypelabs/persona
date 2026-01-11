@@ -216,7 +216,7 @@ export const extractTextFromJson = (jsonString: string): string | null => {
  */
 export const createPlainTextParser = (): AgentWidgetStreamParser => {
   const parser: AgentWidgetStreamParser = {
-    processChunk: (accumulatedContent: string): string | null => {
+    processChunk: (_accumulatedContent: string): string | null => {
       // Always return null to indicate this isn't a structured format
       // Content will be displayed as plain text
       return null;

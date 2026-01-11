@@ -1,7 +1,7 @@
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { componentRegistry, ComponentContext } from "../components/registry";
 import { ComponentDirective, createComponentStreamParser } from "./component-parser";
-import { createStandardBubble, MessageTransform } from "../components/message-bubble";
+import { createStandardBubble as _createStandardBubble, MessageTransform } from "../components/message-bubble";
 
 /**
  * Options for component middleware

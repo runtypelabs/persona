@@ -1,7 +1,7 @@
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig, AgentWidgetHeaderLayoutConfig } from "../types";
-import { buildHeader, HeaderElements, attachHeaderToContainer } from "./header-builder";
+import { buildHeader, HeaderElements, attachHeaderToContainer as _attachHeaderToContainer } from "./header-builder";
 
 export interface HeaderLayoutContext {
   config: AgentWidgetConfig;
@@ -101,7 +101,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
  * Full branding area with additional space for custom content
  */
 export const buildExpandedHeader: HeaderLayoutRenderer = (context) => {
-  const { config, showClose = true, onClose, onClearChat } = context;
+  const { config, showClose = true, onClose, onClearChat: _onClearChat } = context;
   const launcher = config?.launcher ?? {};
 
   const header = createElement(

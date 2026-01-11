@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateCodeSnippet, type CodeFormat, type CodeGeneratorHooks, type CodeGeneratorOptions } from "./code-generators";
+import { generateCodeSnippet, type CodeFormat, type CodeGeneratorHooks, type CodeGeneratorOptions as _CodeGeneratorOptions } from "./code-generators";
 
 // =============================================================================
 // Test Fixtures
@@ -79,12 +79,12 @@ describe("Hook Serialization", () => {
     it("should serialize array of functions", () => {
       const hooks: CodeGeneratorHooks = {
         actionHandlers: [
-          (action: any, ctx: any) => {
+          (action: any, _ctx: any) => {
             if (action.type === 'custom') {
               return { handled: true };
             }
           },
-          (action: any, ctx: any) => {
+          (action: any, _ctx: any) => {
             if (action.type === 'another') {
               return { handled: true, displayText: 'Done' };
             }

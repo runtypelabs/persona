@@ -1,5 +1,5 @@
 import { createAgentExperience, AgentWidgetController } from "../ui";
-import { AgentWidgetConfig, AgentWidgetInitOptions, AgentWidgetEvent } from "../types";
+import { AgentWidgetConfig as _AgentWidgetConfig, AgentWidgetInitOptions, AgentWidgetEvent as _AgentWidgetEvent } from "../types";
 
 const ensureTarget = (target: string | HTMLElement): HTMLElement => {
   if (typeof window === "undefined" || typeof document === "undefined") {
@@ -103,11 +103,11 @@ export const initAgentWidget = (
 
   const useShadow = options.useShadowDom === true;
   let mount: HTMLElement;
-  let root: ShadowRoot | HTMLElement;
+  let _root: ShadowRoot | HTMLElement;
 
   if (useShadow) {
     const shadowRoot = host.attachShadow({ mode: "open" });
-    root = shadowRoot;
+    _root = shadowRoot;
     mount = document.createElement("div");
     mount.id = "persona-root";
     // When launcher is disabled, ensure mount fills the host
@@ -121,7 +121,7 @@ export const initAgentWidget = (
     shadowRoot.appendChild(mount);
     mountStyles(shadowRoot);
   } else {
-    root = host;
+    _root = host;
     mount = document.createElement("div");
     mount.id = "persona-root";
     // When launcher is disabled, ensure mount fills the host
