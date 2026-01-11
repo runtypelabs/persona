@@ -4,7 +4,11 @@ import {
   AgentWidgetEvent,
   AgentWidgetMessage,
   ClientSession,
-  ContentPart
+  ContentPart,
+  InjectMessageOptions,
+  InjectAssistantMessageOptions,
+  InjectUserMessageOptions,
+  InjectSystemMessageOptions
 } from "./types";
 import {
   generateUserMessageId,
@@ -184,8 +188,130 @@ export class AgentWidgetSession {
     return this.streaming;
   }
 
+  /**
+   * @deprecated Use injectMessage() instead.
+   * Injects a raw event into the session event handler.
+   */
   public injectTestEvent(event: AgentWidgetEvent) {
     this.handleEvent(event);
+  }
+
+  /**
+   * Inject a message into the conversation.
+   * This is the primary API for adding messages programmatically.
+   *
+   * Supports dual-content where the displayed content differs from what the LLM receives.
+   *
+   * @param options - Message injection options including dual-content support
+   * @returns The created message object
+   *
+   * @example
+   * // Same content for user and LLM
+   * session.injectMessage({
+   *   role: 'assistant',
+   *   content: 'Here are the search results...'
+   * });
+   *
+   * @example
+   * // Different content for user and LLM (redaction)
+   * session.injectMessage({
+   *   role: 'assistant',
+   *   content: '**Found 3 products:**\n- iPhone 15 Pro ($1,199)\n- iPhone 15 ($999)',
+   *   llmContent: '[Search results: 3 iPhone products, $799-$1199]'
+   * });
+   */
+  public injectMessage(options: InjectMessageOptions): AgentWidgetMessage {
+    const {
+      role,
+      content,
+      llmContent,
+      contentParts,
+      id,
+      createdAt,
+      sequence,
+      streaming = false
+    } = options;
+
+    // Generate appropriate ID based on role
+    const messageId =
+      id ??
+      (role === "user"
+        ? generateUserMessageId()
+        : role === "assistant"
+          ? generateAssistantMessageId()
+          : `system-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+
+    const message: AgentWidgetMessage = {
+      id: messageId,
+      role,
+      content,
+      createdAt: createdAt ?? new Date().toISOString(),
+      sequence: sequence ?? this.nextSequence(),
+      streaming,
+      // Only include optional fields if provided
+      ...(llmContent !== undefined && { llmContent }),
+      ...(contentParts !== undefined && { contentParts })
+    };
+
+    // Use upsert to handle both new messages and updates (streaming)
+    this.upsertMessage(message);
+
+    return message;
+  }
+
+  /**
+   * Convenience method for injecting assistant messages.
+   * Role defaults to 'assistant'.
+   *
+   * @example
+   * // Simple assistant message
+   * session.injectAssistantMessage({
+   *   content: 'Here are your search results...'
+   * });
+   *
+   * @example
+   * // With redacted LLM content
+   * session.injectAssistantMessage({
+   *   content: 'Full product details for the user...',
+   *   llmContent: '[Product details summary]'
+   * });
+   */
+  public injectAssistantMessage(
+    options: InjectAssistantMessageOptions
+  ): AgentWidgetMessage {
+    return this.injectMessage({ ...options, role: "assistant" });
+  }
+
+  /**
+   * Convenience method for injecting user messages.
+   * Role defaults to 'user'.
+   *
+   * @example
+   * session.injectUserMessage({
+   *   content: 'Add iPhone 15 Pro to my cart'
+   * });
+   */
+  public injectUserMessage(
+    options: InjectUserMessageOptions
+  ): AgentWidgetMessage {
+    return this.injectMessage({ ...options, role: "user" });
+  }
+
+  /**
+   * Convenience method for injecting system messages.
+   * Role defaults to 'system'.
+   *
+   * @example
+   * // Inject context that guides LLM behavior
+   * session.injectSystemMessage({
+   *   content: '[Context updated]',  // Minimal display
+   *   llmContent: 'User is viewing iPhone 15 Pro. Cart has 2 items.'
+   * });
+   */
+  public injectSystemMessage(
+    options: InjectSystemMessageOptions
+  ): AgentWidgetMessage {
+    return this.injectMessage({ ...options, role: "system" });
   }
 
   public async sendMessage(

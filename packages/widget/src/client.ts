@@ -47,11 +47,15 @@ const hasValidContent = (message: AgentWidgetMessage): boolean => {
   if (message.contentParts && message.contentParts.length > 0) {
     return true;
   }
-  // Check rawContent
+  // Check llmContent (explicit LLM content)
+  if (message.llmContent && message.llmContent.trim().length > 0) {
+    return true;
+  }
+  // Check rawContent (structured parser output)
   if (message.rawContent && message.rawContent.trim().length > 0) {
     return true;
   }
-  // Check content
+  // Check content (display content)
   if (message.content && message.content.trim().length > 0) {
     return true;
   }
@@ -589,8 +593,8 @@ export class AgentWidgetClient {
       })
       .map((message) => ({
         role: message.role,
-        // Use contentParts for multi-modal messages, otherwise fall back to string content
-        content: message.contentParts ?? message.rawContent ?? message.content,
+        // Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
+        content: message.contentParts ?? message.llmContent ?? message.rawContent ?? message.content,
         createdAt: message.createdAt
       }));
 

@@ -13,7 +13,11 @@ import {
   WidgetLayoutSlot,
   SlotRenderer,
   AgentWidgetMessageFeedback,
-  ContentPart
+  ContentPart,
+  InjectMessageOptions,
+  InjectAssistantMessageOptions,
+  InjectUserMessageOptions,
+  InjectSystemMessageOptions
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
@@ -83,6 +87,26 @@ type Controller = {
   submitMessage: (message?: string) => boolean;
   startVoiceRecognition: () => boolean;
   stopVoiceRecognition: () => boolean;
+  /**
+   * Inject a message into the conversation with dual-content support.
+   * Auto-opens the widget if closed and launcher is enabled.
+   */
+  injectMessage: (options: InjectMessageOptions) => AgentWidgetMessage;
+  /**
+   * Convenience method for injecting assistant messages.
+   */
+  injectAssistantMessage: (options: InjectAssistantMessageOptions) => AgentWidgetMessage;
+  /**
+   * Convenience method for injecting user messages.
+   */
+  injectUserMessage: (options: InjectUserMessageOptions) => AgentWidgetMessage;
+  /**
+   * Convenience method for injecting system messages.
+   */
+  injectSystemMessage: (options: InjectSystemMessageOptions) => AgentWidgetMessage;
+  /**
+   * @deprecated Use injectMessage() instead.
+   */
   injectTestMessage: (event: AgentWidgetEvent) => void;
   getMessages: () => AgentWidgetMessage[];
   getStatus: () => AgentWidgetSessionStatus;
@@ -3191,12 +3215,41 @@ export const createAgentExperience = (
     },
     stopVoiceRecognition(): boolean {
       if (!isRecording) return false;
-      
+
       voiceState.manuallyDeactivated = true;
       persistVoiceMetadata();
       stopVoiceRecognition("user");
       return true;
     },
+    injectMessage(options: InjectMessageOptions): AgentWidgetMessage {
+      // Auto-open widget if closed and launcher is enabled
+      if (!open && launcherEnabled) {
+        setOpenState(true, "system");
+      }
+      return session.injectMessage(options);
+    },
+    injectAssistantMessage(options: InjectAssistantMessageOptions): AgentWidgetMessage {
+      // Auto-open widget if closed and launcher is enabled
+      if (!open && launcherEnabled) {
+        setOpenState(true, "system");
+      }
+      return session.injectAssistantMessage(options);
+    },
+    injectUserMessage(options: InjectUserMessageOptions): AgentWidgetMessage {
+      // Auto-open widget if closed and launcher is enabled
+      if (!open && launcherEnabled) {
+        setOpenState(true, "system");
+      }
+      return session.injectUserMessage(options);
+    },
+    injectSystemMessage(options: InjectSystemMessageOptions): AgentWidgetMessage {
+      // Auto-open widget if closed and launcher is enabled
+      if (!open && launcherEnabled) {
+        setOpenState(true, "system");
+      }
+      return session.injectSystemMessage(options);
+    },
+    /** @deprecated Use injectMessage() instead */
     injectTestMessage(event: AgentWidgetEvent) {
       // Auto-open widget if closed and launcher is enabled
       if (!open && launcherEnabled) {
