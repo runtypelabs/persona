@@ -1,5 +1,15 @@
 # @runtypelabs/persona
 
+## 1.37.2
+
+### Patch Changes
+
+- 71d709e: Fix llmContent not being sent to server in client token mode
+
+  - Add missing `llmContent` to content priority chain in client token dispatch
+  - Content priority now matches proxy mode: `contentParts > llmContent > rawContent > content`
+  - Fixes message injection API when using client tokens instead of proxy
+
 ## 1.37.1
 
 ### Patch Changes
