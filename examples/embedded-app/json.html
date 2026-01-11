@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Streaming Chat Widget – Dynamic Form Demo</title>
+  </head>
+  <body>
+    <main class="demo-container">
+      <section>
+        <h1>Dynamic Form Demo</h1>
+        <p>
+          This page demonstrates the component middleware system. When your
+          backend streams a JSON component directive (e.g., 
+          <code>{"component": "DynamicForm", "props": {...}}</code>), the widget
+          renders an interactive form with dynamically generated fields. The AI
+          creates contextually appropriate forms based on what you ask.
+        </p>
+      </section>
+
+      <section>
+        <h2>Inline Form Embed</h2>
+        <div class="embedded-target" id="json-inline"></div>
+      </section>
+    </main>
+
+    <div id="json-launcher"></div>
+    <script type="module" src="/src/json-demo.ts"></script>
+  </body>
+</html>

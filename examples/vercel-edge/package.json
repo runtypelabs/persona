@@ -1,0 +1,23 @@
+{
+  "name": "vercel-edge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "build": "tsup src/server.ts --format esm,cjs --dts --out-dir dist --clean"
+  },
+  "dependencies": {
+    "@runtypelabs/persona-proxy": "workspace:^",
+    "@hono/node-server": "^1.10.0",
+    "dotenv": "^16.4.5",
+    "get-port": "^7.0.0",
+    "hono": "^4.4.9"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "tsup": "^8.0.1",
+    "tsx": "^4.15.7",
+    "typescript": "^5.4.5"
+  }
+}

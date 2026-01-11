@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shopping Agent Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        color: #1e293b;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+      header {
+        background: white;
+        padding: 1.5rem 2rem;
+        
+        margin-bottom: 2rem;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.75rem;
+        color: #0f172a;
+      }
+      .subtitle {
+        margin-top: 0.5rem;
+        color: #64748b;
+        font-size: 0.9rem;
+      }
+      .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+      }
+      .product-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      .product-card:hover {
+        transform: translateY(-2px);
+      }
+      .product-item {
+        display: flex;
+        flex-direction: column;
+      }
+      .product-image {
+        width: 100%;
+        height: 200px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 6px;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 3rem;
+      }
+      .product-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #0f172a;
+      }
+      .product-title a {
+        color: #0f172a;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .product-title a:hover {
+        color: #0ea5e9;
+      }
+      .product-description {
+        color: #64748b;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+        flex-grow: 1;
+      }
+      .product-price {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #111827;
+        margin-bottom: 1rem;
+      }
+      .AddToCartButton-button {
+        width: 100%;
+        padding: 0.75rem;
+        background: black;
+        color: white;
+        border: 1px solid black;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .AddToCartButton-button:hover {
+        background: #1f2937;
+      }
+      .AddToCartButton-button:active {
+        background: #111827;
+      }
+      .StartBuildingButton-button {
+        padding: 0.75rem 1.5rem;
+        background: black;
+        color: white;
+        border: 1px solid black;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+        margin-top: 1rem;
+      }
+      .StartBuildingButton-button:hover {
+        background: #1f2937;
+      }
+      .ClearStorageButton-button {
+        padding: 0.75rem 1.5rem;
+        background: white;
+        color: black;
+        border: 1px solid black;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+        margin-top: 1rem;
+      }
+      .ClearStorageButton-button:hover {
+        background: #f3f4f6;
+      }
+      .cart-section {
+        background: white;
+        padding: 1.5rem;
+        border: 1px solid #e5e7eb;
+        margin-top: 2rem;
+      }
+      .cart-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 1rem 0;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      .cart-item:last-child {
+        border-bottom: none;
+      }
+      .empty-cart {
+        text-align: center;
+        color: #64748b;
+        padding: 2rem;
+      }
+      .notification {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        background: #1f2937;
+        color: white;
+        padding: 1rem 1.5rem;
+        border: 1px solid #111827;
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+      }
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-white">
+    <div class="bg-white">
+      <header class="bg-white">
+        <nav aria-label="Top" class="mx-auto max-w-2xl px-4 sm:px-6 lg:max-w-7xl lg:px-8">
+          <div class="border-b border-gray-200">
+            <div class="flex h-16 items-center">
+
+              <!-- Logo -->
+              <div class="flex">
+                <a href="#">
+                  <span class="sr-only">Your Company</span>
+                  <span class="text-xl font-bold text-black">🛍️ Agentic Shop</span>
+                </a>
+              </div>
+
+             
+
+              <div class="ml-auto flex items-center">
+
+                <!-- Cart -->
+                <div class="ml-4 flow-root lg:ml-6 relative">
+                  <button id="cart-toggle" class="group -m-2 flex items-center p-2 cursor-pointer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" data-slot="icon" aria-hidden="true" class="size-6 shrink-0 text-gray-400 group-hover:text-gray-500">
+                      <path d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span id="cart-count" class="ml-2 text-sm font-medium text-gray-700 group-hover:text-gray-800">0</span>
+                    <span class="sr-only">items in cart, view bag</span>
+                  </button>
+                  
+                  <!-- Cart Dropdown -->
+                  <div id="cart-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white border border-gray-300 z-50">
+                    <div class="p-4">
+                      <h3 class="text-lg font-medium text-gray-900 mb-4">Shopping Cart</h3>
+                      <div id="cart-dropdown-items" class="max-h-96 overflow-y-auto">
+                        <div class="text-center text-gray-500 py-8">Your cart is empty</div>
+                      </div>
+                      <div id="cart-dropdown-footer" class="hidden mt-4 pt-4 border-t border-gray-200">
+                        <button id="cart-checkout-btn" class="w-full bg-black text-white py-2 px-4 font-medium hover:bg-gray-800">
+                          Proceed to Checkout
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </nav>
+        
+        
+      </header>
+    </div>
+
+    <!-- <div class="relative isolate px-6 pt-14 lg:px-8">
+      <div aria-hidden="true" class="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80">
+        <div style="clip-path: polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)" class="relative left-[calc(50%-11rem)] aspect-1155/678 w-144.5 -translate-x-1/2 rotate-30 bg-linear-to-tr from-[#ff80b5] to-[#9089fc] opacity-30 sm:left-[calc(50%-30rem)] sm:w-288.75"></div>
+      </div>
+      <div class="mx-auto max-w-2xl ">
+        
+        <div class="text-center">
+          <h1 class="text-5xl font-semibold tracking-tight text-balance text-gray-900 sm:text-7xl">Welcome to my store</h1>
+          <p class="mt-8 text-lg font-medium text-pretty text-gray-500 sm:text-xl/8">Use our shopping assistant to browse, add products, and checkout!</p>
+          <div class="mt-10 flex items-center justify-center gap-x-6">
+            <a href="#" class="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Get started</a>
+            <a href="#" class="text-sm/6 font-semibold text-gray-900">Learn more <span aria-hidden="true">→</span></a>
+          </div>
+        </div>
+      </div>
+      <div aria-hidden="true" class="absolute inset-x-0 top-[calc(100%-13rem)] -z-10 transform-gpu overflow-hidden blur-3xl sm:top-[calc(100%-30rem)]">
+        <div style="clip-path: polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)" class="relative left-[calc(50%+3rem)] aspect-1155/678 w-144.5 -translate-x-1/2 bg-linear-to-tr from-[#ff80b5] to-[#9089fc] opacity-30 sm:left-[calc(50%+36rem)] sm:w-288.75"></div>
+      </div>
+    </div> -->
+
+    <div class="bg-white">
+      <div class="mx-auto max-w-2xl px-4 lg:max-w-7xl lg:px-8">
+        <!-- <h2 class="text-2xl font-bold tracking-tight text-gray-900">Popular Products</h2> -->
+
+        <div class="mt-6 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4 xl:gap-x-8">
+          <div class="group relative product-card" data-product="black-shirt-medium">
+            <div class="relative">
+              <div class="aspect-square w-full bg-gray-200 flex items-center justify-center text-gray-600 text-6xl group-hover:opacity-75 lg:aspect-auto lg:h-80">
+                👕
+              </div>
+              <button class="AddToCartButton-button absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-10 bg-black hover:bg-gray-800 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center font-medium z-10" data-product="black-shirt-medium">
+                Add to Cart
+              </button>
+            </div>
+            <div class="mt-4 flex justify-between">
+              <div>
+                <h3 class="text-sm text-gray-700">
+                  <a href="/products.html?product=black-shirt-medium">
+                    <span aria-hidden="true" class="absolute inset-0"></span>
+                    Black Shirt
+                  </a>
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">Medium</p>
+              </div>
+              <p class="text-sm font-medium text-gray-900 product-price">$29.99</p>
+            </div>
+          </div>
+
+          <div class="group relative product-card" data-product="blue-shirt-large">
+            <div class="relative">
+              <div class="aspect-square w-full bg-gray-200 flex items-center justify-center text-gray-600 text-6xl group-hover:opacity-75 lg:aspect-auto lg:h-80">
+                👔
+              </div>
+              <button class="AddToCartButton-button absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-10 bg-black hover:bg-gray-800 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center font-medium z-10" data-product="blue-shirt-large">
+                Add to Cart
+              </button>
+            </div>
+            <div class="mt-4 flex justify-between">
+              <div>
+                <h3 class="text-sm text-gray-700">
+                  <a href="/products.html?product=blue-shirt-large">
+                    <span aria-hidden="true" class="absolute inset-0"></span>
+                    Blue Shirt
+                  </a>
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">Large</p>
+              </div>
+              <p class="text-sm font-medium text-gray-900 product-price">$34.99</p>
+            </div>
+          </div>
+
+          <div class="group relative product-card" data-product="red-tshirt-small">
+            <div class="relative">
+              <div class="aspect-square w-full bg-gray-200 flex items-center justify-center text-gray-600 text-6xl group-hover:opacity-75 lg:aspect-auto lg:h-80">
+                🎽
+              </div>
+              <button class="AddToCartButton-button absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-10 bg-black hover:bg-gray-800 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center font-medium z-10" data-product="red-tshirt-small">
+                Add to Cart
+              </button>
+            </div>
+            <div class="mt-4 flex justify-between">
+              <div>
+                <h3 class="text-sm text-gray-700">
+                  <a href="/products.html?product=red-tshirt-small">
+                    <span aria-hidden="true" class="absolute inset-0"></span>
+                    Red T-Shirt
+                  </a>
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">Small</p>
+              </div>
+              <p class="text-sm font-medium text-gray-900 product-price">$19.99</p>
+            </div>
+          </div>
+
+          <div class="group relative product-card" data-product="jeans-medium">
+            <div class="relative">
+              <div class="aspect-square w-full bg-gray-200 flex items-center justify-center text-gray-600 text-6xl group-hover:opacity-75 lg:aspect-auto lg:h-80">
+                👖
+              </div>
+              <button class="AddToCartButton-button absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-10 bg-black hover:bg-gray-800 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center font-medium z-10" data-product="jeans-medium">
+                Add to Cart
+              </button>
+            </div>
+            <div class="mt-4 flex justify-between">
+              <div>
+                <h3 class="text-sm text-gray-700">
+                  <a href="/products.html?product=jeans-medium">
+                    <span aria-hidden="true" class="absolute inset-0"></span>
+                    Jeans
+                  </a>
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">Medium</p>
+              </div>
+              <p class="text-sm font-medium text-gray-900 product-price">$49.99</p>
+            </div>
+          </div>
+
+          <div class="group relative product-card" data-product="jacket-large">
+            <div class="relative">
+              <div class="aspect-square w-full bg-gray-200 flex items-center justify-center text-gray-600 text-6xl group-hover:opacity-75 lg:aspect-auto lg:h-80">
+                🧥
+              </div>
+              <button class="AddToCartButton-button absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-10 bg-black hover:bg-gray-800 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center font-medium z-10" data-product="jacket-large">
+                Add to Cart
+              </button>
+            </div>
+            <div class="mt-4 flex justify-between">
+              <div>
+                <h3 class="text-sm text-gray-700">
+                  <a href="/products.html?product=jacket-large">
+                    <span aria-hidden="true" class="absolute inset-0"></span>
+                    Denim Jacket
+                  </a>
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">Large</p>
+              </div>
+              <p class="text-sm font-medium text-gray-900 product-price">$79.99</p>
+            </div>
+          </div>
+
+          <div class="group relative product-card" data-product="hat-one-size">
+            <div class="relative">
+              <div class="aspect-square w-full bg-gray-200 flex items-center justify-center text-gray-600 text-6xl group-hover:opacity-75 lg:aspect-auto lg:h-80">
+                🧢
+              </div>
+              <button class="AddToCartButton-button absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-10 bg-black hover:bg-gray-800 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center font-medium z-10" data-product="hat-one-size">
+                Add to Cart
+              </button>
+            </div>
+            <div class="mt-4 flex justify-between">
+              <div>
+                <h3 class="text-sm text-gray-700">
+                  <a href="/products.html?product=hat-one-size">
+                    <span aria-hidden="true" class="absolute inset-0"></span>
+                    Baseball Cap
+                  </a>
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">One Size</p>
+              </div>
+              <p class="text-sm font-medium text-gray-900 product-price">$24.99</p>
+            </div>
+          </div>
+
+          <div class="group relative product-card" data-product="sneakers-10">
+            <div class="relative">
+              <div class="aspect-square w-full bg-gray-200 flex items-center justify-center text-gray-600 text-6xl group-hover:opacity-75 lg:aspect-auto lg:h-80">
+                👟
+              </div>
+              <button class="AddToCartButton-button absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-10 bg-black hover:bg-gray-800 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center font-medium z-10" data-product="sneakers-10">
+                Add to Cart
+              </button>
+            </div>
+            <div class="mt-4 flex justify-between">
+              <div>
+                <h3 class="text-sm text-gray-700">
+                  <a href="/products.html?product=sneakers-10">
+                    <span aria-hidden="true" class="absolute inset-0"></span>
+                    Sneakers
+                  </a>
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">Size 10</p>
+              </div>
+              <p class="text-sm font-medium text-gray-900 product-price">$89.99</p>
+            </div>
+          </div>
+
+          <div class="group relative product-card" data-product="backpack-black">
+            <div class="relative">
+              <div class="aspect-square w-full bg-gray-200 flex items-center justify-center text-gray-600 text-6xl group-hover:opacity-75 lg:aspect-auto lg:h-80">
+                🎒
+              </div>
+              <button class="AddToCartButton-button absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-10 bg-black hover:bg-gray-800 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center font-medium z-10" data-product="backpack-black">
+                Add to Cart
+              </button>
+            </div>
+            <div class="mt-4 flex justify-between">
+              <div>
+                <h3 class="text-sm text-gray-700">
+                  <a href="/products.html?product=backpack-black">
+                    <span aria-hidden="true" class="absolute inset-0"></span>
+                    Backpack
+                  </a>
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">Black</p>
+              </div>
+              <p class="text-sm font-medium text-gray-900 product-price">$59.99</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="cart-section" style="margin-top: 2rem;">
+        <h2>Debug Tools</h2>
+        <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;">
+          Clear chat history and navigation flags to start fresh
+        </p>
+        <button class="ClearStorageButton-button" id="clear-storage-btn">
+          Clear Chat History & Reset
+        </button>
+      </div>
+    </div>
+
+    <div id="launcher-root"></div>
+    <script type="module" src="/src/action-middleware-demo.ts"></script>
+    <script>
+      // Cart functionality
+      let cart = [];
+      
+      // Initialize cart count on page load
+      function initCart() {
+        updateCart();
+      }
+      
+      function updateCart() {
+        const cartDropdownItemsEl = document.getElementById('cart-dropdown-items');
+        const cartDropdownFooterEl = document.getElementById('cart-dropdown-footer');
+        const cartCountEl = document.getElementById('cart-count');
+        
+        // Update cart count in navbar
+        if (cartCountEl) {
+          cartCountEl.textContent = cart.length;
+        }
+        
+        // Update cart dropdown items display
+        if (cart.length === 0) {
+          if (cartDropdownItemsEl) {
+            cartDropdownItemsEl.innerHTML = '<div class="text-center text-gray-500 py-8">Your cart is empty</div>';
+          }
+          if (cartDropdownFooterEl) {
+            cartDropdownFooterEl.classList.add('hidden');
+          }
+        } else {
+          if (cartDropdownItemsEl) {
+            cartDropdownItemsEl.innerHTML = cart.map((item, index) => `
+              <div class="flex items-center justify-between py-3 border-b border-gray-200">
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-gray-900">${item.name}</p>
+                  <p class="text-sm text-gray-500">${item.price}</p>
+                </div>
+                <button data-cart-index="${index}" class="remove-cart-item ml-4 text-gray-400 hover:text-black">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+            `).join('');
+          }
+          if (cartDropdownFooterEl) {
+            cartDropdownFooterEl.classList.remove('hidden');
+          }
+        }
+      }
+      
+      function removeFromCart(index) {
+        if (index >= 0 && index < cart.length) {
+          const item = cart[index];
+          cart.splice(index, 1);
+          updateCart();
+          
+          // Show notification
+          const notification = document.createElement('div');
+          notification.className = 'notification';
+          notification.textContent = `${item.name} removed from cart!`;
+          document.body.appendChild(notification);
+          
+          setTimeout(() => {
+            notification.remove();
+          }, 2000);
+        }
+      }
+      
+      // Handle remove cart item clicks using event delegation
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('.remove-cart-item')) {
+          const button = e.target.closest('.remove-cart-item');
+          const index = parseInt(button.getAttribute('data-cart-index'));
+          removeFromCart(index);
+        }
+      });
+      
+      // Handle add to cart buttons
+      document.querySelectorAll('.AddToCartButton-button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const product = btn.dataset.product;
+          const card = btn.closest('.product-card');
+          const titleLink = card.querySelector('h3 a');
+          const title = titleLink ? titleLink.textContent.trim() : '';
+          const price = card.querySelector('.product-price').textContent;
+          
+          cart.push({
+            id: product,
+            name: title,
+            price: price
+          });
+          
+          updateCart();
+          
+          // Show notification
+          const notification = document.createElement('div');
+          notification.className = 'notification';
+          notification.textContent = `${title} added to cart!`;
+          document.body.appendChild(notification);
+          
+          setTimeout(() => {
+            notification.remove();
+          }, 2000);
+        });
+      });
+      
+      // Handle cart dropdown toggle
+      const cartToggle = document.getElementById('cart-toggle');
+      const cartDropdown = document.getElementById('cart-dropdown');
+      
+      if (cartToggle && cartDropdown) {
+        cartToggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          cartDropdown.classList.toggle('hidden');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+          if (!cartToggle.contains(e.target) && !cartDropdown.contains(e.target)) {
+            cartDropdown.classList.add('hidden');
+          }
+        });
+      }
+      
+      // Handle checkout button in dropdown
+      const cartCheckoutBtn = document.getElementById('cart-checkout-btn');
+      if (cartCheckoutBtn) {
+        cartCheckoutBtn.addEventListener('click', () => {
+          if (cart.length === 0) {
+            alert('Your cart is empty!');
+            return;
+          }
+          alert(`Checking out ${cart.length} item(s)!`);
+          cartDropdown.classList.add('hidden');
+        });
+      }
+      
+      // Handle clear storage button
+      document.getElementById('clear-storage-btn').addEventListener('click', () => {
+        if (confirm('Are you sure you want to clear all chat history and reset? This will reload the page.')) {
+          // Clear localStorage keys used by the middleware
+          localStorage.removeItem('persona-action-middleware');
+          localStorage.removeItem('persona-nav-flag');
+          
+          // Show notification
+          const notification = document.createElement('div');
+          notification.className = 'notification';
+          notification.textContent = 'Chat history cleared! Reloading...';
+          document.body.appendChild(notification);
+          
+          // Reload page after a short delay
+          setTimeout(() => {
+            window.location.reload();
+          }, 500);
+        }
+      });
+      
+      // Initialize cart on page load
+      initCart();
+    </script>
+  </body>
+</html>
+

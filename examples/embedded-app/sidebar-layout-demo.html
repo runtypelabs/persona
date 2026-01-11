@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sidebar Layout Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+    }
+
+    /* Main content takes full page */
+    .main-content {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .main-content img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Custom welcome section styling */
+    .sidebar-welcome {
+      padding: 24px 20px;
+    }
+
+    .sidebar-welcome-icon {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sidebar-welcome-icon svg {
+      width: 48px;
+      height: 48px;
+      color: #374151;
+    }
+
+    .sidebar-welcome-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .sidebar-welcome-description {
+      font-size: 15px;
+      color: #6b7280;
+      line-height: 1.5;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* Custom agent label styling */
+    .agent-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .agent-label .agent-icon {
+      width: 24px;
+      height: 24px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    /* Message styling */
+    .message-group {
+      margin-bottom: 16px;
+    }
+
+    .message-timestamp {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
+
+    .message-timestamp.user-timestamp {
+      text-align: right;
+    }
+
+    /* Markdown content styling */
+    .tvw-prose {
+      line-height: 1.6;
+    }
+
+    .tvw-prose p {
+      margin: 0 0 0.75em 0;
+    }
+
+    .tvw-prose p:last-child {
+      margin-bottom: 0;
+    }
+
+    .tvw-prose ul, .tvw-prose ol {
+      margin: 0.5em 0;
+      padding-left: 1.5em;
+    }
+
+    .tvw-prose li {
+      margin: 0.25em 0;
+    }
+
+    .tvw-prose code {
+      background: #f3f4f6;
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      font-size: 0.9em;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .tvw-prose pre {
+      background: #1f2937;
+      color: #f9fafb;
+      padding: 12px 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 0.75em 0;
+    }
+
+    .tvw-prose pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+    }
+
+    .tvw-prose strong {
+      font-weight: 600;
+    }
+
+    .tvw-prose em {
+      font-style: italic;
+    }
+
+    .tvw-prose a {
+      color: #3b82f6;
+      text-decoration: underline;
+    }
+
+    .tvw-prose h1, .tvw-prose h2, .tvw-prose h3 {
+      font-weight: 600;
+      margin: 0.75em 0 0.5em 0;
+    }
+
+    .tvw-prose h1 { font-size: 1.25em; }
+    .tvw-prose h2 { font-size: 1.15em; }
+    .tvw-prose h3 { font-size: 1.05em; }
+
+    .tvw-prose blockquote {
+      border-left: 3px solid #d1d5db;
+      padding-left: 1em;
+      margin: 0.75em 0;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <!-- Main Content (placeholder background) -->
+  <div class="main-content">
+    <img src="https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&q=80" alt="Modern workspace" />
+  </div>
+
+  <script type="module">
+    import "@runtypelabs/persona/widget.css";
+    import { createAgentExperience, markdownPostprocessor } from "@runtypelabs/persona";
+
+    // Reference to controller
+    let widgetController = null;
+
+    // Toggle function for collapse button
+    const togglePanel = () => {
+      if (widgetController) {
+        widgetController.toggle();
+      }
+    };
+
+    // Custom header - minimal with icon, title, and collapse button
+    const renderCustomHeader = ({ config, onClose }) => {
+      const header = document.createElement('div');
+      header.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        background: white;
+        border-bottom: 1px solid #e5e7eb;
+      `;
+
+      // Left side: icon + title
+      const leftSide = document.createElement('div');
+      leftSide.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+      leftSide.innerHTML = `
+        <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </div>
+        <span style="font-weight: 600; font-size: 15px; color: #111827;">Assistant</span>
+      `;
+      header.appendChild(leftSide);
+
+      // Right side: collapse button
+      const collapseBtn = document.createElement('button');
+      collapseBtn.style.cssText = `
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9ca3af;
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+      `;
+      collapseBtn.innerHTML = '«';
+      collapseBtn.onmouseenter = () => collapseBtn.style.background = '#f3f4f6';
+      collapseBtn.onmouseleave = () => collapseBtn.style.background = 'transparent';
+      collapseBtn.onclick = togglePanel;
+      header.appendChild(collapseBtn);
+
+      return header;
+    };
+
+    // Custom welcome section
+    const renderWelcomeSlot = ({ defaultContent }) => {
+      const welcome = document.createElement('div');
+      welcome.className = 'sidebar-welcome';
+      welcome.innerHTML = `
+        <div class="sidebar-welcome-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </div>
+        <h1 class="sidebar-welcome-title">Hello 👋</h1>
+        <p class="sidebar-welcome-description">
+          I'm your AI assistant. Ask me anything and I'll help you find the answers you need.
+        </p>
+      `;
+      return welcome;
+    };
+
+    // Custom message renderer with agent label
+    const renderAssistantMessage = ({ message, streaming }) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'message-group';
+
+      // Agent label
+      const agentLabel = document.createElement('div');
+      agentLabel.className = 'agent-label';
+      agentLabel.innerHTML = `
+        <span class="agent-icon">💬</span>
+        <span>Assistant</span>
+      `;
+      wrapper.appendChild(agentLabel);
+
+      // Message bubble
+      const bubble = document.createElement('div');
+      bubble.style.cssText = `
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #374151;
+      `;
+
+      // Content - render as markdown
+      const content = document.createElement('div');
+      content.className = 'tvw-prose';
+      content.innerHTML = markdownPostprocessor(message.content || '');
+      bubble.appendChild(content);
+
+      // Typing indicator for streaming
+      if (streaming && (!message.content || !message.content.trim())) {
+        const typing = document.createElement('div');
+        typing.style.cssText = 'display: flex; align-items: center; gap: 4px; padding: 4px 0;';
+        typing.innerHTML = `
+          <div style="width: 6px; height: 6px; background: #9ca3af; border-radius: 50%; animation: typing 1.4s infinite;"></div>
+          <div style="width: 6px; height: 6px; background: #9ca3af; border-radius: 50%; animation: typing 1.4s infinite 0.2s;"></div>
+          <div style="width: 6px; height: 6px; background: #9ca3af; border-radius: 50%; animation: typing 1.4s infinite 0.4s;"></div>
+        `;
+        bubble.appendChild(typing);
+      }
+
+      wrapper.appendChild(bubble);
+
+      // Timestamp
+      if (message.createdAt) {
+        const timestamp = document.createElement('div');
+        timestamp.className = 'message-timestamp';
+        timestamp.textContent = new Date(message.createdAt).toLocaleTimeString([], { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+        wrapper.appendChild(timestamp);
+      }
+
+      return wrapper;
+    };
+
+    // Custom user message renderer
+    const renderUserMessage = ({ message }) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'message-group';
+      wrapper.style.cssText = 'display: flex; flex-direction: column; align-items: flex-end; width: 100%;';
+
+      // Message bubble
+      const bubble = document.createElement('div');
+      bubble.style.cssText = `
+        background: #3b82f6;
+        border-radius: 12px;
+        padding: 8px 16px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: white;
+        max-width: 80%;
+      `;
+      bubble.textContent = message.content;
+      wrapper.appendChild(bubble);
+
+      // Timestamp
+      if (message.createdAt) {
+        const timestamp = document.createElement('div');
+        timestamp.className = 'message-timestamp user-timestamp';
+        timestamp.textContent = new Date(message.createdAt).toLocaleTimeString([], { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        });
+        wrapper.appendChild(timestamp);
+      }
+
+      return wrapper;
+    };
+
+    // Add typing animation keyframes (only custom style needed now!)
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes typing {
+        0%, 60%, 100% { opacity: 0.3; }
+        30% { opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Initialize widget
+    widgetController = createAgentExperience(
+      document.body,
+      {
+        apiUrl: '/api/chat/dispatch',
+        launcher: {
+          enabled: true,
+          position: 'bottom-left',
+          title: 'Assistant',
+          subtitle: 'Here to help',
+          agentIconText: '💬',
+          size: '56px',
+          backgroundColor: '#111827',
+          iconColor: '#ffffff',
+          borderRadius: '28px',
+          // sidebarMode: positions panel as a full-height sidebar flush with screen edges
+          sidebarMode: true,
+          sidebarWidth: '440px',
+        },
+        storageAdapter: {
+          load: () => null,
+          save: () => {},
+          clear: () => {}
+        },
+        copy: {
+          inputPlaceholder: 'Type your message...',
+        },
+        theme: {
+          primary: '#3b82f6',
+          accent: '#3b82f6',
+          surface: '#ffffff',
+          container: '#f9fafb',
+          border: '#e5e7eb',
+          divider: 'transparent',
+          messageBorder: '#e5e7eb',
+          muted: '#6b7280',
+        },
+        statusIndicator: {
+          visible: false,
+        },
+        sendButton: {
+          useIcon: true,
+          iconName: 'send',
+          backgroundColor: '#e5e7eb',
+          textColor: '#9ca3af',
+          size: '36px',
+        },
+        voiceRecognition: {
+          enabled: false,
+        },
+        suggestionChips: [],
+        layout: {
+          header: {
+            render: renderCustomHeader
+          },
+          messages: {
+            layout: 'bubble',
+            timestamp: {
+              show: true,
+              position: 'below'
+            },
+            renderAssistantMessage,
+            renderUserMessage
+          },
+          slots: {
+            'body-top': renderWelcomeSlot
+          }
+        },
+        plugins: [{
+          id: 'sidebar-layout',
+          renderHeader: renderCustomHeader,
+          renderMessage: ({ message, defaultRenderer, config }) => {
+            if (message.role === 'user') {
+              return renderUserMessage({ message, config, streaming: false });
+            } else if (message.role === 'assistant' && !message.variant) {
+              return renderAssistantMessage({ message, config, streaming: message.streaming });
+            }
+            return defaultRenderer();
+          }
+        }],
+        initialMessages: [
+          {
+            id: '1',
+            role: 'assistant',
+            content: `Hi there! 👋
+
+I'm your AI assistant. This demo showcases the **sidebar layout mode**, which positions the chat panel as a full-height sidebar flush with the screen edges.
+
+## Key features demonstrated:
+
+- Custom header with collapse button
+- Custom welcome section
+- Custom message styling with timestamps
+- Full-height sidebar layout
+- **Markdown rendering** with support for:
+  - \`inline code\`
+  - **bold** and *italic* text
+  - [links](https://example.com)
+
+\`\`\`javascript
+// Code blocks too!
+const greeting = "Hello, world!";
+console.log(greeting);
+\`\`\`
+
+Feel free to ask me anything!`,
+            createdAt: new Date(Date.now() - 60000).toISOString()
+          },
+          {
+            id: '2',
+            role: 'user',
+            content: 'How do I enable sidebar mode?',
+            createdAt: new Date(Date.now() - 30000).toISOString()
+          },
+          {
+            id: '3',
+            role: 'assistant',
+            content: '',
+            streaming: true,
+            createdAt: new Date().toISOString()
+          }
+        ]
+      }
+    );
+
+    // Start with panel open
+    widgetController.open();
+
+    console.log('Sidebar layout demo initialized');
+  </script>
+</body>
+</html>

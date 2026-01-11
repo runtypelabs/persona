@@ -1,0 +1,21 @@
+{
+  "name": "persona",
+  "private": true,
+  "scripts": {
+    "build": "pnpm --filter @runtypelabs/persona build && pnpm --filter @runtypelabs/persona-proxy build",
+    "build:widget": "pnpm --filter @runtypelabs/persona build",
+    "build:proxy": "pnpm --filter @runtypelabs/persona-proxy build",
+    "lint": "pnpm --filter @runtypelabs/persona lint && pnpm --filter @runtypelabs/persona-proxy lint",
+    "typecheck": "pnpm --filter @runtypelabs/persona typecheck && pnpm --filter @runtypelabs/persona-proxy typecheck",
+    "dev:widget": "pnpm --filter embedded-app dev",
+    "dev:vercel": "pnpm --filter vercel-edge dev",
+    "dev:cloudflare": "pnpm --filter cloudflare-workers dev",
+    "dev": "concurrently \"pnpm dev:vercel\" \"pnpm dev:widget\"",
+    "changeset": "changeset",
+    "release": "changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.7",
+    "concurrently": "^8.2.2"
+  }
+}

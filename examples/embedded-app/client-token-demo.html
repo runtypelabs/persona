@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Client Token Demo - Vanilla Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #3056D3;
+      --primary-dark: #1e40af;
+      --secondary: #13C296;
+      --dark: #090E34;
+      --dark-2: #1D2144;
+      --body-color: #637381;
+      --body-bg: #f3f4f6;
+      --white: #ffffff;
+      --border: #e7e7e7;
+      --shadow: 0 5px 20px 0 rgba(9, 14, 52, 0.08);
+      --shadow-lg: 0 10px 40px 0 rgba(9, 14, 52, 0.12);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--body-bg);
+      color: var(--body-color);
+      line-height: 1.7;
+      font-size: 16px;
+    }
+
+    /* Hero Section */
+    .hero {
+      background: linear-gradient(180deg, rgba(48, 86, 211, 0.06) 0%, rgba(48, 86, 211, 0) 100%);
+      padding: 40px 40px 0 60px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(48, 86, 211, 0.3), transparent);
+    }
+
+    .hero-shapes {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .hero-shape-1 {
+      position: absolute;
+      top: -200px;
+      right: -100px;
+      width: 500px;
+      height: 500px;
+      background: linear-gradient(135deg, rgba(48, 86, 211, 0.1) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .hero-shape-2 {
+      position: absolute;
+      bottom: -150px;
+      left: -100px;
+      width: 400px;
+      height: 400px;
+      background: linear-gradient(135deg, rgba(19, 194, 150, 0.08) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-content {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--white);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--dark-2);
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--secondary);
+      border-radius: 50%;
+    }
+
+    h1 {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 24px;
+      line-height: 1.2;
+    }
+
+    h1 span {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-description {
+      font-size: 18px;
+      color: var(--body-color);
+      margin-bottom: 32px;
+      max-width: 560px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: var(--white);
+      box-shadow: 0 4px 14px 0 rgba(48, 86, 211, 0.4);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px 0 rgba(48, 86, 211, 0.5);
+    }
+
+    .btn-primary:disabled {
+      background: #9ca3af;
+      box-shadow: none;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: var(--white);
+      color: var(--dark);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    /* Main Content */
+    .main-content {
+      padding: 60px 0 100px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 40px;
+      align-items: start;
+    }
+
+    @media (max-width: 968px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--white);
+      border-radius: 4px;
+      padding: 32px;
+      box-shadow: var(--shadow);
+      border: 1px solid transparent;
+      transition: all 0.3s ease;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-lg);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, rgba(48, 86, 211, 0.1) 0%, rgba(19, 194, 150, 0.1) 100%);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--dark);
+    }
+
+    .card + .card {
+      margin-top: 24px;
+    }
+
+    /* Form Elements */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--dark-2);
+      margin-bottom: 8px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 14px 18px;
+      font-size: 15px;
+      font-family: 'Inter', monospace;
+      background: var(--body-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--dark);
+      transition: all 0.3s ease;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: var(--white);
+      box-shadow: 0 0 0 4px rgba(48, 86, 211, 0.1);
+    }
+
+    input[type="text"]::placeholder {
+      color: #9ca3af;
+    }
+
+    /* Status */
+    .status-wrapper {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .status-indicator.idle {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+
+    .status-indicator.initializing {
+      background: rgba(251, 191, 36, 0.15);
+      color: #d97706;
+    }
+
+    .status-indicator.connected {
+      background: rgba(19, 194, 150, 0.15);
+      color: #059669;
+    }
+
+    .status-indicator.error {
+      background: rgba(239, 68, 68, 0.15);
+      color: #dc2626;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-indicator.initializing .status-dot {
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.9); }
+    }
+
+    /* Session Details */
+    .session-details {
+      background: var(--body-bg);
+      border-radius: 4px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+
+    .session-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      font-size: 14px;
+    }
+
+    .session-row:not(:last-child) {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .session-label {
+      color: var(--body-color);
+    }
+
+    .session-value {
+      font-weight: 500;
+      color: var(--dark);
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+      font-size: 13px;
+    }
+
+    /* Widget Container */
+    .widget-card {
+      position: sticky;
+      top: 40px;
+    }
+
+    .widget-container {
+      height: 550px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--white);
+      border: 1px solid var(--border);
+    }
+
+    /* Code Examples Section */
+    .examples-section {
+      margin-top: 24px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+
+    .tab {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: var(--body-color);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .tab:hover {
+      background: var(--body-bg);
+      color: var(--dark);
+    }
+
+    .tab.active {
+      background: var(--primary);
+      color: var(--white);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .tab-description {
+      font-size: 15px;
+      color: var(--body-color);
+      margin-bottom: 16px;
+    }
+
+    .code-block {
+      background: var(--dark);
+      border-radius: 4px;
+      padding: 24px;
+      overflow-x: auto;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-size: 14px;
+      line-height: 1.8;
+      color: #e5e7eb;
+    }
+
+    .code-block .comment {
+      color: #6b7280;
+    }
+
+    .code-block .keyword {
+      color: #c084fc;
+    }
+
+    .code-block .string {
+      color: #34d399;
+    }
+
+    .code-block .property {
+      color: #60a5fa;
+    }
+
+    .code-block .tag {
+      color: #f472b6;
+    }
+
+    /* Back Link */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--body-color);
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      margin-bottom: 20px;
+    }
+
+    .back-link:hover {
+      color: var(--primary);
+    }
+
+    .back-link svg {
+      transition: transform 0.3s ease;
+    }
+
+    .back-link:hover svg {
+      transform: translateX(-4px);
+    }
+
+    /* Info Box */
+    .info-box {
+      background: linear-gradient(135deg, rgba(48, 86, 211, 0.05) 0%, rgba(19, 194, 150, 0.05) 100%);
+      border: 1px solid rgba(48, 86, 211, 0.1);
+      border-radius: 4px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .info-box p {
+      font-size: 15px;
+      color: var(--body-color);
+      margin: 0;
+    }
+
+    .info-box strong {
+      color: var(--dark);
+    }
+
+    .info-box code {
+      background: rgba(48, 86, 211, 0.1);
+      color: var(--primary);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'SF Mono', monospace;
+    }
+
+    /* Section Title */
+    .section-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .section-header h2 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 16px;
+    }
+
+    .section-header p {
+      font-size: 17px;
+      color: var(--body-color);
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 32px;
+      }
+
+      .hero {
+        padding: 80px 0 60px;
+      }
+
+      .card {
+        padding: 24px;
+      }
+
+      .widget-container {
+        height: 450px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-shapes">
+      <div class="hero-shape-1"></div>
+      <div class="hero-shape-2"></div>
+    </div>
+    <div class="container">
+      <div class="hero-content">
+        <h1>
+          <span>Client Token</span> Integration
+        </h1>
+        <p class="hero-description">
+          Enable direct browser-to-API communication without requiring a proxy server. 
+          Tokens are origin-validated for secure, seamless deployment.
+        </p>
+        <div class="btn-row">
+          <a href="/" class="btn btn-secondary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            Back to Examples
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <section class="main-content" id="demo">
+    <div class="container">
+      <div class="grid">
+        <!-- Configuration Card -->
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-icon">🔑</div>
+              <h3 class="card-title">Configuration</h3>
+            </div>
+
+            <div class="info-box">
+              <p>
+                <strong>Client Token Mode</strong> allows the widget to communicate directly with the Travrse API. 
+                Get your token from the <a href="#" style="color: var(--primary);">Travrse Dashboard</a>.
+              </p>
+            </div>
+
+            <div class="form-group">
+              <label for="client-token">Client Token</label>
+              <input 
+                type="text" 
+                id="client-token" 
+                placeholder="ct_live_flow01k7_a8b9c0d1e2f3..."
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="flow-id">Flow ID <span style="color: var(--body-color); font-weight: 400;">(optional)</span></label>
+              <input 
+                type="text" 
+                id="flow-id" 
+                placeholder="flow_01abc..."
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="api-url">API URL <span style="color: var(--body-color); font-weight: 400;">(optional)</span></label>
+              <input 
+                type="text" 
+                id="api-url" 
+                placeholder="https://api.travrse.ai"
+              />
+            </div>
+
+            <div class="btn-row" style="justify-content: flex-start;">
+              <button class="btn btn-primary" id="init-btn">
+                Initialize Session
+              </button>
+              <button class="btn btn-secondary" id="clear-btn">
+                Clear
+              </button>
+            </div>
+
+            <div class="status-wrapper">
+              <div id="session-status">
+                <span class="status-indicator idle">
+                  <span class="status-dot"></span>
+                  Not initialized
+                </span>
+              </div>
+
+              <div id="session-details" class="session-details" style="display: none;">
+                <div class="session-row">
+                  <span class="session-label">Session ID</span>
+                  <span class="session-value" id="session-id">—</span>
+                </div>
+                <div class="session-row">
+                  <span class="session-label">Expires At</span>
+                  <span class="session-value" id="session-expires">—</span>
+                </div>
+                <div class="session-row">
+                  <span class="session-label">Flow</span>
+                  <span class="session-value" id="session-flow">—</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Code Examples -->
+          <div class="card examples-section">
+            <div class="card-header">
+              <div class="card-icon">📖</div>
+              <h3 class="card-title">Usage Examples</h3>
+            </div>
+
+            <div class="tabs">
+              <button class="tab active" data-tab="simple">Simple</button>
+              <button class="tab" data-tab="config">With Config</button>
+              <button class="tab" data-tab="programmatic">Programmatic</button>
+            </div>
+
+            <div class="tab-content active" id="tab-simple">
+              <p class="tab-description">
+                The simplest way to embed — just add a script tag with your token:
+              </p>
+              <div class="code-block">
+<span class="comment">&lt;!-- Single script tag --&gt;</span>
+&lt;<span class="tag">script</span>
+  <span class="property">src</span>=<span class="string">"https://cdn.jsdelivr.net/npm/@runtypelabs/persona/dist/install.global.js"</span>
+  <span class="property">data-travrse-token</span>=<span class="string">"ct_live_..."</span>
+&gt;&lt;/<span class="tag">script</span>&gt;
+              </div>
+            </div>
+
+            <div class="tab-content" id="tab-config">
+              <p class="tab-description">
+                Use <code>window.siteAgentConfig</code> for more control:
+              </p>
+              <div class="code-block">
+&lt;<span class="tag">script</span>&gt;
+  <span class="property">window</span>.<span class="property">siteAgentConfig</span> = {
+    <span class="property">clientToken</span>: <span class="string">'ct_live_...'</span>,
+    <span class="property">flowId</span>: <span class="string">'flow_01abc...'</span>,
+    <span class="property">onSessionInit</span>: (<span class="property">session</span>) =&gt; {
+      console.<span class="property">log</span>(<span class="string">'Connected!'</span>);
+    }
+  };
+&lt;/<span class="tag">script</span>&gt;
+              </div>
+            </div>
+
+            <div class="tab-content" id="tab-programmatic">
+              <p class="tab-description">
+                For full control, initialize programmatically:
+              </p>
+              <div class="code-block">
+<span class="keyword">import</span> { initAgentWidget } <span class="keyword">from</span> <span class="string">'@runtypelabs/persona'</span>;
+
+<span class="keyword">const</span> controller = <span class="property">initAgentWidget</span>({
+  <span class="property">target</span>: <span class="string">'#chat'</span>,
+  <span class="property">config</span>: {
+    <span class="property">clientToken</span>: <span class="string">'ct_live_...'</span>,
+    <span class="property">onSessionExpired</span>: () =&gt; {
+      showRefreshPrompt();
+    }
+  }
+});
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Widget Demo Card -->
+        <div class="widget-card">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-icon">💬</div>
+              <h3 class="card-title">Live Demo</h3>
+            </div>
+            <div class="widget-container" id="widget-root"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="/src/client-token-demo.ts"></script>
+</body>
+
+</html>

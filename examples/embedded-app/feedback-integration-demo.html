@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Feedback Integration Demo - Client Message IDs</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      color: #1e293b;
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 1.5rem;
+      padding: 1.5rem;
+      max-width: 1400px;
+      margin: 0 auto;
+      margin-top: 2rem;
+      margin-bottom: 2rem;
+      min-height: 100vh;
+    }
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .panel {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+    }
+    .panel-header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: white;
+      padding: 1rem 1.5rem;
+    }
+    .panel-header h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .panel-header p {
+      margin: 0.5rem 0 0 0;
+      font-size: 0.85rem;
+      opacity: 0.8;
+    }
+    .panel-content {
+      padding: 1.5rem;
+    }
+    .info-section {
+      background: #f1f5f9;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-left: 4px solid #6366f1;
+    }
+    .info-section h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.9rem;
+      color: #475569;
+    }
+    .info-section p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+    .info-section code {
+      background: #e2e8f0;
+      padding: 0.125rem 0.375rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+    .feedback-log {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .log-entry {
+      padding: 0.75rem;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+      word-break: break-all;
+    }
+    .log-entry.upvote { background: #dcfce7; color: #166534; border-left: 3px solid #22c55e; }
+    .log-entry.downvote { background: #fee2e2; color: #991b1b; border-left: 3px solid #ef4444; }
+    .log-entry.copy { background: #dbeafe; color: #1e40af; border-left: 3px solid #3b82f6; }
+    .log-entry.csat { background: #fef3c7; color: #92400e; border-left: 3px solid #f59e0b; }
+    .log-entry.nps { background: #f3e8ff; color: #6b21a8; border-left: 3px solid #a855f7; }
+    .log-entry.session { background: #e0e7ff; color: #3730a3; border-left: 3px solid #6366f1; }
+    .log-entry.error { background: #fef2f2; color: #b91c1c; border-left: 3px solid #ef4444; }
+    .log-time { color: #94a3b8; font-size: 0.75rem; margin-top: 0.5rem; }
+    .empty-state {
+      text-align: center;
+      padding: 2rem;
+      color: #94a3b8;
+    }
+    .widget-container {
+      height: 600px;
+    }
+    #feedback-widget {
+      height: 100%;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .stat-card {
+      background: #f1f5f9;
+      padding: 0.75rem;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+    .stat-card.upvotes .stat-value { color: #22c55e; }
+    .stat-card.downvotes .stat-value { color: #ef4444; }
+    .stat-card.copies .stat-value { color: #3b82f6; }
+    .back-link {
+      position: relative;
+      top: 2rem;
+      left: 1rem;
+      background: rgba(255,255,255,0.95);
+      padding: 0.5rem 1rem;
+      margin: 1rem 1rem 3rem 1rem;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #0f172a;
+      font-size: 0.9rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: inline-block;
+    }
+    .back-link:hover {
+      background: white;
+    }
+    .button-group {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .action-btn {
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid;
+    }
+    .action-btn.csat {
+      background: #fef3c7;
+      border-color: #f59e0b;
+      color: #92400e;
+    }
+    .action-btn.csat:hover {
+      background: #fde68a;
+    }
+    .action-btn.nps {
+      background: #f3e8ff;
+      border-color: #a855f7;
+      color: #6b21a8;
+    }
+    .action-btn.nps:hover {
+      background: #e9d5ff;
+    }
+    .section-title {
+      margin: 0 0 0.75rem 0;
+      font-size: 0.9rem;
+      color: #475569;
+    }
+    .divider {
+      border: 0;
+      border-top: 1px solid #e2e8f0;
+      margin: 1rem 0;
+    }
+    .satisfaction-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .satisfaction-stats .stat-card.csat .stat-value { color: #f59e0b; }
+    .satisfaction-stats .stat-card.nps .stat-value { color: #a855f7; }
+  </style>
+</head>
+<body>
+  <a href="/" class="back-link">&larr; Back to examples</a>
+  
+  <div class="layout">
+    <!-- Left: Widget -->
+    <div class="panel widget-container">
+      <div id="feedback-widget"></div>
+    </div>
+
+    <!-- Right: Feedback Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Feedback Integration Demo</h2>
+        <p>Client-generated message IDs for API tracking</p>
+      </div>
+      <div class="panel-content">
+        <div class="info-section">
+          <h3>What's New</h3>
+          <p>
+            Message IDs are now generated on the client using <code>generateMessageId()</code>.
+            In client token mode, feedback is automatically sent to the Travrse API.
+            User and assistant messages can be tracked throughout their lifecycle.
+          </p>
+        </div>
+
+        <!-- Message Stats -->
+        <h3 class="section-title">Message Feedback Stats</h3>
+        <div class="stats">
+          <div class="stat-card upvotes">
+            <div class="stat-value" id="upvote-count">0</div>
+            <div class="stat-label">Upvotes</div>
+          </div>
+          <div class="stat-card downvotes">
+            <div class="stat-value" id="downvote-count">0</div>
+            <div class="stat-label">Downvotes</div>
+          </div>
+          <div class="stat-card copies">
+            <div class="stat-value" id="copy-count">0</div>
+            <div class="stat-label">Copies</div>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- CSAT/NPS Section -->
+        <h3 class="section-title">Satisfaction Feedback</h3>
+        <div class="satisfaction-stats">
+          <div class="stat-card csat">
+            <div class="stat-value" id="csat-rating">-</div>
+            <div class="stat-label">CSAT (1-5)</div>
+          </div>
+          <div class="stat-card nps">
+            <div class="stat-value" id="nps-rating">-</div>
+            <div class="stat-label">NPS (0-10)</div>
+          </div>
+        </div>
+
+        <div class="button-group">
+          <button class="action-btn csat" id="show-csat">Show CSAT Form</button>
+          <button class="action-btn nps" id="show-nps">Show NPS Form</button>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Event Log -->
+        <h3 class="section-title">Event Log</h3>
+        <div class="feedback-log" id="log-container">
+          <div class="empty-state">
+            <p>No events yet</p>
+            <p style="font-size: 0.75rem;">Send a message or interact with feedback buttons</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/feedback-integration-demo.ts"></script>
+</body>
+</html>
+
+
+

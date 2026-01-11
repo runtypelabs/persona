@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layout Configuration Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px;
+    }
+
+    .demo-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: white;
+      margin-bottom: 12px;
+      font-size: 32px;
+    }
+
+    .subtitle {
+      color: rgba(255, 255, 255, 0.8);
+      margin-bottom: 32px;
+      font-size: 18px;
+    }
+
+    .layout-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .layout-card {
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    .layout-card-header {
+      padding: 16px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .layout-card-header h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .layout-card-header p {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    .chat-container {
+      height: 500px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Override widget styles for demo */
+    .chat-container #persona-root {
+      display: flex !important;
+      flex-direction: column !important;
+      flex: 1 !important;
+      min-height: 0 !important;
+      height: 100% !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-container">
+    <h1>Layout Configuration Demo</h1>
+    <p class="subtitle">Three different header layouts using the new layout system</p>
+
+    <div class="layout-grid">
+      <!-- Default Layout -->
+      <div class="layout-card">
+        <div class="layout-card-header">
+          <h3>Default Layout</h3>
+          <p>Standard header with icon, title, subtitle</p>
+        </div>
+        <div class="chat-container" id="chat-default"></div>
+      </div>
+
+      <!-- Minimal Layout -->
+      <div class="layout-card">
+        <div class="layout-card-header">
+          <h3>Minimal Layout</h3>
+          <p>Simplified header with just title</p>
+        </div>
+        <div class="chat-container" id="chat-minimal"></div>
+      </div>
+
+      <!-- With Avatars & Timestamps -->
+      <div class="layout-card">
+        <div class="layout-card-header">
+          <h3>Messages with Avatars</h3>
+          <p>Shows avatars and timestamps</p>
+        </div>
+        <div class="chat-container" id="chat-avatars"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import "@runtypelabs/persona/widget.css";
+    import { createAgentExperience } from "@runtypelabs/persona";
+
+    const baseConfig = {
+      apiUrl: '/api/chat/dispatch',
+      launcher: { enabled: false },
+      statusIndicator: { visible: false },
+      voiceRecognition: { enabled: false },
+      suggestionChips: [],
+      sendButton: {
+        useIcon: true,
+        iconName: 'send',
+        size: '36px',
+      },
+      // Disable persistence so we use fresh initialMessages each time
+      storageAdapter: {
+        load: () => null,
+        save: () => {},
+        clear: () => {}
+      },
+      initialMessages: [
+        {
+          id: '1',
+          role: 'assistant',
+          content: 'Hello! How can I help you today?',
+          createdAt: new Date(Date.now() - 120000).toISOString()
+        },
+        {
+          id: '2',
+          role: 'user',
+          content: 'I have a question about layouts',
+          createdAt: new Date(Date.now() - 60000).toISOString()
+        },
+        {
+          id: '3',
+          role: 'assistant',
+          content: 'Of course! I\'d be happy to help explain the different layout options available.',
+          createdAt: new Date().toISOString()
+        }
+      ]
+    };
+
+    // 1. Default Layout
+    createAgentExperience(
+      document.getElementById('chat-default'),
+      {
+        ...baseConfig,
+        launcher: {
+          enabled: false,
+          title: 'Support Agent',
+          subtitle: 'Here to help',
+          headerIconName: 'message-circle',
+        },
+        layout: {
+          header: {
+            layout: 'default',
+            showIcon: true,
+            showTitle: true,
+            showSubtitle: true,
+            showCloseButton: false,
+            showClearChat: false
+          },
+          messages: {
+            layout: 'bubble'
+          }
+        }
+      }
+    );
+
+    // 2. Minimal Layout
+    createAgentExperience(
+      document.getElementById('chat-minimal'),
+      {
+        ...baseConfig,
+        launcher: {
+          enabled: false,
+          title: 'Quick Chat',
+          subtitle: 'Here to help you get answers fast',
+        },
+        layout: {
+          header: {
+            layout: 'minimal',
+            showCloseButton: false
+          },
+          messages: {
+            layout: 'minimal'
+          }
+        }
+      }
+    );
+
+    // 3. With Avatars & Timestamps
+    createAgentExperience(
+      document.getElementById('chat-avatars'),
+      {
+        ...baseConfig,
+        launcher: {
+          enabled: false,
+          title: 'AI Assistant',
+          subtitle: 'Always online',
+          headerIconName: 'bot',
+        },
+        layout: {
+          header: {
+            layout: 'expanded'
+          },
+          messages: {
+            layout: 'bubble',
+            avatar: {
+              show: true,
+              position: 'left',
+              userAvatar: '👤',
+              assistantAvatar: '🤖'
+            },
+            timestamp: {
+              show: true,
+              position: 'below'
+            }
+          }
+        }
+      }
+    );
+
+    console.log('All layout demos initialized');
+  </script>
+</body>
+</html>
+

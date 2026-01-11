@@ -1,0 +1,13 @@
+name = "persona-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Environment variables (non-sensitive)
+[vars]
+# Add any non-secret environment variables here
+
+# Secrets (set these using: wrangler secret put <KEY>)
+# Required:
+#   TRAVRSE_API_KEY - Your Travrse API key
+# Optional:
+#   TRAVRSE_FLOW_ID - Reference to an existing Travrse flow

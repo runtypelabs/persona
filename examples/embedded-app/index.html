@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vanilla Agent Demo</title>
+</head>
+
+<body>
+  <main class="demo-container">
+    <section>
+      <h1>Vanilla Agent Demo</h1>
+      <p>
+        This page renders the widget two ways: once through the vanilla
+        initializer and once as a floating launcher wired up to user actions.
+      </p>
+      <p>
+        The frontend proxy below lives at <code>/api/chat/dispatch</code>
+        and is powered by a Hono server.
+      </p>
+      <p>
+        Looking for other examples?
+      </p>
+      <ul>
+        <li><a href="/theme.html">Agent Editor (Style it visually)</a></li>
+        <li><a href="/json.html">Directive / interactive form example</a></li>
+        <li><a href="/action-middleware.html">Action middleware / e-commerce example</a></li>
+        <li><a href="/feedback-demo.html">Message Feedback Demo (Copy, Upvote, Downvote)</a></li>
+        <li><a href="/feedback-integration-demo.html">Feedback Integration Demo</a></li>
+        <li><a href="/client-token-demo.html">Client Token Demo (Direct API)</a></li>
+        <li><a href="/client-token-feedback-demo.html">Client Token Feedback Demo (Automatic Feedback)</a></li>
+      </ul>
+      <div class="cta-row">
+        <button id="open-chat" type="button">Open Launcher</button>
+        <button id="toggle-chat" type="button">Toggle Launcher</button>
+      </div>
+    </section>
+    <section>
+      <h2>Programmatic Control</h2>
+      <p>
+        The widget controller returned by <code>initAgentWidget</code> provides methods to programmatically control the
+        widget:
+      </p>
+      <div class="code-example">
+        <pre><code>const launcherController = initAgentWidget({
+  target: "#launcher-root",
+  config: { /* ... */ }
+});
+
+// Open the widget
+launcherController.open();
+
+// Close the widget
+launcherController.close();
+
+// Toggle the widget (open if closed, close if open)
+launcherController.toggle();</code></pre>
+      </div>
+      <p>
+        You can use these methods with your own UI elements, event handlers, or any JavaScript code. The buttons above
+        demonstrate this functionality.
+      </p>
+    </section>
+    <section>
+      <h2>Inline Embed</h2>
+      <div class="embedded-target" id="inline-widget"></div>
+    </section>
+  </main>
+  <div id="launcher-root"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>

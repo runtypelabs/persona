@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inline Scroll Test - Vanilla Agent</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 2rem;
+        background: #f1f5f9;
+        margin: 0;
+      }
+      h1 {
+        margin-bottom: 1rem;
+        color: #1e293b;
+      }
+      p {
+        color: #64748b;
+        margin-bottom: 1.5rem;
+        max-width: 600px;
+      }
+      .container-examples {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 2rem;
+        max-width: 1400px;
+      }
+      .example-card {
+        background: white;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      }
+      .example-card h2 {
+        font-size: 1.125rem;
+        margin: 0 0 0.75rem 0;
+        color: #1e293b;
+      }
+      .example-card p {
+        font-size: 0.875rem;
+        margin: 0 0 1rem 0;
+        color: #64748b;
+      }
+      /* Fixed height container - the widget should fill this and scroll internally */
+      .fixed-height-container {
+        height: 500px;
+        border: 2px dashed #cbd5e1;
+        border-radius: 0.5rem;
+      }
+      /* Smaller height to demonstrate scroll */
+      .small-height-container {
+        height: 350px;
+        border: 2px dashed #cbd5e1;
+        border-radius: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Inline Embed Scroll Test</h1>
+    <p>
+      This page tests the inline embed behavior where the widget should stay within 
+      a container with a specific height, scrolling only the inner chat bubble part 
+      of the widget.
+    </p>
+    
+    <div class="container-examples">
+      <div class="example-card">
+        <h2>500px Fixed Height Container</h2>
+        <p>The widget should fill this 500px container and scroll its chat messages internally.</p>
+        <div class="fixed-height-container" id="widget-500"></div>
+      </div>
+      
+      <div class="example-card">
+        <h2>350px Small Height Container</h2>
+        <p>A smaller container to demonstrate that the widget adapts and scrolls within the constraint.</p>
+        <div class="small-height-container" id="widget-350"></div>
+      </div>
+    </div>
+    
+    <script type="module">
+      import "@runtypelabs/persona/widget.css";
+      import "./src/index.css";
+      import { initAgentWidget, DEFAULT_WIDGET_CONFIG } from "@runtypelabs/persona";
+
+      const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
+      const proxyUrl =
+        import.meta.env.VITE_PROXY_URL ?
+          `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch` :
+          `http://localhost:${proxyPort}/api/chat/dispatch`;
+
+      // Widget in 500px container using initAgentWidget
+      initAgentWidget({
+        target: "#widget-500",
+        useShadowDom: false,
+        config: {
+          ...DEFAULT_WIDGET_CONFIG,
+          apiUrl: proxyUrl,
+          launcher: { enabled: false },
+          theme: {
+            ...DEFAULT_WIDGET_CONFIG.theme,
+            primary: "#6366f1",
+            accent: "#6366f1",
+            surface: "#ffffff",
+            muted: "#64748b"
+          },
+          copy: {
+            ...DEFAULT_WIDGET_CONFIG.copy,
+            welcomeTitle: "500px Container",
+            welcomeSubtitle: "Send messages to see scrolling behavior."
+          },
+          suggestionChips: [
+            "Tell me a long story",
+            "List 10 interesting facts",
+            "What can you help me with?"
+          ]
+        }
+      });
+
+      // Widget in 350px container using initAgentWidget
+      initAgentWidget({
+        target: "#widget-350",
+        useShadowDom: false,
+        config: {
+          ...DEFAULT_WIDGET_CONFIG,
+          apiUrl: proxyUrl,
+          launcher: { enabled: false },
+          theme: {
+            ...DEFAULT_WIDGET_CONFIG.theme,
+            primary: "#0ea5e9",
+            accent: "#0ea5e9",
+            surface: "#ffffff",
+            muted: "#64748b"
+          },
+          copy: {
+            ...DEFAULT_WIDGET_CONFIG.copy,
+            welcomeTitle: "350px Container",
+            welcomeSubtitle: "A smaller container for comparison."
+          },
+          suggestionChips: [
+            "Tell me about yourself",
+            "What time is it?",
+            "Say hello!"
+          ]
+        }
+      });
+    </script>
+  </body>
+</html>
+
