@@ -155,7 +155,7 @@ export type AgentWidgetMessageFeedback = {
  * Configuration for message action buttons (copy, upvote, downvote)
  * 
  * **Client Token Mode**: When using `clientToken`, feedback is automatically
- * sent to your Travrse backend. Just enable the buttons and you're done!
+ * sent to your Runtype backend. Just enable the buttons and you're done!
  * The `onFeedback` and `onCopy` callbacks are optional for additional local handling.
  * 
  * @example
@@ -1449,7 +1449,7 @@ export type AgentWidgetConfig = {
    *
    * @example
    * ```typescript
-   * // For Travrse API format
+   * // For Runtype API format
    * config: {
    *   parseSSEEvent: (data) => {
    *     if (data.type === 'step_chunk' && data.chunk) {

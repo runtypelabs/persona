@@ -204,7 +204,7 @@ clientTokenInput.addEventListener('keypress', (e) => {
 });
 
 // Initialize with demo values if running locally (for testing)
-// In production, these would come from actual Travrse dashboard
+// In production, these would come from actual Runtype dashboard
 if (window.location.hostname === 'localhost') {
   // You can pre-fill a test token here for local development
   // clientTokenInput.value = 'ct_test_...';

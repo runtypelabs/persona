@@ -1,4 +1,4 @@
-import type { TravrseFlowConfig } from "../index.js";
+import type { RuntypeFlowConfig } from "../index.js";
 
 /**
  * Shopping assistant flow configuration
@@ -8,7 +8,7 @@ import type { TravrseFlowConfig } from "../index.js";
  * - Element clicks with messages
  * - Stripe checkout
  */
-export const SHOPPING_ASSISTANT_FLOW: TravrseFlowConfig = {
+export const SHOPPING_ASSISTANT_FLOW: RuntypeFlowConfig = {
   name: "Shopping Assistant Flow",
   description: "Returns JSON actions for page interaction",
   steps: [
@@ -87,7 +87,7 @@ Example conversation flow:
  * This flow uses DOM context from record metadata instead of user message.
  * The metadata should include dom_elements, dom_body, page_url, and page_title.
  */
-export const SHOPPING_ASSISTANT_METADATA_FLOW: TravrseFlowConfig = {
+export const SHOPPING_ASSISTANT_METADATA_FLOW: RuntypeFlowConfig = {
   name: "Metadata-Based Shopping Assistant",
   description: "Uses DOM context from record metadata for page interaction",
   steps: [

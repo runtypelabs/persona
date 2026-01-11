@@ -33,8 +33,8 @@ type DispatchOptions = {
 
 type SSEHandler = (event: AgentWidgetEvent) => void;
 
-const DEFAULT_ENDPOINT = "https://api.travrse.ai/v1/dispatch";
-const DEFAULT_CLIENT_API_BASE = "https://api.travrse.ai";
+const DEFAULT_ENDPOINT = "https://api.runtype.com/v1/dispatch";
+const DEFAULT_CLIENT_API_BASE = "https://api.runtype.com";
 
 /**
  * Check if a message has valid (non-empty) content for sending to the API.
@@ -1199,7 +1199,7 @@ export class AgentWidgetClient {
             continue;
           }
           const assistant = ensureAssistantMessage();
-          // Support various field names: text, delta, content, chunk (Travrse uses 'chunk')
+          // Support various field names: text, delta, content, chunk (Runtype uses 'chunk')
           const chunk = payload.text ?? payload.delta ?? payload.content ?? payload.chunk ?? "";
           if (chunk) {
             // Accumulate raw content for structured format parsing

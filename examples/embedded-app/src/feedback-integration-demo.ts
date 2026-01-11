@@ -1,9 +1,9 @@
 /**
  * Feedback Integration Demo
- * 
+ *
  * This demo shows how the persona widget now supports client-provided
- * message IDs for feedback tracking with the Travrse API.
- * 
+ * message IDs for feedback tracking with the Runtype API.
+ *
  * Key changes:
  * 1. Message IDs are generated on the client before sending
  * 2. Both user and assistant messages have trackable IDs
@@ -26,7 +26,7 @@ import type {
 
 // Configuration
 const clientToken = import.meta.env.VITE_CLIENT_TOKEN || '';
-const apiUrl = import.meta.env.VITE_API_URL || 'https://api.travrse.ai';
+const apiUrl = import.meta.env.VITE_API_URL || 'https://api.runtype.com';
 
 // Stats tracking
 const stats = { upvotes: 0, downvotes: 0, copies: 0, csat: null as number | null, nps: null as number | null };

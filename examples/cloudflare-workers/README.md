@@ -1,6 +1,6 @@
 # Vanilla Agent Proxy - Cloudflare Workers
 
-A production-ready chat proxy service deployed on Cloudflare Workers, powered by the `@runtypelabs/persona-proxy` package and Travrse AI.
+A production-ready chat proxy service deployed on Cloudflare Workers, powered by the `@runtypelabs/persona-proxy` package and Runtype AI.
 
 ## Features
 
@@ -19,7 +19,7 @@ A production-ready chat proxy service deployed on Cloudflare Workers, powered by
    - Great for getting started
 
 2. **`/api/chat/dispatch-directive`** - Directive-enabled flow
-   - Uses a reference to an existing Travrse flow (via `TRAVRSE_FLOW_ID`)
+   - Uses a reference to an existing Runtype flow (via `RUNTYPE_FLOW_ID`)
    - Demonstrates flow ID configuration
 
 3. **`/api/chat/dispatch-action`** - Shopping assistant with JSON actions
@@ -39,7 +39,7 @@ A production-ready chat proxy service deployed on Cloudflare Workers, powered by
 - [Node.js](https://nodejs.org/) 18+ and pnpm installed
 - [Cloudflare account](https://dash.cloudflare.com/sign-up) (free tier works)
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) installed globally or use via pnpm
-- Travrse API key ([get one here](https://travrse.ai))
+- Runtype API key ([get one here](https://runtype.com))
 
 ## Setup
 
@@ -60,18 +60,18 @@ cd examples/cloudflare-proxy
 cp .dev.vars.example .dev.vars
 ```
 
-Edit `.dev.vars` and add your Travrse API key and optionally other configuration:
+Edit `.dev.vars` and add your Runtype API key and optionally other configuration:
 
 ```env
-TRAVRSE_API_KEY=tv_test_your_api_key_here
-TRAVRSE_FLOW_ID=flow_your_flow_id_here  # Optional, for directive flow
+RUNTYPE_API_KEY=rt_test_your_api_key_here
+RUNTYPE_FLOW_ID=flow_your_flow_id_here  # Optional, for directive flow
 STRIPE_SECRET_KEY=sk_test_your_stripe_key_here  # Optional, for checkout functionality
 ALLOWED_ORIGINS=*  # Optional, defaults to "*". For production, use: https://yourdomain.com
 ```
 
 **Environment Variables:**
-- `TRAVRSE_API_KEY` (required): Your Travrse API key
-- `TRAVRSE_FLOW_ID` (optional): Reference to an existing Travrse flow for the directive endpoint
+- `RUNTYPE_API_KEY` (required): Your Runtype API key
+- `RUNTYPE_FLOW_ID` (optional): Reference to an existing Runtype flow for the directive endpoint
 - `STRIPE_SECRET_KEY` (optional): Stripe secret key for checkout functionality
 - `ALLOWED_ORIGINS` (optional): CORS allowed origins. Defaults to `*` (all origins). For production, set to your frontend domain(s). Supports comma-separated list: `https://app.com,https://www.app.com`
 
@@ -123,13 +123,13 @@ curl -X POST http://localhost:8787/api/form \
 Before deploying, set your API key as a secret:
 
 ```bash
-npx wrangler secret put TRAVRSE_API_KEY
+npx wrangler secret put RUNTYPE_API_KEY
 ```
 
 Optionally, set your flow ID:
 
 ```bash
-npx wrangler secret put TRAVRSE_FLOW_ID
+npx wrangler secret put RUNTYPE_FLOW_ID
 ```
 
 Optionally, set your Stripe secret key (required for checkout functionality):
@@ -338,12 +338,12 @@ Or view in the [Cloudflare Dashboard](https://dash.cloudflare.com/) under Worker
 
 ## Troubleshooting
 
-### Error: "Missing TRAVRSE_API_KEY"
+### Error: "Missing RUNTYPE_API_KEY"
 
 Make sure you've set the secret:
 
 ```bash
-npx wrangler secret put TRAVRSE_API_KEY
+npx wrangler secret put RUNTYPE_API_KEY
 ```
 
 ### CORS Errors
@@ -374,7 +374,7 @@ pnpm types-check
 
 - [Cloudflare Workers Docs](https://developers.cloudflare.com/workers/)
 - [Wrangler CLI Docs](https://developers.cloudflare.com/workers/wrangler/)
-- [Travrse AI Docs](https://docs.travrse.ai)
+- [Runtype AI Docs](https://docs.runtype.com)
 - [Hono Framework](https://hono.dev/)
 
 ## License

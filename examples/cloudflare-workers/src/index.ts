@@ -9,7 +9,8 @@ import { Hono } from "hono";
 
 // Environment variables interface for Cloudflare Workers
 interface Env {
-  TRAVRSE_API_KEY: string;
+  RUNTYPE_API_KEY: string;
+  TRAVRSE_API_KEY?: string; // Deprecated, use RUNTYPE_API_KEY
   FLOW_ID_FORM_DIRECTIVE?: string;
   FLOW_ID_SHOPPING_ASSISTANT?: string;
   FLOW_ID_SHOPPING_ASSISTANT_METADATA?: string;
@@ -19,7 +20,7 @@ interface Env {
 
 // Sample environment variables (wrangler.toml or Cloudflare dashboard):
 // [vars]
-// TRAVRSE_API_KEY = "tvrs_..."
+// RUNTYPE_API_KEY = "rt_..."
 // FLOW_ID_FORM_DIRECTIVE = "flow_01abc123..."
 // FLOW_ID_SHOPPING_ASSISTANT = "flow_02def456..."
 // FLOW_ID_SHOPPING_ASSISTANT_METADATA = "flow_03ghi789..."
@@ -36,23 +37,28 @@ function getAllowedOrigins(env: Env): string[] {
 // Main app that combines all proxy endpoints
 const app = new Hono<{ Bindings: Env }>();
 
+// Helper to get API key (supports both new and deprecated env var names)
+function getApiKey(env: Env): string {
+  return env.RUNTYPE_API_KEY || env.TRAVRSE_API_KEY || "";
+}
+
 // 1. Basic conversational assistant proxy
-// This is the simplest configuration - just proxies to Travrse with default settings
+// This is the simplest configuration - just proxies to Runtype with default settings
 app.all("/api/chat/dispatch", async (c) => {
   const proxyApp = createChatProxyApp({
     path: "/api/chat/dispatch",
-    apiKey: c.env.TRAVRSE_API_KEY,
+    apiKey: getApiKey(c.env),
     allowedOrigins: getAllowedOrigins(c.env),
   });
   return proxyApp.fetch(c.req.raw, c.env);
 });
 
 // 2. Directive-enabled proxy using a flow ID
-// This demonstrates using a reference to an existing Travrse flow
+// This demonstrates using a reference to an existing Runtype flow
 app.all("/api/chat/dispatch-directive", async (c) => {
   const proxyApp = createChatProxyApp({
     path: "/api/chat/dispatch-directive",
-    apiKey: c.env.TRAVRSE_API_KEY,
+    apiKey: getApiKey(c.env),
     flowId: c.env.FLOW_ID_FORM_DIRECTIVE || undefined,
     flowConfig: c.env.FLOW_ID_FORM_DIRECTIVE ? undefined : FORM_DIRECTIVE_FLOW,
     allowedOrigins: getAllowedOrigins(c.env),
@@ -65,7 +71,7 @@ app.all("/api/chat/dispatch-directive", async (c) => {
 app.all("/api/chat/dispatch-action", async (c) => {
   const proxyApp = createChatProxyApp({
     path: "/api/chat/dispatch-action",
-    apiKey: c.env.TRAVRSE_API_KEY,
+    apiKey: getApiKey(c.env),
     flowId: c.env.FLOW_ID_SHOPPING_ASSISTANT || undefined,
     flowConfig: c.env.FLOW_ID_SHOPPING_ASSISTANT ? undefined : SHOPPING_ASSISTANT_FLOW,
     allowedOrigins: getAllowedOrigins(c.env),
@@ -78,7 +84,7 @@ app.all("/api/chat/dispatch-action", async (c) => {
 app.all("/api/chat/dispatch-metadata", async (c) => {
   const proxyApp = createChatProxyApp({
     path: "/api/chat/dispatch-metadata",
-    apiKey: c.env.TRAVRSE_API_KEY,
+    apiKey: getApiKey(c.env),
     flowId: c.env.FLOW_ID_SHOPPING_ASSISTANT_METADATA || undefined,
     flowConfig: c.env.FLOW_ID_SHOPPING_ASSISTANT_METADATA ? undefined : SHOPPING_ASSISTANT_METADATA_FLOW,
     allowedOrigins: getAllowedOrigins(c.env),
@@ -172,17 +178,17 @@ app.get("/health", (c) => {
 app.get("/", (c) => {
   return c.json({
     name: "Vanilla Agent Proxy - Cloudflare Workers",
-    description: "Chat proxy service powered by Travrse AI",
+    description: "Chat proxy service powered by Runtype AI",
     endpoints: {
       "/api/chat/dispatch": "Basic conversational assistant",
-      "/api/chat/dispatch-directive": "Directive-enabled flow (requires TRAVRSE_FLOW_ID)",
+      "/api/chat/dispatch-directive": "Directive-enabled flow (requires RUNTYPE_FLOW_ID)",
       "/api/chat/dispatch-action": "Shopping assistant with JSON action responses (message, nav_then_click, message_and_click, checkout)",
       "/api/chat/dispatch-metadata": "Metadata-based shopping assistant (DOM sent as record metadata, not appended to messages)",
       "/api/checkout": "Stripe checkout session creation (POST, requires STRIPE_SECRET_KEY)",
       "/api/form": "Form submission handler (POST)",
       "/health": "Health check endpoint",
     },
-    docs: "https://docs.travrse.ai",
+    docs: "https://docs.runtype.com",
   });
 });
 

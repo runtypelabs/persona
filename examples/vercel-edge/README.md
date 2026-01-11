@@ -1,12 +1,12 @@
 ## Vercel Edge Proxy Example
 
-A production-ready chat proxy server that securely forwards requests to Travrse AI. Built with Hono and optimized for Vercel, but also works on other Node.js platforms like Railway, Fly.io, and traditional servers.
+A production-ready chat proxy server that securely forwards requests to Runtype AI. Built with Hono and optimized for Vercel, but also works on other Node.js platforms like Railway, Fly.io, and traditional servers.
 
 This example uses shared flow configurations and utilities from the `@runtypelabs/persona-proxy` package, making it easy to maintain and extend.
 
 ## Features
 
-- **Secure API key handling** - Never exposes your Travrse API key to the browser
+- **Secure API key handling** - Never exposes your Runtype API key to the browser
 - **Multiple flow configurations**:
   - Basic conversational assistant
   - Directive-enabled flow (via flow ID)
@@ -31,8 +31,8 @@ pnpm install
 
 2. Create a `.env` file in this directory:
 ```bash
-TRAVRSE_API_KEY=tv_test_xxx
-TRAVRSE_FLOW_ID=flow_xxx  # Optional, for directive-enabled flow
+RUNTYPE_API_KEY=rt_test_xxx
+RUNTYPE_FLOW_ID=flow_xxx  # Optional, for directive-enabled flow
 STRIPE_SECRET_KEY=sk_test_xxx  # Optional, for checkout functionality
 FRONTEND_URL=http://localhost:5173  # Optional, defaults to http://localhost:5173
 ```
@@ -49,7 +49,7 @@ The server will start on port `43111` (or next available port) and automatically
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/chat/dispatch` | POST | Basic conversational assistant (default flow) |
-| `/api/chat/dispatch-directive` | POST | Directive-enabled flow (requires `TRAVRSE_FLOW_ID`) |
+| `/api/chat/dispatch-directive` | POST | Directive-enabled flow (requires `RUNTYPE_FLOW_ID`) |
 | `/api/chat/dispatch-action` | POST | Shopping assistant with JSON actions (message, nav_then_click, message_and_click, checkout) |
 | `/api/checkout` | POST | Stripe checkout session creation (requires `STRIPE_SECRET_KEY`) |
 | `/form` | POST | Form submission handler for directive demo |
@@ -69,8 +69,8 @@ vercel
 ```
 
 3. Set environment variables in Vercel dashboard:
-   - `TRAVRSE_API_KEY` (required)
-   - `TRAVRSE_FLOW_ID` (optional)
+   - `RUNTYPE_API_KEY` (required)
+   - `RUNTYPE_FLOW_ID` (optional)
    - `STRIPE_SECRET_KEY` (optional)
    - `FRONTEND_URL` (optional)
 
@@ -86,8 +86,8 @@ vercel
 
 Set these in the Vercel dashboard (Settings → Environment Variables):
 
-- **TRAVRSE_API_KEY** (required): Your Travrse API key
-- **TRAVRSE_FLOW_ID** (optional): Flow ID for directive-enabled endpoint
+- **RUNTYPE_API_KEY** (required): Your Runtype API key
+- **RUNTYPE_FLOW_ID** (optional): Flow ID for directive-enabled endpoint
 - **STRIPE_SECRET_KEY** (optional): Stripe secret key for checkout functionality
 - **FRONTEND_URL** (optional): Your frontend URL for checkout redirect URLs
 
@@ -99,14 +99,14 @@ This example works on any Node.js hosting platform:
 
 1. Install Railway CLI: `npm i -g @railway/cli`
 2. Run `railway init`
-3. Set environment variables: `railway variables set TRAVRSE_API_KEY=xxx`
+3. Set environment variables: `railway variables set RUNTYPE_API_KEY=xxx`
 4. Deploy: `railway up`
 
 ### Fly.io
 
 1. Install Fly CLI: `curl -L https://fly.io/install.sh | sh`
 2. Run `fly launch`
-3. Set secrets: `fly secrets set TRAVRSE_API_KEY=xxx`
+3. Set secrets: `fly secrets set RUNTYPE_API_KEY=xxx`
 4. Deploy: `fly deploy`
 
 ### Traditional Node.js Server

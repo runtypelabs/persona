@@ -305,17 +305,17 @@ type AgentWidgetMessageActionsConfig = {
 - **Copy button**: Shows a checkmark briefly after successful copy
 - **Vote buttons**: Toggle active state and are mutually exclusive (upvoting clears downvote and vice versa)
 
-### Travrse adapter
+### Runtype adapter
 
-This package ships with a Travrse adapter by default. The proxy handles all flow configuration, keeping the client lightweight and flexible.
+This package ships with a Runtype adapter by default. The proxy handles all flow configuration, keeping the client lightweight and flexible.
 
 **Flow configuration happens server-side** - you have three options:
 
 1. **Use default flow** - The proxy includes a basic streaming chat flow out of the box
-2. **Reference a Travrse flow ID** - Configure flows in your Travrse dashboard and reference them by ID
+2. **Reference a Runtype flow ID** - Configure flows in your Runtype dashboard and reference them by ID
 3. **Define custom flows** - Build flow configurations directly in the proxy
 
-The client simply sends messages to the proxy, which constructs the full Travrse payload. This architecture allows you to:
+The client simply sends messages to the proxy, which constructs the full Runtype payload. This architecture allows you to:
 - Change models/prompts without redeploying the widget
 - A/B test different flows server-side
 - Enforce security and cost controls centrally
@@ -777,8 +777,8 @@ This ensures all configuration values are set to sensible defaults while allowin
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `apiUrl` | `string` | Proxy endpoint for your chat backend (defaults to Travrse's cloud API). |
-| `flowId` | `string` | Optional Travrse flow ID. If provided, the client sends it to the proxy which can use it to select a specific flow. |
+| `apiUrl` | `string` | Proxy endpoint for your chat backend (defaults to Runtype's cloud API). |
+| `flowId` | `string` | Optional Runtype flow ID. If provided, the client sends it to the proxy which can use it to select a specific flow. |
 | `headers` | `Record<string, string>` | Extra headers forwarded to your proxy. |
 | `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel? }` | Customize user-facing text. |
 | `theme` | `{ primary?, secondary?, surface?, muted?, accent?, radiusSm?, radiusMd?, radiusLg?, radiusFull? }` | Override CSS variables for the widget. Colors: `primary` (text/UI), `secondary` (unused), `surface` (backgrounds), `muted` (secondary text), `accent` (buttons/links). Border radius: `radiusSm` (0.75rem, inputs), `radiusMd` (1rem, cards), `radiusLg` (1.5rem, panels/bubbles), `radiusFull` (9999px, pills/buttons). |
@@ -1000,7 +1000,7 @@ The parser's `processChunk` method is called for each chunk. If the content matc
 
 ### Optional proxy server
 
-The proxy server handles flow configuration and forwards requests to Travrse. You can configure it in three ways:
+The proxy server handles flow configuration and forwards requests to Runtype. You can configure it in three ways:
 
 **Option 1: Use default flow (recommended for getting started)**
 
@@ -1014,7 +1014,7 @@ export default createChatProxyApp({
 });
 ```
 
-**Option 2: Reference a Travrse flow ID**
+**Option 2: Reference a Runtype flow ID**
 
 ```ts
 import { createChatProxyApp } from '@runtypelabs/persona-proxy';
@@ -1022,7 +1022,7 @@ import { createChatProxyApp } from '@runtypelabs/persona-proxy';
 export default createChatProxyApp({
   path: '/api/chat/dispatch',
   allowedOrigins: ['https://www.example.com'],
-  flowId: 'flow_abc123' // Flow created in Travrse dashboard or API
+  flowId: 'flow_abc123' // Flow created in Runtype dashboard or API
 });
 ```
 
@@ -1070,7 +1070,7 @@ export default createVercelHandler({
 
 **Environment setup:**
 
-Add `TRAVRSE_API_KEY` to your environment. The proxy constructs the Travrse payload (including flow configuration) and streams the response back to the client.
+Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payload (including flow configuration) and streams the response back to the client.
 
 ### Development notes
 
