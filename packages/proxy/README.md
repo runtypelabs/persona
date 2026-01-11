@@ -1,6 +1,6 @@
 ## Vanilla Agent Proxy
 
-Proxy server library for `@runtypelabs/persona` widget. Handles flow configuration and forwards requests to Travrse or other AI backends.
+Proxy server library for `@runtypelabs/persona` widget. Handles flow configuration and forwards requests to Runtype or other AI backends.
 
 ### Installation
 
@@ -10,7 +10,7 @@ npm install @runtypelabs/persona-proxy
 
 ### Usage
 
-The proxy server handles flow configuration and forwards requests to Travrse. You can configure it in three ways:
+The proxy server handles flow configuration and forwards requests to Runtype. You can configure it in three ways:
 
 **Option 1: Use default flow (recommended for getting started)**
 
@@ -24,7 +24,7 @@ export default createChatProxyApp({
 });
 ```
 
-**Option 2: Reference a Travrse flow ID**
+**Option 2: Reference a Runtype flow ID**
 
 ```ts
 import { createChatProxyApp } from '@runtypelabs/persona-proxy';
@@ -32,7 +32,7 @@ import { createChatProxyApp } from '@runtypelabs/persona-proxy';
 export default createChatProxyApp({
   path: '/api/chat/dispatch',
   allowedOrigins: ['https://www.example.com'],
-  flowId: 'flow_abc123' // Flow created in Travrse dashboard or API
+  flowId: 'flow_abc123' // Flow created in Runtype dashboard or API
 });
 ```
 
@@ -82,16 +82,16 @@ export default createVercelHandler({
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `upstreamUrl` | `string` | Travrse API endpoint (defaults to `https://api.travrse.ai/v1/dispatch`) |
-| `apiKey` | `string` | Travrse API key (defaults to `TRAVRSE_API_KEY` environment variable) |
+| `upstreamUrl` | `string` | Runtype API endpoint (defaults to `https://api.runtype.com/v1/dispatch`) |
+| `apiKey` | `string` | Runtype API key (defaults to `RUNTYPE_API_KEY` environment variable) |
 | `path` | `string` | Proxy endpoint path (defaults to `/api/chat/dispatch`) |
 | `allowedOrigins` | `string[]` | CORS allowed origins |
-| `flowId` | `string` | Travrse flow ID to use |
-| `flowConfig` | `TravrseFlowConfig` | Custom flow configuration |
+| `flowId` | `string` | Runtype flow ID to use |
+| `flowConfig` | `RuntypeFlowConfig` | Custom flow configuration |
 
 ### Environment Setup
 
-Add `TRAVRSE_API_KEY` to your environment. The proxy constructs the Travrse payload (including flow configuration) and streams the response back to the client.
+Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payload (including flow configuration) and streams the response back to the client.
 
 ### Building
 

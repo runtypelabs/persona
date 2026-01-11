@@ -1,8 +1,8 @@
 # Copy this file to .dev.vars and fill in your actual values
 # .dev.vars is gitignored and used for local development
 
-# Required: Your Travrse API key
-TRAVRSE_API_KEY=tv_test_your_api_key_here
+# Required: Your Runtype API key
+RUNTYPE_API_KEY=rt_test_your_api_key_here
 
 # Optional: Flow IDs for specific chat endpoints
 # If set, these will be used instead of the hardcoded flow configurations

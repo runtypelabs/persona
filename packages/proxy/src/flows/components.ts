@@ -1,10 +1,10 @@
-import type { TravrseFlowConfig } from "../index.js";
+import type { RuntypeFlowConfig } from "../index.js";
 
 /**
  * Component-aware flow for custom component rendering
  * This flow instructs the AI to respond with component directives in JSON format
  */
-export const COMPONENT_FLOW: TravrseFlowConfig = {
+export const COMPONENT_FLOW: RuntypeFlowConfig = {
   name: "Component Flow",
   description: "Flow configured for custom component rendering",
   steps: [

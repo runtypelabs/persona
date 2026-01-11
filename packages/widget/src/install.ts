@@ -40,7 +40,7 @@ declare global {
 
   /**
    * Read configuration from data attributes on the current script tag.
-   * Supports: data-config (JSON), data-travrse-token, data-flow-id, data-api-url
+   * Supports: data-config (JSON), data-runtype-token, data-flow-id, data-api-url
    */
   const getConfigFromScript = (): Partial<SiteAgentInstallConfig> => {
     // Try to get the current script element
@@ -67,7 +67,7 @@ declare global {
     }
 
     // Client token from data attribute (primary method for client token mode)
-    const token = script.getAttribute('data-travrse-token');
+    const token = script.getAttribute('data-runtype-token');
     if (token) {
       scriptConfig.clientToken = token;
     }

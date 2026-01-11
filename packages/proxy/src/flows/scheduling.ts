@@ -1,10 +1,10 @@
-import type { TravrseFlowConfig } from "../index.js";
+import type { RuntypeFlowConfig } from "../index.js";
 
 /**
  * Dynamic Form flow configuration
  * This flow returns forms as component directives for the widget to render
  */
-export const FORM_DIRECTIVE_FLOW: TravrseFlowConfig = {
+export const FORM_DIRECTIVE_FLOW: RuntypeFlowConfig = {
   name: "Dynamic Form Flow",
   description: "Returns dynamic forms as component directives",
   steps: [

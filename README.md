@@ -1,10 +1,10 @@
 ## 💻 Vanilla Agent ✨ A configurable agent widget in plain JS for websites
 It's an AI chat SDK plus local demos and tooling. Flexible foundation to ship an always on custom assistant on a website.
 
-Travrse is pre-integrated as the AI platform powering the agent, while the UI and proxy are written so that you can point them at any SSE-capable platform.
+Runtype is pre-integrated as the AI platform powering the agent, while the UI and proxy are written so that you can point them at any SSE-capable platform.
 
 - `packages/widget` – the installable chat widget (`@runtypelabs/persona`).
-- `packages/proxy` – the optional proxy server library (`@runtypelabs/persona-proxy`) for handling flow configuration using Travrse.
+- `packages/proxy` – the optional proxy server library (`@runtypelabs/persona-proxy`) for handling flow configuration using Runtype.
 - `examples/embedded-app` – a Vite vanilla app showcasing runtime configuration (see `json.html` for the directive demo).
 - `examples/vercel-edge` – Node.js proxy server for Vercel, Railway, Fly.io, and traditional servers.
 - `examples/cloudflare-workers` – Edge proxy server optimized for Cloudflare Workers.
@@ -21,7 +21,7 @@ The script starts the proxy on `http://localhost:43111` (auto-selects another fr
 
 > **Note:** Make sure you are on Node `v20.19.0` (`nvm use`) before running `pnpm install`. Corepack is bundled with modern Node releases and manages pnpm for you.
 
-See `packages/widget/README.md` for publishing details, configuration reference, and Travrse integration notes.
+See `packages/widget/README.md` for publishing details, configuration reference, and Runtype integration notes.
 
 Install the widget library with `npm install @runtypelabs/persona`. For the proxy server, use `npm install @runtypelabs/persona-proxy`.
 

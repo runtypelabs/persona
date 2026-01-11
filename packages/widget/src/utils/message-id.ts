@@ -1,6 +1,6 @@
 /**
  * Message ID utilities for client-side message tracking
- * Used for feedback integration with the Travrse API
+ * Used for feedback integration with the Runtype API
  */
 
 /**
