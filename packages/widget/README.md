@@ -137,6 +137,97 @@ const chat = initAgentWidget({
 chat.clearChat()
 ```
 
+#### Message Injection
+
+Inject messages programmatically from external sources like tool call responses, system events, or third-party integrations. This is useful when local tools need to push results back into the conversation.
+
+```ts
+const chat = initAgentWidget({
+  target: '#launcher-root',
+  config: { /* ... */ }
+})
+
+// Simple message injection
+chat.injectAssistantMessage({
+  content: 'Here are your search results...'
+});
+
+// User message injection
+chat.injectUserMessage({
+  content: 'Add to cart'
+});
+
+// System context injection
+chat.injectSystemMessage({
+  content: '[Context updated]',
+  llmContent: 'User is viewing product page for iPhone 15 Pro'
+});
+```
+
+**Dual-Content Messages (llmContent)**
+
+Use `llmContent` to show different content to the user versus what gets sent to the LLM. This is useful for:
+- **Token efficiency**: Show rich content to users while sending concise summaries to the LLM
+- **Sensitive data redaction**: Display PII to users while hiding it from the LLM
+- **Context injection**: Provide detailed LLM context with minimal UI footprint
+
+```ts
+// Example: Tool callback that injects search results
+async function handleProductSearch(query: string) {
+  const results = await searchProducts(query);
+
+  // User sees full product details with images and prices
+  // LLM receives a concise summary to save tokens
+  chat.injectAssistantMessage({
+    content: `**Found ${results.length} products:**
+${results.map(p => `- ${p.name} - $${p.price} (SKU: ${p.sku})`).join('\n')}`,
+
+    llmContent: `[Search results: ${results.length} products found, price range $${results.minPrice}-$${results.maxPrice}]`
+  });
+}
+
+// Example: Redacting sensitive information
+chat.injectAssistantMessage({
+  // User sees their order confirmation with details
+  content: `Your order #12345 has been placed!
+- Card ending in 4242
+- Shipping to: 123 Main St, Anytown, USA`,
+
+  // LLM only knows an order was placed (no PII)
+  llmContent: '[Order confirmation displayed to user]'
+});
+```
+
+**Content Priority**
+
+When messages are sent to the API, content is resolved in this priority order:
+1. `contentParts` - Multi-modal content (images, files)
+2. `llmContent` - Explicit LLM-specific content
+3. `content` - Display content as fallback
+
+**Streaming Updates**
+
+For long-running operations, use the same message ID to update content:
+
+```ts
+const messageId = 'search-123';
+
+// Show loading state
+chat.injectAssistantMessage({
+  id: messageId,
+  content: 'Searching...',
+  streaming: true
+});
+
+// Update with results
+chat.injectAssistantMessage({
+  id: messageId,
+  content: 'Found 5 results...',
+  llmContent: '[5 search results]',
+  streaming: false
+});
+```
+
 #### Accessing from window
 
 To access the controller globally (e.g., from browser console or external scripts), use the `windowKey` option:
