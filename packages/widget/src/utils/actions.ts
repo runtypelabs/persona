@@ -213,10 +213,8 @@ export const createActionManager = (options: ActionManagerOptions) => {
           // persistMessage defaults to true if not specified
           const persist = handlerResult.persistMessage !== false;
           const displayText = handlerResult.displayText !== undefined ? handlerResult.displayText : "";
-          // Emit resubmit event if handler requests automatic continuation
-          if (handlerResult.resubmit) {
-            options.emit("action:resubmit", eventPayload);
-          }
+          // Return resubmit flag - the caller (ui.ts) will handle deferred resubmit
+          // after injectAssistantMessage is called (to avoid race conditions with async handlers)
           return { text: displayText, persist, resubmit: handlerResult.resubmit };
         }
       } catch (error) {

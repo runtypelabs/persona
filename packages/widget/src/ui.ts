@@ -135,11 +135,12 @@ type Controller = {
 
 const buildPostprocessor = (
   cfg: AgentWidgetConfig | undefined,
-  actionManager?: ReturnType<typeof createActionManager>
+  actionManager?: ReturnType<typeof createActionManager>,
+  onResubmitRequested?: () => void
 ): MessageTransform => {
   // Create markdown processor from config if markdown config is provided
   // This allows users to enable markdown rendering via config.markdown
-  const markdownProcessor = cfg?.markdown 
+  const markdownProcessor = cfg?.markdown
     ? createMarkdownProcessorFromConfig(cfg.markdown)
     : null;
 
@@ -159,6 +160,11 @@ const buildPostprocessor = (
         // Mark message as non-persistable if persist is false
         if (!actionResult.persist) {
           (context.message as any).__skipPersist = true;
+        }
+        // Request deferred resubmit if handler requested it (and message is complete)
+        // The actual resubmit will be triggered when injectAssistantMessage is called
+        if (actionResult.resubmit && !context.streaming && onResubmitRequested) {
+          onResubmitRequested();
         }
       }
     }
@@ -266,7 +272,32 @@ export const createAgentExperience = (
   let prevLauncherEnabled = launcherEnabled;
   let prevHeaderLayout = config.layout?.header?.layout;
   let open = launcherEnabled ? autoExpand : true;
-  let postprocess = buildPostprocessor(config, actionManager);
+
+  // Track pending resubmit state for injection-triggered resubmit
+  // When a handler returns resubmit: true, we wait for injectAssistantMessage()
+  // to be called before triggering the actual resubmit (to avoid race conditions)
+  let pendingResubmit = false;
+  let pendingResubmitTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  const handleResubmitRequested = () => {
+    pendingResubmit = true;
+    // Clear any existing timeout
+    if (pendingResubmitTimeout) {
+      clearTimeout(pendingResubmitTimeout);
+    }
+    // Safety timeout - clear flag after 10s if no injection occurs
+    pendingResubmitTimeout = setTimeout(() => {
+      if (pendingResubmit) {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.warn("[AgentWidget] Resubmit requested but no injection occurred within 10s");
+        }
+        pendingResubmit = false;
+      }
+    }, 10000);
+  };
+
+  let postprocess = buildPostprocessor(config, actionManager, handleResubmitRequested);
   let showReasoning = config.features?.showReasoning ?? true;
   let showToolCalls = config.features?.showToolCalls ?? true;
   
@@ -2687,7 +2718,7 @@ export const createAgentExperience = (
         documentRef: typeof document !== "undefined" ? document : null
       });
 
-      postprocess = buildPostprocessor(config, actionManager);
+      postprocess = buildPostprocessor(config, actionManager, handleResubmitRequested);
       session.updateConfig(config);
       renderMessagesWithPlugins(
         messagesWrapper,
@@ -3247,7 +3278,26 @@ export const createAgentExperience = (
       if (!open && launcherEnabled) {
         setOpenState(true, "system");
       }
-      return session.injectAssistantMessage(options);
+      const result = session.injectAssistantMessage(options);
+
+      // Check if we should trigger resubmit after injection
+      // This handles the case where a handler returned resubmit: true and then
+      // injected a message - we wait until after injection to trigger resubmit
+      if (pendingResubmit) {
+        pendingResubmit = false;
+        if (pendingResubmitTimeout) {
+          clearTimeout(pendingResubmitTimeout);
+          pendingResubmitTimeout = null;
+        }
+        // Short delay to ensure message is in context
+        setTimeout(() => {
+          if (session && !session.isStreaming()) {
+            session.continueConversation();
+          }
+        }, 100);
+      }
+
+      return result;
     },
     injectUserMessage(options: InjectUserMessageOptions): AgentWidgetMessage {
       // Auto-open widget if closed and launcher is enabled
