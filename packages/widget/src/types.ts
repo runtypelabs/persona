@@ -111,6 +111,21 @@ export type AgentWidgetActionContext = {
     updater: (prev: Record<string, unknown>) => Record<string, unknown>
   ) => void;
   document: Document | null;
+  /**
+   * Trigger automatic model continuation.
+   * Call this AFTER completing async operations (e.g., injecting search results)
+   * to have the model analyze the injected data.
+   *
+   * Use this instead of returning `resubmit: true` for handlers that do async work,
+   * as it ensures the continuation happens after the data is available in context.
+   *
+   * @example
+   * // In an action handler
+   * const results = await fetchProducts(query);
+   * session.injectAssistantMessage({ content: formatResults(results) });
+   * context.triggerResubmit();
+   */
+  triggerResubmit: () => void;
 };
 
 export type AgentWidgetActionHandler = (

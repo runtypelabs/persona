@@ -1788,14 +1788,14 @@ export const createAgentExperience = (
   // Handle action:resubmit event - automatically trigger another model call
   // when an action handler needs the model to continue processing (e.g., analyzing search results)
   const resubmitUnsub = eventBus.on("action:resubmit", () => {
-    // Delay to ensure async operations complete and UI has updated with injected message
+    // Short delay to allow UI to update with any injected messages
+    // Handlers should call context.triggerResubmit() AFTER their async work completes
     setTimeout(() => {
       if (session && !session.isStreaming()) {
-        // Send continuation message to trigger model to analyze injected results
-        // Using a special marker that signals the model should continue with its analysis
-        session.sendMessage("[continue]");
+        // Continue conversation without adding a visible user message
+        session.continueConversation();
       }
-    }, 500);
+    }, 100);
   });
   destroyCallbacks.push(resubmitUnsub);
 
