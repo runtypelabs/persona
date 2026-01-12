@@ -1,5 +1,16 @@
 # @runtypelabs/persona
 
+## 1.38.0
+
+### Minor Changes
+
+- 1ecd4d8: Add resubmit flag to action handler results for automatic model continuation
+
+  - Add `resubmit?: boolean` to `AgentWidgetActionHandlerResult` type
+  - Add `action:resubmit` event to `AgentWidgetControllerEventMap`
+  - When a handler returns `resubmit: true`, automatically trigger another model call
+  - Enables handlers that inject data (e.g., search results) to have the model analyze and respond to that data
+
 ## 1.37.2
 
 ### Patch Changes
