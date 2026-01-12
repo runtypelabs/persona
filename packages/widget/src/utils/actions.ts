@@ -140,7 +140,7 @@ export const createActionManager = (options: ActionManagerOptions) => {
     }));
   };
 
-  const process = (context: ActionManagerProcessContext): { text: string; persist: boolean } | null => {
+  const process = (context: ActionManagerProcessContext): { text: string; persist: boolean; resubmit?: boolean } | null => {
     if (
       context.streaming ||
       context.message.role !== "assistant" ||
@@ -206,7 +206,11 @@ export const createActionManager = (options: ActionManagerOptions) => {
           // persistMessage defaults to true if not specified
           const persist = handlerResult.persistMessage !== false;
           const displayText = handlerResult.displayText !== undefined ? handlerResult.displayText : "";
-          return { text: displayText, persist };
+          // Emit resubmit event if handler requests automatic continuation
+          if (handlerResult.resubmit) {
+            options.emit("action:resubmit", eventPayload);
+          }
+          return { text: displayText, persist, resubmit: handlerResult.resubmit };
         }
       } catch (error) {
         if (typeof console !== "undefined") {

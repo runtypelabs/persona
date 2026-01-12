@@ -1785,6 +1785,19 @@ export const createAgentExperience = (
   });
   destroyCallbacks.push(autoResumeUnsub);
 
+  // Handle action:resubmit event - automatically trigger another model call
+  // when an action handler needs the model to continue processing (e.g., analyzing search results)
+  const resubmitUnsub = eventBus.on("action:resubmit", () => {
+    // Small delay to ensure UI has updated with injected message
+    setTimeout(() => {
+      if (session && !session.isStreaming()) {
+        // Send empty message to trigger model continuation with existing context
+        session.sendMessage("");
+      }
+    }, 150);
+  });
+  destroyCallbacks.push(resubmitUnsub);
+
   const toggleOpen = () => {
     setOpenState(!open, "user");
   };

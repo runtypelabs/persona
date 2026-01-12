@@ -101,6 +101,7 @@ export type AgentWidgetActionHandlerResult = {
   handled?: boolean;
   displayText?: string;
   persistMessage?: boolean; // If false, prevents message from being saved to history
+  resubmit?: boolean; // If true, automatically triggers another model call after handler completes
 };
 
 export type AgentWidgetActionContext = {
@@ -247,6 +248,7 @@ export type AgentWidgetControllerEventMap = {
   "assistant:complete": AgentWidgetMessage;
   "voice:state": AgentWidgetVoiceStateEvent;
   "action:detected": AgentWidgetActionEventPayload;
+  "action:resubmit": AgentWidgetActionEventPayload;
   "widget:opened": AgentWidgetStateEvent;
   "widget:closed": AgentWidgetStateEvent;
   "widget:state": AgentWidgetStateSnapshot;
