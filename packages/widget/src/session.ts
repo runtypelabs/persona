@@ -384,6 +384,64 @@ export class AgentWidgetSession {
     }
   }
 
+  /**
+   * Continue the conversation without adding a new user message.
+   * Triggers the model to respond based on the current conversation state.
+   *
+   * Use this for automatic continuation after action handlers inject data
+   * (e.g., search results) that the model should analyze.
+   *
+   * @example
+   * // After injecting search results, trigger model to analyze them
+   * session.injectAssistantMessage({ content: 'Found 5 products...' });
+   * session.continueConversation();
+   */
+  public async continueConversation() {
+    // Don't continue if already streaming
+    if (this.streaming) return;
+
+    this.abortController?.abort();
+
+    const assistantMessageId = generateAssistantMessageId();
+
+    this.setStreaming(true);
+
+    const controller = new AbortController();
+    this.abortController = controller;
+
+    const snapshot = [...this.messages];
+
+    try {
+      await this.client.dispatch(
+        {
+          messages: snapshot,
+          signal: controller.signal,
+          assistantMessageId
+        },
+        this.handleEvent
+      );
+    } catch (error) {
+      const fallback: AgentWidgetMessage = {
+        id: assistantMessageId,
+        role: "assistant",
+        createdAt: new Date().toISOString(),
+        content:
+          "It looks like the proxy isn't returning a real response yet. Here's a sample message so you can continue testing locally.",
+        sequence: this.nextSequence()
+      };
+
+      this.appendMessage(fallback);
+      this.setStatus("idle");
+      this.setStreaming(false);
+      this.abortController = null;
+      if (error instanceof Error) {
+        this.callbacks.onError?.(error);
+      } else {
+        this.callbacks.onError?.(new Error(String(error)));
+      }
+    }
+  }
+
   public cancel() {
     this.abortController?.abort();
     this.abortController = null;

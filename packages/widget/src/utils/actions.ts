@@ -193,11 +193,18 @@ export const createActionManager = (options: ActionManagerOptions) => {
     for (const handler of options.handlers) {
       if (!handler) continue;
       try {
+        // Create triggerResubmit function that emits the resubmit event
+        // Handlers should call this AFTER async work completes (not return resubmit: true)
+        const triggerResubmit = () => {
+          options.emit("action:resubmit", eventPayload);
+        };
+
         const handlerResult = handler(action, {
           message: context.message,
           metadata: options.getSessionMetadata(),
           updateMetadata: options.updateSessionMetadata,
-          document: options.documentRef
+          document: options.documentRef,
+          triggerResubmit
         } as AgentWidgetActionContext) as AgentWidgetActionHandlerResult | void;
 
         if (!handlerResult) continue;
