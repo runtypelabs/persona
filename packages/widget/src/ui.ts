@@ -63,6 +63,72 @@ import {
 const DEFAULT_CHAT_HISTORY_STORAGE_KEY = "persona-chat-history";
 const VOICE_STATE_RESTORE_WINDOW = 30 * 1000;
 
+// ============================================================================
+// PERSIST STATE HELPERS
+// ============================================================================
+
+type NormalizedPersistConfig = {
+  storage: 'local' | 'session';
+  keyPrefix: string;
+  persist: {
+    openState: boolean;
+    voiceState: boolean;
+    focusInput: boolean;
+  };
+  clearOnChatClear: boolean;
+};
+
+/**
+ * Normalize persistState config - handles both boolean and object forms
+ */
+function normalizePersistStateConfig(
+  config: boolean | { storage?: 'local' | 'session'; keyPrefix?: string; persist?: { openState?: boolean; voiceState?: boolean; focusInput?: boolean }; clearOnChatClear?: boolean } | undefined
+): NormalizedPersistConfig | null {
+  if (!config) return null;
+  
+  if (config === true) {
+    // Use defaults
+    return {
+      storage: 'session',
+      keyPrefix: 'persona-',
+      persist: {
+        openState: true,
+        voiceState: true,
+        focusInput: true
+      },
+      clearOnChatClear: true
+    };
+  }
+  
+  // Object config - merge with defaults
+  return {
+    storage: config.storage ?? 'session',
+    keyPrefix: config.keyPrefix ?? 'persona-',
+    persist: {
+      openState: config.persist?.openState ?? true,
+      voiceState: config.persist?.voiceState ?? true,
+      focusInput: config.persist?.focusInput ?? true
+    },
+    clearOnChatClear: config.clearOnChatClear ?? true
+  };
+}
+
+/**
+ * Get the storage object based on config
+ */
+function getPersistStorage(storageType: 'local' | 'session'): Storage | null {
+  try {
+    const storage = storageType === 'local' ? localStorage : sessionStorage;
+    // Test that storage is actually available
+    const testKey = '__persist_test__';
+    storage.setItem(testKey, '1');
+    storage.removeItem(testKey);
+    return storage;
+  } catch {
+    return null;
+  }
+}
+
 const ensureRecord = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object") {
     return {};
