@@ -170,8 +170,8 @@ export class AgentWidgetClient {
     
     const requestBody: Record<string, unknown> = {
       token: this.config.clientToken,
-      ...(this.config.flowId && { flow_id: this.config.flowId }),
-      ...(storedSessionId && { session_id: storedSessionId }),
+      ...(this.config.flowId && { flowId: this.config.flowId }),
+      ...(storedSessionId && { sessionId: storedSessionId }),
     };
 
     const response = await fetch(this.getClientApiUrl('init'), {
@@ -194,18 +194,18 @@ export class AgentWidgetClient {
     }
 
     const data: ClientInitResponse = await response.json();
-    
-    // Store the new session_id for future resumption
+
+    // Store the new sessionId for future resumption
     if (this.config.setStoredSessionId) {
-      this.config.setStoredSessionId(data.session_id);
+      this.config.setStoredSessionId(data.sessionId);
     }
-    
+
     return {
-      sessionId: data.session_id,
-      expiresAt: new Date(data.expires_at),
+      sessionId: data.sessionId,
+      expiresAt: new Date(data.expiresAt),
       flow: data.flow,
       config: {
-        welcomeMessage: data.config.welcome_message,
+        welcomeMessage: data.config.welcomeMessage,
         placeholder: data.config.placeholder,
         theme: data.config.theme,
       },
@@ -240,22 +240,22 @@ export class AgentWidgetClient {
    * ```typescript
    * // Message feedback (upvote/downvote/copy)
    * await client.sendFeedback({
-   *   session_id: sessionId,
-   *   message_id: messageId,
+   *   sessionId: sessionId,
+   *   messageId: messageId,
    *   type: 'upvote'
    * });
-   * 
+   *
    * // CSAT feedback (1-5 rating)
    * await client.sendFeedback({
-   *   session_id: sessionId,
+   *   sessionId: sessionId,
    *   type: 'csat',
    *   rating: 5,
    *   comment: 'Great experience!'
    * });
-   * 
+   *
    * // NPS feedback (0-10 rating)
    * await client.sendFeedback({
-   *   session_id: sessionId,
+   *   sessionId: sessionId,
    *   type: 'nps',
    *   rating: 9
    * });
@@ -271,10 +271,10 @@ export class AgentWidgetClient {
       throw new Error('No active session. Please initialize session first.');
     }
 
-    // Validate message_id is provided for message-level feedback types
+    // Validate messageId is provided for message-level feedback types
     const messageFeedbackTypes: ClientFeedbackType[] = ['upvote', 'downvote', 'copy'];
-    if (messageFeedbackTypes.includes(feedback.type) && !feedback.message_id) {
-      throw new Error(`message_id is required for ${feedback.type} feedback type`);
+    if (messageFeedbackTypes.includes(feedback.type) && !feedback.messageId) {
+      throw new Error(`messageId is required for ${feedback.type} feedback type`);
     }
 
     // Validate rating is provided for csat/nps feedback types
@@ -332,8 +332,8 @@ export class AgentWidgetClient {
     }
 
     return this.sendFeedback({
-      session_id: session.sessionId,
-      message_id: messageId,
+      sessionId: session.sessionId,
+      messageId: messageId,
       type,
     });
   }
@@ -341,7 +341,7 @@ export class AgentWidgetClient {
   /**
    * Submit CSAT (Customer Satisfaction) feedback.
    * Convenience method for sendFeedback with CSAT feedback.
-   * 
+   *
    * @param rating - Rating from 1 to 5
    * @param comment - Optional comment
    */
@@ -352,7 +352,7 @@ export class AgentWidgetClient {
     }
 
     return this.sendFeedback({
-      session_id: session.sessionId,
+      sessionId: session.sessionId,
       type: 'csat',
       rating,
       comment,
@@ -362,7 +362,7 @@ export class AgentWidgetClient {
   /**
    * Submit NPS (Net Promoter Score) feedback.
    * Convenience method for sendFeedback with NPS feedback.
-   * 
+   *
    * @param rating - Rating from 0 to 10
    * @param comment - Optional comment
    */
@@ -373,7 +373,7 @@ export class AgentWidgetClient {
     }
 
     return this.sendFeedback({
-      session_id: session.sessionId,
+      sessionId: session.sessionId,
       type: 'nps',
       rating,
       comment,
@@ -419,15 +419,15 @@ export class AgentWidgetClient {
       const basePayload = await this.buildPayload(options.messages);
 
       // Build the chat request payload with message IDs for feedback tracking
-      // Filter out session_id from metadata if present (it's only for local storage)
-      const sanitizedMetadata = basePayload.metadata 
+      // Filter out sessionId from metadata if present (it's only for local storage)
+      const sanitizedMetadata = basePayload.metadata
         ? Object.fromEntries(
-            Object.entries(basePayload.metadata).filter(([key]) => key !== 'session_id')
+            Object.entries(basePayload.metadata).filter(([key]) => key !== 'sessionId' && key !== 'session_id')
           )
         : undefined;
       
       const chatRequest: ClientChatRequest = {
-        session_id: session.sessionId,
+        sessionId: session.sessionId,
         // Filter out messages with empty content to prevent validation errors
         messages: options.messages.filter(hasValidContent).map(m => ({
           id: m.id, // Include message ID for tracking
@@ -436,8 +436,8 @@ export class AgentWidgetClient {
           content: m.contentParts ?? m.llmContent ?? m.rawContent ?? m.content,
         })),
         // Include pre-generated assistant message ID if provided
-        ...(options.assistantMessageId && { assistant_message_id: options.assistantMessageId }),
-        // Include metadata/context from middleware if present (excluding session_id)
+        ...(options.assistantMessageId && { assistantMessageId: options.assistantMessageId }),
+        // Include metadata/context from middleware if present (excluding sessionId)
         ...(sanitizedMetadata && Object.keys(sanitizedMetadata).length > 0 && { metadata: sanitizedMetadata }),
         ...(basePayload.context && { context: basePayload.context }),
       };
