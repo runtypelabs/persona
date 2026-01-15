@@ -1342,6 +1342,36 @@ export type AgentWidgetConfig = {
   actionHandlers?: AgentWidgetActionHandler[];
   storageAdapter?: AgentWidgetStorageAdapter;
   /**
+   * Called after state is loaded from the storage adapter, but before the widget
+   * initializes with that state. Use this to transform or inject messages based
+   * on external state (e.g., navigation flags, checkout returns).
+   *
+   * This hook runs synchronously and must return the (potentially modified) state.
+   *
+   * @example
+   * ```typescript
+   * config: {
+   *   onStateLoaded: (state) => {
+   *     // Check for pending navigation message
+   *     const navMessage = consumeNavigationFlag();
+   *     if (navMessage) {
+   *       return {
+   *         ...state,
+   *         messages: [...(state.messages || []), {
+   *           id: `nav-${Date.now()}`,
+   *           role: 'assistant',
+   *           content: navMessage,
+   *           createdAt: new Date().toISOString()
+   *         }]
+   *       };
+   *     }
+   *     return state;
+   *   }
+   * }
+   * ```
+   */
+  onStateLoaded?: (state: AgentWidgetStoredState) => AgentWidgetStoredState;
+  /**
    * Registry of custom components that can be rendered from JSON directives.
    * Components are registered by name and can be invoked via JSON responses
    * with the format: `{"component": "ComponentName", "props": {...}}`

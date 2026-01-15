@@ -720,62 +720,15 @@ function loadBakeryExecutedActionIds(): string[] {
   return [];
 }
 
-// Create storage adapter - handles nav flag injection during load
+// Create storage adapter - simple wrapper that syncs processedActionIds
 const createBakeryStorageAdapter = () => {
   const baseAdapter = createLocalStorageAdapter(BAKERY_STORAGE_KEY);
-
-  // Helper to inject nav message into state
-  const injectNavMessage = (state: AgentWidgetStoredState): AgentWidgetStoredState => {
-    const navMessage = consumeNavigationFlag();
-    if (!navMessage) return state;
-
-    const messages = state.messages || [];
-
-    // Check if this message already exists (avoid duplicates)
-    const messageExists = messages.some(msg =>
-      msg.role === "assistant" && msg.content === navMessage
-    );
-
-    if (messageExists) {
-      console.log("[Bakery Storage] Nav message already exists, skipping injection");
-      return state;
-    }
-
-    console.log("[Bakery Storage] Injecting nav message into loaded state");
-    return {
-      ...state,
-      messages: [...messages, {
-        id: `nav-${Date.now()}`,
-        role: "assistant" as const,
-        content: navMessage,
-        createdAt: new Date().toISOString(),
-        streaming: false
-      }]
-    };
-  };
 
   return {
     load: () => {
       try {
         const stored = baseAdapter.load?.();
-        let result: AgentWidgetStoredState | null = null;
-
         if (!stored || typeof stored !== 'object' || 'then' in stored) {
-          // No stored state, but we might have a nav message
-          const navMessage = consumeNavigationFlag();
-          if (navMessage) {
-            console.log("[Bakery Storage] No stored state, creating with nav message");
-            return {
-              messages: [{
-                id: `nav-${Date.now()}`,
-                role: "assistant" as const,
-                content: navMessage,
-                createdAt: new Date().toISOString(),
-                streaming: false
-              }],
-              metadata: { processedActionMessageIds: [] }
-            };
-          }
           return null;
         }
 
@@ -786,23 +739,18 @@ const createBakeryStorageAdapter = () => {
             ? (parsed.metadata as Record<string, unknown>).processedActionMessageIds as string[]
             : [];
           widgetProcessedIds.forEach(id => processedActionIds.add(id));
-          result = stored as AgentWidgetStoredState;
+          return stored as AgentWidgetStoredState;
         } else if (Array.isArray(parsed.chatHistory) || Array.isArray(parsed.executedActionIds)) {
           const processedIds = Array.isArray(parsed.executedActionIds)
             ? parsed.executedActionIds as string[]
             : [];
           processedIds.forEach(id => processedActionIds.add(id));
-          result = {
+          return {
             messages: (parsed.chatHistory as any[]) || [],
             metadata: { processedActionMessageIds: processedIds }
           };
         } else if (Array.isArray(parsed)) {
-          result = { messages: parsed, metadata: { processedActionMessageIds: [] } };
-        }
-
-        // Inject nav message if present
-        if (result) {
-          return injectNavMessage(result);
+          return { messages: parsed, metadata: { processedActionMessageIds: [] } };
         }
 
         return null;
@@ -1111,14 +1059,51 @@ const scrollThenAddHandler: AgentWidgetActionHandler = (action, context) => {
 // Widget Config
 // ============================================================================
 
+// Helper to inject a message into state (used by onStateLoaded)
+const injectMessage = (
+  state: AgentWidgetStoredState,
+  content: string,
+  idPrefix: string
+): AgentWidgetStoredState => {
+  const messages = state.messages || [];
+
+  // Check if this message already exists (avoid duplicates)
+  const messageExists = messages.some(msg =>
+    msg.role === "assistant" && msg.content === content
+  );
+
+  if (messageExists) {
+    return state;
+  }
+
+  console.log(`[Bakery] Injecting ${idPrefix} message via onStateLoaded`);
+  return {
+    ...state,
+    messages: [...messages, {
+      id: `${idPrefix}-${Date.now()}`,
+      role: "assistant" as const,
+      content,
+      createdAt: new Date().toISOString(),
+      streaming: false
+    }]
+  };
+};
+
 const config: AgentWidgetConfig = {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
   persistState: true,
-  // Note: Don't use initialMessages - storageAdapter handles all message loading
-  // including nav message injection after page navigation
   clearChatHistoryStorageKey: BAKERY_STORAGE_KEY,
   streamParser: createBakeryParser,
+  // Use onStateLoaded to inject navigation messages after page load
+  onStateLoaded: (state) => {
+    // Check for pending navigation message
+    const navMessage = consumeNavigationFlag();
+    if (navMessage) {
+      state = injectMessage(state, navMessage, "nav");
+    }
+    return state;
+  },
   actionHandlers: [
     defaultActionHandlers.message,
     navThenClickHandler,

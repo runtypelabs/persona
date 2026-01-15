@@ -444,6 +444,43 @@ initAgentWidget({
 });
 ```
 
+### State Loaded Hook
+
+The `onStateLoaded` hook is called after state is loaded from the storage adapter, but before the widget initializes. Use this to transform or inject messages based on external state (e.g., navigation flags, checkout returns).
+
+```ts
+initAgentWidget({
+  target: 'body',
+  config: {
+    storageAdapter: createLocalStorageAdapter('my-chat'),
+    onStateLoaded: (state) => {
+      // Check for pending navigation message
+      const navMessage = consumeNavigationFlag();
+      if (navMessage) {
+        return {
+          ...state,
+          messages: [...(state.messages || []), {
+            id: `nav-${Date.now()}`,
+            role: 'assistant',
+            content: navMessage,
+            createdAt: new Date().toISOString()
+          }]
+        };
+      }
+      return state;
+    }
+  }
+});
+```
+
+**Use cases:**
+- Inject messages after page navigation (e.g., "Here are our products!")
+- Add confirmation messages after checkout/payment returns
+- Transform or filter loaded messages
+- Inject system messages based on external state
+
+The hook receives the loaded state and must return the (potentially modified) state synchronously.
+
 ### Message Actions (Copy, Upvote, Downvote)
 
 The widget includes built-in action buttons for assistant messages that allow users to copy message content and provide feedback through upvote/downvote buttons.

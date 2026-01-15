@@ -215,24 +215,60 @@ export const createAgentExperience = (
   let persistentMetadata: Record<string, unknown> = {};
   let pendingStoredState: Promise<AgentWidgetStoredState | null> | null = null;
 
+  // Helper to apply onStateLoaded hook and extract state
+  const applyStateLoadedHook = (state: AgentWidgetStoredState): AgentWidgetStoredState => {
+    if (config.onStateLoaded) {
+      try {
+        return config.onStateLoaded(state);
+      } catch (error) {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.error("[AgentWidget] onStateLoaded hook failed:", error);
+        }
+      }
+    }
+    return state;
+  };
+
   if (storageAdapter?.load) {
     try {
       const storedState = storageAdapter.load();
       if (storedState && typeof (storedState as Promise<any>).then === "function") {
-        pendingStoredState = storedState as Promise<AgentWidgetStoredState | null>;
-      } else if (storedState) {
-        const immediateState = storedState as AgentWidgetStoredState;
-        if (immediateState.metadata) {
-          persistentMetadata = ensureRecord(immediateState.metadata);
+        // For async storage, apply hook when promise resolves
+        pendingStoredState = (storedState as Promise<AgentWidgetStoredState | null>).then(
+          (resolved) => {
+            const state = resolved ?? { messages: [], metadata: {} };
+            return applyStateLoadedHook(state);
+          }
+        );
+      } else {
+        // Apply hook to synchronously loaded state (or empty state if nothing stored)
+        const baseState = (storedState as AgentWidgetStoredState) ?? { messages: [], metadata: {} };
+        const processedState = applyStateLoadedHook(baseState);
+        if (processedState.metadata) {
+          persistentMetadata = ensureRecord(processedState.metadata);
         }
-        if (immediateState.messages?.length) {
-          config = { ...config, initialMessages: immediateState.messages };
+        if (processedState.messages?.length) {
+          config = { ...config, initialMessages: processedState.messages };
         }
       }
     } catch (error) {
       if (typeof console !== "undefined") {
         // eslint-disable-next-line no-console
         console.error("[AgentWidget] Failed to load stored state:", error);
+      }
+    }
+  } else if (config.onStateLoaded) {
+    // No storage adapter but hook exists - call with empty state
+    try {
+      const processedState = applyStateLoadedHook({ messages: [], metadata: {} });
+      if (processedState.messages?.length) {
+        config = { ...config, initialMessages: processedState.messages };
+      }
+    } catch (error) {
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.error("[AgentWidget] onStateLoaded hook failed:", error);
       }
     }
   }

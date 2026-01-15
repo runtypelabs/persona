@@ -17,7 +17,6 @@ import {
   formatPageContext,
   parseActionResponse,
   executeAction,
-  loadChatHistory,
   loadExecutedActionIds,
   saveExecutedActionId,
   checkNavigationFlag,
@@ -135,8 +134,8 @@ const pageContextProvider = () => {
   };
 };
 
-// Load chat history from localStorage
-let savedMessages = loadChatHistory();
+// Note: Chat history is loaded automatically by the storage adapter
+// and messages are injected via onStateLoaded hook
 
 // Create a custom storage adapter that syncs our executedActionIds with widget SDK metadata
 // This wraps the widget SDK's storage adapter to sync our data structure
@@ -216,68 +215,43 @@ const createSyncedStorageAdapter = () => {
   };
 };
 
-// Check for navigation flag and auto-open if needed
-const navMessage = checkNavigationFlag();
 // Auto-open if we have a navigation message OR an order context message
+const navMessage = checkNavigationFlag();
 const shouldAutoOpen = navMessage !== null || orderContextMessage !== null;
 
-// If we have a navigation message, add it as an initial assistant message
-// But only add it once - check if it's already in savedMessages to prevent duplicates
-if (navMessage) {
-  const navMessageExists = savedMessages.some(msg =>
-    msg.role === "assistant" && msg.content === navMessage
+// Helper to inject a message into state (used by onStateLoaded)
+const injectMessage = (
+  state: AgentWidgetStoredState,
+  content: string,
+  idPrefix: string
+): AgentWidgetStoredState => {
+  const messages = state.messages || [];
+
+  // Check if this message already exists (avoid duplicates)
+  const messageExists = messages.some(msg =>
+    msg.role === "assistant" && msg.content === content
   );
 
-  if (!navMessageExists) {
-    const navMessageObj: AgentWidgetMessage = {
-      id: `nav-${Date.now()}`,
-      role: "assistant",
-      content: navMessage,
+  if (messageExists) {
+    return state;
+  }
+
+  console.log(`[Action Middleware] Injecting ${idPrefix} message via onStateLoaded`);
+  return {
+    ...state,
+    messages: [...messages, {
+      id: `${idPrefix}-${Date.now()}`,
+      role: "assistant" as const,
+      content,
       createdAt: new Date().toISOString(),
       streaming: false
-    };
-    savedMessages = [...savedMessages, navMessageObj];
-  }
-}
-
-// If we have an order context message (returning from checkout), add it as an assistant message
-if (orderContextMessage) {
-  const orderMessageExists = savedMessages.some(msg =>
-    msg.role === "assistant" && msg.content === orderContextMessage
-  );
-
-  if (!orderMessageExists) {
-    const orderMessageObj: AgentWidgetMessage = {
-      id: `order-${Date.now()}`,
-      role: "assistant",
-      content: orderContextMessage,
-      createdAt: new Date().toISOString(),
-      streaming: false
-    };
-    savedMessages = [...savedMessages, orderMessageObj];
-
-    // Persist the order message to localStorage so the storage adapter picks it up
-    // Save in widget SDK format that createSyncedStorageAdapter expects
-    try {
-      const existingExecutedIds = loadExecutedActionIds();
-      const storageData = {
-        messages: savedMessages.map(msg => ({ ...msg, streaming: false })),
-        metadata: {
-          processedActionMessageIds: existingExecutedIds
-        }
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData));
-      console.log("[Order] Persisted order message to localStorage");
-    } catch (error) {
-      console.error("[Order] Failed to persist order message:", error);
-    }
-  }
-}
+    }]
+  };
+};
 
 // Load previously executed action IDs from localStorage (for syncing with widget SDK metadata)
 let processedActionIds = new Set<string>(loadExecutedActionIds());
 console.log("[Action Middleware] Loaded processedActionIds:", Array.from(processedActionIds));
-console.log("[Action Middleware] Loaded savedMessages:", savedMessages.map(m => ({ id: m.id, role: m.role, hasRawContent: !!m.rawContent })));
 // Debug: Check localStorage structure
 try {
   const stored = localStorage.getItem("persona-action-middleware");
@@ -380,8 +354,7 @@ const checkoutHandler: AgentWidgetActionHandler = (action, context) => {
 const config: AgentWidgetConfig = {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
-  initialMessages: savedMessages.length > 0 ? savedMessages : undefined,
-  clearChatHistoryStorageKey: "persona-action-middleware",  // Automatically clear localStorage on clear chat
+clearChatHistoryStorageKey: "persona-action-middleware",  // Automatically clear localStorage on clear chat
   streamParser: createActionAwareParser,  // Use our custom parser that provides both text and raw
   // Use widget SDK's default action handlers - they work with the action manager's built-in deduplication
   actionHandlers: [
@@ -391,6 +364,18 @@ const config: AgentWidgetConfig = {
   ],
   // Use custom storage adapter that syncs our executedActionIds with widget SDK metadata
   storageAdapter: createSyncedStorageAdapter(),
+  // Use onStateLoaded to inject navigation and order messages after page load
+  onStateLoaded: (state) => {
+    // Check for pending navigation message
+    if (navMessage) {
+      state = injectMessage(state, navMessage, "nav");
+    }
+    // Check for order context message (returning from checkout)
+    if (orderContextMessage) {
+      state = injectMessage(state, orderContextMessage, "order");
+    }
+    return state;
+  },
   // Add context provider to send DOM content in metadata
   contextProviders: [pageContextProvider],
   // Move context to metadata in request (like sample.html)
