@@ -257,10 +257,10 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       },
       messages: formattedMessages,
       options: {
-        stream_response: true,
-        record_mode: "virtual",
-        flow_mode: flowId ? "existing" : "virtual",
-        auto_append_metadata: false
+        streamResponse: true,
+        recordMode: "virtual",
+        flowMode: flowId ? "existing" : "virtual",
+        autoAppendMetadata: false
       }
     };
 

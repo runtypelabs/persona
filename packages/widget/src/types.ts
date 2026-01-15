@@ -642,15 +642,15 @@ export type ClientSession = {
  * Raw API response from /v1/client/init endpoint
  */
 export type ClientInitResponse = {
-  session_id: string;
-  expires_at: string;
+  sessionId: string;
+  expiresAt: string;
   flow: {
     id: string;
     name: string;
     description: string | null;
   };
   config: {
-    welcome_message: string | null;
+    welcomeMessage: string | null;
     placeholder: string;
     theme: Record<string, unknown> | null;
   };
@@ -660,14 +660,14 @@ export type ClientInitResponse = {
  * Request payload for /v1/client/chat endpoint
  */
 export type ClientChatRequest = {
-  session_id: string;
+  sessionId: string;
   messages: Array<{
     id?: string;
     role: 'user' | 'assistant' | 'system';
     content: MessageContent;
   }>;
   /** ID for the expected assistant response message */
-  assistant_message_id?: string;
+  assistantMessageId?: string;
   metadata?: Record<string, unknown>;
   context?: Record<string, unknown>;
 };
@@ -681,9 +681,9 @@ export type ClientFeedbackType = 'upvote' | 'downvote' | 'copy' | 'csat' | 'nps'
  * Request payload for /v1/client/feedback endpoint
  */
 export type ClientFeedbackRequest = {
-  session_id: string;
+  sessionId: string;
   /** Required for upvote, downvote, copy feedback types */
-  message_id?: string;
+  messageId?: string;
   type: ClientFeedbackType;
   /** Required for csat (1-5) and nps (0-10) feedback types */
   rating?: number;
