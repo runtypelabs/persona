@@ -6,6 +6,7 @@ import {
   FORM_DIRECTIVE_FLOW,
   SHOPPING_ASSISTANT_FLOW,
   COMPONENT_FLOW,
+  BAKERY_ASSISTANT_FLOW,
   createCheckoutSession
 } from "@runtypelabs/persona-proxy";
 
@@ -56,10 +57,20 @@ const componentApp = createChatProxyApp({
   upstreamUrl
 });
 
+// Bakery assistant proxy - for Flour & Stone bakery demo
+const bakeryApp = createChatProxyApp({
+  path: "/api/chat/dispatch-bakery",
+  allowedOrigins: ["http://localhost:5173", "http://localhost:4173"],
+  flowId: process.env.FLOW_ID_BAKERY || undefined,
+  flowConfig: process.env.FLOW_ID_BAKERY ? undefined : BAKERY_ASSISTANT_FLOW,
+  upstreamUrl
+});
+
 // Mount all apps
 app.route("/", directiveApp);
 app.route("/", actionApp);
 app.route("/", componentApp);
+app.route("/", bakeryApp);
 
 // Stripe checkout endpoint
 // Uses the shared createCheckoutSession helper from @runtypelabs/persona-proxy
@@ -97,10 +108,11 @@ app.post("/api/checkout", async (c) => {
     }
 
     // Create Stripe checkout session using the shared helper
+    // {CHECKOUT_SESSION_ID} is a Stripe template variable that gets replaced with the actual session ID
     const result = await createCheckoutSession({
       secretKey: process.env.STRIPE_SECRET_KEY,
       items,
-      successUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/action-middleware.html?checkout=success`,
+      successUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/action-middleware.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/action-middleware.html?checkout=cancelled`,
     });
 
@@ -109,6 +121,68 @@ app.post("/api/checkout", async (c) => {
     });
   } catch (error) {
     console.error("Stripe checkout error:", error);
+    const origin = c.req.header("origin");
+    const allowedOrigins = ["http://localhost:5173", "http://localhost:4173"];
+    const corsOrigin = allowedOrigins.includes(origin || "") ? origin : allowedOrigins[0];
+    return c.json(
+      { success: false, error: error instanceof Error ? error.message : "Failed to create checkout session" },
+      500,
+      {
+        "Access-Control-Allow-Origin": corsOrigin,
+      }
+    );
+  }
+});
+
+// Bakery-specific Stripe checkout endpoint
+// Returns to bakery-goods.html after checkout
+app.post("/api/checkout/bakery", async (c) => {
+  // Handle CORS
+  if (c.req.method === "OPTIONS") {
+    const origin = c.req.header("origin");
+    const allowedOrigins = ["http://localhost:5173", "http://localhost:4173"];
+    const corsOrigin = allowedOrigins.includes(origin || "") ? origin : allowedOrigins[0];
+    return c.json({}, 200, {
+      "Access-Control-Allow-Origin": corsOrigin,
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    });
+  }
+
+  try {
+    const body = await c.req.json();
+    const { items } = body;
+
+    // Get origin for CORS
+    const origin = c.req.header("origin");
+    const allowedOrigins = ["http://localhost:5173", "http://localhost:4173"];
+    const corsOrigin = allowedOrigins.includes(origin || "") ? origin : allowedOrigins[0];
+
+    // Check if Stripe is configured
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return c.json(
+        { success: false, error: "Stripe is not configured. Please set STRIPE_SECRET_KEY environment variable." },
+        500,
+        {
+          "Access-Control-Allow-Origin": corsOrigin,
+        }
+      );
+    }
+
+    // Create Stripe checkout session for bakery
+    // {CHECKOUT_SESSION_ID} is a Stripe template variable that gets replaced with the actual session ID
+    const result = await createCheckoutSession({
+      secretKey: process.env.STRIPE_SECRET_KEY,
+      items,
+      successUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/bakery-goods.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/bakery-goods.html?checkout=cancelled`,
+    });
+
+    return c.json(result, result.success ? 200 : 400, {
+      "Access-Control-Allow-Origin": corsOrigin,
+    });
+  } catch (error) {
+    console.error("Bakery checkout error:", error);
     const origin = c.req.header("origin");
     const allowedOrigins = ["http://localhost:5173", "http://localhost:4173"];
     const corsOrigin = allowedOrigins.includes(origin || "") ? origin : allowedOrigins[0];

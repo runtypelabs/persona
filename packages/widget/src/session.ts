@@ -363,23 +363,37 @@ export class AgentWidgetSession {
         this.handleEvent
       );
     } catch (error) {
-      const fallback: AgentWidgetMessage = {
-        id: assistantMessageId, // Use the pre-generated ID for fallback too
-        role: "assistant",
-        createdAt: new Date().toISOString(),
-        content:
-          "It looks like the proxy isn't returning a real response yet. Here's a sample message so you can continue testing locally.",
-        sequence: this.nextSequence()
-      };
+      // Check if this is an abort error (user canceled, navigated away, etc.)
+      // In these cases, don't show fallback - the request was intentionally interrupted
+      const isAbortError =
+        error instanceof Error &&
+        (error.name === 'AbortError' ||
+         error.message.includes('aborted') ||
+         error.message.includes('abort'));
 
-      this.appendMessage(fallback);
+      if (!isAbortError) {
+        const fallback: AgentWidgetMessage = {
+          id: assistantMessageId, // Use the pre-generated ID for fallback too
+          role: "assistant",
+          createdAt: new Date().toISOString(),
+          content:
+            "It looks like the proxy isn't returning a real response yet. Here's a sample message so you can continue testing locally.",
+          sequence: this.nextSequence()
+        };
+
+        this.appendMessage(fallback);
+      }
+
       this.setStatus("idle");
       this.setStreaming(false);
       this.abortController = null;
-      if (error instanceof Error) {
-        this.callbacks.onError?.(error);
-      } else {
-        this.callbacks.onError?.(new Error(String(error)));
+
+      if (!isAbortError) {
+        if (error instanceof Error) {
+          this.callbacks.onError?.(error);
+        } else {
+          this.callbacks.onError?.(new Error(String(error)));
+        }
       }
     }
   }

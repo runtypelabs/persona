@@ -830,7 +830,8 @@ export const createAgentExperience = (
   const voiceState = {
     active: false,
     manuallyDeactivated: false,
-    lastUserMessageWasVoice: false
+    lastUserMessageWasVoice: false,
+    lastUserMessageId: null as string | null
   };
   const voiceAutoResumeMode = config.voiceRecognition?.autoResume ?? false;
   const emitVoiceState = (source: AgentWidgetVoiceStateEvent["source"]) => {
@@ -1404,6 +1405,14 @@ export const createAgentExperience = (
       const lastUserMessage = [...messages]
         .reverse()
         .find((msg) => msg.role === "user");
+
+      // Emit user:message event when a new user message is detected
+      const prevLastUserMessageId = voiceState.lastUserMessageId;
+      if (lastUserMessage && lastUserMessage.id !== prevLastUserMessageId) {
+        voiceState.lastUserMessageId = lastUserMessage.id;
+        eventBus.emit("user:message", lastUserMessage);
+      }
+
       voiceState.lastUserMessageWasVoice = Boolean(lastUserMessage?.viaVoice);
       persistState(messages);
     },
@@ -3451,6 +3460,87 @@ export const createAgentExperience = (
         (window as any).AgentWidgetBrowser = previousDebug;
       }
     });
+  }
+
+  // ============================================================================
+  // STATE PERSISTENCE ACROSS PAGE NAVIGATIONS
+  // ============================================================================
+  const persistConfig = normalizePersistStateConfig(config.persistState);
+  
+  if (persistConfig && launcherEnabled) {
+    const storage = getPersistStorage(persistConfig.storage!);
+    const openKey = `${persistConfig.keyPrefix}widget-open`;
+    const voiceKey = `${persistConfig.keyPrefix}widget-voice`;
+    const voiceModeKey = `${persistConfig.keyPrefix}widget-voice-mode`;
+
+    if (storage) {
+      // Restore state from previous page
+      const wasOpen = persistConfig.persist?.openState && storage.getItem(openKey) === 'true';
+      const wasVoiceActive = persistConfig.persist?.voiceState && storage.getItem(voiceKey) === 'true';
+      // Also check if user was in voice mode (last message was via voice)
+      const wasInVoiceMode = persistConfig.persist?.voiceState && storage.getItem(voiceModeKey) === 'true';
+
+      if (wasOpen) {
+        // Use setTimeout to ensure DOM is ready
+        setTimeout(() => {
+          controller.open();
+
+          // After opening, restore input mode
+          setTimeout(() => {
+            // Restore voice if it was actively recording OR if user was in voice mode
+            if (wasVoiceActive || wasInVoiceMode) {
+              controller.startVoiceRecognition();
+            } else if (persistConfig.persist?.focusInput) {
+              const textarea = mount.querySelector('textarea') as HTMLTextAreaElement | null;
+              if (textarea) {
+                textarea.focus();
+              }
+            }
+          }, 100);
+        }, 0);
+      }
+
+      // Persist open/close state changes
+      if (persistConfig.persist?.openState) {
+        eventBus.on('widget:opened', () => {
+          storage.setItem(openKey, 'true');
+        });
+        eventBus.on('widget:closed', () => {
+          storage.setItem(openKey, 'false');
+        });
+      }
+
+      // Persist voice state changes
+      if (persistConfig.persist?.voiceState) {
+        eventBus.on('voice:state', (event) => {
+          storage.setItem(voiceKey, event.active ? 'true' : 'false');
+        });
+
+        // Persist whether user is in voice mode based on their messages
+        // This allows voice to resume after navigation even when recording was stopped for submission
+        eventBus.on('user:message', (message) => {
+          storage.setItem(voiceModeKey, message.viaVoice ? 'true' : 'false');
+        });
+      }
+
+      // Clear persisted state on chat clear
+      if (persistConfig.clearOnChatClear) {
+        const clearPersistState = () => {
+          storage.removeItem(openKey);
+          storage.removeItem(voiceKey);
+          storage.removeItem(voiceModeKey);
+        };
+
+        // Listen for clear chat event
+        const handleClearChat = () => clearPersistState();
+        window.addEventListener('vanilla-agent:clear-chat', handleClearChat);
+
+        // Clean up listener on destroy
+        destroyCallbacks.push(() => {
+          window.removeEventListener('vanilla-agent:clear-chat', handleClearChat);
+        });
+      }
+    }
   }
 
   return controller;

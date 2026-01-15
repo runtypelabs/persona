@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Locations | Flour & Stone</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'warm-white': '#FAFAF9',
+            'stone-900': '#1C1917',
+            'stone-800': '#292524',
+            'stone-500': '#78716C',
+            'terracotta': '#D4A574',
+          },
+          fontFamily: {
+            'serif': ['Playfair Display', 'Georgia', 'serif'],
+            'sans': ['Inter', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: #FAFAF9;
+      color: #1C1917;
+    }
+    .font-serif {
+      font-family: 'Playfair Display', Georgia, serif;
+    }
+    .nav-link {
+      letter-spacing: 0.1em;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      transition: color 0.2s ease;
+    }
+    .nav-link:hover {
+      color: #D4A574;
+    }
+    .location-card {
+      transition: transform 0.3s ease;
+    }
+    .location-card:hover {
+      transform: translateY(-4px);
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-warm-white/95 backdrop-blur-sm border-b border-stone-200">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="/bakery.html" class="font-serif text-xl tracking-wide">FLOUR & STONE</a>
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="/bakery-story.html" class="nav-link text-stone-900">Our Story</a>
+          <a href="/bakery-locations.html" class="nav-link text-terracotta">Locations</a>
+          <a href="/bakery-goods.html" class="nav-link text-stone-900">Our Goods</a>
+          <a href="/bakery-services.html" class="nav-link text-stone-900">Services</a>
+        </div>
+        <button class="md:hidden p-2" id="mobile-menu-btn">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="hidden md:hidden border-t border-stone-200" id="mobile-menu">
+      <div class="px-6 py-4 space-y-3">
+        <a href="/bakery-story.html" class="block nav-link text-stone-900 py-2">Our Story</a>
+        <a href="/bakery-locations.html" class="block nav-link text-terracotta py-2">Locations</a>
+        <a href="/bakery-goods.html" class="block nav-link text-stone-900 py-2">Our Goods</a>
+        <a href="/bakery-services.html" class="block nav-link text-stone-900 py-2">Services</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="pt-32 pb-16 px-6 lg:px-8">
+    <div class="max-w-4xl mx-auto text-center">
+      <p class="text-terracotta tracking-widest text-sm uppercase mb-6">Visit Us</p>
+      <h1 class="font-serif text-5xl md:text-6xl mb-6">Our Locations</h1>
+      <p class="text-stone-500 text-lg max-w-2xl mx-auto">
+        Find fresh bread and pastries at one of our three locations across the city.
+      </p>
+    </div>
+  </section>
+
+  <!-- Locations -->
+  <section class="pb-24 px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Downtown -->
+        <div class="location-card bg-white overflow-hidden">
+          <img
+            src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&q=80&fit=crop"
+            alt="Downtown location"
+            class="w-full aspect-[4/3] object-cover"
+          />
+          <div class="p-8">
+            <h3 class="font-serif text-2xl mb-2">Downtown</h3>
+            <p class="text-stone-500 text-sm mb-4">Our flagship location</p>
+            <div class="space-y-3 text-sm text-stone-600">
+              <div class="flex items-start">
+                <svg class="w-5 h-5 mr-3 text-terracotta flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <span>123 Main Street<br/>Downtown, NY 10001</span>
+              </div>
+              <div class="flex items-center">
+                <svg class="w-5 h-5 mr-3 text-terracotta flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span>Daily 6am - 7pm</span>
+              </div>
+              <div class="flex items-center">
+                <svg class="w-5 h-5 mr-3 text-terracotta flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                </svg>
+                <span>(555) 123-4567</span>
+              </div>
+            </div>
+            <div class="mt-6 pt-6 border-t border-stone-100">
+              <p class="text-stone-500 text-sm">
+                Full café seating, espresso bar, and our complete range of breads and pastries.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Midtown -->
+        <div class="location-card bg-white overflow-hidden">
+          <img
+            src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&q=80&fit=crop"
+            alt="Midtown location"
+            class="w-full aspect-[4/3] object-cover"
+          />
+          <div class="p-8">
+            <h3 class="font-serif text-2xl mb-2">Midtown</h3>
+            <p class="text-stone-500 text-sm mb-4">Quick service & takeaway</p>
+            <div class="space-y-3 text-sm text-stone-600">
+              <div class="flex items-start">
+                <svg class="w-5 h-5 mr-3 text-terracotta flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <span>456 Park Avenue<br/>Midtown, NY 10022</span>
+              </div>
+              <div class="flex items-center">
+                <svg class="w-5 h-5 mr-3 text-terracotta flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span>Mon-Fri 7am - 6pm</span>
+              </div>
+              <div class="flex items-center">
+                <svg class="w-5 h-5 mr-3 text-terracotta flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                </svg>
+                <span>(555) 234-5678</span>
+              </div>
+            </div>
+            <div class="mt-6 pt-6 border-t border-stone-100">
+              <p class="text-stone-500 text-sm">
+                Perfect for the morning commute. Grab a croissant and coffee on your way to work.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Brooklyn -->
+        <div class="location-card bg-white overflow-hidden">
+          <img
+            src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600&q=80&fit=crop"
+            alt="Brooklyn location"
+            class="w-full aspect-[4/3] object-cover"
+          />
+          <div class="p-8">
+            <h3 class="font-serif text-2xl mb-2">Brooklyn</h3>
+            <p class="text-stone-500 text-sm mb-4">Weekend brunch spot</p>
+            <div class="space-y-3 text-sm text-stone-600">
+              <div class="flex items-start">
+                <svg class="w-5 h-5 mr-3 text-terracotta flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <span>789 Bedford Avenue<br/>Brooklyn, NY 11211</span>
+              </div>
+              <div class="flex items-center">
+                <svg class="w-5 h-5 mr-3 text-terracotta flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span>Daily 7am - 5pm</span>
+              </div>
+              <div class="flex items-center">
+                <svg class="w-5 h-5 mr-3 text-terracotta flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                </svg>
+                <span>(555) 345-6789</span>
+              </div>
+            </div>
+            <div class="mt-6 pt-6 border-t border-stone-100">
+              <p class="text-stone-500 text-sm">
+                Cozy neighborhood spot with outdoor seating. Local favorite for weekend brunch.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Map Placeholder -->
+  <section class="pb-24 px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto">
+      <div class="bg-stone-200 h-96 flex items-center justify-center">
+        <div class="text-center">
+          <svg class="w-12 h-12 mx-auto mb-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+          </svg>
+          <p class="text-stone-500">Interactive map coming soon</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-24 bg-stone-800 text-white text-center">
+    <div class="max-w-3xl mx-auto px-6">
+      <h2 class="font-serif text-4xl mb-6">Can't Visit in Person?</h2>
+      <p class="text-stone-400 mb-10">
+        Order online and have fresh bread delivered to your door.
+      </p>
+      <a
+        href="/bakery-goods.html"
+        class="inline-block px-8 py-4 bg-white text-stone-900 text-sm tracking-widest uppercase font-medium hover:bg-terracotta hover:text-white transition-all duration-300"
+      >
+        Shop Online
+      </a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-stone-900 text-white py-16">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-12">
+        <div class="md:col-span-2">
+          <h3 class="font-serif text-2xl mb-4">Flour & Stone</h3>
+          <p class="text-stone-400 text-sm leading-relaxed max-w-md">
+            Artisan bakes, crafted daily. We're dedicated to creating exceptional breads and pastries
+            using traditional methods and the finest ingredients.
+          </p>
+        </div>
+        <div>
+          <h4 class="nav-link text-white mb-4">Explore</h4>
+          <ul class="space-y-2 text-sm text-stone-400">
+            <li><a href="/bakery-story.html" class="hover:text-terracotta transition-colors">Our Story</a></li>
+            <li><a href="/bakery-locations.html" class="hover:text-terracotta transition-colors">Locations</a></li>
+            <li><a href="/bakery-goods.html" class="hover:text-terracotta transition-colors">Our Goods</a></li>
+            <li><a href="/bakery-services.html" class="hover:text-terracotta transition-colors">Services</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="nav-link text-white mb-4">Contact</h4>
+          <ul class="space-y-2 text-sm text-stone-400">
+            <li>hello@flourandstone.com</li>
+            <li>(555) 123-4567</li>
+            <li>Open Daily 7am - 6pm</li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-stone-800 mt-12 pt-8 text-center text-stone-500 text-sm">
+        <p>&copy; 2024 Flour & Stone. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Widget Mount Point -->
+  <div id="launcher-root"></div>
+  <script type="module" src="/src/bakery-demo.ts"></script>
+
+  <script>
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    mobileMenuBtn.addEventListener('click', () => {
+      mobileMenu.classList.toggle('hidden');
+    });
+  </script>
+</body>
+</html>

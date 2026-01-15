@@ -51,7 +51,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     if (headerIconName) {
       // Use Lucide icon
       const iconSize = parseFloat(headerIconSize) || 24;
-      const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "#ffffff", 2);
+      const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "#ffffff", 1);
       if (iconSvg) {
         iconHolder.replaceChildren(iconSvg);
       } else {
@@ -140,7 +140,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
       clearChatIconName,
       "20px",
       clearChatIconColor || "",
-      2
+      1
     );
     if (iconSvg) {
       clearChatButton.appendChild(iconSvg);
@@ -290,7 +290,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     closeButtonIconName,
     "20px",
     launcher.closeButtonColor || "",
-    2
+    1
   );
   if (closeIconSvg) {
     closeButton.appendChild(closeIconSvg);

@@ -21,7 +21,15 @@ import {
   loadExecutedActionIds,
   saveExecutedActionId,
   checkNavigationFlag,
-  STORAGE_KEY
+  STORAGE_KEY,
+  // Order-related imports
+  checkCheckoutReturn,
+  clearCheckoutQueryParams,
+  loadOrder,
+  updateOrderStatus,
+  cleanupExpiredOrders,
+  clearOrder,
+  type OrderData
 } from "./middleware";
 import { createFlexibleJsonStreamParser } from "@runtypelabs/persona";
 // Import types directly from the widget package
@@ -37,11 +45,76 @@ const proxyUrl =
   import.meta.env.VITE_PROXY_URL ??
   `http://localhost:${proxyPort}/api/chat/dispatch-action`;
 
+// ============================================================================
+// Order State Management
+// ============================================================================
+
+// Clean up expired orders on page load
+cleanupExpiredOrders();
+
+// Check if user is returning from checkout
+const checkoutReturn = checkCheckoutReturn();
+let orderContextMessage: string | null = null;
+
+if (checkoutReturn.status) {
+  const order = loadOrder();
+
+  if (checkoutReturn.status === 'success' && order) {
+    // Update order status to completed
+    updateOrderStatus('completed', checkoutReturn.sessionId);
+    const totalFormatted = (order.totalCents / 100).toFixed(2);
+    const itemNames = order.items.map(i => i.name).join(', ');
+    orderContextMessage = `Thank you for your purchase! Your order for ${itemNames} (total: $${totalFormatted}) has been confirmed. Order reference: ${order.sessionId.slice(-8)}. Is there anything else I can help you with?`;
+    console.log("[Order] Checkout completed:", { sessionId: checkoutReturn.sessionId, items: order.items });
+  } else if (checkoutReturn.status === 'cancelled') {
+    // Update order status to cancelled
+    updateOrderStatus('cancelled');
+    orderContextMessage = `I see you cancelled the checkout. Your items are still saved if you'd like to try again. Would you like to proceed with the purchase or explore other options?`;
+    console.log("[Order] Checkout cancelled");
+  }
+
+  // Clear checkout query params from URL
+  clearCheckoutQueryParams();
+}
+
+// Helper to get dynamic welcome message based on order state
+const getWelcomeConfig = () => {
+  const order = loadOrder();
+
+  if (order?.status === 'completed') {
+    const completedTime = order.completedAt ? new Date(order.completedAt).getTime() : new Date(order.createdAt).getTime();
+    const hoursAgo = (Date.now() - completedTime) / (1000 * 60 * 60);
+
+    if (hoursAgo < 24) {
+      const itemSummary = order.items.length > 2
+        ? `${order.items.slice(0, 2).map(i => i.name).join(', ')} and more`
+        : order.items.map(i => i.name).join(', ');
+
+      return {
+        title: `Welcome back! Order confirmed`,
+        subtitle: `Your ${itemSummary} order is confirmed. Ask me anything!`
+      };
+    }
+  }
+
+  return {
+    title: "Hi, what can I help you with?",
+    subtitle: "Try asking for products or adding items to your cart"
+  };
+};
+
+const { title: welcomeTitle, subtitle: welcomeSubtitle } = getWelcomeConfig();
+
+// ============================================================================
+// Page Context Provider
+// ============================================================================
+
 // Create a context provider that collects page context for metadata
 const pageContextProvider = () => {
   const elements = collectPageContext();
   const formattedContext = formatPageContext(elements);
-  
+  const order = loadOrder();
+
   // Return context in a format suitable for metadata
   return {
     page_elements: elements.slice(0, 50), // Limit to first 50 elements
@@ -49,7 +122,16 @@ const pageContextProvider = () => {
     page_context: formattedContext,
     page_url: window.location.href,
     page_title: document.title,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    // Include order context for assistant (if available)
+    recent_order: order ? {
+      session_id: order.sessionId,
+      items: order.items,
+      total: (order.totalCents / 100).toFixed(2),
+      status: order.status,
+      created_at: order.createdAt,
+      completed_at: order.completedAt,
+    } : null,
   };
 };
 
@@ -136,15 +218,16 @@ const createSyncedStorageAdapter = () => {
 
 // Check for navigation flag and auto-open if needed
 const navMessage = checkNavigationFlag();
-const shouldAutoOpen = navMessage !== null;
+// Auto-open if we have a navigation message OR an order context message
+const shouldAutoOpen = navMessage !== null || orderContextMessage !== null;
 
 // If we have a navigation message, add it as an initial assistant message
 // But only add it once - check if it's already in savedMessages to prevent duplicates
 if (navMessage) {
-  const navMessageExists = savedMessages.some(msg => 
+  const navMessageExists = savedMessages.some(msg =>
     msg.role === "assistant" && msg.content === navMessage
   );
-  
+
   if (!navMessageExists) {
     const navMessageObj: AgentWidgetMessage = {
       id: `nav-${Date.now()}`,
@@ -154,6 +237,40 @@ if (navMessage) {
       streaming: false
     };
     savedMessages = [...savedMessages, navMessageObj];
+  }
+}
+
+// If we have an order context message (returning from checkout), add it as an assistant message
+if (orderContextMessage) {
+  const orderMessageExists = savedMessages.some(msg =>
+    msg.role === "assistant" && msg.content === orderContextMessage
+  );
+
+  if (!orderMessageExists) {
+    const orderMessageObj: AgentWidgetMessage = {
+      id: `order-${Date.now()}`,
+      role: "assistant",
+      content: orderContextMessage,
+      createdAt: new Date().toISOString(),
+      streaming: false
+    };
+    savedMessages = [...savedMessages, orderMessageObj];
+
+    // Persist the order message to localStorage so the storage adapter picks it up
+    // Save in widget SDK format that createSyncedStorageAdapter expects
+    try {
+      const existingExecutedIds = loadExecutedActionIds();
+      const storageData = {
+        messages: savedMessages.map(msg => ({ ...msg, streaming: false })),
+        metadata: {
+          processedActionMessageIds: existingExecutedIds
+        }
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData));
+      console.log("[Order] Persisted order message to localStorage");
+    } catch (error) {
+      console.error("[Order] Failed to persist order message:", error);
+    }
   }
 }
 
@@ -306,8 +423,8 @@ const config: AgentWidgetConfig = {
   },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle: "Hi, what can I help you with?",
-    welcomeSubtitle: "Try asking for products or adding items to your cart",
+    welcomeTitle,  // Dynamic based on order state
+    welcomeSubtitle,  // Dynamic based on order state
     inputPlaceholder: "Type your message…",
     sendButtonLabel: "Send"
   },
@@ -340,19 +457,25 @@ const config: AgentWidgetConfig = {
 };
 
 // Initialize widget
+// Note: We use a separate variable to avoid reference error in onReady callback
+let widgetControllerRef: ReturnType<typeof initAgentWidget> | null = null;
+
 const widgetController = initAgentWidget({
   target: "#launcher-root",
   useShadowDom: false,
   config,
   onReady: () => {
-    // Handle navigation message after widget is ready
-    if (navMessage && shouldAutoOpen) {
+    // Handle auto-open for navigation message or checkout return
+    // Use setTimeout to ensure widgetControllerRef is assigned
+    if (shouldAutoOpen) {
       setTimeout(() => {
-        widgetController.open();
-      }, 300);
+        widgetControllerRef?.open();
+      }, 100);
     }
   }
 });
+
+widgetControllerRef = widgetController;
 
 // Clear in-memory state when chat is cleared
 // (localStorage is automatically cleared via clearChatHistoryStorageKey config option)
@@ -360,6 +483,8 @@ window.addEventListener("persona:clear-chat", () => {
   console.log("[Action Middleware] Clear chat event received, clearing in-memory state");
   processedActionIds.clear();
   rawJsonByMessageId.clear();
+  // Optionally clear order data when chat is cleared
+  clearOrder();
 });
 
 // Expose controller for debugging

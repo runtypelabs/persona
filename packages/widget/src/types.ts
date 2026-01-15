@@ -259,6 +259,7 @@ export type AgentWidgetStateSnapshot = {
 };
 
 export type AgentWidgetControllerEventMap = {
+  "user:message": AgentWidgetMessage;
   "assistant:message": AgentWidgetMessage;
   "assistant:complete": AgentWidgetMessage;
   "voice:state": AgentWidgetVoiceStateEvent;
