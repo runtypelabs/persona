@@ -63,6 +63,72 @@ import {
 const DEFAULT_CHAT_HISTORY_STORAGE_KEY = "persona-chat-history";
 const VOICE_STATE_RESTORE_WINDOW = 30 * 1000;
 
+// ============================================================================
+// PERSIST STATE HELPERS
+// ============================================================================
+
+type NormalizedPersistConfig = {
+  storage: 'local' | 'session';
+  keyPrefix: string;
+  persist: {
+    openState: boolean;
+    voiceState: boolean;
+    focusInput: boolean;
+  };
+  clearOnChatClear: boolean;
+};
+
+/**
+ * Normalize persistState config - handles both boolean and object forms
+ */
+function normalizePersistStateConfig(
+  config: boolean | { storage?: 'local' | 'session'; keyPrefix?: string; persist?: { openState?: boolean; voiceState?: boolean; focusInput?: boolean }; clearOnChatClear?: boolean } | undefined
+): NormalizedPersistConfig | null {
+  if (!config) return null;
+  
+  if (config === true) {
+    // Use defaults
+    return {
+      storage: 'session',
+      keyPrefix: 'persona-',
+      persist: {
+        openState: true,
+        voiceState: true,
+        focusInput: true
+      },
+      clearOnChatClear: true
+    };
+  }
+  
+  // Object config - merge with defaults
+  return {
+    storage: config.storage ?? 'session',
+    keyPrefix: config.keyPrefix ?? 'persona-',
+    persist: {
+      openState: config.persist?.openState ?? true,
+      voiceState: config.persist?.voiceState ?? true,
+      focusInput: config.persist?.focusInput ?? true
+    },
+    clearOnChatClear: config.clearOnChatClear ?? true
+  };
+}
+
+/**
+ * Get the storage object based on config
+ */
+function getPersistStorage(storageType: 'local' | 'session'): Storage | null {
+  try {
+    const storage = storageType === 'local' ? localStorage : sessionStorage;
+    // Test that storage is actually available
+    const testKey = '__persist_test__';
+    storage.setItem(testKey, '1');
+    storage.removeItem(testKey);
+    return storage;
+  } catch {
+    return null;
+  }
+}
+
 const ensureRecord = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object") {
     return {};
@@ -215,24 +281,60 @@ export const createAgentExperience = (
   let persistentMetadata: Record<string, unknown> = {};
   let pendingStoredState: Promise<AgentWidgetStoredState | null> | null = null;
 
+  // Helper to apply onStateLoaded hook and extract state
+  const applyStateLoadedHook = (state: AgentWidgetStoredState): AgentWidgetStoredState => {
+    if (config.onStateLoaded) {
+      try {
+        return config.onStateLoaded(state);
+      } catch (error) {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.error("[AgentWidget] onStateLoaded hook failed:", error);
+        }
+      }
+    }
+    return state;
+  };
+
   if (storageAdapter?.load) {
     try {
       const storedState = storageAdapter.load();
       if (storedState && typeof (storedState as Promise<any>).then === "function") {
-        pendingStoredState = storedState as Promise<AgentWidgetStoredState | null>;
-      } else if (storedState) {
-        const immediateState = storedState as AgentWidgetStoredState;
-        if (immediateState.metadata) {
-          persistentMetadata = ensureRecord(immediateState.metadata);
+        // For async storage, apply hook when promise resolves
+        pendingStoredState = (storedState as Promise<AgentWidgetStoredState | null>).then(
+          (resolved) => {
+            const state = resolved ?? { messages: [], metadata: {} };
+            return applyStateLoadedHook(state);
+          }
+        );
+      } else {
+        // Apply hook to synchronously loaded state (or empty state if nothing stored)
+        const baseState = (storedState as AgentWidgetStoredState) ?? { messages: [], metadata: {} };
+        const processedState = applyStateLoadedHook(baseState);
+        if (processedState.metadata) {
+          persistentMetadata = ensureRecord(processedState.metadata);
         }
-        if (immediateState.messages?.length) {
-          config = { ...config, initialMessages: immediateState.messages };
+        if (processedState.messages?.length) {
+          config = { ...config, initialMessages: processedState.messages };
         }
       }
     } catch (error) {
       if (typeof console !== "undefined") {
         // eslint-disable-next-line no-console
         console.error("[AgentWidget] Failed to load stored state:", error);
+      }
+    }
+  } else if (config.onStateLoaded) {
+    // No storage adapter but hook exists - call with empty state
+    try {
+      const processedState = applyStateLoadedHook({ messages: [], metadata: {} });
+      if (processedState.messages?.length) {
+        config = { ...config, initialMessages: processedState.messages };
+      }
+    } catch (error) {
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.error("[AgentWidget] onStateLoaded hook failed:", error);
       }
     }
   }
@@ -830,7 +932,8 @@ export const createAgentExperience = (
   const voiceState = {
     active: false,
     manuallyDeactivated: false,
-    lastUserMessageWasVoice: false
+    lastUserMessageWasVoice: false,
+    lastUserMessageId: null as string | null
   };
   const voiceAutoResumeMode = config.voiceRecognition?.autoResume ?? false;
   const emitVoiceState = (source: AgentWidgetVoiceStateEvent["source"]) => {
@@ -1404,6 +1507,14 @@ export const createAgentExperience = (
       const lastUserMessage = [...messages]
         .reverse()
         .find((msg) => msg.role === "user");
+
+      // Emit user:message event when a new user message is detected
+      const prevLastUserMessageId = voiceState.lastUserMessageId;
+      if (lastUserMessage && lastUserMessage.id !== prevLastUserMessageId) {
+        voiceState.lastUserMessageId = lastUserMessage.id;
+        eventBus.emit("user:message", lastUserMessage);
+      }
+
       voiceState.lastUserMessageWasVoice = Boolean(lastUserMessage?.viaVoice);
       persistState(messages);
     },
@@ -3451,6 +3562,87 @@ export const createAgentExperience = (
         (window as any).AgentWidgetBrowser = previousDebug;
       }
     });
+  }
+
+  // ============================================================================
+  // STATE PERSISTENCE ACROSS PAGE NAVIGATIONS
+  // ============================================================================
+  const persistConfig = normalizePersistStateConfig(config.persistState);
+  
+  if (persistConfig && launcherEnabled) {
+    const storage = getPersistStorage(persistConfig.storage!);
+    const openKey = `${persistConfig.keyPrefix}widget-open`;
+    const voiceKey = `${persistConfig.keyPrefix}widget-voice`;
+    const voiceModeKey = `${persistConfig.keyPrefix}widget-voice-mode`;
+
+    if (storage) {
+      // Restore state from previous page
+      const wasOpen = persistConfig.persist?.openState && storage.getItem(openKey) === 'true';
+      const wasVoiceActive = persistConfig.persist?.voiceState && storage.getItem(voiceKey) === 'true';
+      // Also check if user was in voice mode (last message was via voice)
+      const wasInVoiceMode = persistConfig.persist?.voiceState && storage.getItem(voiceModeKey) === 'true';
+
+      if (wasOpen) {
+        // Use setTimeout to ensure DOM is ready
+        setTimeout(() => {
+          controller.open();
+
+          // After opening, restore input mode
+          setTimeout(() => {
+            // Restore voice if it was actively recording OR if user was in voice mode
+            if (wasVoiceActive || wasInVoiceMode) {
+              controller.startVoiceRecognition();
+            } else if (persistConfig.persist?.focusInput) {
+              const textarea = mount.querySelector('textarea') as HTMLTextAreaElement | null;
+              if (textarea) {
+                textarea.focus();
+              }
+            }
+          }, 100);
+        }, 0);
+      }
+
+      // Persist open/close state changes
+      if (persistConfig.persist?.openState) {
+        eventBus.on('widget:opened', () => {
+          storage.setItem(openKey, 'true');
+        });
+        eventBus.on('widget:closed', () => {
+          storage.setItem(openKey, 'false');
+        });
+      }
+
+      // Persist voice state changes
+      if (persistConfig.persist?.voiceState) {
+        eventBus.on('voice:state', (event) => {
+          storage.setItem(voiceKey, event.active ? 'true' : 'false');
+        });
+
+        // Persist whether user is in voice mode based on their messages
+        // This allows voice to resume after navigation even when recording was stopped for submission
+        eventBus.on('user:message', (message) => {
+          storage.setItem(voiceModeKey, message.viaVoice ? 'true' : 'false');
+        });
+      }
+
+      // Clear persisted state on chat clear
+      if (persistConfig.clearOnChatClear) {
+        const clearPersistState = () => {
+          storage.removeItem(openKey);
+          storage.removeItem(voiceKey);
+          storage.removeItem(voiceModeKey);
+        };
+
+        // Listen for clear chat event
+        const handleClearChat = () => clearPersistState();
+        window.addEventListener('vanilla-agent:clear-chat', handleClearChat);
+
+        // Clean up listener on destroy
+        destroyCallbacks.push(() => {
+          window.removeEventListener('vanilla-agent:clear-chat', handleClearChat);
+        });
+      }
+    }
   }
 
   return controller;

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Our Story | Flour & Stone</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'warm-white': '#FAFAF9',
+            'stone-900': '#1C1917',
+            'stone-800': '#292524',
+            'stone-500': '#78716C',
+            'terracotta': '#D4A574',
+          },
+          fontFamily: {
+            'serif': ['Playfair Display', 'Georgia', 'serif'],
+            'sans': ['Inter', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: #FAFAF9;
+      color: #1C1917;
+    }
+    .font-serif {
+      font-family: 'Playfair Display', Georgia, serif;
+    }
+    .nav-link {
+      letter-spacing: 0.1em;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      transition: color 0.2s ease;
+    }
+    .nav-link:hover {
+      color: #D4A574;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-warm-white/95 backdrop-blur-sm border-b border-stone-200">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="/bakery.html" class="font-serif text-xl tracking-wide">FLOUR & STONE</a>
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="/bakery-story.html" class="nav-link text-terracotta">Our Story</a>
+          <a href="/bakery-locations.html" class="nav-link text-stone-900">Locations</a>
+          <a href="/bakery-goods.html" class="nav-link text-stone-900">Our Goods</a>
+          <a href="/bakery-services.html" class="nav-link text-stone-900">Services</a>
+        </div>
+        <button class="md:hidden p-2" id="mobile-menu-btn">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="hidden md:hidden border-t border-stone-200" id="mobile-menu">
+      <div class="px-6 py-4 space-y-3">
+        <a href="/bakery-story.html" class="block nav-link text-terracotta py-2">Our Story</a>
+        <a href="/bakery-locations.html" class="block nav-link text-stone-900 py-2">Locations</a>
+        <a href="/bakery-goods.html" class="block nav-link text-stone-900 py-2">Our Goods</a>
+        <a href="/bakery-services.html" class="block nav-link text-stone-900 py-2">Services</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="pt-32 pb-16 px-6 lg:px-8">
+    <div class="max-w-4xl mx-auto text-center">
+      <p class="text-terracotta tracking-widest text-sm uppercase mb-6">Est. 2018</p>
+      <h1 class="font-serif text-5xl md:text-6xl mb-6">Our Story</h1>
+      <p class="text-stone-500 text-lg max-w-2xl mx-auto">
+        What began as a passion project in a home kitchen has grown into something we're incredibly proud of.
+      </p>
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <section class="pb-24 px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto">
+      <!-- Section 1 -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center mb-24">
+        <div>
+          <img
+            src="https://images.unsplash.com/photo-1528698827591-e19ccd7bc23d?w=800&q=80&fit=crop"
+            alt="Woman selling in bakery store"
+            class="w-full aspect-[4/3] object-cover"
+          />
+        </div>
+        <div>
+          <h2 class="font-serif text-3xl mb-6">The Beginning</h2>
+          <p class="text-stone-600 leading-relaxed mb-4">
+            Flour & Stone started in 2018 when our founder, Emma Chen, decided to turn her lifelong love
+            of bread baking into something more. After years of perfecting her sourdough technique in
+            a tiny apartment kitchen, she opened a small stand at the local farmers market.
+          </p>
+          <p class="text-stone-600 leading-relaxed">
+            The response was overwhelming. Within weeks, she had a loyal following of bread lovers who
+            would line up early just to get their hands on her signature country loaf. That's when she
+            knew this was more than a hobby—it was a calling.
+          </p>
+        </div>
+      </div>
+
+      <!-- Section 2 -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center mb-24">
+        <div class="order-2 lg:order-1">
+          <h2 class="font-serif text-3xl mb-6">Our Philosophy</h2>
+          <p class="text-stone-600 leading-relaxed mb-4">
+            We believe that great bread is a product of time, not shortcuts. Our sourdough starters
+            have been carefully nurtured for years, developing complex flavors that simply can't be
+            rushed or replicated.
+          </p>
+          <p class="text-stone-600 leading-relaxed mb-4">
+            Every ingredient we use is chosen with intention. We source heritage grains from local
+            farms, use filtered water, and never add preservatives or artificial additives. The result
+            is bread that tastes like bread should—honest, wholesome, and deeply satisfying.
+          </p>
+          <p class="text-stone-600 leading-relaxed">
+            From the first fold to the final bake, every step is done by hand. This isn't just a
+            process for us—it's a meditation, a craft we've dedicated ourselves to mastering.
+          </p>
+        </div>
+        <div class="order-1 lg:order-2">
+          <img
+            src="https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=800&q=80&fit=crop"
+            alt="Fresh bread and ingredients"
+            class="w-full aspect-[4/3] object-cover"
+          />
+        </div>
+      </div>
+
+      <!-- Values -->
+      <div class="bg-stone-100 p-12 lg:p-16 mb-24">
+        <h2 class="font-serif text-3xl text-center mb-12">What We Stand For</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+          <div class="text-center">
+            <div class="w-12 h-12 mx-auto mb-4 flex items-center justify-center">
+              <svg class="w-8 h-8 text-terracotta" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <h3 class="nav-link text-stone-900 mb-3">Patience</h3>
+            <p class="text-stone-500 text-sm">
+              Our doughs ferment for 24-48 hours, developing flavors that can't be rushed.
+            </p>
+          </div>
+          <div class="text-center">
+            <div class="w-12 h-12 mx-auto mb-4 flex items-center justify-center">
+              <svg class="w-8 h-8 text-terracotta" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <h3 class="nav-link text-stone-900 mb-3">Local Sourcing</h3>
+            <p class="text-stone-500 text-sm">
+              We partner with regional farms for heritage grains and seasonal ingredients.
+            </p>
+          </div>
+          <div class="text-center">
+            <div class="w-12 h-12 mx-auto mb-4 flex items-center justify-center">
+              <svg class="w-8 h-8 text-terracotta" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+              </svg>
+            </div>
+            <h3 class="nav-link text-stone-900 mb-3">Community</h3>
+            <p class="text-stone-500 text-sm">
+              We're more than a bakery—we're a gathering place for bread lovers.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Team -->
+      <div class="text-center mb-16">
+        <h2 class="font-serif text-3xl mb-4">The Team</h2>
+        <p class="text-stone-500 max-w-2xl mx-auto">
+          Our bakers start at 3am every day to ensure you get the freshest bread possible. Meet the people behind the loaves.
+        </p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div>
+          <img
+            src="https://images.unsplash.com/photo-1556217477-d325251ece38?w=400&q=80&fit=crop"
+            alt="Emma Chen"
+            class="w-full aspect-square object-cover mb-4 grayscale"
+          />
+          <h3 class="font-serif text-xl mb-1">Emma Chen</h3>
+          <p class="text-stone-500 text-sm">Founder & Head Baker</p>
+        </div>
+        <div>
+          <img
+            src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80&fit=crop"
+            alt="Marcus Rivera"
+            class="w-full aspect-square object-cover mb-4 grayscale"
+          />
+          <h3 class="font-serif text-xl mb-1">Marcus Rivera</h3>
+          <p class="text-stone-500 text-sm">Pastry Chef</p>
+        </div>
+        <div>
+          <img
+            src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&q=80&fit=crop"
+            alt="Sarah Kim"
+            class="w-full aspect-square object-cover mb-4 grayscale"
+          />
+          <h3 class="font-serif text-xl mb-1">Sarah Kim</h3>
+          <p class="text-stone-500 text-sm">Operations Manager</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-24 bg-stone-800 text-white text-center">
+    <div class="max-w-3xl mx-auto px-6">
+      <h2 class="font-serif text-4xl mb-6">Experience the Difference</h2>
+      <p class="text-stone-400 mb-10">
+        Taste the passion and craft that goes into every item we make.
+      </p>
+      <a
+        href="/bakery-goods.html"
+        class="inline-block px-8 py-4 bg-white text-stone-900 text-sm tracking-widest uppercase font-medium hover:bg-terracotta hover:text-white transition-all duration-300"
+      >
+        Shop Our Goods
+      </a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-stone-900 text-white py-16">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-12">
+        <div class="md:col-span-2">
+          <h3 class="font-serif text-2xl mb-4">Flour & Stone</h3>
+          <p class="text-stone-400 text-sm leading-relaxed max-w-md">
+            Artisan bakes, crafted daily. We're dedicated to creating exceptional breads and pastries
+            using traditional methods and the finest ingredients.
+          </p>
+        </div>
+        <div>
+          <h4 class="nav-link text-white mb-4">Explore</h4>
+          <ul class="space-y-2 text-sm text-stone-400">
+            <li><a href="/bakery-story.html" class="hover:text-terracotta transition-colors">Our Story</a></li>
+            <li><a href="/bakery-locations.html" class="hover:text-terracotta transition-colors">Locations</a></li>
+            <li><a href="/bakery-goods.html" class="hover:text-terracotta transition-colors">Our Goods</a></li>
+            <li><a href="/bakery-services.html" class="hover:text-terracotta transition-colors">Services</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="nav-link text-white mb-4">Contact</h4>
+          <ul class="space-y-2 text-sm text-stone-400">
+            <li>hello@flourandstone.com</li>
+            <li>(555) 123-4567</li>
+            <li>Open Daily 7am - 6pm</li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-stone-800 mt-12 pt-8 text-center text-stone-500 text-sm">
+        <p>&copy; 2024 Flour & Stone. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Widget Mount Point -->
+  <div id="launcher-root"></div>
+  <script type="module" src="/src/bakery-demo.ts"></script>
+
+  <script>
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    mobileMenuBtn.addEventListener('click', () => {
+      mobileMenu.classList.toggle('hidden');
+    });
+  </script>
+</body>
+</html>

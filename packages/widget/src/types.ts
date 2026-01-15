@@ -259,6 +259,7 @@ export type AgentWidgetStateSnapshot = {
 };
 
 export type AgentWidgetControllerEventMap = {
+  "user:message": AgentWidgetMessage;
   "assistant:message": AgentWidgetMessage;
   "assistant:complete": AgentWidgetMessage;
   "voice:state": AgentWidgetVoiceStateEvent;
@@ -1190,6 +1191,71 @@ export type AgentWidgetAttachmentsConfig = {
   onFileRejected?: (file: File, reason: 'type' | 'size' | 'count') => void;
 };
 
+/**
+ * Configuration for persisting widget state across page navigations.
+ * Stores open/closed state, voice recognition state, and voice mode in browser storage.
+ * 
+ * @example
+ * ```typescript
+ * config: {
+ *   persistState: true  // Use defaults: sessionStorage, persist open state
+ * }
+ * ```
+ * 
+ * @example
+ * ```typescript
+ * config: {
+ *   persistState: {
+ *     storage: 'local',  // Use localStorage instead of sessionStorage
+ *     keyPrefix: 'myapp-',  // Custom prefix for storage keys
+ *     persist: {
+ *       openState: true,
+ *       voiceState: true,
+ *       focusInput: true
+ *     },
+ *     clearOnChatClear: true
+ *   }
+ * }
+ * ```
+ */
+export type AgentWidgetPersistStateConfig = {
+  /**
+   * Storage type to use.
+   * @default 'session'
+   */
+  storage?: 'local' | 'session';
+  /**
+   * Prefix for storage keys.
+   * @default 'persona-'
+   */
+  keyPrefix?: string;
+  /**
+   * What state to persist.
+   */
+  persist?: {
+    /**
+     * Persist widget open/closed state.
+     * @default true
+     */
+    openState?: boolean;
+    /**
+     * Persist voice recognition state.
+     * @default true
+     */
+    voiceState?: boolean;
+    /**
+     * Focus input when restoring open state.
+     * @default true
+     */
+    focusInput?: boolean;
+  };
+  /**
+   * Clear persisted state when chat is cleared.
+   * @default true
+   */
+  clearOnChatClear?: boolean;
+};
+
 export type AgentWidgetConfig = {
   apiUrl?: string;
   flowId?: string;
@@ -1340,6 +1406,36 @@ export type AgentWidgetConfig = {
   actionParsers?: AgentWidgetActionParser[];
   actionHandlers?: AgentWidgetActionHandler[];
   storageAdapter?: AgentWidgetStorageAdapter;
+  /**
+   * Called after state is loaded from the storage adapter, but before the widget
+   * initializes with that state. Use this to transform or inject messages based
+   * on external state (e.g., navigation flags, checkout returns).
+   *
+   * This hook runs synchronously and must return the (potentially modified) state.
+   *
+   * @example
+   * ```typescript
+   * config: {
+   *   onStateLoaded: (state) => {
+   *     // Check for pending navigation message
+   *     const navMessage = consumeNavigationFlag();
+   *     if (navMessage) {
+   *       return {
+   *         ...state,
+   *         messages: [...(state.messages || []), {
+   *           id: `nav-${Date.now()}`,
+   *           role: 'assistant',
+   *           content: navMessage,
+   *           createdAt: new Date().toISOString()
+   *         }]
+   *       };
+   *     }
+   *     return state;
+   *   }
+   * }
+   * ```
+   */
+  onStateLoaded?: (state: AgentWidgetStoredState) => AgentWidgetStoredState;
   /**
    * Registry of custom components that can be rendered from JSON directives.
    * Components are registered by name and can be invoked via JSON responses
@@ -1567,6 +1663,36 @@ export type AgentWidgetConfig = {
    * ```
    */
   attachments?: AgentWidgetAttachmentsConfig;
+
+  /**
+   * Persist widget state (open/closed, voice mode) across page navigations.
+   * When `true`, uses default settings with sessionStorage.
+   * When an object, allows customizing storage type, key prefix, and what to persist.
+   *
+   * @example
+   * ```typescript
+   * // Simple usage - persist open state in sessionStorage
+   * config: {
+   *   persistState: true
+   * }
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Advanced usage
+   * config: {
+   *   persistState: {
+   *     storage: 'local',  // Use localStorage
+   *     persist: {
+   *       openState: true,
+   *       voiceState: true,
+   *       focusInput: true
+   *     }
+   *   }
+   * }
+   * ```
+   */
+  persistState?: boolean | AgentWidgetPersistStateConfig;
 };
 
 export type AgentWidgetMessageRole = "user" | "assistant" | "system";

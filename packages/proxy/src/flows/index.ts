@@ -9,3 +9,4 @@ export {
   SHOPPING_ASSISTANT_METADATA_FLOW
 } from "./shopping-assistant.js";
 export { COMPONENT_FLOW } from "./components.js";
+export { BAKERY_ASSISTANT_FLOW } from "./bakery-assistant.js";

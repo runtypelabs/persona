@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Our Goods | Flour & Stone</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'warm-white': '#FAFAF9',
+            'stone-900': '#1C1917',
+            'stone-800': '#292524',
+            'stone-500': '#78716C',
+            'terracotta': '#D4A574',
+          },
+          fontFamily: {
+            'serif': ['Playfair Display', 'Georgia', 'serif'],
+            'sans': ['Inter', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: #FAFAF9;
+      color: #1C1917;
+    }
+    .font-serif {
+      font-family: 'Playfair Display', Georgia, serif;
+    }
+    .nav-link {
+      letter-spacing: 0.1em;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      transition: color 0.2s ease;
+    }
+    .nav-link:hover {
+      color: #D4A574;
+    }
+    .product-card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .product-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+    }
+    .product-card img {
+      transition: transform 0.5s ease;
+    }
+    .product-card:hover img {
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-warm-white/95 backdrop-blur-sm border-b border-stone-200">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="/bakery.html" class="font-serif text-xl tracking-wide">FLOUR & STONE</a>
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="/bakery-story.html" class="nav-link text-stone-900">Our Story</a>
+          <a href="/bakery-locations.html" class="nav-link text-stone-900">Locations</a>
+          <a href="/bakery-goods.html" class="nav-link text-terracotta">Our Goods</a>
+          <a href="/bakery-services.html" class="nav-link text-stone-900">Services</a>
+        </div>
+        <button class="md:hidden p-2" id="mobile-menu-btn">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="hidden md:hidden border-t border-stone-200" id="mobile-menu">
+      <div class="px-6 py-4 space-y-3">
+        <a href="/bakery-story.html" class="block nav-link text-stone-900 py-2">Our Story</a>
+        <a href="/bakery-locations.html" class="block nav-link text-stone-900 py-2">Locations</a>
+        <a href="/bakery-goods.html" class="block nav-link text-terracotta py-2">Our Goods</a>
+        <a href="/bakery-services.html" class="block nav-link text-stone-900 py-2">Services</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="pt-32 pb-16 px-6 lg:px-8">
+    <div class="max-w-4xl mx-auto text-center">
+      <p class="text-terracotta tracking-widest text-sm uppercase mb-6">Shop</p>
+      <h1 class="font-serif text-5xl md:text-6xl mb-6">Our Goods</h1>
+      <p class="text-stone-500 text-lg max-w-2xl mx-auto">
+        Fresh from the oven, ready for your table. Everything is baked daily using our signature sourdough starters and the finest ingredients.
+      </p>
+    </div>
+  </section>
+
+  <!-- Baked Goods Section -->
+  <section class="pb-16 px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto">
+      <h2 class="nav-link text-stone-900 mb-8">Baked Goods</h2>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Sourdough Loaf -->
+        <div class="product-card bg-white overflow-hidden" data-product="sourdough-loaf" data-price="1200" data-name="Sourdough Loaf">
+          <div class="aspect-square overflow-hidden">
+            <img
+              src="https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&q=80&fit=crop"
+              alt="Sourdough Loaf"
+              class="w-full h-full object-cover"
+            />
+          </div>
+          <div class="p-6">
+            <h3 class="font-serif text-xl mb-1">Sourdough Loaf</h3>
+            <p class="text-stone-500 text-sm mb-4">Our signature country loaf with a deep, tangy flavor</p>
+            <span class="product-price text-lg font-medium">$12.00</span>
+          </div>
+        </div>
+
+        <!-- Croissant Box -->
+        <div class="product-card bg-white overflow-hidden" data-product="croissant-box" data-price="2400" data-name="Croissant Box (6)">
+          <div class="aspect-square overflow-hidden">
+            <img
+              src="https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=600&q=80&fit=crop"
+              alt="Croissant Box"
+              class="w-full h-full object-cover"
+            />
+          </div>
+          <div class="p-6">
+            <h3 class="font-serif text-xl mb-1">Croissant Box (6)</h3>
+            <p class="text-stone-500 text-sm mb-4">Buttery, flaky croissants made with French butter</p>
+            <span class="product-price text-lg font-medium">$24.00</span>
+          </div>
+        </div>
+
+        <!-- Cinnamon Rolls -->
+        <div class="product-card bg-white overflow-hidden" data-product="cinnamon-rolls" data-price="1800" data-name="Cinnamon Rolls (4)">
+          <div class="aspect-square overflow-hidden">
+            <img
+              src="https://images.unsplash.com/photo-1509365465985-25d11c17e812?w=600&q=80&fit=crop"
+              alt="Cinnamon Rolls"
+              class="w-full h-full object-cover"
+            />
+          </div>
+          <div class="p-6">
+            <h3 class="font-serif text-xl mb-1">Cinnamon Rolls (4)</h3>
+            <p class="text-stone-500 text-sm mb-4">Warm, gooey rolls with cream cheese frosting</p>
+            <span class="product-price text-lg font-medium">$18.00</span>
+          </div>
+        </div>
+
+        <!-- Baguette Trio -->
+        <div class="product-card bg-white overflow-hidden" data-product="baguette-trio" data-price="900" data-name="Baguette Trio">
+          <div class="aspect-square overflow-hidden">
+            <img
+              src="https://images.unsplash.com/photo-1549931319-a545dcf3bc73?w=600&q=80&fit=crop"
+              alt="Baguette Trio"
+              class="w-full h-full object-cover"
+            />
+          </div>
+          <div class="p-6">
+            <h3 class="font-serif text-xl mb-1">Baguette Trio</h3>
+            <p class="text-stone-500 text-sm mb-4">Three traditional French baguettes with crisp crusts</p>
+            <span class="product-price text-lg font-medium">$9.00</span>
+          </div>
+        </div>
+
+        <!-- Almond Tart -->
+        <div class="product-card bg-white overflow-hidden" data-product="almond-tart" data-price="800" data-name="Almond Tart">
+          <div class="aspect-square overflow-hidden">
+            <img
+              src="https://images.unsplash.com/photo-1519915028121-7d3463d20b13?w=600&q=80&fit=crop"
+              alt="Almond Tart"
+              class="w-full h-full object-cover"
+            />
+          </div>
+          <div class="p-6">
+            <h3 class="font-serif text-xl mb-1">Almond Tart</h3>
+            <p class="text-stone-500 text-sm mb-4">Buttery tart shell filled with almond frangipane</p>
+            <span class="product-price text-lg font-medium">$8.00</span>
+          </div>
+        </div>
+
+        <!-- Fruit Danish -->
+        <div class="product-card bg-white overflow-hidden" data-product="fruit-danish" data-price="600" data-name="Fruit Danish">
+          <div class="aspect-square overflow-hidden">
+            <img
+              src="https://images.unsplash.com/photo-1483695028939-5bb13f8648b0?w=600&q=80&fit=crop"
+              alt="Fruit Danish"
+              class="w-full h-full object-cover"
+            />
+          </div>
+          <div class="p-6">
+            <h3 class="font-serif text-xl mb-1">Fruit Danish</h3>
+            <p class="text-stone-500 text-sm mb-4">Flaky pastry topped with seasonal fresh fruit</p>
+            <span class="product-price text-lg font-medium">$6.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Divider -->
+  <div class="max-w-7xl mx-auto px-6 lg:px-8">
+    <hr class="border-stone-200" />
+  </div>
+
+  <!-- Gift Cards Section - Below the fold -->
+  <section class="py-16 px-6 lg:px-8" id="gift-cards">
+    <div class="max-w-7xl mx-auto">
+      <h2 class="nav-link text-stone-900 mb-4">Gift Cards</h2>
+      <p class="text-stone-500 mb-8 max-w-xl">
+        The perfect gift for bread lovers. Our gift cards can be used at any of our locations or for online orders.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- $50 Gift Card - The main one for the demo -->
+        <div class="product-card bg-white overflow-hidden" data-product="gift-card-50" data-price="5000" data-name="$50 Gift Card">
+          <div class="aspect-[16/10] overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900 relative">
+            <div class="absolute inset-0 flex flex-col justify-between p-8 text-white">
+              <div>
+                <p class="font-serif text-3xl mb-1">Flour & Stone</p>
+                <p class="text-stone-400 text-sm tracking-wide uppercase">Gift Card</p>
+              </div>
+              <div>
+                <p class="text-4xl font-light">$50</p>
+              </div>
+            </div>
+            <div class="absolute top-4 right-4">
+              <svg class="w-8 h-8 text-terracotta" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="p-8">
+            <h3 class="font-serif text-2xl mb-2">$50 Gift Card</h3>
+            <p class="text-stone-500 mb-6">
+              Give the gift of artisan bakes. Perfect for birthdays, holidays, or just because.
+              Redeemable online or at any of our three locations.
+            </p>
+            <span class="product-price text-xl font-medium">$50.00</span>
+          </div>
+        </div>
+
+        <!-- $25 Gift Card -->
+        <div class="product-card bg-white overflow-hidden" data-product="gift-card-25" data-price="2500" data-name="$25 Gift Card">
+          <div class="aspect-[16/10] overflow-hidden bg-gradient-to-br from-stone-700 to-stone-800 relative">
+            <div class="absolute inset-0 flex flex-col justify-between p-8 text-white">
+              <div>
+                <p class="font-serif text-3xl mb-1">Flour & Stone</p>
+                <p class="text-stone-400 text-sm tracking-wide uppercase">Gift Card</p>
+              </div>
+              <div>
+                <p class="text-4xl font-light">$25</p>
+              </div>
+            </div>
+            <div class="absolute top-4 right-4">
+              <svg class="w-8 h-8 text-terracotta" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="p-8">
+            <h3 class="font-serif text-2xl mb-2">$25 Gift Card</h3>
+            <p class="text-stone-500 mb-6">
+              A thoughtful gift that lets them choose their favorites. Great for coworkers, teachers, or anyone who loves good bread.
+            </p>
+            <span class="product-price text-xl font-medium">$25.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Newsletter -->
+  <section class="py-24 bg-stone-100">
+    <div class="max-w-3xl mx-auto px-6 text-center">
+      <h2 class="font-serif text-3xl mb-4">Stay Fresh</h2>
+      <p class="text-stone-500 mb-8">
+        Sign up for our newsletter to get updates on new products, seasonal specials, and baking tips.
+      </p>
+      <form class="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
+        <input
+          type="email"
+          placeholder="your@email.com"
+          class="flex-1 px-4 py-3 border border-stone-300 focus:border-terracotta focus:outline-none"
+        />
+        <button
+          type="submit"
+          class="px-6 py-3 bg-stone-900 text-white text-sm tracking-widest uppercase hover:bg-terracotta transition-colors"
+        >
+          Subscribe
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-stone-900 text-white py-16">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-12">
+        <div class="md:col-span-2">
+          <h3 class="font-serif text-2xl mb-4">Flour & Stone</h3>
+          <p class="text-stone-400 text-sm leading-relaxed max-w-md">
+            Artisan bakes, crafted daily. We're dedicated to creating exceptional breads and pastries
+            using traditional methods and the finest ingredients.
+          </p>
+        </div>
+        <div>
+          <h4 class="nav-link text-white mb-4">Explore</h4>
+          <ul class="space-y-2 text-sm text-stone-400">
+            <li><a href="/bakery-story.html" class="hover:text-terracotta transition-colors">Our Story</a></li>
+            <li><a href="/bakery-locations.html" class="hover:text-terracotta transition-colors">Locations</a></li>
+            <li><a href="/bakery-goods.html" class="hover:text-terracotta transition-colors">Our Goods</a></li>
+            <li><a href="/bakery-services.html" class="hover:text-terracotta transition-colors">Services</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="nav-link text-white mb-4">Contact</h4>
+          <ul class="space-y-2 text-sm text-stone-400">
+            <li>hello@flourandstone.com</li>
+            <li>(555) 123-4567</li>
+            <li>Open Daily 7am - 6pm</li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-stone-800 mt-12 pt-8 text-center text-stone-500 text-sm">
+        <p>&copy; 2024 Flour & Stone. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Widget Mount Point -->
+  <div id="launcher-root"></div>
+  <script type="module" src="/src/bakery-demo.ts"></script>
+
+  <script>
+    // Mobile menu toggle
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    mobileMenuBtn.addEventListener('click', () => {
+      mobileMenu.classList.toggle('hidden');
+    });
+
+  </script>
+</body>
+</html>

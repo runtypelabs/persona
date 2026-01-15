@@ -283,9 +283,9 @@ const chat = initAgentWidget({ /* ... */ })
 window.chatController = chat
 ```
 
-### Events
+### DOM Events
 
-The widget dispatches custom events that you can listen to for integration with your application:
+The widget dispatches custom DOM events that you can listen to for integration with your application:
 
 #### `persona:clear-chat`
 
@@ -308,6 +308,178 @@ window.addEventListener("persona:clear-chat", (event) => {
 - Sync with backend
 
 **Note:** The widget automatically clears the `"persona-chat-history"` localStorage key by default when chat is cleared. If you set `clearChatHistoryStorageKey` in the config, it will also clear that additional key. You can still listen to this event for additional custom behavior.
+
+### Controller Events
+
+The widget controller exposes an event system for reacting to chat events. Use `controller.on(eventName, callback)` to subscribe and `controller.off(eventName, callback)` to unsubscribe.
+
+#### Available Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `user:message` | `AgentWidgetMessage` | Emitted when a new user message is detected. Includes `viaVoice: true` if sent via voice. |
+| `assistant:message` | `AgentWidgetMessage` | Emitted when an assistant message starts streaming |
+| `assistant:complete` | `AgentWidgetMessage` | Emitted when an assistant message finishes streaming |
+| `voice:state` | `AgentWidgetVoiceStateEvent` | Emitted when voice recognition state changes |
+| `action:detected` | `AgentWidgetActionEventPayload` | Emitted when an action is parsed from an assistant message |
+| `widget:opened` | `AgentWidgetStateEvent` | Emitted when the widget panel opens |
+| `widget:closed` | `AgentWidgetStateEvent` | Emitted when the widget panel closes |
+| `widget:state` | `AgentWidgetStateSnapshot` | Emitted on any widget state change |
+| `message:feedback` | `AgentWidgetMessageFeedback` | Emitted when user provides feedback (upvote/downvote) |
+| `message:copy` | `AgentWidgetMessage` | Emitted when user copies a message |
+
+#### Event Payload Types
+
+```typescript
+// Voice state event
+type AgentWidgetVoiceStateEvent = {
+  active: boolean;
+  source: "user" | "auto" | "restore" | "system";
+  timestamp: number;
+};
+
+// Widget state event (for opened/closed)
+type AgentWidgetStateEvent = {
+  open: boolean;
+  source: "user" | "auto" | "api" | "system";
+  timestamp: number;
+};
+
+// Widget state snapshot
+type AgentWidgetStateSnapshot = {
+  open: boolean;
+  launcherEnabled: boolean;
+  voiceActive: boolean;
+  streaming: boolean;
+};
+
+// Action event payload
+type AgentWidgetActionEventPayload = {
+  action: AgentWidgetParsedAction;
+  message: AgentWidgetMessage;
+};
+
+// Message feedback
+type AgentWidgetMessageFeedback = {
+  type: "upvote" | "downvote";
+  messageId: string;
+  message: AgentWidgetMessage;
+};
+```
+
+#### Example: Listening to Events
+
+```ts
+const chat = initAgentWidget({
+  target: 'body',
+  config: { apiUrl: '/api/chat/dispatch' }
+});
+
+// Listen for new user messages
+chat.on('user:message', (message) => {
+  console.log('User sent:', message.content);
+  if (message.viaVoice) {
+    console.log('Message was sent via voice recognition');
+  }
+});
+
+// Listen for completed assistant responses
+chat.on('assistant:complete', (message) => {
+  console.log('Assistant replied:', message.content);
+});
+
+// Listen for voice state changes
+chat.on('voice:state', (event) => {
+  console.log('Voice active:', event.active, 'Source:', event.source);
+});
+
+// Listen for widget open/close
+chat.on('widget:opened', (event) => {
+  console.log('Widget opened by:', event.source);
+});
+
+chat.on('widget:closed', (event) => {
+  console.log('Widget closed by:', event.source);
+});
+
+// Listen for parsed actions from assistant messages
+chat.on('action:detected', ({ action, message }) => {
+  console.log('Action detected:', action.type, action.payload);
+});
+```
+
+#### Example: Voice Mode Persistence
+
+The `user:message` event is useful for implementing custom voice mode persistence across page navigations:
+
+```ts
+const chat = initAgentWidget({
+  target: 'body',
+  config: {
+    apiUrl: '/api/chat/dispatch',
+    voiceRecognition: { enabled: true }
+  }
+});
+
+// Track if the user is in "voice mode"
+chat.on('user:message', (message) => {
+  localStorage.setItem('voice-mode', message.viaVoice ? 'true' : 'false');
+});
+
+// On page load, restore voice mode if the user was using voice
+if (localStorage.getItem('voice-mode') === 'true') {
+  chat.startVoiceRecognition();
+}
+```
+
+Note: The built-in `persistState` option handles this automatically when configured:
+
+```ts
+initAgentWidget({
+  target: 'body',
+  config: {
+    persistState: true,  // Automatically persists open state and voice mode
+    voiceRecognition: { enabled: true, autoResume: 'assistant' }
+  }
+});
+```
+
+### State Loaded Hook
+
+The `onStateLoaded` hook is called after state is loaded from the storage adapter, but before the widget initializes. Use this to transform or inject messages based on external state (e.g., navigation flags, checkout returns).
+
+```ts
+initAgentWidget({
+  target: 'body',
+  config: {
+    storageAdapter: createLocalStorageAdapter('my-chat'),
+    onStateLoaded: (state) => {
+      // Check for pending navigation message
+      const navMessage = consumeNavigationFlag();
+      if (navMessage) {
+        return {
+          ...state,
+          messages: [...(state.messages || []), {
+            id: `nav-${Date.now()}`,
+            role: 'assistant',
+            content: navMessage,
+            createdAt: new Date().toISOString()
+          }]
+        };
+      }
+      return state;
+    }
+  }
+});
+```
+
+**Use cases:**
+- Inject messages after page navigation (e.g., "Here are our products!")
+- Add confirmation messages after checkout/payment returns
+- Transform or filter loaded messages
+- Inject system messages based on external state
+
+The hook receives the loaded state and must return the (potentially modified) state synchronously.
 
 ### Message Actions (Copy, Upvote, Downvote)
 

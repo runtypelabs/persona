@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Services | Flour & Stone</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'warm-white': '#FAFAF9',
+            'stone-900': '#1C1917',
+            'stone-800': '#292524',
+            'stone-500': '#78716C',
+            'terracotta': '#D4A574',
+          },
+          fontFamily: {
+            'serif': ['Playfair Display', 'Georgia', 'serif'],
+            'sans': ['Inter', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: #FAFAF9;
+      color: #1C1917;
+    }
+    .font-serif {
+      font-family: 'Playfair Display', Georgia, serif;
+    }
+    .nav-link {
+      letter-spacing: 0.1em;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      transition: color 0.2s ease;
+    }
+    .nav-link:hover {
+      color: #D4A574;
+    }
+    .service-card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .service-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-warm-white/95 backdrop-blur-sm border-b border-stone-200">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="/bakery.html" class="font-serif text-xl tracking-wide">FLOUR & STONE</a>
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="/bakery-story.html" class="nav-link text-stone-900">Our Story</a>
+          <a href="/bakery-locations.html" class="nav-link text-stone-900">Locations</a>
+          <a href="/bakery-goods.html" class="nav-link text-stone-900">Our Goods</a>
+          <a href="/bakery-services.html" class="nav-link text-terracotta">Services</a>
+        </div>
+        <button class="md:hidden p-2" id="mobile-menu-btn">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="hidden md:hidden border-t border-stone-200" id="mobile-menu">
+      <div class="px-6 py-4 space-y-3">
+        <a href="/bakery-story.html" class="block nav-link text-stone-900 py-2">Our Story</a>
+        <a href="/bakery-locations.html" class="block nav-link text-stone-900 py-2">Locations</a>
+        <a href="/bakery-goods.html" class="block nav-link text-stone-900 py-2">Our Goods</a>
+        <a href="/bakery-services.html" class="block nav-link text-terracotta py-2">Services</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="pt-32 pb-16 px-6 lg:px-8">
+    <div class="max-w-4xl mx-auto text-center">
+      <p class="text-terracotta tracking-widest text-sm uppercase mb-6">Beyond the Counter</p>
+      <h1 class="font-serif text-5xl md:text-6xl mb-6">Our Services</h1>
+      <p class="text-stone-500 text-lg max-w-2xl mx-auto">
+        From intimate gatherings to corporate events, we bring the warmth of our bakery to your special occasions.
+      </p>
+    </div>
+  </section>
+
+  <!-- Services Grid -->
+  <section class="pb-24 px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- Catering -->
+        <div class="service-card bg-white overflow-hidden">
+          <img
+            src="https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=800&q=80&fit=crop"
+            alt="Catering spread"
+            class="w-full aspect-[16/10] object-cover"
+          />
+          <div class="p-8">
+            <h3 class="font-serif text-2xl mb-3">Catering</h3>
+            <p class="text-stone-500 mb-6">
+              Let us elevate your next event with our signature breads, pastries, and custom menus.
+              From breakfast meetings to evening receptions, we create memorable spreads that bring
+              people together.
+            </p>
+            <ul class="space-y-2 text-sm text-stone-600 mb-6">
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Corporate breakfast & lunch packages
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Private event bread service
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Pastry platters for any occasion
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Custom menus available
+              </li>
+            </ul>
+            <p class="text-sm text-stone-500">
+              Starting at $15 per person • Minimum 10 guests
+            </p>
+          </div>
+        </div>
+
+        <!-- Custom Orders -->
+        <div class="service-card bg-white overflow-hidden">
+          <img
+            src="https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800&q=80&fit=crop"
+            alt="Custom cake"
+            class="w-full aspect-[16/10] object-cover"
+          />
+          <div class="p-8">
+            <h3 class="font-serif text-2xl mb-3">Custom Orders</h3>
+            <p class="text-stone-500 mb-6">
+              Have a special request? Our bakers love a creative challenge. Whether it's a
+              wedding cake, a celebration loaf, or something entirely unique, we'll work with
+              you to bring your vision to life.
+            </p>
+            <ul class="space-y-2 text-sm text-stone-600 mb-6">
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Wedding & celebration cakes
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Specialty bread orders
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Dietary accommodation options
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Corporate gifting programs
+              </li>
+            </ul>
+            <p class="text-sm text-stone-500">
+              Contact us for pricing • 2-week advance notice required
+            </p>
+          </div>
+        </div>
+
+        <!-- Bread Subscription -->
+        <div class="service-card bg-white overflow-hidden">
+          <img
+            src="https://images.unsplash.com/photo-1509440159596-0249088772ff?w=800&q=80&fit=crop"
+            alt="Fresh bread"
+            class="w-full aspect-[16/10] object-cover"
+          />
+          <div class="p-8">
+            <h3 class="font-serif text-2xl mb-3">Bread Subscription</h3>
+            <p class="text-stone-500 mb-6">
+              Never run out of fresh bread. Our weekly subscription delivers your favorite
+              loaves straight to your door, still warm from the oven. Choose your frequency
+              and selections, and we'll handle the rest.
+            </p>
+            <ul class="space-y-2 text-sm text-stone-600 mb-6">
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Weekly or bi-weekly delivery
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Choose your favorite loaves
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Subscriber-only seasonal specials
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Skip or pause anytime
+              </li>
+            </ul>
+            <p class="text-sm text-stone-500">
+              Starting at $28/week • Free delivery on orders over $40
+            </p>
+          </div>
+        </div>
+
+        <!-- Baking Classes -->
+        <div class="service-card bg-white overflow-hidden">
+          <img
+            src="https://images.unsplash.com/photo-1556217477-d325251ece38?w=800&q=80&fit=crop"
+            alt="Baking class"
+            class="w-full aspect-[16/10] object-cover"
+          />
+          <div class="p-8">
+            <h3 class="font-serif text-2xl mb-3">Baking Classes</h3>
+            <p class="text-stone-500 mb-6">
+              Learn the art of bread making from our expert bakers. Our hands-on classes
+              cover everything from starter cultivation to shaping techniques. Leave with
+              your own loaf and the skills to recreate it at home.
+            </p>
+            <ul class="space-y-2 text-sm text-stone-600 mb-6">
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Sourdough fundamentals (3 hours)
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Croissant workshop (4 hours)
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                Private group sessions available
+              </li>
+              <li class="flex items-center">
+                <span class="w-1.5 h-1.5 bg-terracotta rounded-full mr-3"></span>
+                All materials included
+              </li>
+            </ul>
+            <p class="text-sm text-stone-500">
+              $95-150 per person • Classes held on weekends
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Form Section -->
+  <section class="py-24 bg-stone-100">
+    <div class="max-w-3xl mx-auto px-6 lg:px-8 text-center">
+      <h2 class="font-serif text-3xl mb-4">Get in Touch</h2>
+      <p class="text-stone-500 mb-10">
+        Have questions about our services? We'd love to hear from you.
+      </p>
+      <div class="bg-white p-8 md:p-12">
+        <form class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm text-stone-600 mb-2" for="name">Name</label>
+              <input
+                type="text"
+                id="name"
+                class="w-full px-4 py-3 border border-stone-300 focus:border-terracotta focus:outline-none transition-colors"
+                placeholder="Your name"
+              />
+            </div>
+            <div>
+              <label class="block text-sm text-stone-600 mb-2" for="email">Email</label>
+              <input
+                type="email"
+                id="email"
+                class="w-full px-4 py-3 border border-stone-300 focus:border-terracotta focus:outline-none transition-colors"
+                placeholder="your@email.com"
+              />
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm text-stone-600 mb-2" for="service">Service Interest</label>
+            <select
+              id="service"
+              class="w-full px-4 py-3 border border-stone-300 focus:border-terracotta focus:outline-none transition-colors bg-white"
+            >
+              <option value="">Select a service</option>
+              <option value="catering">Catering</option>
+              <option value="custom">Custom Orders</option>
+              <option value="subscription">Bread Subscription</option>
+              <option value="classes">Baking Classes</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-stone-600 mb-2" for="message">Message</label>
+            <textarea
+              id="message"
+              rows="4"
+              class="w-full px-4 py-3 border border-stone-300 focus:border-terracotta focus:outline-none transition-colors"
+              placeholder="Tell us about your needs..."
+            ></textarea>
+          </div>
+          <button
+            type="submit"
+            class="w-full px-8 py-4 bg-stone-900 text-white text-sm tracking-widest uppercase font-medium hover:bg-terracotta transition-all duration-300"
+          >
+            Send Message
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-stone-900 text-white py-16">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-12">
+        <div class="md:col-span-2">
+          <h3 class="font-serif text-2xl mb-4">Flour & Stone</h3>
+          <p class="text-stone-400 text-sm leading-relaxed max-w-md">
+            Artisan bakes, crafted daily. We're dedicated to creating exceptional breads and pastries
+            using traditional methods and the finest ingredients.
+          </p>
+        </div>
+        <div>
+          <h4 class="nav-link text-white mb-4">Explore</h4>
+          <ul class="space-y-2 text-sm text-stone-400">
+            <li><a href="/bakery-story.html" class="hover:text-terracotta transition-colors">Our Story</a></li>
+            <li><a href="/bakery-locations.html" class="hover:text-terracotta transition-colors">Locations</a></li>
+            <li><a href="/bakery-goods.html" class="hover:text-terracotta transition-colors">Our Goods</a></li>
+            <li><a href="/bakery-services.html" class="hover:text-terracotta transition-colors">Services</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="nav-link text-white mb-4">Contact</h4>
+          <ul class="space-y-2 text-sm text-stone-400">
+            <li>hello@flourandstone.com</li>
+            <li>(555) 123-4567</li>
+            <li>Open Daily 7am - 6pm</li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-stone-800 mt-12 pt-8 text-center text-stone-500 text-sm">
+        <p>&copy; 2024 Flour & Stone. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Widget Mount Point -->
+  <div id="launcher-root"></div>
+  <script type="module" src="/src/bakery-demo.ts"></script>
+
+  <script>
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    mobileMenuBtn.addEventListener('click', () => {
+      mobileMenu.classList.toggle('hidden');
+    });
+  </script>
+</body>
+</html>
