@@ -78,16 +78,16 @@ const DEFAULT_FLOW: RuntypeFlowConfig = {
       config: {
         model: "gemini-2.5-flash",
         // model: "gpt-4o",
-        response_format: "markdown",
-        output_variable: "prompt_result",
-        user_prompt: "{{user_message}}",
-        system_prompt: "you are a helpful assistant, chatting with a user",
+        responseFormat: "markdown",
+        outputVariable: "prompt_result",
+        userPrompt: "{{user_message}}",
+        systemPrompt: "you are a helpful assistant, chatting with a user",
         // tools: {
-        //   tool_ids: [
+        //   toolIds: [
         //     "builtin:dalle"
         //   ]
         // },
-        previous_messages: "{{messages}}"
+        previousMessages: "{{messages}}"
       }
     }
   ]
