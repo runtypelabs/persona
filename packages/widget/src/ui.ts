@@ -1474,13 +1474,13 @@ export const createAgentExperience = (
     config = {
       ...config,
       getStoredSessionId: () => {
-        const storedId = persistentMetadata['session_id'];
+        const storedId = persistentMetadata['sessionId'];
         return typeof storedId === 'string' ? storedId : null;
       },
       setStoredSessionId: (sessionId: string) => {
         updateSessionMetadata((prev) => ({
           ...prev,
-          session_id: sessionId,
+          sessionId: sessionId,
         }));
       },
     };

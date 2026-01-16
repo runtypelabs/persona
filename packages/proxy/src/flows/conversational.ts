@@ -15,11 +15,11 @@ export const CONVERSATIONAL_FLOW: RuntypeFlowConfig = {
       enabled: true,
       config: {
         model: "meta/llama3.1-8b-instruct-free",
-        response_format: "markdown",
-        output_variable: "prompt_result",
-        user_prompt: "{{user_message}}",
-        system_prompt: "you are a helpful assistant, chatting with a user",
-        previous_messages: "{{messages}}"
+        responseFormat: "markdown",
+        outputVariable: "prompt_result",
+        userPrompt: "{{user_message}}",
+        systemPrompt: "you are a helpful assistant, chatting with a user",
+        previousMessages: "{{messages}}"
       }
     }
   ]
