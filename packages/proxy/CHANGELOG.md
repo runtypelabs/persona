@@ -1,5 +1,21 @@
 # @runtypelabs/persona-proxy
 
+## 1.40.1
+
+### Patch Changes
+
+- f398a27: Complete camelCase migration for step config fields and add ESLint enforcement
+
+  Proxy step config changes:
+
+  - `response_format` → `responseFormat`
+  - `output_variable` → `outputVariable`
+  - `user_prompt` → `userPrompt`
+  - `system_prompt` → `systemPrompt`
+  - `previous_messages` → `previousMessages`
+
+  ESLint rule added to prevent snake_case regression in API payloads.
+
 ## 1.40.0
 
 ### Patch Changes
