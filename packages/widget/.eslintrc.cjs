@@ -22,6 +22,21 @@ module.exports = {
   rules: {
     "no-unused-vars": "off",
     "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+    // Disallow snake_case in property names (catches API payload fields)
+    // Allows: camelCase, PascalCase, UPPER_CASE, kebab-case (CSS), colons (events), slashes (MIME)
+    "@typescript-eslint/naming-convention": [
+      "error",
+      {
+        selector: "property",
+        format: null,
+        custom: {
+          // Fail if property contains underscore followed by lowercase (snake_case pattern)
+          // but allow leading underscore (_private) and ALL_CAPS constants
+          regex: "^(?!_).*_[a-z]",
+          match: false,
+        },
+      },
+    ],
   },
   ignorePatterns: ["dist/", "node_modules/"],
 };
