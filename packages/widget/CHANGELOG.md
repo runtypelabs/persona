@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 1.41.0
+
+### Minor Changes
+
+- 2d5ec5e: Add custom loading indicator and idle state support. Users can now customize loading indicators via `loadingIndicator.render` and `loadingIndicator.renderIdle` config options, or through plugin hooks `renderLoadingIndicator` and `renderIdleIndicator`. Added `showBubble` option to control bubble styling around standalone loading indicators.
+
 ## 1.40.1
 
 ### Patch Changes
