@@ -85,7 +85,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   const textarea = createElement("textarea") as HTMLTextAreaElement;
   textarea.placeholder = config?.copy?.inputPlaceholder ?? "Type your message…";
   textarea.className =
-    "tvw-w-full tvw-min-h-[24px] tvw-resize-none tvw-border-none tvw-bg-transparent tvw-text-sm tvw-text-cw-primary focus:tvw-outline-none focus:tvw-border-none";
+    "tvw-w-full tvw-min-h-[24px] tvw-resize-none tvw-border-none tvw-bg-transparent tvw-text-sm tvw-text-cw-primary focus:tvw-outline-none focus:tvw-border-none tvw-composer-textarea";
   textarea.rows = 1;
 
   // Apply font family and weight from config
