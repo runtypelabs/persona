@@ -568,6 +568,157 @@ type AgentWidgetMessageActionsConfig = {
 - **Copy button**: Shows a checkmark briefly after successful copy
 - **Vote buttons**: Toggle active state and are mutually exclusive (upvoting clears downvote and vice versa)
 
+### Loading & Idle Indicators
+
+The widget displays visual indicators during different states of the conversation:
+
+- **Loading indicator**: Shown while waiting for a response (standalone) or when an assistant message is streaming but has no content yet (inline)
+- **Idle indicator**: Shown when the widget is idle (not streaming) and has at least one message - useful for showing the assistant is "waiting" for user input
+
+#### Configuration
+
+```ts
+const controller = initAgentWidget({
+  target: '#app',
+  config: {
+    apiUrl: '/api/chat/dispatch',
+
+    loadingIndicator: {
+      // Show/hide bubble styling around standalone indicator (default: true)
+      showBubble: false,
+
+      // Custom loading indicator renderer
+      render: ({ location, config, defaultRenderer }) => {
+        // location: 'standalone' (separate bubble) or 'inline' (inside message)
+        if (location === 'standalone') {
+          const el = document.createElement('div');
+          el.innerHTML = '<svg class="spinner">...</svg>';
+          el.setAttribute('data-preserve-animation', 'true');
+          return el;
+        }
+        // Use default 3-dot bouncing indicator for inline
+        return defaultRenderer();
+      },
+
+      // Custom idle state indicator (shown after response completes)
+      renderIdle: ({ lastMessage, messageCount, config }) => {
+        // Only show after assistant messages
+        if (lastMessage?.role !== 'assistant') return null;
+
+        const el = document.createElement('div');
+        el.textContent = 'What would you like to do next?';
+        el.setAttribute('data-preserve-animation', 'true');
+        return el;
+      }
+    }
+  }
+});
+```
+
+#### Indicator Locations
+
+| Location | When Shown | Description |
+|----------|------------|-------------|
+| `standalone` | Waiting for stream to start | Separate bubble shown after user sends a message |
+| `inline` | Streaming with empty content | Inside the assistant message bubble |
+| `idle` | Not streaming, has messages | After assistant finishes responding |
+
+#### Animation Preservation
+
+When using custom animated indicators, add the `data-preserve-animation="true"` attribute to prevent the DOM morpher from interrupting CSS animations during updates:
+
+```ts
+render: () => {
+  const el = document.createElement('div');
+  el.setAttribute('data-preserve-animation', 'true');
+  el.innerHTML = `
+    <style>
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .spinner { animation: spin 1s linear infinite; }
+    </style>
+    <div class="spinner">⟳</div>
+  `;
+  return el;
+}
+```
+
+#### Hiding Indicators
+
+Return `null` from any render function to hide that indicator:
+
+```ts
+loadingIndicator: {
+  // Hide loading indicator entirely
+  render: () => null,
+
+  // Hide idle indicator (default behavior)
+  renderIdle: () => null
+}
+```
+
+#### Using Plugins
+
+You can also customize indicators via plugins, which take priority over config:
+
+```ts
+const customIndicatorPlugin = {
+  id: 'custom-indicators',
+
+  renderLoadingIndicator: ({ location, defaultRenderer }) => {
+    if (location === 'standalone') {
+      return createCustomSpinner();
+    }
+    return defaultRenderer();
+  },
+
+  renderIdleIndicator: ({ lastMessage, messageCount }) => {
+    if (messageCount === 0) return null;
+    if (lastMessage?.role !== 'assistant') return null;
+    return createIdleAnimation();
+  }
+};
+
+initAgentWidget({
+  target: '#app',
+  config: {
+    plugins: [customIndicatorPlugin]
+  }
+});
+```
+
+#### Type Definitions
+
+```typescript
+// Loading indicator context
+type LoadingIndicatorRenderContext = {
+  config: AgentWidgetConfig;
+  streaming: boolean;
+  location: 'inline' | 'standalone';
+  defaultRenderer: () => HTMLElement;
+};
+
+// Idle indicator context
+type IdleIndicatorRenderContext = {
+  config: AgentWidgetConfig;
+  lastMessage: AgentWidgetMessage | undefined;
+  messageCount: number;
+};
+
+// Configuration
+type AgentWidgetLoadingIndicatorConfig = {
+  showBubble?: boolean;
+  render?: (context: LoadingIndicatorRenderContext) => HTMLElement | null;
+  renderIdle?: (context: IdleIndicatorRenderContext) => HTMLElement | null;
+};
+```
+
+#### Priority Chain
+
+Indicators are resolved in this order:
+1. **Plugin hook** (`renderLoadingIndicator` / `renderIdleIndicator`)
+2. **Config function** (`loadingIndicator.render` / `loadingIndicator.renderIdle`)
+3. **Default** (3-dot bouncing animation for loading, `null` for idle)
+
 ### Runtype adapter
 
 This package ships with a Runtype adapter by default. The proxy handles all flow configuration, keeping the client lightweight and flexible.
