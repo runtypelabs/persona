@@ -32,10 +32,10 @@ export type PageElement = {
   tagName: string;
 };
 
-export const STORAGE_KEY = "vanilla-agent-action-middleware";
-const NAV_FLAG_KEY = "vanilla-agent-nav-flag";
-const EXECUTED_ACTIONS_KEY = "vanilla-agent-executed-actions"; // Track which message IDs have had actions executed
-export const ORDER_STORAGE_KEY = "vanilla-agent-order";
+export const STORAGE_KEY = "runtype-persona-action-middleware";
+const NAV_FLAG_KEY = "runtype-persona-nav-flag";
+const EXECUTED_ACTIONS_KEY = "runtype-persona-executed-actions"; // Track which message IDs have had actions executed
+export const ORDER_STORAGE_KEY = "runtype-persona-order";
 
 // Expiry times for order cleanup
 const ORDER_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours for completed orders

@@ -1,4 +1,4 @@
-import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
+import { AgentWidgetMessage, AgentWidgetConfig, LoadingIndicatorRenderContext, IdleIndicatorRenderContext } from "../types";
 
 /**
  * Plugin interface for customizing widget components
@@ -74,6 +74,43 @@ export interface AgentWidgetPlugin {
     defaultRenderer: () => HTMLElement;
     config: AgentWidgetConfig;
   }) => HTMLElement | null;
+
+  /**
+   * Custom renderer for loading indicator
+   * Return null to use default renderer (or config-based renderer)
+   *
+   * @example
+   * ```typescript
+   * renderLoadingIndicator: ({ location, defaultRenderer }) => {
+   *   if (location === 'standalone') {
+   *     const el = document.createElement('div');
+   *     el.textContent = 'Thinking...';
+   *     return el;
+   *   }
+   *   return defaultRenderer();
+   * }
+   * ```
+   */
+  renderLoadingIndicator?: (context: LoadingIndicatorRenderContext) => HTMLElement | null;
+
+  /**
+   * Custom renderer for idle state indicator.
+   * Called when the widget is idle (not streaming) and has at least one message.
+   * Return an HTMLElement to display, or null to hide (default).
+   *
+   * @example
+   * ```typescript
+   * renderIdleIndicator: ({ lastMessage, messageCount }) => {
+   *   if (messageCount === 0) return null;
+   *   if (lastMessage?.role !== 'assistant') return null;
+   *   const el = document.createElement('div');
+   *   el.className = 'idle-pulse';
+   *   el.setAttribute('data-preserve-animation', 'true');
+   *   return el;
+   * }
+   * ```
+   */
+  renderIdleIndicator?: (context: IdleIndicatorRenderContext) => HTMLElement | null;
 
   /**
    * Called when plugin is registered

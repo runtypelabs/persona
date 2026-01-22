@@ -50,6 +50,8 @@ importers:
         specifier: ^5.4.1
         version: 5.4.20(@types/node@20.19.22)
 
+  examples/standalone-widget: {}
+
   examples/vercel-edge:
     dependencies:
       '@hono/node-server':

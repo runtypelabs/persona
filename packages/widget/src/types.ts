@@ -1256,6 +1256,146 @@ export type AgentWidgetPersistStateConfig = {
   clearOnChatClear?: boolean;
 };
 
+// ============================================================================
+// Loading Indicator Types
+// ============================================================================
+
+/**
+ * Context provided to loading indicator render functions.
+ * Used for customizing the loading indicator appearance.
+ */
+export type LoadingIndicatorRenderContext = {
+  /**
+   * Full widget configuration for accessing theme, etc.
+   */
+  config: AgentWidgetConfig;
+  /**
+   * Current streaming state (always true when indicator is shown)
+   */
+  streaming: boolean;
+  /**
+   * Location where the indicator is rendered:
+   * - 'inline': Inside a streaming assistant message bubble (when content is empty)
+   * - 'standalone': Separate bubble while waiting for stream to start
+   */
+  location: 'inline' | 'standalone';
+  /**
+   * Function to render the default 3-dot bouncing indicator.
+   * Call this if you want to use the default for certain cases.
+   */
+  defaultRenderer: () => HTMLElement;
+};
+
+/**
+ * Context provided to idle indicator render functions.
+ * Used for customizing the idle state indicator appearance.
+ */
+export type IdleIndicatorRenderContext = {
+  /**
+   * Full widget configuration for accessing theme, etc.
+   */
+  config: AgentWidgetConfig;
+  /**
+   * The last message in the conversation (if any).
+   * Useful for conditional rendering based on who spoke last.
+   */
+  lastMessage: AgentWidgetMessage | undefined;
+  /**
+   * Total number of messages in the conversation.
+   */
+  messageCount: number;
+};
+
+/**
+ * Configuration for customizing the loading indicator.
+ * The loading indicator is shown while waiting for a response or
+ * when an assistant message is streaming but has no content yet.
+ *
+ * @example
+ * ```typescript
+ * // Custom animated spinner
+ * config: {
+ *   loadingIndicator: {
+ *     render: ({ location }) => {
+ *       const el = document.createElement('div');
+ *       el.innerHTML = '<svg class="spinner">...</svg>';
+ *       el.setAttribute('data-preserve-animation', 'true');
+ *       return el;
+ *     }
+ *   }
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Different indicators by location
+ * config: {
+ *   loadingIndicator: {
+ *     render: ({ location, defaultRenderer }) => {
+ *       if (location === 'inline') {
+ *         return defaultRenderer(); // Use default for inline
+ *       }
+ *       // Custom for standalone
+ *       const el = document.createElement('div');
+ *       el.textContent = 'Thinking...';
+ *       return el;
+ *     }
+ *   }
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Hide loading indicator entirely
+ * config: {
+ *   loadingIndicator: {
+ *     render: () => null
+ *   }
+ * }
+ * ```
+ */
+export type AgentWidgetLoadingIndicatorConfig = {
+  /**
+   * Whether to show the bubble background and border around the standalone loading indicator.
+   * Set to false to render the loading indicator without any bubble styling.
+   * @default true
+   */
+  showBubble?: boolean;
+
+  /**
+   * Custom render function for the loading indicator.
+   * Return an HTMLElement to display, or null to hide the indicator.
+   *
+   * For custom animations, add `data-preserve-animation="true"` attribute
+   * to prevent the DOM morpher from interrupting the animation.
+   */
+  render?: (context: LoadingIndicatorRenderContext) => HTMLElement | null;
+
+  /**
+   * Render function for the idle state indicator.
+   * Called when the widget is idle (not streaming) and has at least one message.
+   * Return an HTMLElement to display, or null to hide (default).
+   *
+   * For animations, add `data-preserve-animation="true"` attribute
+   * to prevent the DOM morpher from interrupting the animation.
+   *
+   * @example
+   * ```typescript
+   * loadingIndicator: {
+   *   renderIdle: ({ lastMessage }) => {
+   *     // Only show idle indicator after assistant messages
+   *     if (lastMessage?.role !== 'assistant') return null;
+   *     const el = document.createElement('div');
+   *     el.className = 'pulse-dot';
+   *     el.setAttribute('data-preserve-animation', 'true');
+   *     return el;
+   *   }
+   * }
+   * ```
+   */
+  renderIdle?: (context: IdleIndicatorRenderContext) => HTMLElement | null;
+};
+
 export type AgentWidgetConfig = {
   apiUrl?: string;
   flowId?: string;
@@ -1693,6 +1833,29 @@ export type AgentWidgetConfig = {
    * ```
    */
   persistState?: boolean | AgentWidgetPersistStateConfig;
+
+  /**
+   * Configuration for customizing the loading indicator.
+   * The loading indicator is shown while waiting for a response or
+   * when an assistant message is streaming but has no content yet.
+   *
+   * @example
+   * ```typescript
+   * config: {
+   *   loadingIndicator: {
+   *     render: ({ location, defaultRenderer }) => {
+   *       if (location === 'standalone') {
+   *         const el = document.createElement('div');
+   *         el.textContent = 'Thinking...';
+   *         return el;
+   *       }
+   *       return defaultRenderer();
+   *     }
+   *   }
+   * }
+   * ```
+   */
+  loadingIndicator?: AgentWidgetLoadingIndicatorConfig;
 };
 
 export type AgentWidgetMessageRole = "user" | "assistant" | "system";

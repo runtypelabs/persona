@@ -687,6 +687,13 @@
   box-shadow: none !important;
 }
 
+/* Prevent iOS Safari from zooming on input focus (requires 16px minimum) */
+@media (hover: none) and (pointer: coarse) {
+  .tvw-composer-textarea {
+    font-size: 1rem !important;
+  }
+}
+
 /* Prevent form container from showing focus styles */
 .tvw-widget-composer:focus-within {
   outline: none !important;
