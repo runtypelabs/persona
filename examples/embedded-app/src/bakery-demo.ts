@@ -1,4 +1,4 @@
-import "vanilla-agent/widget.css";
+import "@runtypelabs/persona/widget.css";
 import "./index.css";
 
 import {
@@ -11,7 +11,7 @@ import {
   DEFAULT_WIDGET_CONFIG,
   createLocalStorageAdapter,
   defaultActionHandlers
-} from "vanilla-agent";
+} from "@runtypelabs/persona";
 import {
   collectPageContext,
   formatPageContext,
@@ -28,7 +28,7 @@ import {
   saveOrder,
   STORAGE_KEY
 } from "./middleware";
-import { createFlexibleJsonStreamParser } from "vanilla-agent";
+import { createFlexibleJsonStreamParser } from "@runtypelabs/persona";
 import type {
   AgentWidgetStorageAdapter,
   AgentWidgetStoredState,
@@ -1187,7 +1187,7 @@ widgetController.on('widget:closed', () => {
 });
 
 // Clear state when chat is cleared
-window.addEventListener("vanilla-agent:clear-chat", () => {
+window.addEventListener("persona:clear-chat", () => {
   console.log("[Bakery] Clear chat event received");
   processedActionIds.clear();
   clearOrder();

@@ -3763,11 +3763,11 @@ export const createAgentExperience = (
 
         // Listen for clear chat event
         const handleClearChat = () => clearPersistState();
-        window.addEventListener('vanilla-agent:clear-chat', handleClearChat);
+        window.addEventListener('persona:clear-chat', handleClearChat);
 
         // Clean up listener on destroy
         destroyCallbacks.push(() => {
-          window.removeEventListener('vanilla-agent:clear-chat', handleClearChat);
+          window.removeEventListener('persona:clear-chat', handleClearChat);
         });
       }
     }
