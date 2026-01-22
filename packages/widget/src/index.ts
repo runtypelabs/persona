@@ -53,7 +53,12 @@ export type {
   InjectMessageOptions,
   InjectAssistantMessageOptions,
   InjectUserMessageOptions,
-  InjectSystemMessageOptions
+  InjectSystemMessageOptions,
+  // Loading indicator types
+  LoadingIndicatorRenderContext,
+  AgentWidgetLoadingIndicatorConfig,
+  // Idle indicator types
+  IdleIndicatorRenderContext
 } from "./types";
 
 export { initAgentWidgetFn as initAgentWidget };
@@ -169,9 +174,15 @@ export {
   createStandardBubble,
   createBubbleWithLayout,
   createTypingIndicator,
-  createMessageActions
+  createMessageActions,
+  renderLoadingIndicatorWithFallback
 } from "./components/message-bubble";
-export type { MessageTransform, MessageActionCallbacks } from "./components/message-bubble";
+export type {
+  MessageTransform,
+  MessageActionCallbacks,
+  LoadingIndicatorRenderer,
+  CreateStandardBubbleOptions
+} from "./components/message-bubble";
 export {
   createCSATFeedback,
   createNPSFeedback

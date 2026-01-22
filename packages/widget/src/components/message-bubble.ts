@@ -1,13 +1,16 @@
 import { createElement } from "../utils/dom";
-import { 
-  AgentWidgetMessage, 
+import {
+  AgentWidgetMessage,
   AgentWidgetMessageLayoutConfig,
   AgentWidgetAvatarConfig,
   AgentWidgetTimestampConfig,
   AgentWidgetMessageActionsConfig,
-  AgentWidgetMessageFeedback
+  AgentWidgetMessageFeedback,
+  LoadingIndicatorRenderContext
 } from "../types";
 import { renderLucideIcon } from "../utils/icons";
+
+export type LoadingIndicatorRenderer = (context: LoadingIndicatorRenderContext) => HTMLElement | null;
 
 export type MessageTransform = (context: {
   text: string;
@@ -48,6 +51,35 @@ export const createTypingIndicator = (): HTMLElement => {
   container.appendChild(srOnly);
 
   return container;
+};
+
+/**
+ * Render loading indicator with fallback chain:
+ * 1. Custom renderer (if provided and returns non-null)
+ * 2. Default typing indicator
+ */
+export const renderLoadingIndicatorWithFallback = (
+  location: 'inline' | 'standalone',
+  customRenderer?: LoadingIndicatorRenderer,
+  widgetConfig?: import("../types").AgentWidgetConfig
+): HTMLElement | null => {
+  const context: LoadingIndicatorRenderContext = {
+    config: widgetConfig ?? ({} as import("../types").AgentWidgetConfig),
+    streaming: true,
+    location,
+    defaultRenderer: createTypingIndicator
+  };
+
+  // Try custom renderer first
+  if (customRenderer) {
+    const result = customRenderer(context);
+    if (result !== null) {
+      return result;
+    }
+  }
+
+  // Fall back to default
+  return createTypingIndicator();
 };
 
 /**
@@ -395,6 +427,20 @@ export const createMessageActions = (
 };
 
 /**
+ * Options for creating a standard message bubble
+ */
+export type CreateStandardBubbleOptions = {
+  /**
+   * Custom loading indicator renderer for inline location
+   */
+  loadingIndicatorRenderer?: LoadingIndicatorRenderer;
+  /**
+   * Full widget config (needed for loading indicator context)
+   */
+  widgetConfig?: import("../types").AgentWidgetConfig;
+};
+
+/**
  * Create standard message bubble
  * Supports layout configuration for avatars, timestamps, and visual presets
  */
@@ -403,7 +449,8 @@ export const createStandardBubble = (
   transform: MessageTransform,
   layoutConfig?: AgentWidgetMessageLayoutConfig,
   actionsConfig?: AgentWidgetMessageActionsConfig,
-  actionCallbacks?: MessageActionCallbacks
+  actionCallbacks?: MessageActionCallbacks,
+  options?: CreateStandardBubbleOptions
 ): HTMLElement => {
   const config = layoutConfig ?? {};
   const layout = config.layout ?? "bubble";
@@ -449,8 +496,15 @@ export const createStandardBubble = (
   // Add typing indicator if this is a streaming assistant message
   if (message.streaming && message.role === "assistant") {
     if (!message.content || !message.content.trim()) {
-      const typingIndicator = createTypingIndicator();
-      bubble.appendChild(typingIndicator);
+      // Use custom renderer if provided, otherwise default
+      const indicator = renderLoadingIndicatorWithFallback(
+        'inline',
+        options?.loadingIndicatorRenderer,
+        options?.widgetConfig
+      );
+      if (indicator) {
+        bubble.appendChild(indicator);
+      }
     }
   }
 
@@ -502,7 +556,8 @@ export const createBubbleWithLayout = (
   transform: MessageTransform,
   layoutConfig?: AgentWidgetMessageLayoutConfig,
   actionsConfig?: AgentWidgetMessageActionsConfig,
-  actionCallbacks?: MessageActionCallbacks
+  actionCallbacks?: MessageActionCallbacks,
+  options?: CreateStandardBubbleOptions
 ): HTMLElement => {
   const config = layoutConfig ?? {};
 
@@ -524,5 +579,5 @@ export const createBubbleWithLayout = (
   }
 
   // Fall back to standard bubble
-  return createStandardBubble(message, transform, layoutConfig, actionsConfig, actionCallbacks);
+  return createStandardBubble(message, transform, layoutConfig, actionsConfig, actionCallbacks, options);
 };

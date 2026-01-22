@@ -25,8 +25,10 @@ export const morphMessages = (
         if (!(oldNode instanceof HTMLElement)) return;
 
         // Preserve typing indicator dots to maintain animation continuity
+        // Also preserve elements with data-preserve-animation attribute for custom loading indicators
         if (preserveTypingAnimation) {
-          if (oldNode.classList.contains("tvw-animate-typing")) {
+          if (oldNode.classList.contains("tvw-animate-typing") ||
+              oldNode.hasAttribute("data-preserve-animation")) {
             return false;
           }
         }

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Custom Loading Indicator Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 1.5rem;
+      padding: 1.5rem;
+      max-width: 1400px;
+      margin: 0 auto;
+      margin-top: 2rem;
+      margin-bottom: 2rem;
+      min-height: 100vh;
+    }
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .panel {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      overflow: hidden;
+    }
+    .info-panel {
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      padding: 1.5rem;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .info-panel h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.5rem;
+    }
+    .info-panel p {
+      margin: 0 0 1.5rem 0;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+    .info-section {
+      background: rgba(0,0,0,0.2);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .info-section h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.9rem;
+      color: #00ff88;
+    }
+    .info-section p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+    .code-block {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.75rem;
+      color: #c9d1d9;
+      margin-bottom: 1rem;
+    }
+    .code-block .comment { color: #8b949e; }
+    .code-block .keyword { color: #ff7b72; }
+    .code-block .string { color: #a5d6ff; }
+    .code-block .function { color: #d2a8ff; }
+    .widget-container {
+      height: 600px;
+    }
+    #loading-widget {
+      height: 100%;
+    }
+    .back-link {
+      display: inline-block;
+      background: rgba(255,255,255,0.1);
+      padding: 0.5rem 1rem;
+      margin: 1rem 1.5rem;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 0.9rem;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .back-link:hover {
+      background: rgba(255,255,255,0.15);
+    }
+    .preview-box {
+      background: #fff;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .preview-label {
+      font-size: 0.875rem;
+      color: #666;
+    }
+    .toggle-section {
+      background: rgba(0,0,0,0.3);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .toggle-section label {
+      font-size: 0.9rem;
+      color: #fff;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 24px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #4b5563;
+      transition: 0.3s;
+      border-radius: 24px;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background-color: #00ff88;
+    }
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+    .toggle-status {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <a href="/" class="back-link">&larr; Back to examples</a>
+
+  <div class="layout">
+    <!-- Left: Info Panel -->
+    <div class="info-panel">
+      <h1>Custom Loading Indicator</h1>
+      <p>This example demonstrates how to replace the default bouncing dots loading indicator with a custom animated SVG.</p>
+
+      <div class="info-section">
+        <h3>How it works</h3>
+        <p>The <code>loadingIndicator.render</code> config option lets you provide a custom function that returns an HTMLElement. The function receives a context with the <code>location</code> ('standalone' or 'inline') so you can use different indicators in different places.</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Animation Preservation</h3>
+        <p>Add <code>data-preserve-animation="true"</code> to your custom element to prevent the DOM morpher from interrupting CSS animations during updates.</p>
+      </div>
+
+      <div class="code-block">
+<span class="comment">// Custom loading indicator configuration</span>
+loadingIndicator: {
+  <span class="comment">// Hide bubble background/border for cleaner custom indicators</span>
+  showBubble: <span class="keyword">false</span>,
+  render: ({ location, defaultRenderer }) => {
+    <span class="keyword">if</span> (location === <span class="string">'standalone'</span>) {
+      <span class="comment">// Custom animated SVG for standalone</span>
+      <span class="keyword">return</span> <span class="function">createRuntypeLoader</span>();
+    }
+    <span class="comment">// Default dots for inline</span>
+    <span class="keyword">return</span> <span class="function">defaultRenderer</span>();
+  }
+}
+      </div>
+
+      <div class="info-section">
+        <h3>Location Types</h3>
+        <p><strong>standalone:</strong> Shown in its own bubble while waiting for the stream to start.<br>
+        <strong>inline:</strong> Shown inside the assistant message bubble when content is empty.</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Bubble Visibility</h3>
+        <p>Set <code>showBubble: false</code> to hide the background, border, and shadow from the standalone indicator wrapper. This lets custom animated icons render without the default bubble styling.</p>
+      </div>
+
+      <div class="toggle-section">
+        <label for="bubble-toggle">Show Bubble</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="bubble-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-status" id="toggle-status">Bubble: hidden (showBubble: false)</div>
+
+      <div class="info-section">
+        <h3>Idle State Indicator</h3>
+        <p>Show a custom indicator when the assistant is waiting for the next user message. Use <code>loadingIndicator.renderIdle</code> to customize what appears after a response completes.</p>
+      </div>
+
+      <div class="toggle-section">
+        <label for="idle-toggle">Show Idle Indicator</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="idle-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-status" id="idle-toggle-status">Idle indicator: disabled</div>
+
+      <div class="info-section">
+        <h3>Other Options</h3>
+        <p>Return <code>null</code> to hide the indicator entirely. You can also use a plugin's <code>renderLoadingIndicator</code> or <code>renderIdleIndicator</code> hooks for the same functionality.</p>
+      </div>
+    </div>
+
+    <!-- Right: Widget -->
+    <div class="panel widget-container">
+      <div id="loading-widget"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/custom-loading-indicator.ts"></script>
+</body>
+</html>

@@ -17,7 +17,9 @@ import {
   InjectMessageOptions,
   InjectAssistantMessageOptions,
   InjectUserMessageOptions,
-  InjectSystemMessageOptions
+  InjectSystemMessageOptions,
+  LoadingIndicatorRenderContext,
+  IdleIndicatorRenderContext
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
@@ -31,7 +33,7 @@ import { createWrapper, buildPanel, buildHeader, buildComposer, attachHeaderToCo
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
-import { MessageTransform, MessageActionCallbacks } from "./components/message-bubble";
+import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer } from "./components/message-bubble";
 import { createStandardBubble, createTypingIndicator } from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
@@ -1150,6 +1152,25 @@ export const createAgentExperience = (
     // Build new content in a temporary container for morphing
     const tempContainer = document.createElement("div");
 
+    // Create inline loading indicator renderer using priority chain: plugin -> config -> default
+    const getInlineLoadingIndicatorRenderer = (): LoadingIndicatorRenderer | undefined => {
+      // Check if any plugin has renderLoadingIndicator
+      const loadingPlugin = plugins.find(p => p.renderLoadingIndicator);
+      if (loadingPlugin?.renderLoadingIndicator) {
+        return loadingPlugin.renderLoadingIndicator;
+      }
+
+      // Check if config has loadingIndicator.render
+      if (config.loadingIndicator?.render) {
+        return config.loadingIndicator.render;
+      }
+
+      // Return undefined to use default in createStandardBubble
+      return undefined;
+    };
+
+    const inlineLoadingRenderer = getInlineLoadingIndicatorRenderer();
+
     messages.forEach((message) => {
       let bubble: HTMLElement | null = null;
 
@@ -1190,11 +1211,15 @@ export const createAgentExperience = (
             message,
             defaultRenderer: () => {
               const b = createStandardBubble(
-                message, 
-                transform, 
-                messageLayoutConfig, 
-                config.messageActions, 
-                messageActionCallbacks
+                message,
+                transform,
+                messageLayoutConfig,
+                config.messageActions,
+                messageActionCallbacks,
+                {
+                  loadingIndicatorRenderer: inlineLoadingRenderer,
+                  widgetConfig: config
+                }
               );
               if (message.role !== "user") {
                 enhanceWithForms(b, message, config, session);
@@ -1278,11 +1303,15 @@ export const createAgentExperience = (
             });
           } else {
             bubble = createStandardBubble(
-              message, 
-              transform, 
-              messageLayoutConfig, 
-              config.messageActions, 
-              messageActionCallbacks
+              message,
+              transform,
+              messageLayoutConfig,
+              config.messageActions,
+              messageActionCallbacks,
+              {
+                loadingIndicatorRenderer: inlineLoadingRenderer,
+                widgetConfig: config
+              }
             );
           }
           if (message.role !== "user" && bubble) {
@@ -1316,34 +1345,133 @@ export const createAgentExperience = (
     const hasRecentAssistantResponse = lastMessage?.role === "assistant" && !lastMessage.streaming;
 
     if (isStreaming && messages.some((msg) => msg.role === "user") && !hasStreamingAssistantMessage && !hasRecentAssistantResponse) {
-      const typingIndicator = createTypingIndicator();
+      // Get loading indicator using priority chain: plugin -> config -> default
+      const loadingIndicatorContext: LoadingIndicatorRenderContext = {
+        config,
+        streaming: true,
+        location: 'standalone',
+        defaultRenderer: createTypingIndicator
+      };
 
-      // Create a bubble wrapper for the typing indicator (similar to assistant messages)
-      const typingBubble = document.createElement("div");
-      typingBubble.className = [
-        "tvw-max-w-[85%]",
-        "tvw-rounded-2xl",
-        "tvw-text-sm",
-        "tvw-leading-relaxed",
-        "tvw-shadow-sm",
-        "tvw-bg-cw-surface",
-        "tvw-border",
-        "tvw-border-cw-message-border",
-        "tvw-text-cw-primary",
-        "tvw-px-5",
-        "tvw-py-3"
-      ].join(" ");
-      typingBubble.setAttribute("data-typing-indicator", "true");
+      // Try plugin renderLoadingIndicator first
+      const loadingPlugin = plugins.find(p => p.renderLoadingIndicator);
+      let typingIndicator: HTMLElement | null = null;
 
-      typingBubble.appendChild(typingIndicator);
+      if (loadingPlugin?.renderLoadingIndicator) {
+        typingIndicator = loadingPlugin.renderLoadingIndicator(loadingIndicatorContext);
+      }
 
-      const typingWrapper = document.createElement("div");
-      typingWrapper.className = "tvw-flex";
-      // Set id for idiomorph matching
-      typingWrapper.id = "wrapper-typing-indicator";
-      typingWrapper.setAttribute("data-wrapper-id", "typing-indicator");
-      typingWrapper.appendChild(typingBubble);
-      tempContainer.appendChild(typingWrapper);
+      // Try config loadingIndicator.render if no plugin handled it
+      if (typingIndicator === null && config.loadingIndicator?.render) {
+        typingIndicator = config.loadingIndicator.render(loadingIndicatorContext);
+      }
+
+      // Fall back to default
+      if (typingIndicator === null) {
+        typingIndicator = createTypingIndicator();
+      }
+
+      // Only render if we have an indicator (allows hiding via returning null)
+      if (typingIndicator) {
+        // Create a bubble wrapper for the typing indicator (similar to assistant messages)
+        const typingBubble = document.createElement("div");
+        const showBubble = config.loadingIndicator?.showBubble !== false; // default true
+        typingBubble.className = showBubble
+          ? [
+              "tvw-max-w-[85%]",
+              "tvw-rounded-2xl",
+              "tvw-text-sm",
+              "tvw-leading-relaxed",
+              "tvw-shadow-sm",
+              "tvw-bg-cw-surface",
+              "tvw-border",
+              "tvw-border-cw-message-border",
+              "tvw-text-cw-primary",
+              "tvw-px-5",
+              "tvw-py-3"
+            ].join(" ")
+          : [
+              "tvw-max-w-[85%]",
+              "tvw-text-sm",
+              "tvw-leading-relaxed",
+              "tvw-text-cw-primary"
+            ].join(" ");
+        typingBubble.setAttribute("data-typing-indicator", "true");
+
+        typingBubble.appendChild(typingIndicator);
+
+        const typingWrapper = document.createElement("div");
+        typingWrapper.className = "tvw-flex";
+        // Set id for idiomorph matching
+        typingWrapper.id = "wrapper-typing-indicator";
+        typingWrapper.setAttribute("data-wrapper-id", "typing-indicator");
+        typingWrapper.appendChild(typingBubble);
+        tempContainer.appendChild(typingWrapper);
+      }
+    }
+
+    // Render idle state indicator when not streaming and has messages
+    if (!isStreaming && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+
+      // Create context for idle indicator render functions
+      const idleIndicatorContext: IdleIndicatorRenderContext = {
+        config,
+        lastMessage,
+        messageCount: messages.length
+      };
+
+      // Get idle indicator using priority chain: plugin -> config -> null (default)
+      // Try plugin renderIdleIndicator first
+      const idlePlugin = plugins.find(p => p.renderIdleIndicator);
+      let idleIndicator: HTMLElement | null = null;
+
+      if (idlePlugin?.renderIdleIndicator) {
+        idleIndicator = idlePlugin.renderIdleIndicator(idleIndicatorContext);
+      }
+
+      // Try config loadingIndicator.renderIdle if no plugin handled it
+      if (idleIndicator === null && config.loadingIndicator?.renderIdle) {
+        idleIndicator = config.loadingIndicator.renderIdle(idleIndicatorContext);
+      }
+
+      // Only render if we have an indicator (default is null - no idle indicator)
+      if (idleIndicator) {
+        // Create a wrapper for the idle indicator (similar to typing indicator)
+        const idleBubble = document.createElement("div");
+        const showBubble = config.loadingIndicator?.showBubble !== false; // default true
+        idleBubble.className = showBubble
+          ? [
+              "tvw-max-w-[85%]",
+              "tvw-rounded-2xl",
+              "tvw-text-sm",
+              "tvw-leading-relaxed",
+              "tvw-shadow-sm",
+              "tvw-bg-cw-surface",
+              "tvw-border",
+              "tvw-border-cw-message-border",
+              "tvw-text-cw-primary",
+              "tvw-px-5",
+              "tvw-py-3"
+            ].join(" ")
+          : [
+              "tvw-max-w-[85%]",
+              "tvw-text-sm",
+              "tvw-leading-relaxed",
+              "tvw-text-cw-primary"
+            ].join(" ");
+        idleBubble.setAttribute("data-idle-indicator", "true");
+
+        idleBubble.appendChild(idleIndicator);
+
+        const idleWrapper = document.createElement("div");
+        idleWrapper.className = "tvw-flex";
+        // Set id for idiomorph matching
+        idleWrapper.id = "wrapper-idle-indicator";
+        idleWrapper.setAttribute("data-wrapper-id", "idle-indicator");
+        idleWrapper.appendChild(idleBubble);
+        tempContainer.appendChild(idleWrapper);
+      }
     }
 
     // Use idiomorph to morph the container contents
