@@ -1,0 +1,60 @@
+name: Publish to R2 CDN
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: r2-release
+  cancel-in-progress: false
+
+jobs:
+  publish-to-r2:
+    name: Publish to R2 CDN
+    # Only run for widget package releases (tag format: @runtypelabs/persona@x.y.z)
+    if: startsWith(github.event.release.tag_name, '@runtypelabs/persona@')
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build widget
+        run: pnpm build:widget
+
+      - name: Extract version
+        id: version
+        run: echo "version=$(node -p "require('./packages/widget/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload versioned release to R2
+        uses: ryand56/r2-upload-action@latest
+        with:
+          r2-account-id: ${{ secrets.R2_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          r2-bucket: cdn-assets
+          source-dir: packages/widget/dist
+          destination-dir: persona/${{ steps.version.outputs.version }}
+
+      - name: Upload latest to R2
+        uses: ryand56/r2-upload-action@latest
+        with:
+          r2-account-id: ${{ secrets.R2_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          r2-bucket: cdn-assets
+          source-dir: packages/widget/dist
+          destination-dir: persona/latest
+          keep-file-fresh: true
