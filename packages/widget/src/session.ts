@@ -3,6 +3,7 @@ import {
   AgentWidgetConfig,
   AgentWidgetEvent,
   AgentWidgetMessage,
+  AgentExecutionState,
   ClientSession,
   ContentPart,
   InjectMessageOptions,
@@ -39,6 +40,9 @@ export class AgentWidgetSession {
   // Client token session management
   private clientSession: ClientSession | null = null;
 
+  // Agent execution state
+  private agentExecution: AgentExecutionState | null = null;
+
   constructor(
     private config: AgentWidgetConfig = {},
     private callbacks: SessionCallbacks
@@ -61,6 +65,27 @@ export class AgentWidgetSession {
    */
   public isClientTokenMode(): boolean {
     return this.client.isClientTokenMode();
+  }
+
+  /**
+   * Check if running in agent execution mode
+   */
+  public isAgentMode(): boolean {
+    return this.client.isAgentMode();
+  }
+
+  /**
+   * Get current agent execution state (if in agent mode)
+   */
+  public getAgentExecution(): AgentExecutionState | null {
+    return this.agentExecution;
+  }
+
+  /**
+   * Check if an agent execution is currently running
+   */
+  public isAgentExecuting(): boolean {
+    return this.agentExecution?.status === 'running';
   }
 
   /**
@@ -467,6 +492,7 @@ export class AgentWidgetSession {
     this.abortController?.abort();
     this.abortController = null;
     this.messages = [];
+    this.agentExecution = null;
     this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);
@@ -490,6 +516,22 @@ export class AgentWidgetSession {
   private handleEvent = (event: AgentWidgetEvent) => {
     if (event.type === "message") {
       this.upsertMessage(event.message);
+
+      // Track agent execution state from message metadata
+      if (event.message.agentMetadata?.executionId) {
+        if (!this.agentExecution) {
+          this.agentExecution = {
+            executionId: event.message.agentMetadata.executionId,
+            agentId: '',
+            agentName: event.message.agentMetadata.agentName ?? '',
+            status: 'running',
+            currentIteration: event.message.agentMetadata.iteration ?? 0,
+            maxIterations: 0
+          };
+        } else if (event.message.agentMetadata.iteration !== undefined) {
+          this.agentExecution.currentIteration = event.message.agentMetadata.iteration;
+        }
+      }
     } else if (event.type === "status") {
       this.setStatus(event.status);
       if (event.status === "connecting") {
@@ -497,11 +539,18 @@ export class AgentWidgetSession {
       } else if (event.status === "idle" || event.status === "error") {
         this.setStreaming(false);
         this.abortController = null;
+        // Mark agent execution as complete when streaming ends
+        if (this.agentExecution?.status === 'running') {
+          this.agentExecution.status = event.status === "error" ? 'error' : 'complete';
+        }
       }
     } else if (event.type === "error") {
       this.setStatus("error");
       this.setStreaming(false);
       this.abortController = null;
+      if (this.agentExecution?.status === 'running') {
+        this.agentExecution.status = 'error';
+      }
       this.callbacks.onError?.(event.error);
     }
   };

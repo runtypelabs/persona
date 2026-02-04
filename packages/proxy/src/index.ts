@@ -218,11 +218,7 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       );
     }
 
-    let clientPayload: {
-      messages?: Array<{ role: string; content: string; createdAt?: string }>;
-      flowId?: string;
-      metadata?: Record<string, unknown>;
-    };
+    let clientPayload: Record<string, unknown>;
     try {
       clientPayload = await c.req.json();
     } catch (error) {
@@ -232,52 +228,56 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       );
     }
 
-    // Build the Runtype payload
-    const messages = clientPayload.messages ?? [];
-    // Sort messages by timestamp to ensure correct order
-    const sortedMessages = [...messages].sort((a, b) => {
-      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return timeA - timeB;
-    });
-    const formattedMessages = sortedMessages.map((message) => ({
-      role: message.role,
-      content: message.content
-    }));
-
-    // Determine which flow to use
-    const flowId = clientPayload.flowId ?? options.flowId;
-    const flowConfig = options.flowConfig ?? DEFAULT_FLOW;
-
-    const runtypePayload: Record<string, unknown> = {
-      record: {
-        name: "Streaming Chat Widget",
-        type: "standalone",
-        metadata: clientPayload.metadata || {}
-      },
-      messages: formattedMessages,
-      options: {
-        streamResponse: true,
-        recordMode: "virtual",
-        flowMode: flowId ? "existing" : "virtual",
-        autoAppendMetadata: false
-      }
-    };
-
-    // Use flow ID if provided, otherwise use flow config
-    if (flowId) {
-      runtypePayload.flow = {
-        id: flowId
-      }
-    } else {
-      runtypePayload.flow = flowConfig;
-    }
-
-    // Development logging
     const isDevelopment = process.env.NODE_ENV === "development" || !process.env.NODE_ENV;
 
+    // Detect agent mode: if the payload contains an `agent` field, forward it directly
+    const isAgentMode = !!clientPayload.agent;
+
+    let runtypePayload: Record<string, unknown>;
+
+    if (isAgentMode) {
+      // Agent dispatch - forward the payload as-is to the upstream API
+      runtypePayload = clientPayload;
+    } else {
+      // Flow dispatch - build the Runtype flow payload
+      const messages = (clientPayload.messages ?? []) as Array<{ role: string; content: string; createdAt?: string }>;
+      const sortedMessages = [...messages].sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      });
+      const formattedMessages = sortedMessages.map((message) => ({
+        role: message.role,
+        content: message.content
+      }));
+
+      const flowId = (clientPayload.flowId as string | undefined) ?? options.flowId;
+      const flowConfig = options.flowConfig ?? DEFAULT_FLOW;
+
+      runtypePayload = {
+        record: {
+          name: "Streaming Chat Widget",
+          type: "standalone",
+          metadata: (clientPayload.metadata as Record<string, unknown>) || {}
+        },
+        messages: formattedMessages,
+        options: {
+          streamResponse: true,
+          recordMode: "virtual",
+          flowMode: flowId ? "existing" : "virtual",
+          autoAppendMetadata: false
+        }
+      };
+
+      if (flowId) {
+        runtypePayload.flow = { id: flowId };
+      } else {
+        runtypePayload.flow = flowConfig;
+      }
+    }
+
     if (isDevelopment) {
-      console.log("\n=== Runtype Proxy Request ===");
+      console.log(`\n=== Runtype Proxy Request (${isAgentMode ? "agent" : "flow"}) ===`);
       console.log("URL:", upstream);
       console.log("API Key Used:", apiKey ? "Yes" : "No");
       console.log("API Key (first 12 chars):", apiKey ? apiKey.substring(0, 12) : "N/A");

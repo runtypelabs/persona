@@ -58,7 +58,14 @@ export type {
   LoadingIndicatorRenderContext,
   AgentWidgetLoadingIndicatorConfig,
   // Idle indicator types
-  IdleIndicatorRenderContext
+  IdleIndicatorRenderContext,
+  // Agent execution types
+  AgentConfig,
+  AgentLoopConfig,
+  AgentRequestOptions,
+  AgentExecutionState,
+  AgentMessageMetadata,
+  AgentWidgetAgentRequestPayload
 } from "./types";
 
 export { initAgentWidgetFn as initAgentWidget };

@@ -6,10 +6,12 @@ import {
   AgentWidgetContextProvider,
   AgentWidgetRequestMiddleware,
   AgentWidgetRequestPayload,
+  AgentWidgetAgentRequestPayload,
   AgentWidgetCustomFetch,
   AgentWidgetSSEEventParser,
   AgentWidgetHeadersFunction,
   AgentWidgetSSEEventResult as _AgentWidgetSSEEventResult,
+  AgentExecutionState,
   ClientSession,
   ClientInitResponse,
   ClientChatRequest,
@@ -115,6 +117,13 @@ export class AgentWidgetClient {
    */
   public isClientTokenMode(): boolean {
     return !!this.config.clientToken;
+  }
+
+  /**
+   * Check if operating in agent execution mode
+   */
+  public isAgentMode(): boolean {
+    return !!this.config.agent;
   }
 
   /**
@@ -384,6 +393,9 @@ export class AgentWidgetClient {
    * Send a message - handles both proxy and client token modes
    */
   public async dispatch(options: DispatchOptions, onEvent: SSEHandler) {
+    if (this.isAgentMode()) {
+      return this.dispatchAgent(options, onEvent);
+    }
     if (this.isClientTokenMode()) {
       return this.dispatchClientToken(options, onEvent);
     }
@@ -577,6 +589,146 @@ export class AgentWidgetClient {
     } finally {
       onEvent({ type: "status", status: "idle" });
     }
+  }
+
+  /**
+   * Agent mode dispatch
+   */
+  private async dispatchAgent(options: DispatchOptions, onEvent: SSEHandler) {
+    const controller = new AbortController();
+    if (options.signal) {
+      options.signal.addEventListener("abort", () => controller.abort());
+    }
+
+    onEvent({ type: "status", status: "connecting" });
+
+    const payload = await this.buildAgentPayload(options.messages);
+
+    if (this.debug) {
+      // eslint-disable-next-line no-console
+      console.debug("[AgentWidgetClient] agent dispatch payload", payload);
+    }
+
+    // Build headers - merge static headers with dynamic headers if provided
+    let headers = { ...this.headers };
+    if (this.getHeaders) {
+      try {
+        const dynamicHeaders = await this.getHeaders();
+        headers = { ...headers, ...dynamicHeaders };
+      } catch (error) {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.error("[AgentWidget] getHeaders error:", error);
+        }
+      }
+    }
+
+    // Use customFetch if provided, otherwise use default fetch
+    let response: Response;
+    if (this.customFetch) {
+      try {
+        response = await this.customFetch(
+          this.apiUrl,
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          },
+          payload as unknown as AgentWidgetRequestPayload
+        );
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        onEvent({ type: "error", error: err });
+        throw err;
+      }
+    } else {
+      response = await fetch(this.apiUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+    }
+
+    if (!response.ok || !response.body) {
+      const error = new Error(
+        `Agent execution request failed: ${response.status} ${response.statusText}`
+      );
+      onEvent({ type: "error", error });
+      throw error;
+    }
+
+    onEvent({ type: "status", status: "connected" });
+    try {
+      await this.streamResponse(response.body, onEvent, options.assistantMessageId);
+    } finally {
+      onEvent({ type: "status", status: "idle" });
+    }
+  }
+
+  private async buildAgentPayload(
+    messages: AgentWidgetMessage[]
+  ): Promise<AgentWidgetAgentRequestPayload> {
+    if (!this.config.agent) {
+      throw new Error('Agent configuration required for agent mode');
+    }
+
+    // Filter out messages with empty content and normalize
+    const normalizedMessages = messages
+      .slice()
+      .filter(hasValidContent)
+      .filter(m => m.role === "user" || m.role === "assistant" || m.role === "system")
+      .filter(m => !m.variant || m.variant === "assistant")
+      .sort((a, b) => {
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        return timeA - timeB;
+      })
+      .map((message) => ({
+        role: message.role,
+        content: message.contentParts ?? message.llmContent ?? message.rawContent ?? message.content,
+        createdAt: message.createdAt
+      }));
+
+    const payload: AgentWidgetAgentRequestPayload = {
+      agent: this.config.agent,
+      messages: normalizedMessages,
+      options: {
+        streamResponse: true,
+        recordMode: 'virtual',
+        ...this.config.agentOptions
+      }
+    };
+
+    // Add context from providers
+    if (this.contextProviders.length) {
+      const contextAggregate: Record<string, unknown> = {};
+      await Promise.all(
+        this.contextProviders.map(async (provider) => {
+          try {
+            const result = await provider({
+              messages,
+              config: this.config
+            });
+            if (result && typeof result === "object") {
+              Object.assign(contextAggregate, result);
+            }
+          } catch (error) {
+            if (typeof console !== "undefined") {
+              // eslint-disable-next-line no-console
+              console.warn("[AgentWidget] Context provider failed:", error);
+            }
+          }
+        })
+      );
+
+      if (Object.keys(contextAggregate).length) {
+        payload.context = contextAggregate;
+      }
+    }
+
+    return payload;
   }
 
   private async buildPayload(
@@ -980,6 +1132,12 @@ export class AgentWidgetClient {
     const streamParsers = new Map<string, AgentWidgetStreamParser>();
     // Track accumulated raw content for structured formats (JSON, XML, etc.)
     const rawContentBuffers = new Map<string, string>();
+
+    // Agent execution state tracking
+    let agentExecution: AgentExecutionState | null = null;
+    // Track assistant messages per agent iteration for 'separate' mode
+    const agentIterationMessages = new Map<number, AgentWidgetMessage>();
+    const iterationDisplay = this.config.iterationDisplay ?? 'separate';
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -1579,6 +1737,208 @@ export class AgentWidgetClient {
             }
           }
           onEvent({ type: "status", status: "idle" });
+        // ================================================================
+        // Agent Loop Execution Events
+        // ================================================================
+        } else if (payloadType === "agent_start") {
+          agentExecution = {
+            executionId: payload.executionId,
+            agentId: payload.agentId ?? 'virtual',
+            agentName: payload.agentName ?? '',
+            status: 'running',
+            currentIteration: 0,
+            maxIterations: payload.maxIterations ?? 1,
+            startedAt: resolveTimestamp(payload.startedAt)
+          };
+        } else if (payloadType === "agent_iteration_start") {
+          if (agentExecution) {
+            agentExecution.currentIteration = payload.iteration;
+          }
+
+          // In 'separate' mode, finalize previous iteration's message and create a new one
+          if (iterationDisplay === 'separate' && payload.iteration > 1) {
+            const prevMsg = assistantMessage as AgentWidgetMessage | null;
+            if (prevMsg) {
+              prevMsg.streaming = false;
+              emitMessage(prevMsg);
+              // Store the completed message for this iteration
+              agentIterationMessages.set(payload.iteration - 1, prevMsg);
+              // Reset assistant message so ensureAssistantMessage creates a new one
+              assistantMessage = null;
+            }
+          }
+        } else if (payloadType === "agent_turn_start") {
+          // Nothing to do - turn tracking is handled by deltas
+        } else if (payloadType === "agent_turn_delta") {
+          if (payload.contentType === 'text') {
+            // Stream text to assistant message
+            const assistant = ensureAssistantMessage();
+            assistant.content += payload.delta ?? '';
+            assistant.agentMetadata = {
+              executionId: payload.executionId,
+              iteration: payload.iteration,
+              turnId: payload.turnId,
+              agentName: agentExecution?.agentName
+            };
+            emitMessage(assistant);
+          } else if (payload.contentType === 'thinking') {
+            // Stream thinking content to a reasoning message
+            const reasoningId = payload.turnId ?? `agent-think-${payload.iteration}`;
+            const reasoningMessage = ensureReasoningMessage(reasoningId);
+            reasoningMessage.reasoning = reasoningMessage.reasoning ?? {
+              id: reasoningId,
+              status: "streaming",
+              chunks: []
+            };
+            reasoningMessage.reasoning.chunks.push(payload.delta ?? '');
+            reasoningMessage.agentMetadata = {
+              executionId: payload.executionId,
+              iteration: payload.iteration,
+              turnId: payload.turnId
+            };
+            emitMessage(reasoningMessage);
+          } else if (payload.contentType === 'tool_input') {
+            // Stream tool input to current tool message
+            const toolId = payload.toolCallId ?? toolContext.lastId;
+            if (toolId) {
+              const toolMessage = toolMessages.get(toolId);
+              if (toolMessage?.toolCall) {
+                toolMessage.toolCall.chunks = toolMessage.toolCall.chunks ?? [];
+                toolMessage.toolCall.chunks.push(payload.delta ?? '');
+                emitMessage(toolMessage);
+              }
+            }
+          }
+        } else if (payloadType === "agent_turn_complete") {
+          // Mark any active reasoning for this turn as complete
+          const reasoningId = payload.turnId;
+          if (reasoningId) {
+            const reasoningMessage = reasoningMessages.get(reasoningId);
+            if (reasoningMessage?.reasoning) {
+              reasoningMessage.reasoning.status = "complete";
+              reasoningMessage.reasoning.completedAt = resolveTimestamp(payload.completedAt);
+              const start = reasoningMessage.reasoning.startedAt ?? Date.now();
+              reasoningMessage.reasoning.durationMs = Math.max(
+                0,
+                (reasoningMessage.reasoning.completedAt ?? Date.now()) - start
+              );
+              reasoningMessage.streaming = false;
+              emitMessage(reasoningMessage);
+            }
+          }
+        } else if (payloadType === "agent_tool_start") {
+          const toolId = payload.toolCallId ?? `agent-tool-${nextSequence()}`;
+          trackToolId(getToolCallKey(payload), toolId);
+          const toolMessage = ensureToolMessage(toolId);
+          const tool = toolMessage.toolCall ?? {
+            id: toolId, status: "pending" as const,
+            name: undefined, args: undefined, chunks: undefined,
+            result: undefined, duration: undefined, startedAt: undefined,
+            completedAt: undefined, durationMs: undefined
+          };
+          tool.name = payload.toolName ?? tool.name;
+          tool.status = "running";
+          if (payload.parameters !== undefined) {
+            tool.args = payload.parameters;
+          }
+          tool.startedAt = resolveTimestamp(payload.startedAt ?? payload.timestamp);
+          toolMessage.toolCall = tool;
+          toolMessage.streaming = true;
+          toolMessage.agentMetadata = {
+            executionId: payload.executionId,
+            iteration: payload.iteration
+          };
+          emitMessage(toolMessage);
+        } else if (payloadType === "agent_tool_delta") {
+          const toolId = payload.toolCallId ?? toolContext.lastId;
+          if (toolId) {
+            const toolMessage = toolMessages.get(toolId) ?? ensureToolMessage(toolId);
+            if (toolMessage.toolCall) {
+              toolMessage.toolCall.chunks = toolMessage.toolCall.chunks ?? [];
+              toolMessage.toolCall.chunks.push(payload.delta ?? '');
+              toolMessage.toolCall.status = "running";
+              toolMessage.streaming = true;
+              emitMessage(toolMessage);
+            }
+          }
+        } else if (payloadType === "agent_tool_complete") {
+          const toolId = payload.toolCallId ?? toolContext.lastId;
+          if (toolId) {
+            const toolMessage = toolMessages.get(toolId) ?? ensureToolMessage(toolId);
+            if (toolMessage.toolCall) {
+              toolMessage.toolCall.status = "complete";
+              if (payload.result !== undefined) {
+                toolMessage.toolCall.result = payload.result;
+              }
+              if (typeof payload.executionTime === "number") {
+                toolMessage.toolCall.durationMs = payload.executionTime;
+              }
+              toolMessage.toolCall.completedAt = resolveTimestamp(payload.completedAt ?? payload.timestamp);
+              toolMessage.streaming = false;
+              emitMessage(toolMessage);
+              const callKey = getToolCallKey(payload);
+              if (callKey) {
+                toolContext.byCall.delete(callKey);
+              }
+            }
+          }
+        } else if (payloadType === "agent_iteration_complete") {
+          // Iteration complete - no special handling needed
+          // In 'separate' mode, message finalization happens at next iteration_start
+        } else if (payloadType === "agent_reflection") {
+          // Create a reasoning message for reflection content
+          const reflectionId = `agent-reflection-${payload.executionId}-${payload.iteration}`;
+          const reflectionMessage: AgentWidgetMessage = {
+            id: reflectionId,
+            role: "assistant",
+            content: payload.reflection ?? '',
+            createdAt: new Date().toISOString(),
+            streaming: false,
+            variant: "reasoning",
+            sequence: nextSequence(),
+            reasoning: {
+              id: reflectionId,
+              status: "complete",
+              chunks: [payload.reflection ?? '']
+            },
+            agentMetadata: {
+              executionId: payload.executionId,
+              iteration: payload.iteration
+            }
+          };
+          emitMessage(reflectionMessage);
+        } else if (payloadType === "agent_complete") {
+          if (agentExecution) {
+            agentExecution.status = payload.success ? 'complete' : 'error';
+            agentExecution.completedAt = resolveTimestamp(payload.completedAt);
+            agentExecution.stopReason = payload.stopReason;
+          }
+
+          // Finalize the current assistant message
+          const finalMsg = assistantMessage as AgentWidgetMessage | null;
+          if (finalMsg) {
+            finalMsg.streaming = false;
+            emitMessage(finalMsg);
+          }
+
+          onEvent({ type: "status", status: "idle" });
+        } else if (payloadType === "agent_error") {
+          const errorMessage = typeof payload.error === 'string'
+            ? payload.error
+            : payload.error?.message ?? 'Agent execution error';
+          if (payload.recoverable) {
+            if (typeof console !== "undefined") {
+              // eslint-disable-next-line no-console
+              console.warn("[AgentWidget] Recoverable agent error:", errorMessage);
+            }
+          } else {
+            onEvent({
+              type: "error",
+              error: new Error(errorMessage)
+            });
+          }
+        } else if (payloadType === "agent_ping") {
+          // Keep-alive heartbeat - no action needed
         } else if (payloadType === "error" && payload.error) {
           onEvent({
             type: "error",

@@ -571,3 +571,648 @@ describe('AgentWidgetClient - JSON Streaming', () => {
   });
 });
 
+// ============================================================================
+// Agent Loop Execution Tests
+// ============================================================================
+
+/**
+ * Helper to create an SSE event string
+ */
+function sseEvent(eventType: string, data: Record<string, unknown>): string {
+  return `event: ${eventType}\ndata: ${JSON.stringify({ type: eventType, ...data })}\n\n`;
+}
+
+/**
+ * Helper to create a mock fetch that returns an SSE stream
+ */
+function createAgentStreamFetch(events: string[]) {
+  return vi.fn().mockImplementation(async (_url: string, _options: any) => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        for (const event of events) {
+          controller.enqueue(encoder.encode(event));
+        }
+        controller.close();
+      }
+    });
+    return { ok: true, body: stream };
+  });
+}
+
+describe('AgentWidgetClient - Agent Mode Detection', () => {
+  it('should detect agent mode when agent config is provided', () => {
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: {
+        name: 'Test Agent',
+        model: 'openai:gpt-4o-mini',
+        systemPrompt: 'You are a test assistant.',
+      },
+    });
+    expect(client.isAgentMode()).toBe(true);
+    expect(client.isClientTokenMode()).toBe(false);
+  });
+
+  it('should not detect agent mode when no agent config', () => {
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+    });
+    expect(client.isAgentMode()).toBe(false);
+  });
+});
+
+describe('AgentWidgetClient - Agent Payload Building', () => {
+  it('should build agent payload with agent config', async () => {
+    let capturedPayload: any = null;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+            executionId: 'exec_1',
+            agentId: 'virtual',
+            success: true,
+            iterations: 1,
+            stopReason: 'max_iterations',
+            completedAt: new Date().toISOString(),
+            seq: 1,
+          })));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: {
+        name: 'Test Agent',
+        model: 'openai:gpt-4o-mini',
+        systemPrompt: 'You are a test assistant.',
+        temperature: 0.7,
+        loopConfig: {
+          maxIterations: 3,
+          stopCondition: 'auto',
+        },
+      },
+      agentOptions: {
+        recordMode: 'virtual',
+        debugMode: false,
+      },
+    });
+
+    const messages: AgentWidgetMessage[] = [
+      {
+        id: 'usr_1',
+        role: 'user',
+        content: 'Hello agent',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      },
+    ];
+
+    await client.dispatch({ messages }, () => {});
+
+    expect(capturedPayload).toBeDefined();
+    expect(capturedPayload.agent).toBeDefined();
+    expect(capturedPayload.agent.name).toBe('Test Agent');
+    expect(capturedPayload.agent.model).toBe('openai:gpt-4o-mini');
+    expect(capturedPayload.agent.systemPrompt).toBe('You are a test assistant.');
+    expect(capturedPayload.agent.loopConfig.maxIterations).toBe(3);
+    expect(capturedPayload.messages).toHaveLength(1);
+    expect(capturedPayload.messages[0].content).toBe('Hello agent');
+    expect(capturedPayload.options.streamResponse).toBe(true);
+    expect(capturedPayload.options.recordMode).toBe('virtual');
+  });
+
+  it('should filter out variant messages from agent payload', async () => {
+    let capturedPayload: any = null;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+            executionId: 'exec_1', agentId: 'virtual', success: true,
+            iterations: 1, stopReason: 'max_iterations',
+            completedAt: new Date().toISOString(), seq: 1,
+          })));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    const messages: AgentWidgetMessage[] = [
+      { id: 'usr_1', role: 'user', content: 'Hello', createdAt: '2025-01-01T00:00:00.000Z' },
+      { id: 'ast_1', role: 'assistant', content: 'Hi there!', createdAt: '2025-01-01T00:00:01.000Z' },
+      { id: 'tool_1', role: 'assistant', content: '', variant: 'tool', createdAt: '2025-01-01T00:00:02.000Z' },
+      { id: 'reason_1', role: 'assistant', content: '', variant: 'reasoning', createdAt: '2025-01-01T00:00:03.000Z' },
+      { id: 'usr_2', role: 'user', content: 'Thanks', createdAt: '2025-01-01T00:00:04.000Z' },
+    ];
+
+    await client.dispatch({ messages }, () => {});
+
+    // Tool and reasoning variant messages should be filtered out
+    expect(capturedPayload.messages).toHaveLength(3);
+    expect(capturedPayload.messages[0].content).toBe('Hello');
+    expect(capturedPayload.messages[1].content).toBe('Hi there!');
+    expect(capturedPayload.messages[2].content).toBe('Thanks');
+  });
+});
+
+describe('AgentWidgetClient - Agent Event Streaming', () => {
+  it('should handle basic agent text streaming (single iteration)', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_test_1';
+
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxIterations: 1,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_turn_start', {
+        executionId: execId, iteration: 1, turnIndex: 0,
+        role: 'assistant', turnId: 'turn_1', seq: 3,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'Hello',
+        contentType: 'text', turnId: 'turn_1', seq: 4,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: ' World',
+        contentType: 'text', turnId: 'turn_1', seq: 5,
+      }),
+      sseEvent('agent_turn_complete', {
+        executionId: execId, iteration: 1, role: 'assistant',
+        turnId: 'turn_1', completedAt: new Date().toISOString(), seq: 6,
+      }),
+      sseEvent('agent_iteration_complete', {
+        executionId: execId, iteration: 1, toolCallsMade: 0,
+        stopConditionMet: false, completedAt: new Date().toISOString(), seq: 7,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 8,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    // Find message events
+    const messageEvents = events.filter(e => e.type === 'message');
+    expect(messageEvents.length).toBeGreaterThan(0);
+
+    // Find the final assistant message
+    const lastMessage = messageEvents[messageEvents.length - 1];
+    expect(lastMessage.type).toBe('message');
+    if (lastMessage.type === 'message') {
+      expect(lastMessage.message.content).toBe('Hello World');
+      expect(lastMessage.message.streaming).toBe(false);
+      expect(lastMessage.message.role).toBe('assistant');
+      expect(lastMessage.message.agentMetadata).toBeDefined();
+      expect(lastMessage.message.agentMetadata?.executionId).toBe(execId);
+    }
+  });
+
+  it('should create separate messages per iteration in separate mode', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_test_2';
+
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxIterations: 2, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      // Iteration 1
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxIterations: 2,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_turn_start', {
+        executionId: execId, iteration: 1, turnIndex: 0,
+        role: 'assistant', turnId: 'turn_1', seq: 3,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'First iteration',
+        contentType: 'text', turnId: 'turn_1', seq: 4,
+      }),
+      sseEvent('agent_turn_complete', {
+        executionId: execId, iteration: 1, role: 'assistant',
+        turnId: 'turn_1', completedAt: new Date().toISOString(), seq: 5,
+      }),
+      sseEvent('agent_iteration_complete', {
+        executionId: execId, iteration: 1, toolCallsMade: 0,
+        stopConditionMet: false, completedAt: new Date().toISOString(), seq: 6,
+      }),
+      // Iteration 2
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 2, maxIterations: 2,
+        startedAt: new Date().toISOString(), seq: 7,
+      }),
+      sseEvent('agent_turn_start', {
+        executionId: execId, iteration: 2, turnIndex: 0,
+        role: 'assistant', turnId: 'turn_2', seq: 8,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 2, delta: 'Second iteration',
+        contentType: 'text', turnId: 'turn_2', seq: 9,
+      }),
+      sseEvent('agent_turn_complete', {
+        executionId: execId, iteration: 2, role: 'assistant',
+        turnId: 'turn_2', completedAt: new Date().toISOString(), seq: 10,
+      }),
+      sseEvent('agent_iteration_complete', {
+        executionId: execId, iteration: 2, toolCallsMade: 0,
+        stopConditionMet: false, completedAt: new Date().toISOString(), seq: 11,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 2, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 12,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+      iterationDisplay: 'separate',
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+
+    // Collect unique message IDs and their final content
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') {
+        messagesById.set(event.message.id, event.message);
+      }
+    }
+
+    // Should have created two distinct assistant messages
+    const assistantMessages = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant);
+
+    expect(assistantMessages.length).toBe(2);
+    expect(assistantMessages[0].content).toBe('First iteration');
+    expect(assistantMessages[0].streaming).toBe(false);
+    expect(assistantMessages[1].content).toBe('Second iteration');
+    expect(assistantMessages[1].streaming).toBe(false);
+  });
+
+  it('should merge iterations in merged mode', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_test_3';
+
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxIterations: 2, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxIterations: 2,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'First',
+        contentType: 'text', turnId: 'turn_1', seq: 3,
+      }),
+      sseEvent('agent_iteration_complete', {
+        executionId: execId, iteration: 1, toolCallsMade: 0,
+        stopConditionMet: false, completedAt: new Date().toISOString(), seq: 4,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 2, maxIterations: 2,
+        startedAt: new Date().toISOString(), seq: 5,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 2, delta: ' Second',
+        contentType: 'text', turnId: 'turn_2', seq: 6,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 2, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 7,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+      iterationDisplay: 'merged',
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') {
+        messagesById.set(event.message.id, event.message);
+      }
+    }
+
+    // In merged mode, should have only one assistant message with combined content
+    const assistantMessages = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant);
+
+    expect(assistantMessages.length).toBe(1);
+    expect(assistantMessages[0].content).toBe('First Second');
+  });
+
+  it('should handle agent tool events', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_test_4';
+
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxIterations: 1,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_tool_start', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_1',
+        toolName: 'search', toolType: 'function',
+        parameters: { query: 'weather' }, seq: 3,
+      }),
+      sseEvent('agent_tool_delta', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_1',
+        delta: 'Searching...', seq: 4,
+      }),
+      sseEvent('agent_tool_complete', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_1',
+        toolName: 'search', success: true,
+        result: { temperature: 72 }, executionTime: 150, seq: 5,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'The weather is 72F.',
+        contentType: 'text', turnId: 'turn_1', seq: 6,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 7,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Weather?', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') {
+        messagesById.set(event.message.id, event.message);
+      }
+    }
+
+    // Should have a tool message
+    const toolMessages = Array.from(messagesById.values())
+      .filter(m => m.variant === 'tool');
+    expect(toolMessages.length).toBe(1);
+    expect(toolMessages[0].toolCall?.name).toBe('search');
+    expect(toolMessages[0].toolCall?.status).toBe('complete');
+    expect(toolMessages[0].toolCall?.result).toEqual({ temperature: 72 });
+    expect(toolMessages[0].toolCall?.durationMs).toBe(150);
+
+    // Should have an assistant message
+    const assistantMessages = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant);
+    expect(assistantMessages.length).toBe(1);
+    expect(assistantMessages[0].content).toBe('The weather is 72F.');
+  });
+
+  it('should handle agent thinking content', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_test_5';
+
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxIterations: 1,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'Let me think...',
+        contentType: 'thinking', turnId: 'think_1', seq: 3,
+      }),
+      sseEvent('agent_turn_complete', {
+        executionId: execId, iteration: 1, role: 'assistant',
+        turnId: 'think_1', completedAt: new Date().toISOString(), seq: 4,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'The answer is 42.',
+        contentType: 'text', turnId: 'turn_1', seq: 5,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 6,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'What is the answer?', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') {
+        messagesById.set(event.message.id, event.message);
+      }
+    }
+
+    // Should have a reasoning message
+    const reasoningMessages = Array.from(messagesById.values())
+      .filter(m => m.variant === 'reasoning');
+    expect(reasoningMessages.length).toBe(1);
+    expect(reasoningMessages[0].reasoning?.chunks).toContain('Let me think...');
+    expect(reasoningMessages[0].reasoning?.status).toBe('complete');
+
+    // Should have an assistant message
+    const assistantMessages = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant);
+    expect(assistantMessages.length).toBe(1);
+    expect(assistantMessages[0].content).toBe('The answer is 42.');
+  });
+
+  it('should handle agent errors (recoverable and fatal)', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_test_6';
+
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_error', {
+        executionId: execId, iteration: 1,
+        error: 'Rate limit hit, retrying...',
+        recoverable: true, seq: 2,
+      }),
+      sseEvent('agent_error', {
+        executionId: execId, iteration: 1,
+        error: 'Fatal: model unavailable',
+        recoverable: false, seq: 3,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    // Should have an error event for the non-recoverable error
+    const errorEvents = events.filter(e => e.type === 'error');
+    expect(errorEvents.length).toBe(1);
+    if (errorEvents[0].type === 'error') {
+      expect(errorEvents[0].error.message).toBe('Fatal: model unavailable');
+    }
+  });
+
+  it('should handle agent reflection events', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_test_7';
+
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxIterations: 2, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_reflection', {
+        executionId: execId, iteration: 1,
+        reflection: 'I should try a different approach.', seq: 2,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 2, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 3,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') {
+        messagesById.set(event.message.id, event.message);
+      }
+    }
+
+    // Should have a reflection message
+    const reflectionMessages = Array.from(messagesById.values())
+      .filter(m => m.variant === 'reasoning' && m.id.includes('reflection'));
+    expect(reflectionMessages.length).toBe(1);
+    expect(reflectionMessages[0].content).toBe('I should try a different approach.');
+    expect(reflectionMessages[0].reasoning?.chunks).toContain('I should try a different approach.');
+  });
+
+  it('should handle agent_ping events gracefully', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_test_8';
+
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_ping', {
+        executionId: execId, timestamp: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'Hi',
+        contentType: 'text', turnId: 'turn_1', seq: 3,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 4,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    // Ping should not generate any message events
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') {
+        messagesById.set(event.message.id, event.message);
+      }
+    }
+    const assistantMessages = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant);
+    expect(assistantMessages.length).toBe(1);
+    expect(assistantMessages[0].content).toBe('Hi');
+  });
+});
+
