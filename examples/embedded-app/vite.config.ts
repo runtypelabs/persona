@@ -33,6 +33,8 @@ export default defineConfig({
         'navigation-persist-demo': path.resolve(__dirname, 'navigation-persist-demo.html'),
         'navigation-persist-page2': path.resolve(__dirname, 'navigation-persist-page2.html'),
         'preview-mode-demo': path.resolve(__dirname, 'preview-mode-demo.html'),
+        // Agent demo
+        'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
         // Bakery demo pages
         'bakery': path.resolve(__dirname, 'bakery.html'),
         'bakery-story': path.resolve(__dirname, 'bakery-story.html'),

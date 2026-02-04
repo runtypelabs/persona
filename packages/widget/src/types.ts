@@ -73,6 +73,91 @@ export type AgentWidgetRequestPayload = {
   metadata?: Record<string, unknown>;
 };
 
+// ============================================================================
+// Agent Execution Types
+// ============================================================================
+
+/**
+ * Configuration for agent loop behavior.
+ */
+export type AgentLoopConfig = {
+  /** Maximum number of reasoning iterations */
+  maxIterations: number;
+  /** Stop condition: 'auto' for automatic detection, or a custom JS expression */
+  stopCondition?: 'auto' | string;
+  /** Enable periodic reflection during execution */
+  enableReflection?: boolean;
+  /** Number of iterations between reflections */
+  reflectionInterval?: number;
+};
+
+/**
+ * Agent configuration for agent execution mode.
+ * When provided in the widget config, enables agent loop execution instead of flow dispatch.
+ */
+export type AgentConfig = {
+  /** Agent display name */
+  name: string;
+  /** Model identifier (e.g., 'openai:gpt-4o-mini') */
+  model: string;
+  /** System prompt for the agent */
+  systemPrompt: string;
+  /** Temperature for model responses */
+  temperature?: number;
+  /** Loop configuration for multi-iteration execution */
+  loopConfig?: AgentLoopConfig;
+};
+
+/**
+ * Options for agent execution requests.
+ */
+export type AgentRequestOptions = {
+  /** Whether to stream the response (should be true for widget usage) */
+  streamResponse?: boolean;
+  /** Record mode: 'virtual' for no persistence, 'existing'/'create' for database records */
+  recordMode?: 'virtual' | 'existing' | 'create';
+  /** Whether to store results server-side */
+  storeResults?: boolean;
+  /** Enable debug mode for additional event data */
+  debugMode?: boolean;
+};
+
+/**
+ * Request payload for agent execution mode.
+ */
+export type AgentWidgetAgentRequestPayload = {
+  agent: AgentConfig;
+  messages: AgentWidgetRequestPayloadMessage[];
+  options: AgentRequestOptions;
+  context?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+/**
+ * Agent execution state tracking.
+ */
+export type AgentExecutionState = {
+  executionId: string;
+  agentId: string;
+  agentName: string;
+  status: 'running' | 'complete' | 'error';
+  currentIteration: number;
+  maxIterations: number;
+  startedAt?: number;
+  completedAt?: number;
+  stopReason?: 'max_iterations' | 'complete' | 'error' | 'manual';
+};
+
+/**
+ * Metadata attached to messages created during agent execution.
+ */
+export type AgentMessageMetadata = {
+  executionId?: string;
+  iteration?: number;
+  turnId?: string;
+  agentName?: string;
+};
+
 export type AgentWidgetRequestMiddlewareContext = {
   payload: AgentWidgetRequestPayload;
   config: AgentWidgetConfig;
@@ -1400,6 +1485,41 @@ export type AgentWidgetConfig = {
   apiUrl?: string;
   flowId?: string;
   /**
+   * Agent configuration for agent execution mode.
+   * When provided, the widget uses agent loop execution instead of flow dispatch.
+   * Mutually exclusive with `flowId`.
+   *
+   * @example
+   * ```typescript
+   * config: {
+   *   agent: {
+   *     name: 'Assistant',
+   *     model: 'openai:gpt-4o-mini',
+   *     systemPrompt: 'You are a helpful assistant.',
+   *     loopConfig: { maxIterations: 3, stopCondition: 'auto' }
+   *   }
+   * }
+   * ```
+   */
+  agent?: AgentConfig;
+  /**
+   * Options for agent execution requests.
+   * Only used when `agent` is configured.
+   *
+   * @default { streamResponse: true, recordMode: 'virtual' }
+   */
+  agentOptions?: AgentRequestOptions;
+  /**
+   * Controls how multiple agent iterations are displayed in the chat UI.
+   * Only used when `agent` is configured.
+   *
+   * - `'separate'`: Each iteration creates a new assistant message bubble
+   * - `'merged'`: All iterations stream into a single assistant message
+   *
+   * @default 'separate'
+   */
+  iterationDisplay?: 'separate' | 'merged';
+  /**
    * Client token for direct browser-to-API communication.
    * When set, the widget uses /v1/client/* endpoints instead of /v1/dispatch.
    * Mutually exclusive with apiKey/headers authentication.
@@ -1944,6 +2064,11 @@ export type AgentWidgetMessage = {
    * }
    */
   llmContent?: string;
+  /**
+   * Metadata for messages created during agent loop execution.
+   * Contains execution context like iteration number and turn ID.
+   */
+  agentMetadata?: AgentMessageMetadata;
 };
 
 // ============================================================================

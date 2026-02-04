@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent Loop Execution Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #fff;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 1.5rem;
+      padding: 1.5rem;
+      max-width: 1400px;
+      margin: 0 auto;
+      margin-top: 2rem;
+      margin-bottom: 2rem;
+      min-height: 100vh;
+    }
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .panel {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      overflow: hidden;
+    }
+    .info-panel {
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      padding: 1.5rem;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .info-panel h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.5rem;
+    }
+    .info-panel p {
+      margin: 0 0 1.5rem 0;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+    .info-section {
+      background: rgba(0,0,0,0.2);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .info-section h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.9rem;
+      color: #38bdf8;
+    }
+    .info-section p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+    .code-block {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.75rem;
+      color: #c9d1d9;
+      margin-bottom: 1rem;
+    }
+    .code-block .comment { color: #8b949e; }
+    .code-block .keyword { color: #ff7b72; }
+    .code-block .string { color: #a5d6ff; }
+    .code-block .prop { color: #79c0ff; }
+    .widget-container {
+      height: 600px;
+    }
+    #agent-widget {
+      height: 100%;
+    }
+    .back-link {
+      display: inline-block;
+      background: rgba(255,255,255,0.1);
+      padding: 0.5rem 1rem;
+      margin: 1rem 1.5rem;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 0.9rem;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .back-link:hover {
+      background: rgba(255,255,255,0.15);
+    }
+    .toggle-section {
+      background: rgba(0,0,0,0.3);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .toggle-section label {
+      font-size: 0.9rem;
+      color: #fff;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 24px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #4b5563;
+      transition: 0.3s;
+      border-radius: 24px;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background-color: #38bdf8;
+    }
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+    .toggle-status {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 0.5rem;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-new {
+      background: #38bdf8;
+      color: #0f172a;
+    }
+  </style>
+</head>
+<body>
+  <a href="/" class="back-link">&larr; Back to examples</a>
+
+  <div class="layout">
+    <!-- Left: Info Panel -->
+    <div class="info-panel">
+      <h1>Agent Loop Execution <span class="badge badge-new">New</span></h1>
+      <p>This demo shows the new agent execution mode with multi-iteration loops. Instead of dispatching to a pre-configured flow, the widget sends an agent configuration directly and handles streaming agent events.</p>
+
+      <div class="info-section">
+        <h3>How it works</h3>
+        <p>Set <code>config.agent</code> with a model, system prompt, and loop config. The widget sends this to the dispatch API and handles agent-specific SSE events: <code>agent_start</code>, <code>agent_turn_delta</code>, <code>agent_tool_*</code>, <code>agent_iteration_*</code>, and <code>agent_complete</code>.</p>
+      </div>
+
+      <div class="code-block">
+<span class="comment">// Agent execution configuration</span>
+{
+  <span class="prop">agent</span>: {
+    <span class="prop">name</span>: <span class="string">'Assistant'</span>,
+    <span class="prop">model</span>: <span class="string">'openai:gpt-4o-mini'</span>,
+    <span class="prop">systemPrompt</span>: <span class="string">'You are a helpful assistant.'</span>,
+    <span class="prop">temperature</span>: 0.7,
+    <span class="prop">loopConfig</span>: {
+      <span class="prop">maxIterations</span>: 3,
+      <span class="prop">stopCondition</span>: <span class="string">'auto'</span>
+    }
+  },
+  <span class="prop">agentOptions</span>: {
+    <span class="prop">streamResponse</span>: <span class="keyword">true</span>,
+    <span class="prop">recordMode</span>: <span class="string">'virtual'</span>
+  }
+}
+      </div>
+
+      <div class="info-section">
+        <h3>Iteration Display</h3>
+        <p>Control how multiple iterations appear in the chat with <code>iterationDisplay</code>:<br>
+        <strong>separate:</strong> Each iteration creates its own message bubble.<br>
+        <strong>merged:</strong> All iterations stream into a single message.</p>
+      </div>
+
+      <div class="toggle-section">
+        <label for="iteration-toggle">Separate Messages Per Iteration</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="iteration-toggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-status" id="iteration-status">iterationDisplay: 'separate'</div>
+
+      <div class="info-section">
+        <h3>Agent Events</h3>
+        <p>The widget handles these agent-specific SSE events:</p>
+        <p style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; line-height: 1.8;">
+          agent_start &rarr; agent_iteration_start &rarr; agent_turn_start &rarr; agent_turn_delta (text/thinking) &rarr; agent_turn_complete &rarr; agent_tool_start/delta/complete &rarr; agent_iteration_complete &rarr; agent_complete
+        </p>
+      </div>
+
+      <div class="info-section">
+        <h3>Thinking Content</h3>
+        <p>When <code>contentType: 'thinking'</code> is received in <code>agent_turn_delta</code>, it appears as a reasoning bubble (same as extended thinking in flow mode).</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Backward Compatible</h3>
+        <p>Agent mode is opt-in. Without <code>config.agent</code>, the widget uses flow dispatch as before. Both modes share the same SSE streaming infrastructure.</p>
+      </div>
+    </div>
+
+    <!-- Right: Widget -->
+    <div class="panel widget-container">
+      <div id="agent-widget"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/agent-demo.ts"></script>
+</body>
+</html>
