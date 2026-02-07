@@ -100,7 +100,7 @@ This phase delivers a working SSE Event Stream Inspector that captures events an
   - Ensure `packages/widget/src/client.ts` properly integrates the `onSSEEvent` callback
   - Run `pnpm build:widget` from the repo root to verify compilation succeeds
 
-- [ ] Test the feature manually with the dev server:
+- [x] Test the feature manually with the dev server:
   - Run `pnpm dev` from the repo root
   - Open the widget demo at http://localhost:5173
   - Verify the event stream toggle icon appears in the header when the feature flag is enabled in the demo config
@@ -110,3 +110,4 @@ This phase delivers a working SSE Event Stream Inspector that captures events an
   - Click toggle again to return to normal chat
   - Verify chat messages are preserved
   - If the demo config doesn't have the feature flag enabled, check the example app config in `examples/embedded-app/` and add `features: { showEventStreamToggle: true }` to the widget config there
+  - **Note:** Enabled `features: { showEventStreamToggle: true }` in both inline and launcher widget configs in `examples/embedded-app/src/main.ts`. Verified: all 91 tests pass, widget build succeeds (ESM/CJS/IIFE/DTS), typecheck passes. Feature is now ready for interactive browser testing with `pnpm dev`.

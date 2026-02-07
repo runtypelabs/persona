@@ -28,6 +28,9 @@ createAgentExperience(inlineMount, {
     width: "100%",
     enabled: false
   },
+  features: {
+    showEventStreamToggle: true
+  },
   theme: {
     ...DEFAULT_WIDGET_CONFIG.theme,
     primary: "#0f172a",
@@ -56,6 +59,9 @@ const launcherController = initAgentWidget({
   config: {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
+    features: {
+      showEventStreamToggle: true
+    },
     theme: {
       launcherRadius: ".5rem"
     },
