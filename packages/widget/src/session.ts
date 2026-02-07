@@ -1,4 +1,4 @@
-import { AgentWidgetClient } from "./client";
+import { AgentWidgetClient, type SSEEventCallback } from "./client";
 import {
   AgentWidgetConfig,
   AgentWidgetEvent,
@@ -58,6 +58,13 @@ export class AgentWidgetSession {
       this.callbacks.onMessagesChanged([...this.messages]);
     }
     this.callbacks.onStatusChanged(this.status);
+  }
+
+  /**
+   * Set callback for capturing raw SSE events (forwards to client)
+   */
+  public setSSEEventCallback(callback: SSEEventCallback): void {
+    this.client.setSSEEventCallback(callback);
   }
 
   /**

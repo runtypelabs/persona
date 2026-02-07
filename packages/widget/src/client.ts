@@ -81,6 +81,8 @@ function getParserFromType(parserType?: "plain" | "json" | "regex-json" | "xml")
   }
 }
 
+export type SSEEventCallback = (eventType: string, payload: unknown) => void;
+
 export class AgentWidgetClient {
   private readonly apiUrl: string;
   private readonly headers: Record<string, string>;
@@ -91,6 +93,7 @@ export class AgentWidgetClient {
   private readonly customFetch?: AgentWidgetCustomFetch;
   private readonly parseSSEEvent?: AgentWidgetSSEEventParser;
   private readonly getHeaders?: AgentWidgetHeadersFunction;
+  private onSSEEvent?: SSEEventCallback;
   
   // Client token mode properties
   private clientSession: ClientSession | null = null;
@@ -110,6 +113,13 @@ export class AgentWidgetClient {
     this.customFetch = config.customFetch;
     this.parseSSEEvent = config.parseSSEEvent;
     this.getHeaders = config.getHeaders;
+  }
+
+  /**
+   * Set callback for capturing raw SSE events
+   */
+  public setSSEEventCallback(callback: SSEEventCallback): void {
+    this.onSSEEvent = callback;
   }
 
   /**
@@ -1178,6 +1188,9 @@ export class AgentWidgetClient {
 
         const payloadType =
           eventType !== "message" ? eventType : payload.type ?? "message";
+
+        // Tap: capture raw SSE event for event stream inspector
+        this.onSSEEvent?.(payloadType, payload);
 
         // If custom SSE event parser is provided, try it first
         if (this.parseSSEEvent) {

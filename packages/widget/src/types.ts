@@ -360,6 +360,14 @@ export type AgentWidgetControllerEventMap = {
 export type AgentWidgetFeatureFlags = {
   showReasoning?: boolean;
   showToolCalls?: boolean;
+  showEventStreamToggle?: boolean;
+};
+
+export type SSEEventRecord = {
+  id: string;
+  type: string;
+  timestamp: number;
+  payload: string;
 };
 
 export type AgentWidgetTheme = {

@@ -38,6 +38,8 @@ import { createStandardBubble, createTypingIndicator } from "./components/messag
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
 import { createSuggestions } from "./components/suggestions";
+import { EventStreamBuffer } from "./utils/event-stream-buffer";
+import { createEventStreamView } from "./components/event-stream-view";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
 import { mergeWithDefaults } from "./defaults";
@@ -404,6 +406,11 @@ export const createAgentExperience = (
   let postprocess = buildPostprocessor(config, actionManager, handleResubmitRequested);
   let showReasoning = config.features?.showReasoning ?? true;
   let showToolCalls = config.features?.showToolCalls ?? true;
+  let showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
+  const eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(500) : null;
+  let eventStreamView: ReturnType<typeof createEventStreamView> | null = null;
+  let eventStreamVisible = false;
+  let eventStreamInterval: ReturnType<typeof setInterval> | null = null;
   
   // Create message action callbacks that emit events and optionally send to API
   const messageActionCallbacks: MessageActionCallbacks = {
@@ -517,6 +524,74 @@ export const createAgentExperience = (
         header = customHeader;
       }
     }
+  }
+
+  // Event stream toggle button
+  let eventStreamToggleBtn: HTMLButtonElement | null = null;
+  if (showEventStreamToggle) {
+    eventStreamToggleBtn = createElement("button", "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-p-1") as HTMLButtonElement;
+    eventStreamToggleBtn.style.width = "28px";
+    eventStreamToggleBtn.style.height = "28px";
+    eventStreamToggleBtn.type = "button";
+    eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
+    eventStreamToggleBtn.title = "Event Stream";
+    const activityIcon = renderLucideIcon("activity", "18px", "", 1);
+    if (activityIcon) eventStreamToggleBtn.appendChild(activityIcon);
+
+    // Insert before clear chat button wrapper or close button wrapper
+    const clearChatWrapper = panelElements.clearChatButtonWrapper;
+    const closeWrapper = panelElements.closeButtonWrapper;
+    const insertBefore = clearChatWrapper || closeWrapper;
+    if (insertBefore && insertBefore.parentNode === header) {
+      header.insertBefore(eventStreamToggleBtn, insertBefore);
+    } else {
+      header.appendChild(eventStreamToggleBtn);
+    }
+
+    const showEventStream = () => {
+      eventStreamVisible = true;
+      if (!eventStreamView && eventStreamBuffer) {
+        eventStreamView = createEventStreamView(eventStreamBuffer);
+      }
+      if (eventStreamView) {
+        body.style.display = "none";
+        footer.parentNode?.insertBefore(eventStreamView.element, footer);
+        eventStreamView.update();
+      }
+      if (eventStreamToggleBtn) {
+        eventStreamToggleBtn.classList.remove("tvw-text-cw-muted");
+        eventStreamToggleBtn.classList.add("tvw-text-cw-accent");
+      }
+      // Start update interval
+      eventStreamInterval = setInterval(() => {
+        eventStreamView?.update();
+      }, 250);
+    };
+
+    const hideEventStream = () => {
+      eventStreamVisible = false;
+      if (eventStreamView) {
+        eventStreamView.element.remove();
+      }
+      body.style.display = "";
+      if (eventStreamToggleBtn) {
+        eventStreamToggleBtn.classList.remove("tvw-text-cw-accent");
+        eventStreamToggleBtn.classList.add("tvw-text-cw-muted");
+      }
+      // Clear update interval
+      if (eventStreamInterval) {
+        clearInterval(eventStreamInterval);
+        eventStreamInterval = null;
+      }
+    };
+
+    eventStreamToggleBtn.addEventListener("click", () => {
+      if (eventStreamVisible) {
+        hideEventStream();
+      } else {
+        showEventStream();
+      }
+    });
   }
 
   // Plugin hook: renderComposer - allow plugins to provide custom composer
@@ -886,6 +961,19 @@ export const createAgentExperience = (
   applyThemeVariables(mount, config);
 
   const destroyCallbacks: Array<() => void> = [];
+
+  // Event stream cleanup
+  if (showEventStreamToggle) {
+    destroyCallbacks.push(() => {
+      if (eventStreamInterval) {
+        clearInterval(eventStreamInterval);
+        eventStreamInterval = null;
+      }
+      eventStreamView?.destroy();
+      eventStreamView = null;
+      eventStreamBuffer?.clear();
+    });
+  }
 
   // Set up theme observer for auto color scheme detection
   let cleanupThemeObserver: (() => void) | null = null;
@@ -1670,6 +1758,18 @@ export const createAgentExperience = (
     }
   });
 
+  // Wire up event stream buffer to capture SSE events
+  if (eventStreamBuffer) {
+    session.setSSEEventCallback((type: string, payload: unknown) => {
+      eventStreamBuffer.push({
+        id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type,
+        timestamp: Date.now(),
+        payload: JSON.stringify(payload)
+      });
+    });
+  }
+
   if (pendingStoredState) {
     pendingStoredState
       .then((state) => {
@@ -2304,6 +2404,7 @@ export const createAgentExperience = (
       autoExpand = config.launcher?.autoExpand ?? false;
       showReasoning = config.features?.showReasoning ?? true;
       showToolCalls = config.features?.showToolCalls ?? true;
+      showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
 
       if (config.launcher?.enabled === false && launcherButtonInstance) {
         launcherButtonInstance.destroy();
