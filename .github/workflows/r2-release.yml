@@ -14,6 +14,11 @@ jobs:
     # Only run for widget package releases (tag format: @runtypelabs/persona@x.y.z)
     if: startsWith(github.event.release.tag_name, '@runtypelabs/persona@')
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || 'cdn-assets' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,25 +41,41 @@ jobs:
 
       - name: Extract version
         id: version
-        run: echo "version=$(node -p "require('./packages/widget/package.json').version")" >> "$GITHUB_OUTPUT"
+        run: |
+          VERSION=$(node -p "require('./packages/widget/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Extracted version: $VERSION"
 
       - name: Upload versioned release to R2
-        uses: ryand56/r2-upload-action@latest
+        id: upload-versioned
+        uses: ryand56/r2-upload-action@v1.4
         with:
-          r2-account-id: ${{ secrets.R2_ACCOUNT_ID }}
-          r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          r2-bucket: cdn-assets
+          r2-account-id: ${{ env.R2_ACCOUNT_ID }}
+          r2-access-key-id: ${{ env.R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ env.R2_SECRET_ACCESS_KEY }}
+          r2-bucket: ${{ env.R2_BUCKET }}
           source-dir: packages/widget/dist
           destination-dir: persona/${{ steps.version.outputs.version }}
 
       - name: Upload latest to R2
-        uses: ryand56/r2-upload-action@latest
+        id: upload-latest
+        uses: ryand56/r2-upload-action@v1.4
         with:
-          r2-account-id: ${{ secrets.R2_ACCOUNT_ID }}
-          r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          r2-bucket: cdn-assets
+          r2-account-id: ${{ env.R2_ACCOUNT_ID }}
+          r2-access-key-id: ${{ env.R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ env.R2_SECRET_ACCESS_KEY }}
+          r2-bucket: ${{ env.R2_BUCKET }}
           source-dir: packages/widget/dist
           destination-dir: persona/latest
           keep-file-fresh: true
+
+      - name: Summary
+        run: |
+          echo "## R2 CDN Upload Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Bucket:** \`${{ env.R2_BUCKET }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Uploaded Paths" >> $GITHUB_STEP_SUMMARY
+          echo "- \`persona/${{ steps.version.outputs.version }}/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`persona/latest/\`" >> $GITHUB_STEP_SUMMARY
