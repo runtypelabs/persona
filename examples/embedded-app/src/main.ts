@@ -87,6 +87,7 @@ const launcherController = initAgentWidget({
 const openButton = document.getElementById('open-chat')
 const toggleButton = document.getElementById('toggle-chat')
 const loadMessagesButton = document.getElementById('load-messages')
+const targetWidgetSelect = document.getElementById('target-widget') as HTMLSelectElement | null
 
 if (openButton) {
   openButton.addEventListener('click', () => launcherController.open())
@@ -98,8 +99,13 @@ if (loadMessagesButton) {
   loadMessagesButton.addEventListener('click', () => {
     const messageCount = 1000;
     const chunksPerMessage = 5;
-    const target = inlineController;
+    const isLauncher = targetWidgetSelect?.value === 'launcher';
+    const target = isLauncher ? launcherController : inlineController;
     const baseTime = Date.now() - messageCount * 1000;
+
+    if (isLauncher) {
+      launcherController.open();
+    }
 
     // Build all messages up front, then inject in a single batch (one sort + one render)
     const batch: Array<{ role: 'user' | 'assistant'; content: string; createdAt: string }> = [];
@@ -165,8 +171,9 @@ if (loadMessagesButton) {
       payload: { type: 'flow_complete', messageCount }
     });
 
-    console.log('[Demo] Batch injected', messageCount, 'messages + events');
-    loadMessagesButton.textContent = `Loaded ${messageCount} messages + events!`;
+    const targetName = targetWidgetSelect?.value === 'launcher' ? 'launcher' : 'inline';
+    console.log(`[Demo] Batch injected ${messageCount} messages + events into ${targetName} widget`);
+    loadMessagesButton.textContent = `Loaded into ${targetName}!`;
     setTimeout(() => { loadMessagesButton.textContent = 'Load 1000 Messages'; }, 2000);
   });
 }
