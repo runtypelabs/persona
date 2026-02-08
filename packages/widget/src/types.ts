@@ -355,6 +355,8 @@ export type AgentWidgetControllerEventMap = {
   "widget:state": AgentWidgetStateSnapshot;
   "message:feedback": AgentWidgetMessageFeedback;
   "message:copy": AgentWidgetMessage;
+  "eventStream:opened": { timestamp: number };
+  "eventStream:closed": { timestamp: number };
 };
 
 export type AgentWidgetFeatureFlags = {

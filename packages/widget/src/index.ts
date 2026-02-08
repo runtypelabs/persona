@@ -67,7 +67,9 @@ export type {
   AgentMessageMetadata,
   AgentWidgetAgentRequestPayload,
   // Event stream types
-  SSEEventRecord
+  SSEEventRecord,
+  // Controller event map
+  AgentWidgetControllerEventMap
 } from "./types";
 
 export { initAgentWidgetFn as initAgentWidget };

@@ -208,6 +208,12 @@ type Controller = {
   submitNPSFeedback: (rating: number, comment?: string) => Promise<void>;
   /** Push a raw event into the event stream buffer (for testing/debugging) */
   __pushEventStreamEvent: (event: { type: string; payload: unknown }) => void;
+  /** Opens the event stream panel */
+  showEventStream: () => void;
+  /** Closes the event stream panel */
+  hideEventStream: () => void;
+  /** Returns current visibility state of the event stream panel */
+  isEventStreamVisible: () => boolean;
 };
 
 const buildPostprocessor = (
@@ -416,8 +422,8 @@ export const createAgentExperience = (
   let showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
   const persistKeyPrefix = (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
   const eventStreamDbName = `${persistKeyPrefix}event-stream`;
-  const eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
-  const eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(500, eventStreamStore) : null;
+  let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
+  let eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(500, eventStreamStore) : null;
   let eventStreamView: ReturnType<typeof createEventStreamView> | null = null;
   let eventStreamVisible = false;
   let eventStreamRAF: number | null = null;
@@ -544,6 +550,56 @@ export const createAgentExperience = (
     }
   }
 
+  // Event stream toggle functions (lifted to outer scope for controller access)
+  const toggleEventStreamOn = () => {
+    if (!eventStreamBuffer) return;
+    eventStreamVisible = true;
+    if (!eventStreamView && eventStreamBuffer) {
+      eventStreamView = createEventStreamView(eventStreamBuffer, () => eventStreamBuffer!.getAllFromStore());
+    }
+    if (eventStreamView) {
+      body.style.display = "none";
+      footer.parentNode?.insertBefore(eventStreamView.element, footer);
+      eventStreamView.update();
+    }
+    if (eventStreamToggleBtn) {
+      eventStreamToggleBtn.classList.remove("tvw-text-cw-muted");
+      eventStreamToggleBtn.classList.add("tvw-text-cw-accent");
+    }
+    // Start RAF-based update loop (throttled to ~200ms)
+    const rafLoop = () => {
+      if (!eventStreamVisible) return;
+      const now = Date.now();
+      if (now - eventStreamLastUpdate >= 200) {
+        eventStreamView?.update();
+        eventStreamLastUpdate = now;
+      }
+      eventStreamRAF = requestAnimationFrame(rafLoop);
+    };
+    eventStreamLastUpdate = 0;
+    eventStreamRAF = requestAnimationFrame(rafLoop);
+    eventBus.emit("eventStream:opened", { timestamp: Date.now() });
+  };
+
+  const toggleEventStreamOff = () => {
+    if (!eventStreamVisible) return;
+    eventStreamVisible = false;
+    if (eventStreamView) {
+      eventStreamView.element.remove();
+    }
+    body.style.display = "";
+    if (eventStreamToggleBtn) {
+      eventStreamToggleBtn.classList.remove("tvw-text-cw-accent");
+      eventStreamToggleBtn.classList.add("tvw-text-cw-muted");
+    }
+    // Cancel RAF update loop
+    if (eventStreamRAF !== null) {
+      cancelAnimationFrame(eventStreamRAF);
+      eventStreamRAF = null;
+    }
+    eventBus.emit("eventStream:closed", { timestamp: Date.now() });
+  };
+
   // Event stream toggle button
   let eventStreamToggleBtn: HTMLButtonElement | null = null;
   if (showEventStreamToggle) {
@@ -566,56 +622,11 @@ export const createAgentExperience = (
       header.appendChild(eventStreamToggleBtn);
     }
 
-    const showEventStream = () => {
-      eventStreamVisible = true;
-      if (!eventStreamView && eventStreamBuffer) {
-        eventStreamView = createEventStreamView(eventStreamBuffer, () => eventStreamBuffer.getAllFromStore());
-      }
-      if (eventStreamView) {
-        body.style.display = "none";
-        footer.parentNode?.insertBefore(eventStreamView.element, footer);
-        eventStreamView.update();
-      }
-      if (eventStreamToggleBtn) {
-        eventStreamToggleBtn.classList.remove("tvw-text-cw-muted");
-        eventStreamToggleBtn.classList.add("tvw-text-cw-accent");
-      }
-      // Start RAF-based update loop (throttled to ~200ms)
-      const rafLoop = () => {
-        if (!eventStreamVisible) return;
-        const now = Date.now();
-        if (now - eventStreamLastUpdate >= 200) {
-          eventStreamView?.update();
-          eventStreamLastUpdate = now;
-        }
-        eventStreamRAF = requestAnimationFrame(rafLoop);
-      };
-      eventStreamLastUpdate = 0;
-      eventStreamRAF = requestAnimationFrame(rafLoop);
-    };
-
-    const hideEventStream = () => {
-      eventStreamVisible = false;
-      if (eventStreamView) {
-        eventStreamView.element.remove();
-      }
-      body.style.display = "";
-      if (eventStreamToggleBtn) {
-        eventStreamToggleBtn.classList.remove("tvw-text-cw-accent");
-        eventStreamToggleBtn.classList.add("tvw-text-cw-muted");
-      }
-      // Cancel RAF update loop
-      if (eventStreamRAF !== null) {
-        cancelAnimationFrame(eventStreamRAF);
-        eventStreamRAF = null;
-      }
-    };
-
     eventStreamToggleBtn.addEventListener("click", () => {
       if (eventStreamVisible) {
-        hideEventStream();
+        toggleEventStreamOff();
       } else {
-        showEventStream();
+        toggleEventStreamOn();
       }
     });
   }
@@ -1788,7 +1799,7 @@ export const createAgentExperience = (
   // Wire up event stream buffer to capture SSE events
   if (eventStreamBuffer) {
     session.setSSEEventCallback((type: string, payload: unknown) => {
-      eventStreamBuffer.push({
+      eventStreamBuffer?.push({
         id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         type,
         timestamp: Date.now(),
@@ -2435,7 +2446,64 @@ export const createAgentExperience = (
       autoExpand = config.launcher?.autoExpand ?? false;
       showReasoning = config.features?.showReasoning ?? true;
       showToolCalls = config.features?.showToolCalls ?? true;
+      const prevShowEventStreamToggle = showEventStreamToggle;
       showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
+
+      // Handle dynamic event stream feature flag toggling
+      if (showEventStreamToggle && !prevShowEventStreamToggle) {
+        // Flag changed from false to true - create buffer/store if needed
+        if (!eventStreamBuffer) {
+          eventStreamStore = new EventStreamStore(eventStreamDbName);
+          eventStreamBuffer = new EventStreamBuffer(500, eventStreamStore);
+          eventStreamStore.open().then(() => eventStreamBuffer?.restore()).catch(() => {});
+          // Register the SSE event callback
+          session.setSSEEventCallback((type: string, payload: unknown) => {
+            eventStreamBuffer!.push({
+              id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              type,
+              timestamp: Date.now(),
+              payload: JSON.stringify(payload)
+            });
+          });
+        }
+        // Add header toggle button if not present
+        if (!eventStreamToggleBtn && header) {
+          eventStreamToggleBtn = createElement("button", "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-p-1") as HTMLButtonElement;
+          eventStreamToggleBtn.style.width = "28px";
+          eventStreamToggleBtn.style.height = "28px";
+          eventStreamToggleBtn.type = "button";
+          eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
+          eventStreamToggleBtn.title = "Event Stream";
+          const activityIcon = renderLucideIcon("activity", "18px", "", 1);
+          if (activityIcon) eventStreamToggleBtn.appendChild(activityIcon);
+          const clearChatWrapper = panelElements.clearChatButtonWrapper;
+          const closeWrapper = panelElements.closeButtonWrapper;
+          const insertBefore = clearChatWrapper || closeWrapper;
+          if (insertBefore && insertBefore.parentNode === header) {
+            header.insertBefore(eventStreamToggleBtn, insertBefore);
+          } else {
+            header.appendChild(eventStreamToggleBtn);
+          }
+          eventStreamToggleBtn.addEventListener("click", () => {
+            if (eventStreamVisible) {
+              toggleEventStreamOff();
+            } else {
+              toggleEventStreamOn();
+            }
+          });
+        }
+      } else if (!showEventStreamToggle && prevShowEventStreamToggle) {
+        // Flag changed from true to false - hide and clean up
+        toggleEventStreamOff();
+        if (eventStreamToggleBtn) {
+          eventStreamToggleBtn.remove();
+          eventStreamToggleBtn = null;
+        }
+        eventStreamBuffer?.clear();
+        eventStreamStore?.destroy();
+        eventStreamBuffer = null;
+        eventStreamStore = null;
+      }
 
       if (config.launcher?.enabled === false && launcherButtonInstance) {
         launcherButtonInstance.destroy();
@@ -3713,6 +3781,17 @@ export const createAgentExperience = (
         });
       }
     },
+    showEventStream(): void {
+      if (!showEventStreamToggle || !eventStreamBuffer) return;
+      toggleEventStreamOn();
+    },
+    hideEventStream(): void {
+      if (!eventStreamVisible) return;
+      toggleEventStreamOff();
+    },
+    isEventStreamVisible(): boolean {
+      return eventStreamVisible;
+    },
     getMessages() {
       return session.getMessages();
     },
@@ -3842,6 +3921,31 @@ export const createAgentExperience = (
       if ((window as any).AgentWidgetBrowser === debugApi) {
         (window as any).AgentWidgetBrowser = previousDebug;
       }
+    });
+  }
+
+  // ============================================================================
+  // INSTANCE-SCOPED WINDOW EVENTS FOR PROGRAMMATIC CONTROL
+  // ============================================================================
+  if (showEventStreamToggle && typeof window !== "undefined") {
+    const instanceId = mount.id || "persona-" + Math.random().toString(36).slice(2, 8);
+    const handleShowEvent = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.showEventStream();
+      }
+    };
+    const handleHideEvent = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.hideEventStream();
+      }
+    };
+    window.addEventListener("persona:showEventStream", handleShowEvent);
+    window.addEventListener("persona:hideEventStream", handleHideEvent);
+    destroyCallbacks.push(() => {
+      window.removeEventListener("persona:showEventStream", handleShowEvent);
+      window.removeEventListener("persona:hideEventStream", handleHideEvent);
     });
   }
 
