@@ -62,7 +62,10 @@ function renderEventRow(event: SSEEventRecord): HTMLElement {
   return row;
 }
 
-export function createEventStreamView(buffer: EventStreamBuffer): {
+export function createEventStreamView(
+  buffer: EventStreamBuffer,
+  getFullHistory?: () => Promise<SSEEventRecord[]>
+): {
   element: HTMLElement;
   update: () => void;
   destroy: () => void;
@@ -188,8 +191,28 @@ export function createEventStreamView(buffer: EventStreamBuffer): {
   }
 
   // Event handlers
-  const handleCopyAll = () => {
-    navigator.clipboard.writeText(JSON.stringify(buffer.getAll(), null, 2));
+  const handleCopyAll = async () => {
+    const originalText = copyAllBtn.textContent;
+    copyAllBtn.textContent = "Copying...";
+    copyAllBtn.disabled = true;
+
+    try {
+      const allEvents = getFullHistory
+        ? await getFullHistory()
+        : buffer.getAll();
+      await navigator.clipboard.writeText(JSON.stringify(allEvents, null, 2));
+      copyAllBtn.textContent = "Copied!";
+      setTimeout(() => {
+        copyAllBtn.textContent = originalText;
+        copyAllBtn.disabled = false;
+      }, 1500);
+    } catch {
+      copyAllBtn.textContent = "Failed";
+      setTimeout(() => {
+        copyAllBtn.textContent = originalText;
+        copyAllBtn.disabled = false;
+      }, 1500);
+    }
   };
 
   const handleClear = () => {

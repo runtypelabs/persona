@@ -1,4 +1,5 @@
 import type { SSEEventRecord } from "../types";
+import type { EventStreamStore } from "./event-stream-store";
 
 export class EventStreamBuffer {
   private buffer: SSEEventRecord[];
@@ -7,10 +8,12 @@ export class EventStreamBuffer {
   private totalCaptured = 0;
   private eventTypesSet = new Set<string>();
   private readonly maxSize: number;
+  private readonly store: EventStreamStore | null;
 
-  constructor(maxSize = 500) {
+  constructor(maxSize = 500, store: EventStreamStore | null = null) {
     this.maxSize = maxSize;
     this.buffer = new Array(maxSize);
+    this.store = store;
   }
 
   push(event: SSEEventRecord): void {
@@ -21,6 +24,7 @@ export class EventStreamBuffer {
     }
     this.totalCaptured++;
     this.eventTypesSet.add(event.type);
+    this.store?.put(event);
   }
 
   getAll(): SSEEventRecord[] {
@@ -33,6 +37,13 @@ export class EventStreamBuffer {
       ...this.buffer.slice(this.head, this.maxSize),
       ...this.buffer.slice(0, this.head)
     ];
+  }
+
+  getAllFromStore(): Promise<SSEEventRecord[]> {
+    if (this.store) {
+      return this.store.getAll();
+    }
+    return Promise.resolve(this.getAll());
   }
 
   getRecent(count: number): SSEEventRecord[] {
@@ -59,6 +70,11 @@ export class EventStreamBuffer {
     this.count = 0;
     this.totalCaptured = 0;
     this.eventTypesSet.clear();
+    this.store?.clear();
+  }
+
+  destroy(): void {
+    this.store?.destroy();
   }
 
   getEventTypes(): string[] {

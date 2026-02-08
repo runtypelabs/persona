@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { EventStreamBuffer } from "./event-stream-buffer";
+import type { EventStreamStore } from "./event-stream-store";
 import type { SSEEventRecord } from "../types";
 
 function makeEvent(type: string, index: number): SSEEventRecord {
@@ -9,6 +10,20 @@ function makeEvent(type: string, index: number): SSEEventRecord {
     timestamp: 1000 + index,
     payload: JSON.stringify({ index })
   };
+}
+
+function createMockStore(): EventStreamStore {
+  const events: SSEEventRecord[] = [];
+  return {
+    open: vi.fn().mockResolvedValue(undefined),
+    put: vi.fn((event: SSEEventRecord) => { events.push(event); }),
+    putBatch: vi.fn((batch: SSEEventRecord[]) => { events.push(...batch); }),
+    getAll: vi.fn(() => Promise.resolve([...events])),
+    getCount: vi.fn(() => Promise.resolve(events.length)),
+    clear: vi.fn(() => { events.length = 0; return Promise.resolve(); }),
+    close: vi.fn(),
+    destroy: vi.fn().mockResolvedValue(undefined),
+  } as unknown as EventStreamStore;
 }
 
 describe("EventStreamBuffer", () => {
@@ -109,5 +124,54 @@ describe("EventStreamBuffer", () => {
     expect(buf.getSize()).toBe(500);
     expect(buf.getTotalCaptured()).toBe(600);
     expect(buf.getEvictedCount()).toBe(100);
+  });
+
+  it("should forward push to store when store is provided", () => {
+    const store = createMockStore();
+    const buf = new EventStreamBuffer(10, store);
+    const evt = makeEvent("a", 1);
+    buf.push(evt);
+    expect(store.put).toHaveBeenCalledWith(evt);
+  });
+
+  it("should not call store when store is null", () => {
+    const buf = new EventStreamBuffer(10, null);
+    // Should not throw
+    buf.push(makeEvent("a", 1));
+    buf.clear();
+    buf.destroy();
+  });
+
+  it("should forward clear to store", () => {
+    const store = createMockStore();
+    const buf = new EventStreamBuffer(10, store);
+    buf.push(makeEvent("a", 1));
+    buf.clear();
+    expect(store.clear).toHaveBeenCalled();
+  });
+
+  it("should forward destroy to store", () => {
+    const store = createMockStore();
+    const buf = new EventStreamBuffer(10, store);
+    buf.destroy();
+    expect(store.destroy).toHaveBeenCalled();
+  });
+
+  it("should return store events from getAllFromStore when store exists", async () => {
+    const store = createMockStore();
+    const buf = new EventStreamBuffer(3, store);
+    const events = [makeEvent("a", 1), makeEvent("b", 2), makeEvent("c", 3)];
+    for (const e of events) buf.push(e);
+    const result = await buf.getAllFromStore();
+    expect(store.getAll).toHaveBeenCalled();
+    expect(result).toEqual(events);
+  });
+
+  it("should fall back to ring buffer in getAllFromStore when no store", async () => {
+    const buf = new EventStreamBuffer(10, null);
+    const events = [makeEvent("a", 1), makeEvent("b", 2)];
+    for (const e of events) buf.push(e);
+    const result = await buf.getAllFromStore();
+    expect(result).toEqual(events);
   });
 });

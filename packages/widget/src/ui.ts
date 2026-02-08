@@ -39,6 +39,7 @@ import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
 import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
+import { EventStreamStore } from "./utils/event-stream-store";
 import { createEventStreamView } from "./components/event-stream-view";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
@@ -407,11 +408,17 @@ export const createAgentExperience = (
   let showReasoning = config.features?.showReasoning ?? true;
   let showToolCalls = config.features?.showToolCalls ?? true;
   let showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
-  const eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(500) : null;
+  const eventStreamStore = showEventStreamToggle ? new EventStreamStore() : null;
+  const eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(500, eventStreamStore) : null;
   let eventStreamView: ReturnType<typeof createEventStreamView> | null = null;
   let eventStreamVisible = false;
   let eventStreamInterval: ReturnType<typeof setInterval> | null = null;
-  
+
+  // Open IndexedDB store asynchronously (non-blocking)
+  eventStreamStore?.open().catch(err => {
+    if (config.debug) console.warn('[AgentWidget] IndexedDB not available for event stream:', err);
+  });
+
   // Create message action callbacks that emit events and optionally send to API
   const messageActionCallbacks: MessageActionCallbacks = {
     onCopy: (message: AgentWidgetMessage) => {
@@ -551,7 +558,7 @@ export const createAgentExperience = (
     const showEventStream = () => {
       eventStreamVisible = true;
       if (!eventStreamView && eventStreamBuffer) {
-        eventStreamView = createEventStreamView(eventStreamBuffer);
+        eventStreamView = createEventStreamView(eventStreamBuffer, () => eventStreamBuffer.getAllFromStore());
       }
       if (eventStreamView) {
         body.style.display = "none";
@@ -972,6 +979,7 @@ export const createAgentExperience = (
       eventStreamView?.destroy();
       eventStreamView = null;
       eventStreamBuffer?.clear();
+      eventStreamStore?.destroy();
     });
   }
 
@@ -3551,6 +3559,9 @@ export const createAgentExperience = (
       }
       persistentMetadata = {};
       actionManager.syncFromMetadata();
+
+      // Clear event stream store
+      eventStreamStore?.clear();
     },
     setMessage(message: string): boolean {
       if (!textarea) return false;
