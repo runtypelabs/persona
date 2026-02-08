@@ -39,6 +39,30 @@ export class EventStreamBuffer {
     ];
   }
 
+  async restore(): Promise<number> {
+    if (!this.store) return 0;
+    const events = await this.store.getAll();
+    if (events.length === 0) return 0;
+
+    // Take the most recent maxSize events (store returns sorted by timestamp)
+    const toLoad = events.length > this.maxSize
+      ? events.slice(events.length - this.maxSize)
+      : events;
+
+    // Populate the ring buffer without writing back to the store
+    for (const event of toLoad) {
+      this.buffer[this.head] = event;
+      this.head = (this.head + 1) % this.maxSize;
+      if (this.count < this.maxSize) {
+        this.count++;
+      }
+      this.eventTypesSet.add(event.type);
+    }
+    this.totalCaptured = events.length;
+
+    return toLoad.length;
+  }
+
   getAllFromStore(): Promise<SSEEventRecord[]> {
     if (this.store) {
       return this.store.getAll();

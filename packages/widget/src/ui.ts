@@ -423,8 +423,10 @@ export const createAgentExperience = (
   let eventStreamRAF: number | null = null;
   let eventStreamLastUpdate = 0;
 
-  // Open IndexedDB store asynchronously (non-blocking)
-  eventStreamStore?.open().catch(err => {
+  // Open IndexedDB store and restore persisted events into the buffer
+  eventStreamStore?.open().then(() => {
+    return eventStreamBuffer?.restore();
+  }).catch(err => {
     if (config.debug) console.warn('[AgentWidget] IndexedDB not available for event stream:', err);
   });
 
@@ -2379,6 +2381,10 @@ export const createAgentExperience = (
       }
       persistentMetadata = {};
       actionManager.syncFromMetadata();
+
+      // Clear event stream buffer and store
+      eventStreamBuffer?.clear();
+      eventStreamView?.update();
     });
   };
 
@@ -3577,8 +3583,9 @@ export const createAgentExperience = (
       persistentMetadata = {};
       actionManager.syncFromMetadata();
 
-      // Clear event stream store
-      eventStreamStore?.clear();
+      // Clear event stream buffer and store
+      eventStreamBuffer?.clear();
+      eventStreamView?.update();
     },
     setMessage(message: string): boolean {
       if (!textarea) return false;
