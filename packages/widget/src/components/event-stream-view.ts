@@ -303,11 +303,12 @@ export function createEventStreamView(
 
   function updateFilterOptions() {
     const allEvents = buffer.getAll();
-    const types = buffer.getEventTypes();
     const typeCounts: Record<string, number> = {};
     for (const e of allEvents) {
       typeCounts[e.type] = (typeCounts[e.type] || 0) + 1;
     }
+    // Derive types from actual buffer contents (not the stale eventTypesSet)
+    const types = Object.keys(typeCounts).sort();
 
     // Check if types or counts have changed
     const typesChanged = types.length !== lastKnownTypes.length || !types.every((t, i) => t === lastKnownTypes[i]);
@@ -335,7 +336,13 @@ export function createEventStreamView(
         opt.textContent = `${type} (${typeCounts[type] || 0})`;
         filterSelect.appendChild(opt);
       }
-      filterSelect.value = currentValue;
+      // Reset to "All Events" if the previously selected type was evicted
+      if (currentValue && types.includes(currentValue)) {
+        filterSelect.value = currentValue;
+      } else if (currentValue) {
+        filterSelect.value = "";
+        selectedType = "";
+      }
     } else {
       // Just update counts on existing options
       for (let i = 1; i < filterSelect.options.length; i++) {
