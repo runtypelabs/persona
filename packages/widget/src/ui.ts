@@ -557,7 +557,7 @@ export const createAgentExperience = (
     if (!eventStreamBuffer) return;
     eventStreamVisible = true;
     if (!eventStreamView && eventStreamBuffer) {
-      eventStreamView = createEventStreamView(eventStreamBuffer, () => eventStreamBuffer!.getAllFromStore());
+      eventStreamView = createEventStreamView(eventStreamBuffer, () => eventStreamBuffer!.getAllFromStore(), () => toggleEventStreamOff());
     }
     if (eventStreamView) {
       body.style.display = "none";

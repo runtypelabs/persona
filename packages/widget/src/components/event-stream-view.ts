@@ -55,8 +55,47 @@ function renderEventRow(event: SSEEventRecord): HTMLElement {
   );
   const clipIcon = renderLucideIcon("clipboard", "12px", "currentColor", 1.5);
   if (clipIcon) copyBtn.appendChild(clipIcon);
-  copyBtn.addEventListener("click", () => {
-    navigator.clipboard.writeText(event.payload);
+  copyBtn.addEventListener("click", async () => {
+    // Format as structured JSON with parsed payload
+    let formattedPayload: unknown;
+    try {
+      formattedPayload = JSON.parse(event.payload);
+    } catch {
+      formattedPayload = event.payload;
+    }
+    const formatted = JSON.stringify(
+      {
+        type: event.type,
+        timestamp: new Date(event.timestamp).toISOString(),
+        payload: formattedPayload,
+      },
+      null,
+      2
+    );
+
+    try {
+      await navigator.clipboard.writeText(formatted);
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement("textarea");
+      textarea.value = formatted;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
+
+    // Visual feedback: swap icon to checkmark
+    copyBtn.innerHTML = "";
+    const checkIcon = renderLucideIcon("check", "12px", "currentColor", 1.5);
+    if (checkIcon) copyBtn.appendChild(checkIcon);
+    setTimeout(() => {
+      copyBtn.innerHTML = "";
+      const restoreIcon = renderLucideIcon("clipboard", "12px", "currentColor", 1.5);
+      if (restoreIcon) copyBtn.appendChild(restoreIcon);
+    }, 1500);
   });
 
   topRow.appendChild(badge);
@@ -85,7 +124,8 @@ function renderEventRow(event: SSEEventRecord): HTMLElement {
 
 export function createEventStreamView(
   buffer: EventStreamBuffer,
-  getFullHistory?: () => Promise<SSEEventRecord[]>
+  getFullHistory?: () => Promise<SSEEventRecord[]>,
+  onClose?: () => void
 ): {
   element: HTMLElement;
   update: () => void;
@@ -106,19 +146,37 @@ export function createEventStreamView(
   const filterSelect = createElement(
     "select",
     "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-text-cw-primary"
-  );
-  const allOption = createElement("option", "");
+  ) as HTMLSelectElement;
+  const allOption = createElement("option", "") as HTMLOptionElement;
   allOption.value = "";
   allOption.textContent = "All Events";
   filterSelect.appendChild(allOption);
 
-  // Search input
+  // Search input wrapper (relative for clear button positioning)
+  const searchWrapper = createElement(
+    "div",
+    "tvw-relative tvw-flex-1 tvw-min-w-0"
+  );
+
   const searchInput = createElement(
     "input",
-    "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-flex-1 tvw-min-w-0 tvw-text-cw-primary"
+    "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-w-full tvw-text-cw-primary tvw-pr-6"
   ) as HTMLInputElement;
   searchInput.type = "text";
   searchInput.placeholder = "Search events...";
+
+  // Clear search button
+  const searchClearBtn = createElement(
+    "button",
+    "tvw-absolute tvw-right-1 tvw-top-1/2 tvw--translate-y-1/2 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-0 tvw-leading-none"
+  ) as HTMLButtonElement;
+  searchClearBtn.type = "button";
+  searchClearBtn.style.display = "none";
+  const clearSearchIcon = renderLucideIcon("x", "12px", "currentColor", 2);
+  if (clearSearchIcon) searchClearBtn.appendChild(clearSearchIcon);
+
+  searchWrapper.appendChild(searchInput);
+  searchWrapper.appendChild(searchClearBtn);
 
   const iconBtnClass =
     "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded tvw-text-cw-muted hover:tvw-bg-cw-container hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-flex-shrink-0 tvw-p-1";
@@ -148,7 +206,7 @@ export function createEventStreamView(
   if (clearIcon) clearBtn.appendChild(clearIcon);
 
   toolbar.appendChild(filterSelect);
-  toolbar.appendChild(searchInput);
+  toolbar.appendChild(searchWrapper);
   toolbar.appendChild(copyAllBtn);
   toolbar.appendChild(clearBtn);
 
@@ -182,9 +240,18 @@ export function createEventStreamView(
   const indicatorText = createElement("span", "");
   scrollIndicator.appendChild(indicatorText);
 
+  // No matching events message
+  const noResultsMsg = createElement(
+    "div",
+    "tvw-flex tvw-items-center tvw-justify-center tvw-h-full tvw-text-sm tvw-text-cw-muted"
+  );
+  noResultsMsg.style.display = "none";
+
   eventsListWrapper.appendChild(eventsList);
+  eventsListWrapper.appendChild(noResultsMsg);
   eventsListWrapper.appendChild(scrollIndicator);
 
+  container.setAttribute("tabindex", "0");
   container.appendChild(toolbar);
   container.appendChild(truncationBanner);
   container.appendChild(eventsListWrapper);
@@ -228,42 +295,74 @@ export function createEventStreamView(
 
   // Track last known event types for filter update
   let lastKnownTypes: string[] = [];
+  let lastTypeCounts: Record<string, number> = {};
   let lastFilteredCount = 0;
+  let selectedType = "";
+  let searchTerm = "";
+  let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function updateFilterOptions() {
+    const allEvents = buffer.getAll();
     const types = buffer.getEventTypes();
-    if (types.length === lastKnownTypes.length && types.every((t, i) => t === lastKnownTypes[i])) {
-      return;
+    const typeCounts: Record<string, number> = {};
+    for (const e of allEvents) {
+      typeCounts[e.type] = (typeCounts[e.type] || 0) + 1;
     }
+
+    // Check if types or counts have changed
+    const typesChanged = types.length !== lastKnownTypes.length || !types.every((t, i) => t === lastKnownTypes[i]);
+    const countsChanged = !typesChanged && types.some(t => typeCounts[t] !== lastTypeCounts[t]);
+    const totalChanged = allEvents.length !== Object.values(lastTypeCounts).reduce((a, b) => a + b, 0);
+
+    if (!typesChanged && !countsChanged && !totalChanged) return;
+
     lastKnownTypes = types;
+    lastTypeCounts = typeCounts;
+
     const currentValue = filterSelect.value;
-    while (filterSelect.options.length > 1) {
-      filterSelect.remove(1);
+
+    // Update "All Events" option with count
+    filterSelect.options[0].textContent = `All Events (${allEvents.length})`;
+
+    // Rebuild type options if types changed
+    if (typesChanged) {
+      while (filterSelect.options.length > 1) {
+        filterSelect.remove(1);
+      }
+      for (const type of types) {
+        const opt = createElement("option", "") as HTMLOptionElement;
+        opt.value = type;
+        opt.textContent = `${type} (${typeCounts[type] || 0})`;
+        filterSelect.appendChild(opt);
+      }
+      filterSelect.value = currentValue;
+    } else {
+      // Just update counts on existing options
+      for (let i = 1; i < filterSelect.options.length; i++) {
+        const opt = filterSelect.options[i];
+        opt.textContent = `${opt.value} (${typeCounts[opt.value] || 0})`;
+      }
     }
-    for (const type of types) {
-      const opt = createElement("option", "");
-      opt.value = type;
-      opt.textContent = type;
-      filterSelect.appendChild(opt);
-    }
-    filterSelect.value = currentValue;
   }
 
   function getFilteredEvents(): SSEEventRecord[] {
     let events = buffer.getAll();
-    const filterType = filterSelect.value;
-    const searchTerm = searchInput.value.toLowerCase();
-    if (filterType) {
-      events = events.filter((e) => e.type === filterType);
+    if (selectedType) {
+      events = events.filter((e) => e.type === selectedType);
     }
     if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
       events = events.filter(
         (e) =>
-          e.type.toLowerCase().includes(searchTerm) ||
-          e.payload.toLowerCase().includes(searchTerm)
+          e.type.toLowerCase().includes(lower) ||
+          e.payload.toLowerCase().includes(lower)
       );
     }
     return events;
+  }
+
+  function hasActiveFilters(): boolean {
+    return selectedType !== "" || searchTerm !== "";
   }
 
   function update() {
@@ -280,6 +379,26 @@ export function createEventStreamView(
 
     filteredEvents = getFilteredEvents();
     const newCount = filteredEvents.length;
+    const bufferHasEvents = buffer.getSize() > 0;
+
+    // Show/hide no-results message
+    if (newCount === 0 && bufferHasEvents && hasActiveFilters()) {
+      noResultsMsg.textContent = searchTerm
+        ? `No events matching '${searchTerm}'`
+        : "No events matching filter";
+      noResultsMsg.style.display = "";
+      eventsList.style.display = "none";
+    } else {
+      noResultsMsg.style.display = "none";
+      eventsList.style.display = "";
+    }
+
+    // Update Copy All button title based on active filters
+    if (hasActiveFilters()) {
+      copyAllBtn.title = `Copy Filtered (${newCount})`;
+    } else {
+      copyAllBtn.title = "Copy All";
+    }
 
     // Track new events since user scrolled up
     if (userScrolledUp && newCount > lastFilteredCount) {
@@ -314,10 +433,17 @@ export function createEventStreamView(
     copyAllBtn.disabled = true;
 
     try {
-      const allEvents = getFullHistory
-        ? await getFullHistory()
-        : buffer.getAll();
-      await navigator.clipboard.writeText(JSON.stringify(allEvents, null, 2));
+      let events: SSEEventRecord[];
+      if (hasActiveFilters()) {
+        // With filters active: copy only the filtered events from ring buffer
+        events = filteredEvents;
+      } else {
+        // No filters: copy full history from IndexedDB if available
+        events = getFullHistory
+          ? await getFullHistory()
+          : buffer.getAll();
+      }
+      await navigator.clipboard.writeText(JSON.stringify(events, null, 2));
       swapCopyAllIcon("check", 1500);
     } catch {
       swapCopyAllIcon("x", 1500);
@@ -334,6 +460,7 @@ export function createEventStreamView(
   };
 
   const handleFilterChange = () => {
+    selectedType = filterSelect.value;
     lastFilteredCount = 0;
     newEventsSincePause = 0;
     userScrolledUp = false;
@@ -341,6 +468,24 @@ export function createEventStreamView(
     update();
   };
   const handleSearchInput = () => {
+    // Show/hide clear button based on input content
+    searchClearBtn.style.display = searchInput.value ? "" : "none";
+    if (searchTimeout) clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      searchTerm = searchInput.value;
+      lastFilteredCount = 0;
+      newEventsSincePause = 0;
+      userScrolledUp = false;
+      scrollIndicator.style.display = "none";
+      update();
+    }, 150);
+  };
+
+  const handleSearchClear = () => {
+    searchInput.value = "";
+    searchTerm = "";
+    searchClearBtn.style.display = "none";
+    if (searchTimeout) clearTimeout(searchTimeout);
     lastFilteredCount = 0;
     newEventsSincePause = 0;
     userScrolledUp = false;
@@ -348,18 +493,49 @@ export function createEventStreamView(
     update();
   };
 
+  // Keyboard shortcuts
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const isMod = e.metaKey || e.ctrlKey;
+
+    // Ctrl/Cmd + F: focus search
+    if (isMod && e.key === "f") {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+      return;
+    }
+
+    // Escape handling
+    if (e.key === "Escape") {
+      if (document.activeElement === searchInput) {
+        // When search is focused: clear and blur
+        handleSearchClear();
+        searchInput.blur();
+        container.focus();
+      } else if (onClose) {
+        // When container is focused: close panel
+        onClose();
+      }
+    }
+  };
+
   copyAllBtn.addEventListener("click", handleCopyAll);
   clearBtn.addEventListener("click", handleClear);
   filterSelect.addEventListener("change", handleFilterChange);
   searchInput.addEventListener("input", handleSearchInput);
+  searchClearBtn.addEventListener("click", handleSearchClear);
+  container.addEventListener("keydown", handleKeyDown);
 
   function destroy() {
+    if (searchTimeout) clearTimeout(searchTimeout);
     scroller.destroy();
     eventsList.removeEventListener("scroll", handleListScroll);
     copyAllBtn.removeEventListener("click", handleCopyAll);
     clearBtn.removeEventListener("click", handleClear);
     filterSelect.removeEventListener("change", handleFilterChange);
     searchInput.removeEventListener("input", handleSearchInput);
+    searchClearBtn.removeEventListener("click", handleSearchClear);
+    container.removeEventListener("keydown", handleKeyDown);
   }
 
   return { element: container, update, destroy };
