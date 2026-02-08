@@ -420,7 +420,8 @@ export const createAgentExperience = (
   const eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(500, eventStreamStore) : null;
   let eventStreamView: ReturnType<typeof createEventStreamView> | null = null;
   let eventStreamVisible = false;
-  let eventStreamInterval: ReturnType<typeof setInterval> | null = null;
+  let eventStreamRAF: number | null = null;
+  let eventStreamLastUpdate = 0;
 
   // Open IndexedDB store asynchronously (non-blocking)
   eventStreamStore?.open().catch(err => {
@@ -577,10 +578,18 @@ export const createAgentExperience = (
         eventStreamToggleBtn.classList.remove("tvw-text-cw-muted");
         eventStreamToggleBtn.classList.add("tvw-text-cw-accent");
       }
-      // Start update interval
-      eventStreamInterval = setInterval(() => {
-        eventStreamView?.update();
-      }, 250);
+      // Start RAF-based update loop (throttled to ~200ms)
+      const rafLoop = () => {
+        if (!eventStreamVisible) return;
+        const now = Date.now();
+        if (now - eventStreamLastUpdate >= 200) {
+          eventStreamView?.update();
+          eventStreamLastUpdate = now;
+        }
+        eventStreamRAF = requestAnimationFrame(rafLoop);
+      };
+      eventStreamLastUpdate = 0;
+      eventStreamRAF = requestAnimationFrame(rafLoop);
     };
 
     const hideEventStream = () => {
@@ -593,10 +602,10 @@ export const createAgentExperience = (
         eventStreamToggleBtn.classList.remove("tvw-text-cw-accent");
         eventStreamToggleBtn.classList.add("tvw-text-cw-muted");
       }
-      // Clear update interval
-      if (eventStreamInterval) {
-        clearInterval(eventStreamInterval);
-        eventStreamInterval = null;
+      // Cancel RAF update loop
+      if (eventStreamRAF !== null) {
+        cancelAnimationFrame(eventStreamRAF);
+        eventStreamRAF = null;
       }
     };
 
@@ -980,9 +989,9 @@ export const createAgentExperience = (
   // Event stream cleanup
   if (showEventStreamToggle) {
     destroyCallbacks.push(() => {
-      if (eventStreamInterval) {
-        clearInterval(eventStreamInterval);
-        eventStreamInterval = null;
+      if (eventStreamRAF !== null) {
+        cancelAnimationFrame(eventStreamRAF);
+        eventStreamRAF = null;
       }
       eventStreamView?.destroy();
       eventStreamView = null;

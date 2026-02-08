@@ -1,5 +1,6 @@
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
+import { VirtualScroller } from "../utils/virtual-scroller";
 import type { EventStreamBuffer } from "../utils/event-stream-buffer";
 import type { SSEEventRecord } from "../types";
 
@@ -120,26 +121,91 @@ export function createEventStreamView(
   toolbar.appendChild(copyAllBtn);
   toolbar.appendChild(clearBtn);
 
-  // Events list
-  const eventsList = createElement(
+  // Truncation notice banner (above virtual scroller)
+  const truncationBanner = createElement(
     "div",
-    "tvw-event-stream-list tvw-flex-1 tvw-overflow-y-auto tvw-min-h-0"
+    "tvw-text-[10px] tvw-text-cw-muted tvw-text-center tvw-py-1 tvw-px-4 tvw-bg-cw-container tvw-border-b tvw-border-cw-divider tvw-italic tvw-flex-shrink-0"
+  );
+  truncationBanner.style.display = "none";
+
+  // Events list container (wraps virtual scroller + scroll-to-bottom indicator)
+  const eventsListWrapper = createElement(
+    "div",
+    "tvw-flex-1 tvw-min-h-0 tvw-relative"
   );
 
+  const eventsList = createElement(
+    "div",
+    "tvw-event-stream-list tvw-flex-1 tvw-overflow-y-auto tvw-min-h-0 tvw-relative"
+  );
+  eventsList.style.height = "100%";
+
+  // Scroll-to-bottom indicator
+  const scrollIndicator = createElement(
+    "div",
+    "tvw-absolute tvw-bottom-3 tvw-left-1/2 tvw-transform tvw--translate-x-1/2 tvw-bg-cw-accent tvw-text-white tvw-text-xs tvw-px-3 tvw-py-1.5 tvw-rounded-full tvw-cursor-pointer tvw-shadow-md tvw-z-10 tvw-flex tvw-items-center tvw-gap-1"
+  );
+  scrollIndicator.style.display = "none";
+  const arrowIcon = renderLucideIcon("arrow-down", "12px", "currentColor", 2);
+  if (arrowIcon) scrollIndicator.appendChild(arrowIcon);
+  const indicatorText = createElement("span", "");
+  scrollIndicator.appendChild(indicatorText);
+
+  eventsListWrapper.appendChild(eventsList);
+  eventsListWrapper.appendChild(scrollIndicator);
+
   container.appendChild(toolbar);
-  container.appendChild(eventsList);
+  container.appendChild(truncationBanner);
+  container.appendChild(eventsListWrapper);
+
+  // Virtual scroller state
+  let filteredEvents: SSEEventRecord[] = [];
+
+  const scroller = new VirtualScroller({
+    container: eventsList,
+    rowHeight: 40,
+    overscan: 5,
+    renderRow: (index: number) => {
+      const event = filteredEvents[index];
+      if (!event) return createElement("div", "");
+      return renderEventRow(event);
+    },
+  });
+
+  // Auto-scroll state
+  let userScrolledUp = false;
+  let newEventsSincePause = 0;
+
+  const handleListScroll = () => {
+    if (scroller.getIsAutoScrolling()) return;
+    if (scroller.isNearBottom()) {
+      userScrolledUp = false;
+      newEventsSincePause = 0;
+      scrollIndicator.style.display = "none";
+    } else {
+      userScrolledUp = true;
+    }
+  };
+  eventsList.addEventListener("scroll", handleListScroll);
+
+  scrollIndicator.addEventListener("click", () => {
+    scroller.scrollToBottom(true);
+    userScrolledUp = false;
+    newEventsSincePause = 0;
+    scrollIndicator.style.display = "none";
+  });
 
   // Track last known event types for filter update
   let lastKnownTypes: string[] = [];
+  let lastFilteredCount = 0;
 
   function updateFilterOptions() {
     const types = buffer.getEventTypes();
     if (types.length === lastKnownTypes.length && types.every((t, i) => t === lastKnownTypes[i])) {
-      return; // No change
+      return;
     }
     lastKnownTypes = types;
     const currentValue = filterSelect.value;
-    // Remove all options except "All Events"
     while (filterSelect.options.length > 1) {
       filterSelect.remove(1);
     }
@@ -172,21 +238,31 @@ export function createEventStreamView(
   function update() {
     updateFilterOptions();
 
-    // Check auto-scroll before updating: if scrolled to bottom (within 50px)
-    const wasAtBottom =
-      eventsList.scrollHeight - eventsList.scrollTop - eventsList.clientHeight < 50;
-
-    const events = getFilteredEvents();
-
-    // Simple DOM replacement
-    eventsList.innerHTML = "";
-    for (const event of events) {
-      eventsList.appendChild(renderEventRow(event));
+    // Update truncation banner
+    const evictedCount = buffer.getEvictedCount();
+    if (evictedCount > 0) {
+      truncationBanner.textContent = `${evictedCount} older events not shown in live view (available via Copy All)`;
+      truncationBanner.style.display = "";
+    } else {
+      truncationBanner.style.display = "none";
     }
 
-    // Auto-scroll if was at bottom
-    if (wasAtBottom) {
-      eventsList.scrollTop = eventsList.scrollHeight;
+    filteredEvents = getFilteredEvents();
+    const newCount = filteredEvents.length;
+
+    // Track new events since user scrolled up
+    if (userScrolledUp && newCount > lastFilteredCount) {
+      newEventsSincePause += newCount - lastFilteredCount;
+      indicatorText.textContent = `${newEventsSincePause} new event${newEventsSincePause === 1 ? "" : "s"}`;
+      scrollIndicator.style.display = "";
+    }
+    lastFilteredCount = newCount;
+
+    scroller.setTotalCount(filteredEvents.length);
+
+    // Auto-scroll if user hasn't scrolled up
+    if (!userScrolledUp) {
+      scroller.scrollToBottom();
     }
   }
 
@@ -217,11 +293,27 @@ export function createEventStreamView(
 
   const handleClear = () => {
     buffer.clear();
+    userScrolledUp = false;
+    newEventsSincePause = 0;
+    lastFilteredCount = 0;
+    scrollIndicator.style.display = "none";
     update();
   };
 
-  const handleFilterChange = () => update();
-  const handleSearchInput = () => update();
+  const handleFilterChange = () => {
+    lastFilteredCount = 0;
+    newEventsSincePause = 0;
+    userScrolledUp = false;
+    scrollIndicator.style.display = "none";
+    update();
+  };
+  const handleSearchInput = () => {
+    lastFilteredCount = 0;
+    newEventsSincePause = 0;
+    userScrolledUp = false;
+    scrollIndicator.style.display = "none";
+    update();
+  };
 
   copyAllBtn.addEventListener("click", handleCopyAll);
   clearBtn.addEventListener("click", handleClear);
@@ -229,6 +321,8 @@ export function createEventStreamView(
   searchInput.addEventListener("input", handleSearchInput);
 
   function destroy() {
+    scroller.destroy();
+    eventsList.removeEventListener("scroll", handleListScroll);
     copyAllBtn.removeEventListener("click", handleCopyAll);
     clearBtn.removeEventListener("click", handleClear);
     filterSelect.removeEventListener("change", handleFilterChange);
