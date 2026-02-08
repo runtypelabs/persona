@@ -70,6 +70,33 @@ launcherController.toggle();</code></pre>
       </p>
     </section>
     <section>
+      <h2>Event Stream Testing</h2>
+      <p>Test the event stream SDK methods, window events, and instance scoping.</p>
+      <h3>Controller Methods</h3>
+      <div class="cta-row">
+        <select id="event-stream-target">
+          <option value="inline">Inline Widget</option>
+          <option value="launcher">Launcher Widget</option>
+        </select>
+        <button id="es-show" type="button">Show Event Stream</button>
+        <button id="es-hide" type="button">Hide Event Stream</button>
+        <button id="es-check" type="button">Check Visibility</button>
+      </div>
+      <h3>Window Events</h3>
+      <div class="cta-row">
+        <button id="es-win-show-all" type="button">Show All (window)</button>
+        <button id="es-win-hide-all" type="button">Hide All (window)</button>
+        <button id="es-win-show-inline" type="button">Show Inline Only</button>
+        <button id="es-win-show-launcher" type="button">Show Launcher Only</button>
+        <button id="es-win-show-wrong" type="button">Show Wrong ID</button>
+      </div>
+      <h3>Event Listeners</h3>
+      <div class="cta-row">
+        <button id="es-listen" type="button">Register Listeners</button>
+      </div>
+      <div id="es-log" class="code-example" style="max-height:150px;overflow-y:auto;display:none"><pre id="es-log-pre"></pre></div>
+    </section>
+    <section>
       <h2>Inline Embed</h2>
       <div class="embedded-target" id="inline-widget"></div>
     </section>

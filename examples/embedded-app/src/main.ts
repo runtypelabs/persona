@@ -84,6 +84,60 @@ const launcherController = initAgentWidget({
   }
 });
 
+// ---------------------------------------------------------------------------
+// Event Stream Testing
+// ---------------------------------------------------------------------------
+const esTargetSelect = document.getElementById('event-stream-target') as HTMLSelectElement | null;
+const getEsTarget = () => esTargetSelect?.value === 'launcher' ? launcherController : inlineController;
+
+document.getElementById('es-show')?.addEventListener('click', () => getEsTarget().showEventStream());
+document.getElementById('es-hide')?.addEventListener('click', () => getEsTarget().hideEventStream());
+document.getElementById('es-check')?.addEventListener('click', () => {
+  const visible = getEsTarget().isEventStreamVisible();
+  const name = esTargetSelect?.value ?? 'inline';
+  alert(`${name} event stream visible: ${visible}`);
+});
+
+// Window events
+document.getElementById('es-win-show-all')?.addEventListener('click', () => {
+  window.dispatchEvent(new CustomEvent('persona:showEventStream'));
+});
+document.getElementById('es-win-hide-all')?.addEventListener('click', () => {
+  window.dispatchEvent(new CustomEvent('persona:hideEventStream'));
+});
+document.getElementById('es-win-show-inline')?.addEventListener('click', () => {
+  window.dispatchEvent(new CustomEvent('persona:showEventStream', { detail: { instanceId: 'inline-widget' } }));
+});
+document.getElementById('es-win-show-launcher')?.addEventListener('click', () => {
+  window.dispatchEvent(new CustomEvent('persona:showEventStream', { detail: { instanceId: 'launcher-root' } }));
+});
+document.getElementById('es-win-show-wrong')?.addEventListener('click', () => {
+  window.dispatchEvent(new CustomEvent('persona:showEventStream', { detail: { instanceId: 'wrong-id' } }));
+  alert('Dispatched with instanceId "wrong-id" — nothing should open.');
+});
+
+// Event listeners with log output
+const esLogEl = document.getElementById('es-log');
+const esLogPre = document.getElementById('es-log-pre');
+document.getElementById('es-listen')?.addEventListener('click', () => {
+  if (esLogEl) esLogEl.style.display = 'block';
+  const log = (msg: string) => {
+    if (esLogPre) {
+      esLogPre.textContent += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+      esLogPre.parentElement!.scrollTop = esLogPre.parentElement!.scrollHeight;
+    }
+    console.log(`[EventStream] ${msg}`);
+  };
+  inlineController.on('eventStream:opened', (e) => log(`inline opened (ts: ${e.timestamp})`));
+  inlineController.on('eventStream:closed', (e) => log(`inline closed (ts: ${e.timestamp})`));
+  launcherController.on('eventStream:opened', (e) => log(`launcher opened (ts: ${e.timestamp})`));
+  launcherController.on('eventStream:closed', (e) => log(`launcher closed (ts: ${e.timestamp})`));
+  log('Listeners registered for both widgets');
+});
+
+// ---------------------------------------------------------------------------
+// Existing controls
+// ---------------------------------------------------------------------------
 const openButton = document.getElementById('open-chat')
 const toggleButton = document.getElementById('toggle-chat')
 const loadMessagesButton = document.getElementById('load-messages')

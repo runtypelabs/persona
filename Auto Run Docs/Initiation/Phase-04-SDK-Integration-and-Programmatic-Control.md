@@ -86,7 +86,7 @@ This phase adds the full programmatic SDK surface for the event stream inspector
 
 - [x] Run `pnpm build:widget` to verify compilation
 
-- [ ] Test programmatic control:
+- [x] Test programmatic control:
   - Run `pnpm dev` and open the widget demo
   - Open browser DevTools console
   - Test controller methods:

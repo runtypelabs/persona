@@ -136,6 +136,11 @@ export const initAgentWidget = (
     mountStyles(host);
   }
 
+  // Set instance id for window event scoping (mount.id is always "persona-root" for CSS)
+  if (target.id) {
+    mount.setAttribute("data-persona-instance", target.id);
+  }
+
   let controller = createAgentExperience(mount, options.config, {
     debugTools: options.debugTools
   });

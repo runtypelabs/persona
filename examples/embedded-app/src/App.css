@@ -26,6 +26,13 @@
   margin-bottom: 1rem;
 }
 
+.demo-container h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  margin-top: 1rem;
+  color: #334155;
+}
+
 .embedded-target {
   min-height: 480px;
   position: relative;

@@ -275,10 +275,12 @@ export const createAgentExperience = (
   initialConfig?: AgentWidgetConfig,
   runtimeOptions?: { debugTools?: boolean }
 ): Controller => {
-  // Tailwind config uses important: "#persona-root", so ensure mount has this ID
-  if (!mount.id || mount.id !== "persona-root") {
-    mount.id = "persona-root";
+  // Preserve original mount id as data attribute for window event instance scoping,
+  // then set mount.id to "persona-root" (required by Tailwind important: "#persona-root")
+  if (mount.id && mount.id !== "persona-root" && !mount.getAttribute("data-persona-instance")) {
+    mount.setAttribute("data-persona-instance", mount.id);
   }
+  mount.id = "persona-root";
 
   let config = mergeWithDefaults(initialConfig) as AgentWidgetConfig;
   // Note: applyThemeVariables is called after applyFullHeightStyles() below
@@ -3928,7 +3930,7 @@ export const createAgentExperience = (
   // INSTANCE-SCOPED WINDOW EVENTS FOR PROGRAMMATIC CONTROL
   // ============================================================================
   if (showEventStreamToggle && typeof window !== "undefined") {
-    const instanceId = mount.id || "persona-" + Math.random().toString(36).slice(2, 8);
+    const instanceId = mount.getAttribute("data-persona-instance") || mount.id || "persona-" + Math.random().toString(36).slice(2, 8);
     const handleShowEvent = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail?.instanceId || detail.instanceId === instanceId) {
