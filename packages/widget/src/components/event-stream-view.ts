@@ -13,52 +13,72 @@ function formatTimestamp(ms: number): string {
   return `${hh}:${mm}:${ss}.${mmm}`;
 }
 
+// Row height constant shared between renderEventRow and scroller config
+const EVENT_ROW_HEIGHT = 52;
+
 function renderEventRow(event: SSEEventRecord): HTMLElement {
+  // The virtual scroller sets position:absolute + explicit height on the returned element.
+  // We build content directly inside it using fixed pixel positioning to guarantee visibility.
   const row = createElement(
     "div",
-    "tvw-flex tvw-items-start tvw-gap-2 tvw-px-4 tvw-py-2 tvw-border-b tvw-border-cw-divider tvw-text-xs hover:tvw-bg-cw-container tvw-group"
+    "tvw-border-b tvw-border-cw-divider tvw-text-xs hover:tvw-bg-cw-container tvw-group tvw-overflow-hidden"
   );
+
+  // Top line: badge + timestamp + spacer + copy button
+  const topRow = createElement(
+    "div",
+    "tvw-flex tvw-items-center tvw-gap-2 tvw-px-4"
+  );
+  topRow.style.height = "24px";
 
   // Event type badge
   const badge = createElement(
     "span",
-    "tvw-inline-block tvw-px-1.5 tvw-py-0.5 tvw-rounded tvw-text-[10px] tvw-font-mono tvw-font-medium tvw-bg-cw-accent/10 tvw-text-cw-accent tvw-whitespace-nowrap tvw-flex-shrink-0"
+    "tvw-inline-block tvw-px-1.5 tvw-py-px tvw-rounded tvw-text-[10px] tvw-font-mono tvw-font-medium tvw-bg-cw-accent/10 tvw-text-cw-accent tvw-whitespace-nowrap tvw-flex-shrink-0"
   );
   badge.textContent = event.type;
 
   // Timestamp
   const timestamp = createElement(
     "span",
-    "tvw-text-cw-muted tvw-whitespace-nowrap tvw-flex-shrink-0 tvw-font-mono"
+    "tvw-text-[10px] tvw-text-cw-muted tvw-whitespace-nowrap tvw-flex-shrink-0 tvw-font-mono"
   );
   timestamp.textContent = formatTimestamp(event.timestamp);
 
-  // Payload preview
-  const payload = createElement(
-    "pre",
-    "tvw-text-cw-primary tvw-font-mono tvw-overflow-hidden tvw-text-ellipsis tvw-whitespace-nowrap tvw-flex-1 tvw-min-w-0 tvw-m-0"
-  );
-  const preview =
-    event.payload.length > 120
-      ? event.payload.slice(0, 120) + "..."
-      : event.payload;
-  payload.textContent = preview;
+  // Spacer
+  const spacer = createElement("div", "tvw-flex-1");
 
   // Copy button (visible on hover)
   const copyBtn = createElement(
     "button",
     "tvw-opacity-0 group-hover:tvw-opacity-100 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-flex-shrink-0 tvw-border-none tvw-bg-transparent tvw-p-0"
   );
-  const clipIcon = renderLucideIcon("clipboard", "14px", "", 1);
+  const clipIcon = renderLucideIcon("clipboard", "12px", "currentColor", 1.5);
   if (clipIcon) copyBtn.appendChild(clipIcon);
   copyBtn.addEventListener("click", () => {
     navigator.clipboard.writeText(event.payload);
   });
 
-  row.appendChild(badge);
-  row.appendChild(timestamp);
+  topRow.appendChild(badge);
+  topRow.appendChild(timestamp);
+  topRow.appendChild(spacer);
+  topRow.appendChild(copyBtn);
+
+  // Bottom line: payload preview (full width)
+  const payload = createElement(
+    "pre",
+    "tvw-text-[11px] tvw-text-cw-secondary tvw-font-mono tvw-overflow-hidden tvw-text-ellipsis tvw-whitespace-nowrap tvw-m-0 tvw-px-4"
+  );
+  payload.style.height = "18px";
+  payload.style.lineHeight = "18px";
+  const preview =
+    event.payload.length > 200
+      ? event.payload.slice(0, 200) + "..."
+      : event.payload;
+  payload.textContent = preview;
+
+  row.appendChild(topRow);
   row.appendChild(payload);
-  row.appendChild(copyBtn);
 
   return row;
 }
@@ -79,7 +99,7 @@ export function createEventStreamView(
   // Toolbar
   const toolbar = createElement(
     "div",
-    "tvw-flex tvw-items-center tvw-gap-2 tvw-px-4 tvw-py-2 tvw-border-b tvw-border-cw-divider tvw-bg-cw-surface tvw-flex-shrink-0"
+    "tvw-flex tvw-items-center tvw-gap-1.5 tvw-px-4 tvw-py-1.5 tvw-border-b tvw-border-cw-divider tvw-bg-cw-surface tvw-flex-shrink-0"
   );
 
   // Filter select
@@ -95,26 +115,37 @@ export function createEventStreamView(
   // Search input
   const searchInput = createElement(
     "input",
-    "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-flex-1 tvw-text-cw-primary"
+    "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-flex-1 tvw-min-w-0 tvw-text-cw-primary"
   ) as HTMLInputElement;
   searchInput.type = "text";
   searchInput.placeholder = "Search events...";
 
-  // Copy All button
+  const iconBtnClass =
+    "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded tvw-text-cw-muted hover:tvw-bg-cw-container hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-flex-shrink-0 tvw-p-1";
+
+  // Copy All button (icon)
   const copyAllBtn = createElement(
     "button",
-    "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer"
-  );
-  copyAllBtn.textContent = "Copy All";
+    iconBtnClass
+  ) as HTMLButtonElement;
   copyAllBtn.type = "button";
+  copyAllBtn.title = "Copy All";
+  copyAllBtn.style.width = "26px";
+  copyAllBtn.style.height = "26px";
+  const copyAllIcon = renderLucideIcon("clipboard-copy", "14px", "currentColor", 1.5);
+  if (copyAllIcon) copyAllBtn.appendChild(copyAllIcon);
 
-  // Clear button
+  // Clear button (icon)
   const clearBtn = createElement(
     "button",
-    "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer"
-  );
-  clearBtn.textContent = "Clear";
+    iconBtnClass
+  ) as HTMLButtonElement;
   clearBtn.type = "button";
+  clearBtn.title = "Clear";
+  clearBtn.style.width = "26px";
+  clearBtn.style.height = "26px";
+  const clearIcon = renderLucideIcon("trash-2", "14px", "currentColor", 1.5);
+  if (clearIcon) clearBtn.appendChild(clearIcon);
 
   toolbar.appendChild(filterSelect);
   toolbar.appendChild(searchInput);
@@ -124,7 +155,7 @@ export function createEventStreamView(
   // Truncation notice banner (above virtual scroller)
   const truncationBanner = createElement(
     "div",
-    "tvw-text-[10px] tvw-text-cw-muted tvw-text-center tvw-py-1 tvw-px-4 tvw-bg-cw-container tvw-border-b tvw-border-cw-divider tvw-italic tvw-flex-shrink-0"
+    "tvw-text-xs tvw-text-cw-muted tvw-text-center tvw-py-0.5 tvw-px-4 tvw-bg-cw-container tvw-border-b tvw-border-cw-divider tvw-italic tvw-flex-shrink-0"
   );
   truncationBanner.style.display = "none";
 
@@ -163,7 +194,7 @@ export function createEventStreamView(
 
   const scroller = new VirtualScroller({
     container: eventsList,
-    rowHeight: 40,
+    rowHeight: EVENT_ROW_HEIGHT,
     overscan: 5,
     renderRow: (index: number) => {
       const event = filteredEvents[index];
@@ -241,7 +272,7 @@ export function createEventStreamView(
     // Update truncation banner
     const evictedCount = buffer.getEvictedCount();
     if (evictedCount > 0) {
-      truncationBanner.textContent = `${evictedCount} older events not shown in live view (available via Copy All)`;
+      truncationBanner.textContent = `${evictedCount.toLocaleString()} older events truncated`;
       truncationBanner.style.display = "";
     } else {
       truncationBanner.style.display = "none";
@@ -267,9 +298,19 @@ export function createEventStreamView(
   }
 
   // Event handlers
+  const swapCopyAllIcon = (iconName: string, restoreAfterMs: number) => {
+    copyAllBtn.innerHTML = "";
+    const icon = renderLucideIcon(iconName, "14px", "currentColor", 1.5);
+    if (icon) copyAllBtn.appendChild(icon);
+    setTimeout(() => {
+      copyAllBtn.innerHTML = "";
+      const original = renderLucideIcon("clipboard-copy", "14px", "currentColor", 1.5);
+      if (original) copyAllBtn.appendChild(original);
+      copyAllBtn.disabled = false;
+    }, restoreAfterMs);
+  };
+
   const handleCopyAll = async () => {
-    const originalText = copyAllBtn.textContent;
-    copyAllBtn.textContent = "Copying...";
     copyAllBtn.disabled = true;
 
     try {
@@ -277,17 +318,9 @@ export function createEventStreamView(
         ? await getFullHistory()
         : buffer.getAll();
       await navigator.clipboard.writeText(JSON.stringify(allEvents, null, 2));
-      copyAllBtn.textContent = "Copied!";
-      setTimeout(() => {
-        copyAllBtn.textContent = originalText;
-        copyAllBtn.disabled = false;
-      }, 1500);
+      swapCopyAllIcon("check", 1500);
     } catch {
-      copyAllBtn.textContent = "Failed";
-      setTimeout(() => {
-        copyAllBtn.textContent = originalText;
-        copyAllBtn.disabled = false;
-      }, 1500);
+      swapCopyAllIcon("x", 1500);
     }
   };
 
