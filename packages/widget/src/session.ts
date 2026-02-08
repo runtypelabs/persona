@@ -346,6 +346,53 @@ export class AgentWidgetSession {
     return this.injectMessage({ ...options, role: "system" });
   }
 
+  /**
+   * Inject multiple messages in a single batch with one sort and one render pass.
+   */
+  public injectMessageBatch(optionsList: InjectMessageOptions[]): AgentWidgetMessage[] {
+    const results: AgentWidgetMessage[] = [];
+
+    for (const options of optionsList) {
+      const {
+        role,
+        content,
+        llmContent,
+        contentParts,
+        id,
+        createdAt,
+        sequence,
+        streaming = false
+      } = options;
+
+      const messageId =
+        id ??
+        (role === "user"
+          ? generateUserMessageId()
+          : role === "assistant"
+            ? generateAssistantMessageId()
+            : `system-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+
+      const message: AgentWidgetMessage = {
+        id: messageId,
+        role,
+        content,
+        createdAt: createdAt ?? new Date().toISOString(),
+        sequence: sequence ?? this.nextSequence(),
+        streaming,
+        ...(llmContent !== undefined && { llmContent }),
+        ...(contentParts !== undefined && { contentParts })
+      };
+
+      results.push(message);
+    }
+
+    // Add all messages, sort once, notify once
+    this.messages = this.sortMessages([...this.messages, ...results]);
+    this.callbacks.onMessagesChanged([...this.messages]);
+
+    return results;
+  }
+
   public async sendMessage(
     rawInput: string,
     options?: {

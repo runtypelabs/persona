@@ -176,6 +176,10 @@ type Controller = {
    */
   injectSystemMessage: (options: InjectSystemMessageOptions) => AgentWidgetMessage;
   /**
+   * Inject multiple messages in a single batch with one sort and one render pass.
+   */
+  injectMessageBatch: (optionsList: InjectMessageOptions[]) => AgentWidgetMessage[];
+  /**
    * @deprecated Use injectMessage() instead.
    */
   injectTestMessage: (event: AgentWidgetEvent) => void;
@@ -202,6 +206,8 @@ type Controller = {
   showNPSFeedback: (options?: Partial<NPSFeedbackOptions>) => void;
   submitCSATFeedback: (rating: number, comment?: string) => Promise<void>;
   submitNPSFeedback: (rating: number, comment?: string) => Promise<void>;
+  /** Push a raw event into the event stream buffer (for testing/debugging) */
+  __pushEventStreamEvent: (event: { type: string; payload: unknown }) => void;
 };
 
 const buildPostprocessor = (
@@ -408,7 +414,9 @@ export const createAgentExperience = (
   let showReasoning = config.features?.showReasoning ?? true;
   let showToolCalls = config.features?.showToolCalls ?? true;
   let showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
-  const eventStreamStore = showEventStreamToggle ? new EventStreamStore() : null;
+  const persistKeyPrefix = (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
+  const eventStreamDbName = `${persistKeyPrefix}event-stream`;
+  const eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
   const eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(500, eventStreamStore) : null;
   let eventStreamView: ReturnType<typeof createEventStreamView> | null = null;
   let eventStreamVisible = false;
@@ -3664,6 +3672,12 @@ export const createAgentExperience = (
       }
       return session.injectSystemMessage(options);
     },
+    injectMessageBatch(optionsList: InjectMessageOptions[]): AgentWidgetMessage[] {
+      if (!open && launcherEnabled) {
+        setOpenState(true, "system");
+      }
+      return session.injectMessageBatch(optionsList);
+    },
     /** @deprecated Use injectMessage() instead */
     injectTestMessage(event: AgentWidgetEvent) {
       // Auto-open widget if closed and launcher is enabled
@@ -3671,6 +3685,17 @@ export const createAgentExperience = (
         setOpenState(true, "system");
       }
       session.injectTestEvent(event);
+    },
+    /** Push a raw event into the event stream buffer (for testing/debugging) */
+    __pushEventStreamEvent(event: { type: string; payload: unknown }): void {
+      if (eventStreamBuffer) {
+        eventStreamBuffer.push({
+          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: event.type,
+          timestamp: Date.now(),
+          payload: JSON.stringify(event.payload)
+        });
+      }
     },
     getMessages() {
       return session.getMessages();
