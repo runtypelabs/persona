@@ -425,7 +425,7 @@ export const createAgentExperience = (
   const persistKeyPrefix = (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
   const eventStreamDbName = `${persistKeyPrefix}event-stream`;
   let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
-  const eventStreamMaxEvents = config.features?.eventStream?.maxEvents ?? 500;
+  const eventStreamMaxEvents = config.features?.eventStream?.maxEvents ?? 2000;
   let eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore) : null;
   let eventStreamView: ReturnType<typeof createEventStreamView> | null = null;
   let eventStreamVisible = false;
@@ -2464,7 +2464,7 @@ export const createAgentExperience = (
         // Flag changed from false to true - create buffer/store if needed
         if (!eventStreamBuffer) {
           eventStreamStore = new EventStreamStore(eventStreamDbName);
-          eventStreamBuffer = new EventStreamBuffer(500, eventStreamStore);
+          eventStreamBuffer = new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore);
           eventStreamStore.open().then(() => eventStreamBuffer?.restore()).catch(() => {});
           // Register the SSE event callback
           session.setSSEEventCallback((type: string, payload: unknown) => {

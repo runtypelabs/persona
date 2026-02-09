@@ -29,6 +29,8 @@ const DEFAULT_BADGE_COLOR: EventStreamBadgeColor = {
 const DEFAULT_DESCRIPTION_FIELDS = [
   "flowName",
   "stepName",
+  "reasoningText",
+  "text",
   "name",
   "tool",
   "toolName",
@@ -228,8 +230,9 @@ function renderEventRow(
     // Main row line
     const row = createElement(
       "div",
-      "tvw-flex tvw-items-center tvw-gap-2 tvw-px-3 tvw-py-2 hover:tvw-bg-cw-container tvw-cursor-pointer tvw-group"
+      "tvw-flex tvw-items-center tvw-gap-2 tvw-px-3 tvw-py-3 hover:tvw-bg-cw-container tvw-cursor-pointer tvw-group"
     );
+    row.setAttribute("data-event-id", event.id);
 
     // 1. Chevron (expand/collapse)
     const chevron = createElement(
@@ -273,7 +276,7 @@ function renderEventRow(
     );
     badge.style.backgroundColor = badgeColor.bg;
     badge.style.color = badgeColor.text;
-    badge.style.borderColor = badgeColor.text + "30";
+    badge.style.borderColor = badgeColor.text + "50";
     badge.textContent = event.type;
 
     // 5. Description (extracted from payload)
@@ -292,10 +295,10 @@ function renderEventRow(
     // 6. Spacer
     const spacer = createElement("div", "tvw-flex-1 tvw-min-w-0");
 
-    // 7. Copy button (visible on hover)
+    // 7. Copy button
     const copyBtn = createElement(
       "button",
-      "tvw-opacity-0 group-hover:tvw-opacity-100 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-flex-shrink-0 tvw-border-none tvw-bg-transparent tvw-p-0"
+      "tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-flex-shrink-0 tvw-border-none tvw-bg-transparent tvw-p-0"
     );
     const clipIcon = renderLucideIcon(
       "clipboard",
@@ -336,22 +339,6 @@ function renderEventRow(
     if (descEl) row.appendChild(descEl);
     row.appendChild(spacer);
     row.appendChild(copyBtn);
-
-    // Click handler for expand/collapse on the chevron
-    chevron.style.cursor = "pointer";
-    chevron.addEventListener("click", (e: Event) => {
-      e.stopPropagation();
-      onToggleExpand(event.id);
-    });
-
-    // Click handler for expand/collapse (entire row line)
-    row.addEventListener("click", (e: Event) => {
-      e.stopPropagation();
-      const target = e.target as HTMLElement;
-      // Skip if clicking copy button or its children
-      if (target?.closest?.("button") || target?.tagName === "BUTTON") return;
-      onToggleExpand(event.id);
-    });
 
     container.appendChild(row);
 
@@ -442,7 +429,15 @@ export function createEventStreamView(
     let lastRenderTime = 0;
     let pendingUpdate = false;
     let pendingRafId: number | null = null;
+    let suppressScrollHandler = false;
+    let lastScrollTop = 0;
     const expandedSet = new Set<string>();
+
+    // Incremental rendering state
+    const rowElements = new Map<string, HTMLElement>();
+    let lastRenderedFilter = "";
+    let lastRenderedSearch = "";
+    let dirtyExpandId: string | null = null;
 
     // ========================================================================
     // Toolbar: Header Bar + Search Bar
@@ -465,20 +460,20 @@ export function createEventStreamView(
       // --- Header bar ---
       const headerBar = createElement(
         "div",
-        "tvw-flex tvw-items-center tvw-gap-2 tvw-px-4 tvw-py-2 tvw-border-b tvw-border-cw-divider tvw-bg-cw-surface"
+        "tvw-flex tvw-items-center tvw-gap-2 tvw-px-4 tvw-py-3 tvw-pb-0 tvw-border-cw-divider tvw-bg-cw-surface tvw-overflow-hidden"
       );
 
       // Title
       const title = createElement(
         "span",
-        "tvw-text-sm tvw-font-semibold tvw-text-cw-primary"
+        "tvw-text-sm tvw-font-medium tvw-text-cw-primary tvw-whitespace-nowrap"
       );
-      title.textContent = "Event Stream";
+      title.textContent = "Events";
 
       // Count badge
       countBadge = createElement(
         "span",
-        "tvw-text-[11px] tvw-font-mono tvw-bg-cw-container tvw-text-cw-muted tvw-px-2 tvw-py-0.5 tvw-rounded"
+        "tvw-text-[11px] tvw-font-mono tvw-bg-cw-container tvw-text-cw-muted tvw-px-2 tvw-py-0.5 tvw-rounded tvw-border tvw-border-cw-border"
       );
       countBadge.textContent = "0";
 
@@ -487,7 +482,7 @@ export function createEventStreamView(
       // Filter dropdown
       filterSelect = createElement(
         "select",
-        "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-text-cw-primary tvw-cursor-pointer"
+        "tvw-text-xs tvw-bg-cw-surface tvw-border tvw-border-cw-border tvw-rounded tvw-px-2.5 tvw-py-1 tvw-text-cw-primary tvw-cursor-pointer"
       ) as HTMLSelectElement;
       const allOption = createElement("option", "") as HTMLOptionElement;
       allOption.value = "";
@@ -496,7 +491,7 @@ export function createEventStreamView(
 
       // Copy All button
       const iconBtnClass =
-        "tvw-inline-flex tvw-items-center tvw-gap-1.5 tvw-rounded tvw-text-xs tvw-text-cw-muted hover:tvw-bg-cw-container hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border tvw-border-cw-border tvw-bg-transparent tvw-flex-shrink-0 tvw-px-2.5 tvw-py-1";
+        "tvw-inline-flex tvw-items-center tvw-gap-1.5 tvw-rounded tvw-text-xs tvw-text-cw-muted hover:tvw-bg-cw-container hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border tvw-border-cw-border tvw-bg-cw-surface tvw-flex-shrink-0 tvw-px-2.5 tvw-py-1";
 
       copyAllBtn = createElement(
         "button",
@@ -527,7 +522,7 @@ export function createEventStreamView(
       // --- Search bar ---
       const searchBar = createElement(
         "div",
-        "tvw-relative tvw-px-4 tvw-py-1.5 tvw-border-b tvw-border-cw-divider tvw-bg-cw-surface"
+        "tvw-relative tvw-px-4 tvw-py-2.5 tvw-border-b tvw-border-cw-divider tvw-bg-cw-surface"
       );
 
       // Search icon
@@ -545,7 +540,7 @@ export function createEventStreamView(
 
       searchInput = createElement(
         "input",
-        "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-pl-7 tvw-pr-7 tvw-py-1.5 tvw-w-full tvw-text-cw-primary"
+        "tvw-text-sm tvw-bg-cw-surface tvw-border tvw-border-cw-border tvw-rounded-md tvw-pl-8 tvw-pr-3 tvw-py-1 tvw-w-full tvw-text-cw-primary"
       ) as HTMLInputElement;
       searchInput.type = "text";
       searchInput.placeholder = "Search event payloads...";
@@ -750,13 +745,16 @@ export function createEventStreamView(
       } else {
         expandedSet.add(eventId);
       }
+      dirtyExpandId = eventId;
       // Save scroll position — user-initiated expand/collapse should not auto-scroll
       const savedScrollTop = eventsList.scrollTop;
       const wasUserScrolledUp = userScrolledUp;
+      suppressScrollHandler = true;
       userScrolledUp = true; // prevent auto-scroll during re-render
       updateNow();
       eventsList.scrollTop = savedScrollTop;
       userScrolledUp = wasUserScrolledUp;
+      suppressScrollHandler = false;
     }
 
     // ========================================================================
@@ -836,11 +834,19 @@ export function createEventStreamView(
         if (!currentIds.has(id)) expandedSet.delete(id);
       }
 
-      // Render all rows
-      const fragment = document.createDocumentFragment();
-      for (let i = 0; i < filteredEvents.length; i++) {
-        fragment.appendChild(
-          renderEventRow(
+      // Determine which rendering path to use
+      const filterChanged =
+        selectedType !== lastRenderedFilter ||
+        searchTerm !== lastRenderedSearch;
+      const isFirstRender = rowElements.size === 0 && filteredEvents.length > 0;
+
+      if (filterChanged || isFirstRender || filteredEvents.length === 0) {
+        // Path A — Full rebuild (filter/search changed, first render, or empty list)
+        eventsList.innerHTML = "";
+        rowElements.clear();
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < filteredEvents.length; i++) {
+          const row = renderEventRow(
             filteredEvents[i],
             i,
             firstTimestamp,
@@ -849,11 +855,70 @@ export function createEventStreamView(
             toggleExpand,
             plugins,
             config
-          )
-        );
+          );
+          rowElements.set(filteredEvents[i].id, row);
+          fragment.appendChild(row);
+        }
+        eventsList.appendChild(fragment);
+        lastRenderedFilter = selectedType;
+        lastRenderedSearch = searchTerm;
+        dirtyExpandId = null;
+      } else {
+        // Path B — Single row replace (expand/collapse)
+        if (dirtyExpandId !== null) {
+          const oldRow = rowElements.get(dirtyExpandId);
+          if (oldRow && oldRow.parentNode === eventsList) {
+            // Find the index of this event in filteredEvents for correct seq number
+            const idx = filteredEvents.findIndex(
+              (e) => e.id === dirtyExpandId
+            );
+            if (idx >= 0) {
+              const newRow = renderEventRow(
+                filteredEvents[idx],
+                idx,
+                firstTimestamp,
+                esConfig,
+                expandedSet,
+                toggleExpand,
+                plugins,
+                config
+              );
+              eventsList.insertBefore(newRow, oldRow);
+              oldRow.remove();
+              rowElements.set(dirtyExpandId, newRow);
+            }
+          }
+          dirtyExpandId = null;
+        }
+
+        // Path C — Incremental append (default streaming path)
+        // Remove evicted rows
+        const activeIds = new Set(filteredEvents.map((e) => e.id));
+        for (const [id, el] of rowElements) {
+          if (!activeIds.has(id)) {
+            el.remove();
+            rowElements.delete(id);
+          }
+        }
+        // Append new rows (events not yet in rowElements)
+        for (let i = 0; i < filteredEvents.length; i++) {
+          const evt = filteredEvents[i];
+          if (!rowElements.has(evt.id)) {
+            const row = renderEventRow(
+              evt,
+              i,
+              firstTimestamp,
+              esConfig,
+              expandedSet,
+              toggleExpand,
+              plugins,
+              config
+            );
+            rowElements.set(evt.id, row);
+            eventsList.appendChild(row);
+          }
+        }
       }
-      eventsList.innerHTML = "";
-      eventsList.appendChild(fragment);
 
       // Auto-scroll if user hasn't scrolled up
       if (!userScrolledUp) {
@@ -931,8 +996,15 @@ export function createEventStreamView(
             ? await getFullHistory()
             : buffer.getAll();
         }
+        const parsed = events.map((e) => {
+          try {
+            return JSON.parse(e.payload);
+          } catch {
+            return e.payload;
+          }
+        });
         await navigator.clipboard.writeText(
-          JSON.stringify(events, null, 2)
+          JSON.stringify(parsed, null, 2)
         );
         swapCopyAllIcon("check", 1500);
       } catch {
@@ -969,11 +1041,25 @@ export function createEventStreamView(
     };
 
     const handleListScroll = () => {
-      if (isNearBottom()) {
+      if (suppressScrollHandler) return;
+      const currentScrollTop = eventsList.scrollTop;
+      const scrollingDown = currentScrollTop > lastScrollTop;
+      lastScrollTop = currentScrollTop;
+
+      if (isNearBottom() && scrollingDown) {
+        // User scrolled back down to bottom — re-enable auto-scroll
         userScrolledUp = false;
         newEventsSincePause = 0;
         scrollIndicator.style.display = "none";
-      } else {
+      } else if (!isNearBottom()) {
+        userScrolledUp = true;
+      }
+    };
+
+    // Wheel events fire synchronously before rAF callbacks, so we can
+    // detect upward scroll intent before the next updateNow() auto-scrolls.
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) {
         userScrolledUp = true;
       }
     };
@@ -983,6 +1069,19 @@ export function createEventStreamView(
       userScrolledUp = false;
       newEventsSincePause = 0;
       scrollIndicator.style.display = "none";
+    };
+
+    // Delegated click handler for expand/collapse (survives DOM rebuilds)
+    const handleRowClick = (e: Event) => {
+      const target = e.target as Element;
+      if (!target) return;
+      // Skip if clicking copy button or its children
+      if (target.closest("button")) return;
+      // Find the closest row with an event ID
+      const row = target.closest("[data-event-id]") as HTMLElement | null;
+      if (!row) return;
+      const eventId = row.getAttribute("data-event-id");
+      if (eventId) toggleExpand(eventId);
     };
 
     // Keyboard shortcuts
@@ -1022,6 +1121,8 @@ export function createEventStreamView(
     if (searchClearBtn)
       searchClearBtn.addEventListener("click", handleSearchClear);
     eventsList.addEventListener("scroll", handleListScroll);
+    eventsList.addEventListener("wheel", handleWheel, { passive: true });
+    eventsList.addEventListener("click", handleRowClick);
     scrollIndicator.addEventListener("click", handleScrollIndicatorClick);
     container.addEventListener("keydown", handleKeyDown);
 
@@ -1036,6 +1137,7 @@ export function createEventStreamView(
         pendingRafId = null;
       }
       pendingUpdate = false;
+      rowElements.clear();
       if (copyAllBtn)
         copyAllBtn.removeEventListener("click", handleCopyAll);
       if (filterSelect)
@@ -1045,6 +1147,8 @@ export function createEventStreamView(
       if (searchClearBtn)
         searchClearBtn.removeEventListener("click", handleSearchClear);
       eventsList.removeEventListener("scroll", handleListScroll);
+      eventsList.removeEventListener("wheel", handleWheel);
+      eventsList.removeEventListener("click", handleRowClick);
       scrollIndicator.removeEventListener(
         "click",
         handleScrollIndicatorClick

@@ -144,13 +144,13 @@ describe("EventStreamBuffer", () => {
     ]);
   });
 
-  it("should use default maxSize of 500", () => {
+  it("should use default maxSize of 2000", () => {
     const buf = new EventStreamBuffer();
-    for (let i = 0; i < 600; i++) {
+    for (let i = 0; i < 2100; i++) {
       buf.push(makeEvent("x", i));
     }
-    expect(buf.getSize()).toBe(500);
-    expect(buf.getTotalCaptured()).toBe(600);
+    expect(buf.getSize()).toBe(2000);
+    expect(buf.getTotalCaptured()).toBe(2100);
     expect(buf.getEvictedCount()).toBe(100);
   });
 

@@ -106,6 +106,9 @@ function createMockElement(tag = "div"): any {
     closest(selector: string) {
       // Simple mock: check if this element or any parent matches
       if (selector === "button" && el.tagName === "BUTTON") return el;
+      // Support attribute selectors like [data-event-id]
+      const attrMatch = selector.match(/^\[([^\]]+)\]$/);
+      if (attrMatch && el[`__attr_${attrMatch[1]}`] != null) return el;
       if (el.parentNode && el.parentNode.closest) return el.parentNode.closest(selector);
       return null;
     },
@@ -292,7 +295,7 @@ describe("createEventStreamView", () => {
 
       update();
 
-      expect(getTitle(element).textContent).toBe("Event Stream");
+      expect(getTitle(element).textContent).toBe("Events");
       expect(getCountBadge(element).textContent).toBe("1");
     });
 
@@ -525,7 +528,7 @@ describe("createEventStreamView", () => {
       const writeCall = (globalThis.navigator.clipboard.writeText as any).mock.calls[0][0];
       const parsed = JSON.parse(writeCall);
       expect(parsed).toHaveLength(1);
-      expect(parsed[0].type).toBe("step_chunk");
+      expect(parsed[0].index).toBe(1);
     });
 
     it("should copy full history when no filters are active", async () => {
@@ -738,14 +741,19 @@ describe("createEventStreamView", () => {
       const rowLine = container.children[0]; // the flex row line
       expect(rowLine).toBeDefined();
 
-      // Verify click handler is registered on the row line
-      expect(rowLine.__listeners.click).toBeDefined();
-      expect(rowLine.__listeners.click.length).toBeGreaterThan(0);
+      // Verify delegated click handler is registered on eventsList (event delegation)
+      expect(eventsList.__listeners.click).toBeDefined();
+      expect(eventsList.__listeners.click.length).toBeGreaterThan(0);
 
-      // Simulate click (not on a button) - this calls toggleExpand -> updateNow
-      rowLine.__fireEvent("click", { target: rowLine, stopPropagation: () => {} });
+      // Verify data-event-id attribute is set on the row
+      expect(rowLine.getAttribute("data-event-id")).toBe("evt-1");
 
-      // After re-render, the container should have 2 children (row + inline payload)
+      // Simulate click via event delegation on eventsList - target is the row line
+      eventsList.__fireEvent("click", { target: rowLine, stopPropagation: () => {} });
+
+      // After incremental re-render (Path B: single row replace), the new wrapper
+      // replaces the old one in place. The updated container should have 2 children
+      // (row line + inline payload).
       const updatedWrapper = eventsList.children[0];
       const updatedContainer = updatedWrapper.children[0];
       expect(updatedContainer.children.length).toBe(2);
@@ -766,6 +774,106 @@ describe("createEventStreamView", () => {
         result = plainPayload;
       }
       expect(result).toBe(plainPayload);
+    });
+  });
+
+  describe("incremental rendering", () => {
+    it("should preserve existing row DOM references when new events are appended", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1), makeEvent("step_chunk", 2)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
+
+      // Initial render (Path A — first render)
+      update();
+
+      const eventsList = getEventsList(element);
+      expect(eventsList.children.length).toBe(2);
+
+      // Save references to existing rows
+      const row1Ref = eventsList.children[0];
+      const row2Ref = eventsList.children[1];
+
+      // Add a new event and update (Path C — incremental append)
+      vi.advanceTimersByTime(150);
+      buffer.push(makeEvent("step_chunk", 3));
+      update();
+
+      // Should now have 3 rows
+      expect(eventsList.children.length).toBe(3);
+
+      // Original rows should be the same DOM references (not recreated)
+      expect(eventsList.children[0]).toBe(row1Ref);
+      expect(eventsList.children[1]).toBe(row2Ref);
+      vi.useRealTimers();
+    });
+
+    it("should replace only the target row on expand/collapse", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const events = [
+        makeEvent("step_chunk", 1, '{"msg":"first"}'),
+        makeEvent("step_chunk", 2, '{"msg":"second"}'),
+        makeEvent("step_chunk", 3, '{"msg":"third"}'),
+      ];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
+
+      // Initial render
+      update();
+
+      const eventsList = getEventsList(element);
+      expect(eventsList.children.length).toBe(3);
+
+      // Save references
+      const row1Ref = eventsList.children[0];
+      const row3Ref = eventsList.children[2];
+
+      // Expand the second row by simulating a click
+      vi.advanceTimersByTime(150);
+      const row2Container = eventsList.children[1].children[0];
+      const row2Line = row2Container.children[0];
+      eventsList.__fireEvent("click", { target: row2Line, stopPropagation: () => {} });
+
+      // Row 1 and Row 3 should be the same DOM references (untouched)
+      expect(eventsList.children[0]).toBe(row1Ref);
+      expect(eventsList.children[2]).toBe(row3Ref);
+
+      // Row 2 should be a different reference (replaced)
+      expect(eventsList.children[1]).not.toBe(row2Container);
+      vi.useRealTimers();
+    });
+
+    it("should do a full rebuild when filter changes", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const events = [
+        makeEvent("step_chunk", 1),
+        makeEvent("flow_complete", 2),
+        makeEvent("step_chunk", 3),
+      ];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
+
+      // Initial render
+      update();
+
+      const eventsList = getEventsList(element);
+      const originalRow1 = eventsList.children[0];
+
+      // Change filter
+      vi.advanceTimersByTime(150);
+      const filterSelect = getFilterSelect(element);
+      filterSelect.value = "step_chunk";
+      filterSelect.__fireEvent("change");
+
+      // After filter change, rows are fully rebuilt (Path A)
+      // The first row should be a different DOM reference
+      expect(eventsList.children[0]).not.toBe(originalRow1);
+      // Should only show filtered events (2 step_chunk events)
+      expect(eventsList.children.length).toBe(2);
+      vi.useRealTimers();
     });
   });
 

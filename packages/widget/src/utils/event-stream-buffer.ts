@@ -10,7 +10,7 @@ export class EventStreamBuffer {
   private readonly maxSize: number;
   private readonly store: EventStreamStore | null;
 
-  constructor(maxSize = 500, store: EventStreamStore | null = null) {
+  constructor(maxSize = 2000, store: EventStreamStore | null = null) {
     this.maxSize = maxSize;
     this.buffer = new Array(maxSize);
     this.store = store;
