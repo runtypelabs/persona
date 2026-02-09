@@ -574,6 +574,9 @@ export const createAgentExperience = (
     if (eventStreamToggleBtn) {
       eventStreamToggleBtn.classList.remove("tvw-text-cw-muted");
       eventStreamToggleBtn.classList.add("tvw-text-cw-accent");
+      eventStreamToggleBtn.style.boxShadow = "inset 0 0 0 1.5px var(--cw-accent, #3b82f6)";
+      const activeClasses = config.features?.eventStream?.classNames?.toggleButtonActive;
+      if (activeClasses) activeClasses.split(/\s+/).forEach(c => c && eventStreamToggleBtn!.classList.add(c));
     }
     // Start RAF-based update loop (throttled to ~200ms)
     const rafLoop = () => {
@@ -600,6 +603,9 @@ export const createAgentExperience = (
     if (eventStreamToggleBtn) {
       eventStreamToggleBtn.classList.remove("tvw-text-cw-accent");
       eventStreamToggleBtn.classList.add("tvw-text-cw-muted");
+      eventStreamToggleBtn.style.boxShadow = "";
+      const activeClasses = config.features?.eventStream?.classNames?.toggleButtonActive;
+      if (activeClasses) activeClasses.split(/\s+/).forEach(c => c && eventStreamToggleBtn!.classList.remove(c));
     }
     // Cancel RAF update loop
     if (eventStreamRAF !== null) {
@@ -612,13 +618,15 @@ export const createAgentExperience = (
   // Event stream toggle button
   let eventStreamToggleBtn: HTMLButtonElement | null = null;
   if (showEventStreamToggle) {
-    eventStreamToggleBtn = createElement("button", "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-p-1") as HTMLButtonElement;
+    const esClassNames = config.features?.eventStream?.classNames;
+    const toggleBtnClasses = "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-1" + (esClassNames?.toggleButton ? " " + esClassNames.toggleButton : "");
+    eventStreamToggleBtn = createElement("button", toggleBtnClasses) as HTMLButtonElement;
     eventStreamToggleBtn.style.width = "28px";
     eventStreamToggleBtn.style.height = "28px";
     eventStreamToggleBtn.type = "button";
     eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
     eventStreamToggleBtn.title = "Event Stream";
-    const activityIcon = renderLucideIcon("activity", "18px", "", 1);
+    const activityIcon = renderLucideIcon("activity", "18px", "currentColor", 1.5);
     if (activityIcon) eventStreamToggleBtn.appendChild(activityIcon);
 
     // Insert before clear chat button wrapper or close button wrapper
@@ -2478,13 +2486,15 @@ export const createAgentExperience = (
         }
         // Add header toggle button if not present
         if (!eventStreamToggleBtn && header) {
-          eventStreamToggleBtn = createElement("button", "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-p-1") as HTMLButtonElement;
+          const dynEsClassNames = config.features?.eventStream?.classNames;
+          const dynToggleBtnClasses = "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-1" + (dynEsClassNames?.toggleButton ? " " + dynEsClassNames.toggleButton : "");
+          eventStreamToggleBtn = createElement("button", dynToggleBtnClasses) as HTMLButtonElement;
           eventStreamToggleBtn.style.width = "28px";
           eventStreamToggleBtn.style.height = "28px";
           eventStreamToggleBtn.type = "button";
           eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
           eventStreamToggleBtn.title = "Event Stream";
-          const activityIcon = renderLucideIcon("activity", "18px", "", 1);
+          const activityIcon = renderLucideIcon("activity", "18px", "currentColor", 1.5);
           if (activityIcon) eventStreamToggleBtn.appendChild(activityIcon);
           const clearChatWrapper = panelElements.clearChatButtonWrapper;
           const closeWrapper = panelElements.closeButtonWrapper;

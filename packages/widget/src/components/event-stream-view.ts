@@ -10,6 +10,17 @@ import type {
 import type { AgentWidgetPlugin } from "../plugins/types";
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/** Append custom class names to an element if provided. */
+function applyCustomClasses(el: HTMLElement, classes?: string): void {
+  if (classes) {
+    classes.split(/\s+/).forEach((c) => c && el.classList.add(c));
+  }
+}
+
+// ============================================================================
 // Constants
 // ============================================================================
 
@@ -203,6 +214,7 @@ function renderEventRow(
     "div",
     "tvw-border-b tvw-border-cw-divider tvw-text-xs"
   );
+  applyCustomClasses(wrapper, esConfig.classNames?.eventRow);
 
   // Plugin hook: renderEventStreamRow
   const rowPlugin = plugins.find((p) => p.renderEventStreamRow);
@@ -411,10 +423,12 @@ export function createEventStreamView(
     update: () => void;
     destroy: () => void;
   } {
+    const customClasses = esConfig.classNames;
     const container = createElement(
       "div",
       "tvw-event-stream-view tvw-flex tvw-flex-col tvw-flex-1 tvw-min-h-0"
     );
+    applyCustomClasses(container, customClasses?.panel);
 
     // State
     let filteredEvents: SSEEventRecord[] = [];
@@ -462,6 +476,7 @@ export function createEventStreamView(
         "div",
         "tvw-flex tvw-items-center tvw-gap-2 tvw-px-4 tvw-py-3 tvw-pb-0 tvw-border-cw-divider tvw-bg-cw-surface tvw-overflow-hidden"
       );
+      applyCustomClasses(headerBar, customClasses?.headerBar);
 
       // Title
       const title = createElement(
@@ -524,6 +539,7 @@ export function createEventStreamView(
         "div",
         "tvw-relative tvw-px-4 tvw-py-2.5 tvw-border-b tvw-border-cw-divider tvw-bg-cw-surface"
       );
+      applyCustomClasses(searchBar, customClasses?.searchBar);
 
       // Search icon
       const searchIcon = renderLucideIcon(
@@ -542,6 +558,7 @@ export function createEventStreamView(
         "input",
         "tvw-text-sm tvw-bg-cw-surface tvw-border tvw-border-cw-border tvw-rounded-md tvw-pl-8 tvw-pr-3 tvw-py-1 tvw-w-full tvw-text-cw-primary"
       ) as HTMLInputElement;
+      applyCustomClasses(searchInput, customClasses?.searchInput);
       searchInput.type = "text";
       searchInput.placeholder = "Search event payloads...";
 
@@ -623,6 +640,7 @@ export function createEventStreamView(
       "div",
       "tvw-absolute tvw-bottom-3 tvw-left-1/2 tvw-transform tvw--translate-x-1/2 tvw-bg-cw-accent tvw-text-white tvw-text-xs tvw-px-3 tvw-py-1.5 tvw-rounded-full tvw-cursor-pointer tvw-shadow-md tvw-z-10 tvw-flex tvw-items-center tvw-gap-1"
     );
+    applyCustomClasses(scrollIndicator, customClasses?.scrollIndicator);
     scrollIndicator.style.display = "none";
     const arrowIcon = renderLucideIcon(
       "arrow-down",

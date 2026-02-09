@@ -421,6 +421,28 @@ export type EventStreamConfig = {
    * @default ["flowName", "stepName", "name", "tool", "toolName"]
    */
   descriptionFields?: string[];
+  /**
+   * Custom CSS class names to append to event stream UI elements.
+   * Each value is a space-separated class string appended to the element's default classes.
+   */
+  classNames?: {
+    /** The toggle button in the widget header (activity icon). */
+    toggleButton?: string;
+    /** Additional classes applied to the toggle button when the event stream is open. */
+    toggleButtonActive?: string;
+    /** The outer event stream panel/container. */
+    panel?: string;
+    /** The toolbar header bar (title, filter, copy all). */
+    headerBar?: string;
+    /** The search bar wrapper. */
+    searchBar?: string;
+    /** The search text input. */
+    searchInput?: string;
+    /** Each event row wrapper. */
+    eventRow?: string;
+    /** The "new events" scroll indicator pill. */
+    scrollIndicator?: string;
+  };
 };
 
 /**
