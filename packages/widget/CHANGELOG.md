@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 1.43.0
+
+### Minor Changes
+
+- ba29509: Add SSE Event Stream Inspector - a debug panel that shows raw SSE events with filtering, search, virtual scrolling, IndexedDB persistence, and programmatic control via controller methods and window events
+
 ## 1.42.0
 
 ### Minor Changes
