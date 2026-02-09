@@ -38,6 +38,9 @@ import { createStandardBubble, createTypingIndicator } from "./components/messag
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
 import { createSuggestions } from "./components/suggestions";
+import { EventStreamBuffer } from "./utils/event-stream-buffer";
+import { EventStreamStore } from "./utils/event-stream-store";
+import { createEventStreamView } from "./components/event-stream-view";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
 import { mergeWithDefaults } from "./defaults";
@@ -173,6 +176,10 @@ type Controller = {
    */
   injectSystemMessage: (options: InjectSystemMessageOptions) => AgentWidgetMessage;
   /**
+   * Inject multiple messages in a single batch with one sort and one render pass.
+   */
+  injectMessageBatch: (optionsList: InjectMessageOptions[]) => AgentWidgetMessage[];
+  /**
    * @deprecated Use injectMessage() instead.
    */
   injectTestMessage: (event: AgentWidgetEvent) => void;
@@ -199,6 +206,14 @@ type Controller = {
   showNPSFeedback: (options?: Partial<NPSFeedbackOptions>) => void;
   submitCSATFeedback: (rating: number, comment?: string) => Promise<void>;
   submitNPSFeedback: (rating: number, comment?: string) => Promise<void>;
+  /** Push a raw event into the event stream buffer (for testing/debugging) */
+  __pushEventStreamEvent: (event: { type: string; payload: unknown }) => void;
+  /** Opens the event stream panel */
+  showEventStream: () => void;
+  /** Closes the event stream panel */
+  hideEventStream: () => void;
+  /** Returns current visibility state of the event stream panel */
+  isEventStreamVisible: () => boolean;
 };
 
 const buildPostprocessor = (
@@ -260,10 +275,12 @@ export const createAgentExperience = (
   initialConfig?: AgentWidgetConfig,
   runtimeOptions?: { debugTools?: boolean }
 ): Controller => {
-  // Tailwind config uses important: "#persona-root", so ensure mount has this ID
-  if (!mount.id || mount.id !== "persona-root") {
-    mount.id = "persona-root";
+  // Preserve original mount id as data attribute for window event instance scoping,
+  // then set mount.id to "persona-root" (required by Tailwind important: "#persona-root")
+  if (mount.id && mount.id !== "persona-root" && !mount.getAttribute("data-persona-instance")) {
+    mount.setAttribute("data-persona-instance", mount.id);
   }
+  mount.id = "persona-root";
 
   let config = mergeWithDefaults(initialConfig) as AgentWidgetConfig;
   // Note: applyThemeVariables is called after applyFullHeightStyles() below
@@ -404,7 +421,24 @@ export const createAgentExperience = (
   let postprocess = buildPostprocessor(config, actionManager, handleResubmitRequested);
   let showReasoning = config.features?.showReasoning ?? true;
   let showToolCalls = config.features?.showToolCalls ?? true;
-  
+  let showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
+  const persistKeyPrefix = (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
+  const eventStreamDbName = `${persistKeyPrefix}event-stream`;
+  let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
+  const eventStreamMaxEvents = config.features?.eventStream?.maxEvents ?? 2000;
+  let eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore) : null;
+  let eventStreamView: ReturnType<typeof createEventStreamView> | null = null;
+  let eventStreamVisible = false;
+  let eventStreamRAF: number | null = null;
+  let eventStreamLastUpdate = 0;
+
+  // Open IndexedDB store and restore persisted events into the buffer
+  eventStreamStore?.open().then(() => {
+    return eventStreamBuffer?.restore();
+  }).catch(err => {
+    if (config.debug) console.warn('[AgentWidget] IndexedDB not available for event stream:', err);
+  });
+
   // Create message action callbacks that emit events and optionally send to API
   const messageActionCallbacks: MessageActionCallbacks = {
     onCopy: (message: AgentWidgetMessage) => {
@@ -517,6 +551,101 @@ export const createAgentExperience = (
         header = customHeader;
       }
     }
+  }
+
+  // Event stream toggle functions (lifted to outer scope for controller access)
+  const toggleEventStreamOn = () => {
+    if (!eventStreamBuffer) return;
+    eventStreamVisible = true;
+    if (!eventStreamView && eventStreamBuffer) {
+      eventStreamView = createEventStreamView({
+        buffer: eventStreamBuffer,
+        getFullHistory: () => eventStreamBuffer!.getAllFromStore(),
+        onClose: () => toggleEventStreamOff(),
+        config,
+        plugins,
+      });
+    }
+    if (eventStreamView) {
+      body.style.display = "none";
+      footer.parentNode?.insertBefore(eventStreamView.element, footer);
+      eventStreamView.update();
+    }
+    if (eventStreamToggleBtn) {
+      eventStreamToggleBtn.classList.remove("tvw-text-cw-muted");
+      eventStreamToggleBtn.classList.add("tvw-text-cw-accent");
+      eventStreamToggleBtn.style.boxShadow = "inset 0 0 0 1.5px var(--cw-accent, #3b82f6)";
+      const activeClasses = config.features?.eventStream?.classNames?.toggleButtonActive;
+      if (activeClasses) activeClasses.split(/\s+/).forEach(c => c && eventStreamToggleBtn!.classList.add(c));
+    }
+    // Start RAF-based update loop (throttled to ~200ms)
+    const rafLoop = () => {
+      if (!eventStreamVisible) return;
+      const now = Date.now();
+      if (now - eventStreamLastUpdate >= 200) {
+        eventStreamView?.update();
+        eventStreamLastUpdate = now;
+      }
+      eventStreamRAF = requestAnimationFrame(rafLoop);
+    };
+    eventStreamLastUpdate = 0;
+    eventStreamRAF = requestAnimationFrame(rafLoop);
+    eventBus.emit("eventStream:opened", { timestamp: Date.now() });
+  };
+
+  const toggleEventStreamOff = () => {
+    if (!eventStreamVisible) return;
+    eventStreamVisible = false;
+    if (eventStreamView) {
+      eventStreamView.element.remove();
+    }
+    body.style.display = "";
+    if (eventStreamToggleBtn) {
+      eventStreamToggleBtn.classList.remove("tvw-text-cw-accent");
+      eventStreamToggleBtn.classList.add("tvw-text-cw-muted");
+      eventStreamToggleBtn.style.boxShadow = "";
+      const activeClasses = config.features?.eventStream?.classNames?.toggleButtonActive;
+      if (activeClasses) activeClasses.split(/\s+/).forEach(c => c && eventStreamToggleBtn!.classList.remove(c));
+    }
+    // Cancel RAF update loop
+    if (eventStreamRAF !== null) {
+      cancelAnimationFrame(eventStreamRAF);
+      eventStreamRAF = null;
+    }
+    eventBus.emit("eventStream:closed", { timestamp: Date.now() });
+  };
+
+  // Event stream toggle button
+  let eventStreamToggleBtn: HTMLButtonElement | null = null;
+  if (showEventStreamToggle) {
+    const esClassNames = config.features?.eventStream?.classNames;
+    const toggleBtnClasses = "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-1" + (esClassNames?.toggleButton ? " " + esClassNames.toggleButton : "");
+    eventStreamToggleBtn = createElement("button", toggleBtnClasses) as HTMLButtonElement;
+    eventStreamToggleBtn.style.width = "28px";
+    eventStreamToggleBtn.style.height = "28px";
+    eventStreamToggleBtn.type = "button";
+    eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
+    eventStreamToggleBtn.title = "Event Stream";
+    const activityIcon = renderLucideIcon("activity", "18px", "currentColor", 1.5);
+    if (activityIcon) eventStreamToggleBtn.appendChild(activityIcon);
+
+    // Insert before clear chat button wrapper or close button wrapper
+    const clearChatWrapper = panelElements.clearChatButtonWrapper;
+    const closeWrapper = panelElements.closeButtonWrapper;
+    const insertBefore = clearChatWrapper || closeWrapper;
+    if (insertBefore && insertBefore.parentNode === header) {
+      header.insertBefore(eventStreamToggleBtn, insertBefore);
+    } else {
+      header.appendChild(eventStreamToggleBtn);
+    }
+
+    eventStreamToggleBtn.addEventListener("click", () => {
+      if (eventStreamVisible) {
+        toggleEventStreamOff();
+      } else {
+        toggleEventStreamOn();
+      }
+    });
   }
 
   // Plugin hook: renderComposer - allow plugins to provide custom composer
@@ -886,6 +1015,21 @@ export const createAgentExperience = (
   applyThemeVariables(mount, config);
 
   const destroyCallbacks: Array<() => void> = [];
+
+  // Event stream cleanup
+  if (showEventStreamToggle) {
+    destroyCallbacks.push(() => {
+      if (eventStreamRAF !== null) {
+        cancelAnimationFrame(eventStreamRAF);
+        eventStreamRAF = null;
+      }
+      eventStreamView?.destroy();
+      eventStreamView = null;
+      eventStreamBuffer?.destroy();
+      eventStreamBuffer = null;
+      eventStreamStore = null;
+    });
+  }
 
   // Set up theme observer for auto color scheme detection
   let cleanupThemeObserver: (() => void) | null = null;
@@ -1670,6 +1814,18 @@ export const createAgentExperience = (
     }
   });
 
+  // Wire up event stream buffer to capture SSE events
+  if (eventStreamBuffer) {
+    session.setSSEEventCallback((type: string, payload: unknown) => {
+      eventStreamBuffer?.push({
+        id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type,
+        timestamp: Date.now(),
+        payload: JSON.stringify(payload)
+      });
+    });
+  }
+
   if (pendingStoredState) {
     pendingStoredState
       .then((state) => {
@@ -2254,6 +2410,10 @@ export const createAgentExperience = (
       }
       persistentMetadata = {};
       actionManager.syncFromMetadata();
+
+      // Clear event stream buffer and store
+      eventStreamBuffer?.clear();
+      eventStreamView?.update();
     });
   };
 
@@ -2304,6 +2464,66 @@ export const createAgentExperience = (
       autoExpand = config.launcher?.autoExpand ?? false;
       showReasoning = config.features?.showReasoning ?? true;
       showToolCalls = config.features?.showToolCalls ?? true;
+      const prevShowEventStreamToggle = showEventStreamToggle;
+      showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
+
+      // Handle dynamic event stream feature flag toggling
+      if (showEventStreamToggle && !prevShowEventStreamToggle) {
+        // Flag changed from false to true - create buffer/store if needed
+        if (!eventStreamBuffer) {
+          eventStreamStore = new EventStreamStore(eventStreamDbName);
+          eventStreamBuffer = new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore);
+          eventStreamStore.open().then(() => eventStreamBuffer?.restore()).catch(() => {});
+          // Register the SSE event callback
+          session.setSSEEventCallback((type: string, payload: unknown) => {
+            eventStreamBuffer!.push({
+              id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              type,
+              timestamp: Date.now(),
+              payload: JSON.stringify(payload)
+            });
+          });
+        }
+        // Add header toggle button if not present
+        if (!eventStreamToggleBtn && header) {
+          const dynEsClassNames = config.features?.eventStream?.classNames;
+          const dynToggleBtnClasses = "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-1" + (dynEsClassNames?.toggleButton ? " " + dynEsClassNames.toggleButton : "");
+          eventStreamToggleBtn = createElement("button", dynToggleBtnClasses) as HTMLButtonElement;
+          eventStreamToggleBtn.style.width = "28px";
+          eventStreamToggleBtn.style.height = "28px";
+          eventStreamToggleBtn.type = "button";
+          eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
+          eventStreamToggleBtn.title = "Event Stream";
+          const activityIcon = renderLucideIcon("activity", "18px", "currentColor", 1.5);
+          if (activityIcon) eventStreamToggleBtn.appendChild(activityIcon);
+          const clearChatWrapper = panelElements.clearChatButtonWrapper;
+          const closeWrapper = panelElements.closeButtonWrapper;
+          const insertBefore = clearChatWrapper || closeWrapper;
+          if (insertBefore && insertBefore.parentNode === header) {
+            header.insertBefore(eventStreamToggleBtn, insertBefore);
+          } else {
+            header.appendChild(eventStreamToggleBtn);
+          }
+          eventStreamToggleBtn.addEventListener("click", () => {
+            if (eventStreamVisible) {
+              toggleEventStreamOff();
+            } else {
+              toggleEventStreamOn();
+            }
+          });
+        }
+      } else if (!showEventStreamToggle && prevShowEventStreamToggle) {
+        // Flag changed from true to false - hide and clean up
+        toggleEventStreamOff();
+        if (eventStreamToggleBtn) {
+          eventStreamToggleBtn.remove();
+          eventStreamToggleBtn = null;
+        }
+        eventStreamBuffer?.clear();
+        eventStreamStore?.destroy();
+        eventStreamBuffer = null;
+        eventStreamStore = null;
+      }
 
       if (config.launcher?.enabled === false && launcherButtonInstance) {
         launcherButtonInstance.destroy();
@@ -3450,6 +3670,10 @@ export const createAgentExperience = (
       }
       persistentMetadata = {};
       actionManager.syncFromMetadata();
+
+      // Clear event stream buffer and store
+      eventStreamBuffer?.clear();
+      eventStreamView?.update();
     },
     setMessage(message: string): boolean {
       if (!textarea) return false;
@@ -3552,6 +3776,12 @@ export const createAgentExperience = (
       }
       return session.injectSystemMessage(options);
     },
+    injectMessageBatch(optionsList: InjectMessageOptions[]): AgentWidgetMessage[] {
+      if (!open && launcherEnabled) {
+        setOpenState(true, "system");
+      }
+      return session.injectMessageBatch(optionsList);
+    },
     /** @deprecated Use injectMessage() instead */
     injectTestMessage(event: AgentWidgetEvent) {
       // Auto-open widget if closed and launcher is enabled
@@ -3559,6 +3789,28 @@ export const createAgentExperience = (
         setOpenState(true, "system");
       }
       session.injectTestEvent(event);
+    },
+    /** Push a raw event into the event stream buffer (for testing/debugging) */
+    __pushEventStreamEvent(event: { type: string; payload: unknown }): void {
+      if (eventStreamBuffer) {
+        eventStreamBuffer.push({
+          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: event.type,
+          timestamp: Date.now(),
+          payload: JSON.stringify(event.payload)
+        });
+      }
+    },
+    showEventStream(): void {
+      if (!showEventStreamToggle || !eventStreamBuffer) return;
+      toggleEventStreamOn();
+    },
+    hideEventStream(): void {
+      if (!eventStreamVisible) return;
+      toggleEventStreamOff();
+    },
+    isEventStreamVisible(): boolean {
+      return eventStreamVisible;
     },
     getMessages() {
       return session.getMessages();
@@ -3689,6 +3941,31 @@ export const createAgentExperience = (
       if ((window as any).AgentWidgetBrowser === debugApi) {
         (window as any).AgentWidgetBrowser = previousDebug;
       }
+    });
+  }
+
+  // ============================================================================
+  // INSTANCE-SCOPED WINDOW EVENTS FOR PROGRAMMATIC CONTROL
+  // ============================================================================
+  if (showEventStreamToggle && typeof window !== "undefined") {
+    const instanceId = mount.getAttribute("data-persona-instance") || mount.id || "persona-" + Math.random().toString(36).slice(2, 8);
+    const handleShowEvent = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.showEventStream();
+      }
+    };
+    const handleHideEvent = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.hideEventStream();
+      }
+    };
+    window.addEventListener("persona:showEventStream", handleShowEvent);
+    window.addEventListener("persona:hideEventStream", handleHideEvent);
+    destroyCallbacks.push(() => {
+      window.removeEventListener("persona:showEventStream", handleShowEvent);
+      window.removeEventListener("persona:hideEventStream", handleHideEvent);
     });
   }
 

@@ -1,4 +1,13 @@
-import { AgentWidgetMessage, AgentWidgetConfig, LoadingIndicatorRenderContext, IdleIndicatorRenderContext } from "../types";
+import {
+  AgentWidgetMessage,
+  AgentWidgetConfig,
+  LoadingIndicatorRenderContext,
+  IdleIndicatorRenderContext,
+  EventStreamViewRenderContext,
+  EventStreamRowRenderContext,
+  EventStreamToolbarRenderContext,
+  EventStreamPayloadRenderContext
+} from "../types";
 
 /**
  * Plugin interface for customizing widget components
@@ -111,6 +120,30 @@ export interface AgentWidgetPlugin {
    * ```
    */
   renderIdleIndicator?: (context: IdleIndicatorRenderContext) => HTMLElement | null;
+
+  /**
+   * Custom renderer for the entire event stream view.
+   * Return null to use default renderer.
+   */
+  renderEventStreamView?: (context: EventStreamViewRenderContext) => HTMLElement | null;
+
+  /**
+   * Custom renderer for individual event stream rows.
+   * Return null to use default renderer.
+   */
+  renderEventStreamRow?: (context: EventStreamRowRenderContext) => HTMLElement | null;
+
+  /**
+   * Custom renderer for the event stream toolbar/header bar.
+   * Return null to use default renderer.
+   */
+  renderEventStreamToolbar?: (context: EventStreamToolbarRenderContext) => HTMLElement | null;
+
+  /**
+   * Custom renderer for the expanded event payload display.
+   * Return null to use default renderer.
+   */
+  renderEventStreamPayload?: (context: EventStreamPayloadRenderContext) => HTMLElement | null;
 
   /**
    * Called when plugin is registered

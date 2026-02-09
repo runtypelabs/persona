@@ -228,6 +228,31 @@ chat.injectAssistantMessage({
 });
 ```
 
+#### Event Stream Control
+
+When the `showEventStreamToggle` feature flag is enabled, you can programmatically control the event stream inspector panel:
+
+```ts
+const chat = initAgentWidget({
+  target: '#launcher-root',
+  config: {
+    apiUrl: '/api/chat/dispatch',
+    features: { showEventStreamToggle: true }
+  }
+})
+
+// Open the event stream panel
+chat.showEventStream()
+
+// Close the event stream panel
+chat.hideEventStream()
+
+// Check if the event stream panel is currently visible
+chat.isEventStreamVisible() // returns boolean
+```
+
+These methods are no-ops if `showEventStreamToggle` is not enabled.
+
 #### Accessing from window
 
 To access the controller globally (e.g., from browser console or external scripts), use the `windowKey` option:
@@ -309,6 +334,33 @@ window.addEventListener("persona:clear-chat", (event) => {
 
 **Note:** The widget automatically clears the `"persona-chat-history"` localStorage key by default when chat is cleared. If you set `clearChatHistoryStorageKey` in the config, it will also clear that additional key. You can still listen to this event for additional custom behavior.
 
+#### `persona:showEventStream` / `persona:hideEventStream`
+
+Dispatched to programmatically open or close the event stream panel. Requires `showEventStreamToggle: true` in the widget config.
+
+```ts
+// Open the event stream panel on all widget instances
+window.dispatchEvent(new CustomEvent('persona:showEventStream'))
+
+// Close the event stream panel on all widget instances
+window.dispatchEvent(new CustomEvent('persona:hideEventStream'))
+```
+
+**Instance scoping:** When multiple widget instances exist on the same page, use the `instanceId` detail to target a specific one. For `createAgentExperience`, the `instanceId` is the original `id` of the mount element. For `initAgentWidget`, it's the `id` of the target element.
+
+```ts
+// Target only the widget mounted on #inline-widget
+window.dispatchEvent(new CustomEvent('persona:showEventStream', {
+  detail: { instanceId: 'inline-widget' }
+}))
+
+// Events with a non-matching instanceId are ignored
+window.dispatchEvent(new CustomEvent('persona:showEventStream', {
+  detail: { instanceId: 'wrong-id' }
+}))
+// ^ No effect — no widget has this instanceId
+```
+
 ### Controller Events
 
 The widget controller exposes an event system for reacting to chat events. Use `controller.on(eventName, callback)` to subscribe and `controller.off(eventName, callback)` to unsubscribe.
@@ -327,6 +379,8 @@ The widget controller exposes an event system for reacting to chat events. Use `
 | `widget:state` | `AgentWidgetStateSnapshot` | Emitted on any widget state change |
 | `message:feedback` | `AgentWidgetMessageFeedback` | Emitted when user provides feedback (upvote/downvote) |
 | `message:copy` | `AgentWidgetMessage` | Emitted when user copies a message |
+| `eventStream:opened` | `{ timestamp: number }` | Emitted when the event stream panel opens |
+| `eventStream:closed` | `{ timestamp: number }` | Emitted when the event stream panel closes |
 
 #### Event Payload Types
 
@@ -1196,7 +1250,7 @@ This ensures all configuration values are set to sensible defaults while allowin
 | `headers` | `Record<string, string>` | Extra headers forwarded to your proxy. |
 | `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel? }` | Customize user-facing text. |
 | `theme` | `{ primary?, secondary?, surface?, muted?, accent?, radiusSm?, radiusMd?, radiusLg?, radiusFull? }` | Override CSS variables for the widget. Colors: `primary` (text/UI), `secondary` (unused), `surface` (backgrounds), `muted` (secondary text), `accent` (buttons/links). Border radius: `radiusSm` (0.75rem, inputs), `radiusMd` (1rem, cards), `radiusLg` (1.5rem, panels/bubbles), `radiusFull` (9999px, pills/buttons). |
-| `features` | `AgentWidgetFeatureFlags` | Toggle UI features: `showReasoning?` (show thinking bubbles, default: `true`), `showToolCalls?` (show tool usage bubbles, default: `true`). |
+| `features` | `AgentWidgetFeatureFlags` | Toggle UI features: `showReasoning?` (show thinking bubbles, default: `true`), `showToolCalls?` (show tool usage bubbles, default: `true`), `showEventStreamToggle?` (show event stream inspector toggle in header, default: `false`). |
 | `launcher` | `{ enabled?, autoExpand?, title?, subtitle?, iconUrl?, position? }` | Controls the floating launcher button. |
 | `initialMessages` | `AgentWidgetMessage[]` | Seed the conversation transcript. |
 | `suggestionChips` | `string[]` | Render quick reply buttons above the composer. |

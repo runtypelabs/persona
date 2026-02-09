@@ -65,7 +65,17 @@ export type {
   AgentRequestOptions,
   AgentExecutionState,
   AgentMessageMetadata,
-  AgentWidgetAgentRequestPayload
+  AgentWidgetAgentRequestPayload,
+  // Event stream types
+  SSEEventRecord,
+  EventStreamConfig,
+  EventStreamBadgeColor,
+  EventStreamViewRenderContext,
+  EventStreamRowRenderContext,
+  EventStreamToolbarRenderContext,
+  EventStreamPayloadRenderContext,
+  // Controller event map
+  AgentWidgetControllerEventMap
 } from "./types";
 
 export { initAgentWidgetFn as initAgentWidget };
@@ -78,6 +88,7 @@ export {
   type AgentWidgetSessionStatus
 } from "./session";
 export { AgentWidgetClient } from "./client";
+export type { SSEEventCallback } from "./client";
 export { createLocalStorageAdapter } from "./utils/storage";
 export {
   createActionManager,
