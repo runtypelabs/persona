@@ -425,7 +425,8 @@ export const createAgentExperience = (
   const persistKeyPrefix = (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
   const eventStreamDbName = `${persistKeyPrefix}event-stream`;
   let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
-  let eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(500, eventStreamStore) : null;
+  const eventStreamMaxEvents = config.features?.eventStream?.maxEvents ?? 500;
+  let eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore) : null;
   let eventStreamView: ReturnType<typeof createEventStreamView> | null = null;
   let eventStreamVisible = false;
   let eventStreamRAF: number | null = null;
@@ -557,7 +558,13 @@ export const createAgentExperience = (
     if (!eventStreamBuffer) return;
     eventStreamVisible = true;
     if (!eventStreamView && eventStreamBuffer) {
-      eventStreamView = createEventStreamView(eventStreamBuffer, () => eventStreamBuffer!.getAllFromStore(), () => toggleEventStreamOff());
+      eventStreamView = createEventStreamView({
+        buffer: eventStreamBuffer,
+        getFullHistory: () => eventStreamBuffer!.getAllFromStore(),
+        onClose: () => toggleEventStreamOff(),
+        config,
+        plugins,
+      });
     }
     if (eventStreamView) {
       body.style.display = "none";

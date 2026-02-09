@@ -1,10 +1,68 @@
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
-import { VirtualScroller } from "../utils/virtual-scroller";
 import type { EventStreamBuffer } from "../utils/event-stream-buffer";
-import type { SSEEventRecord } from "../types";
+import type {
+  SSEEventRecord,
+  AgentWidgetConfig,
+  EventStreamConfig,
+  EventStreamBadgeColor,
+} from "../types";
+import type { AgentWidgetPlugin } from "../plugins/types";
 
-function formatTimestamp(ms: number): string {
+// ============================================================================
+// Constants
+// ============================================================================
+
+const DEFAULT_BADGE_COLORS: Record<string, EventStreamBadgeColor> = {
+  flow_: { bg: "#dcfce7", text: "#166534" },
+  step_: { bg: "#dbeafe", text: "#1e40af" },
+  reason_: { bg: "#ffedd5", text: "#9a3412" },
+  tool_: { bg: "#f3e8ff", text: "#6b21a8" },
+  agent_: { bg: "#ccfbf1", text: "#115e59" },
+  error: { bg: "#fecaca", text: "#991b1b" },
+};
+const DEFAULT_BADGE_COLOR: EventStreamBadgeColor = {
+  bg: "#f3f4f6",
+  text: "#4b5563",
+};
+
+const DEFAULT_DESCRIPTION_FIELDS = [
+  "flowName",
+  "stepName",
+  "name",
+  "tool",
+  "toolName",
+];
+
+// Minimum interval between renders (ms)
+const UPDATE_THROTTLE_MS = 100;
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+function getBadgeColor(
+  eventType: string,
+  customColors?: Record<string, EventStreamBadgeColor>
+): EventStreamBadgeColor {
+  const allColors = { ...DEFAULT_BADGE_COLORS, ...customColors };
+  // Exact match first
+  if (allColors[eventType]) return allColors[eventType];
+  // Prefix match (keys ending with "_")
+  for (const prefix of Object.keys(allColors)) {
+    if (prefix.endsWith("_") && eventType.startsWith(prefix)) {
+      return allColors[prefix];
+    }
+  }
+  return DEFAULT_BADGE_COLOR;
+}
+
+function formatRelativeTimestamp(ms: number, firstEventMs: number): string {
+  const delta = (ms - firstEventMs) / 1000;
+  return `+${delta.toFixed(3)}s`;
+}
+
+function formatAbsoluteTimestamp(ms: number): string {
   const d = new Date(ms);
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
@@ -13,705 +71,987 @@ function formatTimestamp(ms: number): string {
   return `${hh}:${mm}:${ss}.${mmm}`;
 }
 
-// Row height constant shared between renderEventRow and scroller config
-const EVENT_ROW_HEIGHT = 52;
-
-function renderEventRow(event: SSEEventRecord, onPayloadClick?: (event: SSEEventRecord, target: HTMLElement) => void): HTMLElement {
-  // The virtual scroller sets position:absolute + explicit height on the returned element.
-  // We build content directly inside it using fixed pixel positioning to guarantee visibility.
-  const row = createElement(
-    "div",
-    "tvw-border-b tvw-border-cw-divider tvw-text-xs hover:tvw-bg-cw-container tvw-group tvw-overflow-hidden"
-  );
-
-  // Top line: badge + timestamp + spacer + copy button
-  const topRow = createElement(
-    "div",
-    "tvw-flex tvw-items-center tvw-gap-2 tvw-px-4"
-  );
-  topRow.style.height = "24px";
-
-  // Event type badge
-  const badge = createElement(
-    "span",
-    "tvw-inline-block tvw-px-1.5 tvw-py-px tvw-rounded tvw-text-[10px] tvw-font-mono tvw-font-medium tvw-bg-cw-accent/10 tvw-text-cw-accent tvw-whitespace-nowrap tvw-flex-shrink-0"
-  );
-  badge.textContent = event.type;
-
-  // Timestamp
-  const timestamp = createElement(
-    "span",
-    "tvw-text-[10px] tvw-text-cw-muted tvw-whitespace-nowrap tvw-flex-shrink-0 tvw-font-mono"
-  );
-  timestamp.textContent = formatTimestamp(event.timestamp);
-
-  // Spacer
-  const spacer = createElement("div", "tvw-flex-1");
-
-  // Copy button (visible on hover)
-  const copyBtn = createElement(
-    "button",
-    "tvw-opacity-0 group-hover:tvw-opacity-100 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-flex-shrink-0 tvw-border-none tvw-bg-transparent tvw-p-0"
-  );
-  const clipIcon = renderLucideIcon("clipboard", "12px", "currentColor", 1.5);
-  if (clipIcon) copyBtn.appendChild(clipIcon);
-  copyBtn.addEventListener("click", async () => {
-    // Format as structured JSON with parsed payload
-    let formattedPayload: unknown;
-    try {
-      formattedPayload = JSON.parse(event.payload);
-    } catch {
-      formattedPayload = event.payload;
+function extractDescription(
+  payload: string,
+  fields: string[]
+): string | null {
+  try {
+    const obj = JSON.parse(payload) as Record<string, unknown>;
+    if (typeof obj !== "object" || obj === null) return null;
+    for (const field of fields) {
+      const parts = field.split(".");
+      let current: unknown = obj;
+      for (const part of parts) {
+        if (current && typeof current === "object" && current !== null) {
+          current = (current as Record<string, unknown>)[part];
+        } else {
+          current = undefined;
+          break;
+        }
+      }
+      if (typeof current === "string" && current.trim()) return current.trim();
     }
-    const formatted = JSON.stringify(
-      {
-        type: event.type,
-        timestamp: new Date(event.timestamp).toISOString(),
-        payload: formattedPayload,
-      },
-      null,
-      2
-    );
-
-    try {
-      await navigator.clipboard.writeText(formatted);
-    } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement("textarea");
-      textarea.value = formatted;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-    }
-
-    // Visual feedback: swap icon to checkmark
-    copyBtn.innerHTML = "";
-    const checkIcon = renderLucideIcon("check", "12px", "currentColor", 1.5);
-    if (checkIcon) copyBtn.appendChild(checkIcon);
-    setTimeout(() => {
-      copyBtn.innerHTML = "";
-      const restoreIcon = renderLucideIcon("clipboard", "12px", "currentColor", 1.5);
-      if (restoreIcon) copyBtn.appendChild(restoreIcon);
-    }, 1500);
-  });
-
-  topRow.appendChild(badge);
-  topRow.appendChild(timestamp);
-  topRow.appendChild(spacer);
-  topRow.appendChild(copyBtn);
-
-  // Bottom line: payload preview (full width)
-  const payload = createElement(
-    "pre",
-    "tvw-text-[11px] tvw-text-cw-secondary tvw-font-mono tvw-overflow-hidden tvw-text-ellipsis tvw-whitespace-nowrap tvw-m-0 tvw-px-4 tvw-cursor-pointer hover:tvw-text-cw-primary"
-  );
-  payload.style.height = "18px";
-  payload.style.lineHeight = "18px";
-  const preview =
-    event.payload.length > 120
-      ? event.payload.slice(0, 120) + "..."
-      : event.payload;
-  payload.textContent = preview;
-
-  if (onPayloadClick) {
-    payload.addEventListener("click", (e: Event) => {
-      e.stopPropagation();
-      onPayloadClick(event, payload);
-    });
+  } catch {
+    // Not JSON, no description
   }
-
-  row.appendChild(topRow);
-  row.appendChild(payload);
-
-  return row;
+  return null;
 }
 
+function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve) => {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+    resolve();
+  });
+}
+
+function formatEventForCopy(event: SSEEventRecord): string {
+  let formattedPayload: unknown;
+  try {
+    formattedPayload = JSON.parse(event.payload);
+  } catch {
+    formattedPayload = event.payload;
+  }
+  return JSON.stringify(
+    {
+      type: event.type,
+      timestamp: new Date(event.timestamp).toISOString(),
+      payload: formattedPayload,
+    },
+    null,
+    2
+  );
+}
+
+// ============================================================================
+// Inline Payload Component
+// ============================================================================
+
+function renderInlinePayload(
+  event: SSEEventRecord,
+  plugins: AgentWidgetPlugin[],
+  config: AgentWidgetConfig | undefined
+): HTMLElement {
+  let formattedPayload: string;
+  let parsedPayload: unknown;
+  try {
+    parsedPayload = JSON.parse(event.payload);
+    formattedPayload = JSON.stringify(parsedPayload, null, 2);
+  } catch {
+    parsedPayload = event.payload;
+    formattedPayload = event.payload;
+  }
+
+  // Plugin hook: renderEventStreamPayload
+  const payloadPlugin = plugins.find((p) => p.renderEventStreamPayload);
+  if (payloadPlugin?.renderEventStreamPayload && config) {
+    const customPayload = payloadPlugin.renderEventStreamPayload({
+      event,
+      config,
+      defaultRenderer: () => renderDefaultPayload(),
+      parsedPayload,
+    });
+    if (customPayload) return customPayload;
+  }
+
+  return renderDefaultPayload();
+
+  function renderDefaultPayload(): HTMLElement {
+    const payloadContainer = createElement(
+      "div",
+      "tvw-bg-cw-container tvw-border-t tvw-border-cw-divider tvw-px-3 tvw-py-2 tvw-ml-4 tvw-mr-3 tvw-mb-1 tvw-rounded-b tvw-overflow-auto tvw-max-h-[300px]"
+    );
+
+    const payloadContent = createElement(
+      "pre",
+      "tvw-m-0 tvw-whitespace-pre-wrap tvw-break-all tvw-text-[11px] tvw-text-cw-secondary tvw-font-mono"
+    );
+    payloadContent.textContent = formattedPayload;
+
+    payloadContainer.appendChild(payloadContent);
+    return payloadContainer;
+  }
+}
+
+// ============================================================================
+// Event Row Component
+// ============================================================================
+
+function renderEventRow(
+  event: SSEEventRecord,
+  index: number,
+  firstTimestamp: number,
+  esConfig: EventStreamConfig,
+  expandedSet: Set<string>,
+  onToggleExpand: (eventId: string) => void,
+  plugins: AgentWidgetPlugin[],
+  config: AgentWidgetConfig | undefined
+): HTMLElement {
+  const isExpanded = expandedSet.has(event.id);
+  const wrapper = createElement(
+    "div",
+    "tvw-border-b tvw-border-cw-divider tvw-text-xs"
+  );
+
+  // Plugin hook: renderEventStreamRow
+  const rowPlugin = plugins.find((p) => p.renderEventStreamRow);
+  if (rowPlugin?.renderEventStreamRow && config) {
+    const customRow = rowPlugin.renderEventStreamRow({
+      event,
+      index,
+      config,
+      defaultRenderer: () => buildDefaultRowContent(),
+      isExpanded,
+      onToggleExpand: () => onToggleExpand(event.id),
+    });
+    if (customRow) {
+      wrapper.appendChild(customRow);
+      return wrapper;
+    }
+  }
+
+  wrapper.appendChild(buildDefaultRowContent());
+  return wrapper;
+
+  function buildDefaultRowContent(): HTMLElement {
+    const container = createElement("div", "");
+
+    // Main row line
+    const row = createElement(
+      "div",
+      "tvw-flex tvw-items-center tvw-gap-2 tvw-px-3 tvw-py-2 hover:tvw-bg-cw-container tvw-cursor-pointer tvw-group"
+    );
+
+    // 1. Chevron (expand/collapse)
+    const chevron = createElement(
+      "span",
+      "tvw-flex-shrink-0 tvw-text-cw-muted tvw-w-4 tvw-text-center tvw-flex tvw-items-center tvw-justify-center"
+    );
+    const chevronIcon = renderLucideIcon(
+      isExpanded ? "chevron-down" : "chevron-right",
+      "14px",
+      "currentColor",
+      2
+    );
+    if (chevronIcon) chevron.appendChild(chevronIcon);
+
+    // 2. Timestamp
+    const timestamp = createElement(
+      "span",
+      "tvw-text-[11px] tvw-text-cw-muted tvw-whitespace-nowrap tvw-flex-shrink-0 tvw-font-mono tvw-w-[70px]"
+    );
+    const tsFormat = esConfig.timestampFormat ?? "relative";
+    timestamp.textContent =
+      tsFormat === "relative"
+        ? formatRelativeTimestamp(event.timestamp, firstTimestamp)
+        : formatAbsoluteTimestamp(event.timestamp);
+
+    // 3. Sequence number
+    let seqNum: HTMLElement | null = null;
+    if (esConfig.showSequenceNumbers !== false) {
+      seqNum = createElement(
+        "span",
+        "tvw-text-[11px] tvw-text-cw-muted tvw-font-mono tvw-flex-shrink-0 tvw-w-[28px] tvw-text-right"
+      );
+      seqNum.textContent = String(index + 1);
+    }
+
+    // 4. Color-coded type badge
+    const badgeColor = getBadgeColor(event.type, esConfig.badgeColors);
+    const badge = createElement(
+      "span",
+      "tvw-inline-flex tvw-items-center tvw-px-2 tvw-py-0.5 tvw-rounded tvw-text-[11px] tvw-font-mono tvw-font-medium tvw-whitespace-nowrap tvw-flex-shrink-0 tvw-border"
+    );
+    badge.style.backgroundColor = badgeColor.bg;
+    badge.style.color = badgeColor.text;
+    badge.style.borderColor = badgeColor.text + "30";
+    badge.textContent = event.type;
+
+    // 5. Description (extracted from payload)
+    const descFields =
+      esConfig.descriptionFields ?? DEFAULT_DESCRIPTION_FIELDS;
+    const desc = extractDescription(event.payload, descFields);
+    let descEl: HTMLElement | null = null;
+    if (desc) {
+      descEl = createElement(
+        "span",
+        "tvw-text-[11px] tvw-text-cw-secondary tvw-truncate tvw-min-w-0"
+      );
+      descEl.textContent = desc;
+    }
+
+    // 6. Spacer
+    const spacer = createElement("div", "tvw-flex-1 tvw-min-w-0");
+
+    // 7. Copy button (visible on hover)
+    const copyBtn = createElement(
+      "button",
+      "tvw-opacity-0 group-hover:tvw-opacity-100 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-flex-shrink-0 tvw-border-none tvw-bg-transparent tvw-p-0"
+    );
+    const clipIcon = renderLucideIcon(
+      "clipboard",
+      "12px",
+      "currentColor",
+      1.5
+    );
+    if (clipIcon) copyBtn.appendChild(clipIcon);
+    copyBtn.addEventListener("click", async (e: Event) => {
+      e.stopPropagation();
+      await copyToClipboard(formatEventForCopy(event));
+      // Visual feedback
+      copyBtn.innerHTML = "";
+      const checkIcon = renderLucideIcon(
+        "check",
+        "12px",
+        "currentColor",
+        1.5
+      );
+      if (checkIcon) copyBtn.appendChild(checkIcon);
+      setTimeout(() => {
+        copyBtn.innerHTML = "";
+        const restoreIcon = renderLucideIcon(
+          "clipboard",
+          "12px",
+          "currentColor",
+          1.5
+        );
+        if (restoreIcon) copyBtn.appendChild(restoreIcon);
+      }, 1500);
+    });
+
+    // Assemble row
+    row.appendChild(chevron);
+    row.appendChild(timestamp);
+    if (seqNum) row.appendChild(seqNum);
+    row.appendChild(badge);
+    if (descEl) row.appendChild(descEl);
+    row.appendChild(spacer);
+    row.appendChild(copyBtn);
+
+    // Click handler for expand/collapse on the chevron
+    chevron.style.cursor = "pointer";
+    chevron.addEventListener("click", (e: Event) => {
+      e.stopPropagation();
+      onToggleExpand(event.id);
+    });
+
+    // Click handler for expand/collapse (entire row line)
+    row.addEventListener("click", (e: Event) => {
+      e.stopPropagation();
+      const target = e.target as HTMLElement;
+      // Skip if clicking copy button or its children
+      if (target?.closest?.("button") || target?.tagName === "BUTTON") return;
+      onToggleExpand(event.id);
+    });
+
+    container.appendChild(row);
+
+    // Expanded payload (inline)
+    if (isExpanded) {
+      container.appendChild(
+        renderInlinePayload(event, plugins, config)
+      );
+    }
+
+    return container;
+  }
+}
+
+// ============================================================================
+// Main View
+// ============================================================================
+
+export type EventStreamViewOptions = {
+  buffer: EventStreamBuffer;
+  getFullHistory?: () => Promise<SSEEventRecord[]>;
+  onClose?: () => void;
+  config?: AgentWidgetConfig;
+  plugins?: AgentWidgetPlugin[];
+};
+
 export function createEventStreamView(
-  buffer: EventStreamBuffer,
-  getFullHistory?: () => Promise<SSEEventRecord[]>,
-  onClose?: () => void
+  options: EventStreamViewOptions
 ): {
   element: HTMLElement;
   update: () => void;
   destroy: () => void;
 } {
-  const container = createElement(
-    "div",
-    "tvw-event-stream-view tvw-flex tvw-flex-col tvw-flex-1 tvw-min-h-0"
-  );
+  const {
+    buffer,
+    getFullHistory,
+    onClose,
+    config,
+    plugins = [],
+  } = options;
 
-  // Toolbar
-  const toolbar = createElement(
-    "div",
-    "tvw-flex tvw-items-center tvw-gap-1.5 tvw-px-4 tvw-py-1.5 tvw-border-b tvw-border-cw-divider tvw-bg-cw-surface tvw-flex-shrink-0"
-  );
+  const esConfig: EventStreamConfig = config?.features?.eventStream ?? {};
 
-  // Filter select
-  const filterSelect = createElement(
-    "select",
-    "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-text-cw-primary"
-  ) as HTMLSelectElement;
-  const allOption = createElement("option", "") as HTMLOptionElement;
-  allOption.value = "";
-  allOption.textContent = "All Events";
-  filterSelect.appendChild(allOption);
-
-  // Search input wrapper (relative for clear button positioning)
-  const searchWrapper = createElement(
-    "div",
-    "tvw-relative tvw-flex-1 tvw-min-w-0"
-  );
-
-  const searchInput = createElement(
-    "input",
-    "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-w-full tvw-text-cw-primary tvw-pr-6"
-  ) as HTMLInputElement;
-  searchInput.type = "text";
-  searchInput.placeholder = "Search events...";
-
-  // Clear search button
-  const searchClearBtn = createElement(
-    "button",
-    "tvw-absolute tvw-right-1 tvw-top-1/2 tvw--translate-y-1/2 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-0 tvw-leading-none"
-  ) as HTMLButtonElement;
-  searchClearBtn.type = "button";
-  searchClearBtn.style.display = "none";
-  const clearSearchIcon = renderLucideIcon("x", "12px", "currentColor", 2);
-  if (clearSearchIcon) searchClearBtn.appendChild(clearSearchIcon);
-
-  searchWrapper.appendChild(searchInput);
-  searchWrapper.appendChild(searchClearBtn);
-
-  const iconBtnClass =
-    "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded tvw-text-cw-muted hover:tvw-bg-cw-container hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-flex-shrink-0 tvw-p-1";
-
-  // Copy All button (icon)
-  const copyAllBtn = createElement(
-    "button",
-    iconBtnClass
-  ) as HTMLButtonElement;
-  copyAllBtn.type = "button";
-  copyAllBtn.title = "Copy All";
-  copyAllBtn.style.width = "26px";
-  copyAllBtn.style.height = "26px";
-  const copyAllIcon = renderLucideIcon("clipboard-copy", "14px", "currentColor", 1.5);
-  if (copyAllIcon) copyAllBtn.appendChild(copyAllIcon);
-
-  // Clear button (icon)
-  const clearBtn = createElement(
-    "button",
-    iconBtnClass
-  ) as HTMLButtonElement;
-  clearBtn.type = "button";
-  clearBtn.title = "Clear";
-  clearBtn.style.width = "26px";
-  clearBtn.style.height = "26px";
-  const clearIcon = renderLucideIcon("trash-2", "14px", "currentColor", 1.5);
-  if (clearIcon) clearBtn.appendChild(clearIcon);
-
-  toolbar.appendChild(filterSelect);
-  toolbar.appendChild(searchWrapper);
-  toolbar.appendChild(copyAllBtn);
-  toolbar.appendChild(clearBtn);
-
-  // Truncation notice banner (above virtual scroller)
-  const truncationBanner = createElement(
-    "div",
-    "tvw-text-xs tvw-text-cw-muted tvw-text-center tvw-py-0.5 tvw-px-4 tvw-bg-cw-container tvw-border-b tvw-border-cw-divider tvw-italic tvw-flex-shrink-0"
-  );
-  truncationBanner.style.display = "none";
-
-  // Events list container (wraps virtual scroller + scroll-to-bottom indicator)
-  const eventsListWrapper = createElement(
-    "div",
-    "tvw-flex-1 tvw-min-h-0 tvw-relative"
-  );
-
-  const eventsList = createElement(
-    "div",
-    "tvw-event-stream-list tvw-flex-1 tvw-overflow-y-auto tvw-min-h-0 tvw-relative"
-  );
-  eventsList.style.height = "100%";
-
-  // Scroll-to-bottom indicator
-  const scrollIndicator = createElement(
-    "div",
-    "tvw-absolute tvw-bottom-3 tvw-left-1/2 tvw-transform tvw--translate-x-1/2 tvw-bg-cw-accent tvw-text-white tvw-text-xs tvw-px-3 tvw-py-1.5 tvw-rounded-full tvw-cursor-pointer tvw-shadow-md tvw-z-10 tvw-flex tvw-items-center tvw-gap-1"
-  );
-  scrollIndicator.style.display = "none";
-  const arrowIcon = renderLucideIcon("arrow-down", "12px", "currentColor", 2);
-  if (arrowIcon) scrollIndicator.appendChild(arrowIcon);
-  const indicatorText = createElement("span", "");
-  scrollIndicator.appendChild(indicatorText);
-
-  // No matching events message
-  const noResultsMsg = createElement(
-    "div",
-    "tvw-flex tvw-items-center tvw-justify-center tvw-h-full tvw-text-sm tvw-text-cw-muted"
-  );
-  noResultsMsg.style.display = "none";
-
-  eventsListWrapper.appendChild(eventsList);
-  eventsListWrapper.appendChild(noResultsMsg);
-  eventsListWrapper.appendChild(scrollIndicator);
-
-  container.setAttribute("tabindex", "0");
-  container.appendChild(toolbar);
-  container.appendChild(truncationBanner);
-  container.appendChild(eventsListWrapper);
-
-  // Virtual scroller state
-  let filteredEvents: SSEEventRecord[] = [];
-
-  // Floating payload panel state
-  let activePanel: HTMLElement | null = null;
-
-  function dismissPanel() {
-    if (activePanel) {
-      activePanel.remove();
-      activePanel = null;
-    }
-  }
-
-  function showPayloadPanel(event: SSEEventRecord, target: HTMLElement) {
-    // Dismiss any existing panel first
-    dismissPanel();
-
-    // Format JSON for display
-    let formattedPayload: string;
-    try {
-      formattedPayload = JSON.stringify(JSON.parse(event.payload), null, 2);
-    } catch {
-      formattedPayload = event.payload;
-    }
-
-    // Create floating panel
-    const panel = createElement(
-      "div",
-      "tvw-absolute tvw-z-20 tvw-bg-cw-surface tvw-border tvw-border-cw-border tvw-rounded-lg tvw-shadow-lg tvw-p-3 tvw-text-xs tvw-font-mono tvw-max-w-[500px] tvw-max-h-[300px] tvw-overflow-auto"
-    );
-    panel.setAttribute("data-payload-panel", "true");
-
-    // Copy button in top-right corner
-    const panelCopyBtn = createElement(
-      "button",
-      "tvw-absolute tvw-top-1.5 tvw-right-1.5 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border-none tvw-bg-cw-surface tvw-p-1 tvw-rounded tvw-z-10"
-    );
-    panelCopyBtn.title = "Copy payload";
-    const panelCopyIcon = renderLucideIcon("clipboard", "12px", "currentColor", 1.5);
-    if (panelCopyIcon) panelCopyBtn.appendChild(panelCopyIcon);
-    panelCopyBtn.addEventListener("click", async (e: Event) => {
-      e.stopPropagation();
-      try {
-        await navigator.clipboard.writeText(formattedPayload);
-      } catch {
-        // Fallback
-        const textarea = document.createElement("textarea");
-        textarea.value = formattedPayload;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-      }
-      // Visual feedback
-      panelCopyBtn.innerHTML = "";
-      const checkIcon = renderLucideIcon("check", "12px", "currentColor", 1.5);
-      if (checkIcon) panelCopyBtn.appendChild(checkIcon);
-      setTimeout(() => {
-        panelCopyBtn.innerHTML = "";
-        const restoreIcon = renderLucideIcon("clipboard", "12px", "currentColor", 1.5);
-        if (restoreIcon) panelCopyBtn.appendChild(restoreIcon);
-      }, 1500);
+  // --- Plugin hook: renderEventStreamView (replace entire view) ---
+  const viewPlugin = plugins.find((p) => p.renderEventStreamView);
+  if (viewPlugin?.renderEventStreamView && config) {
+    const customView = viewPlugin.renderEventStreamView({
+      config,
+      events: buffer.getAll(),
+      defaultRenderer: () => buildDefaultView().element,
+      onClose,
     });
+    if (customView) {
+      return {
+        element: customView,
+        update: () => {
+          // Plugin manages its own updates
+        },
+        destroy: () => {
+          // Plugin manages its own cleanup
+        },
+      };
+    }
+  }
 
-    // Payload content
-    const payloadContent = createElement(
-      "pre",
-      "tvw-m-0 tvw-whitespace-pre-wrap tvw-break-all tvw-text-cw-secondary tvw-pr-6"
+  return buildDefaultView();
+
+  function buildDefaultView(): {
+    element: HTMLElement;
+    update: () => void;
+    destroy: () => void;
+  } {
+    const container = createElement(
+      "div",
+      "tvw-event-stream-view tvw-flex tvw-flex-col tvw-flex-1 tvw-min-h-0"
     );
-    payloadContent.textContent = formattedPayload;
 
-    panel.appendChild(panelCopyBtn);
-    panel.appendChild(payloadContent);
+    // State
+    let filteredEvents: SSEEventRecord[] = [];
+    let selectedType = "";
+    let searchTerm = "";
+    let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+    let lastKnownTypes: string[] = [];
+    let lastTypeCounts: Record<string, number> = {};
+    let lastFilteredCount = 0;
+    let userScrolledUp = false;
+    let newEventsSincePause = 0;
+    let lastRenderTime = 0;
+    let pendingUpdate = false;
+    let pendingRafId: number | null = null;
+    const expandedSet = new Set<string>();
 
-    // Position below or above the target based on available space
-    // Use the eventsListWrapper as the positioning context (it has position:relative)
-    const wrapperRect = eventsListWrapper.getBoundingClientRect?.();
-    const targetRect = target.getBoundingClientRect?.();
+    // ========================================================================
+    // Toolbar: Header Bar + Search Bar
+    // ========================================================================
 
-    if (wrapperRect && targetRect) {
-      const spaceBelow = wrapperRect.bottom - targetRect.bottom;
-      const spaceAbove = targetRect.top - wrapperRect.top;
-      const leftOffset = targetRect.left - wrapperRect.left;
+    // Elements we need references to across functions
+    // These are assigned inside buildDefaultToolbar() which always runs
+    let countBadge!: HTMLElement;
+    let filterSelect!: HTMLSelectElement;
+    let copyAllBtn!: HTMLButtonElement;
+    let searchInput!: HTMLInputElement;
+    let searchClearBtn!: HTMLButtonElement;
 
-      if (spaceBelow >= 150 || spaceBelow >= spaceAbove) {
-        // Position below
-        panel.style.top = `${targetRect.bottom - wrapperRect.top}px`;
-      } else {
-        // Position above
-        panel.style.bottom = `${wrapperRect.bottom - targetRect.top}px`;
-      }
-      panel.style.left = `${Math.max(4, leftOffset)}px`;
-      panel.style.right = "4px";
-    } else {
-      // Fallback: center in wrapper
-      panel.style.left = "4px";
-      panel.style.right = "4px";
-      panel.style.top = "50%";
-    }
-
-    // Stop click events from propagating out of the panel
-    panel.addEventListener("click", (e: Event) => e.stopPropagation());
-
-    eventsListWrapper.appendChild(panel);
-    activePanel = panel;
-  }
-
-  const scroller = new VirtualScroller({
-    container: eventsList,
-    rowHeight: EVENT_ROW_HEIGHT,
-    overscan: 5,
-    renderRow: (index: number) => {
-      const event = filteredEvents[index];
-      if (!event) return createElement("div", "");
-      return renderEventRow(event, showPayloadPanel);
-    },
-  });
-
-  // Auto-scroll state
-  let userScrolledUp = false;
-  let newEventsSincePause = 0;
-
-  const handleListScroll = () => {
-    // Dismiss any open payload panel on scroll
-    dismissPanel();
-    if (scroller.getIsAutoScrolling()) return;
-    if (scroller.isNearBottom()) {
-      userScrolledUp = false;
-      newEventsSincePause = 0;
-      scrollIndicator.style.display = "none";
-    } else {
-      userScrolledUp = true;
-    }
-  };
-  eventsList.addEventListener("scroll", handleListScroll);
-
-  scrollIndicator.addEventListener("click", () => {
-    scroller.scrollToBottom(true);
-    userScrolledUp = false;
-    newEventsSincePause = 0;
-    scrollIndicator.style.display = "none";
-  });
-
-  // Track last known event types for filter update
-  let lastKnownTypes: string[] = [];
-  let lastTypeCounts: Record<string, number> = {};
-  let lastFilteredCount = 0;
-  let selectedType = "";
-  let searchTerm = "";
-  let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-
-  // Throttle state for update() — coalesces rapid event bursts
-  let lastRenderTime = 0;
-  let pendingUpdate = false;
-  let pendingRafId: number | null = null;
-
-  function updateFilterOptions() {
-    const allEvents = buffer.getAll();
-    const typeCounts: Record<string, number> = {};
-    for (const e of allEvents) {
-      typeCounts[e.type] = (typeCounts[e.type] || 0) + 1;
-    }
-    // Derive types from actual buffer contents (not the stale eventTypesSet)
-    const types = Object.keys(typeCounts).sort();
-
-    // Check if types or counts have changed
-    const typesChanged = types.length !== lastKnownTypes.length || !types.every((t, i) => t === lastKnownTypes[i]);
-    const countsChanged = !typesChanged && types.some(t => typeCounts[t] !== lastTypeCounts[t]);
-    const totalChanged = allEvents.length !== Object.values(lastTypeCounts).reduce((a, b) => a + b, 0);
-
-    if (!typesChanged && !countsChanged && !totalChanged) return;
-
-    lastKnownTypes = types;
-    lastTypeCounts = typeCounts;
-
-    const currentValue = filterSelect.value;
-
-    // Update "All Events" option with count
-    filterSelect.options[0].textContent = `All Events (${allEvents.length})`;
-
-    // Rebuild type options if types changed
-    if (typesChanged) {
-      while (filterSelect.options.length > 1) {
-        filterSelect.remove(1);
-      }
-      for (const type of types) {
-        const opt = createElement("option", "") as HTMLOptionElement;
-        opt.value = type;
-        opt.textContent = `${type} (${typeCounts[type] || 0})`;
-        filterSelect.appendChild(opt);
-      }
-      // Reset to "All Events" if the previously selected type was evicted
-      if (currentValue && types.includes(currentValue)) {
-        filterSelect.value = currentValue;
-      } else if (currentValue) {
-        filterSelect.value = "";
-        selectedType = "";
-      }
-    } else {
-      // Just update counts on existing options
-      for (let i = 1; i < filterSelect.options.length; i++) {
-        const opt = filterSelect.options[i];
-        opt.textContent = `${opt.value} (${typeCounts[opt.value] || 0})`;
-      }
-    }
-  }
-
-  function getFilteredEvents(): SSEEventRecord[] {
-    let events = buffer.getAll();
-    if (selectedType) {
-      events = events.filter((e) => e.type === selectedType);
-    }
-    if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
-      events = events.filter(
-        (e) =>
-          e.type.toLowerCase().includes(lower) ||
-          e.payload.toLowerCase().includes(lower)
+    function buildDefaultToolbar(): HTMLElement {
+      const toolbarOuter = createElement(
+        "div",
+        "tvw-flex tvw-flex-col tvw-flex-shrink-0"
       );
-    }
-    return events;
-  }
 
-  function hasActiveFilters(): boolean {
-    return selectedType !== "" || searchTerm !== "";
-  }
+      // --- Header bar ---
+      const headerBar = createElement(
+        "div",
+        "tvw-flex tvw-items-center tvw-gap-2 tvw-px-4 tvw-py-2 tvw-border-b tvw-border-cw-divider tvw-bg-cw-surface"
+      );
 
-  function updateNow() {
-    lastRenderTime = Date.now();
-    pendingUpdate = false;
+      // Title
+      const title = createElement(
+        "span",
+        "tvw-text-sm tvw-font-semibold tvw-text-cw-primary"
+      );
+      title.textContent = "Event Stream";
 
-    updateFilterOptions();
+      // Count badge
+      countBadge = createElement(
+        "span",
+        "tvw-text-[11px] tvw-font-mono tvw-bg-cw-container tvw-text-cw-muted tvw-px-2 tvw-py-0.5 tvw-rounded"
+      );
+      countBadge.textContent = "0";
 
-    // Update truncation banner
-    const evictedCount = buffer.getEvictedCount();
-    if (evictedCount > 0) {
-      truncationBanner.textContent = `${evictedCount.toLocaleString()} older events truncated`;
-      truncationBanner.style.display = "";
-    } else {
-      truncationBanner.style.display = "none";
-    }
+      const headerSpacer = createElement("div", "tvw-flex-1");
 
-    filteredEvents = getFilteredEvents();
-    const newCount = filteredEvents.length;
-    const bufferHasEvents = buffer.getSize() > 0;
+      // Filter dropdown
+      filterSelect = createElement(
+        "select",
+        "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-px-2 tvw-py-1 tvw-text-cw-primary tvw-cursor-pointer"
+      ) as HTMLSelectElement;
+      const allOption = createElement("option", "") as HTMLOptionElement;
+      allOption.value = "";
+      allOption.textContent = "All events";
+      filterSelect.appendChild(allOption);
 
-    // Show/hide no-results message
-    if (newCount === 0 && bufferHasEvents && hasActiveFilters()) {
-      noResultsMsg.textContent = searchTerm
-        ? `No events matching '${searchTerm}'`
-        : "No events matching filter";
-      noResultsMsg.style.display = "";
-      eventsList.style.display = "none";
-    } else {
-      noResultsMsg.style.display = "none";
-      eventsList.style.display = "";
-    }
+      // Copy All button
+      const iconBtnClass =
+        "tvw-inline-flex tvw-items-center tvw-gap-1.5 tvw-rounded tvw-text-xs tvw-text-cw-muted hover:tvw-bg-cw-container hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border tvw-border-cw-border tvw-bg-transparent tvw-flex-shrink-0 tvw-px-2.5 tvw-py-1";
 
-    // Update Copy All button title based on active filters
-    if (hasActiveFilters()) {
-      copyAllBtn.title = `Copy Filtered (${newCount})`;
-    } else {
+      copyAllBtn = createElement(
+        "button",
+        iconBtnClass
+      ) as HTMLButtonElement;
+      copyAllBtn.type = "button";
       copyAllBtn.title = "Copy All";
+      const copyAllIcon = renderLucideIcon(
+        "clipboard-copy",
+        "12px",
+        "currentColor",
+        1.5
+      );
+      if (copyAllIcon) copyAllBtn.appendChild(copyAllIcon);
+      const copyAllLabel = createElement(
+        "span",
+        "tvw-text-xs"
+      );
+      copyAllLabel.textContent = "Copy All";
+      copyAllBtn.appendChild(copyAllLabel);
+
+      headerBar.appendChild(title);
+      headerBar.appendChild(countBadge);
+      headerBar.appendChild(headerSpacer);
+      headerBar.appendChild(filterSelect);
+      headerBar.appendChild(copyAllBtn);
+
+      // --- Search bar ---
+      const searchBar = createElement(
+        "div",
+        "tvw-relative tvw-px-4 tvw-py-1.5 tvw-border-b tvw-border-cw-divider tvw-bg-cw-surface"
+      );
+
+      // Search icon
+      const searchIcon = renderLucideIcon(
+        "search",
+        "14px",
+        "var(--cw-muted, #9ca3af)",
+        1.5
+      );
+      const searchIconWrapper = createElement(
+        "span",
+        "tvw-absolute tvw-left-6 tvw-top-1/2 tvw--translate-y-1/2 tvw-pointer-events-none tvw-flex tvw-items-center"
+      );
+      if (searchIcon) searchIconWrapper.appendChild(searchIcon);
+
+      searchInput = createElement(
+        "input",
+        "tvw-text-xs tvw-bg-cw-container tvw-border tvw-border-cw-border tvw-rounded tvw-pl-7 tvw-pr-7 tvw-py-1.5 tvw-w-full tvw-text-cw-primary"
+      ) as HTMLInputElement;
+      searchInput.type = "text";
+      searchInput.placeholder = "Search event payloads...";
+
+      searchClearBtn = createElement(
+        "button",
+        "tvw-absolute tvw-right-5 tvw-top-1/2 tvw--translate-y-1/2 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-0 tvw-leading-none"
+      ) as HTMLButtonElement;
+      searchClearBtn.type = "button";
+      searchClearBtn.style.display = "none";
+      const clearSearchIcon = renderLucideIcon(
+        "x",
+        "12px",
+        "currentColor",
+        2
+      );
+      if (clearSearchIcon) searchClearBtn.appendChild(clearSearchIcon);
+
+      searchBar.appendChild(searchIconWrapper);
+      searchBar.appendChild(searchInput);
+      searchBar.appendChild(searchClearBtn);
+
+      toolbarOuter.appendChild(headerBar);
+      toolbarOuter.appendChild(searchBar);
+      return toolbarOuter;
     }
 
-    // Track new events since user scrolled up
-    if (userScrolledUp && newCount > lastFilteredCount) {
-      newEventsSincePause += newCount - lastFilteredCount;
-      indicatorText.textContent = `${newEventsSincePause} new event${newEventsSincePause === 1 ? "" : "s"}`;
-      scrollIndicator.style.display = "";
-    }
-    lastFilteredCount = newCount;
-
-    scroller.setTotalCount(filteredEvents.length);
-
-    // Auto-scroll if user hasn't scrolled up
-    if (!userScrolledUp) {
-      scroller.scrollToBottom();
-    }
-  }
-
-  // Minimum interval between renders (ms)
-  const UPDATE_THROTTLE_MS = 100;
-
-  function update() {
-    const now = Date.now();
-    const elapsed = now - lastRenderTime;
-
-    if (elapsed >= UPDATE_THROTTLE_MS) {
-      // Enough time has passed — render immediately
-      if (pendingRafId !== null) {
-        cancelAnimationFrame(pendingRafId);
-        pendingRafId = null;
-      }
-      updateNow();
-      return;
-    }
-
-    // Too soon — schedule a coalesced update if not already pending
-    if (!pendingUpdate) {
-      pendingUpdate = true;
-      pendingRafId = requestAnimationFrame(() => {
-        pendingRafId = null;
-        updateNow();
+    // Build toolbar (with plugin hook)
+    let toolbar: HTMLElement;
+    const toolbarPlugin = plugins.find((p) => p.renderEventStreamToolbar);
+    if (toolbarPlugin?.renderEventStreamToolbar && config) {
+      const customToolbar = toolbarPlugin.renderEventStreamToolbar({
+        config,
+        defaultRenderer: () => buildDefaultToolbar(),
+        eventCount: buffer.getSize(),
+        filteredCount: 0,
+        onFilterChange: (type: string) => {
+          selectedType = type;
+          resetScrollState();
+          updateNow();
+        },
+        onSearchChange: (term: string) => {
+          searchTerm = term;
+          resetScrollState();
+          updateNow();
+        },
       });
+      toolbar = customToolbar ?? buildDefaultToolbar();
+    } else {
+      toolbar = buildDefaultToolbar();
     }
-  }
 
-  // Event handlers
-  const swapCopyAllIcon = (iconName: string, restoreAfterMs: number) => {
-    copyAllBtn.innerHTML = "";
-    const icon = renderLucideIcon(iconName, "14px", "currentColor", 1.5);
-    if (icon) copyAllBtn.appendChild(icon);
-    setTimeout(() => {
-      copyAllBtn.innerHTML = "";
-      const original = renderLucideIcon("clipboard-copy", "14px", "currentColor", 1.5);
-      if (original) copyAllBtn.appendChild(original);
-      copyAllBtn.disabled = false;
-    }, restoreAfterMs);
-  };
+    // ========================================================================
+    // Truncation Banner
+    // ========================================================================
 
-  const handleCopyAll = async () => {
-    copyAllBtn.disabled = true;
+    const truncationBanner = createElement(
+      "div",
+      "tvw-text-xs tvw-text-cw-muted tvw-text-center tvw-py-0.5 tvw-px-4 tvw-bg-cw-container tvw-border-b tvw-border-cw-divider tvw-italic tvw-flex-shrink-0"
+    );
+    truncationBanner.style.display = "none";
 
-    try {
-      let events: SSEEventRecord[];
-      if (hasActiveFilters()) {
-        // With filters active: copy only the filtered events from ring buffer
-        events = filteredEvents;
-      } else {
-        // No filters: copy full history from IndexedDB if available
-        events = getFullHistory
-          ? await getFullHistory()
-          : buffer.getAll();
+    // ========================================================================
+    // Events List (simple DOM, no virtual scroller)
+    // ========================================================================
+
+    const eventsListWrapper = createElement(
+      "div",
+      "tvw-flex-1 tvw-min-h-0 tvw-relative"
+    );
+
+    const eventsList = createElement(
+      "div",
+      "tvw-event-stream-list tvw-overflow-y-auto tvw-min-h-0"
+    );
+    eventsList.style.height = "100%";
+
+    // Scroll-to-bottom indicator
+    const scrollIndicator = createElement(
+      "div",
+      "tvw-absolute tvw-bottom-3 tvw-left-1/2 tvw-transform tvw--translate-x-1/2 tvw-bg-cw-accent tvw-text-white tvw-text-xs tvw-px-3 tvw-py-1.5 tvw-rounded-full tvw-cursor-pointer tvw-shadow-md tvw-z-10 tvw-flex tvw-items-center tvw-gap-1"
+    );
+    scrollIndicator.style.display = "none";
+    const arrowIcon = renderLucideIcon(
+      "arrow-down",
+      "12px",
+      "currentColor",
+      2
+    );
+    if (arrowIcon) scrollIndicator.appendChild(arrowIcon);
+    const indicatorText = createElement("span", "");
+    scrollIndicator.appendChild(indicatorText);
+
+    // No matching events message
+    const noResultsMsg = createElement(
+      "div",
+      "tvw-flex tvw-items-center tvw-justify-center tvw-h-full tvw-text-sm tvw-text-cw-muted"
+    );
+    noResultsMsg.style.display = "none";
+
+    eventsListWrapper.appendChild(eventsList);
+    eventsListWrapper.appendChild(noResultsMsg);
+    eventsListWrapper.appendChild(scrollIndicator);
+
+    // ========================================================================
+    // Assemble container
+    // ========================================================================
+
+    container.setAttribute("tabindex", "0");
+    container.appendChild(toolbar);
+    container.appendChild(truncationBanner);
+    container.appendChild(eventsListWrapper);
+
+    // ========================================================================
+    // Filtering & Search Logic
+    // ========================================================================
+
+    function updateFilterOptions() {
+      const allEvents = buffer.getAll();
+      const typeCounts: Record<string, number> = {};
+      for (const e of allEvents) {
+        typeCounts[e.type] = (typeCounts[e.type] || 0) + 1;
       }
-      await navigator.clipboard.writeText(JSON.stringify(events, null, 2));
-      swapCopyAllIcon("check", 1500);
-    } catch {
-      swapCopyAllIcon("x", 1500);
+      const types = Object.keys(typeCounts).sort();
+
+      const typesChanged =
+        types.length !== lastKnownTypes.length ||
+        !types.every((t, i) => t === lastKnownTypes[i]);
+      const countsChanged =
+        !typesChanged &&
+        types.some((t) => typeCounts[t] !== lastTypeCounts[t]);
+      const totalChanged =
+        allEvents.length !==
+        Object.values(lastTypeCounts).reduce((a, b) => a + b, 0);
+
+      if (!typesChanged && !countsChanged && !totalChanged) return;
+
+      lastKnownTypes = types;
+      lastTypeCounts = typeCounts;
+
+      if (!filterSelect) return;
+
+      const currentValue = filterSelect.value;
+
+      // Update "All events" option
+      filterSelect.options[0].textContent = `All events`;
+
+      if (typesChanged) {
+        while (filterSelect.options.length > 1) {
+          filterSelect.remove(1);
+        }
+        for (const type of types) {
+          const opt = createElement("option", "") as HTMLOptionElement;
+          opt.value = type;
+          opt.textContent = `${type} (${typeCounts[type] || 0})`;
+          filterSelect.appendChild(opt);
+        }
+        if (currentValue && types.includes(currentValue)) {
+          filterSelect.value = currentValue;
+        } else if (currentValue) {
+          filterSelect.value = "";
+          selectedType = "";
+        }
+      } else {
+        for (let i = 1; i < filterSelect.options.length; i++) {
+          const opt = filterSelect.options[i];
+          opt.textContent = `${opt.value} (${typeCounts[opt.value] || 0})`;
+        }
+      }
     }
-  };
 
-  const handleClear = () => {
-    buffer.clear();
-    userScrolledUp = false;
-    newEventsSincePause = 0;
-    lastFilteredCount = 0;
-    scrollIndicator.style.display = "none";
-    updateNow();
-  };
+    function getFilteredEvents(): SSEEventRecord[] {
+      let events = buffer.getAll();
+      if (selectedType) {
+        events = events.filter((e) => e.type === selectedType);
+      }
+      if (searchTerm) {
+        const lower = searchTerm.toLowerCase();
+        events = events.filter(
+          (e) =>
+            e.type.toLowerCase().includes(lower) ||
+            e.payload.toLowerCase().includes(lower)
+        );
+      }
+      return events;
+    }
 
-  const handleFilterChange = () => {
-    selectedType = filterSelect.value;
-    lastFilteredCount = 0;
-    newEventsSincePause = 0;
-    userScrolledUp = false;
-    scrollIndicator.style.display = "none";
-    updateNow();
-  };
-  const handleSearchInput = () => {
-    // Show/hide clear button based on input content
-    searchClearBtn.style.display = searchInput.value ? "" : "none";
-    if (searchTimeout) clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-      searchTerm = searchInput.value;
+    function hasActiveFilters(): boolean {
+      return selectedType !== "" || searchTerm !== "";
+    }
+
+    function resetScrollState() {
       lastFilteredCount = 0;
       newEventsSincePause = 0;
       userScrolledUp = false;
       scrollIndicator.style.display = "none";
-      updateNow();
-    }, 150);
-  };
-
-  const handleSearchClear = () => {
-    searchInput.value = "";
-    searchTerm = "";
-    searchClearBtn.style.display = "none";
-    if (searchTimeout) clearTimeout(searchTimeout);
-    lastFilteredCount = 0;
-    newEventsSincePause = 0;
-    userScrolledUp = false;
-    scrollIndicator.style.display = "none";
-    updateNow();
-  };
-
-  // Keyboard shortcuts
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const isMod = e.metaKey || e.ctrlKey;
-
-    // Ctrl/Cmd + F: focus search
-    if (isMod && e.key === "f") {
-      e.preventDefault();
-      searchInput.focus();
-      searchInput.select();
-      return;
     }
 
-    // Escape handling
-    if (e.key === "Escape") {
-      // If a payload panel is open, dismiss it first
-      if (activePanel) {
-        dismissPanel();
+    function toggleExpand(eventId: string) {
+      if (expandedSet.has(eventId)) {
+        expandedSet.delete(eventId);
+      } else {
+        expandedSet.add(eventId);
+      }
+      // Save scroll position — user-initiated expand/collapse should not auto-scroll
+      const savedScrollTop = eventsList.scrollTop;
+      const wasUserScrolledUp = userScrolledUp;
+      userScrolledUp = true; // prevent auto-scroll during re-render
+      updateNow();
+      eventsList.scrollTop = savedScrollTop;
+      userScrolledUp = wasUserScrolledUp;
+    }
+
+    // ========================================================================
+    // Render Logic
+    // ========================================================================
+
+    function isNearBottom(): boolean {
+      const threshold = 50;
+      return (
+        eventsList.scrollHeight -
+          eventsList.scrollTop -
+          eventsList.clientHeight <=
+        threshold
+      );
+    }
+
+    function updateNow() {
+      lastRenderTime = Date.now();
+      pendingUpdate = false;
+
+      updateFilterOptions();
+
+      // Truncation banner
+      const evictedCount = buffer.getEvictedCount();
+      if (evictedCount > 0) {
+        truncationBanner.textContent = `${evictedCount.toLocaleString()} older events truncated`;
+        truncationBanner.style.display = "";
+      } else {
+        truncationBanner.style.display = "none";
+      }
+
+      filteredEvents = getFilteredEvents();
+      const newCount = filteredEvents.length;
+      const bufferHasEvents = buffer.getSize() > 0;
+
+      // Update count badge
+      if (countBadge) {
+        countBadge.textContent = String(buffer.getSize());
+      }
+
+      // Show/hide no-results message
+      if (newCount === 0 && bufferHasEvents && hasActiveFilters()) {
+        noResultsMsg.textContent = searchTerm
+          ? `No events matching '${searchTerm}'`
+          : "No events matching filter";
+        noResultsMsg.style.display = "";
+        eventsList.style.display = "none";
+      } else {
+        noResultsMsg.style.display = "none";
+        eventsList.style.display = "";
+      }
+
+      // Update Copy All button title
+      if (copyAllBtn) {
+        copyAllBtn.title = hasActiveFilters()
+          ? `Copy Filtered (${newCount})`
+          : "Copy All";
+      }
+
+      // Track new events since user scrolled up
+      if (userScrolledUp && newCount > lastFilteredCount) {
+        newEventsSincePause += newCount - lastFilteredCount;
+        indicatorText.textContent = `${newEventsSincePause} new event${newEventsSincePause === 1 ? "" : "s"}`;
+        scrollIndicator.style.display = "";
+      }
+      lastFilteredCount = newCount;
+
+      // Get first event timestamp for relative time calculations
+      // Use the unfiltered first event for consistent time references
+      const allEvents = buffer.getAll();
+      const firstTimestamp =
+        allEvents.length > 0 ? allEvents[0].timestamp : 0;
+
+      // Clean up expanded state for evicted events
+      const currentIds = new Set(filteredEvents.map((e) => e.id));
+      for (const id of expandedSet) {
+        if (!currentIds.has(id)) expandedSet.delete(id);
+      }
+
+      // Render all rows
+      const fragment = document.createDocumentFragment();
+      for (let i = 0; i < filteredEvents.length; i++) {
+        fragment.appendChild(
+          renderEventRow(
+            filteredEvents[i],
+            i,
+            firstTimestamp,
+            esConfig,
+            expandedSet,
+            toggleExpand,
+            plugins,
+            config
+          )
+        );
+      }
+      eventsList.innerHTML = "";
+      eventsList.appendChild(fragment);
+
+      // Auto-scroll if user hasn't scrolled up
+      if (!userScrolledUp) {
+        eventsList.scrollTop = eventsList.scrollHeight;
+      }
+    }
+
+    function update() {
+      const now = Date.now();
+      const elapsed = now - lastRenderTime;
+
+      if (elapsed >= UPDATE_THROTTLE_MS) {
+        if (pendingRafId !== null) {
+          cancelAnimationFrame(pendingRafId);
+          pendingRafId = null;
+        }
+        updateNow();
         return;
       }
-      if (document.activeElement === searchInput) {
-        // When search is focused: clear and blur
-        handleSearchClear();
-        searchInput.blur();
-        container.focus();
-      } else if (onClose) {
-        // When container is focused: close panel
-        onClose();
+
+      if (!pendingUpdate) {
+        pendingUpdate = true;
+        pendingRafId = requestAnimationFrame(() => {
+          pendingRafId = null;
+          updateNow();
+        });
       }
     }
-  };
 
-  // Dismiss payload panel on click outside
-  const handleContainerClick = () => {
-    dismissPanel();
-  };
+    // ========================================================================
+    // Event Handlers
+    // ========================================================================
 
-  copyAllBtn.addEventListener("click", handleCopyAll);
-  clearBtn.addEventListener("click", handleClear);
-  filterSelect.addEventListener("change", handleFilterChange);
-  searchInput.addEventListener("input", handleSearchInput);
-  searchClearBtn.addEventListener("click", handleSearchClear);
-  container.addEventListener("keydown", handleKeyDown);
-  container.addEventListener("click", handleContainerClick);
+    const swapCopyAllIcon = (
+      iconName: string,
+      restoreAfterMs: number
+    ) => {
+      if (!copyAllBtn) return;
+      copyAllBtn.innerHTML = "";
+      const icon = renderLucideIcon(
+        iconName,
+        "12px",
+        "currentColor",
+        1.5
+      );
+      if (icon) copyAllBtn.appendChild(icon);
+      const label = createElement("span", "tvw-text-xs");
+      label.textContent = "Copy All";
+      copyAllBtn.appendChild(label);
+      setTimeout(() => {
+        copyAllBtn.innerHTML = "";
+        const original = renderLucideIcon(
+          "clipboard-copy",
+          "12px",
+          "currentColor",
+          1.5
+        );
+        if (original) copyAllBtn.appendChild(original);
+        const restoreLabel = createElement("span", "tvw-text-xs");
+        restoreLabel.textContent = "Copy All";
+        copyAllBtn.appendChild(restoreLabel);
+        copyAllBtn.disabled = false;
+      }, restoreAfterMs);
+    };
 
-  function destroy() {
-    if (searchTimeout) clearTimeout(searchTimeout);
-    if (pendingRafId !== null) {
-      cancelAnimationFrame(pendingRafId);
-      pendingRafId = null;
+    const handleCopyAll = async () => {
+      if (!copyAllBtn) return;
+      copyAllBtn.disabled = true;
+      try {
+        let events: SSEEventRecord[];
+        if (hasActiveFilters()) {
+          events = filteredEvents;
+        } else {
+          events = getFullHistory
+            ? await getFullHistory()
+            : buffer.getAll();
+        }
+        await navigator.clipboard.writeText(
+          JSON.stringify(events, null, 2)
+        );
+        swapCopyAllIcon("check", 1500);
+      } catch {
+        swapCopyAllIcon("x", 1500);
+      }
+    };
+
+    const handleFilterChange = () => {
+      if (!filterSelect) return;
+      selectedType = filterSelect.value;
+      resetScrollState();
+      updateNow();
+    };
+
+    const handleSearchInput = () => {
+      if (!searchInput || !searchClearBtn) return;
+      searchClearBtn.style.display = searchInput.value ? "" : "none";
+      if (searchTimeout) clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        searchTerm = searchInput.value;
+        resetScrollState();
+        updateNow();
+      }, 150);
+    };
+
+    const handleSearchClear = () => {
+      if (!searchInput || !searchClearBtn) return;
+      searchInput.value = "";
+      searchTerm = "";
+      searchClearBtn.style.display = "none";
+      if (searchTimeout) clearTimeout(searchTimeout);
+      resetScrollState();
+      updateNow();
+    };
+
+    const handleListScroll = () => {
+      if (isNearBottom()) {
+        userScrolledUp = false;
+        newEventsSincePause = 0;
+        scrollIndicator.style.display = "none";
+      } else {
+        userScrolledUp = true;
+      }
+    };
+
+    const handleScrollIndicatorClick = () => {
+      eventsList.scrollTop = eventsList.scrollHeight;
+      userScrolledUp = false;
+      newEventsSincePause = 0;
+      scrollIndicator.style.display = "none";
+    };
+
+    // Keyboard shortcuts
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMod = e.metaKey || e.ctrlKey;
+
+      if (isMod && e.key === "f") {
+        e.preventDefault();
+        searchInput?.focus();
+        searchInput?.select();
+        return;
+      }
+
+      if (e.key === "Escape") {
+        if (
+          searchInput &&
+          document.activeElement === searchInput
+        ) {
+          handleSearchClear();
+          searchInput.blur();
+          container.focus();
+        } else if (onClose) {
+          onClose();
+        }
+      }
+    };
+
+    // ========================================================================
+    // Wire up event listeners
+    // ========================================================================
+
+    if (copyAllBtn) copyAllBtn.addEventListener("click", handleCopyAll);
+    if (filterSelect)
+      filterSelect.addEventListener("change", handleFilterChange);
+    if (searchInput)
+      searchInput.addEventListener("input", handleSearchInput);
+    if (searchClearBtn)
+      searchClearBtn.addEventListener("click", handleSearchClear);
+    eventsList.addEventListener("scroll", handleListScroll);
+    scrollIndicator.addEventListener("click", handleScrollIndicatorClick);
+    container.addEventListener("keydown", handleKeyDown);
+
+    // ========================================================================
+    // Destroy / Cleanup
+    // ========================================================================
+
+    function destroy() {
+      if (searchTimeout) clearTimeout(searchTimeout);
+      if (pendingRafId !== null) {
+        cancelAnimationFrame(pendingRafId);
+        pendingRafId = null;
+      }
+      pendingUpdate = false;
+      if (copyAllBtn)
+        copyAllBtn.removeEventListener("click", handleCopyAll);
+      if (filterSelect)
+        filterSelect.removeEventListener("change", handleFilterChange);
+      if (searchInput)
+        searchInput.removeEventListener("input", handleSearchInput);
+      if (searchClearBtn)
+        searchClearBtn.removeEventListener("click", handleSearchClear);
+      eventsList.removeEventListener("scroll", handleListScroll);
+      scrollIndicator.removeEventListener(
+        "click",
+        handleScrollIndicatorClick
+      );
+      container.removeEventListener("keydown", handleKeyDown);
     }
-    pendingUpdate = false;
-    dismissPanel();
-    scroller.destroy();
-    eventsList.removeEventListener("scroll", handleListScroll);
-    copyAllBtn.removeEventListener("click", handleCopyAll);
-    clearBtn.removeEventListener("click", handleClear);
-    filterSelect.removeEventListener("change", handleFilterChange);
-    searchInput.removeEventListener("input", handleSearchInput);
-    searchClearBtn.removeEventListener("click", handleSearchClear);
-    container.removeEventListener("keydown", handleKeyDown);
-    container.removeEventListener("click", handleContainerClick);
-  }
 
-  return { element: container, update, destroy };
+    return { element: container, update, destroy };
+  }
 }

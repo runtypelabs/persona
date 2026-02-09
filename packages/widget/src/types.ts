@@ -363,6 +363,8 @@ export type AgentWidgetFeatureFlags = {
   showReasoning?: boolean;
   showToolCalls?: boolean;
   showEventStreamToggle?: boolean;
+  /** Configuration for the Event Stream inspector view */
+  eventStream?: EventStreamConfig;
 };
 
 export type SSEEventRecord = {
@@ -370,6 +372,99 @@ export type SSEEventRecord = {
   type: string;
   timestamp: number;
   payload: string;
+};
+
+// ============================================================================
+// Event Stream Configuration Types
+// ============================================================================
+
+/**
+ * Badge color configuration for event stream event types.
+ */
+export type EventStreamBadgeColor = {
+  /** Background color (CSS value) */
+  bg: string;
+  /** Text color (CSS value) */
+  text: string;
+};
+
+/**
+ * Configuration for the Event Stream inspector view.
+ */
+export type EventStreamConfig = {
+  /**
+   * Custom badge color mappings by event type prefix or exact type.
+   * Keys are matched as exact match first, then prefix match (keys ending with "_").
+   * @example { "flow_": { bg: "#dcfce7", text: "#166534" }, "error": { bg: "#fecaca", text: "#991b1b" } }
+   */
+  badgeColors?: Record<string, EventStreamBadgeColor>;
+  /**
+   * Timestamp display format.
+   * - "relative": Shows time offset from first event (+0.000s, +0.361s)
+   * - "absolute": Shows wall-clock time (HH:MM:SS.mmm)
+   * @default "relative"
+   */
+  timestampFormat?: "absolute" | "relative";
+  /**
+   * Whether to show sequential event numbers (1, 2, 3...).
+   * @default true
+   */
+  showSequenceNumbers?: boolean;
+  /**
+   * Maximum events to keep in the ring buffer.
+   * @default 500
+   */
+  maxEvents?: number;
+  /**
+   * Fields to extract from event payloads for description text.
+   * The first matching field value is displayed after the badge.
+   * @default ["flowName", "stepName", "name", "tool", "toolName"]
+   */
+  descriptionFields?: string[];
+};
+
+/**
+ * Context for the renderEventStreamView plugin hook.
+ */
+export type EventStreamViewRenderContext = {
+  config: AgentWidgetConfig;
+  events: SSEEventRecord[];
+  defaultRenderer: () => HTMLElement;
+  onClose?: () => void;
+};
+
+/**
+ * Context for the renderEventStreamRow plugin hook.
+ */
+export type EventStreamRowRenderContext = {
+  event: SSEEventRecord;
+  index: number;
+  config: AgentWidgetConfig;
+  defaultRenderer: () => HTMLElement;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+};
+
+/**
+ * Context for the renderEventStreamToolbar plugin hook.
+ */
+export type EventStreamToolbarRenderContext = {
+  config: AgentWidgetConfig;
+  defaultRenderer: () => HTMLElement;
+  eventCount: number;
+  filteredCount: number;
+  onFilterChange: (type: string) => void;
+  onSearchChange: (term: string) => void;
+};
+
+/**
+ * Context for the renderEventStreamPayload plugin hook.
+ */
+export type EventStreamPayloadRenderContext = {
+  event: SSEEventRecord;
+  config: AgentWidgetConfig;
+  defaultRenderer: () => HTMLElement;
+  parsedPayload: unknown;
 };
 
 export type AgentWidgetTheme = {

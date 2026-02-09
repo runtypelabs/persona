@@ -68,6 +68,12 @@ export type {
   AgentWidgetAgentRequestPayload,
   // Event stream types
   SSEEventRecord,
+  EventStreamConfig,
+  EventStreamBadgeColor,
+  EventStreamViewRenderContext,
+  EventStreamRowRenderContext,
+  EventStreamToolbarRenderContext,
+  EventStreamPayloadRenderContext,
   // Controller event map
   AgentWidgetControllerEventMap
 } from "./types";

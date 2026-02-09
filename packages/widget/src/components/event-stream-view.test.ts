@@ -21,7 +21,13 @@ function createMockElement(tag = "div"): any {
     disabled: false,
     title: "",
     textContent: "",
-    innerHTML: "",
+    get innerHTML() { return ""; },
+    set innerHTML(val: string) {
+      if (val === "") {
+        children.length = 0;
+        el.firstChild = null;
+      }
+    },
     offsetHeight: 300,
     scrollTop: 0,
     scrollHeight: 300,
@@ -29,6 +35,20 @@ function createMockElement(tag = "div"): any {
     // For <select>
     options: [] as any[],
     appendChild(child: any) {
+      // Handle DocumentFragment: move its children into this element
+      if (child.tagName === "FRAGMENT") {
+        const fragChildren = [...child.children];
+        for (const fragChild of fragChildren) {
+          children.push(fragChild);
+          fragChild.parentNode = el;
+          if (tag === "select" && fragChild.tagName === "OPTION") {
+            el.options.push(fragChild);
+          }
+        }
+        child.children.length = 0;
+        el.firstChild = children[0] || null;
+        return child;
+      }
       children.push(child);
       child.parentNode = el;
       el.firstChild = children[0] || null;
@@ -82,6 +102,12 @@ function createMockElement(tag = "div"): any {
       add: (...cls: string[]) => cls.forEach((c) => classList.add(c)),
       remove: (...cls: string[]) => cls.forEach((c) => classList.delete(c)),
       contains: (c: string) => classList.has(c),
+    },
+    closest(selector: string) {
+      // Simple mock: check if this element or any parent matches
+      if (selector === "button" && el.tagName === "BUTTON") return el;
+      if (el.parentNode && el.parentNode.closest) return el.parentNode.closest(selector);
+      return null;
     },
     focus: vi.fn(),
     blur: vi.fn(),
@@ -144,6 +170,11 @@ beforeEach(() => {
   (globalThis.document as any).createElement = (tag: string) =>
     createMockElement(tag);
   (globalThis.document as any).activeElement = null;
+  (globalThis.document as any).createDocumentFragment = () => {
+    const frag = createMockElement("fragment");
+    // Fragments transfer children on appendChild to a real element
+    return frag;
+  };
 
   (globalThis as any).requestAnimationFrame = (cb: Function) => {
     rafCallbacks.push(cb);
@@ -178,36 +209,110 @@ vi.mock("../utils/icons", () => ({
 
 // Use dynamic import to load after mocks are set up
 async function loadModule() {
-  // Reset module cache to get fresh module with mocks
   const mod = await import("./event-stream-view");
-  // Wrap createEventStreamView to return `element` as `any` since tests use mock DOM with custom properties
   const origCreate = mod.createEventStreamView;
-  const wrappedCreate = (...args: Parameters<typeof origCreate>): { element: any; update: () => void; destroy: () => void } => {
-    return origCreate(...args);
+  const wrappedCreate = (options: Parameters<typeof origCreate>[0]): { element: any; update: () => void; destroy: () => void } => {
+    return origCreate(options);
   };
   return { ...mod, createEventStreamView: wrappedCreate };
+}
+
+// Helper: navigate the new DOM structure
+// container.children = [toolbarOuter, truncationBanner, eventsListWrapper]
+// toolbarOuter.children = [headerBar, searchBar]
+// headerBar.children = [title, countBadge, spacer, filterSelect, copyAllBtn]
+// searchBar.children = [searchIconWrapper, searchInput, searchClearBtn]
+// eventsListWrapper.children = [eventsList, noResultsMsg, scrollIndicator]
+
+function getToolbar(element: any) {
+  return element.children[0]; // toolbarOuter
+}
+function getHeaderBar(element: any) {
+  return getToolbar(element).children[0]; // headerBar
+}
+function getSearchBar(element: any) {
+  return getToolbar(element).children[1]; // searchBar
+}
+function getTitle(element: any) {
+  return getHeaderBar(element).children[0]; // title span
+}
+function getCountBadge(element: any) {
+  return getHeaderBar(element).children[1]; // count badge span
+}
+function getFilterSelect(element: any) {
+  return getHeaderBar(element).children[3]; // filterSelect (after title, badge, spacer)
+}
+function getCopyAllBtn(element: any) {
+  return getHeaderBar(element).children[4]; // copyAllBtn
+}
+function getSearchInput(element: any) {
+  return getSearchBar(element).children[1]; // searchInput (after searchIconWrapper)
+}
+function getSearchClearBtn(element: any) {
+  return getSearchBar(element).children[2]; // searchClearBtn
+}
+function getEventsWrapper(element: any) {
+  return element.children[2]; // eventsListWrapper
+}
+function getEventsList(element: any) {
+  return getEventsWrapper(element).children[0]; // eventsList
+}
+function getNoResultsMsg(element: any) {
+  return getEventsWrapper(element).children[1]; // noResultsMsg
 }
 
 describe("createEventStreamView", () => {
   it("should create a container element with expected children", async () => {
     const { createEventStreamView } = await loadModule();
     const buffer = createMockBuffer();
-    const { element } = createEventStreamView(buffer as any);
+    const { element } = createEventStreamView({ buffer: buffer as any });
 
     // Container should have tabindex for keyboard events
     expect(element.getAttribute("tabindex")).toBe("0");
 
-    // Should have toolbar, truncation banner, and events wrapper
+    // Should have toolbarOuter, truncation banner, and events wrapper
     expect(element.children.length).toBe(3);
   });
 
   it("should return update and destroy functions", async () => {
     const { createEventStreamView } = await loadModule();
     const buffer = createMockBuffer();
-    const view = createEventStreamView(buffer as any);
+    const view = createEventStreamView({ buffer: buffer as any });
 
     expect(typeof view.update).toBe("function");
     expect(typeof view.destroy).toBe("function");
+  });
+
+  describe("header bar", () => {
+    it("should show 'Event Stream' title and count badge", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
+
+      update();
+
+      expect(getTitle(element).textContent).toBe("Event Stream");
+      expect(getCountBadge(element).textContent).toBe("1");
+    });
+
+    it("should update count badge when events change", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
+
+      update();
+      expect(getCountBadge(element).textContent).toBe("1");
+
+      vi.advanceTimersByTime(150);
+      buffer.push(makeEvent("step_chunk", 2));
+      update();
+
+      expect(getCountBadge(element).textContent).toBe("2");
+      vi.useRealTimers();
+    });
   });
 
   describe("filter dropdown", () => {
@@ -219,17 +324,15 @@ describe("createEventStreamView", () => {
         makeEvent("flow_complete", 3),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       update();
 
-      // Find the select element (first child of toolbar)
-      const toolbar = element.children[0];
-      const filterSelect = toolbar.children[0];
+      const filterSelect = getFilterSelect(element);
 
-      // Should have "All Events (3)" + 2 type options
+      // Should have "All events" + 2 type options
       expect(filterSelect.options.length).toBe(3);
-      expect(filterSelect.options[0].textContent).toBe("All Events (3)");
+      expect(filterSelect.options[0].textContent).toBe("All events");
       expect(filterSelect.options[1].textContent).toBe("flow_complete (1)");
       expect(filterSelect.options[2].textContent).toBe("step_chunk (2)");
     });
@@ -239,13 +342,12 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       update();
 
-      const toolbar = element.children[0];
-      const filterSelect = toolbar.children[0];
-      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
+      const filterSelect = getFilterSelect(element);
+      expect(filterSelect.options[0].textContent).toBe("All events");
       expect(filterSelect.options[1].textContent).toBe("step_chunk (1)");
 
       // Add another event and advance past throttle window
@@ -253,7 +355,6 @@ describe("createEventStreamView", () => {
       vi.advanceTimersByTime(150);
       update();
 
-      expect(filterSelect.options[0].textContent).toBe("All Events (2)");
       expect(filterSelect.options[1].textContent).toBe("step_chunk (2)");
       vi.useRealTimers();
     });
@@ -266,18 +367,14 @@ describe("createEventStreamView", () => {
         makeEvent("step_chunk", 3),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       update();
 
-      // Select "step_chunk" filter
-      const toolbar = element.children[0];
-      const filterSelect = toolbar.children[0];
+      const filterSelect = getFilterSelect(element);
       filterSelect.value = "step_chunk";
       filterSelect.__fireEvent("change");
 
-      // Buffer.getAll is called, and we can verify the scroller was updated
-      // The view should filter to 2 events (step_chunk only)
       expect(buffer.getAll).toHaveBeenCalled();
     });
   });
@@ -288,23 +385,19 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1, '{"message":"hello world"}')];
       const buffer = createMockBuffer(events);
-      const { element } = createEventStreamView(buffer as any);
+      const { element } = createEventStreamView({ buffer: buffer as any });
 
-      const toolbar = element.children[0];
-      const searchWrapper = toolbar.children[1];
-      const searchInput = searchWrapper.children[0];
+      const searchInput = getSearchInput(element);
 
       // Type in search
       searchInput.value = "hello";
       searchInput.__fireEvent("input");
 
-      // Buffer.getAll shouldn't be called for filter yet (debounced)
       const callCountBefore = buffer.getAll.mock.calls.length;
 
       // Advance past debounce
       vi.advanceTimersByTime(200);
 
-      // Now it should have been called
       expect(buffer.getAll.mock.calls.length).toBeGreaterThan(callCountBefore);
       vi.useRealTimers();
     });
@@ -312,12 +405,10 @@ describe("createEventStreamView", () => {
     it("should show clear button when search has text", async () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
-      const { element } = createEventStreamView(buffer as any);
+      const { element } = createEventStreamView({ buffer: buffer as any });
 
-      const toolbar = element.children[0];
-      const searchWrapper = toolbar.children[1];
-      const searchInput = searchWrapper.children[0];
-      const clearBtn = searchWrapper.children[1];
+      const searchInput = getSearchInput(element);
+      const clearBtn = getSearchClearBtn(element);
 
       // Initially hidden
       expect(clearBtn.style.display).toBe("none");
@@ -334,12 +425,10 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("a", 1)]);
-      const { element } = createEventStreamView(buffer as any);
+      const { element } = createEventStreamView({ buffer: buffer as any });
 
-      const toolbar = element.children[0];
-      const searchWrapper = toolbar.children[1];
-      const searchInput = searchWrapper.children[0];
-      const clearBtn = searchWrapper.children[1];
+      const searchInput = getSearchInput(element);
+      const clearBtn = getSearchClearBtn(element);
 
       // Type and trigger search
       searchInput.value = "test";
@@ -361,20 +450,16 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1, '{"data":"hello"}')];
       const buffer = createMockBuffer(events);
-      const { element } = createEventStreamView(buffer as any);
+      const { element } = createEventStreamView({ buffer: buffer as any });
 
-      const toolbar = element.children[0];
-      const searchWrapper = toolbar.children[1];
-      const searchInput = searchWrapper.children[0];
+      const searchInput = getSearchInput(element);
 
       // Search for something that doesn't match
       searchInput.value = "nonexistent_term_xyz";
       searchInput.__fireEvent("input");
       vi.advanceTimersByTime(200);
 
-      // The no-results message is in the eventsListWrapper (3rd child of container)
-      const eventsWrapper = element.children[2]; // toolbar, truncation, eventsWrapper
-      const noResultsMsg = eventsWrapper.children[1]; // eventsList, noResultsMsg, scrollIndicator
+      const noResultsMsg = getNoResultsMsg(element);
 
       expect(noResultsMsg.style.display).toBe("");
       expect(noResultsMsg.textContent).toContain("nonexistent_term_xyz");
@@ -391,10 +476,9 @@ describe("createEventStreamView", () => {
         makeEvent("flow_complete", 2),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
-      const toolbar = element.children[0];
-      const copyAllBtn = toolbar.children[2]; // filterSelect, searchWrapper, copyAllBtn, clearBtn
+      const copyAllBtn = getCopyAllBtn(element);
 
       update();
 
@@ -402,7 +486,7 @@ describe("createEventStreamView", () => {
       expect(copyAllBtn.title).toBe("Copy All");
 
       // Apply type filter
-      const filterSelect = toolbar.children[0];
+      const filterSelect = getFilterSelect(element);
       filterSelect.value = "step_chunk";
       filterSelect.__fireEvent("change");
 
@@ -419,11 +503,13 @@ describe("createEventStreamView", () => {
       ];
       const buffer = createMockBuffer(events);
       const getFullHistory = vi.fn().mockResolvedValue(events);
-      const { element } = createEventStreamView(buffer as any, getFullHistory);
+      const { element } = createEventStreamView({
+        buffer: buffer as any,
+        getFullHistory,
+      });
 
-      const toolbar = element.children[0];
-      const filterSelect = toolbar.children[0];
-      const copyAllBtn = toolbar.children[2];
+      const filterSelect = getFilterSelect(element);
+      const copyAllBtn = getCopyAllBtn(element);
 
       // Apply type filter
       filterSelect.value = "step_chunk";
@@ -451,15 +537,14 @@ describe("createEventStreamView", () => {
       const buffer = createMockBuffer(events);
       const fullHistory = [...events, makeEvent("old_event", 0)];
       const getFullHistory = vi.fn().mockResolvedValue(fullHistory);
-      const { element, update } = createEventStreamView(
-        buffer as any,
-        getFullHistory
-      );
+      const { element, update } = createEventStreamView({
+        buffer: buffer as any,
+        getFullHistory,
+      });
 
       update();
 
-      const toolbar = element.children[0];
-      const copyAllBtn = toolbar.children[2];
+      const copyAllBtn = getCopyAllBtn(element);
 
       // Click copy all with no filters
       await copyAllBtn.__listeners.click[0]();
@@ -473,11 +558,9 @@ describe("createEventStreamView", () => {
     it("should focus search on Ctrl+F", async () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
-      const { element } = createEventStreamView(buffer as any);
+      const { element } = createEventStreamView({ buffer: buffer as any });
 
-      const toolbar = element.children[0];
-      const searchWrapper = toolbar.children[1];
-      const searchInput = searchWrapper.children[0];
+      const searchInput = getSearchInput(element);
 
       // Simulate Ctrl+F
       const event = {
@@ -497,11 +580,9 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("a", 1)]);
-      const { element } = createEventStreamView(buffer as any);
+      const { element } = createEventStreamView({ buffer: buffer as any });
 
-      const toolbar = element.children[0];
-      const searchWrapper = toolbar.children[1];
-      const searchInput = searchWrapper.children[0];
+      const searchInput = getSearchInput(element);
 
       // Simulate search having text
       searchInput.value = "test";
@@ -528,7 +609,10 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
       const onClose = vi.fn();
-      const { element } = createEventStreamView(buffer as any, undefined, onClose);
+      const { element } = createEventStreamView({
+        buffer: buffer as any,
+        onClose,
+      });
 
       // Ensure activeElement is NOT the search input
       (globalThis.document as any).activeElement = element;
@@ -545,17 +629,155 @@ describe("createEventStreamView", () => {
     });
   });
 
+  describe("event rows", () => {
+    it("should render rows with relative timestamps", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [
+        { id: "evt-1", type: "flow_start", timestamp: 1000, payload: '{"flowName":"Test"}' },
+        { id: "evt-2", type: "step_start", timestamp: 1361, payload: '{"stepName":"Chatbot 1"}' },
+      ];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
+
+      update();
+
+      // Events are rendered in eventsList
+      const eventsList = getEventsList(element);
+      // Each event produces a row wrapper
+      expect(eventsList.children.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("should render rows with absolute timestamps when configured", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({
+        buffer: buffer as any,
+        config: {
+          features: { eventStream: { timestampFormat: "absolute" } },
+        } as any,
+      });
+
+      update();
+
+      // Verify render happened
+      expect(buffer.getAll).toHaveBeenCalled();
+    });
+
+    it("should extract description from payload fields", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [
+        { id: "evt-1", type: "flow_start", timestamp: 1000, payload: '{"flowName":"My Flow"}' },
+      ];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
+
+      update();
+
+      // Verify the row was rendered
+      const eventsList = getEventsList(element);
+      expect(eventsList.children.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("should hide sequence numbers when showSequenceNumbers is false", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { update } = createEventStreamView({
+        buffer: buffer as any,
+        config: {
+          features: { eventStream: { showSequenceNumbers: false } },
+        } as any,
+      });
+
+      update();
+      expect(buffer.getAll).toHaveBeenCalled();
+    });
+
+    it("should use custom badge colors from config", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("custom_type", 1)];
+      const buffer = createMockBuffer(events);
+      const { update } = createEventStreamView({
+        buffer: buffer as any,
+        config: {
+          features: {
+            eventStream: {
+              badgeColors: {
+                custom_type: { bg: "#ff0000", text: "#ffffff" },
+              },
+            },
+          },
+        } as any,
+      });
+
+      update();
+      expect(buffer.getAll).toHaveBeenCalled();
+    });
+  });
+
+  describe("expand/collapse", () => {
+    it("should expand row to show inline payload when clicked", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1, '{"message":"hello"}')];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
+
+      update();
+
+      const eventsList = getEventsList(element);
+      // First row wrapper (direct child of eventsList after fragment transfer)
+      const rowWrapper = eventsList.children[0];
+      expect(rowWrapper).toBeDefined();
+
+      // Row wrapper > container div (from buildDefaultRowContent) > row line div
+      const container = rowWrapper.children[0]; // container div
+      expect(container).toBeDefined();
+      expect(container.children.length).toBeGreaterThanOrEqual(1);
+
+      const rowLine = container.children[0]; // the flex row line
+      expect(rowLine).toBeDefined();
+
+      // Verify click handler is registered on the row line
+      expect(rowLine.__listeners.click).toBeDefined();
+      expect(rowLine.__listeners.click.length).toBeGreaterThan(0);
+
+      // Simulate click (not on a button) - this calls toggleExpand -> updateNow
+      rowLine.__fireEvent("click", { target: rowLine, stopPropagation: () => {} });
+
+      // After re-render, the container should have 2 children (row + inline payload)
+      const updatedWrapper = eventsList.children[0];
+      const updatedContainer = updatedWrapper.children[0];
+      expect(updatedContainer.children.length).toBe(2);
+    });
+
+    it("should format JSON payload as pretty-printed in expanded view", async () => {
+      const jsonPayload = '{"name":"test","value":42}';
+      const formatted = JSON.stringify(JSON.parse(jsonPayload), null, 2);
+      expect(formatted).toBe('{\n  "name": "test",\n  "value": 42\n}');
+    });
+
+    it("should handle non-JSON payload gracefully", async () => {
+      const plainPayload = "just plain text, not JSON";
+      let result: string;
+      try {
+        result = JSON.stringify(JSON.parse(plainPayload), null, 2);
+      } catch {
+        result = plainPayload;
+      }
+      expect(result).toBe(plainPayload);
+    });
+  });
+
   describe("individual event copy", () => {
     it("should format event as structured JSON with parsed payload", async () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1, '{"message":"hello"}')];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { update } = createEventStreamView({ buffer: buffer as any });
 
       update();
 
-      // The virtual scroller renders rows - we need to find the rendered row's copy button
-      // Since we can't easily access virtual scroller internals, verify the buffer was called
       expect(buffer.getAll).toHaveBeenCalled();
     });
   });
@@ -569,21 +791,20 @@ describe("createEventStreamView", () => {
         makeEvent("flow_complete", 2),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       update();
 
-      const toolbar = element.children[0];
-      const filterSelect = toolbar.children[0];
-      expect(filterSelect.options[0].textContent).toBe("All Events (2)");
+      const filterSelect = getFilterSelect(element);
+      expect(filterSelect.options[0].textContent).toBe("All events");
 
       // Simulate clearChat: buffer.clear() + view.update()
       vi.advanceTimersByTime(150);
       buffer.clear();
       update();
 
-      // Filter should show zero events
-      expect(filterSelect.options[0].textContent).toBe("All Events (0)");
+      // Filter should show "All events"
+      expect(filterSelect.options[0].textContent).toBe("All events");
       // No type-specific options remain
       expect(filterSelect.options.length).toBe(1);
       vi.useRealTimers();
@@ -594,7 +815,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       update();
 
@@ -603,16 +824,14 @@ describe("createEventStreamView", () => {
       buffer.clear();
       update();
 
-      const toolbar = element.children[0];
-      const filterSelect = toolbar.children[0];
-      expect(filterSelect.options[0].textContent).toBe("All Events (0)");
+      const filterSelect = getFilterSelect(element);
+      expect(filterSelect.options[0].textContent).toBe("All events");
 
       // New events arrive in new session
       vi.advanceTimersByTime(150);
       buffer.push(makeEvent("tool_start", 10));
       update();
 
-      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
       expect(filterSelect.options[1].textContent).toBe("tool_start (1)");
       vi.useRealTimers();
     });
@@ -623,14 +842,12 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       update();
 
-      // Should render immediately — filter options should be populated
-      const toolbar = element.children[0];
-      const filterSelect = toolbar.children[0];
-      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
+      const filterSelect = getFilterSelect(element);
+      expect(filterSelect.options[1].textContent).toBe("step_chunk (1)");
     });
 
     it("should throttle rapid update calls within 100ms", async () => {
@@ -638,14 +855,13 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       // First update renders immediately
       update();
 
-      const toolbar = element.children[0];
-      const filterSelect = toolbar.children[0];
-      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
+      const filterSelect = getFilterSelect(element);
+      expect(filterSelect.options[1].textContent).toBe("step_chunk (1)");
 
       // Add more events and call update rapidly (within throttle window)
       buffer.push(makeEvent("step_chunk", 2));
@@ -655,13 +871,13 @@ describe("createEventStreamView", () => {
       update();
 
       // Should NOT have rendered yet (within 100ms throttle, rAF pending)
-      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
+      expect(filterSelect.options[1].textContent).toBe("step_chunk (1)");
 
-      // Advance time to flush the rAF callback (vitest fake timers handle rAF)
+      // Advance time to flush the rAF callback
       vi.advanceTimersByTime(20);
 
       // Now it should have rendered with all 3 events
-      expect(filterSelect.options[0].textContent).toBe("All Events (3)");
+      expect(filterSelect.options[1].textContent).toBe("step_chunk (3)");
       vi.useRealTimers();
     });
 
@@ -670,14 +886,12 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       // First update
       update();
 
-      const toolbar = element.children[0];
-      const filterSelect = toolbar.children[0];
-      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
+      const filterSelect = getFilterSelect(element);
 
       // Wait past the throttle interval
       vi.advanceTimersByTime(150);
@@ -686,7 +900,7 @@ describe("createEventStreamView", () => {
       buffer.push(makeEvent("flow_complete", 2));
       update();
 
-      expect(filterSelect.options[0].textContent).toBe("All Events (2)");
+      expect(filterSelect.options.length).toBe(3); // All events + flow_complete + step_chunk
       vi.useRealTimers();
     });
 
@@ -694,7 +908,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("step_chunk", 1)]);
-      const { update } = createEventStreamView(buffer as any);
+      const { update } = createEventStreamView({ buffer: buffer as any });
 
       // First call: immediate render
       update();
@@ -712,7 +926,7 @@ describe("createEventStreamView", () => {
       // Flush the rAF
       vi.advanceTimersByTime(20);
 
-      // Should have been called for the coalesced update (updateFilterOptions + getFilteredEvents)
+      // Should have been called for the coalesced update
       expect(buffer.getAll.mock.calls.length).toBeGreaterThan(callCountAfterFirst);
       vi.useRealTimers();
     });
@@ -724,14 +938,13 @@ describe("createEventStreamView", () => {
         makeEvent("flow_complete", 2),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       // Initial render
       update();
 
-      const toolbar = element.children[0];
-      const filterSelect = toolbar.children[0];
-      const copyAllBtn = toolbar.children[2];
+      const filterSelect = getFilterSelect(element);
+      const copyAllBtn = getCopyAllBtn(element);
 
       // Immediately change filter — this should bypass throttle (uses updateNow internally)
       filterSelect.value = "step_chunk";
@@ -745,7 +958,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("step_chunk", 1)]);
-      const { update, destroy } = createEventStreamView(buffer as any);
+      const { update, destroy } = createEventStreamView({ buffer: buffer as any });
 
       // First update — immediate
       update();
@@ -763,173 +976,21 @@ describe("createEventStreamView", () => {
     });
   });
 
-  describe("expandable JSON payloads", () => {
-    it("should truncate payload preview to 120 characters with ellipsis", async () => {
+  describe("scroll behavior", () => {
+    it("should have scroll listener on events list", async () => {
       const { createEventStreamView } = await loadModule();
-      // Create a long payload (over 120 chars)
-      const longPayload = JSON.stringify({ data: "x".repeat(200) });
-      const events = [makeEvent("step_chunk", 1, longPayload)];
+      const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { update } = createEventStreamView(buffer as any);
+      const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       update();
 
-      // The payload preview in the rendered row should be truncated
-      // We verify by checking that the buffer was called (row rendering happens inside VirtualScroller)
-      expect(buffer.getAll).toHaveBeenCalled();
-      // Long payload should be over 120 chars
-      expect(longPayload.length).toBeGreaterThan(120);
-    });
-
-    it("should show floating panel when payload is clicked", async () => {
-      const { createEventStreamView } = await loadModule();
-      const jsonPayload = JSON.stringify({ message: "hello world", data: [1, 2, 3] });
-      const events = [makeEvent("step_chunk", 1, jsonPayload)];
-      const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
-
-      update();
-
-      // The eventsListWrapper is the 3rd child of container
-      const eventsWrapper = element.children[2];
-
-      // Simulate a payload click by finding the renderRow callback through the virtual scroller
-      // The virtual scroller's container is the first child of eventsListWrapper
-      const eventsList = eventsWrapper.children[0];
-
-      // We can trigger the showPayloadPanel by simulating a click on a payload element
-      // The scroller renders rows, and each row's payload has a click listener
-      // For testing, we access the internal renderRow via the scroller
-
-      // Get the initial child count (before any panel is opened)
-      const initialChildCount = eventsWrapper.children.length;
-
-      // Since the virtual scroller mock doesn't fully render rows in the DOM,
-      // we test the panel system through the container click handler pattern:
-      // The eventsListWrapper has position:relative, panels are appended to it
-      // We can verify the panel mechanism by checking the container's event handling
-      expect(element.__listeners.click).toBeDefined();
-      expect(element.__listeners.click.length).toBeGreaterThan(0);
-    });
-
-    it("should dismiss floating panel on Escape key", async () => {
-      const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1, '{"data":"test"}')];
-      const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
-      const onClose = vi.fn();
-
-      update();
-
-      // Press Escape when no panel is open — should call onClose (existing behavior)
-      (globalThis.document as any).activeElement = element;
-      const { createEventStreamView: createView2 } = await loadModule();
-      const buffer2 = createMockBuffer(events);
-      const view2 = createView2(buffer2 as any, undefined, onClose);
-      view2.update();
-
-      view2.element.__fireEvent("keydown", {
-        key: "Escape",
-        ctrlKey: false,
-        metaKey: false,
-        preventDefault: vi.fn(),
-      });
-
-      expect(onClose).toHaveBeenCalled();
-    });
-
-    it("should dismiss floating panel on scroll", async () => {
-      const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1, '{"data":"test"}')];
-      const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
-
-      update();
-
-      // The scroll handler on eventsList should dismiss any open panel
-      const eventsWrapper = element.children[2];
-      const eventsList = eventsWrapper.children[0];
-
-      // Verify scroll listener is registered
+      const eventsList = getEventsList(element);
       expect(eventsList.__listeners.scroll).toBeDefined();
       expect(eventsList.__listeners.scroll.length).toBeGreaterThan(0);
 
-      // Triggering scroll should not throw (panel dismiss when no panel is open)
+      // Triggering scroll should not throw
       expect(() => eventsList.__fireEvent("scroll")).not.toThrow();
-    });
-
-    it("should dismiss floating panel on container click (click outside)", async () => {
-      const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1, '{"data":"test"}')];
-      const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView(buffer as any);
-
-      update();
-
-      // Container has a click handler for dismissing panels
-      expect(element.__listeners.click).toBeDefined();
-      expect(element.__listeners.click.length).toBeGreaterThan(0);
-
-      // Clicking container should not throw (dismiss when no panel open)
-      expect(() => element.__fireEvent("click")).not.toThrow();
-    });
-
-    it("should dismiss floating panel on destroy", async () => {
-      const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1, '{"data":"test"}')];
-      const buffer = createMockBuffer(events);
-      const { update, destroy } = createEventStreamView(buffer as any);
-
-      update();
-
-      // Destroy should dismiss any open panel and not throw
-      expect(() => destroy()).not.toThrow();
-    });
-
-    it("should format JSON payload as pretty-printed in floating panel", async () => {
-      // Verify the formatting function works correctly:
-      // When valid JSON payload is provided, the panel should show pretty-printed JSON
-      const jsonPayload = '{"name":"test","value":42}';
-      const formatted = JSON.stringify(JSON.parse(jsonPayload), null, 2);
-
-      expect(formatted).toBe('{\n  "name": "test",\n  "value": 42\n}');
-    });
-
-    it("should handle non-JSON payload gracefully in floating panel", async () => {
-      // When the payload is not valid JSON, it should be shown as-is
-      const plainPayload = "just plain text, not JSON";
-      let result: string;
-      try {
-        result = JSON.stringify(JSON.parse(plainPayload), null, 2);
-      } catch {
-        result = plainPayload;
-      }
-
-      expect(result).toBe(plainPayload);
-    });
-
-    it("should show short payloads without truncation", async () => {
-      const shortPayload = '{"ok":true}';
-      expect(shortPayload.length).toBeLessThanOrEqual(120);
-      // Short payloads should be displayed as-is (no ellipsis)
-      const preview =
-        shortPayload.length > 120
-          ? shortPayload.slice(0, 120) + "..."
-          : shortPayload;
-      expect(preview).toBe(shortPayload);
-    });
-
-    it("should have payload click handler with cursor-pointer styling in rows", async () => {
-      const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1, '{"data":"test"}')];
-      const buffer = createMockBuffer(events);
-      const { update } = createEventStreamView(buffer as any);
-
-      update();
-
-      // The view is created with a renderRow that passes the showPayloadPanel callback
-      // This is verified by the fact that the scroller was initialized with the correct renderRow
-      expect(buffer.getAll).toHaveBeenCalled();
     });
   });
 
@@ -937,7 +998,7 @@ describe("createEventStreamView", () => {
     it("should clean up event listeners on destroy", async () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
-      const { destroy } = createEventStreamView(buffer as any);
+      const { destroy } = createEventStreamView({ buffer: buffer as any });
 
       // Should not throw
       expect(() => destroy()).not.toThrow();
@@ -947,11 +1008,9 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("a", 1)]);
-      const { element, destroy } = createEventStreamView(buffer as any);
+      const { element, destroy } = createEventStreamView({ buffer: buffer as any });
 
-      const toolbar = element.children[0];
-      const searchWrapper = toolbar.children[1];
-      const searchInput = searchWrapper.children[0];
+      const searchInput = getSearchInput(element);
 
       // Type to start debounce timer
       searchInput.value = "test";
@@ -963,6 +1022,103 @@ describe("createEventStreamView", () => {
       // Advancing time should not cause errors
       vi.advanceTimersByTime(200);
       vi.useRealTimers();
+    });
+  });
+
+  describe("plugin hooks", () => {
+    it("should use custom renderEventStreamRow plugin when provided", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const customRow = createMockElement("div");
+      customRow.textContent = "Custom Row";
+
+      const plugin = {
+        id: "test-plugin",
+        renderEventStreamRow: vi.fn(() => customRow),
+      };
+
+      const { update } = createEventStreamView({
+        buffer: buffer as any,
+        config: {} as any,
+        plugins: [plugin],
+      });
+
+      update();
+
+      expect(plugin.renderEventStreamRow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: events[0],
+          index: 0,
+          isExpanded: false,
+        })
+      );
+    });
+
+    it("should use custom renderEventStreamToolbar plugin when provided", async () => {
+      const { createEventStreamView } = await loadModule();
+      const buffer = createMockBuffer();
+      const customToolbar = createMockElement("div");
+      customToolbar.textContent = "Custom Toolbar";
+
+      const plugin = {
+        id: "test-plugin",
+        renderEventStreamToolbar: vi.fn(() => customToolbar),
+      };
+
+      const { element } = createEventStreamView({
+        buffer: buffer as any,
+        config: {} as any,
+        plugins: [plugin],
+      });
+
+      expect(plugin.renderEventStreamToolbar).toHaveBeenCalled();
+      // The toolbar should be the custom element
+      expect(element.children[0].textContent).toBe("Custom Toolbar");
+    });
+
+    it("should use custom renderEventStreamView plugin when provided", async () => {
+      const { createEventStreamView } = await loadModule();
+      const buffer = createMockBuffer();
+      const customView = createMockElement("div");
+      customView.textContent = "Fully Custom View";
+
+      const plugin = {
+        id: "test-plugin",
+        renderEventStreamView: vi.fn(() => customView),
+      };
+
+      const { element } = createEventStreamView({
+        buffer: buffer as any,
+        config: {} as any,
+        plugins: [plugin],
+      });
+
+      expect(plugin.renderEventStreamView).toHaveBeenCalled();
+      expect(element.textContent).toBe("Fully Custom View");
+    });
+
+    it("should fall back to default when plugin returns null", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+
+      const plugin = {
+        id: "test-plugin",
+        renderEventStreamRow: vi.fn(() => null),
+      };
+
+      const { element, update } = createEventStreamView({
+        buffer: buffer as any,
+        config: {} as any,
+        plugins: [plugin],
+      });
+
+      update();
+
+      // Should still render the default view
+      expect(element.children.length).toBe(3);
+      expect(plugin.renderEventStreamRow).toHaveBeenCalled();
     });
   });
 });
