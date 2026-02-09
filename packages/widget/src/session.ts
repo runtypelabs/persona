@@ -204,8 +204,12 @@ export class AgentWidgetSession {
   }
 
   public updateConfig(next: AgentWidgetConfig) {
+    const prevSSECallback = this.client.getSSEEventCallback();
     this.config = { ...this.config, ...next };
     this.client = new AgentWidgetClient(this.config);
+    if (prevSSECallback) {
+      this.client.setSSEEventCallback(prevSSECallback);
+    }
   }
 
   public getMessages() {

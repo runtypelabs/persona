@@ -123,6 +123,13 @@ export class AgentWidgetClient {
   }
 
   /**
+   * Get the current SSE event callback (used to preserve across client recreation)
+   */
+  public getSSEEventCallback(): SSEEventCallback | undefined {
+    return this.onSSEEvent;
+  }
+
+  /**
    * Check if running in client token mode
    */
   public isClientTokenMode(): boolean {
