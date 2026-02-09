@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { VirtualScroller } from "./virtual-scroller";
 
 // Minimal DOM mock for Node environment
@@ -55,7 +55,7 @@ function createMockElement(tag = "div"): any {
 const origCreateElement = globalThis.document?.createElement;
 let rafCallbacks: Function[] = [];
 
-function flushRAF() {
+function _flushRAF() {
   const cbs = rafCallbacks.slice();
   rafCallbacks = [];
   cbs.forEach((cb) => cb());

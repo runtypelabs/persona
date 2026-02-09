@@ -654,7 +654,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({
+      const { update } = createEventStreamView({
         buffer: buffer as any,
         config: {
           features: { eventStream: { timestampFormat: "absolute" } },
@@ -707,7 +707,8 @@ describe("createEventStreamView", () => {
           features: {
             eventStream: {
               badgeColors: {
-                custom_type: { bg: "#ff0000", text: "#ffffff" },
+                // Event type keys can be snake_case (e.g. from API)
+                ["custom_type" as string]: { bg: "#ff0000", text: "#ffffff" },
               },
             },
           },

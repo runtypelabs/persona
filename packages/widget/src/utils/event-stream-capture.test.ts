@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AgentWidgetClient, SSEEventCallback } from "../client";
+import { AgentWidgetClient } from "../client";
 import type { AgentWidgetEvent, AgentWidgetMessage } from "../types";
 
 /**

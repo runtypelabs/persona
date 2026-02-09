@@ -220,16 +220,19 @@ describe("Event Stream Controller Methods", () => {
   });
 });
 
+/** Listener type compatible with EventTarget in Node test env (no DOM globals). */
+type EventListenerLike = ((event: Event) => void) | { handleEvent(event: Event): void };
+
 /**
  * Minimal EventTarget-based mock for window with CustomEvent support.
  * Used because the test environment is Node.js (no browser globals).
  */
 class MockWindow {
   private target = new EventTarget();
-  addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+  addEventListener(type: string, listener: EventListenerLike) {
     this.target.addEventListener(type, listener);
   }
-  removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+  removeEventListener(type: string, listener: EventListenerLike) {
     this.target.removeEventListener(type, listener);
   }
   dispatchEvent(event: Event): boolean {
