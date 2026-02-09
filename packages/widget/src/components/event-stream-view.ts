@@ -301,6 +301,11 @@ export function createEventStreamView(
   let searchTerm = "";
   let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // Throttle state for update() — coalesces rapid event bursts
+  let lastRenderTime = 0;
+  let pendingUpdate = false;
+  let pendingRafId: number | null = null;
+
   function updateFilterOptions() {
     const allEvents = buffer.getAll();
     const typeCounts: Record<string, number> = {};
@@ -372,7 +377,10 @@ export function createEventStreamView(
     return selectedType !== "" || searchTerm !== "";
   }
 
-  function update() {
+  function updateNow() {
+    lastRenderTime = Date.now();
+    pendingUpdate = false;
+
     updateFilterOptions();
 
     // Update truncation banner
@@ -423,6 +431,33 @@ export function createEventStreamView(
     }
   }
 
+  // Minimum interval between renders (ms)
+  const UPDATE_THROTTLE_MS = 100;
+
+  function update() {
+    const now = Date.now();
+    const elapsed = now - lastRenderTime;
+
+    if (elapsed >= UPDATE_THROTTLE_MS) {
+      // Enough time has passed — render immediately
+      if (pendingRafId !== null) {
+        cancelAnimationFrame(pendingRafId);
+        pendingRafId = null;
+      }
+      updateNow();
+      return;
+    }
+
+    // Too soon — schedule a coalesced update if not already pending
+    if (!pendingUpdate) {
+      pendingUpdate = true;
+      pendingRafId = requestAnimationFrame(() => {
+        pendingRafId = null;
+        updateNow();
+      });
+    }
+  }
+
   // Event handlers
   const swapCopyAllIcon = (iconName: string, restoreAfterMs: number) => {
     copyAllBtn.innerHTML = "";
@@ -463,7 +498,7 @@ export function createEventStreamView(
     newEventsSincePause = 0;
     lastFilteredCount = 0;
     scrollIndicator.style.display = "none";
-    update();
+    updateNow();
   };
 
   const handleFilterChange = () => {
@@ -472,7 +507,7 @@ export function createEventStreamView(
     newEventsSincePause = 0;
     userScrolledUp = false;
     scrollIndicator.style.display = "none";
-    update();
+    updateNow();
   };
   const handleSearchInput = () => {
     // Show/hide clear button based on input content
@@ -484,7 +519,7 @@ export function createEventStreamView(
       newEventsSincePause = 0;
       userScrolledUp = false;
       scrollIndicator.style.display = "none";
-      update();
+      updateNow();
     }, 150);
   };
 
@@ -497,7 +532,7 @@ export function createEventStreamView(
     newEventsSincePause = 0;
     userScrolledUp = false;
     scrollIndicator.style.display = "none";
-    update();
+    updateNow();
   };
 
   // Keyboard shortcuts
@@ -535,6 +570,11 @@ export function createEventStreamView(
 
   function destroy() {
     if (searchTimeout) clearTimeout(searchTimeout);
+    if (pendingRafId !== null) {
+      cancelAnimationFrame(pendingRafId);
+      pendingRafId = null;
+    }
+    pendingUpdate = false;
     scroller.destroy();
     eventsList.removeEventListener("scroll", handleListScroll);
     copyAllBtn.removeEventListener("click", handleCopyAll);

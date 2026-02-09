@@ -230,6 +230,7 @@ describe("createEventStreamView", () => {
     });
 
     it("should update counts on subsequent update() calls", async () => {
+      vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
@@ -242,12 +243,14 @@ describe("createEventStreamView", () => {
       expect(filterSelect.options[0].textContent).toBe("All Events (1)");
       expect(filterSelect.options[1].textContent).toBe("step_chunk (1)");
 
-      // Add another event
+      // Add another event and advance past throttle window
       buffer.push(makeEvent("step_chunk", 2));
+      vi.advanceTimersByTime(150);
       update();
 
       expect(filterSelect.options[0].textContent).toBe("All Events (2)");
       expect(filterSelect.options[1].textContent).toBe("step_chunk (2)");
+      vi.useRealTimers();
     });
 
     it("should filter events when a type is selected", async () => {
@@ -554,6 +557,7 @@ describe("createEventStreamView", () => {
 
   describe("clear chat integration", () => {
     it("should reflect empty state after buffer clear and update", async () => {
+      vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const events = [
         makeEvent("step_chunk", 1),
@@ -569,6 +573,7 @@ describe("createEventStreamView", () => {
       expect(filterSelect.options[0].textContent).toBe("All Events (2)");
 
       // Simulate clearChat: buffer.clear() + view.update()
+      vi.advanceTimersByTime(150);
       buffer.clear();
       update();
 
@@ -576,9 +581,11 @@ describe("createEventStreamView", () => {
       expect(filterSelect.options[0].textContent).toBe("All Events (0)");
       // No type-specific options remain
       expect(filterSelect.options.length).toBe(1);
+      vi.useRealTimers();
     });
 
     it("should recover after clear when new events arrive", async () => {
+      vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
@@ -587,6 +594,7 @@ describe("createEventStreamView", () => {
       update();
 
       // Clear (simulate clearChat)
+      vi.advanceTimersByTime(150);
       buffer.clear();
       update();
 
@@ -595,11 +603,158 @@ describe("createEventStreamView", () => {
       expect(filterSelect.options[0].textContent).toBe("All Events (0)");
 
       // New events arrive in new session
+      vi.advanceTimersByTime(150);
       buffer.push(makeEvent("tool_start", 10));
       update();
 
       expect(filterSelect.options[0].textContent).toBe("All Events (1)");
       expect(filterSelect.options[1].textContent).toBe("tool_start (1)");
+      vi.useRealTimers();
+    });
+  });
+
+  describe("update throttle", () => {
+    it("should render immediately on first update call", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView(buffer as any);
+
+      update();
+
+      // Should render immediately — filter options should be populated
+      const toolbar = element.children[0];
+      const filterSelect = toolbar.children[0];
+      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
+    });
+
+    it("should throttle rapid update calls within 100ms", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView(buffer as any);
+
+      // First update renders immediately
+      update();
+
+      const toolbar = element.children[0];
+      const filterSelect = toolbar.children[0];
+      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
+
+      // Add more events and call update rapidly (within throttle window)
+      buffer.push(makeEvent("step_chunk", 2));
+      buffer.push(makeEvent("step_chunk", 3));
+      update();
+      update();
+      update();
+
+      // Should NOT have rendered yet (within 100ms throttle, rAF pending)
+      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
+
+      // Advance time to flush the rAF callback (vitest fake timers handle rAF)
+      vi.advanceTimersByTime(20);
+
+      // Now it should have rendered with all 3 events
+      expect(filterSelect.options[0].textContent).toBe("All Events (3)");
+      vi.useRealTimers();
+    });
+
+    it("should render immediately after 100ms has elapsed", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView(buffer as any);
+
+      // First update
+      update();
+
+      const toolbar = element.children[0];
+      const filterSelect = toolbar.children[0];
+      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
+
+      // Wait past the throttle interval
+      vi.advanceTimersByTime(150);
+
+      // Add event and update — should render immediately since 150ms > 100ms
+      buffer.push(makeEvent("flow_complete", 2));
+      update();
+
+      expect(filterSelect.options[0].textContent).toBe("All Events (2)");
+      vi.useRealTimers();
+    });
+
+    it("should coalesce multiple rapid updates into a single render via rAF", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const buffer = createMockBuffer([makeEvent("step_chunk", 1)]);
+      const { update } = createEventStreamView(buffer as any);
+
+      // First call: immediate render
+      update();
+      const callCountAfterFirst = buffer.getAll.mock.calls.length;
+
+      // Rapid burst: 10 updates within throttle window
+      for (let i = 2; i <= 11; i++) {
+        buffer.push(makeEvent("step_chunk", i));
+        update();
+      }
+
+      // Buffer.getAll should NOT have been called again yet (all coalesced via rAF)
+      expect(buffer.getAll.mock.calls.length).toBe(callCountAfterFirst);
+
+      // Flush the rAF
+      vi.advanceTimersByTime(20);
+
+      // Should have been called for the coalesced update (updateFilterOptions + getFilteredEvents)
+      expect(buffer.getAll.mock.calls.length).toBeGreaterThan(callCountAfterFirst);
+      vi.useRealTimers();
+    });
+
+    it("should render immediately for user-initiated actions (filter change)", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [
+        makeEvent("step_chunk", 1),
+        makeEvent("flow_complete", 2),
+      ];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView(buffer as any);
+
+      // Initial render
+      update();
+
+      const toolbar = element.children[0];
+      const filterSelect = toolbar.children[0];
+      const copyAllBtn = toolbar.children[2];
+
+      // Immediately change filter — this should bypass throttle (uses updateNow internally)
+      filterSelect.value = "step_chunk";
+      filterSelect.__fireEvent("change");
+
+      // Should have updated immediately (Copy All title reflects filter)
+      expect(copyAllBtn.title).toBe("Copy Filtered (1)");
+    });
+
+    it("should cancel pending rAF on destroy", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const buffer = createMockBuffer([makeEvent("step_chunk", 1)]);
+      const { update, destroy } = createEventStreamView(buffer as any);
+
+      // First update — immediate
+      update();
+
+      // Schedule a throttled update
+      buffer.push(makeEvent("step_chunk", 2));
+      update();
+
+      // Destroy before rAF fires — should not throw
+      expect(() => destroy()).not.toThrow();
+
+      // Advancing timers to flush rAF — should not throw even though view is destroyed
+      vi.advanceTimersByTime(20);
+      vi.useRealTimers();
     });
   });
 
