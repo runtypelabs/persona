@@ -74,6 +74,15 @@ describe("EventStreamBuffer", () => {
     expect(buf.getRecent(10)).toEqual(events);
   });
 
+  it("should return the N most recent from a large buffer", () => {
+    const buf = new EventStreamBuffer(200);
+    const events = Array.from({ length: 100 }, (_, i) => makeEvent("x", i));
+    for (const e of events) buf.push(e);
+    const recent = buf.getRecent(10);
+    expect(recent).toHaveLength(10);
+    expect(recent).toEqual(events.slice(90));
+  });
+
   it("should track unique event types", () => {
     const buf = new EventStreamBuffer(10);
     buf.push(makeEvent("step_chunk", 1));
@@ -83,6 +92,25 @@ describe("EventStreamBuffer", () => {
     expect(types).toContain("step_chunk");
     expect(types).toContain("flow_complete");
     expect(types).toHaveLength(2);
+  });
+
+  it("should preserve event types after eviction", () => {
+    const buf = new EventStreamBuffer(3);
+    buf.push(makeEvent("step_chunk", 1));
+    buf.push(makeEvent("tool_start", 2));
+    buf.push(makeEvent("flow_complete", 3));
+    // Evict the step_chunk event
+    buf.push(makeEvent("tool_end", 4));
+    buf.push(makeEvent("tool_end", 5));
+    // step_chunk is evicted from the buffer but still tracked in types
+    const all = buf.getAll();
+    expect(all.every(e => e.type !== "step_chunk")).toBe(true);
+    const types = buf.getEventTypes();
+    expect(types).toContain("step_chunk");
+    expect(types).toContain("tool_start");
+    expect(types).toContain("flow_complete");
+    expect(types).toContain("tool_end");
+    expect(types).toHaveLength(4);
   });
 
   it("should clear the buffer", () => {
