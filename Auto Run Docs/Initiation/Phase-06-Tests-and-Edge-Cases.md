@@ -23,7 +23,7 @@ This phase adds comprehensive unit tests for the event stream feature and handle
     - Push events, call `clear()`, verify buffer is empty
     - Verify `getTotalCaptured()` resets to 0
 
-- [ ] Write unit tests for the EventStreamStore at `packages/widget/src/utils/event-stream-store.test.ts`:
+- [x] Write unit tests for the EventStreamStore at `packages/widget/src/utils/event-stream-store.test.ts`:
   - Use the `fake-indexeddb` package or mock IndexedDB for testing (check if it's already in dev dependencies, if not add it)
   - Test basic CRUD:
     - Open the store, put an event, getAll returns it

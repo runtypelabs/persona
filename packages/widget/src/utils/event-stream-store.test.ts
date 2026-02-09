@@ -113,4 +113,36 @@ describe("EventStreamStore", () => {
     const result = await store.getAll();
     expect(result).toEqual([]);
   });
+
+  it("should handle putBatch with 100 events", async () => {
+    const events = Array.from({ length: 100 }, (_, i) => makeEvent("bulk", i));
+    store.putBatch(events);
+    await new Promise((r) => setTimeout(r, 50));
+    const result = await store.getAll();
+    expect(result).toHaveLength(100);
+    const count = await store.getCount();
+    expect(count).toBe(100);
+  });
+
+  it("should handle IndexedDB being unavailable", async () => {
+    const origIndexedDB = globalThis.indexedDB;
+    try {
+      // Simulate IndexedDB being unavailable by deleting it
+      // @ts-expect-error - intentionally removing indexedDB for testing
+      delete globalThis.indexedDB;
+      const unavailableStore = new EventStreamStore("unavailable-db", "events");
+      // open() should reject, but put/putBatch should not throw
+      await expect(unavailableStore.open()).rejects.toBeDefined();
+      // Operations on a store that never opened should be silent no-ops
+      unavailableStore.put(makeEvent("a", 1));
+      unavailableStore.putBatch([makeEvent("b", 2)]);
+      const result = await unavailableStore.getAll();
+      expect(result).toEqual([]);
+      const count = await unavailableStore.getCount();
+      expect(count).toBe(0);
+      await unavailableStore.clear(); // should not throw
+    } finally {
+      globalThis.indexedDB = origIndexedDB;
+    }
+  });
 });
