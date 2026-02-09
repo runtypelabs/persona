@@ -70,7 +70,7 @@ This phase adds comprehensive unit tests for the event stream feature and handle
     - Null out the buffer and view references to prevent memory leaks
   <!-- Completed: Added isDestroyed flag to EventStreamStore (checked in put, putBatch, flushWrites); updated destroy() to set flag and discard pending writes before closing DB; updated EventStreamBuffer.destroy() to clear internal state and chain to store; updated ui.ts destroy callback to use buffer.destroy() and null out references; added 5 new tests (3 store, 2 buffer) -->
 
-- [ ] Handle edge case: session reset / clear chat:
+- [x] Handle edge case: session reset / clear chat:
   - When `clearChat()` is called in `packages/widget/src/ui.ts`:
     - Clear the event stream buffer: `eventStreamBuffer?.clear()`
     - This cascades to clear IndexedDB via the buffer's store reference
@@ -78,6 +78,7 @@ This phase adds comprehensive unit tests for the event stream feature and handle
   - When the widget session is reset (new session):
     - The buffer persists across session resets (same widget instance)
     - Only clear on explicit `clearChat()` or widget destroy
+  <!-- Completed: Verified existing implementation already handles this correctly — both clearChat button handler (line 2400) and controller clearChat() (line 3658) call eventStreamBuffer?.clear() and eventStreamView?.update(). Buffer persists across session resets (session.clearMessages doesn't touch event stream). Added 4 new tests: 2 buffer tests (accept events after clear, retain events across session resets) and 2 view tests (empty state after clear+update, recovery when new events arrive after clear). All 192 tests pass. -->
 
 - [ ] Handle edge case: rapid event bursts (e.g., fast streaming with many step_chunk events):
   - In `packages/widget/src/components/event-stream-view.ts`:

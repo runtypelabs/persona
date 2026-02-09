@@ -225,4 +225,44 @@ describe("EventStreamBuffer", () => {
     const result = await buf.getAllFromStore();
     expect(result).toEqual(events);
   });
+
+  it("should accept new events after clear (simulates new session after clearChat)", () => {
+    const store = createMockStore();
+    const buf = new EventStreamBuffer(10, store);
+    buf.push(makeEvent("a", 1));
+    buf.push(makeEvent("b", 2));
+    expect(buf.getSize()).toBe(2);
+
+    // Simulate clearChat
+    buf.clear();
+    expect(buf.getSize()).toBe(0);
+    expect(buf.getAll()).toEqual([]);
+    expect(store.clear).toHaveBeenCalled();
+
+    // Simulate new session sending events — buffer should accept them
+    const newEvt = makeEvent("c", 3);
+    buf.push(newEvt);
+    expect(buf.getSize()).toBe(1);
+    expect(buf.getAll()).toEqual([newEvt]);
+    expect(buf.getTotalCaptured()).toBe(1);
+  });
+
+  it("should retain events across simulated session resets (no clear called)", () => {
+    const buf = new EventStreamBuffer(10);
+    // Session 1 events
+    buf.push(makeEvent("session1_a", 1));
+    buf.push(makeEvent("session1_b", 2));
+
+    // Session reset happens (no clear called — buffer persists)
+    // Session 2 events
+    buf.push(makeEvent("session2_a", 3));
+
+    expect(buf.getSize()).toBe(3);
+    expect(buf.getAll()).toEqual([
+      makeEvent("session1_a", 1),
+      makeEvent("session1_b", 2),
+      makeEvent("session2_a", 3),
+    ]);
+    expect(buf.getTotalCaptured()).toBe(3);
+  });
 });

@@ -552,6 +552,57 @@ describe("createEventStreamView", () => {
     });
   });
 
+  describe("clear chat integration", () => {
+    it("should reflect empty state after buffer clear and update", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [
+        makeEvent("step_chunk", 1),
+        makeEvent("flow_complete", 2),
+      ];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView(buffer as any);
+
+      update();
+
+      const toolbar = element.children[0];
+      const filterSelect = toolbar.children[0];
+      expect(filterSelect.options[0].textContent).toBe("All Events (2)");
+
+      // Simulate clearChat: buffer.clear() + view.update()
+      buffer.clear();
+      update();
+
+      // Filter should show zero events
+      expect(filterSelect.options[0].textContent).toBe("All Events (0)");
+      // No type-specific options remain
+      expect(filterSelect.options.length).toBe(1);
+    });
+
+    it("should recover after clear when new events arrive", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView(buffer as any);
+
+      update();
+
+      // Clear (simulate clearChat)
+      buffer.clear();
+      update();
+
+      const toolbar = element.children[0];
+      const filterSelect = toolbar.children[0];
+      expect(filterSelect.options[0].textContent).toBe("All Events (0)");
+
+      // New events arrive in new session
+      buffer.push(makeEvent("tool_start", 10));
+      update();
+
+      expect(filterSelect.options[0].textContent).toBe("All Events (1)");
+      expect(filterSelect.options[1].textContent).toBe("tool_start (1)");
+    });
+  });
+
   describe("destroy", () => {
     it("should clean up event listeners on destroy", async () => {
       const { createEventStreamView } = await loadModule();
