@@ -1010,8 +1010,9 @@ export const createAgentExperience = (
       }
       eventStreamView?.destroy();
       eventStreamView = null;
-      eventStreamBuffer?.clear();
-      eventStreamStore?.destroy();
+      eventStreamBuffer?.destroy();
+      eventStreamBuffer = null;
+      eventStreamStore = null;
     });
   }
 

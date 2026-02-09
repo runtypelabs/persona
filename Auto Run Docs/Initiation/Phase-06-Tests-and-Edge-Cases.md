@@ -51,15 +51,16 @@ This phase adds comprehensive unit tests for the event stream feature and handle
     - Increase count, verify spacer height updates
     - Decrease count, verify spacer height updates and excess rows removed
 
-- [ ] Write integration tests for the event capture pipeline at `packages/widget/src/utils/event-stream-capture.test.ts`:
+- [x] Write integration tests for the event capture pipeline at `packages/widget/src/utils/event-stream-capture.test.ts`:
   - Test that the `onSSEEvent` callback fires for each event type:
     - Mock a stream with `step_chunk`, `tool_start`, `flow_complete` events
     - Verify the callback is called with correct event type and payload for each
   - Test that event capture doesn't interfere with normal message processing:
     - Verify that the assistant message is still created correctly
     - Verify that tool calls still display properly
+  <!-- Completed: 9 tests covering callback firing for all event types, multi-event streams, payload type resolution, non-interference with message/tool processing, no-callback mode, and callback error resilience -->
 
-- [ ] Handle edge case: widget destroy with active IndexedDB writes:
+- [x] Handle edge case: widget destroy with active IndexedDB writes:
   - In `packages/widget/src/utils/event-stream-store.ts`:
     - Add an `isDestroyed` flag that prevents new writes after `destroy()` is called
     - In `flushWrites()`, check `isDestroyed` before attempting to write
@@ -67,6 +68,7 @@ This phase adds comprehensive unit tests for the event stream feature and handle
   - In `packages/widget/src/ui.ts`:
     - In the destroy callback, call `eventStreamBuffer?.destroy()` which chains to the store
     - Null out the buffer and view references to prevent memory leaks
+  <!-- Completed: Added isDestroyed flag to EventStreamStore (checked in put, putBatch, flushWrites); updated destroy() to set flag and discard pending writes before closing DB; updated EventStreamBuffer.destroy() to clear internal state and chain to store; updated ui.ts destroy callback to use buffer.destroy() and null out references; added 5 new tests (3 store, 2 buffer) -->
 
 - [ ] Handle edge case: session reset / clear chat:
   - When `clearChat()` is called in `packages/widget/src/ui.ts`:

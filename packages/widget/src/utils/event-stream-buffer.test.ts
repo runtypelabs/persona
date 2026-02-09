@@ -185,6 +185,29 @@ describe("EventStreamBuffer", () => {
     expect(store.destroy).toHaveBeenCalled();
   });
 
+  it("should clear internal state on destroy", () => {
+    const buf = new EventStreamBuffer(10);
+    buf.push(makeEvent("a", 1));
+    buf.push(makeEvent("b", 2));
+    expect(buf.getSize()).toBe(2);
+    buf.destroy();
+    expect(buf.getSize()).toBe(0);
+    expect(buf.getAll()).toEqual([]);
+    expect(buf.getTotalCaptured()).toBe(0);
+    expect(buf.getEventTypes()).toEqual([]);
+  });
+
+  it("should clear buffer state and chain to store destroy", () => {
+    const store = createMockStore();
+    const buf = new EventStreamBuffer(10, store);
+    buf.push(makeEvent("a", 1));
+    buf.push(makeEvent("b", 2));
+    buf.destroy();
+    expect(buf.getSize()).toBe(0);
+    expect(buf.getAll()).toEqual([]);
+    expect(store.destroy).toHaveBeenCalled();
+  });
+
   it("should return store events from getAllFromStore when store exists", async () => {
     const store = createMockStore();
     const buf = new EventStreamBuffer(3, store);

@@ -4,6 +4,7 @@ export class EventStreamStore {
   private db: IDBDatabase | null = null;
   private pendingWrites: SSEEventRecord[] = [];
   private flushScheduled = false;
+  private isDestroyed = false;
   private readonly dbName: string;
   private readonly storeName: string;
 
@@ -40,7 +41,7 @@ export class EventStreamStore {
   }
 
   put(event: SSEEventRecord): void {
-    if (!this.db) return;
+    if (!this.db || this.isDestroyed) return;
     this.pendingWrites.push(event);
     if (!this.flushScheduled) {
       this.flushScheduled = true;
@@ -49,7 +50,7 @@ export class EventStreamStore {
   }
 
   putBatch(events: SSEEventRecord[]): void {
-    if (!this.db || events.length === 0) return;
+    if (!this.db || this.isDestroyed || events.length === 0) return;
     try {
       const tx = this.db.transaction(this.storeName, "readwrite");
       const store = tx.objectStore(this.storeName);
@@ -143,6 +144,8 @@ export class EventStreamStore {
   }
 
   destroy(): Promise<void> {
+    this.isDestroyed = true;
+    this.pendingWrites = [];
     this.close();
     return new Promise((resolve, reject) => {
       try {
@@ -163,7 +166,7 @@ export class EventStreamStore {
 
   private flushWrites(): void {
     this.flushScheduled = false;
-    if (!this.db || this.pendingWrites.length === 0) return;
+    if (!this.db || this.isDestroyed || this.pendingWrites.length === 0) return;
     const toWrite = this.pendingWrites;
     this.pendingWrites = [];
     try {

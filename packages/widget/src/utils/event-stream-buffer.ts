@@ -98,6 +98,11 @@ export class EventStreamBuffer {
   }
 
   destroy(): void {
+    this.buffer = [];
+    this.head = 0;
+    this.count = 0;
+    this.totalCaptured = 0;
+    this.eventTypesSet.clear();
     this.store?.destroy();
   }
 
