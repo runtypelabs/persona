@@ -112,8 +112,9 @@ This phase adds comprehensive unit tests for the event stream feature and handle
 - [x] Run `pnpm build:widget` and `pnpm typecheck` from the repo root to verify final build and type checking pass
   <!-- Completed: Build succeeded (ESM, CJS, IIFE, DTS all built). Typecheck had 67 errors in event-stream-view.test.ts due to mock DOM elements returning `Element` type instead of `any` — fixed by wrapping createEventStreamView return to type `element` as `any`, and casting clipboard mock access. Both `pnpm build:widget` and `pnpm typecheck` now pass clean. All 208 tests still pass. -->
 
-- [ ] Create a changeset for the new feature:
+- [x] Create a changeset for the new feature:
   - Run `pnpm changeset` from the repo root
   - Select `@runtypelabs/persona` (the widget package) as the changed package
   - Select `minor` as the bump type (new feature)
   - Description: "Add SSE Event Stream Inspector - a debug panel that shows raw SSE events with filtering, search, virtual scrolling, IndexedDB persistence, and programmatic control via controller methods and window events"
+  <!-- Completed: Created changeset file at .changeset/sse-event-stream-inspector.md with minor bump for @runtypelabs/persona. Verified with `pnpm changeset status` — changeset recognized correctly. -->
