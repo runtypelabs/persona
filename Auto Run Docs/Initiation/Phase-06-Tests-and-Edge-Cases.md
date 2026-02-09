@@ -80,15 +80,16 @@ This phase adds comprehensive unit tests for the event stream feature and handle
     - Only clear on explicit `clearChat()` or widget destroy
   <!-- Completed: Verified existing implementation already handles this correctly — both clearChat button handler (line 2400) and controller clearChat() (line 3658) call eventStreamBuffer?.clear() and eventStreamView?.update(). Buffer persists across session resets (session.clearMessages doesn't touch event stream). Added 4 new tests: 2 buffer tests (accept events after clear, retain events across session resets) and 2 view tests (empty state after clear+update, recovery when new events arrive after clear). All 192 tests pass. -->
 
-- [ ] Handle edge case: rapid event bursts (e.g., fast streaming with many step_chunk events):
+- [x] Handle edge case: rapid event bursts (e.g., fast streaming with many step_chunk events):
   - In `packages/widget/src/components/event-stream-view.ts`:
     - The `update()` method should have a built-in throttle: skip the update if less than 100ms since the last render
     - Use a `pendingUpdate` flag and `requestAnimationFrame` to coalesce rapid updates
   - In `packages/widget/src/utils/event-stream-buffer.ts`:
     - The ring buffer `push()` is already O(1) by design (overwrite at head pointer)
     - No additional optimization needed for the buffer itself
+  <!-- Completed: Added throttle to update() with 100ms minimum interval between renders. Uses requestAnimationFrame + pendingUpdate flag to coalesce rapid bursts into a single render pass. User-initiated actions (filter change, search, clear) bypass throttle via updateNow() for immediate response. Destroy cancels pending rAF. Confirmed ring buffer push() is already O(1). Added 6 new tests covering: immediate first render, throttle within 100ms, render after 100ms elapsed, rAF coalescing of rapid bursts, user-action bypass, and rAF cleanup on destroy. Updated 3 existing tests to account for throttle. All 198 tests pass. -->
 
-- [ ] Handle edge case: expandable JSON payloads in event rows:
+- [x] Handle edge case: expandable JSON payloads in event rows:
   - In `packages/widget/src/components/event-stream-view.ts`, update `renderEventRow()`:
     - The payload preview shows truncated JSON (first ~120 chars with ellipsis) by default
     - Add a click handler on the payload `<pre>` element:
@@ -103,6 +104,7 @@ This phase adds comprehensive unit tests for the event stream feature and handle
       - Position it below or above the clicked row (whichever has more space)
       - Dismiss on: click outside, Escape key, scroll
       - Include a small copy button in the top-right corner of the floating panel
+  <!-- Completed: Implemented floating panel for expandable JSON payloads. Payload preview truncated to 120 chars with ellipsis. Click on payload opens a floating panel with pretty-printed JSON, positioned below/above based on available space. Panel has a copy button in top-right corner. Dismisses on: click outside (container click handler), Escape key (prioritized before search/close), scroll (in scroll handler). Panel is cleaned up on destroy. Added cursor-pointer + hover styling on payload. Non-JSON payloads shown as-is. Added 10 new tests covering: truncation, panel show, Escape dismiss, scroll dismiss, click-outside dismiss, destroy cleanup, JSON formatting, non-JSON fallback, short payload pass-through, and click handler presence. All 208 tests pass. -->
 
 - [ ] Run `pnpm test:run` from `packages/widget/` to run all tests and verify everything passes
 

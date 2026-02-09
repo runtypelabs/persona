@@ -16,7 +16,7 @@ function formatTimestamp(ms: number): string {
 // Row height constant shared between renderEventRow and scroller config
 const EVENT_ROW_HEIGHT = 52;
 
-function renderEventRow(event: SSEEventRecord): HTMLElement {
+function renderEventRow(event: SSEEventRecord, onPayloadClick?: (event: SSEEventRecord, target: HTMLElement) => void): HTMLElement {
   // The virtual scroller sets position:absolute + explicit height on the returned element.
   // We build content directly inside it using fixed pixel positioning to guarantee visibility.
   const row = createElement(
@@ -106,15 +106,22 @@ function renderEventRow(event: SSEEventRecord): HTMLElement {
   // Bottom line: payload preview (full width)
   const payload = createElement(
     "pre",
-    "tvw-text-[11px] tvw-text-cw-secondary tvw-font-mono tvw-overflow-hidden tvw-text-ellipsis tvw-whitespace-nowrap tvw-m-0 tvw-px-4"
+    "tvw-text-[11px] tvw-text-cw-secondary tvw-font-mono tvw-overflow-hidden tvw-text-ellipsis tvw-whitespace-nowrap tvw-m-0 tvw-px-4 tvw-cursor-pointer hover:tvw-text-cw-primary"
   );
   payload.style.height = "18px";
   payload.style.lineHeight = "18px";
   const preview =
-    event.payload.length > 200
-      ? event.payload.slice(0, 200) + "..."
+    event.payload.length > 120
+      ? event.payload.slice(0, 120) + "..."
       : event.payload;
   payload.textContent = preview;
+
+  if (onPayloadClick) {
+    payload.addEventListener("click", (e: Event) => {
+      e.stopPropagation();
+      onPayloadClick(event, payload);
+    });
+  }
 
   row.appendChild(topRow);
   row.appendChild(payload);
@@ -259,6 +266,112 @@ export function createEventStreamView(
   // Virtual scroller state
   let filteredEvents: SSEEventRecord[] = [];
 
+  // Floating payload panel state
+  let activePanel: HTMLElement | null = null;
+
+  function dismissPanel() {
+    if (activePanel) {
+      activePanel.remove();
+      activePanel = null;
+    }
+  }
+
+  function showPayloadPanel(event: SSEEventRecord, target: HTMLElement) {
+    // Dismiss any existing panel first
+    dismissPanel();
+
+    // Format JSON for display
+    let formattedPayload: string;
+    try {
+      formattedPayload = JSON.stringify(JSON.parse(event.payload), null, 2);
+    } catch {
+      formattedPayload = event.payload;
+    }
+
+    // Create floating panel
+    const panel = createElement(
+      "div",
+      "tvw-absolute tvw-z-20 tvw-bg-cw-surface tvw-border tvw-border-cw-border tvw-rounded-lg tvw-shadow-lg tvw-p-3 tvw-text-xs tvw-font-mono tvw-max-w-[500px] tvw-max-h-[300px] tvw-overflow-auto"
+    );
+    panel.setAttribute("data-payload-panel", "true");
+
+    // Copy button in top-right corner
+    const panelCopyBtn = createElement(
+      "button",
+      "tvw-absolute tvw-top-1.5 tvw-right-1.5 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border-none tvw-bg-cw-surface tvw-p-1 tvw-rounded tvw-z-10"
+    );
+    panelCopyBtn.title = "Copy payload";
+    const panelCopyIcon = renderLucideIcon("clipboard", "12px", "currentColor", 1.5);
+    if (panelCopyIcon) panelCopyBtn.appendChild(panelCopyIcon);
+    panelCopyBtn.addEventListener("click", async (e: Event) => {
+      e.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(formattedPayload);
+      } catch {
+        // Fallback
+        const textarea = document.createElement("textarea");
+        textarea.value = formattedPayload;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      // Visual feedback
+      panelCopyBtn.innerHTML = "";
+      const checkIcon = renderLucideIcon("check", "12px", "currentColor", 1.5);
+      if (checkIcon) panelCopyBtn.appendChild(checkIcon);
+      setTimeout(() => {
+        panelCopyBtn.innerHTML = "";
+        const restoreIcon = renderLucideIcon("clipboard", "12px", "currentColor", 1.5);
+        if (restoreIcon) panelCopyBtn.appendChild(restoreIcon);
+      }, 1500);
+    });
+
+    // Payload content
+    const payloadContent = createElement(
+      "pre",
+      "tvw-m-0 tvw-whitespace-pre-wrap tvw-break-all tvw-text-cw-secondary tvw-pr-6"
+    );
+    payloadContent.textContent = formattedPayload;
+
+    panel.appendChild(panelCopyBtn);
+    panel.appendChild(payloadContent);
+
+    // Position below or above the target based on available space
+    // Use the eventsListWrapper as the positioning context (it has position:relative)
+    const wrapperRect = eventsListWrapper.getBoundingClientRect?.();
+    const targetRect = target.getBoundingClientRect?.();
+
+    if (wrapperRect && targetRect) {
+      const spaceBelow = wrapperRect.bottom - targetRect.bottom;
+      const spaceAbove = targetRect.top - wrapperRect.top;
+      const leftOffset = targetRect.left - wrapperRect.left;
+
+      if (spaceBelow >= 150 || spaceBelow >= spaceAbove) {
+        // Position below
+        panel.style.top = `${targetRect.bottom - wrapperRect.top}px`;
+      } else {
+        // Position above
+        panel.style.bottom = `${wrapperRect.bottom - targetRect.top}px`;
+      }
+      panel.style.left = `${Math.max(4, leftOffset)}px`;
+      panel.style.right = "4px";
+    } else {
+      // Fallback: center in wrapper
+      panel.style.left = "4px";
+      panel.style.right = "4px";
+      panel.style.top = "50%";
+    }
+
+    // Stop click events from propagating out of the panel
+    panel.addEventListener("click", (e: Event) => e.stopPropagation());
+
+    eventsListWrapper.appendChild(panel);
+    activePanel = panel;
+  }
+
   const scroller = new VirtualScroller({
     container: eventsList,
     rowHeight: EVENT_ROW_HEIGHT,
@@ -266,7 +379,7 @@ export function createEventStreamView(
     renderRow: (index: number) => {
       const event = filteredEvents[index];
       if (!event) return createElement("div", "");
-      return renderEventRow(event);
+      return renderEventRow(event, showPayloadPanel);
     },
   });
 
@@ -275,6 +388,8 @@ export function createEventStreamView(
   let newEventsSincePause = 0;
 
   const handleListScroll = () => {
+    // Dismiss any open payload panel on scroll
+    dismissPanel();
     if (scroller.getIsAutoScrolling()) return;
     if (scroller.isNearBottom()) {
       userScrolledUp = false;
@@ -549,6 +664,11 @@ export function createEventStreamView(
 
     // Escape handling
     if (e.key === "Escape") {
+      // If a payload panel is open, dismiss it first
+      if (activePanel) {
+        dismissPanel();
+        return;
+      }
       if (document.activeElement === searchInput) {
         // When search is focused: clear and blur
         handleSearchClear();
@@ -561,12 +681,18 @@ export function createEventStreamView(
     }
   };
 
+  // Dismiss payload panel on click outside
+  const handleContainerClick = () => {
+    dismissPanel();
+  };
+
   copyAllBtn.addEventListener("click", handleCopyAll);
   clearBtn.addEventListener("click", handleClear);
   filterSelect.addEventListener("change", handleFilterChange);
   searchInput.addEventListener("input", handleSearchInput);
   searchClearBtn.addEventListener("click", handleSearchClear);
   container.addEventListener("keydown", handleKeyDown);
+  container.addEventListener("click", handleContainerClick);
 
   function destroy() {
     if (searchTimeout) clearTimeout(searchTimeout);
@@ -575,6 +701,7 @@ export function createEventStreamView(
       pendingRafId = null;
     }
     pendingUpdate = false;
+    dismissPanel();
     scroller.destroy();
     eventsList.removeEventListener("scroll", handleListScroll);
     copyAllBtn.removeEventListener("click", handleCopyAll);
@@ -583,6 +710,7 @@ export function createEventStreamView(
     searchInput.removeEventListener("input", handleSearchInput);
     searchClearBtn.removeEventListener("click", handleSearchClear);
     container.removeEventListener("keydown", handleKeyDown);
+    container.removeEventListener("click", handleContainerClick);
   }
 
   return { element: container, update, destroy };
