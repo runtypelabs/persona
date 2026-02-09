@@ -106,7 +106,8 @@ This phase adds comprehensive unit tests for the event stream feature and handle
       - Include a small copy button in the top-right corner of the floating panel
   <!-- Completed: Implemented floating panel for expandable JSON payloads. Payload preview truncated to 120 chars with ellipsis. Click on payload opens a floating panel with pretty-printed JSON, positioned below/above based on available space. Panel has a copy button in top-right corner. Dismisses on: click outside (container click handler), Escape key (prioritized before search/close), scroll (in scroll handler). Panel is cleaned up on destroy. Added cursor-pointer + hover styling on payload. Non-JSON payloads shown as-is. Added 10 new tests covering: truncation, panel show, Escape dismiss, scroll dismiss, click-outside dismiss, destroy cleanup, JSON formatting, non-JSON fallback, short payload pass-through, and click handler presence. All 208 tests pass. -->
 
-- [ ] Run `pnpm test:run` from `packages/widget/` to run all tests and verify everything passes
+- [x] Run `pnpm test:run` from `packages/widget/` to run all tests and verify everything passes
+  <!-- Completed: All 208 tests pass across 10 test files (event-stream-buffer: 21, event-stream-store: 17, event-stream-capture: 9, event-stream-controller: 24, event-stream-view: 36, virtual-scroller: 19, client: 22, session: 14, formatting: 4, code-generators: 42). Duration: 1.03s. -->
 
 - [ ] Run `pnpm build:widget` and `pnpm typecheck` from the repo root to verify final build and type checking pass
 
