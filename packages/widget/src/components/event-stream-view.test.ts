@@ -180,7 +180,12 @@ vi.mock("../utils/icons", () => ({
 async function loadModule() {
   // Reset module cache to get fresh module with mocks
   const mod = await import("./event-stream-view");
-  return mod;
+  // Wrap createEventStreamView to return `element` as `any` since tests use mock DOM with custom properties
+  const origCreate = mod.createEventStreamView;
+  const wrappedCreate = (...args: Parameters<typeof origCreate>): { element: any; update: () => void; destroy: () => void } => {
+    return origCreate(...args);
+  };
+  return { ...mod, createEventStreamView: wrappedCreate };
 }
 
 describe("createEventStreamView", () => {
@@ -431,7 +436,7 @@ describe("createEventStreamView", () => {
       expect(getFullHistory).not.toHaveBeenCalled();
 
       // Should copy only filtered events
-      const writeCall = globalThis.navigator.clipboard.writeText.mock.calls[0][0];
+      const writeCall = (globalThis.navigator.clipboard.writeText as any).mock.calls[0][0];
       const parsed = JSON.parse(writeCall);
       expect(parsed).toHaveLength(1);
       expect(parsed[0].type).toBe("step_chunk");

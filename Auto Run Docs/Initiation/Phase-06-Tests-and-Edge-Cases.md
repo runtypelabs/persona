@@ -109,7 +109,8 @@ This phase adds comprehensive unit tests for the event stream feature and handle
 - [x] Run `pnpm test:run` from `packages/widget/` to run all tests and verify everything passes
   <!-- Completed: All 208 tests pass across 10 test files (event-stream-buffer: 21, event-stream-store: 17, event-stream-capture: 9, event-stream-controller: 24, event-stream-view: 36, virtual-scroller: 19, client: 22, session: 14, formatting: 4, code-generators: 42). Duration: 1.03s. -->
 
-- [ ] Run `pnpm build:widget` and `pnpm typecheck` from the repo root to verify final build and type checking pass
+- [x] Run `pnpm build:widget` and `pnpm typecheck` from the repo root to verify final build and type checking pass
+  <!-- Completed: Build succeeded (ESM, CJS, IIFE, DTS all built). Typecheck had 67 errors in event-stream-view.test.ts due to mock DOM elements returning `Element` type instead of `any` — fixed by wrapping createEventStreamView return to type `element` as `any`, and casting clipboard mock access. Both `pnpm build:widget` and `pnpm typecheck` now pass clean. All 208 tests still pass. -->
 
 - [ ] Create a changeset for the new feature:
   - Run `pnpm changeset` from the repo root
