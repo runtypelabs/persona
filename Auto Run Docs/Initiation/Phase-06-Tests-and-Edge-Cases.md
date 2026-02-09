@@ -38,7 +38,7 @@ This phase adds comprehensive unit tests for the event stream feature and handle
   - Test error handling:
     - If IndexedDB is unavailable, verify no errors thrown and operations are no-ops
 
-- [ ] Write unit tests for the VirtualScroller at `packages/widget/src/utils/virtual-scroller.test.ts`:
+- [x] Write unit tests for the VirtualScroller at `packages/widget/src/utils/virtual-scroller.test.ts`:
   - Mock the DOM container with a fixed size (e.g., 400px height)
   - Test row rendering:
     - Set total count to 100, verify only ~10-15 rows are in the DOM (400px / 40px row height + overscan)

@@ -327,4 +327,123 @@ describe("VirtualScroller", () => {
     expect(viewport.children.length).toBe(5);
     expect(viewport.children[0].__dataIndex).toBe(50);
   });
+
+  describe("with 400px container height", () => {
+    beforeEach(() => {
+      container.clientHeight = 400;
+      container.scrollHeight = 400;
+    });
+
+    it("should render ~10 visible rows plus overscan with 100 items", () => {
+      scroller = new VirtualScroller({
+        container,
+        rowHeight: 40,
+        overscan: 5,
+        renderRow: createRenderRow(),
+      });
+
+      scroller.setTotalCount(100);
+
+      // 400px / 40px = 10 visible + 5 overscan below = 15 rows
+      const viewport = container.children[0].children[0];
+      expect(viewport.children.length).toBe(15);
+    });
+
+    it("should render correct rows when scrollTop is 200", () => {
+      scroller = new VirtualScroller({
+        container,
+        rowHeight: 40,
+        overscan: 0,
+        renderRow: createRenderRow(),
+      });
+
+      scroller.setTotalCount(100);
+      const viewport = container.children[0].children[0];
+
+      // Initially at scrollTop=0: rows 0-9 (400/40 = 10 visible)
+      expect(viewport.children.length).toBe(10);
+
+      // Scroll to 200px -> first visible row = floor(200/40) = 5
+      // Last visible row = ceil((200+400)/40) = 15
+      container.scrollTop = 200;
+      scroller.render();
+
+      expect(viewport.children.length).toBe(10);
+      expect(viewport.children[0].__dataIndex).toBe(5);
+      expect(viewport.children[viewport.children.length - 1].__dataIndex).toBe(14);
+    });
+
+    it("should render correct range with overscan when scrollTop is 200", () => {
+      scroller = new VirtualScroller({
+        container,
+        rowHeight: 40,
+        overscan: 3,
+        renderRow: createRenderRow(),
+      });
+
+      scroller.setTotalCount(100);
+      const viewport = container.children[0].children[0];
+
+      container.scrollTop = 200;
+      scroller.render();
+
+      // startIndex = max(0, floor(200/40) - 3) = max(0, 5-3) = 2
+      // endIndex = min(100, ceil((200+400)/40) + 3) = min(100, 15+3) = 18
+      // 18 - 2 = 16 rows
+      expect(viewport.children.length).toBe(16);
+      expect(viewport.children[0].__dataIndex).toBe(2);
+      expect(viewport.children[viewport.children.length - 1].__dataIndex).toBe(17);
+    });
+  });
+
+  it("should remove excess rows when totalCount decreases", () => {
+    scroller = new VirtualScroller({
+      container,
+      rowHeight: 40,
+      overscan: 0,
+      renderRow: createRenderRow(),
+    });
+
+    // Start with many items
+    scroller.setTotalCount(100);
+    const viewport = container.children[0].children[0];
+    const spacer = container.children[0];
+    expect(viewport.children.length).toBe(5); // 200/40 = 5
+
+    // Decrease to 2 items
+    scroller.setTotalCount(2);
+    expect(spacer.style.height).toBe("80px"); // 2 * 40
+    expect(viewport.children.length).toBe(2); // Only 2 rows exist
+    expect(viewport.children[0].__dataIndex).toBe(0);
+    expect(viewport.children[1].__dataIndex).toBe(1);
+  });
+
+  it("isNearBottom should return true when at bottom", () => {
+    scroller = new VirtualScroller({
+      container,
+      rowHeight: 40,
+      renderRow: createRenderRow(),
+    });
+
+    scroller.setTotalCount(100);
+
+    // At bottom: scrollHeight - scrollTop - clientHeight < threshold
+    container.scrollHeight = 4000;
+    container.scrollTop = 3800; // 4000 - 3800 - 200 = 0 < 50
+    expect(scroller.isNearBottom()).toBe(true);
+  });
+
+  it("isNearBottom should return false when scrolled up", () => {
+    scroller = new VirtualScroller({
+      container,
+      rowHeight: 40,
+      renderRow: createRenderRow(),
+    });
+
+    scroller.setTotalCount(100);
+
+    container.scrollHeight = 4000;
+    container.scrollTop = 1000; // 4000 - 1000 - 200 = 2800 > 50
+    expect(scroller.isNearBottom()).toBe(false);
+  });
 });
