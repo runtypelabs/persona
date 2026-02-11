@@ -54,10 +54,12 @@ jobs:
         run: |
           CURRENT="${{ steps.version.outputs.version }}"
           IS_PRERELEASE="${{ github.event.release.prerelease }}"
+          CURRENT_NO_BUILD="${CURRENT%%+*}"
 
-          # Pre-releases should never update latest
-          if [[ "$IS_PRERELEASE" == "true" ]]; then
-            echo "Skipping latest update: pre-release"
+          # Pre-releases should never update latest.
+          # Detect from both GitHub metadata and semver version string.
+          if [[ "$IS_PRERELEASE" == "true" ]] || [[ "$CURRENT_NO_BUILD" == *-* ]]; then
+            echo "Skipping latest update: pre-release (metadata=$IS_PRERELEASE, version=$CURRENT)"
             echo "should_update=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
