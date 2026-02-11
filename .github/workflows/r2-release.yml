@@ -21,6 +21,9 @@ jobs:
       R2_BUCKET: ${{ vars.R2_BUCKET || 'cdn-assets' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -46,6 +49,38 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Extracted version: $VERSION"
 
+      - name: Check if should update latest
+        id: check-latest
+        run: |
+          CURRENT="${{ steps.version.outputs.version }}"
+          IS_PRERELEASE="${{ github.event.release.prerelease }}"
+
+          # Pre-releases should never update latest
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            echo "Skipping latest update: pre-release"
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Get the highest stable version from existing git tags
+          HIGHEST=$(git tag -l '@runtypelabs/persona@*' | \
+            sed 's/@runtypelabs\/persona@//' | \
+            grep -v '-' | \
+            sort -V | \
+            tail -1)
+
+          echo "Current version: $CURRENT"
+          echo "Highest stable version: $HIGHEST"
+
+          # Update latest only if current >= highest
+          if [[ -z "$HIGHEST" ]] || [[ "$(printf '%s\n' "$HIGHEST" "$CURRENT" | sort -V | tail -1)" == "$CURRENT" ]]; then
+            echo "Will update latest"
+            echo "should_update=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping latest update: $CURRENT is older than $HIGHEST"
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload versioned release to R2
         id: upload-versioned
         uses: ryand56/r2-upload-action@v1.4
@@ -59,6 +94,7 @@ jobs:
 
       - name: Upload latest to R2
         id: upload-latest
+        if: steps.check-latest.outputs.should_update == 'true'
         uses: ryand56/r2-upload-action@v1.4
         with:
           r2-account-id: ${{ env.R2_ACCOUNT_ID }}
@@ -75,7 +111,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** \`${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Bucket:** \`${{ env.R2_BUCKET }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Pre-release:** ${{ github.event.release.prerelease }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Uploaded Paths" >> $GITHUB_STEP_SUMMARY
           echo "- \`persona/${{ steps.version.outputs.version }}/\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`persona/latest/\`" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ steps.check-latest.outputs.should_update }}" == "true" ]]; then
+            echo "- \`persona/latest/\` ✓" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- \`persona/latest/\` _(skipped)_" >> $GITHUB_STEP_SUMMARY
+          fi
