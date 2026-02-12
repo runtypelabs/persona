@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 1.43.3
+
+### Patch Changes
+
+- 3b79b5a: Fix typo in package description ("plugable" → "pluggable")
+
 ## 1.43.2
 
 ### Patch Changes
