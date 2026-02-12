@@ -1,0 +1,131 @@
+name: Publish to R2 CDN
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: r2-release
+  cancel-in-progress: false
+
+jobs:
+  publish-to-r2:
+    name: Publish to R2 CDN
+    # Only run for widget package releases (tag format: @runtypelabs/persona@x.y.z)
+    if: startsWith(github.event.release.tag_name, '@runtypelabs/persona@')
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || 'cdn-assets' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build widget
+        run: pnpm build:widget
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./packages/widget/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Extracted version: $VERSION"
+
+      - name: Check if should update latest
+        id: check-latest
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          CURRENT="$RELEASE_VERSION"
+          IS_PRERELEASE="$RELEASE_PRERELEASE"
+          CURRENT_NO_BUILD="${CURRENT%%+*}"
+
+          # Pre-releases should never update latest.
+          # Detect from both GitHub metadata and semver version string.
+          if [[ "$IS_PRERELEASE" == "true" ]] || [[ "$CURRENT_NO_BUILD" == *-* ]]; then
+            echo "Skipping latest update: pre-release (metadata=$IS_PRERELEASE, version=$CURRENT)"
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Get the highest stable version from existing git tags
+          HIGHEST=$(git tag -l '@runtypelabs/persona@*' | \
+            sed 's/@runtypelabs\/persona@//' | \
+            grep -v '-' | \
+            sort -V | \
+            tail -1)
+
+          echo "Current version: $CURRENT"
+          echo "Highest stable version: $HIGHEST"
+
+          # Update latest only if current >= highest
+          if [[ -z "$HIGHEST" ]] || [[ "$(printf '%s\n' "$HIGHEST" "$CURRENT" | sort -V | tail -1)" == "$CURRENT" ]]; then
+            echo "Will update latest"
+            echo "should_update=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping latest update: $CURRENT is older than $HIGHEST"
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload versioned release to R2
+        id: upload-versioned
+        uses: ryand56/r2-upload-action@v1.4
+        with:
+          r2-account-id: ${{ env.R2_ACCOUNT_ID }}
+          r2-access-key-id: ${{ env.R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ env.R2_SECRET_ACCESS_KEY }}
+          r2-bucket: ${{ env.R2_BUCKET }}
+          source-dir: packages/widget/dist
+          destination-dir: persona/${{ steps.version.outputs.version }}
+
+      - name: Upload latest to R2
+        id: upload-latest
+        if: steps.check-latest.outputs.should_update == 'true'
+        uses: ryand56/r2-upload-action@v1.4
+        with:
+          r2-account-id: ${{ env.R2_ACCOUNT_ID }}
+          r2-access-key-id: ${{ env.R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ env.R2_SECRET_ACCESS_KEY }}
+          r2-bucket: ${{ env.R2_BUCKET }}
+          source-dir: packages/widget/dist
+          destination-dir: persona/latest
+          keep-file-fresh: true
+
+      - name: Summary
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          SHOULD_UPDATE_LATEST: ${{ steps.check-latest.outputs.should_update }}
+        run: |
+          echo "## R2 CDN Upload Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Version:** \`$RELEASE_VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Bucket:** \`$R2_BUCKET\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Pre-release:** $RELEASE_PRERELEASE" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Uploaded Paths" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`persona/$RELEASE_VERSION/\`" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$SHOULD_UPDATE_LATEST" == "true" ]]; then
+            echo "- \`persona/latest/\` ✓" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- \`persona/latest/\` _(skipped)_" >> "$GITHUB_STEP_SUMMARY"
+          fi
