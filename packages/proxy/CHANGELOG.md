@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 1.43.2
+
+### Patch Changes
+
+- ce823c8: Add "ai" keyword to package metadata for improved discoverability
+
 ## 1.42.0
 
 ### Minor Changes
