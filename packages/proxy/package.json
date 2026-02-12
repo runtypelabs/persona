@@ -1,6 +1,6 @@
 {
   "name": "@runtypelabs/persona-proxy",
-  "version": "1.42.0",
+  "version": "1.43.2",
   "description": "Proxy server for @runtypelabs/persona widget - handles flow configuration and forwards requests to AI backends.",
   "type": "module",
   "main": "dist/index.cjs",
