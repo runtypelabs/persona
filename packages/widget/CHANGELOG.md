@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 1.43.4
+
+### Patch Changes
+
+- 4b23630: Consolidate R2 CDN publish into release workflow and add manual dispatch
+
 ## 1.43.3
 
 ### Patch Changes
