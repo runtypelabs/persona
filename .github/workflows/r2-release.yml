@@ -51,9 +51,12 @@ jobs:
 
       - name: Check if should update latest
         id: check-latest
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
-          CURRENT="${{ steps.version.outputs.version }}"
-          IS_PRERELEASE="${{ github.event.release.prerelease }}"
+          CURRENT="$RELEASE_VERSION"
+          IS_PRERELEASE="$RELEASE_PRERELEASE"
           CURRENT_NO_BUILD="${CURRENT%%+*}"
 
           # Pre-releases should never update latest.
@@ -108,17 +111,21 @@ jobs:
           keep-file-fresh: true
 
       - name: Summary
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          SHOULD_UPDATE_LATEST: ${{ steps.check-latest.outputs.should_update }}
         run: |
-          echo "## R2 CDN Upload Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** \`${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Bucket:** \`${{ env.R2_BUCKET }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Pre-release:** ${{ github.event.release.prerelease }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Uploaded Paths" >> $GITHUB_STEP_SUMMARY
-          echo "- \`persona/${{ steps.version.outputs.version }}/\`" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ steps.check-latest.outputs.should_update }}" == "true" ]]; then
-            echo "- \`persona/latest/\` ✓" >> $GITHUB_STEP_SUMMARY
+          echo "## R2 CDN Upload Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Version:** \`$RELEASE_VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Bucket:** \`$R2_BUCKET\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Pre-release:** $RELEASE_PRERELEASE" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Uploaded Paths" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`persona/$RELEASE_VERSION/\`" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$SHOULD_UPDATE_LATEST" == "true" ]]; then
+            echo "- \`persona/latest/\` ✓" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- \`persona/latest/\` _(skipped)_" >> $GITHUB_STEP_SUMMARY
+            echo "- \`persona/latest/\` _(skipped)_" >> "$GITHUB_STEP_SUMMARY"
           fi
