@@ -3,6 +3,12 @@ name: Publish to R2 CDN
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to publish (e.g. @runtypelabs/persona@1.44.0)'
+        required: true
+        type: string
 
 concurrency:
   group: r2-release
@@ -12,17 +18,22 @@ jobs:
   publish-to-r2:
     name: Publish to R2 CDN
     # Only run for widget package releases (tag format: @runtypelabs/persona@x.y.z)
-    if: startsWith(github.event.release.tag_name, '@runtypelabs/persona@')
+    if: >-
+      startsWith(
+        inputs.tag || github.event.release.tag_name,
+        '@runtypelabs/persona@'
+      )
     runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_BUCKET: ${{ vars.R2_BUCKET || 'cdn-assets' }}
+      RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
 
       - name: Setup pnpm
@@ -53,7 +64,7 @@ jobs:
         id: check-latest
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
-          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease || 'false' }}
         run: |
           CURRENT="$RELEASE_VERSION"
           IS_PRERELEASE="$RELEASE_PRERELEASE"
@@ -113,7 +124,7 @@ jobs:
       - name: Summary
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
-          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease || 'false' }}
           SHOULD_UPDATE_LATEST: ${{ steps.check-latest.outputs.should_update }}
         run: |
           echo "## R2 CDN Upload Summary" >> "$GITHUB_STEP_SUMMARY"
