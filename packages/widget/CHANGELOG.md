@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 1.43.5
+
+### Patch Changes
+
+- e600050: Pre-initialize client session in client token mode so feedback (upvote/downvote) works before the user sends their first message (e.g. on restored or persisted messages)
+
 ## 1.43.4
 
 ### Patch Changes
