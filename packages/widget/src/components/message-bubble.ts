@@ -250,7 +250,7 @@ const getBubbleClasses = (
 export const createMessageActions = (
   message: AgentWidgetMessage,
   actionsConfig: AgentWidgetMessageActionsConfig,
-  callbacks?: MessageActionCallbacks
+  _callbacks?: MessageActionCallbacks
 ): HTMLElement => {
   const showCopy = actionsConfig.showCopy ?? true;
   const showUpvote = actionsConfig.showUpvote ?? true;
@@ -282,145 +282,38 @@ export const createMessageActions = (
   container.id = `actions-${message.id}`;
   container.setAttribute("data-actions-for", message.id);
 
-  // Track vote state for this message
-  let currentVote: "upvote" | "downvote" | null = null;
-
   const createActionButton = (
     iconName: string,
     label: string,
-    onClick: () => void,
-    dataAction?: string
+    dataAction: string
   ): HTMLButtonElement => {
     const button = document.createElement("button");
     button.className = "tvw-message-action-btn";
     button.setAttribute("aria-label", label);
     button.setAttribute("title", label);
-    if (dataAction) {
-      button.setAttribute("data-action", dataAction);
-    }
+    button.setAttribute("data-action", dataAction);
 
     const icon = renderLucideIcon(iconName, 14, "currentColor", 2);
     if (icon) {
       button.appendChild(icon);
     }
 
-    button.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      onClick();
-    });
-
     return button;
   };
 
-  // Copy button
+  // Copy button - click handled via event delegation in ui.ts
   if (showCopy) {
-    const copyButton = createActionButton("copy", "Copy message", () => {
-      // Copy to clipboard
-      const textToCopy = message.content || "";
-      navigator.clipboard.writeText(textToCopy).then(() => {
-        // Show success feedback - swap icon temporarily
-        copyButton.classList.add("tvw-message-action-success");
-        const checkIcon = renderLucideIcon("check", 14, "currentColor", 2);
-        if (checkIcon) {
-          copyButton.innerHTML = "";
-          copyButton.appendChild(checkIcon);
-        }
-        
-        // Restore original icon after 2 seconds
-        setTimeout(() => {
-          copyButton.classList.remove("tvw-message-action-success");
-          const originalIcon = renderLucideIcon("copy", 14, "currentColor", 2);
-          if (originalIcon) {
-            copyButton.innerHTML = "";
-            copyButton.appendChild(originalIcon);
-          }
-        }, 2000);
-      }).catch((err) => {
-        if (typeof console !== "undefined") {
-          console.error("[AgentWidget] Failed to copy message:", err);
-        }
-      });
-
-      // Trigger callback
-      if (callbacks?.onCopy) {
-        callbacks.onCopy(message);
-      }
-      if (actionsConfig.onCopy) {
-        actionsConfig.onCopy(message);
-      }
-    }, "copy");
-    container.appendChild(copyButton);
+    container.appendChild(createActionButton("copy", "Copy message", "copy"));
   }
 
-  // Upvote button
+  // Upvote button - click handled via event delegation in ui.ts
   if (showUpvote) {
-    const upvoteButton = createActionButton("thumbs-up", "Upvote", () => {
-      const wasActive = currentVote === "upvote";
-      
-      // Toggle state
-      if (wasActive) {
-        currentVote = null;
-        upvoteButton.classList.remove("tvw-message-action-active");
-      } else {
-        // Remove downvote if active
-        const downvoteBtn = container.querySelector('[data-action="downvote"]');
-        if (downvoteBtn) {
-          downvoteBtn.classList.remove("tvw-message-action-active");
-        }
-        currentVote = "upvote";
-        upvoteButton.classList.add("tvw-message-action-active");
-        
-        // Trigger feedback
-        const feedback: AgentWidgetMessageFeedback = {
-          type: "upvote",
-          messageId: message.id,
-          message
-        };
-        if (callbacks?.onFeedback) {
-          callbacks.onFeedback(feedback);
-        }
-        if (actionsConfig.onFeedback) {
-          actionsConfig.onFeedback(feedback);
-        }
-      }
-    }, "upvote");
-    container.appendChild(upvoteButton);
+    container.appendChild(createActionButton("thumbs-up", "Upvote", "upvote"));
   }
 
-  // Downvote button
+  // Downvote button - click handled via event delegation in ui.ts
   if (showDownvote) {
-    const downvoteButton = createActionButton("thumbs-down", "Downvote", () => {
-      const wasActive = currentVote === "downvote";
-      
-      // Toggle state
-      if (wasActive) {
-        currentVote = null;
-        downvoteButton.classList.remove("tvw-message-action-active");
-      } else {
-        // Remove upvote if active
-        const upvoteBtn = container.querySelector('[data-action="upvote"]');
-        if (upvoteBtn) {
-          upvoteBtn.classList.remove("tvw-message-action-active");
-        }
-        currentVote = "downvote";
-        downvoteButton.classList.add("tvw-message-action-active");
-        
-        // Trigger feedback
-        const feedback: AgentWidgetMessageFeedback = {
-          type: "downvote",
-          messageId: message.id,
-          message
-        };
-        if (callbacks?.onFeedback) {
-          callbacks.onFeedback(feedback);
-        }
-        if (actionsConfig.onFeedback) {
-          actionsConfig.onFeedback(feedback);
-        }
-      }
-    }, "downvote");
-    container.appendChild(downvoteButton);
+    container.appendChild(createActionButton("thumbs-down", "Downvote", "downvote"));
   }
 
   return container;
