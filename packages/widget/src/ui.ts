@@ -823,6 +823,89 @@ export const createAgentExperience = (
     }
   });
 
+  // Add event delegation for message action buttons (upvote, downvote, copy)
+  // This handles clicks even after idiomorph morphs the DOM and strips inline listeners
+  const messageVoteState = new Map<string, "upvote" | "downvote">();
+
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const actionBtn = target.closest('.tvw-message-action-btn[data-action]') as HTMLElement;
+    if (!actionBtn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const actionsContainer = actionBtn.closest('[data-actions-for]') as HTMLElement;
+    if (!actionsContainer) return;
+
+    const messageId = actionsContainer.getAttribute('data-actions-for');
+    if (!messageId) return;
+
+    const action = actionBtn.getAttribute('data-action');
+
+    if (action === 'copy') {
+      const messages = session.getMessages();
+      const message = messages.find(m => m.id === messageId);
+      if (message && messageActionCallbacks.onCopy) {
+        // Copy to clipboard
+        const textToCopy = message.content || "";
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          // Show success feedback - swap icon temporarily
+          actionBtn.classList.add("tvw-message-action-success");
+          const checkIcon = renderLucideIcon("check", 14, "currentColor", 2);
+          if (checkIcon) {
+            actionBtn.innerHTML = "";
+            actionBtn.appendChild(checkIcon);
+          }
+          setTimeout(() => {
+            actionBtn.classList.remove("tvw-message-action-success");
+            const originalIcon = renderLucideIcon("copy", 14, "currentColor", 2);
+            if (originalIcon) {
+              actionBtn.innerHTML = "";
+              actionBtn.appendChild(originalIcon);
+            }
+          }, 2000);
+        }).catch((err) => {
+          if (typeof console !== "undefined") {
+            // eslint-disable-next-line no-console
+            console.error("[AgentWidget] Failed to copy message:", err);
+          }
+        });
+        messageActionCallbacks.onCopy(message);
+      }
+    } else if (action === 'upvote' || action === 'downvote') {
+      const currentVote = messageVoteState.get(messageId) ?? null;
+      const wasActive = currentVote === action;
+
+      if (wasActive) {
+        // Toggle off
+        messageVoteState.delete(messageId);
+        actionBtn.classList.remove("tvw-message-action-active");
+      } else {
+        // Clear opposite vote button
+        const oppositeAction = action === 'upvote' ? 'downvote' : 'upvote';
+        const oppositeBtn = actionsContainer.querySelector(`[data-action="${oppositeAction}"]`);
+        if (oppositeBtn) {
+          oppositeBtn.classList.remove("tvw-message-action-active");
+        }
+
+        messageVoteState.set(messageId, action);
+        actionBtn.classList.add("tvw-message-action-active");
+
+        // Trigger feedback
+        const messages = session.getMessages();
+        const message = messages.find(m => m.id === messageId);
+        if (message && messageActionCallbacks.onFeedback) {
+          messageActionCallbacks.onFeedback({
+            type: action,
+            messageId: message.id,
+            message
+          });
+        }
+      }
+    }
+  });
+
   panel.appendChild(container);
   mount.appendChild(wrapper);
 
