@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 1.43.6
+
+### Patch Changes
+
+- 81c2585: Fix message action buttons (upvote, downvote, copy) not firing after DOM morphing by using event delegation
+
 ## 1.43.5
 
 ### Patch Changes
