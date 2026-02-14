@@ -1814,6 +1814,17 @@ export const createAgentExperience = (
     }
   });
 
+  // Pre-initialize client session when in client token mode so feedback works
+  // before the user sends their first message (e.g. on restored/persisted messages)
+  if (config.clientToken) {
+    session.initClientSession().catch((err) => {
+      if (config.debug) {
+        // eslint-disable-next-line no-console
+        console.warn("[AgentWidget] Pre-init client session failed:", err);
+      }
+    });
+  }
+
   // Wire up event stream buffer to capture SSE events
   if (eventStreamBuffer) {
     session.setSSEEventCallback((type: string, payload: unknown) => {
