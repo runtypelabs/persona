@@ -301,6 +301,31 @@ const runCleanup = async () => {
   ]);
 };
 
+const runReal = async () => {
+  const scenario = "real";
+  writeLog(`running ${scenario}`);
+  // Restore original context
+  installModelContext(originalModelContext);
+  
+  createHarnessWidget(scenario, buildWebMcpConfig(scenario));
+  await submitAndWait("run real case");
+
+  assertScenario("Real Browser WebMCP", [
+    {
+      ok: (lastPayload as any)?.context?.webmcp?.state === "ready",
+      message: "payload.context.webmcp.state is ready"
+    },
+    {
+      ok: Array.isArray((lastPayload as any)?.context?.webmcp?.registeredTools),
+      message: "registeredTools is an array"
+    },
+    {
+      ok: (lastPayload as any)?.context?.webmcp?.registeredTools?.includes("local_echo"),
+      message: "local_echo tool was registered"
+    }
+  ]);
+};
+
 const clearResults = () => {
   resultsEl.innerHTML = "";
   logEl.textContent = "";
@@ -349,3 +374,20 @@ window.addEventListener("beforeunload", () => {
 });
 
 writeLog("Harness ready");
+
+if (originalModelContext) {
+  const statusEl = document.getElementById("browser-status");
+  const runRealBtn = document.getElementById("run-real") as HTMLButtonElement;
+  if (statusEl && runRealBtn) {
+    statusEl.textContent = "WebMCP detected in this browser";
+    statusEl.style.color = "#166534";
+    runRealBtn.disabled = false;
+    runRealBtn.style.opacity = "1";
+    runRealBtn.style.cursor = "pointer";
+    runRealBtn.addEventListener("click", () => {
+      void runReal().catch((error) => {
+        addResult({ pass: false, name: "Real Browser WebMCP", details: String(error) });
+      });
+    });
+  }
+}

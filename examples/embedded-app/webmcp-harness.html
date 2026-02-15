@@ -105,8 +105,11 @@
       <h1>WebMCP Browser Harness</h1>
       <p class="small">
         Verifies unsupported fallback, mock WebMCP ready path, error fallback, and cleanup behavior in-browser.
+        <br>
+        <span id="browser-status" style="font-weight: 600; color: #dc2626;">WebMCP not detected in this browser</span>
       </p>
       <div class="controls">
+        <button id="run-real" disabled style="opacity: 0.5; cursor: not-allowed;">Run Real (Browser)</button>
         <button id="run-unsupported">Run Unsupported</button>
         <button id="run-ready">Run Mock Ready</button>
         <button id="run-error">Run Mock Error</button>

@@ -121,11 +121,12 @@ The action middleware example demonstrates:
 ### WebMCP Browser Harness
 - **Harness page**: `http://localhost:5173/webmcp-harness.html`
   - Verifies WebMCP capability detection and fallback behavior in-browser
-  - Runs four scenarios:
+  - Runs five scenarios:
     - `Unsupported`: no `navigator.modelContext`, confirms fallback request path
     - `Mock Ready`: mocked `modelContext` confirms context + tool registration path
     - `Mock Error`: mocked failure confirms safe fallback with successful request
     - `Cleanup`: confirms `unregisterTool` and `clearContext` on widget destroy
+    - `Real Browser`: (if detected) runs against the native `navigator.modelContext` implementation
   - Uses `customFetch` to capture outgoing payload and return synthetic SSE responses (no backend required)
 
 ### Custom Components Demo
