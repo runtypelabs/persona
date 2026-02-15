@@ -118,6 +118,16 @@ The action middleware example demonstrates:
 - Page navigation with persistent chat state
 - localStorage-based chat history persistence
 
+### WebMCP Browser Harness
+- **Harness page**: `http://localhost:5173/webmcp-harness.html`
+  - Verifies WebMCP capability detection and fallback behavior in-browser
+  - Runs four scenarios:
+    - `Unsupported`: no `navigator.modelContext`, confirms fallback request path
+    - `Mock Ready`: mocked `modelContext` confirms context + tool registration path
+    - `Mock Error`: mocked failure confirms safe fallback with successful request
+    - `Cleanup`: confirms `unregisterTool` and `clearContext` on widget destroy
+  - Uses `customFetch` to capture outgoing payload and return synthetic SSE responses (no backend required)
+
 ### Custom Components Demo
 - **Components page**: `http://localhost:5173/custom-components.html`
   - Demonstrates custom component rendering from JSON directives
