@@ -12,6 +12,7 @@ import {
   AgentWidgetHeadersFunction,
   AgentWidgetSSEEventResult as _AgentWidgetSSEEventResult,
   AgentExecutionState,
+  AgentWidgetWebMcpStatus,
   ClientSession,
   ClientInitResponse,
   ClientChatRequest,
@@ -19,6 +20,7 @@ import {
   ClientFeedbackType,
   PersonaArtifactKind
 } from "./types";
+import { WebMcpRuntime } from "./webmcp";
 import { 
   extractTextFromJson, 
   createPlainTextParser,
@@ -96,6 +98,8 @@ export class AgentWidgetClient {
   private readonly parseSSEEvent?: AgentWidgetSSEEventParser;
   private readonly getHeaders?: AgentWidgetHeadersFunction;
   private onSSEEvent?: SSEEventCallback;
+  private readonly webMcpRuntime: WebMcpRuntime | null = null;
+  private webMcpStatus: AgentWidgetWebMcpStatus | null = null;
   
   // Client token mode properties
   private clientSession: ClientSession | null = null;
@@ -115,6 +119,10 @@ export class AgentWidgetClient {
     this.customFetch = config.customFetch;
     this.parseSSEEvent = config.parseSSEEvent;
     this.getHeaders = config.getHeaders;
+    if (config.webmcp?.enabled) {
+      this.webMcpRuntime = new WebMcpRuntime(config.webmcp, config);
+      this.webMcpStatus = this.webMcpRuntime.getStatus();
+    }
   }
 
   /**
@@ -129,6 +137,22 @@ export class AgentWidgetClient {
    */
   public getSSEEventCallback(): SSEEventCallback | undefined {
     return this.onSSEEvent;
+  }
+
+  /**
+   * Dispose client resources.
+   */
+  public async destroy(): Promise<void> {
+    if (this.webMcpRuntime) {
+      try {
+        await this.webMcpRuntime.dispose();
+      } catch (error) {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.warn("[AgentWidget] WebMCP dispose failed:", error);
+        }
+      }
+    }
   }
 
   /**
@@ -433,6 +457,8 @@ export class AgentWidgetClient {
     onEvent({ type: "status", status: "connecting" });
 
     try {
+      await this.ensureWebMcp(options.messages, controller.signal);
+
       // Ensure session is initialized
       const session = await this.initSession();
 
@@ -546,6 +572,7 @@ export class AgentWidgetClient {
 
     onEvent({ type: "status", status: "connecting" });
 
+    await this.ensureWebMcp(options.messages, controller.signal);
     const payload = await this.buildPayload(options.messages);
 
     if (this.debug) {
@@ -622,6 +649,7 @@ export class AgentWidgetClient {
 
     onEvent({ type: "status", status: "connecting" });
 
+    await this.ensureWebMcp(options.messages, controller.signal);
     const payload = await this.buildAgentPayload(options.messages);
 
     if (this.debug) {
@@ -799,6 +827,14 @@ export class AgentWidgetClient {
       }
     }
 
+    const webMcpContext = this.getWebMcpContext();
+    if (webMcpContext) {
+      payload.context = {
+        ...(payload.context ?? {}),
+        webmcp: webMcpContext
+      };
+    }
+
     return payload;
   }
 
@@ -852,6 +888,14 @@ export class AgentWidgetClient {
       }
     }
 
+    const webMcpContext = this.getWebMcpContext();
+    if (webMcpContext) {
+      payload.context = {
+        ...(payload.context ?? {}),
+        webmcp: webMcpContext
+      };
+    }
+
     if (this.requestMiddleware) {
       try {
         const result = await this.requestMiddleware({
@@ -870,6 +914,38 @@ export class AgentWidgetClient {
     }
 
     return payload;
+  }
+
+  private async ensureWebMcp(
+    messages: AgentWidgetMessage[],
+    signal?: AbortSignal
+  ): Promise<void> {
+    if (!this.webMcpRuntime) return;
+    try {
+      this.webMcpStatus = await this.webMcpRuntime.sync(messages, signal);
+    } catch (error) {
+      this.webMcpStatus = {
+        state: "error",
+        reason: "webmcp_unhandled_sync_failure",
+        details: error instanceof Error ? error.message : String(error)
+      };
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.warn("[AgentWidget] WebMCP sync failed, using fallback path:", error);
+      }
+    }
+  }
+
+  private getWebMcpContext(): Record<string, unknown> | null {
+    if (this.config.webmcp?.enabled !== true) return null;
+    if (this.config.webmcp?.exposeStatusInContext === false) return null;
+    if (!this.webMcpStatus) return null;
+    return {
+      state: this.webMcpStatus.state,
+      reason: this.webMcpStatus.reason,
+      details: this.webMcpStatus.details,
+      registeredTools: this.webMcpStatus.registeredTools ?? []
+    };
   }
 
   /**

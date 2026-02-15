@@ -1358,6 +1358,48 @@ const controller = initAgentWidget({
 
 This ensures all configuration values are set to sensible defaults while allowing you to customize only what you need.
 
+### Experimental: WebMCP
+
+You can enable experimental browser-side WebMCP integration when available, while automatically falling back to normal Persona behavior when it is not supported.
+
+```ts
+import { initAgentWidget } from '@runtypelabs/persona';
+
+initAgentWidget({
+  target: '#chat-root',
+  config: {
+    apiUrl: '/api/chat/dispatch',
+    webmcp: {
+      enabled: true,
+      tools: [
+        {
+          name: 'local_echo',
+          description: 'Returns the input payload',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              text: { type: 'string' }
+            },
+            required: ['text']
+          },
+          handler: async (input) => {
+            return { ok: true, echo: input };
+          }
+        }
+      ],
+      onEvent: (event) => {
+        console.debug('[webmcp]', event.phase, event.status);
+      }
+    }
+  }
+});
+```
+
+Notes:
+- WebMCP is optional. If `navigator.modelContext` is unavailable, requests continue using non-WebMCP flows.
+- If WebMCP sync or registration fails, the widget degrades safely and still sends normal chat requests.
+- By default, status is attached to outbound request context as `context.webmcp`. Set `webmcp.exposeStatusInContext = false` to disable this.
+
 ### Configuration reference
 
 All options are safe to mutate via `initAgentWidget(...).update(newConfig)`.
@@ -1375,6 +1417,7 @@ For detailed theme styling properties, see [THEME-CONFIG.md](./THEME-CONFIG.md).
 | `getHeaders` | `() => Record<string, string> \| Promise<...>` | Dynamic headers function called before each request. Use for auth tokens that may change. |
 | `customFetch` | `(url, init, payload) => Promise<Response>` | Replace the default `fetch` entirely. Receives URL, RequestInit, and the payload. |
 | `parseSSEEvent` | `(eventData) => { text?, done?, error? } \| null` | Transform non-standard SSE events into the expected format. Return `null` to ignore an event. |
+| `webmcp` | `AgentWidgetWebMcpConfig` | Experimental browser-side WebMCP integration. Enables capability detection, optional tool registration, and automatic fallback when unavailable. |
 
 #### Client Token Mode
 

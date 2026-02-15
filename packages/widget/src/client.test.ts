@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { AgentWidgetClient } from './client';
 import { AgentWidgetEvent, AgentWidgetMessage } from './types';
 import { createJsonStreamParser } from './utils/formatting';
@@ -190,6 +190,110 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
 
     expect(capturedPayload.messages).toHaveLength(1);
     expect(capturedPayload.messages[0].content).toBe('{"action": "message", "text": "Hello"}');
+  });
+});
+
+describe('AgentWidgetClient - WebMCP Integration', () => {
+  const originalModelContext = (globalThis.navigator as any)?.modelContext;
+  let capturedPayload: any = null;
+
+  beforeEach(() => {
+    capturedPayload = null;
+    (globalThis.navigator as any).modelContext = undefined;
+  });
+
+  const mockFetch = () => {
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+  };
+
+  it('falls back cleanly when navigator.modelContext is unavailable', async () => {
+    mockFetch();
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      webmcp: { enabled: true },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'hello', createdAt: new Date().toISOString() }] },
+      () => {}
+    );
+
+    expect(capturedPayload?.context?.webmcp?.state).toBe('unsupported');
+    expect(capturedPayload?.context?.webmcp?.reason).toBe('navigator.modelContext_unavailable');
+  });
+
+  it('registers tools and provides context when WebMCP is available', async () => {
+    mockFetch();
+    const provideContext = vi.fn().mockResolvedValue(undefined);
+    const registerTool = vi.fn().mockResolvedValue(undefined);
+    const unregisterTool = vi.fn().mockResolvedValue(undefined);
+    const clearContext = vi.fn().mockResolvedValue(undefined);
+    (globalThis.navigator as any).modelContext = {
+      provideContext,
+      registerTool,
+      unregisterTool,
+      clearContext
+    };
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      webmcp: {
+        enabled: true,
+        tools: [
+          {
+            name: 'local_echo',
+            description: 'Echo tool'
+          }
+        ]
+      },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_2', role: 'user', content: 'hello', createdAt: new Date().toISOString() }] },
+      () => {}
+    );
+
+    expect(provideContext).toHaveBeenCalled();
+    expect(registerTool).toHaveBeenCalled();
+    expect(capturedPayload?.context?.webmcp?.state).toBe('ready');
+    expect(capturedPayload?.context?.webmcp?.registeredTools).toContain('local_echo');
+
+    await client.destroy();
+    expect(unregisterTool).toHaveBeenCalled();
+    expect(clearContext).toHaveBeenCalled();
+  });
+
+  it('falls back to normal requests when WebMCP sync throws', async () => {
+    mockFetch();
+    const provideContext = vi.fn().mockRejectedValue(new Error('boom'));
+    (globalThis.navigator as any).modelContext = { provideContext };
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      webmcp: { enabled: true },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_3', role: 'user', content: 'hello', createdAt: new Date().toISOString() }] },
+      () => {}
+    );
+
+    expect(capturedPayload?.context?.webmcp?.state).toBe('error');
+    expect((global.fetch as any).mock.calls.length).toBe(1);
+  });
+
+  afterAll(() => {
+    (globalThis.navigator as any).modelContext = originalModelContext;
   });
 });
 
@@ -1439,4 +1543,3 @@ describe('AgentWidgetClient - Unified Event Names', () => {
     expect(reasoningMessages[0].reasoning?.chunks).toContain('Thinking...');
   });
 });
-

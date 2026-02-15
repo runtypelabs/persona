@@ -25,6 +25,11 @@ export type {
   AgentWidgetSSEEventParser,
   AgentWidgetSSEEventResult,
   AgentWidgetHeadersFunction,
+  AgentWidgetWebMcpConfig,
+  AgentWidgetWebMcpToolDefinition,
+  AgentWidgetWebMcpToolHandlerContext,
+  AgentWidgetWebMcpStatus,
+  AgentWidgetWebMcpEvent,
   // Multi-modal content types
   TextContentPart,
   ImageContentPart,

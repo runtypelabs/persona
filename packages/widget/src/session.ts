@@ -497,12 +497,19 @@ export class AgentWidgetSession {
   }
 
   public updateConfig(next: AgentWidgetConfig) {
+    void this.client.destroy();
     const prevSSECallback = this.client.getSSEEventCallback();
     this.config = { ...this.config, ...next };
     this.client = new AgentWidgetClient(this.config);
     if (prevSSECallback) {
       this.client.setSSEEventCallback(prevSSECallback);
     }
+  }
+
+  public destroy() {
+    this.abortController?.abort();
+    this.abortController = null;
+    void this.client.destroy();
   }
 
   public getMessages() {

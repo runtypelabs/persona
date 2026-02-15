@@ -5132,6 +5132,7 @@ export const createAgentExperience = (
       return session.submitNPSFeedback(rating, comment);
     },
     destroy() {
+      session.destroy();
       destroyCallbacks.forEach((cb) => cb());
       wrapper.remove();
       launcherButtonInstance?.destroy();

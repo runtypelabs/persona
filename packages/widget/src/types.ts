@@ -1304,6 +1304,92 @@ export type AgentWidgetCustomFetch = (
 export type AgentWidgetHeadersFunction = () => Record<string, string> | Promise<Record<string, string>>;
 
 // ============================================================================
+// WebMCP Types
+// ============================================================================
+
+/**
+ * Context passed to WebMCP tool handlers.
+ */
+export type AgentWidgetWebMcpToolHandlerContext = {
+  messages: AgentWidgetMessage[];
+  config: AgentWidgetConfig;
+  signal?: AbortSignal;
+};
+
+/**
+ * Definition for a WebMCP tool to register in compatible browsers.
+ */
+export type AgentWidgetWebMcpToolDefinition = {
+  name: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  handler?: (
+    input: unknown,
+    context: AgentWidgetWebMcpToolHandlerContext
+  ) => unknown | Promise<unknown>;
+};
+
+/**
+ * Runtime status emitted by the WebMCP integration.
+ */
+export type AgentWidgetWebMcpStatus = {
+  state: "disabled" | "unsupported" | "ready" | "error";
+  reason?: string;
+  details?: string;
+  registeredTools?: string[];
+};
+
+/**
+ * Event emitted as WebMCP state changes.
+ */
+export type AgentWidgetWebMcpEvent = {
+  phase: "detect" | "init" | "context" | "tool-register" | "dispose";
+  status: AgentWidgetWebMcpStatus;
+  toolName?: string;
+  error?: Error;
+};
+
+/**
+ * Configuration for experimental WebMCP integration.
+ */
+export type AgentWidgetWebMcpConfig = {
+  /**
+   * Enables WebMCP integration.
+   * When false/undefined, widget behavior is unchanged.
+   */
+  enabled?: boolean;
+  /**
+   * Optional tool definitions to register when WebMCP is available.
+   */
+  tools?: AgentWidgetWebMcpToolDefinition[];
+  /**
+   * Optional provider for browser-local context.
+   * Defaults to lightweight recent-message context.
+   */
+  contextProvider?: (context: {
+    messages: AgentWidgetMessage[];
+    config: AgentWidgetConfig;
+  }) =>
+    | Record<string, unknown>
+    | void
+    | Promise<Record<string, unknown> | void>;
+  /**
+   * Number of recent messages included by default when `contextProvider` is not set.
+   * @default 20
+   */
+  maxContextMessages?: number;
+  /**
+   * Include current WebMCP status under `context.webmcp` in outbound payloads.
+   * @default true
+   */
+  exposeStatusInContext?: boolean;
+  /**
+   * Callback for observability and debugging.
+   */
+  onEvent?: (event: AgentWidgetWebMcpEvent) => void;
+};
+
+// ============================================================================
 // Client Token Types
 // ============================================================================
 
@@ -2245,6 +2331,11 @@ export type AgentWidgetConfig = {
    * ```
    */
   getHeaders?: AgentWidgetHeadersFunction;
+  /**
+   * Experimental WebMCP integration.
+   * Uses browser capabilities when available and automatically falls back.
+   */
+  webmcp?: AgentWidgetWebMcpConfig;
   copy?: {
     welcomeTitle?: string;
     welcomeSubtitle?: string;
