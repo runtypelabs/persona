@@ -189,7 +189,6 @@ export function createCSATFeedback(options: CSATFeedbackOptions): HTMLElement {
     } catch (error) {
       submitButton.disabled = false;
       submitButton.textContent = submitText;
-      // eslint-disable-next-line no-console
       console.error('[CSAT Feedback] Failed to submit:', error);
     }
   });
@@ -361,7 +360,6 @@ export function createNPSFeedback(options: NPSFeedbackOptions): HTMLElement {
     } catch (error) {
       submitButton.disabled = false;
       submitButton.textContent = submitText;
-      // eslint-disable-next-line no-console
       console.error('[NPS Feedback] Failed to submit:', error);
     }
   });

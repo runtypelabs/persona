@@ -103,7 +103,6 @@ export const defaultActionHandlers: Record<
           element.click();
         }, 400);
       } else if (typeof console !== "undefined") {
-        // eslint-disable-next-line no-console
         console.warn("[AgentWidget] Element not found for selector:", selector);
       }
     }
@@ -163,7 +162,6 @@ export const createActionManager = (options: ActionManagerOptions) => {
       context.text.trim().startsWith("{") &&
       typeof console !== "undefined"
     ) {
-      // eslint-disable-next-line no-console
       console.warn(
         "[AgentWidget] Structured response detected but no raw payload was provided. Ensure your stream parser returns { text, raw }."
       );
@@ -219,7 +217,6 @@ export const createActionManager = (options: ActionManagerOptions) => {
         }
       } catch (error) {
         if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
           console.error("[AgentWidget] Action handler error:", error);
         }
       }

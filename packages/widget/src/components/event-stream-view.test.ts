@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SSEEventRecord } from "../types";
+import type { EventStreamBuffer } from "../utils/event-stream-buffer";
 
 // ---------- DOM helpers for Node environment ----------
 
@@ -165,6 +166,12 @@ function createMockBuffer(events: SSEEventRecord[] = []) {
   };
 }
 
+function asEventStreamBuffer(
+  buffer: ReturnType<typeof createMockBuffer>
+): EventStreamBuffer {
+  return buffer as unknown as EventStreamBuffer;
+}
+
 beforeEach(() => {
   rafCallbacks = [];
   if (!globalThis.document) {
@@ -214,7 +221,9 @@ vi.mock("../utils/icons", () => ({
 async function loadModule() {
   const mod = await import("./event-stream-view");
   const origCreate = mod.createEventStreamView;
-  const wrappedCreate = (options: Parameters<typeof origCreate>[0]): { element: any; update: () => void; destroy: () => void } => {
+  const wrappedCreate = (
+    options: Parameters<typeof origCreate>[0]
+  ): ReturnType<typeof origCreate> => {
     return origCreate(options);
   };
   return { ...mod, createEventStreamView: wrappedCreate };
@@ -264,11 +273,23 @@ function getNoResultsMsg(element: any) {
   return getEventsWrapper(element).children[1]; // noResultsMsg
 }
 
+function fireMockEvent(
+  element: HTMLElement,
+  eventName: string,
+  detail?: unknown
+) {
+  (
+    element as unknown as {
+      __fireEvent: (event: string, payload?: unknown) => void;
+    }
+  ).__fireEvent(eventName, detail);
+}
+
 describe("createEventStreamView", () => {
   it("should create a container element with expected children", async () => {
     const { createEventStreamView } = await loadModule();
     const buffer = createMockBuffer();
-    const { element } = createEventStreamView({ buffer: buffer as any });
+    const { element } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
     // Container should have tabindex for keyboard events
     expect(element.getAttribute("tabindex")).toBe("0");
@@ -280,7 +301,7 @@ describe("createEventStreamView", () => {
   it("should return update and destroy functions", async () => {
     const { createEventStreamView } = await loadModule();
     const buffer = createMockBuffer();
-    const view = createEventStreamView({ buffer: buffer as any });
+    const view = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
     expect(typeof view.update).toBe("function");
     expect(typeof view.destroy).toBe("function");
@@ -291,7 +312,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -304,7 +325,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
       expect(getCountBadge(element).textContent).toBe("1");
@@ -327,7 +348,7 @@ describe("createEventStreamView", () => {
         makeEvent("flow_complete", 3),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -345,7 +366,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -370,7 +391,7 @@ describe("createEventStreamView", () => {
         makeEvent("step_chunk", 3),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -388,7 +409,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1, '{"message":"hello world"}')];
       const buffer = createMockBuffer(events);
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       const searchInput = getSearchInput(element);
 
@@ -408,7 +429,7 @@ describe("createEventStreamView", () => {
     it("should show clear button when search has text", async () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       const searchInput = getSearchInput(element);
       const clearBtn = getSearchClearBtn(element);
@@ -428,7 +449,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("a", 1)]);
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       const searchInput = getSearchInput(element);
       const clearBtn = getSearchClearBtn(element);
@@ -453,7 +474,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1, '{"data":"hello"}')];
       const buffer = createMockBuffer(events);
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       const searchInput = getSearchInput(element);
 
@@ -479,7 +500,7 @@ describe("createEventStreamView", () => {
         makeEvent("flow_complete", 2),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       const copyAllBtn = getCopyAllBtn(element);
 
@@ -507,7 +528,7 @@ describe("createEventStreamView", () => {
       const buffer = createMockBuffer(events);
       const getFullHistory = vi.fn().mockResolvedValue(events);
       const { element } = createEventStreamView({
-        buffer: buffer as any,
+        buffer: asEventStreamBuffer(buffer),
         getFullHistory,
       });
 
@@ -525,7 +546,9 @@ describe("createEventStreamView", () => {
       expect(getFullHistory).not.toHaveBeenCalled();
 
       // Should copy only filtered events
-      const writeCall = (globalThis.navigator.clipboard.writeText as any).mock.calls[0][0];
+      const writeTextMock = globalThis.navigator.clipboard
+        .writeText as unknown as { mock: { calls: unknown[][] } };
+      const writeCall = writeTextMock.mock.calls[0][0] as string;
       const parsed = JSON.parse(writeCall);
       expect(parsed).toHaveLength(1);
       expect(parsed[0].index).toBe(1);
@@ -541,7 +564,7 @@ describe("createEventStreamView", () => {
       const fullHistory = [...events, makeEvent("old_event", 0)];
       const getFullHistory = vi.fn().mockResolvedValue(fullHistory);
       const { element, update } = createEventStreamView({
-        buffer: buffer as any,
+        buffer: asEventStreamBuffer(buffer),
         getFullHistory,
       });
 
@@ -561,7 +584,7 @@ describe("createEventStreamView", () => {
     it("should focus search on Ctrl+F", async () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       const searchInput = getSearchInput(element);
 
@@ -572,7 +595,7 @@ describe("createEventStreamView", () => {
         metaKey: false,
         preventDefault: vi.fn(),
       };
-      element.__fireEvent("keydown", event);
+      fireMockEvent(element, "keydown", event);
 
       expect(event.preventDefault).toHaveBeenCalled();
       expect(searchInput.focus).toHaveBeenCalled();
@@ -583,7 +606,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("a", 1)]);
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       const searchInput = getSearchInput(element);
 
@@ -596,7 +619,7 @@ describe("createEventStreamView", () => {
       (globalThis.document as any).activeElement = searchInput;
 
       // Press Escape
-      element.__fireEvent("keydown", {
+      fireMockEvent(element, "keydown", {
         key: "Escape",
         ctrlKey: false,
         metaKey: false,
@@ -613,7 +636,7 @@ describe("createEventStreamView", () => {
       const buffer = createMockBuffer();
       const onClose = vi.fn();
       const { element } = createEventStreamView({
-        buffer: buffer as any,
+        buffer: asEventStreamBuffer(buffer),
         onClose,
       });
 
@@ -621,7 +644,7 @@ describe("createEventStreamView", () => {
       (globalThis.document as any).activeElement = element;
 
       // Press Escape
-      element.__fireEvent("keydown", {
+      fireMockEvent(element, "keydown", {
         key: "Escape",
         ctrlKey: false,
         metaKey: false,
@@ -640,7 +663,7 @@ describe("createEventStreamView", () => {
         { id: "evt-2", type: "step_start", timestamp: 1361, payload: '{"stepName":"Chatbot 1"}' },
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -655,10 +678,10 @@ describe("createEventStreamView", () => {
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
       const { update } = createEventStreamView({
-        buffer: buffer as any,
+        buffer: asEventStreamBuffer(buffer),
         config: {
           features: { eventStream: { timestampFormat: "absolute" } },
-        } as any,
+        },
       });
 
       update();
@@ -673,7 +696,7 @@ describe("createEventStreamView", () => {
         { id: "evt-1", type: "flow_start", timestamp: 1000, payload: '{"flowName":"My Flow"}' },
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -687,10 +710,10 @@ describe("createEventStreamView", () => {
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
       const { update } = createEventStreamView({
-        buffer: buffer as any,
+        buffer: asEventStreamBuffer(buffer),
         config: {
           features: { eventStream: { showSequenceNumbers: false } },
-        } as any,
+        },
       });
 
       update();
@@ -702,7 +725,7 @@ describe("createEventStreamView", () => {
       const events = [makeEvent("custom_type", 1)];
       const buffer = createMockBuffer(events);
       const { update } = createEventStreamView({
-        buffer: buffer as any,
+        buffer: asEventStreamBuffer(buffer),
         config: {
           features: {
             eventStream: {
@@ -712,7 +735,7 @@ describe("createEventStreamView", () => {
               },
             },
           },
-        } as any,
+        },
       });
 
       update();
@@ -725,7 +748,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1, '{"message":"hello"}')];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -784,7 +807,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1), makeEvent("step_chunk", 2)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       // Initial render (Path A — first render)
       update();
@@ -819,7 +842,7 @@ describe("createEventStreamView", () => {
         makeEvent("step_chunk", 3, '{"msg":"third"}'),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       // Initial render
       update();
@@ -855,7 +878,7 @@ describe("createEventStreamView", () => {
         makeEvent("step_chunk", 3),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       // Initial render
       update();
@@ -883,7 +906,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1, '{"message":"hello"}')];
       const buffer = createMockBuffer(events);
-      const { update } = createEventStreamView({ buffer: buffer as any });
+      const { update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -900,7 +923,7 @@ describe("createEventStreamView", () => {
         makeEvent("flow_complete", 2),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -924,7 +947,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -951,7 +974,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -964,7 +987,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       // First update renders immediately
       update();
@@ -995,7 +1018,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       // First update
       update();
@@ -1017,7 +1040,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("step_chunk", 1)]);
-      const { update } = createEventStreamView({ buffer: buffer as any });
+      const { update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       // First call: immediate render
       update();
@@ -1047,7 +1070,7 @@ describe("createEventStreamView", () => {
         makeEvent("flow_complete", 2),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       // Initial render
       update();
@@ -1067,7 +1090,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("step_chunk", 1)]);
-      const { update, destroy } = createEventStreamView({ buffer: buffer as any });
+      const { update, destroy } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       // First update — immediate
       update();
@@ -1090,7 +1113,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       update();
 
@@ -1107,7 +1130,7 @@ describe("createEventStreamView", () => {
     it("should clean up event listeners on destroy", async () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
-      const { destroy } = createEventStreamView({ buffer: buffer as any });
+      const { destroy } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       // Should not throw
       expect(() => destroy()).not.toThrow();
@@ -1117,7 +1140,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("a", 1)]);
-      const { element, destroy } = createEventStreamView({ buffer: buffer as any });
+      const { element, destroy } = createEventStreamView({ buffer: asEventStreamBuffer(buffer) });
 
       const searchInput = getSearchInput(element);
 
@@ -1148,8 +1171,8 @@ describe("createEventStreamView", () => {
       };
 
       const { update } = createEventStreamView({
-        buffer: buffer as any,
-        config: {} as any,
+        buffer: asEventStreamBuffer(buffer),
+        config: {},
         plugins: [plugin],
       });
 
@@ -1176,8 +1199,8 @@ describe("createEventStreamView", () => {
       };
 
       const { element } = createEventStreamView({
-        buffer: buffer as any,
-        config: {} as any,
+        buffer: asEventStreamBuffer(buffer),
+        config: {},
         plugins: [plugin],
       });
 
@@ -1198,8 +1221,8 @@ describe("createEventStreamView", () => {
       };
 
       const { element } = createEventStreamView({
-        buffer: buffer as any,
-        config: {} as any,
+        buffer: asEventStreamBuffer(buffer),
+        config: {},
         plugins: [plugin],
       });
 
@@ -1218,8 +1241,8 @@ describe("createEventStreamView", () => {
       };
 
       const { element, update } = createEventStreamView({
-        buffer: buffer as any,
-        config: {} as any,
+        buffer: asEventStreamBuffer(buffer),
+        config: {},
         plugins: [plugin],
       });
 

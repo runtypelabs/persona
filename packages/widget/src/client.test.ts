@@ -3,14 +3,46 @@ import { AgentWidgetClient } from './client';
 import { AgentWidgetEvent, AgentWidgetMessage } from './types';
 import { createJsonStreamParser } from './utils/formatting';
 
+type MockFetchOptions = {
+  body?: string;
+};
+
+type CapturedPayload = {
+  messages: Array<Record<string, unknown>>;
+  agent?: {
+    name?: string;
+    model?: string;
+    systemPrompt?: string;
+    loopConfig?: {
+      maxIterations?: number;
+    };
+  };
+  options?: {
+    streamResponse?: boolean;
+    recordMode?: string;
+  };
+};
+
+function parsePayload(options: MockFetchOptions): CapturedPayload {
+  const parsed = JSON.parse(options.body ?? '{}') as Partial<CapturedPayload>;
+  return {
+    messages: [],
+    ...parsed,
+  };
+}
+
+function emptyPayload(): CapturedPayload {
+  return { messages: [] };
+}
+
 describe('AgentWidgetClient - Empty Message Filtering', () => {
   let client: AgentWidgetClient;
   let events: AgentWidgetEvent[] = [];
-  let capturedPayload: any = null;
+  let capturedPayload: CapturedPayload = emptyPayload();
 
   beforeEach(() => {
     events = [];
-    capturedPayload = null;
+    capturedPayload = emptyPayload();
     client = new AgentWidgetClient({
       apiUrl: 'http://localhost:8000',
     });
@@ -18,8 +50,8 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
 
   it('should filter out messages with empty content before sending', async () => {
     // Create a mock fetch that captures the request payload
-    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       // Return a minimal successful response
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
@@ -66,14 +98,14 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
 
     // Verify no message has empty content
     const hasEmptyContent = capturedPayload.messages.some(
-      (m: any) => !m.content || (typeof m.content === 'string' && m.content.trim() === '')
+      (m: Record<string, unknown>) => !m.content || (typeof m.content === 'string' && m.content.trim() === '')
     );
     expect(hasEmptyContent).toBe(false);
   });
 
   it('should filter out messages with whitespace-only content', async () => {
-    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -122,8 +154,8 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
   });
 
   it('should preserve messages with valid contentParts even if content is empty', async () => {
-    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -139,7 +171,7 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
         id: 'usr_1',
         role: 'user',
         content: '', // Empty content but has contentParts - SHOULD BE PRESERVED
-        contentParts: [{ type: 'image', data: 'base64data' }] as any,
+        contentParts: [{ type: 'image', data: 'base64data' }] as unknown as AgentWidgetMessage['contentParts'],
         createdAt: '2025-01-01T00:00:00.000Z',
       },
       {
@@ -161,8 +193,8 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
   });
 
   it('should preserve messages with valid rawContent even if content is empty', async () => {
-    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -195,18 +227,18 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
 
 describe('AgentWidgetClient - llmContent Priority', () => {
   let client: AgentWidgetClient;
-  let capturedPayload: any = null;
+  let capturedPayload: CapturedPayload = emptyPayload();
 
   beforeEach(() => {
-    capturedPayload = null;
+    capturedPayload = emptyPayload();
     client = new AgentWidgetClient({
       apiUrl: 'http://localhost:8000',
     });
   });
 
   it('should use llmContent instead of content when provided', async () => {
-    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -236,8 +268,8 @@ describe('AgentWidgetClient - llmContent Priority', () => {
   });
 
   it('should fall back to content when llmContent is not provided', async () => {
-    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -265,8 +297,8 @@ describe('AgentWidgetClient - llmContent Priority', () => {
   });
 
   it('should prioritize contentParts over llmContent', async () => {
-    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -283,7 +315,7 @@ describe('AgentWidgetClient - llmContent Priority', () => {
         role: 'user',
         content: 'Display content',
         llmContent: 'LLM content (should be ignored)',
-        contentParts: [{ type: 'text', text: 'Multi-modal text' }] as any,
+        contentParts: [{ type: 'text', text: 'Multi-modal text' }] as unknown as AgentWidgetMessage['contentParts'],
         createdAt: '2025-01-01T00:00:00.000Z',
       },
     ];
@@ -297,8 +329,8 @@ describe('AgentWidgetClient - llmContent Priority', () => {
   });
 
   it('should preserve messages with valid llmContent even if content is empty', async () => {
-    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -326,8 +358,8 @@ describe('AgentWidgetClient - llmContent Priority', () => {
   });
 
   it('should support dual-content pattern for redaction', async () => {
-    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -482,7 +514,7 @@ describe('AgentWidgetClient - JSON Streaming', () => {
     global.fetch = async () => ({
       ok: true,
       body: stream
-    }) as any;
+    }) as unknown as Response;
 
     // Dispatch and collect events
     await client.dispatch(
@@ -586,7 +618,7 @@ function sseEvent(eventType: string, data: Record<string, unknown>): string {
  * Helper to create a mock fetch that returns an SSE stream
  */
 function createAgentStreamFetch(events: string[]) {
-  return vi.fn().mockImplementation(async (_url: string, _options: any) => {
+  return vi.fn().mockImplementation(async (_url: string, _options: MockFetchOptions) => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
@@ -624,9 +656,9 @@ describe('AgentWidgetClient - Agent Mode Detection', () => {
 
 describe('AgentWidgetClient - Agent Payload Building', () => {
   it('should build agent payload with agent config', async () => {
-    let capturedPayload: any = null;
-    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    let capturedPayload: CapturedPayload = emptyPayload();
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -676,20 +708,22 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
 
     expect(capturedPayload).toBeDefined();
     expect(capturedPayload.agent).toBeDefined();
-    expect(capturedPayload.agent.name).toBe('Test Agent');
-    expect(capturedPayload.agent.model).toBe('openai:gpt-4o-mini');
-    expect(capturedPayload.agent.systemPrompt).toBe('You are a test assistant.');
-    expect(capturedPayload.agent.loopConfig.maxIterations).toBe(3);
+    const payloadAgent = capturedPayload.agent as NonNullable<CapturedPayload['agent']>;
+    expect(payloadAgent.name).toBe('Test Agent');
+    expect(payloadAgent.model).toBe('openai:gpt-4o-mini');
+    expect(payloadAgent.systemPrompt).toBe('You are a test assistant.');
+    expect(payloadAgent.loopConfig?.maxIterations).toBe(3);
     expect(capturedPayload.messages).toHaveLength(1);
     expect(capturedPayload.messages[0].content).toBe('Hello agent');
-    expect(capturedPayload.options.streamResponse).toBe(true);
-    expect(capturedPayload.options.recordMode).toBe('virtual');
+    const payloadOptions = capturedPayload.options as NonNullable<CapturedPayload['options']>;
+    expect(payloadOptions.streamResponse).toBe(true);
+    expect(payloadOptions.recordMode).toBe('virtual');
   });
 
   it('should filter out variant messages from agent payload', async () => {
-    let capturedPayload: any = null;
-    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
-      capturedPayload = JSON.parse(options.body);
+    let capturedPayload: CapturedPayload = emptyPayload();
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: MockFetchOptions) => {
+      capturedPayload = parsePayload(options);
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -1215,4 +1249,3 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     expect(assistantMessages[0].content).toBe('Hi');
   });
 });
-

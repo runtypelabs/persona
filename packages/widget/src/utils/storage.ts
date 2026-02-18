@@ -10,7 +10,6 @@ const safeJsonParse = (value: string | null) => {
     return JSON.parse(value);
   } catch (error) {
     if (typeof console !== "undefined") {
-      // eslint-disable-next-line no-console
       console.error("[AgentWidget] Failed to parse stored state:", error);
     }
     return null;
@@ -50,7 +49,6 @@ export const createLocalStorageAdapter = (
         storage.setItem(key, JSON.stringify(payload));
       } catch (error) {
         if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
           console.error("[AgentWidget] Failed to persist state:", error);
         }
       }
@@ -62,7 +60,6 @@ export const createLocalStorageAdapter = (
         storage.removeItem(key);
       } catch (error) {
         if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
           console.error("[AgentWidget] Failed to clear stored state:", error);
         }
       }

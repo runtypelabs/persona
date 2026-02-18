@@ -29,7 +29,6 @@ export const createEventBus = <EventMap extends Record<string, any>>() => {
         handler(payload);
       } catch (error) {
         if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
           console.error("[AgentWidget] Event handler error:", error);
         }
       }

@@ -316,7 +316,6 @@ export class AgentWidgetClient {
     }
 
     if (this.debug) {
-      // eslint-disable-next-line no-console
       console.debug("[AgentWidgetClient] sending feedback", feedback);
     }
 
@@ -472,7 +471,6 @@ export class AgentWidgetClient {
       };
 
       if (this.debug) {
-        // eslint-disable-next-line no-console
         console.debug("[AgentWidgetClient] client token dispatch", chatRequest);
       }
 
@@ -546,7 +544,6 @@ export class AgentWidgetClient {
     const payload = await this.buildPayload(options.messages);
 
     if (this.debug) {
-      // eslint-disable-next-line no-console
       console.debug("[AgentWidgetClient] dispatch payload", payload);
     }
 
@@ -558,7 +555,6 @@ export class AgentWidgetClient {
         headers = { ...headers, ...dynamicHeaders };
       } catch (error) {
         if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
           console.error("[AgentWidget] getHeaders error:", error);
         }
       }
@@ -622,7 +618,6 @@ export class AgentWidgetClient {
     const payload = await this.buildAgentPayload(options.messages);
 
     if (this.debug) {
-      // eslint-disable-next-line no-console
       console.debug("[AgentWidgetClient] agent dispatch payload", payload);
     }
 
@@ -634,7 +629,6 @@ export class AgentWidgetClient {
         headers = { ...headers, ...dynamicHeaders };
       } catch (error) {
         if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
           console.error("[AgentWidget] getHeaders error:", error);
         }
       }
@@ -733,7 +727,6 @@ export class AgentWidgetClient {
             }
           } catch (error) {
             if (typeof console !== "undefined") {
-              // eslint-disable-next-line no-console
               console.warn("[AgentWidget] Context provider failed:", error);
             }
           }
@@ -786,7 +779,6 @@ export class AgentWidgetClient {
             }
           } catch (error) {
             if (typeof console !== "undefined") {
-              // eslint-disable-next-line no-console
               console.warn("[AgentWidget] Context provider failed:", error);
             }
           }
@@ -809,7 +801,6 @@ export class AgentWidgetClient {
         }
       } catch (error) {
         if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
           console.error("[AgentWidget] Request middleware error:", error);
         }
       }
@@ -875,7 +866,6 @@ export class AgentWidgetClient {
       return true; // Event was handled
     } catch (error) {
       if (typeof console !== "undefined") {
-        // eslint-disable-next-line no-console
         console.error("[AgentWidget] parseSSEEvent error:", error);
       }
       return false;
@@ -1948,7 +1938,6 @@ export class AgentWidgetClient {
             : payload.error?.message ?? 'Agent execution error';
           if (payload.recoverable) {
             if (typeof console !== "undefined") {
-              // eslint-disable-next-line no-console
               console.warn("[AgentWidget] Recoverable agent error:", errorMessage);
             }
           } else {

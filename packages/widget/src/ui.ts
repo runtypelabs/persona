@@ -307,7 +307,6 @@ export const createAgentExperience = (
         return config.onStateLoaded(state);
       } catch (error) {
         if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
           console.error("[AgentWidget] onStateLoaded hook failed:", error);
         }
       }
@@ -339,7 +338,6 @@ export const createAgentExperience = (
       }
     } catch (error) {
       if (typeof console !== "undefined") {
-        // eslint-disable-next-line no-console
         console.error("[AgentWidget] Failed to load stored state:", error);
       }
     }
@@ -352,7 +350,6 @@ export const createAgentExperience = (
       }
     } catch (error) {
       if (typeof console !== "undefined") {
-        // eslint-disable-next-line no-console
         console.error("[AgentWidget] onStateLoaded hook failed:", error);
       }
     }
@@ -410,7 +407,6 @@ export const createAgentExperience = (
     pendingResubmitTimeout = setTimeout(() => {
       if (pendingResubmit) {
         if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
           console.warn("[AgentWidget] Resubmit requested but no injection occurred within 10s");
         }
         pendingResubmit = false;
@@ -447,7 +443,6 @@ export const createAgentExperience = (
       if (session?.isClientTokenMode()) {
         session.submitMessageFeedback(message.id, 'copy').catch((error) => {
           if (config.debug) {
-            // eslint-disable-next-line no-console
             console.error("[AgentWidget] Failed to submit copy feedback:", error);
           }
         });
@@ -461,7 +456,6 @@ export const createAgentExperience = (
       if (session?.isClientTokenMode()) {
         session.submitMessageFeedback(feedback.messageId, feedback.type).catch((error) => {
           if (config.debug) {
-            // eslint-disable-next-line no-console
             console.error("[AgentWidget] Failed to submit feedback:", error);
           }
         });
@@ -758,7 +752,6 @@ export const createAgentExperience = (
           }
         } catch (error) {
           if (typeof console !== "undefined") {
-            // eslint-disable-next-line no-console
             console.error(`[AgentWidget] Error rendering slot "${slotName}":`, error);
           }
         }
@@ -867,7 +860,6 @@ export const createAgentExperience = (
           }, 2000);
         }).catch((err) => {
           if (typeof console !== "undefined") {
-            // eslint-disable-next-line no-console
             console.error("[AgentWidget] Failed to copy message:", err);
           }
         });
@@ -1222,14 +1214,12 @@ export const createAgentExperience = (
       if (result instanceof Promise) {
         result.catch((error) => {
           if (typeof console !== "undefined") {
-            // eslint-disable-next-line no-console
             console.error("[AgentWidget] Failed to persist state:", error);
           }
         });
       }
     } catch (error) {
       if (typeof console !== "undefined") {
-        // eslint-disable-next-line no-console
         console.error("[AgentWidget] Failed to persist state:", error);
       }
     }
@@ -1902,7 +1892,6 @@ export const createAgentExperience = (
   if (config.clientToken) {
     session.initClientSession().catch((err) => {
       if (config.debug) {
-        // eslint-disable-next-line no-console
         console.warn("[AgentWidget] Pre-init client session failed:", err);
       }
     });
@@ -1934,7 +1923,6 @@ export const createAgentExperience = (
       })
       .catch((error) => {
         if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
           console.error("[AgentWidget] Failed to hydrate stored state:", error);
         }
       });
@@ -2490,14 +2478,12 @@ export const createAgentExperience = (
           if (result instanceof Promise) {
             result.catch((error) => {
               if (typeof console !== "undefined") {
-                // eslint-disable-next-line no-console
                 console.error("[AgentWidget] Failed to clear storage adapter:", error);
               }
             });
           }
         } catch (error) {
           if (typeof console !== "undefined") {
-            // eslint-disable-next-line no-console
             console.error("[AgentWidget] Failed to clear storage adapter:", error);
           }
         }
@@ -3750,14 +3736,12 @@ export const createAgentExperience = (
           if (result instanceof Promise) {
             result.catch((error) => {
               if (typeof console !== "undefined") {
-                // eslint-disable-next-line no-console
                 console.error("[AgentWidget] Failed to clear storage adapter:", error);
               }
             });
           }
         } catch (error) {
           if (typeof console !== "undefined") {
-            // eslint-disable-next-line no-console
             console.error("[AgentWidget] Failed to clear storage adapter:", error);
           }
         }
