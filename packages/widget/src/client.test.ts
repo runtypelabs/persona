@@ -91,7 +91,7 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
     );
 
     // Verify the empty message was filtered out
-    expect(capturedPayload).toBeDefined();
+    expect(global.fetch).toHaveBeenCalled();
     expect(capturedPayload.messages).toHaveLength(2);
     expect(capturedPayload.messages[0].content).toBe('What can you help me with?');
     expect(capturedPayload.messages[1].content).toBe('test');
@@ -261,7 +261,7 @@ describe('AgentWidgetClient - llmContent Priority', () => {
 
     await client.dispatch({ messages }, () => {});
 
-    expect(capturedPayload).toBeDefined();
+    expect(global.fetch).toHaveBeenCalled();
     expect(capturedPayload.messages).toHaveLength(1);
     // Should use llmContent, not content
     expect(capturedPayload.messages[0].content).toBe('LLM-specific content with more context');
@@ -291,7 +291,7 @@ describe('AgentWidgetClient - llmContent Priority', () => {
 
     await client.dispatch({ messages }, () => {});
 
-    expect(capturedPayload).toBeDefined();
+    expect(global.fetch).toHaveBeenCalled();
     expect(capturedPayload.messages).toHaveLength(1);
     expect(capturedPayload.messages[0].content).toBe('Regular content without llmContent');
   });
@@ -322,7 +322,7 @@ describe('AgentWidgetClient - llmContent Priority', () => {
 
     await client.dispatch({ messages }, () => {});
 
-    expect(capturedPayload).toBeDefined();
+    expect(global.fetch).toHaveBeenCalled();
     expect(capturedPayload.messages).toHaveLength(1);
     // Should use contentParts, not llmContent
     expect(capturedPayload.messages[0].content).toEqual([{ type: 'text', text: 'Multi-modal text' }]);
@@ -397,7 +397,7 @@ describe('AgentWidgetClient - llmContent Priority', () => {
 
     await client.dispatch({ messages }, () => {});
 
-    expect(capturedPayload).toBeDefined();
+    expect(global.fetch).toHaveBeenCalled();
     expect(capturedPayload.messages).toHaveLength(3);
 
     // First message: regular user message
@@ -706,7 +706,7 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
 
     await client.dispatch({ messages }, () => {});
 
-    expect(capturedPayload).toBeDefined();
+    expect(global.fetch).toHaveBeenCalled();
     expect(capturedPayload.agent).toBeDefined();
     const payloadAgent = capturedPayload.agent as NonNullable<CapturedPayload['agent']>;
     expect(payloadAgent.name).toBe('Test Agent');
