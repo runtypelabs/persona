@@ -1234,7 +1234,7 @@ export class AgentWidgetClient {
           reasoningMessage.streaming = true;
           reasoningMessage.reasoning.status = "streaming";
           emitMessage(reasoningMessage);
-        } else if (payloadType === "reason_chunk") {
+        } else if (payloadType === "reason_chunk" || payloadType === "reason_delta") {
           const reasoningId =
             resolveReasoningId(payload, false) ??
             resolveReasoningId(payload, true) ??
@@ -1304,6 +1304,8 @@ export class AgentWidgetClient {
           tool.status = "running";
           if (payload.args !== undefined) {
             tool.args = payload.args;
+          } else if (payload.parameters !== undefined) {
+            tool.args = payload.parameters;
           }
           tool.startedAt =
             tool.startedAt ??
@@ -1312,8 +1314,15 @@ export class AgentWidgetClient {
           tool.durationMs = undefined;
           toolMessage.toolCall = tool;
           toolMessage.streaming = true;
+          const agentCtx = payload.agentContext;
+          if (agentCtx || payload.executionId) {
+            toolMessage.agentMetadata = {
+              executionId: agentCtx?.executionId ?? payload.executionId,
+              iteration: agentCtx?.iteration ?? payload.iteration,
+            };
+          }
           emitMessage(toolMessage);
-        } else if (payloadType === "tool_chunk") {
+        } else if (payloadType === "tool_chunk" || payloadType === "tool_delta") {
           const toolId =
             resolveToolId(payload, false) ??
             resolveToolId(payload, true) ??
@@ -1335,6 +1344,13 @@ export class AgentWidgetClient {
           tool.status = "running";
           toolMessage.toolCall = tool;
           toolMessage.streaming = true;
+          const agentCtxChunk = payload.agentContext;
+          if (agentCtxChunk || payload.executionId) {
+            toolMessage.agentMetadata = toolMessage.agentMetadata ?? {
+              executionId: agentCtxChunk?.executionId ?? payload.executionId,
+              iteration: agentCtxChunk?.iteration ?? payload.iteration,
+            };
+          }
           emitMessage(toolMessage);
         } else if (payloadType === "tool_complete") {
           const toolId =
@@ -1356,8 +1372,9 @@ export class AgentWidgetClient {
           tool.completedAt = resolveTimestamp(
             payload.completedAt ?? payload.timestamp
           );
-          if (typeof payload.duration === "number") {
-            tool.durationMs = payload.duration;
+          const durationValue = payload.duration ?? payload.executionTime;
+          if (typeof durationValue === "number") {
+            tool.durationMs = durationValue;
           } else {
             const start = tool.startedAt ?? Date.now();
             tool.durationMs = Math.max(
@@ -1367,12 +1384,19 @@ export class AgentWidgetClient {
           }
           toolMessage.toolCall = tool;
           toolMessage.streaming = false;
+          const agentCtxComplete = payload.agentContext;
+          if (agentCtxComplete || payload.executionId) {
+            toolMessage.agentMetadata = toolMessage.agentMetadata ?? {
+              executionId: agentCtxComplete?.executionId ?? payload.executionId,
+              iteration: agentCtxComplete?.iteration ?? payload.iteration,
+            };
+          }
           emitMessage(toolMessage);
           const callKey = getToolCallKey(payload);
           if (callKey) {
             toolContext.byCall.delete(callKey);
           }
-        } else if (payloadType === "step_chunk") {
+        } else if (payloadType === "step_chunk" || payloadType === "step_delta") {
           // Only process chunks for prompt steps, not tool/context steps
           const stepType = (payload as any).stepType;
           const executionType = (payload as any).executionType;
@@ -1905,7 +1929,7 @@ export class AgentWidgetClient {
         } else if (payloadType === "agent_iteration_complete") {
           // Iteration complete - no special handling needed
           // In 'separate' mode, message finalization happens at next iteration_start
-        } else if (payloadType === "agent_reflection") {
+        } else if (payloadType === "agent_reflection" || payloadType === "agent_reflect") {
           // Create a reasoning message for reflection content
           const reflectionId = `agent-reflection-${payload.executionId}-${payload.iteration}`;
           const reflectionMessage: AgentWidgetMessage = {
