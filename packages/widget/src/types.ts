@@ -1952,8 +1952,8 @@ export type AgentWidgetConfig = {
    * // For Runtype API format
    * config: {
    *   parseSSEEvent: (data) => {
-   *     if (data.type === 'step_chunk' && data.chunk) {
-   *       return { text: data.chunk };
+   *     if ((data.type === 'step_delta' || data.type === 'step_chunk') && (data.delta || data.chunk)) {
+   *       return { text: data.delta ?? data.chunk };
    *     }
    *     if (data.type === 'flow_complete') {
    *       return { done: true };

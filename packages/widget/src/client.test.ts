@@ -1216,3 +1216,228 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
   });
 });
 
+// ============================================================================
+// Unified Event Name Support (chunk → delta, agent_tool_* → tool_* with agentContext)
+// ============================================================================
+
+describe('AgentWidgetClient - Unified Event Names', () => {
+  it('should handle step_delta as alias for step_chunk', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_start","flowId":"f1","flowName":"Test","totalSteps":1}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"step_start","id":"s1","name":"Prompt","stepType":"prompt","index":1,"totalSteps":1}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"step_delta","id":"s1","name":"Prompt","executionType":"prompt","text":"Hello "}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"step_delta","id":"s1","name":"Prompt","executionType":"prompt","text":"world"}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"step_complete","id":"s1","name":"Prompt"}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const assistantMessages = messageEvents
+      .map(e => e.type === 'message' ? e.message : null)
+      .filter((m): m is AgentWidgetMessage => m !== null && m.role === 'assistant' && !m.variant);
+    expect(assistantMessages.length).toBeGreaterThan(0);
+    const final = assistantMessages[assistantMessages.length - 1];
+    expect(final.content).toContain('Hello ');
+    expect(final.content).toContain('world');
+  });
+
+  it('should handle tool_delta as alias for tool_chunk', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_start","flowId":"f1","flowName":"Test","totalSteps":1}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"tool_start","toolCallId":"tc_1","toolName":"search"}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"tool_delta","toolCallId":"tc_1","delta":"Searching..."}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"tool_complete","toolCallId":"tc_1","toolName":"search","result":{"found":true},"duration":100}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Search', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const toolMessages = Array.from(messagesById.values()).filter(m => m.variant === 'tool');
+    expect(toolMessages.length).toBe(1);
+    expect(toolMessages[0].toolCall?.name).toBe('search');
+    expect(toolMessages[0].toolCall?.chunks).toContain('Searching...');
+    expect(toolMessages[0].toolCall?.status).toBe('complete');
+  });
+
+  it('should handle tool_start with agentContext (unified agent tool events)', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_unified_1';
+
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxIterations: 1,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('tool_start', {
+        toolCallId: 'tc_1', toolName: 'search', parameters: { query: 'weather' },
+        agentContext: { executionId: execId, iteration: 1, seq: 3 },
+      }),
+      sseEvent('tool_delta', {
+        toolCallId: 'tc_1', delta: 'Searching...',
+        agentContext: { executionId: execId, iteration: 1, seq: 4 },
+      }),
+      sseEvent('tool_complete', {
+        toolCallId: 'tc_1', toolName: 'search', result: { temperature: 72 },
+        executionTime: 150,
+        agentContext: { executionId: execId, iteration: 1, seq: 5 },
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'The weather is 72F.',
+        contentType: 'text', turnId: 'turn_1', seq: 6,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 7,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Weather?', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const toolMessages = Array.from(messagesById.values()).filter(m => m.variant === 'tool');
+    expect(toolMessages.length).toBe(1);
+    expect(toolMessages[0].toolCall?.name).toBe('search');
+    expect(toolMessages[0].toolCall?.status).toBe('complete');
+    expect(toolMessages[0].toolCall?.result).toEqual({ temperature: 72 });
+    expect(toolMessages[0].toolCall?.durationMs).toBe(150);
+    expect(toolMessages[0].agentMetadata?.executionId).toBe(execId);
+    expect(toolMessages[0].agentMetadata?.iteration).toBe(1);
+
+    const assistantMessages = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant);
+    expect(assistantMessages.length).toBe(1);
+    expect(assistantMessages[0].content).toBe('The weather is 72F.');
+  });
+
+  it('should handle agent_reflect as alias for agent_reflection', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_reflect_1';
+
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxIterations: 2, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_reflect', {
+        executionId: execId, iteration: 1,
+        reflection: 'Let me reconsider.', seq: 2,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 2, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 3,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const reflectionMessages = Array.from(messagesById.values())
+      .filter(m => m.variant === 'reasoning' && m.id.includes('reflection'));
+    expect(reflectionMessages.length).toBe(1);
+    expect(reflectionMessages[0].content).toBe('Let me reconsider.');
+    expect(reflectionMessages[0].reasoning?.chunks).toContain('Let me reconsider.');
+  });
+
+  it('should handle reason_delta as alias for reason_chunk', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_start","flowId":"f1","flowName":"Test","totalSteps":1}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"reason_start","reasoningId":"r1"}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"reason_delta","reasoningId":"r1","reasoningText":"Thinking..."}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"reason_complete","reasoningId":"r1"}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Think', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const reasoningMessages = Array.from(messagesById.values())
+      .filter(m => m.variant === 'reasoning');
+    expect(reasoningMessages.length).toBe(1);
+    expect(reasoningMessages[0].reasoning?.chunks).toContain('Thinking...');
+  });
+});
+

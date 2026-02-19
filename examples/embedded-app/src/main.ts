@@ -188,8 +188,8 @@ if (loadMessagesButton) {
 
       if (isUser) {
         target.__pushEventStreamEvent({
-          type: 'step_chunk',
-          payload: { type: 'step_chunk', text: batch[msg].content, stepType: 'prompt' }
+          type: 'step_delta',
+          payload: { type: 'step_delta', text: batch[msg].content, stepType: 'prompt' }
         });
         target.__pushEventStreamEvent({
           type: 'step_complete',
@@ -200,8 +200,8 @@ if (loadMessagesButton) {
           const chunkStart = Math.floor((chunk / chunksPerMessage) * batch[msg].content.length);
           const chunkEnd = Math.floor(((chunk + 1) / chunksPerMessage) * batch[msg].content.length);
           target.__pushEventStreamEvent({
-            type: 'step_chunk',
-            payload: { type: 'step_chunk', text: batch[msg].content.slice(chunkStart, chunkEnd), stepType: 'prompt', messageId: `ast_${msg}` }
+            type: 'step_delta',
+            payload: { type: 'step_delta', text: batch[msg].content.slice(chunkStart, chunkEnd), stepType: 'prompt', messageId: `ast_${msg}` }
           });
         }
         target.__pushEventStreamEvent({
@@ -211,7 +211,7 @@ if (loadMessagesButton) {
       }
 
       if (msg % 20 === 0) {
-        for (const t of ['reason_start', 'reason_chunk', 'reason_complete', 'tool_start', 'tool_chunk', 'tool_complete']) {
+        for (const t of ['reason_start', 'reason_delta', 'reason_complete', 'tool_start', 'tool_delta', 'tool_complete']) {
           target.__pushEventStreamEvent({
             type: t,
             payload: { type: t, text: `Simulated ${t} for msg #${msgNum}`, toolName: t.startsWith('tool') ? 'web_search' : undefined }

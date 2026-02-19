@@ -182,7 +182,7 @@
 
       <div class="info-section">
         <h3>How it works</h3>
-        <p>Set <code>config.agent</code> with a model, system prompt, and loop config. The widget sends this to the dispatch API and handles agent-specific SSE events: <code>agent_start</code>, <code>agent_turn_delta</code>, <code>agent_tool_*</code>, <code>agent_iteration_*</code>, and <code>agent_complete</code>.</p>
+        <p>Set <code>config.agent</code> with a model, system prompt, and loop config. The widget sends this to the dispatch API and handles agent-specific SSE events: <code>agent_start</code>, <code>agent_turn_delta</code>, <code>tool_*</code> (with optional <code>agentContext</code>), <code>agent_iteration_*</code>, and <code>agent_complete</code>.</p>
       </div>
 
       <div class="code-block">
@@ -225,7 +225,7 @@
         <h3>Agent Events</h3>
         <p>The widget handles these agent-specific SSE events:</p>
         <p style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; line-height: 1.8;">
-          agent_start &rarr; agent_iteration_start &rarr; agent_turn_start &rarr; agent_turn_delta (text/thinking) &rarr; agent_turn_complete &rarr; agent_tool_start/delta/complete &rarr; agent_iteration_complete &rarr; agent_complete
+          agent_start &rarr; agent_iteration_start &rarr; agent_turn_start &rarr; agent_turn_delta (text/thinking) &rarr; agent_turn_complete &rarr; tool_start/tool_delta/tool_complete (with agentContext) &rarr; agent_iteration_complete &rarr; agent_complete
         </p>
       </div>
 
