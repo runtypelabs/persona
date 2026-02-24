@@ -1234,7 +1234,7 @@ export class AgentWidgetClient {
           reasoningMessage.streaming = true;
           reasoningMessage.reasoning.status = "streaming";
           emitMessage(reasoningMessage);
-        } else if (payloadType === "reason_chunk" || payloadType === "reason_delta") {
+        } else if (payloadType === "reason_delta" || payloadType === "reason_chunk") {
           const reasoningId =
             resolveReasoningId(payload, false) ??
             resolveReasoningId(payload, true) ??

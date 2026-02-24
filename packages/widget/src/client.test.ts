@@ -1404,7 +1404,7 @@ describe('AgentWidgetClient - Unified Event Names', () => {
     expect(reflectionMessages[0].reasoning?.chunks).toContain('Let me reconsider.');
   });
 
-  it('should handle reason_delta as alias for reason_chunk', async () => {
+  it('should handle reason_delta as canonical event (with reason_chunk as legacy alias)', async () => {
     const events: AgentWidgetEvent[] = [];
 
     const encoder = new TextEncoder();
