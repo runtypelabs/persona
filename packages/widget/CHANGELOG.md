@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 1.44.1
+
+### Patch Changes
+
+- b81e5d1: Refactor event handling in AgentWidgetClient to clarify alias usage. Updated the conditional check to maintain the order of event types for clarity, with `reason_delta` as the canonical event and `reason_chunk` as a legacy alias.
+
 ## 1.44.0
 
 ### Minor Changes
