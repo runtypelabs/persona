@@ -461,16 +461,21 @@ export const createStandardBubble = (
 
   // Add message content
   const contentDiv = document.createElement("div");
-  const textContentDiv = document.createElement("div");
-  textContentDiv.innerHTML = transform({
+  const transformedContent = transform({
     text: message.content,
     message,
     streaming: Boolean(message.streaming),
     raw: message.rawContent
   });
-  contentDiv.appendChild(textContentDiv);
+  let textContentDiv: HTMLElement | null = null;
+
   if (shouldHideTextUntilPreviewFails) {
+    textContentDiv = document.createElement("div");
+    textContentDiv.innerHTML = transformedContent;
     textContentDiv.style.display = "none";
+    contentDiv.appendChild(textContentDiv);
+  } else {
+    contentDiv.innerHTML = transformedContent;
   }
 
   // Add inline timestamp if configured
@@ -485,7 +490,7 @@ export const createStandardBubble = (
       imageParts,
       !shouldHideTextUntilPreviewFails && Boolean(messageContentText),
       () => {
-        if (shouldHideTextUntilPreviewFails) {
+        if (shouldHideTextUntilPreviewFails && textContentDiv) {
           textContentDiv.style.display = "";
         }
       }
@@ -493,7 +498,7 @@ export const createStandardBubble = (
 
     if (imagePreviews) {
       bubble.appendChild(imagePreviews);
-    } else if (shouldHideTextUntilPreviewFails) {
+    } else if (shouldHideTextUntilPreviewFails && textContentDiv) {
       textContentDiv.style.display = "";
     }
   }
