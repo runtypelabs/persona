@@ -68,6 +68,59 @@ import {
 const DEFAULT_CHAT_HISTORY_STORAGE_KEY = "persona-chat-history";
 const VOICE_STATE_RESTORE_WINDOW = 30 * 1000;
 
+const IMAGE_FILE_EXTENSION_BY_MIME_TYPE: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/svg+xml": "svg",
+  "image/bmp": "bmp",
+  "image/tiff": "tiff"
+};
+
+function getClipboardImageFiles(clipboardData: DataTransfer | null): File[] {
+  if (!clipboardData) return [];
+
+  const imageFiles: File[] = [];
+  const clipboardItems = Array.from(clipboardData.items ?? []);
+
+  for (const item of clipboardItems) {
+    if (item.kind !== "file" || !item.type.startsWith("image/")) continue;
+    const file = item.getAsFile();
+    if (!file) continue;
+
+    if (file.name) {
+      imageFiles.push(file);
+      continue;
+    }
+
+    const extension = IMAGE_FILE_EXTENSION_BY_MIME_TYPE[file.type] ?? "png";
+    imageFiles.push(
+      new File(
+        [file],
+        `clipboard-image-${Date.now()}.${extension}`,
+        {
+          type: file.type,
+          lastModified: Date.now()
+        }
+      )
+    );
+  }
+
+  if (imageFiles.length > 0) {
+    return imageFiles;
+  }
+
+  for (const file of Array.from(clipboardData.files ?? [])) {
+    if (file.type.startsWith("image/")) {
+      imageFiles.push(file);
+    }
+  }
+
+  return imageFiles;
+}
+
 // ============================================================================
 // PERSIST STATE HELPERS
 // ============================================================================
@@ -1979,6 +2032,15 @@ export const createAgentExperience = (
     }
   };
 
+  const handleInputPaste = async (event: ClipboardEvent) => {
+    if (config.attachments?.enabled !== true || !attachmentManager) return;
+
+    const clipboardImageFiles = getClipboardImageFiles(event.clipboardData);
+    if (clipboardImageFiles.length === 0) return;
+
+    await attachmentManager.handleFiles(clipboardImageFiles);
+  };
+
   // Voice recognition state and logic
   let speechRecognition: any = null;
   let isRecording = false;
@@ -2515,10 +2577,12 @@ export const createAgentExperience = (
 
   composerForm.addEventListener("submit", handleSubmit);
   textarea.addEventListener("keydown", handleInputEnter);
+  textarea.addEventListener("paste", handleInputPaste);
 
   destroyCallbacks.push(() => {
     composerForm.removeEventListener("submit", handleSubmit);
     textarea.removeEventListener("keydown", handleInputEnter);
+    textarea.removeEventListener("paste", handleInputPaste);
   });
 
   destroyCallbacks.push(() => {
