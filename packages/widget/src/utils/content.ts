@@ -7,6 +7,11 @@
 import type { MessageContent, ContentPart, TextContentPart, ImageContentPart, FileContentPart } from '../types';
 
 /**
+ * Fallback display text for messages that only contain image attachments.
+ */
+export const IMAGE_ONLY_MESSAGE_FALLBACK_TEXT = "[Image]";
+
+/**
  * Normalize content to ContentPart[] format.
  * Converts string content to a single text content part.
  */

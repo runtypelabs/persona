@@ -10,6 +10,7 @@ import {
   ImageContentPart
 } from "../types";
 import { renderLucideIcon } from "../utils/icons";
+import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "../utils/content";
 
 export type LoadingIndicatorRenderer = (context: LoadingIndicatorRenderContext) => HTMLElement | null;
 
@@ -27,7 +28,6 @@ export type MessageActionCallbacks = {
 
 const MESSAGE_IMAGE_PREVIEW_MAX_WIDTH_PX = 320;
 const MESSAGE_IMAGE_PREVIEW_MAX_HEIGHT_PX = 320;
-const IMAGE_ONLY_FALLBACK_TEXT = "[Image]";
 
 const getMessageImageParts = (message: AgentWidgetMessage): ImageContentPart[] => {
   if (!message.contentParts || message.contentParts.length === 0) {
@@ -456,7 +456,7 @@ export const createStandardBubble = (
   const imageParts = getMessageImageParts(message);
   const messageContentText = message.content?.trim() ?? "";
   const isImageOnlyFallbackMessage =
-    imageParts.length > 0 && messageContentText === IMAGE_ONLY_FALLBACK_TEXT;
+    imageParts.length > 0 && messageContentText === IMAGE_ONLY_MESSAGE_FALLBACK_TEXT;
   const shouldHideTextUntilPreviewFails = isImageOnlyFallbackMessage;
 
   // Add message content

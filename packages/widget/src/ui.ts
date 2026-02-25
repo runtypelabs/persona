@@ -2038,6 +2038,8 @@ export const createAgentExperience = (
     const clipboardImageFiles = getClipboardImageFiles(event.clipboardData);
     if (clipboardImageFiles.length === 0) return;
 
+    // Prevent browser text/html paste when handling clipboard images as attachments.
+    event.preventDefault();
     await attachmentManager.handleFiles(clipboardImageFiles);
   };
 
