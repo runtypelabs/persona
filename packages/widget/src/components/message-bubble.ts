@@ -6,7 +6,8 @@ import {
   AgentWidgetTimestampConfig,
   AgentWidgetMessageActionsConfig,
   AgentWidgetMessageFeedback,
-  LoadingIndicatorRenderContext
+  LoadingIndicatorRenderContext,
+  ImageContentPart
 } from "../types";
 import { renderLucideIcon } from "../utils/icons";
 
@@ -22,6 +23,97 @@ export type MessageTransform = (context: {
 export type MessageActionCallbacks = {
   onCopy?: (message: AgentWidgetMessage) => void;
   onFeedback?: (feedback: AgentWidgetMessageFeedback) => void;
+};
+
+const MESSAGE_IMAGE_PREVIEW_MAX_WIDTH_PX = 320;
+const MESSAGE_IMAGE_PREVIEW_MAX_HEIGHT_PX = 320;
+const IMAGE_ONLY_FALLBACK_TEXT = "[Image]";
+
+const getMessageImageParts = (message: AgentWidgetMessage): ImageContentPart[] => {
+  if (!message.contentParts || message.contentParts.length === 0) {
+    return [];
+  }
+
+  return message.contentParts.filter(
+    (part): part is ImageContentPart =>
+      part.type === "image" &&
+      typeof part.image === "string" &&
+      part.image.trim().length > 0
+  );
+};
+
+const createMessageImagePreviews = (
+  imageParts: ImageContentPart[],
+  hasVisibleText: boolean,
+  onPreviewFailed?: () => void
+): HTMLElement | null => {
+  if (imageParts.length === 0) return null;
+
+  try {
+    const container = createElement(
+      "div",
+      "tvw-flex tvw-flex-col tvw-gap-2"
+    );
+    container.setAttribute("data-message-attachments", "images");
+    if (hasVisibleText) {
+      container.style.marginBottom = "8px";
+    }
+
+    let visiblePreviewCount = 0;
+    let failureHandled = false;
+
+    const handleTotalPreviewFailure = () => {
+      if (failureHandled) return;
+      failureHandled = true;
+      container.remove();
+      onPreviewFailed?.();
+    };
+
+    imageParts.forEach((imagePart, index) => {
+      const imageElement = createElement("img") as HTMLImageElement;
+      imageElement.alt = imagePart.alt?.trim() || `Attached image ${index + 1}`;
+      imageElement.loading = "lazy";
+      imageElement.decoding = "async";
+      imageElement.referrerPolicy = "no-referrer";
+      imageElement.style.display = "block";
+      imageElement.style.width = "100%";
+      imageElement.style.maxWidth = `${MESSAGE_IMAGE_PREVIEW_MAX_WIDTH_PX}px`;
+      imageElement.style.maxHeight = `${MESSAGE_IMAGE_PREVIEW_MAX_HEIGHT_PX}px`;
+      imageElement.style.height = "auto";
+      imageElement.style.objectFit = "contain";
+      imageElement.style.borderRadius = "10px";
+      imageElement.style.backgroundColor = "var(--cw-container, #f3f4f6)";
+      imageElement.style.border = "1px solid var(--cw-border, #e5e7eb)";
+
+      let settled = false;
+      visiblePreviewCount += 1;
+      imageElement.addEventListener("error", () => {
+        if (settled) return;
+        settled = true;
+        visiblePreviewCount = Math.max(0, visiblePreviewCount - 1);
+        imageElement.remove();
+        if (visiblePreviewCount === 0) {
+          handleTotalPreviewFailure();
+        }
+      });
+      imageElement.addEventListener("load", () => {
+        settled = true;
+      });
+
+      imageElement.src = imagePart.image;
+      container.appendChild(imageElement);
+    });
+
+    if (visiblePreviewCount === 0) {
+      handleTotalPreviewFailure();
+      return null;
+    }
+
+    return container;
+  } catch {
+    onPreviewFailed?.();
+    return null;
+  }
 };
 
 // Create typing indicator element
@@ -361,20 +453,49 @@ export const createStandardBubble = (
   bubble.id = `bubble-${message.id}`;
   bubble.setAttribute("data-message-id", message.id);
 
+  const imageParts = getMessageImageParts(message);
+  const messageContentText = message.content?.trim() ?? "";
+  const isImageOnlyFallbackMessage =
+    imageParts.length > 0 && messageContentText === IMAGE_ONLY_FALLBACK_TEXT;
+  const shouldHideTextUntilPreviewFails = isImageOnlyFallbackMessage;
+
   // Add message content
   const contentDiv = document.createElement("div");
-  contentDiv.innerHTML = transform({
+  const textContentDiv = document.createElement("div");
+  textContentDiv.innerHTML = transform({
     text: message.content,
     message,
     streaming: Boolean(message.streaming),
     raw: message.rawContent
   });
+  contentDiv.appendChild(textContentDiv);
+  if (shouldHideTextUntilPreviewFails) {
+    textContentDiv.style.display = "none";
+  }
 
   // Add inline timestamp if configured
   if (showTimestamp && timestampPosition === "inline" && message.createdAt) {
     const timestamp = createTimestamp(message, timestampConfig!);
     timestamp.classList.add("tvw-ml-2", "tvw-inline");
     contentDiv.appendChild(timestamp);
+  }
+
+  if (imageParts.length > 0) {
+    const imagePreviews = createMessageImagePreviews(
+      imageParts,
+      !shouldHideTextUntilPreviewFails && Boolean(messageContentText),
+      () => {
+        if (shouldHideTextUntilPreviewFails) {
+          textContentDiv.style.display = "";
+        }
+      }
+    );
+
+    if (imagePreviews) {
+      bubble.appendChild(imagePreviews);
+    } else if (shouldHideTextUntilPreviewFails) {
+      textContentDiv.style.display = "";
+    }
   }
 
   bubble.appendChild(contentDiv);
