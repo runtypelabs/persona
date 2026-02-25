@@ -15,6 +15,7 @@ import {
   generateUserMessageId,
   generateAssistantMessageId
 } from "./utils/message-id";
+import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "./utils/content";
 
 export type AgentWidgetSessionStatus =
   | "idle"
@@ -418,7 +419,7 @@ export class AgentWidgetSession {
     const userMessage: AgentWidgetMessage = {
       id: userMessageId,
       role: "user",
-      content: input || "[Image]", // Display text (fallback if only images)
+      content: input || IMAGE_ONLY_MESSAGE_FALLBACK_TEXT, // Display text (fallback if only images)
       createdAt: new Date().toISOString(),
       sequence: this.nextSequence(),
       viaVoice: options?.viaVoice || false,

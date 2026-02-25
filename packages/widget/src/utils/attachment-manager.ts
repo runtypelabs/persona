@@ -152,10 +152,16 @@ export class AttachmentManager {
    */
   async handleFileSelect(files: FileList | null): Promise<void> {
     if (!files || files.length === 0) return;
+    await this.handleFiles(Array.from(files));
+  }
 
-    const filesToProcess = Array.from(files);
+  /**
+   * Handle an array of files (e.g., clipboard image paste)
+   */
+  async handleFiles(files: readonly File[]): Promise<void> {
+    if (!files.length) return;
 
-    for (const file of filesToProcess) {
+    for (const file of files) {
       // Check if we've hit the max files limit
       if (this.attachments.length >= this.config.maxFiles) {
         this.config.onFileRejected?.(file, "count");
