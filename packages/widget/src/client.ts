@@ -684,6 +684,24 @@ export class AgentWidgetClient {
     }
   }
 
+  /**
+   * Process an external SSE stream through the SDK's event pipeline.
+   * This allows piping responses from endpoints like agent approval
+   * through the same message/tool/reasoning handling as dispatch().
+   */
+  public async processStream(
+    body: ReadableStream<Uint8Array>,
+    onEvent: SSEHandler,
+    assistantMessageId?: string
+  ): Promise<void> {
+    onEvent({ type: "status", status: "connected" });
+    try {
+      await this.streamResponse(body, onEvent, assistantMessageId);
+    } finally {
+      onEvent({ type: "status", status: "idle" });
+    }
+  }
+
   private async buildAgentPayload(
     messages: AgentWidgetMessage[]
   ): Promise<AgentWidgetAgentRequestPayload> {

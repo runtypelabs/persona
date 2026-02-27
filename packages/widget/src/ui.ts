@@ -259,6 +259,14 @@ type Controller = {
   showNPSFeedback: (options?: Partial<NPSFeedbackOptions>) => void;
   submitCSATFeedback: (rating: number, comment?: string) => Promise<void>;
   submitNPSFeedback: (rating: number, comment?: string) => Promise<void>;
+  /**
+   * Connect an external SSE stream and process it through the SDK's
+   * native event pipeline (tools, reasoning, streaming text, etc.).
+   */
+  connectStream: (
+    stream: ReadableStream<Uint8Array>,
+    options?: { assistantMessageId?: string }
+  ) => Promise<void>;
   /** Push a raw event into the event stream buffer (for testing/debugging) */
   __pushEventStreamEvent: (event: { type: string; payload: unknown }) => void;
   /** Opens the event stream panel */
@@ -3949,6 +3957,12 @@ export const createAgentExperience = (
         setOpenState(true, "system");
       }
       session.injectTestEvent(event);
+    },
+    async connectStream(
+      stream: ReadableStream<Uint8Array>,
+      options?: { assistantMessageId?: string }
+    ): Promise<void> {
+      return session.connectStream(stream, options);
     },
     /** Push a raw event into the event stream buffer (for testing/debugging) */
     __pushEventStreamEvent(event: { type: string; payload: unknown }): void {

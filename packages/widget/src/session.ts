@@ -540,6 +540,34 @@ export class AgentWidgetSession {
     }
   }
 
+  /**
+   * Connect an external SSE stream (e.g. from an approval endpoint) and
+   * process it through the SDK's native event pipeline.
+   */
+  public async connectStream(
+    stream: ReadableStream<Uint8Array>,
+    options?: { assistantMessageId?: string }
+  ): Promise<void> {
+    if (this.streaming) return;
+    this.abortController?.abort();
+    this.setStreaming(true);
+
+    try {
+      await this.client.processStream(
+        stream,
+        this.handleEvent,
+        options?.assistantMessageId
+      );
+    } catch (error) {
+      this.setStatus("error");
+      this.setStreaming(false);
+      this.abortController = null;
+      this.callbacks.onError?.(
+        error instanceof Error ? error : new Error(String(error))
+      );
+    }
+  }
+
   public cancel() {
     this.abortController?.abort();
     this.abortController = null;
