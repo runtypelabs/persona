@@ -37,7 +37,7 @@ import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer } fr
 import { createStandardBubble, createTypingIndicator } from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
-import { createApprovalBubble, updateApprovalBubbleUI } from "./components/approval-bubble";
+import { createApprovalBubble } from "./components/approval-bubble";
 import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
@@ -277,6 +277,11 @@ type Controller = {
   /** Returns current visibility state of the event stream panel */
   isEventStreamVisible: () => boolean;
   /**
+   * Focus the chat input. Returns true if focus succeeded, false if panel is closed
+   * (launcher mode) or textarea is unavailable.
+   */
+  focusInput: () => boolean;
+  /**
    * Programmatically resolve a pending approval.
    * @param approvalId - The approval ID to resolve
    * @param decision - "approved" or "denied"
@@ -457,6 +462,7 @@ export const createAgentExperience = (
 
   let launcherEnabled = config.launcher?.enabled ?? true;
   let autoExpand = config.launcher?.autoExpand ?? false;
+  const autoFocusInput = config.autoFocusInput ?? false;
   let prevAutoExpand = autoExpand;
   let prevLauncherEnabled = launcherEnabled;
   let prevHeaderLayout = config.layout?.header?.layout;
@@ -1698,8 +1704,10 @@ export const createAgentExperience = (
     
     // Also check if there's a recently completed assistant message (streaming just ended)
     // This prevents flicker when the message completes but isStreaming hasn't updated yet
+    // Approval-variant messages are UI controls, not content — exclude them so the typing
+    // indicator still shows while the agent resumes after approval
     const lastMessage = messages[messages.length - 1];
-    const hasRecentAssistantResponse = lastMessage?.role === "assistant" && !lastMessage.streaming;
+    const hasRecentAssistantResponse = lastMessage?.role === "assistant" && !lastMessage.streaming && lastMessage.variant !== "approval";
 
     if (isStreaming && messages.some((msg) => msg.role === "user") && !hasStreamingAssistantMessage && !hasRecentAssistantResponse) {
       // Get loading indicator using priority chain: plugin -> config -> default
@@ -1919,6 +1927,16 @@ export const createAgentExperience = (
       btn.disabled = disabled;
     });
   };
+
+  const maybeFocusInput = () => {
+    if (voiceState.active) return;
+    if (!textarea) return;
+    textarea.focus();
+  };
+
+  eventBus.on("widget:opened", () => {
+    if (config.autoFocusInput) setTimeout(() => maybeFocusInput(), 200);
+  });
 
   const updateCopy = () => {
     introTitle.textContent = config.copy?.welcomeTitle ?? "Hello 👋";
@@ -2501,6 +2519,14 @@ export const createAgentExperience = (
   setComposerDisabled(session.isStreaming());
   scheduleAutoScroll(true);
   maybeRestoreVoiceFromMetadata();
+
+  if (autoFocusInput) {
+    if (!launcherEnabled) {
+      setTimeout(() => maybeFocusInput(), 0);
+    } else if (open) {
+      setTimeout(() => maybeFocusInput(), 200);
+    }
+  }
 
   const recalcPanelHeight = () => {
     const sidebarMode = config.launcher?.sidebarMode ?? false;
@@ -4055,6 +4081,12 @@ export const createAgentExperience = (
     isEventStreamVisible(): boolean {
       return eventStreamVisible;
     },
+    focusInput(): boolean {
+      if (launcherEnabled && !open) return false;
+      if (!textarea) return false;
+      textarea.focus();
+      return true;
+    },
     async resolveApproval(approvalId: string, decision: 'approved' | 'denied'): Promise<void> {
       const messages = session.getMessages();
       const approvalMessage = messages.find(
@@ -4200,26 +4232,40 @@ export const createAgentExperience = (
   // ============================================================================
   // INSTANCE-SCOPED WINDOW EVENTS FOR PROGRAMMATIC CONTROL
   // ============================================================================
-  if (showEventStreamToggle && typeof window !== "undefined") {
+  if (typeof window !== "undefined") {
     const instanceId = mount.getAttribute("data-persona-instance") || mount.id || "persona-" + Math.random().toString(36).slice(2, 8);
-    const handleShowEvent = (e: Event) => {
+
+    const handleFocusInput = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.showEventStream();
+        controller.focusInput();
       }
     };
-    const handleHideEvent = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.hideEventStream();
-      }
-    };
-    window.addEventListener("persona:showEventStream", handleShowEvent);
-    window.addEventListener("persona:hideEventStream", handleHideEvent);
+    window.addEventListener("persona:focusInput", handleFocusInput);
     destroyCallbacks.push(() => {
-      window.removeEventListener("persona:showEventStream", handleShowEvent);
-      window.removeEventListener("persona:hideEventStream", handleHideEvent);
+      window.removeEventListener("persona:focusInput", handleFocusInput);
     });
+
+    if (showEventStreamToggle) {
+      const handleShowEvent = (e: Event) => {
+        const detail = (e as CustomEvent).detail;
+        if (!detail?.instanceId || detail.instanceId === instanceId) {
+          controller.showEventStream();
+        }
+      };
+      const handleHideEvent = (e: Event) => {
+        const detail = (e as CustomEvent).detail;
+        if (!detail?.instanceId || detail.instanceId === instanceId) {
+          controller.hideEventStream();
+        }
+      };
+      window.addEventListener("persona:showEventStream", handleShowEvent);
+      window.addEventListener("persona:hideEventStream", handleHideEvent);
+      destroyCallbacks.push(() => {
+        window.removeEventListener("persona:showEventStream", handleShowEvent);
+        window.removeEventListener("persona:hideEventStream", handleHideEvent);
+      });
+    }
   }
 
   // ============================================================================

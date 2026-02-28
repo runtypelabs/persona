@@ -555,6 +555,32 @@ describe("createEventStreamView", () => {
       // Should call getFullHistory
       expect(getFullHistory).toHaveBeenCalled();
     });
+
+    it("should fall back to buffer when getFullHistory returns empty", async () => {
+      const { createEventStreamView } = await loadModule();
+      const events = [
+        makeEvent("step_chunk", 1),
+        makeEvent("flow_complete", 2),
+      ];
+      const buffer = createMockBuffer(events);
+      const getFullHistory = vi.fn().mockResolvedValue([]);
+      const { element } = createEventStreamView({
+        buffer: buffer as any,
+        getFullHistory,
+      });
+
+      const copyAllBtn = getCopyAllBtn(element);
+
+      // Click copy all with no filters (All events)
+      await copyAllBtn.__listeners.click[0]();
+
+      expect(getFullHistory).toHaveBeenCalled();
+      const writeCall = (globalThis.navigator.clipboard.writeText as any).mock.calls[0][0];
+      const parsed = JSON.parse(writeCall);
+      expect(parsed).toHaveLength(2);
+      expect(parsed[0].index).toBe(1);
+      expect(parsed[1].index).toBe(2);
+    });
   });
 
   describe("keyboard shortcuts", () => {

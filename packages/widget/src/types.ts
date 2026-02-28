@@ -1814,6 +1814,13 @@ export type AgentWidgetConfig = {
    */
   colorScheme?: 'auto' | 'light' | 'dark';
   features?: AgentWidgetFeatureFlags;
+  /**
+   * When true, focus the chat input after the panel opens and the open animation completes.
+   * Applies to launcher mode (user click, controller.open(), autoExpand) and inline mode (on init).
+   * Skip when voice is active to avoid stealing focus from voice UI.
+   * @default false
+   */
+  autoFocusInput?: boolean;
   launcher?: AgentWidgetLauncherConfig;
   initialMessages?: AgentWidgetMessage[];
   suggestionChips?: string[];

@@ -253,6 +253,22 @@ chat.isEventStreamVisible() // returns boolean
 
 These methods are no-ops if `showEventStreamToggle` is not enabled.
 
+#### Input focus control
+
+Focus the chat input programmatically:
+
+```ts
+const chat = initAgentWidget({
+  target: '#chat-root',
+  config: { apiUrl: '/api/chat/dispatch' }
+})
+
+// Focus the input (returns true if successful, false if panel is closed or unavailable)
+chat.focusInput()
+```
+
+In launcher mode, `focusInput()` returns `false` when the panel is closed and does not auto-open it. Use `chat.open()` first if you want to open and focus in one flow.
+
 #### Accessing from window
 
 To access the controller globally (e.g., from browser console or external scripts), use the `windowKey` option:
@@ -360,6 +376,22 @@ window.dispatchEvent(new CustomEvent('persona:showEventStream', {
 }))
 // ^ No effect — no widget has this instanceId
 ```
+
+#### `persona:focusInput`
+
+Dispatched to programmatically focus the chat input on a widget instance.
+
+```ts
+// Focus input on all widget instances
+window.dispatchEvent(new CustomEvent('persona:focusInput'))
+
+// Focus input on a specific instance
+window.dispatchEvent(new CustomEvent('persona:focusInput', {
+  detail: { instanceId: 'inline-widget' }
+}))
+```
+
+**Instance scoping:** Same as `persona:showEventStream` — use `detail.instanceId` to target a specific widget. Without `instanceId`, all instances receive the event.
 
 ### Controller Events
 
@@ -1251,6 +1283,7 @@ This ensures all configuration values are set to sensible defaults while allowin
 | `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel? }` | Customize user-facing text. |
 | `theme` | `{ primary?, secondary?, surface?, muted?, accent?, radiusSm?, radiusMd?, radiusLg?, radiusFull? }` | Override CSS variables for the widget. Colors: `primary` (text/UI), `secondary` (unused), `surface` (backgrounds), `muted` (secondary text), `accent` (buttons/links). Border radius: `radiusSm` (0.75rem, inputs), `radiusMd` (1rem, cards), `radiusLg` (1.5rem, panels/bubbles), `radiusFull` (9999px, pills/buttons). |
 | `features` | `AgentWidgetFeatureFlags` | Toggle UI features: `showReasoning?` (show thinking bubbles, default: `true`), `showToolCalls?` (show tool usage bubbles, default: `true`), `showEventStreamToggle?` (show event stream inspector toggle in header, default: `false`). |
+| `autoFocusInput` | `boolean` | When `true`, focus the chat input after the panel opens and the open animation completes. Applies to launcher mode (user click, `controller.open()`, `autoExpand`) and inline mode (on init). Skips when voice is active. Default: `false`. |
 | `launcher` | `{ enabled?, autoExpand?, title?, subtitle?, iconUrl?, position? }` | Controls the floating launcher button. |
 | `initialMessages` | `AgentWidgetMessage[]` | Seed the conversation transcript. |
 | `suggestionChips` | `string[]` | Render quick reply buttons above the composer. |
