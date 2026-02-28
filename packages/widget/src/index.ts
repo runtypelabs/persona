@@ -66,6 +66,9 @@ export type {
   AgentExecutionState,
   AgentMessageMetadata,
   AgentWidgetAgentRequestPayload,
+  // Approval types
+  AgentWidgetApproval,
+  AgentWidgetApprovalConfig,
   // Event stream types
   SSEEventRecord,
   EventStreamConfig,

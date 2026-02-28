@@ -357,6 +357,8 @@ export type AgentWidgetControllerEventMap = {
   "message:copy": AgentWidgetMessage;
   "eventStream:opened": { timestamp: number };
   "eventStream:closed": { timestamp: number };
+  "approval:requested": { approval: AgentWidgetApproval; message: AgentWidgetMessage };
+  "approval:resolved": { approval: AgentWidgetApproval; decision: string };
 };
 
 export type AgentWidgetFeatureFlags = {
@@ -691,6 +693,48 @@ export type AgentWidgetVoiceRecognitionConfig = {
   recordingBorderColor?: string;
   showRecordingIndicator?: boolean;
   autoResume?: boolean | "assistant";
+};
+
+/**
+ * Configuration for tool approval bubbles.
+ * Controls styling, labels, and behavior of the approval UI.
+ */
+export type AgentWidgetApprovalConfig = {
+  /** Background color of the approval bubble */
+  backgroundColor?: string;
+  /** Border color of the approval bubble */
+  borderColor?: string;
+  /** Color for the title text */
+  titleColor?: string;
+  /** Color for the description text */
+  descriptionColor?: string;
+  /** Background color for the approve button */
+  approveButtonColor?: string;
+  /** Text color for the approve button */
+  approveButtonTextColor?: string;
+  /** Background color for the deny button */
+  denyButtonColor?: string;
+  /** Text color for the deny button */
+  denyButtonTextColor?: string;
+  /** Background color for the parameters block */
+  parameterBackgroundColor?: string;
+  /** Text color for the parameters block */
+  parameterTextColor?: string;
+  /** Title text displayed above the description */
+  title?: string;
+  /** Label for the approve button */
+  approveLabel?: string;
+  /** Label for the deny button */
+  denyLabel?: string;
+  /**
+   * Custom handler for approval decisions.
+   * Return void to let the SDK auto-resolve via the API,
+   * or return a Response/ReadableStream for custom handling.
+   */
+  onDecision?: (
+    data: { approvalId: string; executionId: string; agentId: string; toolName: string },
+    decision: 'approved' | 'denied'
+  ) => Promise<Response | ReadableStream<Uint8Array> | void>;
 };
 
 export type AgentWidgetToolCallConfig = {
@@ -1781,6 +1825,23 @@ export type AgentWidgetConfig = {
   statusIndicator?: AgentWidgetStatusIndicatorConfig;
   voiceRecognition?: AgentWidgetVoiceRecognitionConfig;
   toolCall?: AgentWidgetToolCallConfig;
+  /**
+   * Configuration for tool approval bubbles.
+   * Set to `false` to disable built-in approval handling entirely.
+   *
+   * @example
+   * ```typescript
+   * config: {
+   *   approval: {
+   *     title: "Permission Required",
+   *     approveLabel: "Allow",
+   *     denyLabel: "Block",
+   *     approveButtonColor: "#16a34a"
+   *   }
+   * }
+   * ```
+   */
+  approval?: AgentWidgetApprovalConfig | false;
   postprocessMessage?: (context: {
     text: string;
     message: AgentWidgetMessage;
@@ -2129,7 +2190,23 @@ export type AgentWidgetToolCall = {
   durationMs?: number;
 };
 
-export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool";
+/**
+ * Represents a tool approval request in the chat conversation.
+ * Created when the agent requires human approval before executing a tool.
+ */
+export type AgentWidgetApproval = {
+  id: string;
+  status: "pending" | "approved" | "denied" | "timeout";
+  agentId: string;
+  executionId: string;
+  toolName: string;
+  toolType?: string;
+  description: string;
+  parameters?: unknown;
+  resolvedAt?: number;
+};
+
+export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool" | "approval";
 
 /**
  * Represents a message in the chat conversation.
@@ -2165,6 +2242,8 @@ export type AgentWidgetMessage = {
   reasoning?: AgentWidgetReasoning;
   toolCall?: AgentWidgetToolCall;
   tools?: AgentWidgetToolCall[];
+  /** Approval data for messages with variant "approval" */
+  approval?: AgentWidgetApproval;
   viaVoice?: boolean;
   /**
    * Raw structured payload for this message (e.g., JSON action response).

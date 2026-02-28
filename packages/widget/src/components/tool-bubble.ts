@@ -126,7 +126,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
 
   const content = createElement(
     "div",
-    "tvw-border-t tvw-border-gray-200 tvw-bg-gray-50 tvw-space-y-3 tvw-px-4 tvw-py-3"
+    "tvw-border-t tvw-space-y-3 tvw-px-4 tvw-py-3"
   );
   content.style.display = expanded ? "" : "none";
 
@@ -170,7 +170,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     argsLabel.textContent = "Arguments";
     const argsPre = createElement(
       "pre",
-      "tvw-max-h-48 tvw-overflow-auto tvw-whitespace-pre-wrap tvw-rounded-lg tvw-border tvw-border-gray-100 tvw-bg-white tvw-px-3 tvw-py-2 tvw-text-xs tvw-text-cw-primary"
+      "tvw-max-h-48 tvw-overflow-auto tvw-whitespace-pre-wrap tvw-rounded-lg tvw-border tvw-px-3 tvw-py-2 tvw-text-xs tvw-text-cw-primary"
     );
     // Ensure font size matches header text (0.75rem / 12px)
     argsPre.style.fontSize = "0.75rem";
@@ -201,7 +201,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     logsLabel.textContent = "Activity";
     const logsPre = createElement(
       "pre",
-      "tvw-max-h-48 tvw-overflow-auto tvw-whitespace-pre-wrap tvw-rounded-lg tvw-border tvw-border-gray-100 tvw-bg-white tvw-px-3 tvw-py-2 tvw-text-xs tvw-text-cw-primary"
+      "tvw-max-h-48 tvw-overflow-auto tvw-whitespace-pre-wrap tvw-rounded-lg tvw-border tvw-px-3 tvw-py-2 tvw-text-xs tvw-text-cw-primary"
     );
     // Ensure font size matches header text (0.75rem / 12px)
     logsPre.style.fontSize = "0.75rem";
@@ -232,7 +232,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     resultLabel.textContent = "Result";
     const resultPre = createElement(
       "pre",
-      "tvw-max-h-48 tvw-overflow-auto tvw-whitespace-pre-wrap tvw-rounded-lg tvw-border tvw-border-gray-100 tvw-bg-white tvw-px-3 tvw-py-2 tvw-text-xs tvw-text-cw-primary"
+      "tvw-max-h-48 tvw-overflow-auto tvw-whitespace-pre-wrap tvw-rounded-lg tvw-border tvw-px-3 tvw-py-2 tvw-text-xs tvw-text-cw-primary"
     );
     // Ensure font size matches header text (0.75rem / 12px)
     resultPre.style.fontSize = "0.75rem";

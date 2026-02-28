@@ -1817,3 +1817,71 @@
 .tvw-feedback-shake {
   animation: tvw-feedback-shake 0.5s ease-in-out;
 }
+
+/* ============================================
+   Tool & Reasoning Bubble Theme Styles
+   ============================================ */
+
+/* Content areas: replace ghost tvw-bg-gray-50 / tvw-border-gray-200 */
+.vanilla-tool-bubble .tvw-border-t,
+.vanilla-reasoning-bubble .tvw-border-t {
+  border-top-color: var(--cw-border, #e5e7eb);
+  background-color: var(--cw-container, #f9fafb);
+}
+
+/* Tool bubble code blocks: replace ghost tvw-bg-white / tvw-border-gray-100 */
+.vanilla-tool-bubble pre {
+  background-color: var(--cw-surface, #ffffff);
+  border-color: var(--cw-border, #f1f5f9);
+}
+
+/* Collapsible header hover (tool + reasoning) */
+.vanilla-tool-bubble button[data-expand-header],
+.vanilla-reasoning-bubble button[data-expand-header] {
+  transition: background-color 0.15s ease;
+}
+.vanilla-tool-bubble button[data-expand-header]:hover,
+.vanilla-reasoning-bubble button[data-expand-header]:hover {
+  background-color: var(--cw-container, #f8fafc);
+}
+
+/* ============================================
+   Approval Bubble Theme Styles
+   ============================================ */
+
+/* Approval bubble defaults (overridden by inline styles when config exists) */
+.vanilla-approval-bubble {
+  background-color: var(--cw-surface, #ffffff);
+  border-color: var(--cw-border, #e5e7eb);
+}
+
+/* Approval status badges — rgba() so they work on any surface */
+.tvw-approval-badge-approved {
+  background-color: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
+}
+.tvw-approval-badge-denied {
+  background-color: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+.tvw-approval-badge-timeout {
+  background-color: rgba(202, 138, 4, 0.12);
+  color: #ca8a04;
+}
+
+/* Approval button hover/active states */
+.vanilla-approval-bubble [data-approval-action] {
+  transition: opacity 0.15s ease, transform 0.1s ease, background-color 0.15s ease;
+}
+.vanilla-approval-bubble [data-approval-action="approve"]:hover {
+  opacity: 0.85;
+}
+.vanilla-approval-bubble [data-approval-action="approve"]:active {
+  transform: scale(0.97);
+}
+.vanilla-approval-bubble [data-approval-action="deny"]:hover {
+  background-color: rgba(220, 38, 38, 0.08);
+}
+.vanilla-approval-bubble [data-approval-action="deny"]:active {
+  transform: scale(0.97);
+}
