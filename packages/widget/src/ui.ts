@@ -37,7 +37,7 @@ import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer } fr
 import { createStandardBubble, createTypingIndicator } from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
-import { createApprovalBubble, updateApprovalBubbleUI } from "./components/approval-bubble";
+import { createApprovalBubble } from "./components/approval-bubble";
 import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
