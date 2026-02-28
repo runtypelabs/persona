@@ -1,5 +1,18 @@
 # @runtypelabs/persona
 
+## 1.45.0
+
+### Minor Changes
+
+- b614fce: feat: add connectStream() to pipe external SSE streams through SDK event pipeline
+
+  Enables streaming approval responses (and other external SSE sources) through the SDK's native message/tool/reasoning handling instead of static injection.
+
+### Patch Changes
+
+- b245fbe: Fix inline timestamp positioning regression in message bubbles by avoiding an always-on wrapper div around transformed text content.
+- 862366b: Use theme-aware styling for approval, tool, and reasoning bubbles instead of hardcoded colors and ghost CSS classes. All three bubble types now adapt to dark mode and custom themes. Config overrides still take priority.
+
 ## 1.44.2
 
 ### Patch Changes
