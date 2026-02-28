@@ -1704,8 +1704,10 @@ export const createAgentExperience = (
     
     // Also check if there's a recently completed assistant message (streaming just ended)
     // This prevents flicker when the message completes but isStreaming hasn't updated yet
+    // Approval-variant messages are UI controls, not content — exclude them so the typing
+    // indicator still shows while the agent resumes after approval
     const lastMessage = messages[messages.length - 1];
-    const hasRecentAssistantResponse = lastMessage?.role === "assistant" && !lastMessage.streaming;
+    const hasRecentAssistantResponse = lastMessage?.role === "assistant" && !lastMessage.streaming && lastMessage.variant !== "approval";
 
     if (isStreaming && messages.some((msg) => msg.role === "user") && !hasStreamingAssistantMessage && !hasRecentAssistantResponse) {
       // Get loading indicator using priority chain: plugin -> config -> default
