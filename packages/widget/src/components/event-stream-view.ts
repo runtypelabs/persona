@@ -1010,9 +1010,12 @@ export function createEventStreamView(
         if (hasActiveFilters()) {
           events = filteredEvents;
         } else {
-          events = getFullHistory
-            ? await getFullHistory()
-            : buffer.getAll();
+          if (getFullHistory) {
+            events = await getFullHistory();
+            if (events.length === 0) events = buffer.getAll();
+          } else {
+            events = buffer.getAll();
+          }
         }
         const parsed = events.map((e) => {
           try {
