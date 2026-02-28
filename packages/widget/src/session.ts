@@ -551,6 +551,20 @@ export class AgentWidgetSession {
   ): Promise<void> {
     if (this.streaming) return;
     this.abortController?.abort();
+
+    // Finalize any stale streaming messages from the previous stream
+    // (e.g., tool messages interrupted by approval pause)
+    let hasStale = false;
+    for (const msg of this.messages) {
+      if (msg.streaming) {
+        msg.streaming = false;
+        hasStale = true;
+      }
+    }
+    if (hasStale) {
+      this.callbacks.onMessagesChanged([...this.messages]);
+    }
+
     this.setStreaming(true);
 
     try {
