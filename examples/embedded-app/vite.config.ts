@@ -43,6 +43,8 @@ export default defineConfig({
         'bakery-services': path.resolve(__dirname, 'bakery-services.html'),
         // Approval demo
         'approval-demo': path.resolve(__dirname, 'approval-demo.html'),
+        // Focus input demo
+        'focus-input-demo': path.resolve(__dirname, 'focus-input-demo.html'),
       }
     }
   },

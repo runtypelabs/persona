@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Focus Input Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 1.5rem;
+      padding: 1.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .info-panel {
+      padding: 1.5rem;
+    }
+    .info-panel h1 { margin: 0 0 0.5rem 0; font-size: 1.5rem; }
+    .info-panel p { margin: 0 0 1rem 0; color: #475569; line-height: 1.6; }
+    .section {
+      margin-bottom: 1.5rem;
+    }
+    .section h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.9rem;
+      color: #64748b;
+    }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .btn {
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      color: #0f172a;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .btn:hover { background: #f1f5f9; }
+    .btn-primary { background: #3b82f6; color: white; border-color: #3b82f6; }
+    .btn-primary:hover { background: #2563eb; }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .checkbox-row input { width: 18px; height: 18px; }
+    .log {
+      background: #f1f5f9;
+      border-radius: 6px;
+      padding: 0.75rem;
+      max-height: 120px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #475569;
+    }
+    .back-link {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      margin: 1rem 1.5rem;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+    .back-link:hover { color: #0f172a; }
+    .widget-container { height: 500px; }
+    #inline-widget { height: 100%; }
+    #launcher-root { height: 100%; }
+  </style>
+</head>
+<body>
+  <a href="/" class="back-link">&larr; Back to examples</a>
+
+  <div class="layout">
+    <div class="info-panel">
+      <h1>Focus Input Demo</h1>
+      <p>Test the three ways to control chat input focus: <code>autoFocusInput</code> config, <code>controller.focusInput()</code>, and <code>persona:focusInput</code> DOM event.</p>
+
+      <div class="section">
+        <h3>1. autoFocusInput (init parameter)</h3>
+        <p>When enabled, the input focuses after the panel opens and the open animation completes (~200ms).</p>
+        <div class="checkbox-row">
+          <input type="checkbox" id="auto-focus-toggle" />
+          <label for="auto-focus-toggle">Enable autoFocusInput</label>
+        </div>
+        <p style="font-size: 0.85rem; margin-top: 0.25rem;">Toggle on, then open the launcher (click the floating button) — the input should auto-focus. For inline, reload the page with the checkbox on.</p>
+      </div>
+
+      <div class="section">
+        <h3>2. controller.focusInput()</h3>
+        <p>Programmatically focus the input. Returns <code>false</code> if the launcher panel is closed.</p>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="focus-inline">Focus Inline</button>
+          <button class="btn btn-primary" id="focus-launcher">Focus Launcher</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>3. persona:focusInput (DOM event)</h3>
+        <p>Dispatch a window event to focus a specific instance or all instances.</p>
+        <div class="btn-row">
+          <button class="btn" id="focus-win-all">Focus All</button>
+          <button class="btn" id="focus-win-inline">Focus Inline Only</button>
+          <button class="btn" id="focus-win-launcher">Focus Launcher Only</button>
+          <button class="btn" id="focus-win-wrong">Focus Wrong ID</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Log</h3>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+
+    <div class="panel widget-container">
+      <p style="padding: 1rem; margin: 0; font-size: 0.9rem; color: #64748b;">Inline widget (always visible). Launcher floats bottom-right.</p>
+      <div id="inline-widget" style="height: 400px;"></div>
+    </div>
+  </div>
+
+  <div id="launcher-root" style="position: fixed; bottom: 1rem; right: 1rem; z-index: 50;"></div>
+
+  <script type="module" src="/src/focus-input-demo.ts"></script>
+</body>
+</html>
