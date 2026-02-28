@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 1.46.1
+
+### Patch Changes
+
+- 9485a83: Fix finalizing stale streaming messages when starting a new stream (e.g., tool messages interrupted by approval pause)
+
 ## 1.46.0
 
 ### Minor Changes
