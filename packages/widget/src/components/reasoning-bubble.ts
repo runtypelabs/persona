@@ -103,7 +103,7 @@ export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement 
 
   const content = createElement(
     "div",
-    "tvw-border-t tvw-border-gray-200 tvw-bg-gray-50 tvw-px-4 tvw-py-3"
+    "tvw-border-t tvw-px-4 tvw-py-3"
   );
   content.style.display = expanded ? "" : "none";
 

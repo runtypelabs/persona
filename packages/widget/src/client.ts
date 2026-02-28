@@ -702,6 +702,39 @@ export class AgentWidgetClient {
     }
   }
 
+  /**
+   * Send an approval decision to the API and return the response
+   * for streaming continuation.
+   */
+  public async resolveApproval(
+    approval: { agentId: string; executionId: string; approvalId: string },
+    decision: 'approved' | 'denied'
+  ): Promise<Response> {
+    const baseUrl = this.config.apiUrl
+      ?.replace(/\/+$/, '')
+      .replace(/\/v1\/dispatch$/, '') || DEFAULT_CLIENT_API_BASE;
+    const url = `${baseUrl}/v1/agents/${approval.agentId}/approve`;
+
+    let headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...this.headers
+    };
+    if (this.getHeaders) {
+      Object.assign(headers, await this.getHeaders());
+    }
+
+    return fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        executionId: approval.executionId,
+        approvalId: approval.approvalId,
+        decision,
+        streamResponse: true,
+      }),
+    });
+  }
+
   private async buildAgentPayload(
     messages: AgentWidgetMessage[]
   ): Promise<AgentWidgetAgentRequestPayload> {
@@ -2001,6 +2034,78 @@ export class AgentWidgetClient {
           }
         } else if (payloadType === "agent_ping") {
           // Keep-alive heartbeat - no action needed
+        // ================================================================
+        // Tool Approval Events
+        // ================================================================
+        } else if (payloadType === "agent_approval_start") {
+          const approvalId = payload.approvalId ?? `approval-${nextSequence()}`;
+          const approvalMessage: AgentWidgetMessage = {
+            id: `approval-${approvalId}`,
+            role: "assistant",
+            content: "",
+            createdAt: new Date().toISOString(),
+            streaming: false,
+            variant: "approval",
+            sequence: nextSequence(),
+            approval: {
+              id: approvalId,
+              status: "pending",
+              agentId: agentExecution?.agentId ?? 'virtual',
+              executionId: payload.executionId ?? agentExecution?.executionId ?? '',
+              toolName: payload.toolName ?? '',
+              toolType: payload.toolType,
+              description: payload.description ?? `Execute ${payload.toolName ?? 'tool'}`,
+              parameters: payload.parameters,
+            },
+          };
+          emitMessage(approvalMessage);
+        } else if (payloadType === "step_await" && payload.awaitReason === "approval_required") {
+          const approvalId = payload.approvalId ?? `approval-${nextSequence()}`;
+          const approvalMessage: AgentWidgetMessage = {
+            id: `approval-${approvalId}`,
+            role: "assistant",
+            content: "",
+            createdAt: new Date().toISOString(),
+            streaming: false,
+            variant: "approval",
+            sequence: nextSequence(),
+            approval: {
+              id: approvalId,
+              status: "pending",
+              agentId: agentExecution?.agentId ?? 'virtual',
+              executionId: payload.executionId ?? agentExecution?.executionId ?? '',
+              toolName: payload.toolName ?? '',
+              toolType: payload.toolType,
+              description: payload.description ?? `Execute ${payload.toolName ?? 'tool'}`,
+              parameters: payload.parameters,
+            },
+          };
+          emitMessage(approvalMessage);
+        } else if (payloadType === "agent_approval_complete") {
+          const approvalId = payload.approvalId;
+          if (approvalId) {
+            // Find and update the existing approval message
+            const approvalMessageId = `approval-${approvalId}`;
+            const existingMessage: AgentWidgetMessage = {
+              id: approvalMessageId,
+              role: "assistant",
+              content: "",
+              createdAt: new Date().toISOString(),
+              streaming: false,
+              variant: "approval",
+              sequence: nextSequence(),
+              approval: {
+                id: approvalId,
+                status: (payload.decision as "approved" | "denied") ?? "approved",
+                agentId: agentExecution?.agentId ?? 'virtual',
+                executionId: payload.executionId ?? agentExecution?.executionId ?? '',
+                toolName: payload.toolName ?? '',
+                description: payload.description ?? '',
+                resolvedAt: Date.now(),
+              },
+            };
+            emitMessage(existingMessage);
+          }
         } else if (payloadType === "error" && payload.error) {
           onEvent({
             type: "error",

@@ -85,6 +85,16 @@ export interface AgentWidgetPlugin {
   }) => HTMLElement | null;
 
   /**
+   * Custom renderer for approval bubbles
+   * Return null to use default renderer
+   */
+  renderApproval?: (context: {
+    message: AgentWidgetMessage;
+    defaultRenderer: () => HTMLElement;
+    config: AgentWidgetConfig;
+  }) => HTMLElement | null;
+
+  /**
    * Custom renderer for loading indicator
    * Return null to use default renderer (or config-based renderer)
    *

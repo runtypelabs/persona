@@ -41,6 +41,8 @@ export default defineConfig({
         'bakery-locations': path.resolve(__dirname, 'bakery-locations.html'),
         'bakery-goods': path.resolve(__dirname, 'bakery-goods.html'),
         'bakery-services': path.resolve(__dirname, 'bakery-services.html'),
+        // Approval demo
+        'approval-demo': path.resolve(__dirname, 'approval-demo.html'),
       }
     }
   },

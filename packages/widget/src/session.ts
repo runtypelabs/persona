@@ -3,6 +3,7 @@ import {
   AgentWidgetConfig,
   AgentWidgetEvent,
   AgentWidgetMessage,
+  AgentWidgetApproval,
   AgentExecutionState,
   ClientSession,
   ContentPart,
@@ -562,6 +563,97 @@ export class AgentWidgetSession {
       this.setStatus("error");
       this.setStreaming(false);
       this.abortController = null;
+      this.callbacks.onError?.(
+        error instanceof Error ? error : new Error(String(error))
+      );
+    }
+  }
+
+  /**
+   * Resolve a tool approval request (approve or deny).
+   * Updates the approval message status, calls the API (or custom onDecision),
+   * and pipes the response stream through connectStream().
+   */
+  public async resolveApproval(
+    approval: AgentWidgetApproval,
+    decision: 'approved' | 'denied'
+  ): Promise<void> {
+    // 1. Update approval message status immediately for responsive UI
+    const approvalMessageId = `approval-${approval.id}`;
+    const updatedApproval: AgentWidgetApproval = {
+      ...approval,
+      status: decision,
+      resolvedAt: Date.now(),
+    };
+    const updatedMessage: AgentWidgetMessage = {
+      id: approvalMessageId,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+      streaming: false,
+      variant: "approval",
+      approval: updatedApproval,
+    };
+    this.upsertMessage(updatedMessage);
+
+    // 2. Call onDecision callback if provided, otherwise use client.resolveApproval()
+    const approvalConfig = this.config.approval;
+    const onDecision = approvalConfig && typeof approvalConfig === 'object' ? approvalConfig.onDecision : undefined;
+
+    try {
+      let response: Response | ReadableStream<Uint8Array> | void;
+
+      if (onDecision) {
+        response = await onDecision(
+          {
+            approvalId: approval.id,
+            executionId: approval.executionId,
+            agentId: approval.agentId,
+            toolName: approval.toolName,
+          },
+          decision
+        );
+      } else {
+        response = await this.client.resolveApproval(
+          {
+            agentId: approval.agentId,
+            executionId: approval.executionId,
+            approvalId: approval.id,
+          },
+          decision
+        );
+      }
+
+      // 3. Pipe through connectStream if we got a response with a body
+      if (response) {
+        let stream: ReadableStream<Uint8Array> | null = null;
+        if (response instanceof Response) {
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            throw new Error(
+              errorData?.error ?? `Approval request failed: ${response.status}`
+            );
+          }
+          stream = response.body;
+        } else if (response instanceof ReadableStream) {
+          stream = response;
+        }
+
+        if (stream) {
+          await this.connectStream(stream);
+        } else if (decision === 'denied') {
+          // No stream body for denied — inject a denial message
+          this.appendMessage({
+            id: `denial-${approval.id}`,
+            role: "assistant",
+            content: "Tool execution was denied by user.",
+            createdAt: new Date().toISOString(),
+            streaming: false,
+            sequence: this.nextSequence(),
+          });
+        }
+      }
+    } catch (error) {
       this.callbacks.onError?.(
         error instanceof Error ? error : new Error(String(error))
       );

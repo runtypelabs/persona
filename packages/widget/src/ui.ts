@@ -37,6 +37,7 @@ import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer } fr
 import { createStandardBubble, createTypingIndicator } from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
+import { createApprovalBubble, updateApprovalBubbleUI } from "./components/approval-bubble";
 import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
@@ -275,6 +276,12 @@ type Controller = {
   hideEventStream: () => void;
   /** Returns current visibility state of the event stream panel */
   isEventStreamVisible: () => boolean;
+  /**
+   * Programmatically resolve a pending approval.
+   * @param approvalId - The approval ID to resolve
+   * @param decision - "approved" or "denied"
+   */
+  resolveApproval: (approvalId: string, decision: 'approved' | 'denied') => Promise<void>;
 };
 
 const buildPostprocessor = (
@@ -967,6 +974,46 @@ export const createAgentExperience = (
     }
   });
 
+  // Add event delegation for approval action buttons (approve/deny)
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const approvalButton = target.closest('button[data-approval-action]') as HTMLElement;
+    if (!approvalButton) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const approvalBubble = approvalButton.closest('.vanilla-approval-bubble') as HTMLElement;
+    if (!approvalBubble) return;
+
+    const messageId = approvalBubble.getAttribute('data-message-id');
+    if (!messageId) return;
+
+    const action = approvalButton.getAttribute('data-approval-action') as 'approve' | 'deny';
+    if (!action) return;
+
+    const decision = action === 'approve' ? 'approved' as const : 'denied' as const;
+
+    // Find the approval message
+    const messages = session.getMessages();
+    const approvalMessage = messages.find(m => m.id === messageId);
+    if (!approvalMessage?.approval) return;
+
+    // Disable buttons immediately for responsive UI
+    const buttonsContainer = approvalBubble.querySelector('[data-approval-buttons]') as HTMLElement;
+    if (buttonsContainer) {
+      const buttons = buttonsContainer.querySelectorAll('button');
+      buttons.forEach(btn => {
+        (btn as HTMLButtonElement).disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+      });
+    }
+
+    // Resolve the approval
+    session.resolveApproval(approvalMessage.approval, decision);
+  });
+
   panel.appendChild(container);
   mount.appendChild(wrapper);
 
@@ -1422,6 +1469,15 @@ export const createAgentExperience = (
       ) {
         eventBus.emit("assistant:complete", message);
       }
+
+      // Emit approval events
+      if (message.variant === "approval" && message.approval) {
+        if (!previous) {
+          eventBus.emit("approval:requested", { approval: message.approval, message });
+        } else if (message.approval.status !== "pending") {
+          eventBus.emit("approval:resolved", { approval: message.approval, decision: message.approval.status });
+        }
+      }
     });
 
     messageState.clear();
@@ -1470,6 +1526,9 @@ export const createAgentExperience = (
         if (message.variant === "tool" && p.renderToolCall) {
           return true;
         }
+        if (message.variant === "approval" && p.renderApproval) {
+          return true;
+        }
         if (!message.variant && p.renderMessage) {
           return true;
         }
@@ -1492,6 +1551,13 @@ export const createAgentExperience = (
           bubble = matchingPlugin.renderToolCall({
             message,
             defaultRenderer: () => createToolBubble(message, config),
+            config
+          });
+        } else if (message.variant === "approval" && message.approval && matchingPlugin.renderApproval) {
+          if (config.approval === false) return;
+          bubble = matchingPlugin.renderApproval({
+            message,
+            defaultRenderer: () => createApprovalBubble(message, config),
             config
           });
         } else if (matchingPlugin.renderMessage) {
@@ -1574,6 +1640,9 @@ export const createAgentExperience = (
         } else if (message.variant === "tool" && message.toolCall) {
           if (!showToolCalls) return;
           bubble = createToolBubble(message, config);
+        } else if (message.variant === "approval" && message.approval) {
+          if (config.approval === false) return;
+          bubble = createApprovalBubble(message, config);
         } else {
           // Check for custom message renderers in layout config
           const messageLayoutConfig = config.layout?.messages;
@@ -3985,6 +4054,16 @@ export const createAgentExperience = (
     },
     isEventStreamVisible(): boolean {
       return eventStreamVisible;
+    },
+    async resolveApproval(approvalId: string, decision: 'approved' | 'denied'): Promise<void> {
+      const messages = session.getMessages();
+      const approvalMessage = messages.find(
+        m => m.variant === "approval" && m.approval?.id === approvalId
+      );
+      if (!approvalMessage?.approval) {
+        throw new Error(`Approval not found: ${approvalId}`);
+      }
+      return session.resolveApproval(approvalMessage.approval, decision);
     },
     getMessages() {
       return session.getMessages();
