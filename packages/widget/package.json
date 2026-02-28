@@ -1,6 +1,6 @@
 {
   "name": "@runtypelabs/persona",
-  "version": "1.44.2",
+  "version": "1.45.0",
   "description": "Themeable, pluggable streaming agent widget for websites, in plain JS with support for voice input and reasoning / tool output.",
   "type": "module",
   "main": "dist/index.cjs",
