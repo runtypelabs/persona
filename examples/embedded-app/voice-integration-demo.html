@@ -334,73 +334,7 @@
             </select>
 
             <div id="ttsOptions" style="display: none; margin-top: 0.5rem">
-              <select
-                id="ttsVoice"
-                style="
-                  width: 100%;
-                  padding: 0.5rem;
-                  border-radius: 4px;
-                  border: 1px solid #30363d;
-                  background: #0d1117;
-                  color: #c9d1d9;
-                  font-family: monospace;
-                  margin-bottom: 0.5rem;
-                "
-              >
-                <option value="">Auto-detect best voice</option>
-              </select>
-              <button
-                id="ttsTestVoice"
-                style="
-                  width: 100%;
-                  padding: 0.4rem;
-                  border-radius: 4px;
-                  border: 1px solid #30363d;
-                  background: #161b22;
-                  color: #c9d1d9;
-                  font-family: monospace;
-                  font-size: 0.8rem;
-                  cursor: pointer;
-                  margin-bottom: 0.5rem;
-                "
-              >&#9654; Test voice</button>
-              <div style="display: flex; gap: 0.5rem">
-                <input
-                  type="range"
-                  id="ttsRate"
-                  min="0.5"
-                  max="2"
-                  step="0.1"
-                  value="1"
-                  style="flex: 1"
-                />
-                <span
-                  id="ttsRateValue"
-                  style="color: #c9d1d9; font-size: 0.8rem"
-                  >1.0</span
-                >
-              </div>
-              <label style="color: #94a3b8; font-size: 0.7rem">Rate</label>
-
-              <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem">
-                <input
-                  type="range"
-                  id="ttsPitch"
-                  min="0.5"
-                  max="2"
-                  step="0.1"
-                  value="1"
-                  style="flex: 1"
-                />
-                <span
-                  id="ttsPitchValue"
-                  style="color: #c9d1d9; font-size: 0.8rem"
-                  >1.0</span
-                >
-              </div>
-              <label style="color: #94a3b8; font-size: 0.7rem">Pitch</label>
-
-              <div id="ttsBrowserFallbackOption" style="display: none; margin-top: 0.75rem">
+              <div id="ttsBrowserFallbackOption" style="display: none; margin-top: 0.75rem; margin-bottom: 0.75rem">
                 <label style="display: flex; align-items: center; gap: 0.5rem; color: #c9d1d9; font-size: 0.8rem; cursor: pointer">
                   <input type="checkbox" id="ttsBrowserFallback" />
                   Browser fallback for text messages
@@ -408,6 +342,74 @@
                 <span style="color: #94a3b8; font-size: 0.7rem; display: block; margin-top: 0.25rem">
                   When TTS provider is "Runtype", also use browser TTS for text-typed responses that the server didn't speak.
                 </span>
+              </div>
+
+              <div id="ttsBrowserVoiceControls">
+                <select
+                  id="ttsVoice"
+                  style="
+                    width: 100%;
+                    padding: 0.5rem;
+                    border-radius: 4px;
+                    border: 1px solid #30363d;
+                    background: #0d1117;
+                    color: #c9d1d9;
+                    font-family: monospace;
+                    margin-bottom: 0.5rem;
+                  "
+                >
+                  <option value="">Auto-detect best voice</option>
+                </select>
+                <button
+                  id="ttsTestVoice"
+                  style="
+                    width: 100%;
+                    padding: 0.4rem;
+                    border-radius: 4px;
+                    border: 1px solid #30363d;
+                    background: #161b22;
+                    color: #c9d1d9;
+                    font-family: monospace;
+                    font-size: 0.8rem;
+                    cursor: pointer;
+                    margin-bottom: 0.5rem;
+                  "
+                >&#9654; Test voice</button>
+                <div style="display: flex; gap: 0.5rem">
+                  <input
+                    type="range"
+                    id="ttsRate"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value="1"
+                    style="flex: 1"
+                  />
+                  <span
+                    id="ttsRateValue"
+                    style="color: #c9d1d9; font-size: 0.8rem"
+                    >1.0</span
+                  >
+                </div>
+                <label style="color: #94a3b8; font-size: 0.7rem">Rate</label>
+
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem">
+                  <input
+                    type="range"
+                    id="ttsPitch"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value="1"
+                    style="flex: 1"
+                  />
+                  <span
+                    id="ttsPitchValue"
+                    style="color: #c9d1d9; font-size: 0.8rem"
+                    >1.0</span
+                  >
+                </div>
+                <label style="color: #94a3b8; font-size: 0.7rem">Pitch</label>
               </div>
             </div>
           </div>
@@ -575,6 +577,16 @@
                  }
                }
              },
+             <span class="comment">// Processing state (while agent is thinking)</span>
+             <span class="prop">processingIconName</span>: <span class="string">'loader'</span>,     <span class="comment">// spins automatically</span>
+             <span class="prop">processingBackgroundColor</span>: <span class="string">'#6366f1'</span>, <span class="comment">// optional: indigo</span>
+             <span class="prop">processingIconColor</span>: <span class="string">'#ffffff'</span>,
+
+             <span class="comment">// Speaking state (while agent TTS is playing)</span>
+             <span class="prop">speakingIconName</span>: <span class="string">'volume-2'</span>,     <span class="comment">// or 'square' for cancel mode</span>
+             <span class="prop">speakingBackgroundColor</span>: <span class="string">'#3b82f6'</span>, <span class="comment">// optional: blue</span>
+             <span class="prop">speakingIconColor</span>: <span class="string">'#ffffff'</span>,
+
              <span class="comment">// Custom rendering via voiceProcessing flag</span>
              <span class="prop">postprocessMessage</span>: ({ <span class="prop">text</span>, <span class="prop">message</span> }) =&gt; {
                <span class="keyword">if</span> (<span class="prop">message</span>.<span class="prop">voiceProcessing</span>) {
@@ -1020,6 +1032,13 @@
         if (ttsBrowserFallbackOptionLoad && currentConfig.voiceOutputProvider === "runtype") {
           ttsBrowserFallbackOptionLoad.style.display = "block";
         }
+        // Show browser voice controls only when browser TTS is active
+        const browserVoiceControlsLoad = document.getElementById("ttsBrowserVoiceControls");
+        if (browserVoiceControlsLoad) {
+          const showBrowserControls = currentConfig.voiceOutputProvider === "browser" ||
+            (currentConfig.voiceOutputProvider === "runtype" && currentConfig.ttsBrowserFallback);
+          browserVoiceControlsLoad.style.display = showBrowserControls ? "block" : "none";
+        }
 
         // Recreate config with loaded values
         config = createConfig();
@@ -1343,6 +1362,17 @@
         const ttsOptionsDiv = document.getElementById("ttsOptions");
 
         const ttsBrowserFallbackOption = document.getElementById("ttsBrowserFallbackOption");
+        const ttsBrowserVoiceControls = document.getElementById("ttsBrowserVoiceControls");
+        const ttsBrowserFallbackCheckbox = document.getElementById("ttsBrowserFallback");
+
+        function updateBrowserVoiceControlsVisibility() {
+          if (!ttsBrowserVoiceControls) return;
+          const provider = voiceOutputProviderSelect ? voiceOutputProviderSelect.value : "none";
+          const fallbackChecked = ttsBrowserFallbackCheckbox ? ttsBrowserFallbackCheckbox.checked : false;
+          const show = provider === "browser" || (provider === "runtype" && fallbackChecked);
+          ttsBrowserVoiceControls.style.display = show ? "block" : "none";
+        }
+
         if (voiceOutputProviderSelect && ttsOptionsDiv) {
           voiceOutputProviderSelect.addEventListener("change", function () {
             if (this.value !== "none") {
@@ -1354,6 +1384,15 @@
             if (ttsBrowserFallbackOption) {
               ttsBrowserFallbackOption.style.display = this.value === "runtype" ? "block" : "none";
             }
+            updateBrowserVoiceControlsVisibility();
+          });
+        }
+
+        // Toggle browser voice controls when fallback checkbox changes
+        if (ttsBrowserFallbackCheckbox) {
+          ttsBrowserFallbackCheckbox.addEventListener("change", function () {
+            currentConfig.ttsBrowserFallback = this.checked;
+            updateBrowserVoiceControlsVisibility();
           });
         }
 

@@ -136,6 +136,26 @@ export class AgentWidgetSession {
     return this.voiceStatus;
   }
 
+  /**
+   * Get the voice interruption mode from the provider (none/cancel/barge-in)
+   */
+  public getVoiceInterruptionMode(): "none" | "cancel" | "barge-in" {
+    if (this.voiceProvider?.getInterruptionMode) {
+      return this.voiceProvider.getInterruptionMode();
+    }
+    return "none";
+  }
+
+  /**
+   * Stop voice playback / cancel in-flight request without starting recording.
+   * Returns to idle state.
+   */
+  public stopVoicePlayback(): void {
+    if (this.voiceProvider?.stopPlayback) {
+      this.voiceProvider.stopPlayback();
+    }
+  }
+
   // Pending placeholder IDs for Runtype two-phase voice flow
   private pendingVoiceUserMessageId: string | null = null;
   private pendingVoiceAssistantMessageId: string | null = null;

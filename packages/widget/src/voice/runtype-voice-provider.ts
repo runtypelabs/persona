@@ -20,6 +20,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private processingStartCallbacks: (() => void)[] = [];
   private audioChunks: Blob[] = [];
   private isProcessing = false;
+  private isSpeaking = false;
 
   // Silence detection
   private analyserNode: AnalyserNode | null = null;
@@ -27,7 +28,18 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private silenceCheckInterval: ReturnType<typeof setInterval> | null = null;
   private silenceStart: number | null = null;
 
+  // Cancellation / interruption support
+  private currentAudio: HTMLAudioElement | null = null;
+  private currentAudioUrl: string | null = null;
+  private currentRequestId: string | null = null;
+  private interruptionMode: "none" | "cancel" | "barge-in" = "none";
+
   constructor(private config: VoiceConfig["runtype"]) {}
+
+  /** Returns the current interruption mode received from the server */
+  getInterruptionMode(): "none" | "cancel" | "barge-in" {
+    return this.interruptionMode;
+  }
 
   async connect() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -151,15 +163,16 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   private handleWebSocketMessage(message: any) {
     switch (message.type) {
-      case "voice_response":
-        // Play TTS audio if present
-        if (message.response.audio?.base64) {
-          this.playAudio(message.response.audio).catch((err) =>
-            this.errorCallbacks.forEach((cb) => cb(err instanceof Error ? err : new Error(String(err)))),
-          );
+      case "session_config":
+        // Server sends voice settings on session init
+        if (message.interruptionMode) {
+          this.interruptionMode = message.interruptionMode;
         }
-        // Use agentResponseText (the agent's reply) as the text result,
-        // falling back to transcript (user's STT input) for backwards compat
+        break;
+
+      case "voice_response":
+        // Deliver text result immediately
+        this.isProcessing = false;
         this.resultCallbacks.forEach((cb) =>
           cb({
             text: message.response.agentResponseText || message.response.transcript,
@@ -169,8 +182,22 @@ export class RuntypeVoiceProvider implements VoiceProvider {
             provider: "runtype",
           }),
         );
+
+        // Play TTS audio if present — stay in "speaking" state until playback ends
+        if (message.response.audio?.base64) {
+          this.isSpeaking = true;
+          this.statusCallbacks.forEach((cb) => cb("speaking"));
+          this.playAudio(message.response.audio).catch((err) =>
+            this.errorCallbacks.forEach((cb) => cb(err instanceof Error ? err : new Error(String(err)))),
+          );
+        } else {
+          this.statusCallbacks.forEach((cb) => cb("idle"));
+        }
+        break;
+
+      case "cancelled":
+        // Server acknowledged cancellation — discard any late-arriving responses
         this.isProcessing = false;
-        this.statusCallbacks.forEach((cb) => cb("idle"));
         break;
 
       case "error":
@@ -185,10 +212,57 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     }
   }
 
+  /**
+   * Stop playback / cancel in-flight request and return to idle.
+   * This is the public "stop only" action — does NOT start recording.
+   */
+  stopPlayback(): void {
+    if (!this.isProcessing && !this.isSpeaking) return;
+    this.cancelCurrentPlayback();
+    this.statusCallbacks.forEach((cb) => cb("idle"));
+  }
+
+  /**
+   * Cancel the current playback and in-flight server request.
+   * Internal helper — does NOT fire status callbacks (caller decides next state).
+   */
+  private cancelCurrentPlayback(): void {
+    // Stop playing audio
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio.src = "";
+      this.currentAudio = null;
+    }
+    if (this.currentAudioUrl) {
+      URL.revokeObjectURL(this.currentAudioUrl);
+      this.currentAudioUrl = null;
+    }
+
+    // Tell server to abort the in-flight request
+    if (this.currentRequestId && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({
+          type: "cancel",
+          requestId: this.currentRequestId,
+        }),
+      );
+    }
+
+    this.currentRequestId = null;
+    this.isProcessing = false;
+    this.isSpeaking = false;
+  }
+
   async startListening() {
     try {
-      if (this.isProcessing) {
-        throw new Error("Already processing audio");
+      if (this.isProcessing || this.isSpeaking) {
+        // If interruption is enabled, cancel current playback and proceed
+        if (this.interruptionMode !== "none") {
+          this.cancelCurrentPlayback();
+        } else {
+          // Mode is "none" — block mic while processing or speaking
+          return;
+        }
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -293,6 +367,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.statusCallbacks.forEach((cb) => cb("idle"));
   }
 
+  private generateRequestId(): string {
+    return "vreq_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+  }
+
   private async sendAudio(audioBlob: Blob) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.errorCallbacks.forEach((cb) =>
@@ -305,6 +383,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     try {
       const base64Audio = await this.blobToBase64(audioBlob);
       const format = this.getFormatFromMimeType(audioBlob.type);
+      const requestId = this.generateRequestId();
+      this.currentRequestId = requestId;
 
       this.ws.send(
         JSON.stringify({
@@ -313,6 +393,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           format,
           sampleRate: 16000,
           voiceId: this.config?.voiceId,
+          requestId,
         }),
       );
     } catch (error) {
@@ -357,7 +438,20 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     const blob = new Blob([bytes], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const audioEl = new Audio(url);
-    audioEl.onended = () => URL.revokeObjectURL(url);
+
+    // Store references so playback can be cancelled
+    this.currentAudio = audioEl;
+    this.currentAudioUrl = url;
+
+    audioEl.onended = () => {
+      URL.revokeObjectURL(url);
+      if (this.currentAudio === audioEl) {
+        this.currentAudio = null;
+        this.currentAudioUrl = null;
+        this.isSpeaking = false;
+        this.statusCallbacks.forEach((cb) => cb("idle"));
+      }
+    };
     await audioEl.play();
   }
 
@@ -378,6 +472,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   async disconnect(): Promise<void> {
+    // Stop any playing audio
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio.src = "";
+      this.currentAudio = null;
+    }
+    if (this.currentAudioUrl) {
+      URL.revokeObjectURL(this.currentAudioUrl);
+      this.currentAudioUrl = null;
+    }
+    this.currentRequestId = null;
+    this.isSpeaking = false;
+
     await this.stopListening();
 
     if (this.ws) {

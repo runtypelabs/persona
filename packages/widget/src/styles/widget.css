@@ -1060,6 +1060,30 @@
   animation: tvw-voice-recording-pulse 1.5s ease-in-out infinite;
 }
 
+/* Voice processing animation (spinner) */
+@keyframes tvw-voice-processing-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.tvw-voice-processing svg {
+  animation: tvw-voice-processing-spin 1.2s linear infinite;
+}
+
+/* Voice speaking animation (gentle pulse — slower/subtler than recording) */
+@keyframes tvw-voice-speaking-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+
+.tvw-voice-speaking {
+  animation: tvw-voice-speaking-pulse 2s ease-in-out infinite;
+}
+
+.tvw-voice-speaking svg {
+  animation: tvw-voice-speaking-pulse 2s ease-in-out infinite;
+}
+
 /* Markdown content overflow handling */
 .vanilla-message-bubble pre {
   overflow-x: auto;

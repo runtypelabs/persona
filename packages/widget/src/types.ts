@@ -696,6 +696,26 @@ export type AgentWidgetVoiceRecognitionConfig = {
   recordingBackgroundColor?: string;
   recordingBorderColor?: string;
   showRecordingIndicator?: boolean;
+
+  // Processing state (after recording stops, waiting for agent response)
+  /** Icon name shown while processing voice input. Default: "loader" */
+  processingIconName?: string;
+  /** Icon color during processing. Inherits idle iconColor if not set */
+  processingIconColor?: string;
+  /** Button background color during processing. Inherits idle backgroundColor if not set */
+  processingBackgroundColor?: string;
+  /** Button border color during processing. Inherits idle borderColor if not set */
+  processingBorderColor?: string;
+
+  // Speaking state (agent TTS audio is playing)
+  /** Icon name shown while agent is speaking. Default: "volume-2" (or "square" in cancel mode) */
+  speakingIconName?: string;
+  /** Icon color while speaking. Inherits idle iconColor if not set */
+  speakingIconColor?: string;
+  /** Button background color while speaking. Inherits idle backgroundColor if not set */
+  speakingBackgroundColor?: string;
+  /** Button border color while speaking. Inherits idle borderColor if not set */
+  speakingBorderColor?: string;
   autoResume?: boolean | "assistant";
   
   // Voice provider configuration
@@ -794,11 +814,12 @@ export type VoiceResult = {
 /**
  * Voice provider status states
  */
-export type VoiceStatus = 
+export type VoiceStatus =
   | 'disconnected'
   | 'connected'
   | 'listening'
   | 'processing'
+  | 'speaking'
   | 'error'
   | 'idle';
 
@@ -843,6 +864,12 @@ export interface VoiceProvider {
 
   /** Register a callback fired when recording stops and audio is about to be sent */
   onProcessingStart?(callback: () => void): void;
+
+  /** Returns the current interruption mode (only meaningful for Runtype provider) */
+  getInterruptionMode?(): "none" | "cancel" | "barge-in";
+
+  /** Stop playback / cancel in-flight request without starting recording */
+  stopPlayback?(): void;
 }
 
 /**
