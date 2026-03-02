@@ -37,7 +37,7 @@ import type {
   AgentWidgetStoredState,
   AgentWidgetRequestPayload,
   AgentWidgetActionHandler
-} from "../../../packages/widget/src/types";
+} from "@runtypelabs/persona";
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =

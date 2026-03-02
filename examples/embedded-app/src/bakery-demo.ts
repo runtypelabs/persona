@@ -34,7 +34,7 @@ import type {
   AgentWidgetStoredState,
   AgentWidgetRequestPayload,
   AgentWidgetActionHandler
-} from "../../../packages/widget/src/types";
+} from "@runtypelabs/persona";
 
 // Use bakery-specific storage key
 const BAKERY_STORAGE_KEY = "bakery-demo-chat";

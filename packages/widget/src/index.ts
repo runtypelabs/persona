@@ -210,4 +210,17 @@ export {
 } from "./components/feedback";
 export type { CSATFeedbackOptions, NPSFeedbackOptions } from "./components/feedback";
 
+// Voice module exports
+export {
+  createVoiceProvider,
+  createBestAvailableVoiceProvider,
+  isVoiceSupported
+} from "./voice";
+export type {
+  VoiceProvider,
+  VoiceResult,
+  VoiceStatus,
+  VoiceConfig
+} from "./types";
+
 export default initAgentWidgetFn;

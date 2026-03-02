@@ -1,0 +1,1484 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice Integration Demo</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #fff;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 1fr 420px;
+        gap: 1.5rem;
+        padding: 1.5rem;
+        max-width: 1400px;
+        margin: 0 auto;
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+        min-height: 100vh;
+      }
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      .panel {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
+      }
+      .info-panel {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 1.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .info-panel h1 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.5rem;
+      }
+      .info-panel p {
+        margin: 0 0 1.5rem 0;
+        color: #94a3b8;
+        line-height: 1.6;
+      }
+      .info-section {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+      }
+      .info-section h3 {
+        margin: 0 0 0.5rem 0;
+        font-size: 0.9rem;
+        color: #38bdf8;
+      }
+      .info-section p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #94a3b8;
+      }
+      .code-block {
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 1rem;
+        overflow-x: auto;
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        font-size: 0.75rem;
+        color: #c9d1d9;
+        margin-bottom: 1rem;
+      }
+      .code-block .comment {
+        color: #8b949e;
+      }
+      .code-block .keyword {
+        color: #ff7b72;
+      }
+      .code-block .string {
+        color: #a5d6ff;
+      }
+      .code-block .prop {
+        color: #79c0ff;
+      }
+      #agent-widget {
+        height: 100%;
+      }
+      .back-link {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 0.5rem 1rem;
+        margin: 1rem 1.5rem;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #fff;
+        font-size: 0.9rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .back-link:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+      .toggle-section {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .toggle-section label {
+        font-size: 0.9rem;
+        color: #fff;
+      }
+      .toggle-switch {
+        position: relative;
+        width: 48px;
+        height: 24px;
+      }
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #4b5563;
+        transition: 0.3s;
+        border-radius: 24px;
+      }
+      .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+      }
+      .toggle-switch input:checked + .toggle-slider {
+        background-color: #38bdf8;
+      }
+      .toggle-switch input:checked + .toggle-slider:before {
+        transform: translateX(24px);
+      }
+      .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+        background-color: #64748b;
+      }
+      .status-indicator.connected {
+        background-color: #10b981;
+      }
+      .status-indicator.listening {
+        background-color: #f59e0b;
+        animation: pulse 1.5s infinite;
+      }
+      .status-indicator.error {
+        background-color: #ef4444;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .voice-controls {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+      }
+      .voice-button {
+        background: #38bdf8;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: background-color 0.2s;
+      }
+      .voice-button:hover {
+        background: #0ea5e9;
+      }
+      .voice-button:disabled {
+        background: #64748b;
+        cursor: not-allowed;
+      }
+      .voice-button.listening {
+        background: #f59e0b;
+        animation: pulse 1.5s infinite;
+      }
+    </style>
+  </head>
+  <body>
+    <a href="./index.html" class="back-link">← Back to Examples</a>
+
+    <div class="layout">
+      <div class="info-panel">
+        <h1>Voice Integration Demo</h1>
+         <p>
+           This demo showcases the ElevenLabs voice integration with the Persona
+           widget. It demonstrates real-time voice input and output using
+           WebSocket technology. The WebSocket stream connects to the Runtype
+           backend for server-side voice processing.
+         </p>
+
+        <div class="info-section">
+          <h3>🔧 Configuration</h3>
+          <div style="margin-bottom: 1rem">
+            <label
+              style="
+                display: block;
+                margin-bottom: 0.5rem;
+                color: #fff;
+                font-size: 0.9rem;
+              "
+            >
+              Client Token:
+            </label>
+            <input
+              type="text"
+              id="clientTokenInput"
+              placeholder="REPLACE_WITH_YOUR_CLIENT_TOKEN"
+              style="
+                width: 100%;
+                padding: 0.5rem;
+                border-radius: 4px;
+                border: 1px solid #30363d;
+                background: #0d1117;
+                color: #c9d1d9;
+                font-family: monospace;
+              "
+              value="REPLACE_WITH_YOUR_CLIENT_TOKEN"
+            />
+          </div>
+          <div style="margin-bottom: 1rem">
+            <label
+              style="
+                display: block;
+                margin-bottom: 0.5rem;
+                color: #fff;
+                font-size: 0.9rem;
+              "
+            >
+              Agent ID:
+            </label>
+            <input
+              type="text"
+              id="agentIdInput"
+              placeholder="REPLACE_WITH_YOUR_AGENT_ID"
+              style="
+                width: 100%;
+                padding: 0.5rem;
+                border-radius: 4px;
+                border: 1px solid #30363d;
+                background: #0d1117;
+                color: #c9d1d9;
+                font-family: monospace;
+              "
+              value="REPLACE_WITH_YOUR_AGENT_ID"
+            />
+          </div>
+          <div style="margin-top: 1rem">
+            <h4
+              style="margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.9rem"
+            >
+              🎤 Voice Input (Speech-to-Text)
+            </h4>
+            <select
+              id="voiceInputProvider"
+              style="
+                width: 100%;
+                padding: 0.5rem;
+                border-radius: 4px;
+                border: 1px solid #30363d;
+                background: #0d1117;
+                color: #c9d1d9;
+                font-family: monospace;
+                margin-bottom: 0.5rem;
+              "
+            >
+              <option value="runtype">Runtype (Server)</option>
+              <option value="browser">Browser (Web Speech API)</option>
+            </select>
+          </div>
+
+          <div style="margin-top: 1rem">
+            <h4
+              style="margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.9rem"
+            >
+              🔊 Voice Output (Text-to-Speech)
+            </h4>
+            <select
+              id="voiceOutputProvider"
+              style="
+                width: 100%;
+                padding: 0.5rem;
+                border-radius: 4px;
+                border: 1px solid #30363d;
+                background: #0d1117;
+                color: #c9d1d9;
+                font-family: monospace;
+                margin-bottom: 0.5rem;
+              "
+            >
+              <option value="none">None (Text only)</option>
+              <option value="browser">Browser (Web Speech API)</option>
+              <option value="runtype">Runtype (Server)</option>
+            </select>
+
+            <div id="ttsOptions" style="display: none; margin-top: 0.5rem">
+              <select
+                id="ttsVoice"
+                style="
+                  width: 100%;
+                  padding: 0.5rem;
+                  border-radius: 4px;
+                  border: 1px solid #30363d;
+                  background: #0d1117;
+                  color: #c9d1d9;
+                  font-family: monospace;
+                  margin-bottom: 0.5rem;
+                "
+              >
+                <option value="">Auto-detect best voice</option>
+              </select>
+              <button
+                id="ttsTestVoice"
+                style="
+                  width: 100%;
+                  padding: 0.4rem;
+                  border-radius: 4px;
+                  border: 1px solid #30363d;
+                  background: #161b22;
+                  color: #c9d1d9;
+                  font-family: monospace;
+                  font-size: 0.8rem;
+                  cursor: pointer;
+                  margin-bottom: 0.5rem;
+                "
+              >&#9654; Test voice</button>
+              <div style="display: flex; gap: 0.5rem">
+                <input
+                  type="range"
+                  id="ttsRate"
+                  min="0.5"
+                  max="2"
+                  step="0.1"
+                  value="1"
+                  style="flex: 1"
+                />
+                <span
+                  id="ttsRateValue"
+                  style="color: #c9d1d9; font-size: 0.8rem"
+                  >1.0</span
+                >
+              </div>
+              <label style="color: #94a3b8; font-size: 0.7rem">Rate</label>
+
+              <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem">
+                <input
+                  type="range"
+                  id="ttsPitch"
+                  min="0.5"
+                  max="2"
+                  step="0.1"
+                  value="1"
+                  style="flex: 1"
+                />
+                <span
+                  id="ttsPitchValue"
+                  style="color: #c9d1d9; font-size: 0.8rem"
+                  >1.0</span
+                >
+              </div>
+              <label style="color: #94a3b8; font-size: 0.7rem">Pitch</label>
+
+              <div id="ttsBrowserFallbackOption" style="display: none; margin-top: 0.75rem">
+                <label style="display: flex; align-items: center; gap: 0.5rem; color: #c9d1d9; font-size: 0.8rem; cursor: pointer">
+                  <input type="checkbox" id="ttsBrowserFallback" />
+                  Browser fallback for text messages
+                </label>
+                <span style="color: #94a3b8; font-size: 0.7rem; display: block; margin-top: 0.25rem">
+                  When TTS provider is "Runtype", also use browser TTS for text-typed responses that the server didn't speak.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 1rem">
+            <h4
+              style="margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.9rem"
+            >
+              ⏱ Silence Detection
+            </h4>
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem">
+              <div style="flex: 1">
+                <label style="color: #94a3b8; font-size: 0.7rem; display: block; margin-bottom: 0.25rem">Pause Duration (ms)</label>
+                <input
+                  type="number"
+                  id="pauseDurationInput"
+                  value="2000"
+                  min="500"
+                  max="10000"
+                  step="250"
+                  style="
+                    width: 100%;
+                    padding: 0.5rem;
+                    border-radius: 4px;
+                    border: 1px solid #30363d;
+                    background: #0d1117;
+                    color: #c9d1d9;
+                    font-family: monospace;
+                  "
+                />
+              </div>
+              <div style="flex: 1">
+                <label style="color: #94a3b8; font-size: 0.7rem; display: block; margin-bottom: 0.25rem">Silence Threshold</label>
+                <input
+                  type="number"
+                  id="silenceThresholdInput"
+                  value="0.01"
+                  min="0.001"
+                  max="0.1"
+                  step="0.001"
+                  style="
+                    width: 100%;
+                    padding: 0.5rem;
+                    border-radius: 4px;
+                    border: 1px solid #30363d;
+                    background: #0d1117;
+                    color: #c9d1d9;
+                    font-family: monospace;
+                  "
+                />
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 1rem">
+            <h4
+              style="margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.9rem"
+            >
+              💬 Processing Placeholder Text
+            </h4>
+            <div style="margin-bottom: 0.5rem">
+              <label style="color: #94a3b8; font-size: 0.7rem; display: block; margin-bottom: 0.25rem">Processing Text (user bubble)</label>
+              <input
+                type="text"
+                id="processingTextInput"
+                value="🎤 Processing voice..."
+                style="
+                  width: 100%;
+                  padding: 0.5rem;
+                  border-radius: 4px;
+                  border: 1px solid #30363d;
+                  background: #0d1117;
+                  color: #c9d1d9;
+                  font-family: monospace;
+                "
+              />
+            </div>
+            <div style="margin-bottom: 0.5rem">
+              <label style="color: #94a3b8; font-size: 0.7rem; display: block; margin-bottom: 0.25rem">Error Text (assistant bubble)</label>
+              <input
+                type="text"
+                id="processingErrorTextInput"
+                value="Voice processing failed. Please try again."
+                style="
+                  width: 100%;
+                  padding: 0.5rem;
+                  border-radius: 4px;
+                  border: 1px solid #30363d;
+                  background: #0d1117;
+                  color: #c9d1d9;
+                  font-family: monospace;
+                "
+              />
+            </div>
+          </div>
+
+          <div style="margin-top: 1rem">
+            <h4
+              style="margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.9rem"
+            >
+              🎨 Custom Processing UI
+            </h4>
+            <label style="display: flex; align-items: center; gap: 0.5rem; color: #c9d1d9; font-size: 0.85rem; cursor: pointer">
+              <input type="checkbox" id="customProcessingUIToggle" />
+              Enable custom <code>postprocessMessage</code> for voice placeholders
+            </label>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.7rem; color: #64748b">
+              When enabled, voice processing placeholders use a custom animated component
+              via the <code>voiceProcessing</code> message flag instead of plain text.
+            </p>
+          </div>
+
+          <button
+            id="applyConfigBtn"
+            style="
+              background: #38bdf8;
+              color: white;
+              border: none;
+              padding: 0.5rem 1rem;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 0.9rem;
+              margin-top: 1rem;
+            "
+          >
+            Apply Configuration
+          </button>
+          <p
+            id="configStatus"
+            style="margin-top: 1rem; font-size: 0.85rem; color: #94a3b8"
+          >
+            Configuration not applied yet
+          </p>
+        </div>
+
+       <div class="info-section">
+         <h3>🎤 Voice Features</h3>
+         <p>• Real-time voice-to-text transcription via WebSocket</p>
+         <p>• <strong>Auto-stop on silence</strong> — configurable pause duration &amp; threshold</p>
+         <p>• <strong>Typing indicator</strong> — shows while server processes audio</p>
+         <p>• <strong>User transcript placeholder</strong> — appears instantly on recording stop</p>
+         <p>• <strong>Customizable processing UI</strong> — text config or full <code>postprocessMessage</code> override via <code>voiceProcessing</code> flag</p>
+         <p>• Text-to-speech with ElevenLabs voices over WebSocket stream</p>
+         <p>• WebSocket-based bidirectional communication</p>
+         <p>• Automatic fallback to browser speech API when WebSocket unavailable</p>
+       </div>
+
+       <div class="info-section">
+         <h3>🔧 Configuration</h3>
+         <div class="code-block">
+           <span class="comment">// Voice recognition configuration for AgentWidget</span>
+           <span class="keyword">const</span> <span class="prop">config</span> = {
+             <span class="prop">voiceRecognition</span>: {
+               <span class="prop">enabled</span>: <span class="keyword">true</span>,
+               <span class="prop">processingText</span>: <span class="string">'Transcribing...'</span>,
+               <span class="prop">processingErrorText</span>: <span class="string">'Failed'</span>,
+               <span class="prop">provider</span>: {
+                 <span class="prop">type</span>: <span class="string">'runtype'</span>,
+                 <span class="prop">runtype</span>: {
+                   <span class="prop">agentId</span>: <span class="string">'your-agent-id'</span>,
+                   <span class="prop">clientToken</span>: <span class="string">'your-token'</span>,
+                   <span class="prop">host</span>: <span class="string">'api.runtype.com'</span>,
+                   <span class="prop">pauseDuration</span>: <span class="keyword">2000</span>,
+                   <span class="prop">silenceThreshold</span>: <span class="keyword">0.01</span>
+                 }
+               }
+             },
+             <span class="comment">// Custom rendering via voiceProcessing flag</span>
+             <span class="prop">postprocessMessage</span>: ({ <span class="prop">text</span>, <span class="prop">message</span> }) =&gt; {
+               <span class="keyword">if</span> (<span class="prop">message</span>.<span class="prop">voiceProcessing</span>) {
+                 <span class="keyword">return</span> <span class="string">'&lt;div&gt;Custom UI&lt;/div&gt;'</span>;
+               }
+               <span class="keyword">return</span> <span class="prop">text</span>;
+             }
+           };
+         </div>
+       </div>
+        </div>
+
+        <div class="info-section">
+          <h3>📡 Connection Status</h3>
+          <div id="connection-status">
+            <span class="status-indicator"></span>
+            <span id="status-text">Disconnected</span>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h3>🎤 Voice Controls</h3>
+          <div class="voice-controls">
+            <button id="toggle-voice" class="voice-button" disabled>
+              Start Listening
+            </button>
+            <button id="test-connection" class="voice-button">
+              Test Connection
+            </button>
+          </div>
+          <div
+            id="voice-feedback"
+            style="margin-top: 0.5rem; font-size: 0.85rem; color: #94a3b8"
+          ></div>
+        </div>
+
+        <div class="info-section">
+          <h3>📝 Transcription Results</h3>
+          <div
+            id="transcription-results"
+            style="
+              background: #0d1117;
+              border: 1px solid #30363d;
+              border-radius: 6px;
+              padding: 1rem;
+              min-height: 100px;
+              font-family: monospace;
+              font-size: 0.85rem;
+              color: #c9d1d9;
+              overflow-y: auto;
+              max-height: 200px;
+            "
+          ></div>
+        </div>
+
+        <div class="info-section">
+          <h3>💡 Tips</h3>
+          <p>• Use Chrome or Edge for best voice support</p>
+          <p>• Grant microphone permissions when prompted</p>
+          <p>• Speak clearly for best transcription accuracy</p>
+          <p>• Check console for detailed logs and errors</p>
+        </div>
+      </div>
+
+      <div class="panel widget-container">
+        <div id="agent-widget"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      import {
+        initAgentWidget,
+        createVoiceProvider,
+        isVoiceSupported,
+      } from "@runtypelabs/persona";
+
+      // UI Elements - these will be initialized in the function
+      let statusIndicator,
+        statusText,
+        toggleVoiceBtn,
+        testConnectionBtn,
+        voiceFeedback,
+        transcriptionResults;
+
+      // Configuration variables
+      let currentConfig = {
+        clientToken: "REPLACE_WITH_YOUR_CLIENT_TOKEN",
+        agentId: "REPLACE_WITH_YOUR_AGENT_ID",
+        voiceInputProvider: "runtype",
+        voiceOutputProvider: "none",
+        ttsBrowserFallback: false,
+        ttsVoice: "",
+        ttsRate: 1.0,
+        ttsPitch: 1.0,
+        pauseDuration: 2000,
+        silenceThreshold: 0.01,
+        processingText: "\u{1F3A4} Processing voice...",
+        processingErrorText: "Voice processing failed. Please try again.",
+        customProcessingUI: false,
+      };
+
+      // Function to create config dynamically based on current configuration
+      function createConfig() {
+        // Store host in a variable first to avoid circular reference
+        const websocketHost = window.location.hostname.includes("localhost") ? "localhost:8787" : "api.runtype.com";
+
+        return {
+          clientToken: currentConfig.clientToken,
+          agentId: currentConfig.agentId,
+          flowId: currentConfig.agentId,
+          voiceWebSocketHost: websocketHost,
+
+          // Voice recognition configuration
+          voiceRecognition: {
+            enabled: true,
+            processingText: currentConfig.processingText,
+            processingErrorText: currentConfig.processingErrorText,
+            provider: {
+              type: currentConfig.voiceInputProvider,
+              runtype:
+                currentConfig.voiceInputProvider === "runtype"
+                  ? {
+                      agentId: currentConfig.agentId,
+                      clientToken: currentConfig.clientToken,
+                      host: websocketHost,
+                      pauseDuration: currentConfig.pauseDuration,
+                      silenceThreshold: currentConfig.silenceThreshold,
+                    }
+                  : undefined,
+              browser:
+                currentConfig.voiceInputProvider === "browser"
+                  ? {
+                      language: "en-US",
+                      continuous: false,
+                    }
+                  : undefined,
+            },
+          },
+
+          // Custom postprocessMessage for voice processing placeholders
+          ...(currentConfig.customProcessingUI ? {
+            postprocessMessage: ({ text, message, streaming }) => {
+              if (message.voiceProcessing) {
+                if (message.role === 'user') {
+                  return `<div style="display:flex;align-items:center;gap:8px">
+                    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#38bdf8;animation:pulse 1.2s ease-in-out infinite"></span>
+                    <span style="color:#64748b;font-style:italic">Transcribing your voice...</span>
+                  </div>`;
+                }
+                if (message.role === 'assistant' && streaming) {
+                  return `<div style="display:flex;align-items:center;gap:6px">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;animation:pulse 1s ease-in-out infinite"></span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;animation:pulse 1s ease-in-out 0.2s infinite"></span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;animation:pulse 1s ease-in-out 0.4s infinite"></span>
+                    <span style="color:#64748b;font-style:italic;margin-left:4px">Agent is thinking...</span>
+                  </div>`;
+                }
+              }
+              return text;
+            }
+          } : {}),
+
+          // Text-to-speech configuration
+          textToSpeech:
+            currentConfig.voiceOutputProvider !== "none"
+              ? {
+                  enabled: true,
+                  provider: currentConfig.voiceOutputProvider,
+                  browserFallback: currentConfig.ttsBrowserFallback,
+                  voice: currentConfig.ttsVoice || undefined,
+                  rate: currentConfig.ttsRate,
+                  pitch: currentConfig.ttsPitch,
+                }
+              : undefined,
+
+           // Basic widget configuration
+           apiUrl: window.location.hostname.includes("localhost")
+             ? "http://localhost:8787"
+             : "https://api.runtype.com",
+           
+           // Ensure WebSocket uses the correct host for voice
+           voiceWebSocketHost: window.location.hostname.includes("localhost")
+             ? "localhost:8787"
+             : "api.runtype.com",
+
+          theme: {
+            primaryColor: "#38bdf8",
+            backgroundColor: "#ffffff",
+            textColor: "#1e293b",
+            bubbleBackground: "#f8fafc",
+            bubbleTextColor: "#0f172a",
+          },
+          launcher: {
+            enabled: true,
+            title: "Voice Assistant",
+            subtitle: "Try voice interaction",
+            agentIconText: "🎤",
+            position: "bottom-right",
+          },
+          persistState: {
+            enabled: false,
+          },
+        };
+      }
+
+      // Create initial config
+      let config = createConfig();
+
+      // Function to apply configuration from input fields
+      async function applyConfiguration() {
+        const clientTokenInput = document.getElementById("clientTokenInput");
+        const agentIdInput = document.getElementById("agentIdInput");
+        const voiceInputProviderSelect =
+          document.getElementById("voiceInputProvider");
+        const voiceOutputProviderSelect = document.getElementById(
+          "voiceOutputProvider",
+        );
+        const ttsVoiceInput = document.getElementById("ttsVoice");
+        const configStatus = document.getElementById("configStatus");
+
+        const clientToken = clientTokenInput.value.trim();
+        const agentId = agentIdInput.value.trim();
+
+        if (!clientToken || !agentId) {
+          configStatus.textContent = "Please fill in both fields";
+          configStatus.style.color = "#ef4444";
+          return;
+        }
+
+        // Update current configuration
+        currentConfig.clientToken = clientToken;
+        currentConfig.agentId = agentId;
+
+        if (voiceInputProviderSelect) {
+          currentConfig.voiceInputProvider = voiceInputProviderSelect.value;
+        }
+
+        if (voiceOutputProviderSelect) {
+          currentConfig.voiceOutputProvider = voiceOutputProviderSelect.value;
+        }
+
+        const ttsBrowserFallbackCheckbox = document.getElementById("ttsBrowserFallback");
+        if (ttsBrowserFallbackCheckbox) {
+          currentConfig.ttsBrowserFallback = ttsBrowserFallbackCheckbox.checked;
+        }
+
+        if (ttsVoiceInput) {
+          currentConfig.ttsVoice = ttsVoiceInput.value;
+        }
+
+        // Read silence detection and processing text inputs
+        const pauseDurationInput = document.getElementById("pauseDurationInput");
+        const silenceThresholdInput = document.getElementById("silenceThresholdInput");
+        const processingTextInput = document.getElementById("processingTextInput");
+        const processingErrorTextInput = document.getElementById("processingErrorTextInput");
+        const customProcessingUIToggle = document.getElementById("customProcessingUIToggle");
+
+        if (pauseDurationInput) {
+          currentConfig.pauseDuration = parseInt(pauseDurationInput.value, 10) || 2000;
+        }
+        if (silenceThresholdInput) {
+          currentConfig.silenceThreshold = parseFloat(silenceThresholdInput.value) || 0.01;
+        }
+        if (processingTextInput) {
+          currentConfig.processingText = processingTextInput.value;
+        }
+        if (processingErrorTextInput) {
+          currentConfig.processingErrorText = processingErrorTextInput.value;
+        }
+        if (customProcessingUIToggle) {
+          currentConfig.customProcessingUI = customProcessingUIToggle.checked;
+        }
+
+        // Recreate config with new values
+        config = createConfig();
+
+        configStatus.textContent = "Configuration applied successfully!";
+        configStatus.style.color = "#10b981";
+
+        // Save to localStorage for persistence
+        localStorage.setItem("voiceDemoClientToken", clientToken);
+        localStorage.setItem("voiceDemoAgentId", agentId);
+        localStorage.setItem(
+          "voiceDemoVoiceInputProvider",
+          currentConfig.voiceInputProvider,
+        );
+        localStorage.setItem(
+          "voiceDemoVoiceOutputProvider",
+          currentConfig.voiceOutputProvider,
+        );
+        localStorage.setItem("voiceDemoTtsBrowserFallback", currentConfig.ttsBrowserFallback ? "true" : "false");
+        localStorage.setItem("voiceDemoTtsVoice", currentConfig.ttsVoice);
+        localStorage.setItem(
+          "voiceDemoTtsRate",
+          currentConfig.ttsRate.toString(),
+        );
+        localStorage.setItem(
+          "voiceDemoTtsPitch",
+          currentConfig.ttsPitch.toString(),
+        );
+        localStorage.setItem("voiceDemoPauseDuration", currentConfig.pauseDuration.toString());
+        localStorage.setItem("voiceDemoSilenceThreshold", currentConfig.silenceThreshold.toString());
+        localStorage.setItem("voiceDemoProcessingText", currentConfig.processingText);
+        localStorage.setItem("voiceDemoProcessingErrorText", currentConfig.processingErrorText);
+        localStorage.setItem("voiceDemoCustomProcessingUI", currentConfig.customProcessingUI ? "true" : "false");
+
+        console.log("Configuration updated:", currentConfig);
+        console.log("New config:", config);
+        console.log("FlowId for client init:", config.flowId);
+
+        // Reinitialize widget with new configuration
+        try {
+          // Check if widget container exists before reinitializing
+          const widgetContainer = document.getElementById("agent-widget");
+          if (!widgetContainer) {
+            throw new Error(
+              "Widget container not found. Please refresh the page.",
+            );
+          }
+
+          await initWidget();
+          configStatus.textContent =
+            "Configuration applied and widget reinitialized!";
+        } catch (error) {
+          console.error("Failed to reinitialize widget:", error);
+          configStatus.textContent =
+            "Configuration applied, but widget initialization failed. See console.";
+          configStatus.style.color = "#f59e0b";
+        }
+      }
+
+      // Load saved configuration from localStorage
+      function loadSavedConfiguration() {
+        const clientTokenInput = document.getElementById("clientTokenInput");
+        const agentIdInput = document.getElementById("agentIdInput");
+        const voiceInputProviderSelect =
+          document.getElementById("voiceInputProvider");
+        const voiceOutputProviderSelect = document.getElementById(
+          "voiceOutputProvider",
+        );
+        const ttsVoiceInput = document.getElementById("ttsVoice");
+        const ttsRateSlider = document.getElementById("ttsRate");
+        const ttsPitchSlider = document.getElementById("ttsPitch");
+
+        const savedClientToken = localStorage.getItem("voiceDemoClientToken");
+        const savedAgentId = localStorage.getItem("voiceDemoAgentId");
+        const savedVoiceInputProvider = localStorage.getItem(
+          "voiceDemoVoiceInputProvider",
+        );
+        const savedVoiceOutputProvider = localStorage.getItem(
+          "voiceDemoVoiceOutputProvider",
+        );
+        const savedTtsBrowserFallback = localStorage.getItem("voiceDemoTtsBrowserFallback");
+        const savedTtsVoice = localStorage.getItem("voiceDemoTtsVoice");
+        const savedTtsRate = localStorage.getItem("voiceDemoTtsRate");
+        const savedTtsPitch = localStorage.getItem("voiceDemoTtsPitch");
+
+        if (savedClientToken) {
+          clientTokenInput.value = savedClientToken;
+          currentConfig.clientToken = savedClientToken;
+        }
+
+        if (savedAgentId) {
+          agentIdInput.value = savedAgentId;
+          currentConfig.agentId = savedAgentId;
+        }
+
+        if (savedVoiceInputProvider && voiceInputProviderSelect) {
+          voiceInputProviderSelect.value = savedVoiceInputProvider;
+          currentConfig.voiceInputProvider = savedVoiceInputProvider;
+        }
+
+        if (savedVoiceOutputProvider && voiceOutputProviderSelect) {
+          voiceOutputProviderSelect.value = savedVoiceOutputProvider;
+          currentConfig.voiceOutputProvider = savedVoiceOutputProvider;
+        }
+
+        const ttsBrowserFallbackCheckbox = document.getElementById("ttsBrowserFallback");
+        if (savedTtsBrowserFallback && ttsBrowserFallbackCheckbox) {
+          const isChecked = savedTtsBrowserFallback === "true";
+          ttsBrowserFallbackCheckbox.checked = isChecked;
+          currentConfig.ttsBrowserFallback = isChecked;
+        }
+
+        if (savedTtsVoice && ttsVoiceInput) {
+          ttsVoiceInput.value = savedTtsVoice;
+          currentConfig.ttsVoice = savedTtsVoice;
+        }
+
+        if (savedTtsRate && ttsRateSlider) {
+          ttsRateSlider.value = savedTtsRate;
+          document.getElementById("ttsRateValue").textContent = savedTtsRate;
+          currentConfig.ttsRate = parseFloat(savedTtsRate);
+        }
+
+        if (savedTtsPitch && ttsPitchSlider) {
+          ttsPitchSlider.value = savedTtsPitch;
+          document.getElementById("ttsPitchValue").textContent = savedTtsPitch;
+          currentConfig.ttsPitch = parseFloat(savedTtsPitch);
+        }
+
+        // Restore silence detection and processing text settings
+        const savedPauseDuration = localStorage.getItem("voiceDemoPauseDuration");
+        const savedSilenceThreshold = localStorage.getItem("voiceDemoSilenceThreshold");
+        const savedProcessingText = localStorage.getItem("voiceDemoProcessingText");
+        const savedProcessingErrorText = localStorage.getItem("voiceDemoProcessingErrorText");
+        const savedCustomProcessingUI = localStorage.getItem("voiceDemoCustomProcessingUI");
+
+        const pauseDurationInput = document.getElementById("pauseDurationInput");
+        const silenceThresholdInput = document.getElementById("silenceThresholdInput");
+        const processingTextInput = document.getElementById("processingTextInput");
+        const processingErrorTextInput = document.getElementById("processingErrorTextInput");
+        const customProcessingUIToggle = document.getElementById("customProcessingUIToggle");
+
+        if (savedPauseDuration && pauseDurationInput) {
+          pauseDurationInput.value = savedPauseDuration;
+          currentConfig.pauseDuration = parseInt(savedPauseDuration, 10);
+        }
+        if (savedSilenceThreshold && silenceThresholdInput) {
+          silenceThresholdInput.value = savedSilenceThreshold;
+          currentConfig.silenceThreshold = parseFloat(savedSilenceThreshold);
+        }
+        if (savedProcessingText && processingTextInput) {
+          processingTextInput.value = savedProcessingText;
+          currentConfig.processingText = savedProcessingText;
+        }
+        if (savedProcessingErrorText && processingErrorTextInput) {
+          processingErrorTextInput.value = savedProcessingErrorText;
+          currentConfig.processingErrorText = savedProcessingErrorText;
+        }
+        if (savedCustomProcessingUI && customProcessingUIToggle) {
+          customProcessingUIToggle.checked = savedCustomProcessingUI === "true";
+          currentConfig.customProcessingUI = savedCustomProcessingUI === "true";
+        }
+
+        // Show/hide TTS options based on saved voice output provider
+        const ttsOptionsDiv = document.getElementById("ttsOptions");
+        if (ttsOptionsDiv && currentConfig.voiceOutputProvider !== "none") {
+          ttsOptionsDiv.style.display = "block";
+        }
+        // Show browserFallback option only for Runtype TTS provider
+        const ttsBrowserFallbackOptionLoad = document.getElementById("ttsBrowserFallbackOption");
+        if (ttsBrowserFallbackOptionLoad && currentConfig.voiceOutputProvider === "runtype") {
+          ttsBrowserFallbackOptionLoad.style.display = "block";
+        }
+
+        // Recreate config with loaded values
+        config = createConfig();
+
+        if (savedClientToken || savedAgentId) {
+          const configStatus = document.getElementById("configStatus");
+          configStatus.textContent = "Loaded saved configuration";
+          configStatus.style.color = "#10b981";
+        }
+      }
+
+      // Voice provider instance
+      let voiceProvider = null;
+      let widgetSession = null;
+
+      // Initialize the widget
+      async function initWidget() {
+        try {
+          // Initialize UI elements
+          statusIndicator = document.querySelector(".status-indicator");
+          statusText = document.getElementById("status-text");
+          toggleVoiceBtn = document.getElementById("toggle-voice");
+          testConnectionBtn = document.getElementById("test-connection");
+          voiceFeedback = document.getElementById("voice-feedback");
+          transcriptionResults = document.getElementById(
+            "transcription-results",
+          );
+
+          // Check if all required elements exist
+          if (
+            !statusIndicator ||
+            !statusText ||
+            !toggleVoiceBtn ||
+            !testConnectionBtn ||
+            !voiceFeedback ||
+            !transcriptionResults
+          ) {
+            console.error("Missing required UI elements");
+            const missingElements = [];
+            if (!statusIndicator) missingElements.push(".status-indicator");
+            if (!statusText) missingElements.push("#status-text");
+            if (!toggleVoiceBtn) missingElements.push("#toggle-voice");
+            if (!testConnectionBtn) missingElements.push("#test-connection");
+            if (!voiceFeedback) missingElements.push("#voice-feedback");
+            if (!transcriptionResults)
+              missingElements.push("#transcription-results");
+            console.error("Missing elements:", missingElements.join(", "));
+
+            if (voiceFeedback) {
+              voiceFeedback.textContent =
+                "Missing required UI elements. Check console for details.";
+              voiceFeedback.style.color = "#ef4444";
+            }
+            return;
+          }
+
+          // Validate configuration
+          if (
+            !currentConfig.clientToken ||
+            currentConfig.clientToken === "REPLACE_WITH_YOUR_CLIENT_TOKEN"
+          ) {
+            voiceFeedback.textContent =
+              "Please set clientToken in the configuration section above";
+            voiceFeedback.style.color = "#ef4444";
+            console.error("Configuration error: clientToken not set");
+            return;
+          }
+
+          if (
+            !currentConfig.agentId ||
+            currentConfig.agentId === "REPLACE_WITH_YOUR_AGENT_ID"
+          ) {
+            voiceFeedback.textContent =
+              "Please set agentId in the configuration section above";
+            voiceFeedback.style.color = "#ef4444";
+            console.error("Configuration error: agentId not set");
+            return;
+          }
+
+          // Check if voice is supported
+          const voiceSupported = isVoiceSupported(config.voiceRecognition);
+          console.log("Voice supported:", voiceSupported);
+
+          if (!voiceSupported) {
+            voiceFeedback.textContent =
+              "Voice not supported in this browser. Using text input only.";
+            voiceFeedback.style.color = "#f59e0b";
+          }
+
+          // Check if widget container exists
+          const widgetContainer = document.getElementById("agent-widget");
+          if (!widgetContainer) {
+            throw new Error("Widget container element not found");
+          }
+
+          // Clean up existing widget and ensure proper structure
+          widgetContainer.innerHTML = ""; // Clear any existing content
+
+          // Create a fresh div inside the container for the widget to mount to
+          const mountPoint = document.createElement("div");
+          mountPoint.style.height = "100%";
+          widgetContainer.appendChild(mountPoint);
+
+          // Initialize the widget
+          const widget = await initAgentWidget({
+            target: widgetContainer,
+            useShadowDom: false,
+            config: config,
+            onReady: () => {
+              console.log("Widget ready, setting up voice...");
+              setupVoiceInterface();
+            },
+          });
+
+          widgetSession = widget.session;
+
+          widget.on("error", (error) => {
+            console.error("Widget error:", error);
+            updateStatus("error", "Widget error: " + error.message);
+          });
+        } catch (error) {
+          console.error("Failed to initialize widget:", error);
+          updateStatus("error", "Initialization failed: " + error.message);
+        }
+
+        // Set up voice interface
+        function setupVoiceInterface() {
+          try {
+         // Create voice provider
+         try {
+           // Ensure we always use the backend host, not the Vite dev server
+           const isLocalhost = window.location.hostname.includes("localhost");
+           const backendHost = isLocalhost ? "localhost:8787" : "api.runtype.com";
+           
+           voiceProvider = createVoiceProvider({
+             type: currentConfig.voiceInputProvider,
+             runtype:
+               currentConfig.voiceInputProvider === "runtype"
+                 ? {
+                     agentId: currentConfig.agentId,
+                     clientToken: currentConfig.clientToken,
+                     host: backendHost, // Always use backend host
+                   }
+                 : undefined,
+                browser:
+                  currentConfig.voiceInputProvider === "browser"
+                    ? { language: "en-US" }
+                    : undefined,
+              });
+            } catch (error) {
+              console.error("Failed to create voice provider:", error);
+              updateStatus(
+                "error",
+                "Voice provider creation failed: " + error.message,
+              );
+              voiceFeedback.textContent =
+                "Voice provider creation failed: " + error.message;
+              voiceFeedback.style.color = "#ef4444";
+              return;
+            }
+
+            // Set up event handlers
+            voiceProvider.onResult((result) => {
+              console.log("Voice result:", result);
+
+              // Show transcription in sidebar
+              if (transcriptionResults) {
+                const resultElement = document.createElement("div");
+                resultElement.style.marginBottom = "0.5rem";
+                resultElement.style.padding = "0.5rem";
+                resultElement.style.background = "rgba(56, 189, 248, 0.1)";
+                resultElement.style.borderLeft = "3px solid #38bdf8";
+                resultElement.innerHTML = `<strong>You:</strong> ${result.transcript || result.text}`;
+                transcriptionResults.prepend(resultElement);
+              }
+
+              // The widget session handles injecting both the user transcript and agent
+              // response into the chat for the Runtype provider — no sendMessage needed.
+
+              updateStatus("idle", "Transcription received");
+            });
+
+            voiceProvider.onError((error) => {
+              console.error("Voice error:", error);
+              updateStatus("error", "Voice error: " + error.message);
+              voiceFeedback.textContent = error.message;
+              voiceFeedback.style.color = "#ef4444";
+            });
+
+            voiceProvider.onStatusChange((status) => {
+              console.log("Voice status:", status);
+              updateStatus(status, getStatusText(status));
+
+              if (status === "listening") {
+                toggleVoiceBtn.textContent = "Stop Listening";
+                toggleVoiceBtn.classList.add("listening");
+                voiceFeedback.textContent = "Listening... Speak now";
+                voiceFeedback.style.color = "#f59e0b";
+              } else {
+                toggleVoiceBtn.textContent = "Start Listening";
+                toggleVoiceBtn.classList.remove("listening");
+              }
+            });
+
+            // Enable buttons
+            toggleVoiceBtn.disabled = false;
+            testConnectionBtn.disabled = false;
+
+            updateStatus("connected", "Ready to connect");
+            voiceFeedback.textContent = 'Click "Start Listening" to begin';
+            voiceFeedback.style.color = "#10b981";
+
+            // Event listeners
+            toggleVoiceBtn.addEventListener("click", toggleVoice);
+            testConnectionBtn.addEventListener("click", testConnection);
+          } catch (error) {
+            console.error("Failed to setup voice:", error);
+            updateStatus("error", "Setup failed: " + error.message);
+            voiceFeedback.textContent = "Voice setup failed: " + error.message;
+            voiceFeedback.style.color = "#ef4444";
+          }
+        }
+      }
+
+      // Update connection status UI
+      function updateStatus(status, text) {
+        statusText.textContent = text;
+
+        // Update indicator
+        statusIndicator.className = "status-indicator " + status;
+
+        console.log(`Status: ${status} - ${text}`);
+      }
+
+      function getStatusText(status) {
+        const texts = {
+          disconnected: "Disconnected",
+          connected: "Connected",
+          listening: "Listening...",
+          processing: "Processing...",
+          error: "Error occurred",
+          idle: "Ready",
+        };
+        return texts[status] || status;
+      }
+
+      // Toggle voice listening
+      async function toggleVoice() {
+        if (!voiceProvider) {
+          voiceFeedback.textContent = "Voice provider not initialized";
+          voiceFeedback.style.color = "#ef4444";
+          return;
+        }
+
+        try {
+          if (toggleVoiceBtn.textContent.includes("Start")) {
+            // Start listening
+            await voiceProvider.connect();
+            await voiceProvider.startListening();
+          } else {
+            // Stop listening
+            await voiceProvider.stopListening();
+          }
+        } catch (error) {
+          console.error("Failed to toggle voice:", error);
+          voiceFeedback.textContent = "Failed: " + error.message;
+          voiceFeedback.style.color = "#ef4444";
+          updateStatus("error", error.message);
+        }
+      }
+
+      // Test connection
+      async function testConnection() {
+        if (!voiceProvider) {
+          voiceFeedback.textContent = "Voice provider not initialized";
+          voiceFeedback.style.color = "#ef4444";
+          return;
+        }
+
+        try {
+          testConnectionBtn.disabled = true;
+          testConnectionBtn.textContent = "Testing...";
+          voiceFeedback.textContent = "Testing connection...";
+          voiceFeedback.style.color = "#f59e0b";
+
+          // Connect and immediately disconnect to test
+          await voiceProvider.connect();
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await voiceProvider.disconnect();
+
+          voiceFeedback.textContent = "Connection test successful!";
+          voiceFeedback.style.color = "#10b981";
+          updateStatus("connected", "Connection verified");
+        } catch (error) {
+          console.error("Connection test failed:", error);
+          voiceFeedback.textContent =
+            "Connection test failed: " + error.message;
+          voiceFeedback.style.color = "#ef4444";
+          updateStatus("error", "Connection failed");
+        } finally {
+          testConnectionBtn.disabled = false;
+          testConnectionBtn.textContent = "Test Connection";
+        }
+      }
+
+      // Initialize on page load
+      document.addEventListener("DOMContentLoaded", () => {
+        loadSavedConfiguration();
+        initWidget();
+
+        // Setup event listeners for configuration
+        const applyConfigBtn = document.getElementById("applyConfigBtn");
+        if (applyConfigBtn) {
+          applyConfigBtn.addEventListener("click", applyConfiguration);
+        }
+
+        // Setup TTS options toggle
+        const voiceOutputProviderSelect = document.getElementById(
+          "voiceOutputProvider",
+        );
+        const ttsOptionsDiv = document.getElementById("ttsOptions");
+
+        const ttsBrowserFallbackOption = document.getElementById("ttsBrowserFallbackOption");
+        if (voiceOutputProviderSelect && ttsOptionsDiv) {
+          voiceOutputProviderSelect.addEventListener("change", function () {
+            if (this.value !== "none") {
+              ttsOptionsDiv.style.display = "block";
+            } else {
+              ttsOptionsDiv.style.display = "none";
+            }
+            // Show browserFallback option only for Runtype provider
+            if (ttsBrowserFallbackOption) {
+              ttsBrowserFallbackOption.style.display = this.value === "runtype" ? "block" : "none";
+            }
+          });
+        }
+
+        // Setup TTS slider value displays
+        const ttsRateSlider = document.getElementById("ttsRate");
+        const ttsRateValue = document.getElementById("ttsRateValue");
+        const ttsPitchSlider = document.getElementById("ttsPitch");
+        const ttsPitchValue = document.getElementById("ttsPitchValue");
+
+        if (ttsRateSlider && ttsRateValue) {
+          ttsRateSlider.addEventListener("input", function () {
+            ttsRateValue.textContent = this.value;
+            currentConfig.ttsRate = parseFloat(this.value);
+          });
+        }
+
+        if (ttsPitchSlider && ttsPitchValue) {
+          ttsPitchSlider.addEventListener("input", function () {
+            ttsPitchValue.textContent = this.value;
+            currentConfig.ttsPitch = parseFloat(this.value);
+          });
+        }
+
+        // Populate TTS voice picker dropdown with available voices
+        const ttsVoiceSelect = document.getElementById("ttsVoice");
+
+        function populateVoiceList() {
+          if (!ttsVoiceSelect) return;
+          const voices = window.speechSynthesis.getVoices();
+          if (voices.length === 0) return;
+
+          // Clear existing options except the auto-detect default
+          while (ttsVoiceSelect.options.length > 1) {
+            ttsVoiceSelect.remove(1);
+          }
+
+          // Group voices by language
+          const grouped = {};
+          voices.forEach(function (voice) {
+            const lang = voice.lang || "unknown";
+            if (!grouped[lang]) grouped[lang] = [];
+            grouped[lang].push(voice);
+          });
+
+          // English voices first, then others alphabetically
+          const langKeys = Object.keys(grouped).sort(function (a, b) {
+            const aEn = a.startsWith("en");
+            const bEn = b.startsWith("en");
+            if (aEn && !bEn) return -1;
+            if (!aEn && bEn) return 1;
+            return a.localeCompare(b);
+          });
+
+          langKeys.forEach(function (lang) {
+            const optgroup = document.createElement("optgroup");
+            optgroup.label = lang;
+            grouped[lang].forEach(function (voice) {
+              const option = document.createElement("option");
+              option.value = voice.name;
+              option.textContent = voice.name + (voice.localService ? "" : " ☁️");
+              option.title = voice.localService ? "Local voice" : "Remote/cloud voice";
+              optgroup.appendChild(option);
+            });
+            ttsVoiceSelect.appendChild(optgroup);
+          });
+
+          // Restore saved voice selection (voices may load after config restore)
+          if (currentConfig.ttsVoice) {
+            ttsVoiceSelect.value = currentConfig.ttsVoice;
+          }
+        }
+
+        // Voices load asynchronously in Chrome
+        populateVoiceList();
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+          window.speechSynthesis.onvoiceschanged = populateVoiceList;
+        }
+
+        // Test voice button
+        const ttsTestVoiceBtn = document.getElementById("ttsTestVoice");
+        if (ttsTestVoiceBtn) {
+          ttsTestVoiceBtn.addEventListener("click", function () {
+            const synth = window.speechSynthesis;
+            synth.cancel();
+            const utterance = new SpeechSynthesisUtterance(
+              "Hello! This is a test of the text-to-speech voice."
+            );
+            const voices = synth.getVoices();
+            const selectedName = ttsVoiceSelect ? ttsVoiceSelect.value : "";
+            if (selectedName) {
+              const match = voices.find(function (v) { return v.name === selectedName; });
+              if (match) utterance.voice = match;
+            } else {
+              // Auto-detect: use same priority as the SDK
+              const preferred = [
+                "Microsoft Jenny Online (Natural) - English (United States)",
+                "Microsoft Aria Online (Natural) - English (United States)",
+                "Google US English",
+                "Google UK English Female",
+                "Ava (Premium)", "Evan (Enhanced)", "Samantha (Enhanced)",
+                "Samantha", "Daniel", "Karen",
+                "Microsoft David Desktop - English (United States)",
+                "Microsoft Zira Desktop - English (United States)"
+              ];
+              for (var i = 0; i < preferred.length; i++) {
+                var m = voices.find(function (v) { return v.name === preferred[i]; });
+                if (m) { utterance.voice = m; break; }
+              }
+              if (!utterance.voice) {
+                var eng = voices.find(function (v) { return v.lang.startsWith("en"); });
+                if (eng) utterance.voice = eng;
+              }
+            }
+            utterance.rate = currentConfig.ttsRate;
+            utterance.pitch = currentConfig.ttsPitch;
+            setTimeout(function () { synth.speak(utterance); }, 50);
+          });
+        }
+      });
+
+      // Log to console
+      console.log("Voice Integration Demo loaded");
+      console.log(
+        "Replace clientToken and agentId in the config to test with your agent",
+      );
+    </script>
+  </body>
+</html>

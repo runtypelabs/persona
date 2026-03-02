@@ -678,6 +678,10 @@ export type AgentWidgetStatusIndicatorConfig = {
 export type AgentWidgetVoiceRecognitionConfig = {
   enabled?: boolean;
   pauseDuration?: number;
+  /** Text shown in the user message placeholder while voice is being processed. Default: "🎤 Processing voice..." */
+  processingText?: string;
+  /** Text shown in the assistant message if voice processing fails. Default: "Voice processing failed. Please try again." */
+  processingErrorText?: string;
   iconName?: string;
   iconSize?: string;
   iconColor?: string;
@@ -693,7 +697,153 @@ export type AgentWidgetVoiceRecognitionConfig = {
   recordingBorderColor?: string;
   showRecordingIndicator?: boolean;
   autoResume?: boolean | "assistant";
+  
+  // Voice provider configuration
+  provider?: {
+    type: 'browser' | 'runtype' | 'custom';
+    browser?: {
+      language?: string;
+      continuous?: boolean;
+    };
+    runtype?: {
+      agentId: string;
+      clientToken: string;
+      host?: string;
+      voiceId?: string;
+      /** Duration of silence (ms) before auto-stopping recording. Default: 2000 */
+      pauseDuration?: number;
+      /** RMS volume threshold below which counts as silence. Default: 0.01 */
+      silenceThreshold?: number;
+    };
+    custom?: any;
+  };
 };
+
+/**
+ * Text-to-speech configuration for reading assistant messages aloud.
+ * Currently supports the Web Speech API (`speechSynthesis`).
+ *
+ * @example
+ * ```typescript
+ * textToSpeech: {
+ *   enabled: true,
+ *   provider: 'browser',
+ *   voice: 'Google US English',
+ *   rate: 1.2,
+ *   pitch: 1.0
+ * }
+ * ```
+ */
+export type TextToSpeechConfig = {
+  /** Enable text-to-speech for assistant messages */
+  enabled: boolean;
+  /**
+   * TTS provider.
+   * - `'browser'` — Use the Web Speech API for all assistant messages (default).
+   * - `'runtype'` — Server handles TTS for voice interactions.
+   *   Set `browserFallback: true` to also speak text-typed responses via the browser.
+   */
+  provider?: 'browser' | 'runtype';
+  /**
+   * When `provider` is `'runtype'`, fall back to browser TTS for assistant
+   * messages that the server didn't already speak (e.g. text-typed messages).
+   * Has no effect when provider is `'browser'` (browser TTS is always used).
+   * @default false
+   */
+  browserFallback?: boolean;
+  /** Voice name to use for browser TTS (e.g., 'Google US English'). If not found, uses auto-detect. */
+  voice?: string;
+  /**
+   * Custom voice picker called when `voice` is not set.
+   * Receives the full list of available `SpeechSynthesisVoice` objects and
+   * should return the one to use. If not provided, the SDK auto-detects the
+   * best English voice.
+   *
+   * @example
+   * ```typescript
+   * pickVoice: (voices) => voices.find(v => v.lang === 'fr-FR') ?? voices[0]
+   * ```
+   */
+  pickVoice?: (voices: SpeechSynthesisVoice[]) => SpeechSynthesisVoice;
+  /** Speech rate (0.1 - 10). Default: 1 */
+  rate?: number;
+  /** Speech pitch (0 - 2). Default: 1 */
+  pitch?: number;
+};
+
+// ============================================================================
+// Voice Provider Types
+// ============================================================================
+
+/**
+ * Voice recognition result with transcript and optional audio
+ */
+export type VoiceResult = {
+  text: string;
+  transcript?: string;
+  audio?: {
+    base64: string;
+    format: 'wav' | 'mp3' | 'ogg' | 'webm';
+    sampleRate: number;
+    duration: number;
+  };
+  confidence?: number;
+  provider: 'runtype' | 'browser' | 'custom';
+};
+
+/**
+ * Voice provider status states
+ */
+export type VoiceStatus = 
+  | 'disconnected'
+  | 'connected'
+  | 'listening'
+  | 'processing'
+  | 'error'
+  | 'idle';
+
+/**
+ * Voice provider configuration
+ * Determines which voice provider to use and its specific settings
+ */
+export type VoiceConfig = {
+  type: 'browser' | 'runtype' | 'custom';
+  browser?: {
+    language?: string;
+    continuous?: boolean;
+  };
+  runtype?: {
+    agentId: string;
+    clientToken: string;
+    host?: string;
+    voiceId?: string;
+    /** Duration of silence (ms) before auto-stopping recording. Default: 2000 */
+    pauseDuration?: number;
+    /** RMS volume threshold below which counts as silence. Default: 0.01 */
+    silenceThreshold?: number;
+  };
+  custom?: any;
+};
+
+/**
+ * Voice provider interface
+ * Abstract interface for all voice providers in the Persona SDK
+ */
+export interface VoiceProvider {
+  type: 'browser' | 'runtype' | 'custom';
+
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  startListening(): Promise<void>;
+  stopListening(): Promise<void>;
+
+  onResult(callback: (result: VoiceResult) => void): void;
+  onError(callback: (error: Error) => void): void;
+  onStatusChange(callback: (status: VoiceStatus) => void): void;
+
+  /** Register a callback fired when recording stops and audio is about to be sent */
+  onProcessingStart?(callback: () => void): void;
+}
 
 /**
  * Configuration for tool approval bubbles.
@@ -1831,6 +1981,23 @@ export type AgentWidgetConfig = {
   sendButton?: AgentWidgetSendButtonConfig;
   statusIndicator?: AgentWidgetStatusIndicatorConfig;
   voiceRecognition?: AgentWidgetVoiceRecognitionConfig;
+  /**
+   * Text-to-speech configuration for reading assistant messages aloud.
+   * Uses the browser's Web Speech API (`speechSynthesis`).
+   *
+   * @example
+   * ```typescript
+   * config: {
+   *   textToSpeech: {
+   *     enabled: true,
+   *     voice: 'Google US English',
+   *     rate: 1.0,
+   *     pitch: 1.0
+   *   }
+   * }
+   * ```
+   */
+  textToSpeech?: TextToSpeechConfig;
   toolCall?: AgentWidgetToolCallConfig;
   /**
    * Configuration for tool approval bubbles.
@@ -2253,6 +2420,19 @@ export type AgentWidgetMessage = {
   approval?: AgentWidgetApproval;
   viaVoice?: boolean;
   /**
+   * Set to `true` on placeholder messages injected during Runtype voice processing.
+   * Use this in `messageTransform` to detect and customize voice processing placeholders.
+   *
+   * @example
+   * messageTransform: ({ text, message }) => {
+   *   if (message.voiceProcessing && message.role === 'user') {
+   *     return '<div class="my-voice-spinner">Transcribing...</div>';
+   *   }
+   *   return text;
+   * }
+   */
+  voiceProcessing?: boolean;
+  /**
    * Raw structured payload for this message (e.g., JSON action response).
    * Populated automatically when structured parsers run.
    */
@@ -2357,6 +2537,12 @@ export type InjectMessageOptions = {
    * @default false
    */
   streaming?: boolean;
+
+  /**
+   * Mark this message as a voice processing placeholder.
+   * Consumers can detect this in `messageTransform` to render custom UI.
+   */
+  voiceProcessing?: boolean;
 };
 
 /**
