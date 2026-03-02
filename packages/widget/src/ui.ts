@@ -19,7 +19,8 @@ import {
   InjectUserMessageOptions,
   InjectSystemMessageOptions,
   LoadingIndicatorRenderContext,
-  IdleIndicatorRenderContext
+  IdleIndicatorRenderContext,
+  VoiceStatus
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
@@ -1306,7 +1307,15 @@ export const createAgentExperience = (
       setTimeout(() => {
         if (!voiceState.active) {
           voiceState.manuallyDeactivated = false;
-          startVoiceRecognition("restore");
+          if (config.voiceRecognition?.provider?.type === 'runtype') {
+            session.toggleVoice().then(() => {
+              voiceState.active = session.isVoiceActive();
+              emitVoiceState("restore");
+              if (session.isVoiceActive()) applyRuntypeMicRecordingStyles();
+            });
+          } else {
+            startVoiceRecognition("restore");
+          }
         }
       }, 1000);
     }
@@ -2042,8 +2051,29 @@ export const createAgentExperience = (
       if (!streaming) {
         scheduleAutoScroll(true);
       }
+    },
+    onVoiceStatusChanged(status: VoiceStatus) {
+      // When Runtype provider auto-stops (e.g. silence detection), update mic button
+      if (config.voiceRecognition?.provider?.type === 'runtype' && status !== 'listening') {
+        voiceState.active = false;
+        removeRuntypeMicRecordingStyles();
+        emitVoiceState("system");
+        persistVoiceMetadata();
+      }
     }
   });
+
+  // Setup Runtype voice provider when configured (connects WebSocket for server-side STT)
+  if (config.voiceRecognition?.provider?.type === 'runtype') {
+    try {
+      session.setupVoice();
+    } catch (err) {
+      if (typeof console !== 'undefined') {
+        // eslint-disable-next-line no-console
+        console.warn('[AgentWidget] Runtype voice setup failed:', err);
+      }
+    }
+  }
 
   // Pre-initialize client session when in client token mode so feedback works
   // before the user sends their first message (e.g. on restored/persisted messages)
@@ -2327,12 +2357,14 @@ export const createAgentExperience = (
 
   // Function to create mic button dynamically
   const createMicButton = (voiceConfig: AgentWidgetConfig['voiceRecognition'], sendButtonConfig: AgentWidgetConfig['sendButton']): { micButton: HTMLButtonElement; micButtonWrapper: HTMLElement } | null => {
-    const hasSpeechRecognition = 
-      typeof window !== 'undefined' && 
-      (typeof (window as any).webkitSpeechRecognition !== 'undefined' || 
+    const hasSpeechRecognition =
+      typeof window !== 'undefined' &&
+      (typeof (window as any).webkitSpeechRecognition !== 'undefined' ||
        typeof (window as any).SpeechRecognition !== 'undefined');
-    
-    if (!hasSpeechRecognition) return null;
+    const hasRuntypeProvider = voiceConfig?.provider?.type === 'runtype';
+    const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider;
+
+    if (!hasVoiceInput) return null;
 
     const micButtonWrapper = createElement("div", "tvw-send-button-wrapper");
     const micButton = createElement(
@@ -2418,8 +2450,61 @@ export const createAgentExperience = (
     return { micButton, micButtonWrapper };
   };
 
+  // Helpers to apply/remove Runtype mic recording styles (mirrors start/stopVoiceRecognition)
+  const applyRuntypeMicRecordingStyles = () => {
+    if (!micButton) return;
+    originalMicStyles = {
+      backgroundColor: micButton.style.backgroundColor,
+      color: micButton.style.color,
+      borderColor: micButton.style.borderColor
+    };
+    const voiceConfig = config.voiceRecognition ?? {};
+    const recordingBackgroundColor = voiceConfig.recordingBackgroundColor ?? "#ef4444";
+    const recordingIconColor = voiceConfig.recordingIconColor;
+    const recordingBorderColor = voiceConfig.recordingBorderColor;
+    micButton.classList.add("tvw-voice-recording");
+    micButton.style.backgroundColor = recordingBackgroundColor;
+    if (recordingIconColor) {
+      micButton.style.color = recordingIconColor;
+      const svg = micButton.querySelector("svg");
+      if (svg) svg.setAttribute("stroke", recordingIconColor);
+    }
+    if (recordingBorderColor) micButton.style.borderColor = recordingBorderColor;
+    micButton.setAttribute("aria-label", "Stop voice recognition");
+  };
+  const removeRuntypeMicRecordingStyles = () => {
+    if (!micButton) return;
+    micButton.classList.remove("tvw-voice-recording");
+    if (originalMicStyles) {
+      micButton.style.backgroundColor = originalMicStyles.backgroundColor ?? "";
+      micButton.style.color = originalMicStyles.color ?? "";
+      micButton.style.borderColor = originalMicStyles.borderColor ?? "";
+      const svg = micButton.querySelector("svg");
+      if (svg) svg.setAttribute("stroke", originalMicStyles.color || "currentColor");
+      originalMicStyles = null;
+    }
+    micButton.setAttribute("aria-label", "Start voice recognition");
+  };
+
   // Wire up mic button click handler
   const handleMicButtonClick = () => {
+    // Runtype provider: use session.toggleVoice() (WebSocket-based STT)
+    if (config.voiceRecognition?.provider?.type === 'runtype') {
+      session.toggleVoice().then(() => {
+        voiceState.active = session.isVoiceActive();
+        voiceState.manuallyDeactivated = !session.isVoiceActive();
+        persistVoiceMetadata();
+        emitVoiceState("user");
+        if (session.isVoiceActive()) {
+          applyRuntypeMicRecordingStyles();
+        } else {
+          removeRuntypeMicRecordingStyles();
+        }
+      });
+      return;
+    }
+
+    // Browser provider: use SpeechRecognition
     if (isRecording) {
       // Stop recording and submit
       const finalValue = textarea.value.trim();
@@ -2443,7 +2528,12 @@ export const createAgentExperience = (
     micButton.addEventListener("click", handleMicButtonClick);
 
     destroyCallbacks.push(() => {
-      stopVoiceRecognition("system");
+      if (config.voiceRecognition?.provider?.type === 'runtype') {
+        if (session.isVoiceActive()) session.toggleVoice();
+        removeRuntypeMicRecordingStyles();
+      } else {
+        stopVoiceRecognition("system");
+      }
       if (micButton) {
         micButton.removeEventListener("click", handleMicButtonClick);
       }
@@ -2458,7 +2548,15 @@ export const createAgentExperience = (
     }
     setTimeout(() => {
       if (!voiceState.active && !voiceState.manuallyDeactivated) {
-        startVoiceRecognition("auto");
+        if (config.voiceRecognition?.provider?.type === 'runtype') {
+          session.toggleVoice().then(() => {
+            voiceState.active = session.isVoiceActive();
+            emitVoiceState("auto");
+            if (session.isVoiceActive()) applyRuntypeMicRecordingStyles();
+          });
+        } else {
+          startVoiceRecognition("auto");
+        }
       }
     }, 600);
   });
@@ -3457,8 +3555,11 @@ export const createAgentExperience = (
         typeof window !== 'undefined' &&
         (typeof (window as any).webkitSpeechRecognition !== 'undefined' ||
          typeof (window as any).SpeechRecognition !== 'undefined');
+      const hasRuntypeProvider =
+        config.voiceRecognition?.provider?.type === 'runtype';
+      const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider;
 
-      if (voiceRecognitionEnabled && hasSpeechRecognition) {
+      if (voiceRecognitionEnabled && hasVoiceInput) {
         // Create or update mic button
         if (!micButton || !micButtonWrapper) {
           // Create new mic button
@@ -3580,7 +3681,9 @@ export const createAgentExperience = (
         if (micButton && micButtonWrapper) {
           micButtonWrapper.style.display = "none";
           // Stop any active recording if disabling
-          if (isRecording) {
+          if (config.voiceRecognition?.provider?.type === 'runtype') {
+            if (session.isVoiceActive()) session.toggleVoice();
+          } else if (isRecording) {
             stopVoiceRecognition();
           }
         }
@@ -3969,22 +4072,40 @@ export const createAgentExperience = (
       return true;
     },
     startVoiceRecognition(): boolean {
-      if (isRecording || session.isStreaming()) return false;
-      
+      if (session.isStreaming()) return false;
+      if (config.voiceRecognition?.provider?.type === 'runtype') {
+        if (session.isVoiceActive()) return true;
+        if (!open && launcherEnabled) setOpenState(true, "system");
+        voiceState.manuallyDeactivated = false;
+        persistVoiceMetadata();
+        session.toggleVoice().then(() => {
+          voiceState.active = session.isVoiceActive();
+          emitVoiceState("user");
+          if (session.isVoiceActive()) applyRuntypeMicRecordingStyles();
+        });
+        return true;
+      }
+      if (isRecording) return true;
       const SpeechRecognitionClass = getSpeechRecognitionClass();
       if (!SpeechRecognitionClass) return false;
-      
-      // Auto-open widget if closed and launcher is enabled
-      if (!open && launcherEnabled) {
-        setOpenState(true, "system");
-      }
-      
+      if (!open && launcherEnabled) setOpenState(true, "system");
       voiceState.manuallyDeactivated = false;
       persistVoiceMetadata();
       startVoiceRecognition("user");
       return true;
     },
     stopVoiceRecognition(): boolean {
+      if (config.voiceRecognition?.provider?.type === 'runtype') {
+        if (!session.isVoiceActive()) return false;
+        session.toggleVoice().then(() => {
+          voiceState.active = false;
+          voiceState.manuallyDeactivated = true;
+          persistVoiceMetadata();
+          emitVoiceState("user");
+          removeRuntypeMicRecordingStyles();
+        });
+        return true;
+      }
       if (!isRecording) return false;
 
       voiceState.manuallyDeactivated = true;

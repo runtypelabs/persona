@@ -17,6 +17,18 @@ import {
   generateAssistantMessageId
 } from "./utils/message-id";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "./utils/content";
+import type {
+  VoiceProvider,
+  VoiceResult,
+  VoiceStatus,
+  VoiceConfig,
+  TextToSpeechConfig
+} from "./types";
+import {
+  createVoiceProvider,
+  createBestAvailableVoiceProvider,
+  isVoiceSupported
+} from "./voice";
 
 export type AgentWidgetSessionStatus =
   | "idle"
@@ -29,6 +41,7 @@ type SessionCallbacks = {
   onStatusChanged: (status: AgentWidgetSessionStatus) => void;
   onStreamingChanged: (streaming: boolean) => void;
   onError?: (error: Error) => void;
+  onVoiceStatusChanged?: (status: VoiceStatus) => void;
 };
 
 export class AgentWidgetSession {
@@ -44,6 +57,11 @@ export class AgentWidgetSession {
 
   // Agent execution state
   private agentExecution: AgentExecutionState | null = null;
+
+  // Voice support
+  private voiceProvider: VoiceProvider | null = null;
+  private voiceActive = false;
+  private voiceStatus: VoiceStatus = 'disconnected';
 
   constructor(
     private config: AgentWidgetConfig = {},
@@ -95,6 +113,237 @@ export class AgentWidgetSession {
    */
   public isAgentExecuting(): boolean {
     return this.agentExecution?.status === 'running';
+  }
+
+  /**
+   * Check if voice is supported
+   */
+  public isVoiceSupported(): boolean {
+    return isVoiceSupported(this.config.voiceRecognition?.provider);
+  }
+
+  /**
+   * Check if voice is currently active
+   */
+  public isVoiceActive(): boolean {
+    return this.voiceActive;
+  }
+
+  /**
+   * Get current voice status
+   */
+  public getVoiceStatus(): VoiceStatus {
+    return this.voiceStatus;
+  }
+
+  // Pending placeholder IDs for Runtype two-phase voice flow
+  private pendingVoiceUserMessageId: string | null = null;
+  private pendingVoiceAssistantMessageId: string | null = null;
+
+  // Track message IDs where the Runtype provider already played TTS audio
+  // so browser TTS doesn't double-speak them
+  private ttsSpokenMessageIds = new Set<string>();
+
+  /**
+   * Setup voice recognition with the given configuration
+   */
+  public setupVoice(config?: VoiceConfig) {
+    try {
+      const voiceConfig = config || this.getVoiceConfigFromConfig();
+      if (!voiceConfig) {
+        throw new Error('Voice configuration not provided');
+      }
+
+      this.voiceProvider = createVoiceProvider(voiceConfig);
+
+      // Read configurable text from widget config
+      const voiceRecognitionConfig = this.config.voiceRecognition ?? {};
+      const processingText = voiceRecognitionConfig.processingText ?? '\u{1F3A4} Processing voice...';
+      const processingErrorText = voiceRecognitionConfig.processingErrorText ?? 'Voice processing failed. Please try again.';
+
+      // Phase A: When recording stops and audio is about to be sent,
+      // inject placeholder messages and show typing indicator immediately.
+      // Placeholders are tagged with voiceProcessing=true so consumers can
+      // detect them in messageTransform and render custom UI.
+      if (this.voiceProvider.onProcessingStart) {
+        this.voiceProvider.onProcessingStart(() => {
+          // Inject user message placeholder
+          const userMsg = this.injectMessage({
+            role: 'user',
+            content: processingText,
+            streaming: false,
+            voiceProcessing: true
+          });
+          this.pendingVoiceUserMessageId = userMsg.id;
+
+          // Inject empty assistant message with streaming=true for typing indicator
+          const assistantMsg = this.injectMessage({
+            role: 'assistant',
+            content: '',
+            streaming: true,
+            voiceProcessing: true
+          });
+          this.pendingVoiceAssistantMessageId = assistantMsg.id;
+
+          // Trigger typing indicator in the UI
+          this.setStreaming(true);
+        });
+      }
+
+      // Phase B: When server responds with transcript + agent response,
+      // upsert the placeholder messages with actual content and clear voiceProcessing flag
+      this.voiceProvider.onResult((result) => {
+        if (result.provider === 'browser') {
+          // Browser STT: send transcript as a user message (agent runs via normal chat)
+          if (result.text && result.text.trim()) {
+            this.sendMessage(result.text, { viaVoice: true });
+          }
+        } else if (result.provider === 'runtype') {
+          // Runtype provider: agent already executed server-side, audio playback
+          // is handled by the provider itself. Update placeholders with actual content.
+          if (this.pendingVoiceUserMessageId && result.transcript?.trim()) {
+            this.upsertMessage({
+              id: this.pendingVoiceUserMessageId,
+              role: 'user',
+              content: result.transcript.trim(),
+              createdAt: new Date().toISOString(),
+              streaming: false,
+              voiceProcessing: false
+            });
+          } else if (result.transcript?.trim()) {
+            this.injectUserMessage({ content: result.transcript.trim() });
+          }
+
+          if (this.pendingVoiceAssistantMessageId && result.text?.trim()) {
+            this.upsertMessage({
+              id: this.pendingVoiceAssistantMessageId,
+              role: 'assistant',
+              content: result.text.trim(),
+              createdAt: new Date().toISOString(),
+              streaming: false,
+              voiceProcessing: false
+            });
+          } else if (result.text?.trim()) {
+            this.injectAssistantMessage({ content: result.text.trim() });
+          }
+
+          // If Runtype provider returned audio (server-side TTS), mark the
+          // assistant message as already spoken so browser TTS doesn't double-speak
+          if (result.audio?.base64) {
+            const spokenId = this.pendingVoiceAssistantMessageId
+              ?? [...this.messages].reverse().find(m => m.role === 'assistant')?.id;
+            if (spokenId) this.ttsSpokenMessageIds.add(spokenId);
+          }
+
+          // Clear streaming state and pending IDs
+          this.setStreaming(false);
+          this.pendingVoiceUserMessageId = null;
+          this.pendingVoiceAssistantMessageId = null;
+        }
+      });
+
+      this.voiceProvider.onError((error) => {
+        console.error('Voice error:', error);
+
+        // If error occurs while placeholders are pending, update assistant with error text
+        if (this.pendingVoiceAssistantMessageId) {
+          this.upsertMessage({
+            id: this.pendingVoiceAssistantMessageId,
+            role: 'assistant',
+            content: processingErrorText,
+            createdAt: new Date().toISOString(),
+            streaming: false,
+            voiceProcessing: false
+          });
+          this.setStreaming(false);
+          this.pendingVoiceUserMessageId = null;
+          this.pendingVoiceAssistantMessageId = null;
+        }
+      });
+
+      this.voiceProvider.onStatusChange((status) => {
+        this.voiceStatus = status;
+        this.voiceActive = status === 'listening';
+        this.callbacks.onVoiceStatusChanged?.(status);
+      });
+
+      this.voiceProvider.connect();
+
+    } catch (error) {
+      console.error('Failed to setup voice:', error);
+    }
+  }
+
+  /**
+   * Toggle voice recognition on/off
+   */
+  public async toggleVoice() {
+    if (!this.voiceProvider) {
+      console.error('Voice not configured');
+      return;
+    }
+
+    if (this.voiceActive) {
+      await this.voiceProvider.stopListening();
+    } else {
+      // Stop any in-progress TTS so the mic doesn't pick it up
+      this.stopSpeaking();
+      try {
+        await this.voiceProvider.startListening();
+      } catch (error) {
+        console.error('Failed to start voice:', error);
+      }
+    }
+  }
+
+  /**
+   * Cleanup voice resources
+   */
+  public cleanupVoice() {
+    if (this.voiceProvider) {
+      this.voiceProvider.disconnect();
+      this.voiceProvider = null;
+    }
+    this.voiceActive = false;
+    this.voiceStatus = 'disconnected';
+  }
+
+  /**
+   * Extract voice configuration from widget config
+   */
+  private getVoiceConfigFromConfig(): VoiceConfig | undefined {
+    if (!this.config.voiceRecognition?.provider) {
+      return undefined;
+    }
+    
+    const providerConfig = this.config.voiceRecognition.provider;
+    
+    switch (providerConfig.type) {
+      case 'runtype':
+        return {
+          type: 'runtype',
+          runtype: {
+            agentId: providerConfig.runtype?.agentId || '',
+            clientToken: providerConfig.runtype?.clientToken || '',
+            host: providerConfig.runtype?.host,
+            voiceId: providerConfig.runtype?.voiceId,
+            pauseDuration: providerConfig.runtype?.pauseDuration,
+            silenceThreshold: providerConfig.runtype?.silenceThreshold
+          }
+        };
+      
+      case 'browser':
+        return {
+          type: 'browser',
+          browser: {
+            language: providerConfig.browser?.language || 'en-US',
+            continuous: providerConfig.browser?.continuous
+          }
+        };
+      
+      default:
+        return undefined;
+    }
   }
 
   /**
@@ -267,7 +516,8 @@ export class AgentWidgetSession {
       id,
       createdAt,
       sequence,
-      streaming = false
+      streaming = false,
+      voiceProcessing
     } = options;
 
     // Generate appropriate ID based on role
@@ -288,7 +538,8 @@ export class AgentWidgetSession {
       streaming,
       // Only include optional fields if provided
       ...(llmContent !== undefined && { llmContent }),
-      ...(contentParts !== undefined && { contentParts })
+      ...(contentParts !== undefined && { contentParts }),
+      ...(voiceProcessing !== undefined && { voiceProcessing })
     };
 
     // Use upsert to handle both new messages and updates (streaming)
@@ -411,6 +662,7 @@ export class AgentWidgetSession {
     // Allow sending if there's text OR attachments
     if (!input && (!options?.contentParts || options.contentParts.length === 0)) return;
 
+    this.stopSpeaking();
     this.abortController?.abort();
 
     // Generate IDs for both user message and expected assistant response
@@ -682,6 +934,7 @@ export class AgentWidgetSession {
   }
 
   public clearMessages() {
+    this.stopSpeaking();
     this.abortController?.abort();
     this.abortController = null;
     this.messages = [];
@@ -756,8 +1009,127 @@ export class AgentWidgetSession {
 
   private setStreaming(streaming: boolean) {
     if (this.streaming === streaming) return;
+    const wasStreaming = this.streaming;
     this.streaming = streaming;
     this.callbacks.onStreamingChanged(streaming);
+
+    // Speak the latest assistant message when streaming completes
+    if (wasStreaming && !streaming) {
+      this.speakLatestAssistantMessage();
+    }
+  }
+
+  /**
+   * Speak the latest assistant message using the Web Speech API
+   * if text-to-speech is enabled in the config.
+   */
+  private speakLatestAssistantMessage() {
+    const ttsConfig = this.config.textToSpeech;
+    if (!ttsConfig?.enabled) return;
+
+    // Determine if browser TTS should fire:
+    // - provider 'browser' (or unset): always use browser TTS
+    // - provider 'runtype': only if browserFallback is enabled
+    const useBrowserTts =
+      !ttsConfig.provider ||
+      ttsConfig.provider === 'browser' ||
+      (ttsConfig.provider === 'runtype' && ttsConfig.browserFallback);
+    if (!useBrowserTts) return;
+
+    // Find the last assistant message with actual content
+    const lastAssistant = [...this.messages]
+      .reverse()
+      .find(m => m.role === 'assistant' && m.content && !m.voiceProcessing);
+
+    if (!lastAssistant) return;
+
+    // Skip if already spoken by Runtype provider's audio playback
+    if (this.ttsSpokenMessageIds.has(lastAssistant.id)) {
+      this.ttsSpokenMessageIds.delete(lastAssistant.id);
+      return;
+    }
+
+    const text = lastAssistant.content;
+    if (!text.trim()) return;
+
+    this.speak(text, ttsConfig);
+  }
+
+  /**
+   * Speak text using the Web Speech API.
+   * Cancels any in-progress speech before starting.
+   */
+  private speak(text: string, config: TextToSpeechConfig) {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const synth = window.speechSynthesis;
+    synth.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = synth.getVoices();
+
+    if (config.voice) {
+      const match = voices.find(v => v.name === config.voice);
+      if (match) utterance.voice = match;
+    } else if (voices.length > 0) {
+      // Use custom picker if provided, otherwise auto-detect
+      utterance.voice = config.pickVoice
+        ? config.pickVoice(voices)
+        : AgentWidgetSession.pickBestVoice(voices);
+    }
+
+    if (config.rate !== undefined) utterance.rate = config.rate;
+    if (config.pitch !== undefined) utterance.pitch = config.pitch;
+
+    // Chrome bug: cancel() immediately followed by speak() can ignore
+    // rate/pitch. A microtask delay lets the engine reset properly.
+    setTimeout(() => synth.speak(utterance), 50);
+  }
+
+  /**
+   * Pick the best available English voice from a list of SpeechSynthesisVoices.
+   * Prefers high-quality remote/natural voices, then enhanced local voices,
+   * then standard local voices.
+   */
+  static pickBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice {
+    // Priority list: high-quality voices across browsers/platforms
+    const preferred = [
+      // Edge Online Natural (highest quality)
+      'Microsoft Jenny Online (Natural) - English (United States)',
+      'Microsoft Aria Online (Natural) - English (United States)',
+      'Microsoft Guy Online (Natural) - English (United States)',
+      // Google remote (good quality, cross-platform in Chrome)
+      'Google US English',
+      'Google UK English Female',
+      // Apple premium/enhanced (macOS)
+      'Ava (Premium)',
+      'Evan (Enhanced)',
+      'Samantha (Enhanced)',
+      // Apple standard (macOS/iOS)
+      'Samantha',
+      'Daniel',
+      'Karen',
+      // Windows SAPI
+      'Microsoft David Desktop - English (United States)',
+      'Microsoft Zira Desktop - English (United States)',
+    ];
+
+    for (const name of preferred) {
+      const match = voices.find(v => v.name === name);
+      if (match) return match;
+    }
+
+    // Fallback: any English voice, then first available
+    return voices.find(v => v.lang.startsWith('en')) ?? voices[0];
+  }
+
+  /**
+   * Stop any in-progress text-to-speech playback.
+   */
+  public stopSpeaking() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
   }
 
   private appendMessage(message: AgentWidgetMessage) {

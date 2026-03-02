@@ -253,13 +253,16 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   let micButton: HTMLButtonElement | null = null;
   let micButtonWrapper: HTMLElement | null = null;
 
-  // Check browser support for speech recognition
+  // Check browser support for speech recognition or Runtype provider
   const hasSpeechRecognition =
     typeof window !== "undefined" &&
     (typeof (window as any).webkitSpeechRecognition !== "undefined" ||
       typeof (window as any).SpeechRecognition !== "undefined");
+  const hasRuntypeProvider =
+    voiceRecognitionConfig.provider?.type === "runtype";
+  const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider;
 
-  if (voiceRecognitionEnabled && hasSpeechRecognition) {
+  if (voiceRecognitionEnabled && hasVoiceInput) {
     micButtonWrapper = createElement("div", "tvw-send-button-wrapper");
     micButton = createElement(
       "button",
