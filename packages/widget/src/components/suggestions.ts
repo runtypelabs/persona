@@ -52,7 +52,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
     chips.forEach((chip) => {
       const btn = createElement(
         "button",
-        "tvw-rounded-button tvw-bg-cw-surface tvw-px-3 tvw-py-1.5 tvw-text-xs tvw-font-medium tvw-text-cw-muted hover:tvw-opacity-90 tvw-cursor-pointer tvw-border tvw-border-gray-200"
+        "persona-rounded-button persona-bg-persona-surface persona-px-3 persona-py-1.5 persona-text-xs persona-font-medium persona-text-persona-muted hover:persona-opacity-90 persona-cursor-pointer persona-border persona-border-gray-200"
       ) as HTMLButtonElement;
       btn.type = "button";
       btn.textContent = chip;

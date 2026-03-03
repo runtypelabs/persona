@@ -531,7 +531,7 @@ export type AgentWidgetTheme = {
   /**
    * Border style for the chat panel container.
    * @example "1px solid #e5e7eb" | "none"
-   * @default "1px solid var(--tvw-cw-border)"
+   * @default "1px solid var(--persona-border)"
    */
   panelBorder?: string;
   /**

@@ -35,11 +35,11 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 
   const header = createElement(
     "div",
-    "tvw-flex tvw-items-center tvw-justify-between tvw-bg-cw-surface tvw-px-6 tvw-py-4 tvw-border-b-cw-divider"
+    "persona-flex persona-items-center persona-justify-between persona-bg-persona-surface persona-px-6 persona-py-4 persona-border-b-persona-divider"
   );
 
   // Title only (no icon, no subtitle)
-  const title = createElement("span", "tvw-text-base tvw-font-semibold");
+  const title = createElement("span", "persona-text-base persona-font-semibold");
   title.textContent = launcher.title ?? "Chat Assistant";
 
   header.appendChild(title);
@@ -50,7 +50,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 
   const closeButton = createElement(
     "button",
-    "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none"
+    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
   ) as HTMLButtonElement;
   closeButton.style.height = closeButtonSize;
   closeButton.style.width = closeButtonSize;
@@ -106,20 +106,20 @@ export const buildExpandedHeader: HeaderLayoutRenderer = (context) => {
 
   const header = createElement(
     "div",
-    "tvw-flex tvw-flex-col tvw-bg-cw-surface tvw-px-6 tvw-py-5 tvw-border-b-cw-divider"
+    "persona-flex persona-flex-col persona-bg-persona-surface persona-px-6 persona-py-5 persona-border-b-persona-divider"
   );
 
   // Top row: icon + text + buttons
   const topRow = createElement(
     "div",
-    "tvw-flex tvw-items-center tvw-gap-3"
+    "persona-flex persona-items-center persona-gap-3"
   );
 
   // Icon
   const headerIconSize = launcher.headerIconSize ?? "56px";
   const iconHolder = createElement(
     "div",
-    "tvw-flex tvw-items-center tvw-justify-center tvw-rounded-xl tvw-bg-cw-primary tvw-text-white tvw-text-2xl"
+    "persona-flex persona-items-center persona-justify-center persona-rounded-xl persona-bg-persona-primary persona-text-white persona-text-2xl"
   );
   iconHolder.style.height = headerIconSize;
   iconHolder.style.width = headerIconSize;
@@ -137,7 +137,7 @@ export const buildExpandedHeader: HeaderLayoutRenderer = (context) => {
     const img = createElement("img") as HTMLImageElement;
     img.src = launcher.iconUrl;
     img.alt = "";
-    img.className = "tvw-rounded-xl tvw-object-cover";
+    img.className = "persona-rounded-xl persona-object-cover";
     img.style.height = headerIconSize;
     img.style.width = headerIconSize;
     iconHolder.replaceChildren(img);
@@ -146,10 +146,10 @@ export const buildExpandedHeader: HeaderLayoutRenderer = (context) => {
   }
 
   // Title and subtitle
-  const headerCopy = createElement("div", "tvw-flex tvw-flex-col tvw-flex-1");
-  const title = createElement("span", "tvw-text-lg tvw-font-semibold");
+  const headerCopy = createElement("div", "persona-flex persona-flex-col persona-flex-1");
+  const title = createElement("span", "persona-text-lg persona-font-semibold");
   title.textContent = launcher.title ?? "Chat Assistant";
-  const subtitle = createElement("span", "tvw-text-sm tvw-text-cw-muted");
+  const subtitle = createElement("span", "persona-text-sm persona-text-persona-muted");
   subtitle.textContent = launcher.subtitle ?? "Here to help you get answers fast";
   headerCopy.append(title, subtitle);
 
@@ -161,7 +161,7 @@ export const buildExpandedHeader: HeaderLayoutRenderer = (context) => {
 
   const closeButton = createElement(
     "button",
-    "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none"
+    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
   ) as HTMLButtonElement;
   closeButton.style.height = closeButtonSize;
   closeButton.style.width = closeButtonSize;
@@ -194,7 +194,7 @@ export const buildExpandedHeader: HeaderLayoutRenderer = (context) => {
   // Bottom row: additional space for status or branding
   const bottomRow = createElement(
     "div",
-    "tvw-mt-3 tvw-pt-3 tvw-border-t tvw-border-gray-100 tvw-text-xs tvw-text-cw-muted"
+    "persona-mt-3 persona-pt-3 persona-border-t persona-border-gray-100 persona-text-xs persona-text-persona-muted"
   );
   bottomRow.textContent = "Online and ready to help";
   header.appendChild(bottomRow);

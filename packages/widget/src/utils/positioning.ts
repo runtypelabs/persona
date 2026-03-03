@@ -2,10 +2,10 @@ export const positionMap: Record<
   "bottom-right" | "bottom-left" | "top-right" | "top-left",
   string
 > = {
-  "bottom-right": "tvw-bottom-6 tvw-right-6",
-  "bottom-left": "tvw-bottom-6 tvw-left-6",
-  "top-right": "tvw-top-6 tvw-right-6",
-  "top-left": "tvw-top-6 tvw-left-6"
+  "bottom-right": "persona-bottom-6 persona-right-6",
+  "bottom-left": "persona-bottom-6 persona-left-6",
+  "top-right": "persona-top-6 persona-right-6",
+  "top-left": "persona-top-6 persona-left-6"
 };
 
 

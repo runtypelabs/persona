@@ -144,6 +144,48 @@ export type { AgentWidgetInitHandle };
 export type { AgentWidgetPlugin } from "./plugins/types";
 export { pluginRegistry } from "./plugins/registry";
 
+// Theme system exports
+export {
+  createTheme,
+  resolveTokens,
+  themeToCssVariables,
+  applyThemeVariables,
+  getActiveTheme,
+  getColorScheme,
+  detectColorScheme,
+  createThemeObserver
+} from "./utils/theme";
+export {
+  accessibilityPlugin,
+  animationsPlugin,
+  brandPlugin,
+  reducedMotionPlugin,
+  highContrastPlugin,
+  createPlugin
+} from "./utils/plugins";
+export {
+  migrateV1Theme,
+  validateV1Theme
+} from "./utils/migration";
+export type {
+  PersonaTheme,
+  PersonaThemePlugin,
+  CreateThemeOptions,
+  TokenReference,
+  ColorPalette,
+  SpacingScale,
+  TypographyScale,
+  ShadowScale,
+  BorderScale,
+  RadiusScale,
+  SemanticColors,
+  SemanticSpacing,
+  SemanticTypography,
+  ComponentTokens,
+  ThemeValidationResult,
+  ThemeValidationError
+} from "./types/theme";
+
 // Component system exports
 export { componentRegistry } from "./components/registry";
 export type { ComponentRenderer, ComponentContext } from "./components/registry";

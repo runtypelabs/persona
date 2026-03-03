@@ -11,15 +11,15 @@ export const updateToolBubbleUI = (messageId: string, bubble: HTMLElement, confi
   const expanded = toolExpansionState.has(messageId);
   const toolCallConfig = config?.toolCall ?? {};
   const header = bubble.querySelector('button[data-expand-header="true"]') as HTMLElement;
-  const content = bubble.querySelector('.tvw-border-t') as HTMLElement;
+  const content = bubble.querySelector('.persona-border-t') as HTMLElement;
   
   if (!header || !content) return;
   
   header.setAttribute("aria-expanded", expanded ? "true" : "false");
   
-  // Find toggle icon container - it's the direct child div of headerMeta (which has tvw-ml-auto)
-  const headerMeta = header.querySelector('.tvw-ml-auto') as HTMLElement;
-  const toggleIcon = headerMeta?.querySelector(':scope > .tvw-flex.tvw-items-center') as HTMLElement;
+  // Find toggle icon container - it's the direct child div of headerMeta (which has persona-ml-auto)
+  const headerMeta = header.querySelector('.persona-ml-auto') as HTMLElement;
+  const toggleIcon = headerMeta?.querySelector(':scope > .persona-flex.persona-items-center') as HTMLElement;
   if (toggleIcon) {
     toggleIcon.innerHTML = "";
     const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
@@ -43,17 +43,17 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     [
       "vanilla-message-bubble",
       "vanilla-tool-bubble",
-      "tvw-w-full",
-      "tvw-max-w-[85%]",
-      "tvw-rounded-2xl",
-      "tvw-bg-cw-surface",
-      "tvw-border",
-      "tvw-border-cw-message-border",
-      "tvw-text-cw-primary",
-      "tvw-shadow-sm",
-      "tvw-overflow-hidden",
-      "tvw-px-0",
-      "tvw-py-0"
+      "persona-w-full",
+      "persona-max-w-[85%]",
+      "persona-rounded-2xl",
+      "persona-bg-persona-surface",
+      "persona-border",
+      "persona-border-persona-message-border",
+      "persona-text-persona-primary",
+      "persona-shadow-sm",
+      "persona-overflow-hidden",
+      "persona-px-0",
+      "persona-py-0"
     ].join(" ")
   );
   // Set id for idiomorph matching
@@ -81,7 +81,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   let expanded = toolExpansionState.has(message.id);
   const header = createElement(
     "button",
-    "tvw-flex tvw-w-full tvw-items-center tvw-justify-between tvw-gap-3 tvw-bg-transparent tvw-px-4 tvw-py-3 tvw-text-left tvw-cursor-pointer tvw-border-none"
+    "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
   ) as HTMLButtonElement;
   header.type = "button";
   header.setAttribute("aria-expanded", expanded ? "true" : "false");
@@ -101,15 +101,15 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     header.style.paddingBottom = toolCallConfig.headerPaddingY;
   }
 
-  const headerContent = createElement("div", "tvw-flex tvw-flex-col tvw-text-left");
-  const title = createElement("span", "tvw-text-xs tvw-text-cw-primary");
+  const headerContent = createElement("div", "persona-flex persona-flex-col persona-text-left");
+  const title = createElement("span", "persona-text-xs persona-text-persona-primary");
   if (toolCallConfig.headerTextColor) {
     title.style.color = toolCallConfig.headerTextColor;
   }
   title.textContent = describeToolTitle(tool);
   headerContent.appendChild(title);
 
-  const toggleIcon = createElement("div", "tvw-flex tvw-items-center");
+  const toggleIcon = createElement("div", "persona-flex persona-items-center");
   const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
   const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
   if (chevronIcon) {
@@ -119,14 +119,14 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     toggleIcon.textContent = expanded ? "Hide" : "Show";
   }
 
-  const headerMeta = createElement("div", "tvw-flex tvw-items-center tvw-gap-2 tvw-ml-auto");
+  const headerMeta = createElement("div", "persona-flex persona-items-center persona-gap-2 persona-ml-auto");
   headerMeta.append(toggleIcon);
 
   header.append(headerContent, headerMeta);
 
   const content = createElement(
     "div",
-    "tvw-border-t tvw-space-y-3 tvw-px-4 tvw-py-3"
+    "persona-border-t persona-border-gray-200 persona-bg-gray-50 persona-space-y-3 persona-px-4 persona-py-3"
   );
   content.style.display = expanded ? "" : "none";
 
@@ -148,7 +148,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
 
   // Add tool name at the top of content
   if (tool.name) {
-    const toolName = createElement("div", "tvw-text-xs tvw-text-cw-muted tvw-italic");
+    const toolName = createElement("div", "persona-text-xs persona-text-persona-muted persona-italic");
     if (toolCallConfig.contentTextColor) {
       toolName.style.color = toolCallConfig.contentTextColor;
     } else if (toolCallConfig.headerTextColor) {
@@ -159,10 +159,10 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   }
 
   if (tool.args !== undefined) {
-    const argsBlock = createElement("div", "tvw-space-y-1");
+    const argsBlock = createElement("div", "persona-space-y-1");
     const argsLabel = createElement(
       "div",
-      "tvw-text-xs tvw-text-cw-muted"
+      "persona-text-xs persona-text-persona-muted"
     );
     if (toolCallConfig.labelTextColor) {
       argsLabel.style.color = toolCallConfig.labelTextColor;
@@ -170,7 +170,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     argsLabel.textContent = "Arguments";
     const argsPre = createElement(
       "pre",
-      "tvw-max-h-48 tvw-overflow-auto tvw-whitespace-pre-wrap tvw-rounded-lg tvw-border tvw-px-3 tvw-py-2 tvw-text-xs tvw-text-cw-primary"
+      "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-border-gray-100 persona-bg-white persona-px-3 persona-py-2 persona-text-xs persona-text-persona-primary"
     );
     // Ensure font size matches header text (0.75rem / 12px)
     argsPre.style.fontSize = "0.75rem";
@@ -190,10 +190,10 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   }
 
   if (tool.chunks && tool.chunks.length) {
-    const logsBlock = createElement("div", "tvw-space-y-1");
+    const logsBlock = createElement("div", "persona-space-y-1");
     const logsLabel = createElement(
       "div",
-      "tvw-text-xs tvw-text-cw-muted"
+      "persona-text-xs persona-text-persona-muted"
     );
     if (toolCallConfig.labelTextColor) {
       logsLabel.style.color = toolCallConfig.labelTextColor;
@@ -201,7 +201,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     logsLabel.textContent = "Activity";
     const logsPre = createElement(
       "pre",
-      "tvw-max-h-48 tvw-overflow-auto tvw-whitespace-pre-wrap tvw-rounded-lg tvw-border tvw-px-3 tvw-py-2 tvw-text-xs tvw-text-cw-primary"
+      "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-border-gray-100 persona-bg-white persona-px-3 persona-py-2 persona-text-xs persona-text-persona-primary"
     );
     // Ensure font size matches header text (0.75rem / 12px)
     logsPre.style.fontSize = "0.75rem";
@@ -221,10 +221,10 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   }
 
   if (tool.status === "complete" && tool.result !== undefined) {
-    const resultBlock = createElement("div", "tvw-space-y-1");
+    const resultBlock = createElement("div", "persona-space-y-1");
     const resultLabel = createElement(
       "div",
-      "tvw-text-xs tvw-text-cw-muted"
+      "persona-text-xs persona-text-persona-muted"
     );
     if (toolCallConfig.labelTextColor) {
       resultLabel.style.color = toolCallConfig.labelTextColor;
@@ -232,7 +232,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     resultLabel.textContent = "Result";
     const resultPre = createElement(
       "pre",
-      "tvw-max-h-48 tvw-overflow-auto tvw-whitespace-pre-wrap tvw-rounded-lg tvw-border tvw-px-3 tvw-py-2 tvw-text-xs tvw-text-cw-primary"
+      "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-border-gray-100 persona-bg-white persona-px-3 persona-py-2 persona-text-xs persona-text-persona-primary"
     );
     // Ensure font size matches header text (0.75rem / 12px)
     resultPre.style.fontSize = "0.75rem";
@@ -254,7 +254,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   if (tool.status === "complete" && typeof tool.duration === "number") {
     const duration = createElement(
       "div",
-      "tvw-text-xs tvw-text-cw-muted"
+      "persona-text-xs persona-text-persona-muted"
     );
     if (toolCallConfig.contentTextColor) {
       duration.style.color = toolCallConfig.contentTextColor;

@@ -181,12 +181,12 @@ function renderInlinePayload(
   function renderDefaultPayload(): HTMLElement {
     const payloadContainer = createElement(
       "div",
-      "tvw-bg-cw-container tvw-border-t tvw-border-cw-divider tvw-px-3 tvw-py-2 tvw-ml-4 tvw-mr-3 tvw-mb-1 tvw-rounded-b tvw-overflow-auto tvw-max-h-[300px]"
+      "persona-bg-persona-container persona-border-t persona-border-persona-divider persona-px-3 persona-py-2 persona-ml-4 persona-mr-3 persona-mb-1 persona-rounded-b persona-overflow-auto persona-max-h-[300px]"
     );
 
     const payloadContent = createElement(
       "pre",
-      "tvw-m-0 tvw-whitespace-pre-wrap tvw-break-all tvw-text-[11px] tvw-text-cw-secondary tvw-font-mono"
+      "persona-m-0 persona-whitespace-pre-wrap persona-break-all persona-text-[11px] persona-text-persona-secondary persona-font-mono"
     );
     payloadContent.textContent = formattedPayload;
 
@@ -212,7 +212,7 @@ function renderEventRow(
   const isExpanded = expandedSet.has(event.id);
   const wrapper = createElement(
     "div",
-    "tvw-border-b tvw-border-cw-divider tvw-text-xs"
+    "persona-border-b persona-border-persona-divider persona-text-xs"
   );
   applyCustomClasses(wrapper, esConfig.classNames?.eventRow);
 
@@ -242,14 +242,14 @@ function renderEventRow(
     // Main row line
     const row = createElement(
       "div",
-      "tvw-flex tvw-items-center tvw-gap-2 tvw-px-3 tvw-py-3 hover:tvw-bg-cw-container tvw-cursor-pointer tvw-group"
+      "persona-flex persona-items-center persona-gap-2 persona-px-3 persona-py-3 hover:persona-bg-persona-container persona-cursor-pointer persona-group"
     );
     row.setAttribute("data-event-id", event.id);
 
     // 1. Chevron (expand/collapse)
     const chevron = createElement(
       "span",
-      "tvw-flex-shrink-0 tvw-text-cw-muted tvw-w-4 tvw-text-center tvw-flex tvw-items-center tvw-justify-center"
+      "persona-flex-shrink-0 persona-text-persona-muted persona-w-4 persona-text-center persona-flex persona-items-center persona-justify-center"
     );
     const chevronIcon = renderLucideIcon(
       isExpanded ? "chevron-down" : "chevron-right",
@@ -262,7 +262,7 @@ function renderEventRow(
     // 2. Timestamp
     const timestamp = createElement(
       "span",
-      "tvw-text-[11px] tvw-text-cw-muted tvw-whitespace-nowrap tvw-flex-shrink-0 tvw-font-mono tvw-w-[70px]"
+      "persona-text-[11px] persona-text-persona-muted persona-whitespace-nowrap persona-flex-shrink-0 persona-font-mono persona-w-[70px]"
     );
     const tsFormat = esConfig.timestampFormat ?? "relative";
     timestamp.textContent =
@@ -275,7 +275,7 @@ function renderEventRow(
     if (esConfig.showSequenceNumbers !== false) {
       seqNum = createElement(
         "span",
-        "tvw-text-[11px] tvw-text-cw-muted tvw-font-mono tvw-flex-shrink-0 tvw-w-[28px] tvw-text-right"
+        "persona-text-[11px] persona-text-persona-muted persona-font-mono persona-flex-shrink-0 persona-w-[28px] persona-text-right"
       );
       seqNum.textContent = String(index + 1);
     }
@@ -284,7 +284,7 @@ function renderEventRow(
     const badgeColor = getBadgeColor(event.type, esConfig.badgeColors);
     const badge = createElement(
       "span",
-      "tvw-inline-flex tvw-items-center tvw-px-2 tvw-py-0.5 tvw-rounded tvw-text-[11px] tvw-font-mono tvw-font-medium tvw-whitespace-nowrap tvw-flex-shrink-0 tvw-border"
+      "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded persona-text-[11px] persona-font-mono persona-font-medium persona-whitespace-nowrap persona-flex-shrink-0 persona-border"
     );
     badge.style.backgroundColor = badgeColor.bg;
     badge.style.color = badgeColor.text;
@@ -299,18 +299,18 @@ function renderEventRow(
     if (desc) {
       descEl = createElement(
         "span",
-        "tvw-text-[11px] tvw-text-cw-secondary tvw-truncate tvw-min-w-0"
+        "persona-text-[11px] persona-text-persona-secondary persona-truncate persona-min-w-0"
       );
       descEl.textContent = desc;
     }
 
     // 6. Spacer
-    const spacer = createElement("div", "tvw-flex-1 tvw-min-w-0");
+    const spacer = createElement("div", "persona-flex-1 persona-min-w-0");
 
     // 7. Copy button
     const copyBtn = createElement(
       "button",
-      "tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-flex-shrink-0 tvw-border-none tvw-bg-transparent tvw-p-0"
+      "persona-text-persona-muted hover:persona-text-persona-primary persona-cursor-pointer persona-flex-shrink-0 persona-border-none persona-bg-transparent persona-p-0"
     );
     const clipIcon = renderLucideIcon(
       "clipboard",
@@ -426,7 +426,7 @@ export function createEventStreamView(
     const customClasses = esConfig.classNames;
     const container = createElement(
       "div",
-      "tvw-event-stream-view tvw-flex tvw-flex-col tvw-flex-1 tvw-min-h-0"
+      "persona-event-stream-view persona-flex persona-flex-col persona-flex-1 persona-min-h-0"
     );
     applyCustomClasses(container, customClasses?.panel);
 
@@ -468,36 +468,36 @@ export function createEventStreamView(
     function buildDefaultToolbar(): HTMLElement {
       const toolbarOuter = createElement(
         "div",
-        "tvw-flex tvw-flex-col tvw-flex-shrink-0"
+        "persona-flex persona-flex-col persona-flex-shrink-0"
       );
 
       // --- Header bar ---
       const headerBar = createElement(
         "div",
-        "tvw-flex tvw-items-center tvw-gap-2 tvw-px-4 tvw-py-3 tvw-pb-0 tvw-border-cw-divider tvw-bg-cw-surface tvw-overflow-hidden"
+        "persona-flex persona-items-center persona-gap-2 persona-px-4 persona-py-3 persona-pb-0 persona-border-persona-divider persona-bg-persona-surface persona-overflow-hidden"
       );
       applyCustomClasses(headerBar, customClasses?.headerBar);
 
       // Title
       const title = createElement(
         "span",
-        "tvw-text-sm tvw-font-medium tvw-text-cw-primary tvw-whitespace-nowrap"
+        "persona-text-sm persona-font-medium persona-text-persona-primary persona-whitespace-nowrap"
       );
       title.textContent = "Events";
 
       // Count badge
       countBadge = createElement(
         "span",
-        "tvw-text-[11px] tvw-font-mono tvw-bg-cw-container tvw-text-cw-muted tvw-px-2 tvw-py-0.5 tvw-rounded tvw-border tvw-border-cw-border"
+        "persona-text-[11px] persona-font-mono persona-bg-persona-container persona-text-persona-muted persona-px-2 persona-py-0.5 persona-rounded persona-border persona-border-persona-border"
       );
       countBadge.textContent = "0";
 
-      const headerSpacer = createElement("div", "tvw-flex-1");
+      const headerSpacer = createElement("div", "persona-flex-1");
 
       // Filter dropdown
       filterSelect = createElement(
         "select",
-        "tvw-text-xs tvw-bg-cw-surface tvw-border tvw-border-cw-border tvw-rounded tvw-px-2.5 tvw-py-1 tvw-text-cw-primary tvw-cursor-pointer"
+        "persona-text-xs persona-bg-persona-surface persona-border persona-border-persona-border persona-rounded persona-px-2.5 persona-py-1 persona-text-persona-primary persona-cursor-pointer"
       ) as HTMLSelectElement;
       const allOption = createElement("option", "") as HTMLOptionElement;
       allOption.value = "";
@@ -506,7 +506,7 @@ export function createEventStreamView(
 
       // Copy All button
       const iconBtnClass =
-        "tvw-inline-flex tvw-items-center tvw-gap-1.5 tvw-rounded tvw-text-xs tvw-text-cw-muted hover:tvw-bg-cw-container hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border tvw-border-cw-border tvw-bg-cw-surface tvw-flex-shrink-0 tvw-px-2.5 tvw-py-1";
+        "persona-inline-flex persona-items-center persona-gap-1.5 persona-rounded persona-text-xs persona-text-persona-muted hover:persona-bg-persona-container hover:persona-text-persona-primary persona-cursor-pointer persona-border persona-border-persona-border persona-bg-persona-surface persona-flex-shrink-0 persona-px-2.5 persona-py-1";
 
       copyAllBtn = createElement(
         "button",
@@ -523,7 +523,7 @@ export function createEventStreamView(
       if (copyAllIcon) copyAllBtn.appendChild(copyAllIcon);
       const copyAllLabel = createElement(
         "span",
-        "tvw-text-xs"
+        "persona-text-xs"
       );
       copyAllLabel.textContent = "Copy All";
       copyAllBtn.appendChild(copyAllLabel);
@@ -537,7 +537,7 @@ export function createEventStreamView(
       // --- Search bar ---
       const searchBar = createElement(
         "div",
-        "tvw-relative tvw-px-4 tvw-py-2.5 tvw-border-b tvw-border-cw-divider tvw-bg-cw-surface"
+        "persona-relative persona-px-4 persona-py-2.5 persona-border-b persona-border-persona-divider persona-bg-persona-surface"
       );
       applyCustomClasses(searchBar, customClasses?.searchBar);
 
@@ -545,18 +545,18 @@ export function createEventStreamView(
       const searchIcon = renderLucideIcon(
         "search",
         "14px",
-        "var(--cw-muted, #9ca3af)",
+        "var(--persona-muted, #9ca3af)",
         1.5
       );
       const searchIconWrapper = createElement(
         "span",
-        "tvw-absolute tvw-left-6 tvw-top-1/2 tvw--translate-y-1/2 tvw-pointer-events-none tvw-flex tvw-items-center"
+        "persona-absolute persona-left-6 persona-top-1/2 persona--translate-y-1/2 persona-pointer-events-none persona-flex persona-items-center"
       );
       if (searchIcon) searchIconWrapper.appendChild(searchIcon);
 
       searchInput = createElement(
         "input",
-        "tvw-text-sm tvw-bg-cw-surface tvw-border tvw-border-cw-border tvw-rounded-md tvw-pl-8 tvw-pr-3 tvw-py-1 tvw-w-full tvw-text-cw-primary"
+        "persona-text-sm persona-bg-persona-surface persona-border persona-border-persona-border persona-rounded-md persona-pl-8 persona-pr-3 persona-py-1 persona-w-full persona-text-persona-primary"
       ) as HTMLInputElement;
       applyCustomClasses(searchInput, customClasses?.searchInput);
       searchInput.type = "text";
@@ -564,7 +564,7 @@ export function createEventStreamView(
 
       searchClearBtn = createElement(
         "button",
-        "tvw-absolute tvw-right-5 tvw-top-1/2 tvw--translate-y-1/2 tvw-text-cw-muted hover:tvw-text-cw-primary tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-0 tvw-leading-none"
+        "persona-absolute persona-right-5 persona-top-1/2 persona--translate-y-1/2 persona-text-persona-muted hover:persona-text-persona-primary persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-0 persona-leading-none"
       ) as HTMLButtonElement;
       searchClearBtn.type = "button";
       searchClearBtn.style.display = "none";
@@ -616,7 +616,7 @@ export function createEventStreamView(
 
     const truncationBanner = createElement(
       "div",
-      "tvw-text-xs tvw-text-cw-muted tvw-text-center tvw-py-0.5 tvw-px-4 tvw-bg-cw-container tvw-border-b tvw-border-cw-divider tvw-italic tvw-flex-shrink-0"
+      "persona-text-xs persona-text-persona-muted persona-text-center persona-py-0.5 persona-px-4 persona-bg-persona-container persona-border-b persona-border-persona-divider persona-italic persona-flex-shrink-0"
     );
     truncationBanner.style.display = "none";
 
@@ -626,19 +626,19 @@ export function createEventStreamView(
 
     const eventsListWrapper = createElement(
       "div",
-      "tvw-flex-1 tvw-min-h-0 tvw-relative"
+      "persona-flex-1 persona-min-h-0 persona-relative"
     );
 
     const eventsList = createElement(
       "div",
-      "tvw-event-stream-list tvw-overflow-y-auto tvw-min-h-0"
+      "persona-event-stream-list persona-overflow-y-auto persona-min-h-0"
     );
     eventsList.style.height = "100%";
 
     // Scroll-to-bottom indicator
     const scrollIndicator = createElement(
       "div",
-      "tvw-absolute tvw-bottom-3 tvw-left-1/2 tvw-transform tvw--translate-x-1/2 tvw-bg-cw-accent tvw-text-white tvw-text-xs tvw-px-3 tvw-py-1.5 tvw-rounded-full tvw-cursor-pointer tvw-shadow-md tvw-z-10 tvw-flex tvw-items-center tvw-gap-1"
+      "persona-absolute persona-bottom-3 persona-left-1/2 persona-transform persona--translate-x-1/2 persona-bg-persona-accent persona-text-white persona-text-xs persona-px-3 persona-py-1.5 persona-rounded-full persona-cursor-pointer persona-shadow-md persona-z-10 persona-flex persona-items-center persona-gap-1"
     );
     applyCustomClasses(scrollIndicator, customClasses?.scrollIndicator);
     scrollIndicator.style.display = "none";
@@ -655,7 +655,7 @@ export function createEventStreamView(
     // No matching events message
     const noResultsMsg = createElement(
       "div",
-      "tvw-flex tvw-items-center tvw-justify-center tvw-h-full tvw-text-sm tvw-text-cw-muted"
+      "persona-flex persona-items-center persona-justify-center persona-h-full persona-text-sm persona-text-persona-muted"
     );
     noResultsMsg.style.display = "none";
 
@@ -983,7 +983,7 @@ export function createEventStreamView(
         1.5
       );
       if (icon) copyAllBtn.appendChild(icon);
-      const label = createElement("span", "tvw-text-xs");
+      const label = createElement("span", "persona-text-xs");
       label.textContent = "Copy All";
       copyAllBtn.appendChild(label);
       setTimeout(() => {
@@ -995,7 +995,7 @@ export function createEventStreamView(
           1.5
         );
         if (original) copyAllBtn.appendChild(original);
-        const restoreLabel = createElement("span", "tvw-text-xs");
+        const restoreLabel = createElement("span", "persona-text-xs");
         restoreLabel.textContent = "Copy All";
         copyAllBtn.appendChild(restoreLabel);
         copyAllBtn.disabled = false;

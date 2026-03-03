@@ -10,15 +10,15 @@ export const reasoningExpansionState = new Set<string>();
 export const updateReasoningBubbleUI = (messageId: string, bubble: HTMLElement): void => {
   const expanded = reasoningExpansionState.has(messageId);
   const header = bubble.querySelector('button[data-expand-header="true"]') as HTMLElement;
-  const content = bubble.querySelector('.tvw-border-t') as HTMLElement;
+  const content = bubble.querySelector('.persona-border-t') as HTMLElement;
   
   if (!header || !content) return;
   
   header.setAttribute("aria-expanded", expanded ? "true" : "false");
   
-  // Find toggle icon container - it's the direct child div of headerMeta (which has tvw-ml-auto)
-  const headerMeta = header.querySelector('.tvw-ml-auto') as HTMLElement;
-  const toggleIcon = headerMeta?.querySelector(':scope > .tvw-flex.tvw-items-center') as HTMLElement;
+  // Find toggle icon container - it's the direct child div of headerMeta (which has persona-ml-auto)
+  const headerMeta = header.querySelector('.persona-ml-auto') as HTMLElement;
+  const toggleIcon = headerMeta?.querySelector(':scope > .persona-flex.persona-items-center') as HTMLElement;
   if (toggleIcon) {
     toggleIcon.innerHTML = "";
     const iconColor = "currentColor";
@@ -40,17 +40,17 @@ export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement 
     [
       "vanilla-message-bubble",
       "vanilla-reasoning-bubble",
-      "tvw-w-full",
-      "tvw-max-w-[85%]",
-      "tvw-rounded-2xl",
-      "tvw-bg-cw-surface",
-      "tvw-border",
-      "tvw-border-cw-message-border",
-      "tvw-text-cw-primary",
-      "tvw-shadow-sm",
-      "tvw-overflow-hidden",
-      "tvw-px-0",
-      "tvw-py-0"
+      "persona-w-full",
+      "persona-max-w-[85%]",
+      "persona-rounded-2xl",
+      "persona-bg-persona-surface",
+      "persona-border",
+      "persona-border-persona-message-border",
+      "persona-text-persona-primary",
+      "persona-shadow-sm",
+      "persona-overflow-hidden",
+      "persona-px-0",
+      "persona-py-0"
     ].join(" ")
   );
   // Set id for idiomorph matching
@@ -64,19 +64,19 @@ export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement 
   let expanded = reasoningExpansionState.has(message.id);
   const header = createElement(
     "button",
-    "tvw-flex tvw-w-full tvw-items-center tvw-justify-between tvw-gap-3 tvw-bg-transparent tvw-px-4 tvw-py-3 tvw-text-left tvw-cursor-pointer tvw-border-none"
+    "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
   ) as HTMLButtonElement;
   header.type = "button";
   header.setAttribute("aria-expanded", expanded ? "true" : "false");
   header.setAttribute("data-expand-header", "true");
   header.setAttribute("data-bubble-type", "reasoning");
 
-  const headerContent = createElement("div", "tvw-flex tvw-flex-col tvw-text-left");
-  const title = createElement("span", "tvw-text-xs tvw-text-cw-primary");
+  const headerContent = createElement("div", "persona-flex persona-flex-col persona-text-left");
+  const title = createElement("span", "persona-text-xs persona-text-persona-primary");
   title.textContent = "Thinking...";
   headerContent.appendChild(title);
 
-  const status = createElement("span", "tvw-text-xs tvw-text-cw-primary");
+  const status = createElement("span", "persona-text-xs persona-text-persona-primary");
   status.textContent = describeReasonStatus(reasoning);
   headerContent.appendChild(status);
 
@@ -86,7 +86,7 @@ export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement 
     title.style.display = "";
   }
 
-  const toggleIcon = createElement("div", "tvw-flex tvw-items-center");
+  const toggleIcon = createElement("div", "persona-flex persona-items-center");
   const iconColor = "currentColor";
   const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
   if (chevronIcon) {
@@ -96,21 +96,21 @@ export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement 
     toggleIcon.textContent = expanded ? "Hide" : "Show";
   }
 
-  const headerMeta = createElement("div", "tvw-flex tvw-items-center tvw-ml-auto");
+  const headerMeta = createElement("div", "persona-flex persona-items-center persona-ml-auto");
   headerMeta.append(toggleIcon);
 
   header.append(headerContent, headerMeta);
 
   const content = createElement(
     "div",
-    "tvw-border-t tvw-px-4 tvw-py-3"
+    "persona-border-t persona-border-gray-200 persona-bg-gray-50 persona-px-4 persona-py-3"
   );
   content.style.display = expanded ? "" : "none";
 
   const text = reasoning.chunks.join("");
   const body = createElement(
     "div",
-    "tvw-whitespace-pre-wrap tvw-text-xs tvw-leading-snug tvw-text-cw-muted"
+    "persona-whitespace-pre-wrap persona-text-xs persona-leading-snug persona-text-persona-muted"
   );
   body.textContent =
     text ||

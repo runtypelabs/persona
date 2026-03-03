@@ -16,13 +16,13 @@ export const createLauncherButton = (
   const button = createElement("button") as HTMLButtonElement;
   button.type = "button";
   button.innerHTML = `
-    <span class="tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-bg-cw-primary tvw-text-white" data-role="launcher-icon">💬</span>
-    <img data-role="launcher-image" class="tvw-rounded-full tvw-object-cover" alt="" style="display:none" />
-    <span class="tvw-flex tvw-flex-col tvw-items-start tvw-text-left">
-      <span class="tvw-text-sm tvw-font-semibold tvw-text-cw-primary" data-role="launcher-title"></span>
-      <span class="tvw-text-xs tvw-text-cw-muted" data-role="launcher-subtitle"></span>
+    <span class="persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-bg-persona-primary persona-text-white" data-role="launcher-icon">💬</span>
+    <img data-role="launcher-image" class="persona-rounded-full persona-object-cover" alt="" style="display:none" />
+    <span class="persona-flex persona-flex-col persona-items-start persona-text-left">
+      <span class="persona-text-sm persona-font-semibold persona-text-persona-primary" data-role="launcher-title"></span>
+      <span class="persona-text-xs persona-text-persona-muted" data-role="launcher-subtitle"></span>
     </span>
-    <span class="tvw-ml-2 tvw-grid tvw-place-items-center tvw-rounded-full tvw-bg-cw-primary tvw-text-cw-call-to-action" data-role="launcher-call-to-action-icon">↗</span>
+    <span class="persona-ml-2 persona-grid persona-place-items-center persona-rounded-full persona-bg-persona-primary persona-text-persona-call-to-action" data-role="launcher-call-to-action-icon">↗</span>
   `;
   button.addEventListener("click", onToggle);
 
@@ -40,7 +40,7 @@ export const createLauncherButton = (
     }
 
     // Hide/show text container
-    const textContainer = button.querySelector(".tvw-flex-col");
+    const textContainer = button.querySelector(".persona-flex-col");
     if (textContainer) {
       if (launcher.textHidden) {
         (textContainer as HTMLElement).style.display = "none";
@@ -108,10 +108,10 @@ export const createLauncherButton = (
       // Apply background color if configured
       if (launcher.callToActionIconBackgroundColor) {
         callToActionIconEl.style.backgroundColor = launcher.callToActionIconBackgroundColor;
-        callToActionIconEl.classList.remove("tvw-bg-cw-primary");
+        callToActionIconEl.classList.remove("persona-bg-persona-primary");
       } else {
         callToActionIconEl.style.backgroundColor = "";
-        callToActionIconEl.classList.add("tvw-bg-cw-primary");
+        callToActionIconEl.classList.add("persona-bg-persona-primary");
       }
       
       // Calculate padding to adjust icon size
@@ -158,10 +158,10 @@ export const createLauncherButton = (
         ? positionMap[launcher.position]
         : positionMap["bottom-right"];
 
-    // Removed hardcoded border/shadow classes (tvw-shadow-lg, tvw-border, tvw-border-gray-200)
+    // Removed hardcoded border/shadow classes (persona-shadow-lg, persona-border, persona-border-gray-200)
     // These are now applied via inline styles from config
     const base =
-      "tvw-fixed tvw-flex tvw-items-center tvw-gap-3 tvw-rounded-launcher tvw-bg-cw-surface tvw-py-2.5 tvw-pl-3 tvw-pr-3 tvw-transition hover:tvw-translate-y-[-2px] tvw-cursor-pointer tvw-z-50";
+      "persona-fixed persona-flex persona-items-center persona-gap-3 persona-rounded-launcher persona-bg-persona-surface persona-py-2.5 persona-pl-3 persona-pr-3 persona-transition hover:persona-translate-y-[-2px] persona-cursor-pointer persona-z-50";
 
     button.className = `${base} ${positionClass}`;
     

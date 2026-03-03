@@ -620,7 +620,7 @@ export const createAgentExperience = (
     });
     if (customHeader) {
       // Replace the default header with custom header
-      const existingHeader = container.querySelector('.tvw-border-b-cw-divider');
+      const existingHeader = container.querySelector('.persona-border-b-persona-divider');
       if (existingHeader) {
         existingHeader.replaceWith(customHeader);
         header = customHeader;
@@ -647,9 +647,9 @@ export const createAgentExperience = (
       eventStreamView.update();
     }
     if (eventStreamToggleBtn) {
-      eventStreamToggleBtn.classList.remove("tvw-text-cw-muted");
-      eventStreamToggleBtn.classList.add("tvw-text-cw-accent");
-      eventStreamToggleBtn.style.boxShadow = "inset 0 0 0 1.5px var(--cw-accent, #3b82f6)";
+      eventStreamToggleBtn.classList.remove("persona-text-persona-muted");
+      eventStreamToggleBtn.classList.add("persona-text-persona-accent");
+      eventStreamToggleBtn.style.boxShadow = "inset 0 0 0 1.5px var(--persona-accent, #3b82f6)";
       const activeClasses = config.features?.eventStream?.classNames?.toggleButtonActive;
       if (activeClasses) activeClasses.split(/\s+/).forEach(c => c && eventStreamToggleBtn!.classList.add(c));
     }
@@ -676,8 +676,8 @@ export const createAgentExperience = (
     }
     body.style.display = "";
     if (eventStreamToggleBtn) {
-      eventStreamToggleBtn.classList.remove("tvw-text-cw-accent");
-      eventStreamToggleBtn.classList.add("tvw-text-cw-muted");
+      eventStreamToggleBtn.classList.remove("persona-text-persona-accent");
+      eventStreamToggleBtn.classList.add("persona-text-persona-muted");
       eventStreamToggleBtn.style.boxShadow = "";
       const activeClasses = config.features?.eventStream?.classNames?.toggleButtonActive;
       if (activeClasses) activeClasses.split(/\s+/).forEach(c => c && eventStreamToggleBtn!.classList.remove(c));
@@ -694,7 +694,7 @@ export const createAgentExperience = (
   let eventStreamToggleBtn: HTMLButtonElement | null = null;
   if (showEventStreamToggle) {
     const esClassNames = config.features?.eventStream?.classNames;
-    const toggleBtnClasses = "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-1" + (esClassNames?.toggleButton ? " " + esClassNames.toggleButton : "");
+    const toggleBtnClasses = "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-1" + (esClassNames?.toggleButton ? " " + esClassNames.toggleButton : "");
     eventStreamToggleBtn = createElement("button", toggleBtnClasses) as HTMLButtonElement;
     eventStreamToggleBtn.style.width = "28px";
     eventStreamToggleBtn.style.height = "28px";
@@ -757,7 +757,7 @@ export const createAgentExperience = (
       switch (slot) {
         case "body-top":
           // Default: the intro card
-          return container.querySelector(".tvw-rounded-2xl.tvw-bg-cw-surface.tvw-p-6") as HTMLElement || null;
+          return container.querySelector(".persona-rounded-2xl.persona-bg-persona-surface.persona-p-6") as HTMLElement || null;
         case "messages":
           return messagesWrapper;
         case "footer-top":
@@ -784,7 +784,7 @@ export const createAgentExperience = (
             header.appendChild(element);
           } else {
             // header-center: insert after icon/title
-            const titleSection = header.querySelector(".tvw-flex-col");
+            const titleSection = header.querySelector(".persona-flex-col");
             if (titleSection) {
               titleSection.parentNode?.insertBefore(element, titleSection.nextSibling);
             } else {
@@ -794,7 +794,7 @@ export const createAgentExperience = (
           break;
         case "body-top": {
           // Replace or prepend to body
-          const introCard = body.querySelector(".tvw-rounded-2xl.tvw-bg-cw-surface.tvw-p-6");
+          const introCard = body.querySelector(".persona-rounded-2xl.persona-bg-persona-surface.persona-p-6");
           if (introCard) {
             introCard.replaceWith(element);
           } else {
@@ -1036,7 +1036,7 @@ export const createAgentExperience = (
     const isLeftSidebar = position === 'bottom-left' || position === 'top-left';
     
     // Default values based on mode
-    const defaultPanelBorder = sidebarMode ? 'none' : '1px solid var(--tvw-cw-border)';
+    const defaultPanelBorder = sidebarMode ? 'none' : '1px solid var(--persona-persona-border)';
     const defaultPanelShadow = sidebarMode 
       ? (isLeftSidebar ? '2px 0 12px rgba(0, 0, 0, 0.08)' : '-2px 0 12px rgba(0, 0, 0, 0.08)')
       : '0 25px 50px -12px rgba(0, 0, 0, 0.25)';
@@ -1125,8 +1125,8 @@ export const createAgentExperience = (
     // Handle positioning classes based on mode
     // First remove all position classes to reset state
     wrapper.classList.remove(
-      'tvw-bottom-6', 'tvw-right-6', 'tvw-left-6', 'tvw-top-6',
-      'tvw-bottom-4', 'tvw-right-4', 'tvw-left-4', 'tvw-top-4'
+      'persona-bottom-6', 'persona-right-6', 'persona-left-6', 'persona-top-6',
+      'persona-bottom-4', 'persona-right-4', 'persona-left-4', 'persona-top-4'
     );
     
     if (!sidebarMode && !isInlineEmbed) {
@@ -1616,12 +1616,12 @@ export const createAgentExperience = (
               const componentWrapper = document.createElement("div");
               componentWrapper.className = [
                 "vanilla-message-bubble",
-                "tvw-max-w-[85%]",
-                "tvw-rounded-2xl",
-                "tvw-bg-cw-surface",
-                "tvw-border",
-                "tvw-border-cw-message-border",
-                "tvw-p-4"
+                "persona-max-w-[85%]",
+                "persona-rounded-2xl",
+                "persona-bg-persona-surface",
+                "persona-border",
+                "persona-border-persona-message-border",
+                "persona-p-4"
               ].join(" ");
               // Set id for idiomorph matching
               componentWrapper.id = `bubble-${message.id}`;
@@ -1630,7 +1630,7 @@ export const createAgentExperience = (
               // Add text content above component if present (combined text+component response)
               if (message.content && message.content.trim()) {
                 const textDiv = document.createElement("div");
-                textDiv.className = "tvw-mb-3 tvw-text-sm tvw-leading-relaxed";
+                textDiv.className = "persona-mb-3 persona-text-sm persona-leading-relaxed";
                 textDiv.innerHTML = transform({
                   text: message.content,
                   message,
@@ -1693,12 +1693,12 @@ export const createAgentExperience = (
       }
 
       const wrapper = document.createElement("div");
-      wrapper.className = "tvw-flex";
+      wrapper.className = "persona-flex";
       // Set id for idiomorph matching
       wrapper.id = `wrapper-${message.id}`;
       wrapper.setAttribute("data-wrapper-id", message.id);
       if (message.role === "user") {
-        wrapper.classList.add("tvw-justify-end");
+        wrapper.classList.add("persona-justify-end");
       }
       wrapper.appendChild(bubble);
       tempContainer.appendChild(wrapper);
@@ -1752,30 +1752,30 @@ export const createAgentExperience = (
         const showBubble = config.loadingIndicator?.showBubble !== false; // default true
         typingBubble.className = showBubble
           ? [
-              "tvw-max-w-[85%]",
-              "tvw-rounded-2xl",
-              "tvw-text-sm",
-              "tvw-leading-relaxed",
-              "tvw-shadow-sm",
-              "tvw-bg-cw-surface",
-              "tvw-border",
-              "tvw-border-cw-message-border",
-              "tvw-text-cw-primary",
-              "tvw-px-5",
-              "tvw-py-3"
+              "persona-max-w-[85%]",
+              "persona-rounded-2xl",
+              "persona-text-sm",
+              "persona-leading-relaxed",
+              "persona-shadow-sm",
+              "persona-bg-persona-surface",
+              "persona-border",
+              "persona-border-persona-message-border",
+              "persona-text-persona-primary",
+              "persona-px-5",
+              "persona-py-3"
             ].join(" ")
           : [
-              "tvw-max-w-[85%]",
-              "tvw-text-sm",
-              "tvw-leading-relaxed",
-              "tvw-text-cw-primary"
+              "persona-max-w-[85%]",
+              "persona-text-sm",
+              "persona-leading-relaxed",
+              "persona-text-persona-primary"
             ].join(" ");
         typingBubble.setAttribute("data-typing-indicator", "true");
 
         typingBubble.appendChild(typingIndicator);
 
         const typingWrapper = document.createElement("div");
-        typingWrapper.className = "tvw-flex";
+        typingWrapper.className = "persona-flex";
         // Set id for idiomorph matching
         typingWrapper.id = "wrapper-typing-indicator";
         typingWrapper.setAttribute("data-wrapper-id", "typing-indicator");
@@ -1816,30 +1816,30 @@ export const createAgentExperience = (
         const showBubble = config.loadingIndicator?.showBubble !== false; // default true
         idleBubble.className = showBubble
           ? [
-              "tvw-max-w-[85%]",
-              "tvw-rounded-2xl",
-              "tvw-text-sm",
-              "tvw-leading-relaxed",
-              "tvw-shadow-sm",
-              "tvw-bg-cw-surface",
-              "tvw-border",
-              "tvw-border-cw-message-border",
-              "tvw-text-cw-primary",
-              "tvw-px-5",
-              "tvw-py-3"
+              "persona-max-w-[85%]",
+              "persona-rounded-2xl",
+              "persona-text-sm",
+              "persona-leading-relaxed",
+              "persona-shadow-sm",
+              "persona-bg-persona-surface",
+              "persona-border",
+              "persona-border-persona-message-border",
+              "persona-text-persona-primary",
+              "persona-px-5",
+              "persona-py-3"
             ].join(" ")
           : [
-              "tvw-max-w-[85%]",
-              "tvw-text-sm",
-              "tvw-leading-relaxed",
-              "tvw-text-cw-primary"
+              "persona-max-w-[85%]",
+              "persona-text-sm",
+              "persona-leading-relaxed",
+              "persona-text-persona-primary"
             ].join(" ");
         idleBubble.setAttribute("data-idle-indicator", "true");
 
         idleBubble.appendChild(idleIndicator);
 
         const idleWrapper = document.createElement("div");
-        idleWrapper.className = "tvw-flex";
+        idleWrapper.className = "persona-flex";
         // Set id for idiomorph matching
         idleWrapper.id = "wrapper-idle-indicator";
         idleWrapper.setAttribute("data-wrapper-id", "idle-indicator");
@@ -1868,9 +1868,9 @@ export const createAgentExperience = (
   const updateOpenState = () => {
     if (!launcherEnabled) return;
     if (open) {
-      wrapper.classList.remove("tvw-pointer-events-none", "tvw-opacity-0");
-      panel.classList.remove("tvw-scale-95", "tvw-opacity-0");
-      panel.classList.add("tvw-scale-100", "tvw-opacity-100");
+      wrapper.classList.remove("persona-pointer-events-none", "persona-opacity-0");
+      panel.classList.remove("persona-scale-95", "persona-opacity-0");
+      panel.classList.add("persona-scale-100", "persona-opacity-100");
       // Hide launcher button when widget is open
       if (launcherButtonInstance) {
         launcherButtonInstance.element.style.display = "none";
@@ -1878,9 +1878,9 @@ export const createAgentExperience = (
         customLauncherElement.style.display = "none";
       }
     } else {
-      wrapper.classList.add("tvw-pointer-events-none", "tvw-opacity-0");
-      panel.classList.remove("tvw-scale-100", "tvw-opacity-100");
-      panel.classList.add("tvw-scale-95", "tvw-opacity-0");
+      wrapper.classList.add("persona-pointer-events-none", "persona-opacity-0");
+      panel.classList.remove("persona-scale-100", "persona-opacity-100");
+      panel.classList.add("persona-scale-95", "persona-opacity-0");
       // Show launcher button when widget is closed
       if (launcherButtonInstance) {
         launcherButtonInstance.element.style.display = "";
@@ -2312,7 +2312,7 @@ export const createAgentExperience = (
         const recordingIconColor = voiceConfig.recordingIconColor;
         const recordingBorderColor = voiceConfig.recordingBorderColor;
         
-        micButton.classList.add("tvw-voice-recording");
+        micButton.classList.add("persona-voice-recording");
         micButton.style.backgroundColor = recordingBackgroundColor;
         
         if (recordingIconColor) {
@@ -2360,7 +2360,24 @@ export const createAgentExperience = (
     persistVoiceMetadata();
 
     if (micButton) {
-      removeRuntypeMicStateStyles();
+      micButton.classList.remove("persona-voice-recording");
+      
+      // Restore original styles
+      if (originalMicStyles) {
+        micButton.style.backgroundColor = originalMicStyles.backgroundColor;
+        micButton.style.color = originalMicStyles.color;
+        micButton.style.borderColor = originalMicStyles.borderColor;
+        
+        // Restore SVG stroke color if present
+        const svg = micButton.querySelector("svg");
+        if (svg) {
+          svg.setAttribute("stroke", originalMicStyles.color || "currentColor");
+        }
+        
+        originalMicStyles = null;
+      }
+      
+      micButton.setAttribute("aria-label", "Start voice recognition");
     }
   };
 
@@ -2375,10 +2392,10 @@ export const createAgentExperience = (
 
     if (!hasVoiceInput) return null;
 
-    const micButtonWrapper = createElement("div", "tvw-send-button-wrapper");
+    const micButtonWrapper = createElement("div", "persona-send-button-wrapper");
     const micButton = createElement(
       "button",
-      "tvw-rounded-button tvw-flex tvw-items-center tvw-justify-center disabled:tvw-opacity-50 tvw-cursor-pointer"
+      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer"
     ) as HTMLButtonElement;
     
     micButton.type = "button";
@@ -2416,14 +2433,14 @@ export const createAgentExperience = (
     if (backgroundColor) {
       micButton.style.backgroundColor = backgroundColor;
     } else {
-      micButton.classList.add("tvw-bg-cw-primary");
+      micButton.classList.add("persona-bg-persona-primary");
     }
     
     // Apply icon/text color
     if (iconColor) {
       micButton.style.color = iconColor;
     } else if (!iconColor && !sendButtonConfig?.textColor) {
-      micButton.classList.add("tvw-text-white");
+      micButton.classList.add("persona-text-white");
     }
     
     // Apply border styling
@@ -2451,7 +2468,7 @@ export const createAgentExperience = (
     const tooltipText = voiceConfig?.tooltipText ?? "Start voice recognition";
     const showTooltip = voiceConfig?.showTooltip ?? false;
     if (showTooltip && tooltipText) {
-      const tooltip = createElement("div", "tvw-send-button-tooltip");
+      const tooltip = createElement("div", "persona-send-button-tooltip");
       tooltip.textContent = tooltipText;
       micButtonWrapper.appendChild(tooltip);
     }
@@ -2984,7 +3001,7 @@ export const createAgentExperience = (
         // Add header toggle button if not present
         if (!eventStreamToggleBtn && header) {
           const dynEsClassNames = config.features?.eventStream?.classNames;
-          const dynToggleBtnClasses = "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-1" + (dynEsClassNames?.toggleButton ? " " + dynEsClassNames.toggleButton : "");
+          const dynToggleBtnClasses = "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-1" + (dynEsClassNames?.toggleButton ? " " + dynEsClassNames.toggleButton : "");
           eventStreamToggleBtn = createElement("button", dynToggleBtnClasses) as HTMLButtonElement;
           eventStreamToggleBtn.style.width = "28px";
           eventStreamToggleBtn.style.height = "28px";
@@ -3116,11 +3133,11 @@ export const createAgentExperience = (
             panelElements.clearChatButtonWrapper.style.display = showClearChat ? "" : "none";
             // When clear chat is hidden, close button needs ml-auto to stay right-aligned
             const { closeButtonWrapper } = panelElements;
-            if (closeButtonWrapper && !closeButtonWrapper.classList.contains("tvw-absolute")) {
+            if (closeButtonWrapper && !closeButtonWrapper.classList.contains("persona-absolute")) {
               if (showClearChat) {
-                closeButtonWrapper.classList.remove("tvw-ml-auto");
+                closeButtonWrapper.classList.remove("persona-ml-auto");
               } else {
-                closeButtonWrapper.classList.add("tvw-ml-auto");
+                closeButtonWrapper.classList.add("persona-ml-auto");
               }
             }
           }
@@ -3181,8 +3198,8 @@ export const createAgentExperience = (
       const headerIconSize = launcher.headerIconSize ?? "48px";
 
       if (iconHolder) {
-        const headerEl = container.querySelector(".tvw-border-b-cw-divider");
-        const headerCopy = headerEl?.querySelector(".tvw-flex-col");
+        const headerEl = container.querySelector(".persona-border-b-persona-divider");
+        const headerCopy = headerEl?.querySelector(".persona-flex-col");
 
         // Handle hide/show
         if (shouldHideIcon) {
@@ -3232,7 +3249,7 @@ export const createAgentExperience = (
               const newImg = document.createElement("img");
               newImg.src = launcher.iconUrl;
               newImg.alt = "";
-              newImg.className = "tvw-rounded-xl tvw-object-cover";
+              newImg.className = "persona-rounded-xl persona-object-cover";
               newImg.style.height = headerIconSize;
               newImg.style.width = headerIconSize;
               iconHolder.replaceChildren(newImg);
@@ -3283,7 +3300,7 @@ export const createAgentExperience = (
         // Update placement if changed - move the wrapper (not just the button) to preserve tooltip
         const { closeButtonWrapper } = panelElements;
         const isTopRight = closeButtonPlacement === "top-right";
-        const currentlyTopRight = closeButtonWrapper?.classList.contains("tvw-absolute");
+        const currentlyTopRight = closeButtonWrapper?.classList.contains("persona-absolute");
         
         if (closeButtonWrapper && isTopRight !== currentlyTopRight) {
           // Placement changed - need to move wrapper and update classes
@@ -3291,16 +3308,16 @@ export const createAgentExperience = (
           
           // Update wrapper classes
           if (isTopRight) {
-            closeButtonWrapper.className = "tvw-absolute tvw-top-4 tvw-right-4 tvw-z-50";
+            closeButtonWrapper.className = "persona-absolute persona-top-4 persona-right-4 persona-z-50";
             container.style.position = "relative";
             container.appendChild(closeButtonWrapper);
           } else {
             // Check if clear chat is inline to determine if we need ml-auto
             const clearChatPlacement = launcher.clearChat?.placement ?? "inline";
             const clearChatEnabled = launcher.clearChat?.enabled ?? true;
-            closeButtonWrapper.className = (clearChatEnabled && clearChatPlacement === "inline") ? "" : "tvw-ml-auto";
+            closeButtonWrapper.className = (clearChatEnabled && clearChatPlacement === "inline") ? "" : "persona-ml-auto";
             // Find header element
-            const header = container.querySelector(".tvw-border-b-cw-divider");
+            const header = container.querySelector(".persona-border-b-persona-divider");
             if (header) {
               header.appendChild(closeButtonWrapper);
             }
@@ -3310,18 +3327,18 @@ export const createAgentExperience = (
         // Apply close button styling from config
         if (launcher.closeButtonColor) {
           closeButton.style.color = launcher.closeButtonColor;
-          closeButton.classList.remove("tvw-text-cw-muted");
+          closeButton.classList.remove("persona-text-persona-muted");
         } else {
           closeButton.style.color = "";
-          closeButton.classList.add("tvw-text-cw-muted");
+          closeButton.classList.add("persona-text-persona-muted");
         }
         
         if (launcher.closeButtonBackgroundColor) {
           closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
-          closeButton.classList.remove("hover:tvw-bg-gray-100");
+          closeButton.classList.remove("hover:persona-bg-gray-100");
         } else {
           closeButton.style.backgroundColor = "";
-          closeButton.classList.add("hover:tvw-bg-gray-100");
+          closeButton.classList.add("hover:persona-bg-gray-100");
         }
         
         // Apply border if width and/or color are provided
@@ -3329,18 +3346,18 @@ export const createAgentExperience = (
           const borderWidth = launcher.closeButtonBorderWidth || "0px";
           const borderColor = launcher.closeButtonBorderColor || "transparent";
           closeButton.style.border = `${borderWidth} solid ${borderColor}`;
-          closeButton.classList.remove("tvw-border-none");
+          closeButton.classList.remove("persona-border-none");
         } else {
           closeButton.style.border = "";
-          closeButton.classList.add("tvw-border-none");
+          closeButton.classList.add("persona-border-none");
         }
         
         if (launcher.closeButtonBorderRadius) {
           closeButton.style.borderRadius = launcher.closeButtonBorderRadius;
-          closeButton.classList.remove("tvw-rounded-full");
+          closeButton.classList.remove("persona-rounded-full");
         } else {
           closeButton.style.borderRadius = "";
-          closeButton.classList.add("tvw-rounded-full");
+          closeButton.classList.add("persona-rounded-full");
         }
 
         // Update padding
@@ -3393,12 +3410,12 @@ export const createAgentExperience = (
               if (portaledTooltip || !closeButton) return; // Already showing or button doesn't exist
 
               // Create tooltip element
-              portaledTooltip = createElement("div", "tvw-clear-chat-tooltip");
+              portaledTooltip = createElement("div", "persona-clear-chat-tooltip");
               portaledTooltip.textContent = closeButtonTooltipText;
 
               // Add arrow
               const arrow = createElement("div");
-              arrow.className = "tvw-clear-chat-tooltip-arrow";
+              arrow.className = "persona-clear-chat-tooltip-arrow";
               portaledTooltip.appendChild(arrow);
 
               // Get button position
@@ -3462,36 +3479,36 @@ export const createAgentExperience = (
 
           // When clear chat is hidden, close button needs ml-auto to stay right-aligned
           const { closeButtonWrapper } = panelElements;
-          if (closeButtonWrapper && !closeButtonWrapper.classList.contains("tvw-absolute")) {
+          if (closeButtonWrapper && !closeButtonWrapper.classList.contains("persona-absolute")) {
             if (shouldShowClearChat) {
-              closeButtonWrapper.classList.remove("tvw-ml-auto");
+              closeButtonWrapper.classList.remove("persona-ml-auto");
             } else {
-              closeButtonWrapper.classList.add("tvw-ml-auto");
+              closeButtonWrapper.classList.add("persona-ml-auto");
             }
           }
 
           // Update placement if changed
           const isTopRight = clearChatPlacement === "top-right";
-          const currentlyTopRight = clearChatButtonWrapper.classList.contains("tvw-absolute");
+          const currentlyTopRight = clearChatButtonWrapper.classList.contains("persona-absolute");
 
           if (isTopRight !== currentlyTopRight && shouldShowClearChat) {
             clearChatButtonWrapper.remove();
 
             if (isTopRight) {
-              // Don't use tvw-clear-chat-button-wrapper class for top-right mode as its
+              // Don't use persona-clear-chat-button-wrapper class for top-right mode as its
               // display: inline-flex causes alignment issues with the close button
-              clearChatButtonWrapper.className = "tvw-absolute tvw-top-4 tvw-z-50";
+              clearChatButtonWrapper.className = "persona-absolute persona-top-4 persona-z-50";
               // Position to the left of the close button (which is at right: 1rem/16px)
               // Close button is ~32px wide, plus small gap = 48px from right
               clearChatButtonWrapper.style.right = "48px";
               container.style.position = "relative";
               container.appendChild(clearChatButtonWrapper);
             } else {
-              clearChatButtonWrapper.className = "tvw-relative tvw-ml-auto tvw-clear-chat-button-wrapper";
+              clearChatButtonWrapper.className = "persona-relative persona-ml-auto persona-clear-chat-button-wrapper";
               // Clear the inline right style when switching back to inline mode
               clearChatButtonWrapper.style.right = "";
               // Find header and insert before close button
-              const header = container.querySelector(".tvw-border-b-cw-divider");
+              const header = container.querySelector(".persona-border-b-persona-divider");
               const closeButtonWrapperEl = panelElements.closeButtonWrapper;
               if (header && closeButtonWrapperEl && closeButtonWrapperEl.parentElement === header) {
                 header.insertBefore(clearChatButtonWrapper, closeButtonWrapperEl);
@@ -3502,13 +3519,13 @@ export const createAgentExperience = (
 
             // Also update close button's ml-auto class based on clear chat position
             const closeButtonWrapperEl = panelElements.closeButtonWrapper;
-            if (closeButtonWrapperEl && !closeButtonWrapperEl.classList.contains("tvw-absolute")) {
+            if (closeButtonWrapperEl && !closeButtonWrapperEl.classList.contains("persona-absolute")) {
               if (isTopRight) {
                 // Clear chat moved to top-right, close needs ml-auto
-                closeButtonWrapperEl.classList.add("tvw-ml-auto");
+                closeButtonWrapperEl.classList.add("persona-ml-auto");
               } else {
                 // Clear chat is inline, close doesn't need ml-auto
-                closeButtonWrapperEl.classList.remove("tvw-ml-auto");
+                closeButtonWrapperEl.classList.remove("persona-ml-auto");
               }
             }
           }
@@ -3534,19 +3551,19 @@ export const createAgentExperience = (
           // Update icon color
           if (clearChatIconColor) {
             clearChatButton.style.color = clearChatIconColor;
-            clearChatButton.classList.remove("tvw-text-cw-muted");
+            clearChatButton.classList.remove("persona-text-persona-muted");
           } else {
             clearChatButton.style.color = "";
-            clearChatButton.classList.add("tvw-text-cw-muted");
+            clearChatButton.classList.add("persona-text-persona-muted");
           }
 
           // Update background color
           if (clearChatConfig.backgroundColor) {
             clearChatButton.style.backgroundColor = clearChatConfig.backgroundColor;
-            clearChatButton.classList.remove("hover:tvw-bg-gray-100");
+            clearChatButton.classList.remove("hover:persona-bg-gray-100");
           } else {
             clearChatButton.style.backgroundColor = "";
-            clearChatButton.classList.add("hover:tvw-bg-gray-100");
+            clearChatButton.classList.add("hover:persona-bg-gray-100");
           }
 
           // Update border
@@ -3554,19 +3571,19 @@ export const createAgentExperience = (
             const borderWidth = clearChatConfig.borderWidth || "0px";
             const borderColor = clearChatConfig.borderColor || "transparent";
             clearChatButton.style.border = `${borderWidth} solid ${borderColor}`;
-            clearChatButton.classList.remove("tvw-border-none");
+            clearChatButton.classList.remove("persona-border-none");
           } else {
             clearChatButton.style.border = "";
-            clearChatButton.classList.add("tvw-border-none");
+            clearChatButton.classList.add("persona-border-none");
           }
 
           // Update border radius
           if (clearChatConfig.borderRadius) {
             clearChatButton.style.borderRadius = clearChatConfig.borderRadius;
-            clearChatButton.classList.remove("tvw-rounded-full");
+            clearChatButton.classList.remove("persona-rounded-full");
           } else {
             clearChatButton.style.borderRadius = "";
-            clearChatButton.classList.add("tvw-rounded-full");
+            clearChatButton.classList.add("persona-rounded-full");
           }
 
           // Update padding
@@ -3605,12 +3622,12 @@ export const createAgentExperience = (
                 if (portaledTooltip || !clearChatButton) return; // Already showing or button doesn't exist
 
                 // Create tooltip element
-                portaledTooltip = createElement("div", "tvw-clear-chat-tooltip");
+                portaledTooltip = createElement("div", "persona-clear-chat-tooltip");
                 portaledTooltip.textContent = clearChatTooltipText;
 
                 // Add arrow
                 const arrow = createElement("div");
-                arrow.className = "tvw-clear-chat-tooltip-arrow";
+                arrow.className = "persona-clear-chat-tooltip-arrow";
                 portaledTooltip.appendChild(arrow);
 
                 // Get button position
@@ -3744,18 +3761,18 @@ export const createAgentExperience = (
           const backgroundColor = voiceConfig.backgroundColor ?? sendButtonConfig.backgroundColor;
           if (backgroundColor) {
             micButton.style.backgroundColor = backgroundColor;
-            micButton.classList.remove("tvw-bg-cw-primary");
+            micButton.classList.remove("persona-bg-persona-primary");
           } else {
             micButton.style.backgroundColor = "";
-            micButton.classList.add("tvw-bg-cw-primary");
+            micButton.classList.add("persona-bg-persona-primary");
           }
           
           if (iconColor) {
             micButton.style.color = iconColor;
-            micButton.classList.remove("tvw-text-white");
+            micButton.classList.remove("persona-text-white");
           } else if (!iconColor && !sendButtonConfig.textColor) {
             micButton.style.color = "";
-            micButton.classList.add("tvw-text-white");
+            micButton.classList.add("persona-text-white");
           }
           
           // Update border styling
@@ -3789,14 +3806,14 @@ export const createAgentExperience = (
           }
           
           // Update tooltip
-          const tooltip = micButtonWrapper?.querySelector(".tvw-send-button-tooltip") as HTMLElement | null;
+          const tooltip = micButtonWrapper?.querySelector(".persona-send-button-tooltip") as HTMLElement | null;
           const tooltipText = voiceConfig.tooltipText ?? "Start voice recognition";
           const showTooltip = voiceConfig.showTooltip ?? false;
           if (showTooltip && tooltipText) {
             if (!tooltip) {
               // Create tooltip if it doesn't exist
               const newTooltip = document.createElement("div");
-              newTooltip.className = "tvw-send-button-tooltip";
+              newTooltip.className = "persona-send-button-tooltip";
               newTooltip.textContent = tooltipText;
               micButtonWrapper?.insertBefore(newTooltip, micButton);
             } else {
@@ -3837,7 +3854,7 @@ export const createAgentExperience = (
 
           // Create previews container if not exists
           if (!attachmentPreviewsContainer) {
-            attachmentPreviewsContainer = createElement("div", "tvw-attachment-previews tvw-flex tvw-flex-wrap tvw-gap-2 tvw-mb-2");
+            attachmentPreviewsContainer = createElement("div", "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2");
             attachmentPreviewsContainer.style.display = "none";
             composerForm.insertBefore(attachmentPreviewsContainer, textarea);
           }
@@ -3854,12 +3871,12 @@ export const createAgentExperience = (
           }
 
           // Create attachment button wrapper
-          attachmentButtonWrapper = createElement("div", "tvw-send-button-wrapper");
+          attachmentButtonWrapper = createElement("div", "persona-send-button-wrapper");
 
           // Create attachment button
           attachmentButton = createElement(
             "button",
-            "tvw-rounded-button tvw-flex tvw-items-center tvw-justify-center disabled:tvw-opacity-50 tvw-cursor-pointer tvw-attachment-button"
+            "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button"
           ) as HTMLButtonElement;
           attachmentButton.type = "button";
           attachmentButton.setAttribute("aria-label", attachmentsConfig.buttonTooltipText ?? "Attach file");
@@ -3878,7 +3895,7 @@ export const createAgentExperience = (
           attachmentButton.style.fontSize = "18px";
           attachmentButton.style.lineHeight = "1";
           attachmentButton.style.backgroundColor = "transparent";
-          attachmentButton.style.color = "var(--cw-primary, #111827)";
+          attachmentButton.style.color = "var(--persona-primary, #111827)";
           attachmentButton.style.border = "none";
           attachmentButton.style.borderRadius = "6px";
           attachmentButton.style.transition = "background-color 0.15s ease";
@@ -3907,7 +3924,7 @@ export const createAgentExperience = (
 
           // Add tooltip
           const attachTooltipText = attachmentsConfig.buttonTooltipText ?? "Attach file";
-          const tooltip = createElement("div", "tvw-send-button-tooltip");
+          const tooltip = createElement("div", "persona-send-button-tooltip");
           tooltip.textContent = attachTooltipText;
           attachmentButtonWrapper.appendChild(tooltip);
 
@@ -3995,7 +4012,7 @@ export const createAgentExperience = (
             if (textColor) {
               sendButton.style.color = textColor;
             } else {
-              sendButton.classList.add("tvw-text-white");
+              sendButton.classList.add("persona-text-white");
             }
           }
         } else {
@@ -4003,18 +4020,18 @@ export const createAgentExperience = (
           if (textColor) {
             sendButton.style.color = textColor;
           } else {
-            sendButton.classList.add("tvw-text-white");
+            sendButton.classList.add("persona-text-white");
           }
         }
         
         // Update classes
-        sendButton.className = "tvw-rounded-button tvw-flex tvw-items-center tvw-justify-center disabled:tvw-opacity-50 tvw-cursor-pointer";
+        sendButton.className = "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer";
         
         if (backgroundColor) {
           sendButton.style.backgroundColor = backgroundColor;
-          sendButton.classList.remove("tvw-bg-cw-primary");
+          sendButton.classList.remove("persona-bg-persona-primary");
         } else {
-          sendButton.classList.add("tvw-bg-cw-primary");
+          sendButton.classList.add("persona-bg-persona-primary");
         }
       } else {
         // Text mode: existing behavior
@@ -4027,19 +4044,19 @@ export const createAgentExperience = (
         sendButton.style.lineHeight = "";
         
         // Update classes
-        sendButton.className = "tvw-rounded-button tvw-bg-cw-accent tvw-px-4 tvw-py-2 tvw-text-sm tvw-font-semibold tvw-text-white disabled:tvw-opacity-50 tvw-cursor-pointer";
+        sendButton.className = "persona-rounded-button persona-bg-persona-accent persona-px-4 persona-py-2 persona-text-sm persona-font-semibold persona-text-white disabled:persona-opacity-50 persona-cursor-pointer";
         
         if (backgroundColor) {
           sendButton.style.backgroundColor = backgroundColor;
-          sendButton.classList.remove("tvw-bg-cw-accent");
+          sendButton.classList.remove("persona-bg-persona-accent");
         } else {
-          sendButton.classList.add("tvw-bg-cw-accent");
+          sendButton.classList.add("persona-bg-persona-accent");
         }
         
         if (textColor) {
           sendButton.style.color = textColor;
         } else {
-          sendButton.classList.add("tvw-text-white");
+          sendButton.classList.add("persona-text-white");
         }
       }
 
@@ -4074,12 +4091,12 @@ export const createAgentExperience = (
       }
 
       // Update tooltip
-      const tooltip = sendButtonWrapper?.querySelector(".tvw-send-button-tooltip") as HTMLElement | null;
+      const tooltip = sendButtonWrapper?.querySelector(".persona-send-button-tooltip") as HTMLElement | null;
       if (showTooltip && tooltipText) {
         if (!tooltip) {
           // Create tooltip if it doesn't exist
           const newTooltip = document.createElement("div");
-          newTooltip.className = "tvw-send-button-tooltip";
+          newTooltip.className = "persona-send-button-tooltip";
           newTooltip.textContent = tooltipText;
           sendButtonWrapper?.insertBefore(newTooltip, sendButton);
         } else {
@@ -4397,7 +4414,7 @@ export const createAgentExperience = (
       }
       
       // Remove any existing feedback forms
-      const existingFeedback = messagesWrapper.querySelector('.tvw-feedback-container');
+      const existingFeedback = messagesWrapper.querySelector('.persona-feedback-container');
       if (existingFeedback) {
         existingFeedback.remove();
       }
@@ -4424,7 +4441,7 @@ export const createAgentExperience = (
       }
       
       // Remove any existing feedback forms
-      const existingFeedback = messagesWrapper.querySelector('.tvw-feedback-container');
+      const existingFeedback = messagesWrapper.querySelector('.persona-feedback-container');
       if (existingFeedback) {
         existingFeedback.remove();
       }
