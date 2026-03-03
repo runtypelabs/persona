@@ -8,6 +8,8 @@ module.exports = {
   globals: {
     RequestInit: "readonly",
     HTMLElementTagNameMap: "readonly",
+    SpeechSynthesisVoice: "readonly",
+    SpeechSynthesis: "readonly",
   },
   extends: [
     "eslint:recommended",

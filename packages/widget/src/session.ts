@@ -19,14 +19,12 @@ import {
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "./utils/content";
 import type {
   VoiceProvider,
-  VoiceResult,
   VoiceStatus,
   VoiceConfig,
   TextToSpeechConfig
 } from "./types";
 import {
   createVoiceProvider,
-  createBestAvailableVoiceProvider,
   isVoiceSupported
 } from "./voice";
 
