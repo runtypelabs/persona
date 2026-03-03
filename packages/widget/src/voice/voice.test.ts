@@ -1,12 +1,13 @@
 // Voice SDK Tests
-import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { VoiceProvider, VoiceResult, VoiceStatus, VoiceConfig } from './provider-interface';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import type { VoiceConfig } from '../types';
 import { RuntypeVoiceProvider } from './runtype-voice-provider';
 import { BrowserVoiceProvider } from './browser-voice-provider';
 import { createVoiceProvider, createBestAvailableVoiceProvider, isVoiceSupported } from './voice-factory';
 
 // Mock window object for browser tests
-const mockWindow = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockWindow: any = {
   SpeechRecognition: undefined,
   webkitSpeechRecognition: undefined
 };
@@ -160,7 +161,7 @@ describe('Best Available Voice Provider', () => {
     mockBrowserSupport(false);
     
     const config = {
-      type: 'runtype',
+      type: 'runtype' as const,
       runtype: {
         agentId: 'test-agent',
         clientToken: 'test-token'
@@ -200,7 +201,7 @@ describe('Voice Support Check', () => {
     mockBrowserSupport(false);
     
     const config = {
-      type: 'runtype',
+      type: 'runtype' as const,
       runtype: {
         agentId: 'test-agent',
         clientToken: 'test-token'

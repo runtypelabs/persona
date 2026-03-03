@@ -8,6 +8,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "lib": ["ES2019", "DOM"],
     "baseUrl": ".",
     "paths": {
       "@runtypelabs/persona": ["src"]
