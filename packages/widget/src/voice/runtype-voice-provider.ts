@@ -8,6 +8,7 @@ import type {
   VoiceConfig,
 } from "../types";
 import { AudioPlaybackManager } from "./audio-playback-manager";
+import { VoiceActivityDetector } from "./voice-activity-detector";
 
 export class RuntypeVoiceProvider implements VoiceProvider {
   type: "runtype" = "runtype";
@@ -23,11 +24,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private isProcessing = false;
   private isSpeaking = false;
 
-  // Silence detection
-  private analyserNode: AnalyserNode | null = null;
+  // Voice activity detection (silence auto-stop + barge-in speech detection)
+  private vad = new VoiceActivityDetector();
   private mediaStream: MediaStream | null = null;
-  private silenceCheckInterval: ReturnType<typeof setInterval> | null = null;
-  private silenceStart: number | null = null;
 
   // Cancellation / interruption support
   private currentAudio: HTMLAudioElement | null = null;
@@ -43,6 +42,24 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   /** Returns the current interruption mode received from the server */
   getInterruptionMode(): "none" | "cancel" | "barge-in" {
     return this.interruptionMode;
+  }
+
+  /** Returns true if the barge-in mic stream is alive (hot mic between turns) */
+  isBargeInActive(): boolean {
+    return this.interruptionMode === "barge-in" && this.mediaStream !== null;
+  }
+
+  /** Tear down the barge-in mic pipeline — "hang up" the always-on mic */
+  async deactivateBargeIn(): Promise<void> {
+    this.vad.stop();
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach((track) => track.stop());
+      this.mediaStream = null;
+    }
+    if (this.audioContext) {
+      await this.audioContext.close();
+      this.audioContext = null;
+    }
   }
 
   async connect() {
@@ -129,6 +146,11 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           { once: true }
         );
       });
+
+      // Send a ping immediately so the server replies with session_config
+      // (which includes interruptionMode). This ensures the client knows
+      // about barge-in mode before the first recording starts.
+      this.sendHeartbeat();
     } catch (error) {
       this.ws = null;
       this.errorCallbacks.forEach((cb) => cb(error as Error));
@@ -213,6 +235,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         break;
 
       case "audio_end":
+        // Guard: discard late audio_end from a cancelled request
+        if (message.requestId && message.requestId !== this.currentRequestId) break;
         // All PCM chunks have been sent — signal the playback manager
         if (this.playbackManager) {
           this.playbackManager.markStreamEnd();
@@ -246,6 +270,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    */
   private handleAudioChunk(pcmData: Uint8Array): void {
     if (pcmData.length === 0) return;
+    if (!this.currentRequestId) return; // discard late chunks after cancel
 
     // Lazily create playback manager on first chunk
     if (!this.playbackManager) {
@@ -253,6 +278,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       this.playbackManager.onFinished(() => {
         this.isSpeaking = false;
         this.playbackManager = null;
+        this.vad.stop(); // stop speech monitoring — audio ended naturally
         this.statusCallbacks.forEach((cb) => cb("idle"));
       });
     }
@@ -261,6 +287,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     if (!this.isSpeaking) {
       this.isSpeaking = true;
       this.statusCallbacks.forEach((cb) => cb("speaking"));
+      this.startBargeInMonitoring().catch(() => {}); // no-op if not barge-in mode
     }
 
     this.playbackManager.enqueue(pcmData);
@@ -325,48 +352,31 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         }
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.mediaStream = stream;
+      // Reuse existing mic stream in barge-in mode (mic stays hot)
+      if (!this.mediaStream) {
+        const constraints =
+          this.interruptionMode === "barge-in"
+            ? { audio: { echoCancellation: true, noiseSuppression: true } }
+            : { audio: true };
+        this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      }
       const w = this.w!;
-      this.audioContext = new (w.AudioContext || w.webkitAudioContext)();
+      if (!this.audioContext) {
+        this.audioContext = new (w.AudioContext || w.webkitAudioContext)();
+      }
 
-      // Set up silence detection via AnalyserNode
-      const audioCtx = this.audioContext!;
-      const source = audioCtx.createMediaStreamSource(stream);
-      this.analyserNode = audioCtx.createAnalyser();
-      this.analyserNode.fftSize = 2048;
-      source.connect(this.analyserNode);
-
+      // VAD-based silence detection — fires once when user stops talking
       const pauseDuration = this.config?.pauseDuration ?? 2000;
       const silenceThreshold = this.config?.silenceThreshold ?? 0.01;
-      this.silenceStart = null;
+      this.vad.start(
+        this.audioContext,
+        this.mediaStream,
+        "silence",
+        { threshold: silenceThreshold, duration: pauseDuration },
+        () => this.stopListening(),
+      );
 
-      const dataArray = new Float32Array(this.analyserNode.fftSize);
-      this.silenceCheckInterval = setInterval(() => {
-        if (!this.analyserNode) return;
-        this.analyserNode.getFloatTimeDomainData(dataArray);
-
-        // Compute RMS volume
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i] * dataArray[i];
-        }
-        const rms = Math.sqrt(sum / dataArray.length);
-
-        if (rms < silenceThreshold) {
-          if (this.silenceStart === null) {
-            this.silenceStart = Date.now();
-          } else if (Date.now() - this.silenceStart >= pauseDuration) {
-            // Silence exceeded threshold — auto-stop
-            this.stopListening();
-          }
-        } else {
-          // Sound detected — reset silence timer
-          this.silenceStart = null;
-        }
-      }, 100);
-
-      this.mediaRecorder = new MediaRecorder(stream);
+      this.mediaRecorder = new MediaRecorder(this.mediaStream);
       this.audioChunks = [];
 
       this.mediaRecorder.ondataavailable = (event) => {
@@ -399,32 +409,73 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   async stopListening() {
-    // Clean up silence detection
-    if (this.silenceCheckInterval) {
-      clearInterval(this.silenceCheckInterval);
-      this.silenceCheckInterval = null;
-    }
-    this.analyserNode = null;
-    this.silenceStart = null;
+    this.vad.stop();
 
     if (this.mediaRecorder) {
+      if (this.interruptionMode !== "barge-in") {
+        this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+      }
       this.mediaRecorder.stop();
-      this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
       this.mediaRecorder = null;
     }
 
-    // Clean up media stream reference
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((track) => track.stop());
-      this.mediaStream = null;
-    }
-
-    if (this.audioContext) {
-      await this.audioContext.close();
-      this.audioContext = null;
+    // Only tear down mic pipeline in non-barge-in modes
+    if (this.interruptionMode !== "barge-in") {
+      if (this.mediaStream) {
+        this.mediaStream.getTracks().forEach((track) => track.stop());
+        this.mediaStream = null;
+      }
+      if (this.audioContext) {
+        await this.audioContext.close();
+        this.audioContext = null;
+      }
     }
 
     this.statusCallbacks.forEach((cb) => cb("idle"));
+  }
+
+  /**
+   * Start VAD in speech mode during agent playback — detects when the user
+   * starts talking so we can interrupt (barge-in). No-op in other modes.
+   * Acquires mic if needed (e.g., first response where stopListening tore it down).
+   */
+  private async startBargeInMonitoring(): Promise<void> {
+    if (this.interruptionMode !== "barge-in") return;
+
+    // Acquire mic pipeline if not already available (first response scenario)
+    const w = this.w;
+    if (!this.mediaStream && w) {
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+    }
+    if (!this.audioContext && w) {
+      this.audioContext = new (w.AudioContext || w.webkitAudioContext)();
+    }
+    if (!this.audioContext || !this.mediaStream) return;
+
+    const speechThreshold = this.config?.silenceThreshold ?? 0.01;
+    const speechDebounce = 200; // 200ms sustained sound = real speech, not echo blip
+
+    this.vad.start(
+      this.audioContext,
+      this.mediaStream,
+      "speech",
+      { threshold: speechThreshold, duration: speechDebounce },
+      () => this.handleBargeIn(),
+    );
+  }
+
+  /**
+   * Handle a barge-in event: cancel playback and immediately start recording.
+   */
+  private handleBargeIn(): void {
+    this.cancelCurrentPlayback();
+    this.startListening().catch((err) => {
+      this.errorCallbacks.forEach((cb) =>
+        cb(err instanceof Error ? err : new Error(String(err))),
+      );
+    });
   }
 
   private generateRequestId(): string {
@@ -550,7 +601,18 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.currentRequestId = null;
     this.isSpeaking = false;
 
+    this.vad.stop();
     await this.stopListening();
+
+    // Force mic teardown (barge-in mode skips this in stopListening)
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach((track) => track.stop());
+      this.mediaStream = null;
+    }
+    if (this.audioContext) {
+      await this.audioContext.close();
+      this.audioContext = null;
+    }
 
     if (this.ws) {
       try {

@@ -156,6 +156,18 @@ export class AgentWidgetSession {
     }
   }
 
+  /** Returns true if the barge-in mic stream is alive (hot mic between turns) */
+  public isBargeInActive(): boolean {
+    return this.voiceProvider?.isBargeInActive?.() ?? false;
+  }
+
+  /** Tear down the barge-in mic pipeline — "hang up" the always-on mic */
+  public async deactivateBargeIn(): Promise<void> {
+    if (this.voiceProvider?.deactivateBargeIn) {
+      await this.voiceProvider.deactivateBargeIn();
+    }
+  }
+
   // Pending placeholder IDs for Runtype two-phase voice flow
   private pendingVoiceUserMessageId: string | null = null;
   private pendingVoiceAssistantMessageId: string | null = null;

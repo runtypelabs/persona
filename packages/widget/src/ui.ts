@@ -2069,10 +2069,17 @@ export const createAgentExperience = (
           break;
         default:
           // idle, connected, disconnected, error
-          voiceState.active = false;
-          removeRuntypeMicStateStyles();
-          emitVoiceState("system");
-          persistVoiceMetadata();
+          if (status === 'idle' && session.isBargeInActive()) {
+            // Barge-in mic is still hot between turns — show it as active
+            removeRuntypeMicStateStyles();
+            applyRuntypeMicRecordingStyles();
+            micButton?.setAttribute("aria-label", "End voice session");
+          } else {
+            voiceState.active = false;
+            removeRuntypeMicStateStyles();
+            emitVoiceState("system");
+            persistVoiceMetadata();
+          }
           break;
       }
     }
@@ -2532,12 +2539,18 @@ export const createAgentExperience = (
     storeOriginalMicStyles();
     const voiceConfig = config.voiceRecognition ?? {};
     const interruptionMode = session.getVoiceInterruptionMode();
-    // Default icon depends on interruption mode: "square" for cancel, "volume-2" otherwise
-    const defaultSpeakingIcon = interruptionMode === "cancel" ? "square" : "volume-2";
+    // Default icon depends on interruption mode:
+    // "square" for cancel, "mic" for barge-in (hot mic), "volume-2" otherwise
+    const defaultSpeakingIcon = interruptionMode === "cancel" ? "square"
+      : interruptionMode === "barge-in" ? "mic"
+      : "volume-2";
     const iconName = voiceConfig.speakingIconName ?? defaultSpeakingIcon;
-    const iconColor = voiceConfig.speakingIconColor ?? originalMicStyles?.color ?? "";
-    const bgColor = voiceConfig.speakingBackgroundColor ?? originalMicStyles?.backgroundColor ?? "";
-    const borderColor = voiceConfig.speakingBorderColor ?? originalMicStyles?.borderColor ?? "";
+    const iconColor = voiceConfig.speakingIconColor
+      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingIconColor ?? originalMicStyles?.color ?? "") : (originalMicStyles?.color ?? ""));
+    const bgColor = voiceConfig.speakingBackgroundColor
+      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBackgroundColor ?? "#ef4444") : (originalMicStyles?.backgroundColor ?? ""));
+    const borderColor = voiceConfig.speakingBorderColor
+      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBorderColor ?? "") : (originalMicStyles?.borderColor ?? ""));
 
     removeAllVoiceStateClasses();
     micButton.classList.add("tvw-voice-speaking");
@@ -2550,11 +2563,17 @@ export const createAgentExperience = (
     // aria-label varies by interruption mode
     const ariaLabel = interruptionMode === "cancel"
       ? "Stop playback and re-record"
+      : interruptionMode === "barge-in"
+      ? "Speak to interrupt"
       : "Agent is speaking";
     micButton.setAttribute("aria-label", ariaLabel);
     // In "none" mode the button is not actionable during speaking
     if (interruptionMode === "none") {
       micButton.style.cursor = "default";
+    }
+    // In "barge-in" mode, add recording class to show mic is hot
+    if (interruptionMode === "barge-in") {
+      micButton.classList.add("tvw-voice-recording");
     }
   };
 
@@ -2586,12 +2605,24 @@ export const createAgentExperience = (
         return;
       }
 
-      // In "cancel" mode during processing/speaking: stop only, don't start recording.
-      // The button shows a stop icon — clicking it should stop playback and return to
-      // idle. The user can then click the mic again to start a new recording.
+      // In "cancel" mode during processing/speaking: stop playback only
       if (interruptionMode === "cancel" &&
           (voiceStatus === "processing" || voiceStatus === "speaking")) {
         session.stopVoicePlayback();
+        return;
+      }
+
+      // In barge-in mode, clicking mic = "hang up" (any state: speaking, idle, etc.)
+      // Stops playback if active, tears down the always-on mic.
+      if (session.isBargeInActive()) {
+        session.stopVoicePlayback();
+        session.deactivateBargeIn().then(() => {
+          voiceState.active = false;
+          voiceState.manuallyDeactivated = true;
+          persistVoiceMetadata();
+          emitVoiceState("user");
+          removeRuntypeMicStateStyles();
+        });
         return;
       }
 

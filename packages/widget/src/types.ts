@@ -868,6 +868,12 @@ export interface VoiceProvider {
   /** Returns the current interruption mode (only meaningful for Runtype provider) */
   getInterruptionMode?(): "none" | "cancel" | "barge-in";
 
+  /** Returns true if the barge-in mic stream is alive (hot mic between turns) */
+  isBargeInActive?(): boolean;
+
+  /** Tear down the barge-in mic pipeline — "hang up" the always-on mic */
+  deactivateBargeIn?(): Promise<void>;
+
   /** Stop playback / cancel in-flight request without starting recording */
   stopPlayback?(): void;
 }
