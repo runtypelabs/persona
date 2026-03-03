@@ -136,6 +136,38 @@ export class AgentWidgetSession {
     return this.voiceStatus;
   }
 
+  /**
+   * Get the voice interruption mode from the provider (none/cancel/barge-in)
+   */
+  public getVoiceInterruptionMode(): "none" | "cancel" | "barge-in" {
+    if (this.voiceProvider?.getInterruptionMode) {
+      return this.voiceProvider.getInterruptionMode();
+    }
+    return "none";
+  }
+
+  /**
+   * Stop voice playback / cancel in-flight request without starting recording.
+   * Returns to idle state.
+   */
+  public stopVoicePlayback(): void {
+    if (this.voiceProvider?.stopPlayback) {
+      this.voiceProvider.stopPlayback();
+    }
+  }
+
+  /** Returns true if the barge-in mic stream is alive (hot mic between turns) */
+  public isBargeInActive(): boolean {
+    return this.voiceProvider?.isBargeInActive?.() ?? false;
+  }
+
+  /** Tear down the barge-in mic pipeline — "hang up" the always-on mic */
+  public async deactivateBargeIn(): Promise<void> {
+    if (this.voiceProvider?.deactivateBargeIn) {
+      await this.voiceProvider.deactivateBargeIn();
+    }
+  }
+
   // Pending placeholder IDs for Runtype two-phase voice flow
   private pendingVoiceUserMessageId: string | null = null;
   private pendingVoiceAssistantMessageId: string | null = null;
@@ -227,9 +259,12 @@ export class AgentWidgetSession {
             this.injectAssistantMessage({ content: result.text.trim() });
           }
 
-          // If Runtype provider returned audio (server-side TTS), mark the
-          // assistant message as already spoken so browser TTS doesn't double-speak
-          if (result.audio?.base64) {
+          // Mark assistant message as already spoken so browser TTS doesn't
+          // double-speak. This covers both paths:
+          //   - Batch: audio.base64 is present in the voice_response
+          //   - Streaming: audio arrives as binary PCM chunks (no base64 here)
+          // In either case, the Runtype provider handles TTS — browser TTS must skip.
+          {
             const spokenId = this.pendingVoiceAssistantMessageId
               ?? [...this.messages].reverse().find(m => m.role === 'assistant')?.id;
             if (spokenId) this.ttsSpokenMessageIds.add(spokenId);

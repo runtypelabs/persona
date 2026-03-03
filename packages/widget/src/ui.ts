@@ -2053,12 +2053,34 @@ export const createAgentExperience = (
       }
     },
     onVoiceStatusChanged(status: VoiceStatus) {
-      // When Runtype provider auto-stops (e.g. silence detection), update mic button
-      if (config.voiceRecognition?.provider?.type === 'runtype' && status !== 'listening') {
-        voiceState.active = false;
-        removeRuntypeMicRecordingStyles();
-        emitVoiceState("system");
-        persistVoiceMetadata();
+      if (config.voiceRecognition?.provider?.type !== 'runtype') return;
+
+      switch (status) {
+        case 'listening':
+          // Recording styles are applied by toggleVoice() / startVoiceRecognition() flows
+          break;
+        case 'processing':
+          removeRuntypeMicStateStyles();
+          applyRuntypeMicProcessingStyles();
+          break;
+        case 'speaking':
+          removeRuntypeMicStateStyles();
+          applyRuntypeMicSpeakingStyles();
+          break;
+        default:
+          // idle, connected, disconnected, error
+          if (status === 'idle' && session.isBargeInActive()) {
+            // Barge-in mic is still hot between turns — show it as active
+            removeRuntypeMicStateStyles();
+            applyRuntypeMicRecordingStyles();
+            micButton?.setAttribute("aria-label", "End voice session");
+          } else {
+            voiceState.active = false;
+            removeRuntypeMicStateStyles();
+            emitVoiceState("system");
+            persistVoiceMetadata();
+          }
+          break;
       }
     }
   });
@@ -2176,6 +2198,8 @@ export const createAgentExperience = (
     backgroundColor: string;
     color: string;
     borderColor: string;
+    iconName: string;
+    iconSize: number;
   } | null = null;
 
   const getSpeechRecognitionClass = (): any => {
@@ -2273,15 +2297,17 @@ export const createAgentExperience = (
       emitVoiceState(source);
       persistVoiceMetadata();
       if (micButton) {
-        // Store original styles
+        // Store original styles (including icon info for restoration)
+        const voiceConfig = config.voiceRecognition ?? {};
         originalMicStyles = {
           backgroundColor: micButton.style.backgroundColor,
           color: micButton.style.color,
-          borderColor: micButton.style.borderColor
+          borderColor: micButton.style.borderColor,
+          iconName: voiceConfig.iconName ?? "mic",
+          iconSize: parseFloat(voiceConfig.iconSize ?? config.sendButton?.size ?? "40") || 24,
         };
-        
+
         // Apply recording state styles from config
-        const voiceConfig = config.voiceRecognition ?? {};
         const recordingBackgroundColor = voiceConfig.recordingBackgroundColor ?? "#ef4444";
         const recordingIconColor = voiceConfig.recordingIconColor;
         const recordingBorderColor = voiceConfig.recordingBorderColor;
@@ -2334,24 +2360,7 @@ export const createAgentExperience = (
     persistVoiceMetadata();
 
     if (micButton) {
-      micButton.classList.remove("tvw-voice-recording");
-      
-      // Restore original styles
-      if (originalMicStyles) {
-        micButton.style.backgroundColor = originalMicStyles.backgroundColor;
-        micButton.style.color = originalMicStyles.color;
-        micButton.style.borderColor = originalMicStyles.borderColor;
-        
-        // Restore SVG stroke color if present
-        const svg = micButton.querySelector("svg");
-        if (svg) {
-          svg.setAttribute("stroke", originalMicStyles.color || "currentColor");
-        }
-        
-        originalMicStyles = null;
-      }
-      
-      micButton.setAttribute("aria-label", "Start voice recognition");
+      removeRuntypeMicStateStyles();
     }
   };
 
@@ -2450,18 +2459,46 @@ export const createAgentExperience = (
     return { micButton, micButtonWrapper };
   };
 
-  // Helpers to apply/remove Runtype mic recording styles (mirrors start/stopVoiceRecognition)
-  const applyRuntypeMicRecordingStyles = () => {
-    if (!micButton) return;
+  // --- Helpers to store/restore original mic button state ---
+
+  const storeOriginalMicStyles = () => {
+    if (!micButton || originalMicStyles) return; // Already stored
+    const voiceConfig = config.voiceRecognition ?? {};
     originalMicStyles = {
       backgroundColor: micButton.style.backgroundColor,
       color: micButton.style.color,
-      borderColor: micButton.style.borderColor
+      borderColor: micButton.style.borderColor,
+      iconName: voiceConfig.iconName ?? "mic",
+      iconSize: parseFloat(voiceConfig.iconSize ?? config.sendButton?.size ?? "40") || 24,
     };
+  };
+
+  /** Swap the mic button's SVG icon */
+  const swapMicIcon = (iconName: string, color: string) => {
+    if (!micButton) return;
+    const existingSvg = micButton.querySelector("svg");
+    if (existingSvg) existingSvg.remove();
+    const size = originalMicStyles?.iconSize ?? (parseFloat(config.voiceRecognition?.iconSize ?? config.sendButton?.size ?? "40") || 24);
+    const newSvg = renderLucideIcon(iconName, size, color, 1.5);
+    if (newSvg) micButton.appendChild(newSvg);
+  };
+
+  /** Remove all voice state CSS classes */
+  const removeAllVoiceStateClasses = () => {
+    if (!micButton) return;
+    micButton.classList.remove("tvw-voice-recording", "tvw-voice-processing", "tvw-voice-speaking");
+  };
+
+  // --- Per-state style application ---
+
+  const applyRuntypeMicRecordingStyles = () => {
+    if (!micButton) return;
+    storeOriginalMicStyles();
     const voiceConfig = config.voiceRecognition ?? {};
     const recordingBackgroundColor = voiceConfig.recordingBackgroundColor ?? "#ef4444";
     const recordingIconColor = voiceConfig.recordingIconColor;
     const recordingBorderColor = voiceConfig.recordingBorderColor;
+    removeAllVoiceStateClasses();
     micButton.classList.add("tvw-voice-recording");
     micButton.style.backgroundColor = recordingBackgroundColor;
     if (recordingIconColor) {
@@ -2472,17 +2509,86 @@ export const createAgentExperience = (
     if (recordingBorderColor) micButton.style.borderColor = recordingBorderColor;
     micButton.setAttribute("aria-label", "Stop voice recognition");
   };
-  const removeRuntypeMicRecordingStyles = () => {
+
+  const applyRuntypeMicProcessingStyles = () => {
     if (!micButton) return;
-    micButton.classList.remove("tvw-voice-recording");
+    storeOriginalMicStyles();
+    const voiceConfig = config.voiceRecognition ?? {};
+    const interruptionMode = session.getVoiceInterruptionMode();
+    const iconName = voiceConfig.processingIconName ?? "loader";
+    const iconColor = voiceConfig.processingIconColor ?? originalMicStyles?.color ?? "";
+    const bgColor = voiceConfig.processingBackgroundColor ?? originalMicStyles?.backgroundColor ?? "";
+    const borderColor = voiceConfig.processingBorderColor ?? originalMicStyles?.borderColor ?? "";
+
+    removeAllVoiceStateClasses();
+    micButton.classList.add("tvw-voice-processing");
+    micButton.style.backgroundColor = bgColor;
+    micButton.style.borderColor = borderColor;
+    const resolvedColor = iconColor || "currentColor";
+    micButton.style.color = resolvedColor;
+    swapMicIcon(iconName, resolvedColor);
+    micButton.setAttribute("aria-label", "Processing voice input");
+    // In "none" mode the button is not actionable during processing
+    if (interruptionMode === "none") {
+      micButton.style.cursor = "default";
+    }
+  };
+
+  const applyRuntypeMicSpeakingStyles = () => {
+    if (!micButton) return;
+    storeOriginalMicStyles();
+    const voiceConfig = config.voiceRecognition ?? {};
+    const interruptionMode = session.getVoiceInterruptionMode();
+    // Default icon depends on interruption mode:
+    // "square" for cancel, "mic" for barge-in (hot mic), "volume-2" otherwise
+    const defaultSpeakingIcon = interruptionMode === "cancel" ? "square"
+      : interruptionMode === "barge-in" ? "mic"
+      : "volume-2";
+    const iconName = voiceConfig.speakingIconName ?? defaultSpeakingIcon;
+    const iconColor = voiceConfig.speakingIconColor
+      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingIconColor ?? originalMicStyles?.color ?? "") : (originalMicStyles?.color ?? ""));
+    const bgColor = voiceConfig.speakingBackgroundColor
+      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBackgroundColor ?? "#ef4444") : (originalMicStyles?.backgroundColor ?? ""));
+    const borderColor = voiceConfig.speakingBorderColor
+      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBorderColor ?? "") : (originalMicStyles?.borderColor ?? ""));
+
+    removeAllVoiceStateClasses();
+    micButton.classList.add("tvw-voice-speaking");
+    micButton.style.backgroundColor = bgColor;
+    micButton.style.borderColor = borderColor;
+    const resolvedColor = iconColor || "currentColor";
+    micButton.style.color = resolvedColor;
+    swapMicIcon(iconName, resolvedColor);
+
+    // aria-label varies by interruption mode
+    const ariaLabel = interruptionMode === "cancel"
+      ? "Stop playback and re-record"
+      : interruptionMode === "barge-in"
+      ? "Speak to interrupt"
+      : "Agent is speaking";
+    micButton.setAttribute("aria-label", ariaLabel);
+    // In "none" mode the button is not actionable during speaking
+    if (interruptionMode === "none") {
+      micButton.style.cursor = "default";
+    }
+    // In "barge-in" mode, add recording class to show mic is hot
+    if (interruptionMode === "barge-in") {
+      micButton.classList.add("tvw-voice-recording");
+    }
+  };
+
+  /** Restore mic button to idle state (icon, colors, aria-label, cursor) */
+  const removeRuntypeMicStateStyles = () => {
+    if (!micButton) return;
+    removeAllVoiceStateClasses();
     if (originalMicStyles) {
       micButton.style.backgroundColor = originalMicStyles.backgroundColor ?? "";
       micButton.style.color = originalMicStyles.color ?? "";
       micButton.style.borderColor = originalMicStyles.borderColor ?? "";
-      const svg = micButton.querySelector("svg");
-      if (svg) svg.setAttribute("stroke", originalMicStyles.color || "currentColor");
+      swapMicIcon(originalMicStyles.iconName, originalMicStyles.color || "currentColor");
       originalMicStyles = null;
     }
+    micButton.style.cursor = "";
     micButton.setAttribute("aria-label", "Start voice recognition");
   };
 
@@ -2490,6 +2596,36 @@ export const createAgentExperience = (
   const handleMicButtonClick = () => {
     // Runtype provider: use session.toggleVoice() (WebSocket-based STT)
     if (config.voiceRecognition?.provider?.type === 'runtype') {
+      const voiceStatus = session.getVoiceStatus();
+      const interruptionMode = session.getVoiceInterruptionMode();
+
+      // In "none" mode, ignore clicks while processing or speaking
+      if (interruptionMode === "none" &&
+          (voiceStatus === "processing" || voiceStatus === "speaking")) {
+        return;
+      }
+
+      // In "cancel" mode during processing/speaking: stop playback only
+      if (interruptionMode === "cancel" &&
+          (voiceStatus === "processing" || voiceStatus === "speaking")) {
+        session.stopVoicePlayback();
+        return;
+      }
+
+      // In barge-in mode, clicking mic = "hang up" (any state: speaking, idle, etc.)
+      // Stops playback if active, tears down the always-on mic.
+      if (session.isBargeInActive()) {
+        session.stopVoicePlayback();
+        session.deactivateBargeIn().then(() => {
+          voiceState.active = false;
+          voiceState.manuallyDeactivated = true;
+          persistVoiceMetadata();
+          emitVoiceState("user");
+          removeRuntypeMicStateStyles();
+        });
+        return;
+      }
+
       session.toggleVoice().then(() => {
         voiceState.active = session.isVoiceActive();
         voiceState.manuallyDeactivated = !session.isVoiceActive();
@@ -2498,7 +2634,7 @@ export const createAgentExperience = (
         if (session.isVoiceActive()) {
           applyRuntypeMicRecordingStyles();
         } else {
-          removeRuntypeMicRecordingStyles();
+          removeRuntypeMicStateStyles();
         }
       });
       return;
@@ -2530,7 +2666,7 @@ export const createAgentExperience = (
     destroyCallbacks.push(() => {
       if (config.voiceRecognition?.provider?.type === 'runtype') {
         if (session.isVoiceActive()) session.toggleVoice();
-        removeRuntypeMicRecordingStyles();
+        removeRuntypeMicStateStyles();
       } else {
         stopVoiceRecognition("system");
       }
@@ -4102,7 +4238,7 @@ export const createAgentExperience = (
           voiceState.manuallyDeactivated = true;
           persistVoiceMetadata();
           emitVoiceState("user");
-          removeRuntypeMicRecordingStyles();
+          removeRuntypeMicStateStyles();
         });
         return true;
       }
