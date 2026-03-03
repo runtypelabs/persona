@@ -1,5 +1,28 @@
 # @runtypelabs/persona
 
+## 1.48.0
+
+### Minor Changes
+
+- 7b61bce: Add barge-in voice interruption mode with always-on mic and speech detection
+
+  - New `VoiceActivityDetector` class provides reusable RMS-based VAD with two modes: `silence` (user stopped talking) and `speech` (user started talking)
+  - In barge-in mode the mic stays hot between turns — audio pipeline is reused instead of torn down after each utterance
+  - During agent playback, VAD monitors for sustained speech and automatically interrupts playback to begin recording
+  - Mic button shows recording state during agent speech in barge-in mode and acts as a "hang up" to end the session
+  - New `isBargeInActive()` and `deactivateBargeIn()` methods on `VoiceProvider` and `Session` for UI coordination
+  - Guard against late `audio_end` and audio chunks from cancelled requests
+
+- d3ed42b: Add voice interruption and cancellation support to RuntypeVoiceProvider
+
+  - Handle `session_config` WebSocket message to receive server-side interruption mode (`none`, `cancel`, `barge-in`)
+  - New `cancelCurrentPlayback()` method stops audio playback and sends cancel request to server
+  - When interruption is enabled, `startListening()` cancels in-flight responses instead of throwing
+  - Track current audio element and request IDs for reliable cancellation and cleanup
+  - Handle `cancelled` WebSocket message for server-acknowledged cancellation
+  - Clean up audio resources on disconnect
+  - Demo: conditionally show browser voice controls based on active TTS provider
+
 ## 1.47.0
 
 ### Minor Changes
