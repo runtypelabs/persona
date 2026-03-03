@@ -364,12 +364,13 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       if (!this.audioContext) {
         this.audioContext = new (w.AudioContext || w.webkitAudioContext)();
       }
+      const audioContext = this.audioContext!;
 
       // VAD-based silence detection — fires once when user stops talking
       const pauseDuration = this.config?.pauseDuration ?? 2000;
       const silenceThreshold = this.config?.silenceThreshold ?? 0.01;
       this.vad.start(
-        this.audioContext,
+        audioContext,
         this.mediaStream,
         "silence",
         { threshold: silenceThreshold, duration: pauseDuration },
@@ -454,11 +455,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     }
     if (!this.audioContext || !this.mediaStream) return;
 
+    const audioContext = this.audioContext!;
     const speechThreshold = this.config?.silenceThreshold ?? 0.01;
     const speechDebounce = 200; // 200ms sustained sound = real speech, not echo blip
 
     this.vad.start(
-      this.audioContext,
+      audioContext,
       this.mediaStream,
       "speech",
       { threshold: speechThreshold, duration: speechDebounce },
