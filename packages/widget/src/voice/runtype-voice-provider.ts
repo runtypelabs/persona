@@ -7,6 +7,7 @@ import type {
   VoiceStatus,
   VoiceConfig,
 } from "../types";
+import { AudioPlaybackManager } from "./audio-playback-manager";
 
 export class RuntypeVoiceProvider implements VoiceProvider {
   type: "runtype" = "runtype";
@@ -33,6 +34,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private currentAudioUrl: string | null = null;
   private currentRequestId: string | null = null;
   private interruptionMode: "none" | "cancel" | "barge-in" = "none";
+
+  // Streaming audio playback (PCM chunks)
+  private playbackManager: AudioPlaybackManager | null = null;
 
   constructor(private config: VoiceConfig["runtype"]) {}
 
@@ -149,7 +153,17 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       this.statusCallbacks.forEach((cb) => cb("error"));
     };
 
+    // Receive binary frames for streaming audio (set binaryType to arraybuffer)
+    this.ws.binaryType = "arraybuffer";
+
     this.ws.onmessage = (event) => {
+      // Binary frame = raw PCM audio chunk for streaming playback
+      if (event.data instanceof ArrayBuffer) {
+        this.handleAudioChunk(new Uint8Array(event.data));
+        return;
+      }
+
+      // Text frame = JSON control message
       try {
         const message = JSON.parse(event.data);
         this.handleWebSocketMessage(message);
@@ -183,14 +197,29 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           }),
         );
 
-        // Play TTS audio if present — stay in "speaking" state until playback ends
+        // Batch path: play TTS audio if present in the response (backward compat)
         if (message.response.audio?.base64) {
           this.isSpeaking = true;
           this.statusCallbacks.forEach((cb) => cb("speaking"));
           this.playAudio(message.response.audio).catch((err) =>
             this.errorCallbacks.forEach((cb) => cb(err instanceof Error ? err : new Error(String(err)))),
           );
+        } else if (!message.response.audio?.base64) {
+          // Streaming path: text-only voice_response — audio will arrive as
+          // binary chunks followed by audio_end. Transition to speaking state
+          // once the first audio chunk arrives (see handleAudioChunk).
+          // Stay in processing state until then.
+        }
+        break;
+
+      case "audio_end":
+        // All PCM chunks have been sent — signal the playback manager
+        if (this.playbackManager) {
+          this.playbackManager.markStreamEnd();
         } else {
+          // No audio chunks arrived — go idle
+          this.isSpeaking = false;
+          this.isProcessing = false;
           this.statusCallbacks.forEach((cb) => cb("idle"));
         }
         break;
@@ -213,6 +242,31 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   /**
+   * Handle a binary audio chunk (raw PCM 24kHz 16-bit LE) for streaming playback.
+   */
+  private handleAudioChunk(pcmData: Uint8Array): void {
+    if (pcmData.length === 0) return;
+
+    // Lazily create playback manager on first chunk
+    if (!this.playbackManager) {
+      this.playbackManager = new AudioPlaybackManager(24000);
+      this.playbackManager.onFinished(() => {
+        this.isSpeaking = false;
+        this.playbackManager = null;
+        this.statusCallbacks.forEach((cb) => cb("idle"));
+      });
+    }
+
+    // Transition to speaking on first chunk
+    if (!this.isSpeaking) {
+      this.isSpeaking = true;
+      this.statusCallbacks.forEach((cb) => cb("speaking"));
+    }
+
+    this.playbackManager.enqueue(pcmData);
+  }
+
+  /**
    * Stop playback / cancel in-flight request and return to idle.
    * This is the public "stop only" action — does NOT start recording.
    */
@@ -227,7 +281,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * Internal helper — does NOT fire status callbacks (caller decides next state).
    */
   private cancelCurrentPlayback(): void {
-    // Stop playing audio
+    // Stop batch playback (Audio element)
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio.src = "";
@@ -236,6 +290,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     if (this.currentAudioUrl) {
       URL.revokeObjectURL(this.currentAudioUrl);
       this.currentAudioUrl = null;
+    }
+
+    // Stop streaming playback (AudioPlaybackManager)
+    if (this.playbackManager) {
+      this.playbackManager.flush();
+      this.playbackManager = null;
     }
 
     // Tell server to abort the in-flight request
@@ -472,7 +532,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   async disconnect(): Promise<void> {
-    // Stop any playing audio
+    // Stop any playing audio (batch)
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio.src = "";
@@ -481,6 +541,11 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     if (this.currentAudioUrl) {
       URL.revokeObjectURL(this.currentAudioUrl);
       this.currentAudioUrl = null;
+    }
+    // Stop streaming playback
+    if (this.playbackManager) {
+      await this.playbackManager.destroy();
+      this.playbackManager = null;
     }
     this.currentRequestId = null;
     this.isSpeaking = false;

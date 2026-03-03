@@ -247,9 +247,12 @@ export class AgentWidgetSession {
             this.injectAssistantMessage({ content: result.text.trim() });
           }
 
-          // If Runtype provider returned audio (server-side TTS), mark the
-          // assistant message as already spoken so browser TTS doesn't double-speak
-          if (result.audio?.base64) {
+          // Mark assistant message as already spoken so browser TTS doesn't
+          // double-speak. This covers both paths:
+          //   - Batch: audio.base64 is present in the voice_response
+          //   - Streaming: audio arrives as binary PCM chunks (no base64 here)
+          // In either case, the Runtype provider handles TTS — browser TTS must skip.
+          {
             const spokenId = this.pendingVoiceAssistantMessageId
               ?? [...this.messages].reverse().find(m => m.role === 'assistant')?.id;
             if (spokenId) this.ttsSpokenMessageIds.add(spokenId);
