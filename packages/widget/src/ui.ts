@@ -904,7 +904,7 @@ export const createAgentExperience = (
 
   messagesWrapper.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    const actionBtn = target.closest('.tvw-message-action-btn[data-action]') as HTMLElement;
+    const actionBtn = target.closest('.persona-message-action-btn[data-action]') as HTMLElement;
     if (!actionBtn) return;
 
     event.preventDefault();
@@ -926,14 +926,14 @@ export const createAgentExperience = (
         const textToCopy = message.content || "";
         navigator.clipboard.writeText(textToCopy).then(() => {
           // Show success feedback - swap icon temporarily
-          actionBtn.classList.add("tvw-message-action-success");
+          actionBtn.classList.add("persona-message-action-success");
           const checkIcon = renderLucideIcon("check", 14, "currentColor", 2);
           if (checkIcon) {
             actionBtn.innerHTML = "";
             actionBtn.appendChild(checkIcon);
           }
           setTimeout(() => {
-            actionBtn.classList.remove("tvw-message-action-success");
+            actionBtn.classList.remove("persona-message-action-success");
             const originalIcon = renderLucideIcon("copy", 14, "currentColor", 2);
             if (originalIcon) {
               actionBtn.innerHTML = "";
@@ -955,17 +955,17 @@ export const createAgentExperience = (
       if (wasActive) {
         // Toggle off
         messageVoteState.delete(messageId);
-        actionBtn.classList.remove("tvw-message-action-active");
+        actionBtn.classList.remove("persona-message-action-active");
       } else {
         // Clear opposite vote button
         const oppositeAction = action === 'upvote' ? 'downvote' : 'upvote';
         const oppositeBtn = actionsContainer.querySelector(`[data-action="${oppositeAction}"]`);
         if (oppositeBtn) {
-          oppositeBtn.classList.remove("tvw-message-action-active");
+          oppositeBtn.classList.remove("persona-message-action-active");
         }
 
         messageVoteState.set(messageId, action);
-        actionBtn.classList.add("tvw-message-action-active");
+        actionBtn.classList.add("persona-message-action-active");
 
         // Trigger feedback
         const messages = session.getMessages();
