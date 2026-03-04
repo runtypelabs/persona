@@ -51,7 +51,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     if (headerIconName) {
       // Use Lucide icon
       const iconSize = parseFloat(headerIconSize) || 24;
-      const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "#ffffff", 1);
+      const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "var(--persona-text-inverse, #ffffff)", 1);
       if (iconSvg) {
         iconHolder.replaceChildren(iconSvg);
       } else {

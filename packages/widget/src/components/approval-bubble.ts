@@ -26,11 +26,17 @@ export const updateApprovalBubbleUI = (
 
     // Update badge color
     if (approval.status === "approved") {
-      statusBadge.className = "tvw-inline-flex tvw-items-center tvw-px-2 tvw-py-0.5 tvw-rounded-full tvw-text-xs tvw-font-medium tvw-approval-badge-approved";
+      statusBadge.className = "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded-full persona-text-xs persona-font-medium";
+      statusBadge.style.backgroundColor = "var(--persona-palette-colors-success-100, #dcfce7)";
+      statusBadge.style.color = "var(--persona-palette-colors-success-700, #15803d)";
     } else if (approval.status === "denied") {
-      statusBadge.className = "tvw-inline-flex tvw-items-center tvw-px-2 tvw-py-0.5 tvw-rounded-full tvw-text-xs tvw-font-medium tvw-approval-badge-denied";
+      statusBadge.className = "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded-full persona-text-xs persona-font-medium";
+      statusBadge.style.backgroundColor = "var(--persona-palette-colors-error-100, #fee2e2)";
+      statusBadge.style.color = "var(--persona-palette-colors-error-700, #b91c1c)";
     } else if (approval.status === "timeout") {
-      statusBadge.className = "tvw-inline-flex tvw-items-center tvw-px-2 tvw-py-0.5 tvw-rounded-full tvw-text-xs tvw-font-medium tvw-approval-badge-timeout";
+      statusBadge.className = "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded-full persona-text-xs persona-font-medium";
+      statusBadge.style.backgroundColor = "var(--persona-palette-colors-warning-100, #fef3c7)";
+      statusBadge.style.color = "var(--persona-palette-colors-warning-700, #b45309)";
     }
     statusBadge.setAttribute("data-approval-status", approval.status);
   }
@@ -42,9 +48,9 @@ export const updateApprovalBubbleUI = (
     const iconName = approval.status === "denied" ? "shield-x"
       : approval.status === "timeout" ? "shield-alert"
       : "shield-check";
-    const iconColor = approval.status === "approved" ? "#16a34a"
-      : approval.status === "denied" ? "#dc2626"
-      : approval.status === "timeout" ? "#ca8a04"
+    const iconColor = approval.status === "approved" ? "var(--persona-feedback-success, #16a34a)"
+      : approval.status === "denied" ? "var(--persona-feedback-error, #dc2626)"
+      : approval.status === "timeout" ? "var(--persona-feedback-warning, #ca8a04)"
       : (approvalConfig?.titleColor ?? "currentColor");
     const icon = renderLucideIcon(iconName, 20, iconColor, 2);
     if (icon) {
@@ -73,14 +79,12 @@ export const createApprovalBubble = (
   const bubble = createElement(
     "div",
     [
-      "vanilla-message-bubble",
-      "vanilla-approval-bubble",
-      "tvw-w-full",
-      "tvw-max-w-[85%]",
-      "tvw-rounded-2xl",
-      "tvw-border",
-      "tvw-shadow-sm",
-      "tvw-overflow-hidden",
+      "persona-w-full",
+      "persona-max-w-[85%]",
+      "persona-rounded-2xl",
+      "persona-border",
+      "persona-shadow-sm",
+      "persona-overflow-hidden",
     ].join(" ")
   );
 
@@ -88,13 +92,9 @@ export const createApprovalBubble = (
   bubble.id = `bubble-${message.id}`;
   bubble.setAttribute("data-message-id", message.id);
 
-  // Apply styling — only set inline styles when config overrides exist (CSS defaults handle the rest)
-  if (approvalConfig?.backgroundColor) {
-    bubble.style.backgroundColor = approvalConfig.backgroundColor;
-  }
-  if (approvalConfig?.borderColor) {
-    bubble.style.borderColor = approvalConfig.borderColor;
-  }
+  // Apply styling — use semantic tokens with config overrides
+  bubble.style.backgroundColor = approvalConfig?.backgroundColor ?? "var(--persona-approval-bg, #fefce8)";
+  bubble.style.borderColor = approvalConfig?.borderColor ?? "var(--persona-approval-border, #fef08a)";
 
   if (!approval) {
     return bubble;
@@ -103,18 +103,18 @@ export const createApprovalBubble = (
   // Header section with icon, title, and status badge
   const header = createElement(
     "div",
-    "tvw-flex tvw-items-start tvw-gap-3 tvw-px-4 tvw-py-3"
+    "persona-flex persona-items-start persona-gap-3 persona-px-4 persona-py-3"
   );
 
   // Icon container
-  const iconContainer = createElement("div", "tvw-flex-shrink-0 tvw-mt-0.5");
+  const iconContainer = createElement("div", "persona-flex-shrink-0 persona-mt-0.5");
   iconContainer.setAttribute("data-approval-icon", "true");
   const iconName = approval.status === "denied" ? "shield-x"
     : approval.status === "timeout" ? "shield-alert"
     : "shield-check";
-  const iconColor = approval.status === "approved" ? "#16a34a"
-    : approval.status === "denied" ? "#dc2626"
-    : approval.status === "timeout" ? "#ca8a04"
+  const iconColor = approval.status === "approved" ? "var(--persona-feedback-success, #16a34a)"
+    : approval.status === "denied" ? "var(--persona-feedback-error, #dc2626)"
+    : approval.status === "timeout" ? "var(--persona-feedback-warning, #ca8a04)"
     : (approvalConfig?.titleColor ?? "currentColor");
   const icon = renderLucideIcon(iconName, 20, iconColor, 2);
   if (icon) {
@@ -122,11 +122,11 @@ export const createApprovalBubble = (
   }
 
   // Content area
-  const content = createElement("div", "tvw-flex-1 tvw-min-w-0");
+  const content = createElement("div", "persona-flex-1 persona-min-w-0");
 
   // Title row with status badge
-  const titleRow = createElement("div", "tvw-flex tvw-items-center tvw-gap-2");
-  const title = createElement("span", "tvw-text-sm tvw-font-medium tvw-text-cw-primary");
+  const titleRow = createElement("div", "persona-flex persona-items-center persona-gap-2");
+  const title = createElement("span", "persona-text-sm persona-font-medium persona-text-persona-primary");
   if (approvalConfig?.titleColor) {
     title.style.color = approvalConfig.titleColor;
   }
@@ -135,16 +135,19 @@ export const createApprovalBubble = (
 
   // Status badge (shown when resolved)
   if (!isPending) {
-    const badge = createElement("span", "tvw-inline-flex tvw-items-center tvw-px-2 tvw-py-0.5 tvw-rounded-full tvw-text-xs tvw-font-medium");
+    const badge = createElement("span", "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded-full persona-text-xs persona-font-medium");
     badge.setAttribute("data-approval-status", approval.status);
     if (approval.status === "approved") {
-      badge.className += " tvw-approval-badge-approved";
+      badge.style.backgroundColor = "var(--persona-palette-colors-success-100, #dcfce7)";
+      badge.style.color = "var(--persona-palette-colors-success-700, #15803d)";
       badge.textContent = "Approved";
     } else if (approval.status === "denied") {
-      badge.className += " tvw-approval-badge-denied";
+      badge.style.backgroundColor = "var(--persona-palette-colors-error-100, #fee2e2)";
+      badge.style.color = "var(--persona-palette-colors-error-700, #b91c1c)";
       badge.textContent = "Denied";
     } else if (approval.status === "timeout") {
-      badge.className += " tvw-approval-badge-timeout";
+      badge.style.backgroundColor = "var(--persona-palette-colors-warning-100, #fef3c7)";
+      badge.style.color = "var(--persona-palette-colors-warning-700, #b45309)";
       badge.textContent = "Timeout";
     }
     titleRow.appendChild(badge);
@@ -153,7 +156,7 @@ export const createApprovalBubble = (
   content.appendChild(titleRow);
 
   // Description
-  const description = createElement("p", "tvw-text-sm tvw-mt-0.5 tvw-text-cw-muted");
+  const description = createElement("p", "persona-text-sm persona-mt-0.5 persona-text-persona-muted");
   if (approvalConfig?.descriptionColor) {
     description.style.color = approvalConfig.descriptionColor;
   }
@@ -164,7 +167,7 @@ export const createApprovalBubble = (
   if (approval.parameters) {
     const paramsPre = createElement(
       "pre",
-      "tvw-mt-2 tvw-text-xs tvw-p-2 tvw-rounded tvw-overflow-x-auto tvw-max-h-32 tvw-bg-cw-container tvw-text-cw-primary"
+      "persona-mt-2 persona-text-xs persona-p-2 persona-rounded persona-overflow-x-auto persona-max-h-32 persona-bg-persona-container persona-text-persona-primary"
     );
     if (approvalConfig?.parameterBackgroundColor) {
       paramsPre.style.backgroundColor = approvalConfig.parameterBackgroundColor;
@@ -180,13 +183,13 @@ export const createApprovalBubble = (
 
   // Action buttons (only shown when pending)
   if (isPending) {
-    const buttonsContainer = createElement("div", "tvw-flex tvw-gap-2 tvw-mt-2");
+    const buttonsContainer = createElement("div", "persona-flex persona-gap-2 persona-mt-2");
     buttonsContainer.setAttribute("data-approval-buttons", "true");
 
     // Approve button
-    const approveBtn = createElement("button", "tvw-inline-flex tvw-items-center tvw-px-3 tvw-py-1.5 tvw-rounded-md tvw-text-xs tvw-font-medium tvw-border-none tvw-cursor-pointer") as HTMLButtonElement;
+    const approveBtn = createElement("button", "persona-inline-flex persona-items-center persona-px-3 persona-py-1.5 persona-rounded-md persona-text-xs persona-font-medium persona-border-none persona-cursor-pointer") as HTMLButtonElement;
     approveBtn.type = "button";
-    approveBtn.style.backgroundColor = approvalConfig?.approveButtonColor ?? "#16a34a";
+    approveBtn.style.backgroundColor = approvalConfig?.approveButtonColor ?? "var(--persona-approval-approve-bg, #22c55e)";
     approveBtn.style.color = approvalConfig?.approveButtonTextColor ?? "#ffffff";
     approveBtn.setAttribute("data-approval-action", "approve");
     const approveIcon = renderLucideIcon("shield-check", 14, approvalConfig?.approveButtonTextColor ?? "#ffffff", 2);
@@ -198,13 +201,13 @@ export const createApprovalBubble = (
     approveBtn.appendChild(approveLabel);
 
     // Deny button
-    const denyBtn = createElement("button", "tvw-inline-flex tvw-items-center tvw-px-3 tvw-py-1.5 tvw-rounded-md tvw-text-xs tvw-font-medium tvw-cursor-pointer") as HTMLButtonElement;
+    const denyBtn = createElement("button", "persona-inline-flex persona-items-center persona-px-3 persona-py-1.5 persona-rounded-md persona-text-xs persona-font-medium persona-cursor-pointer") as HTMLButtonElement;
     denyBtn.type = "button";
     denyBtn.style.backgroundColor = approvalConfig?.denyButtonColor ?? "transparent";
-    denyBtn.style.color = approvalConfig?.denyButtonTextColor ?? "#dc2626";
-    denyBtn.style.border = `1px solid ${approvalConfig?.denyButtonTextColor ?? "#fca5a5"}`;
+    denyBtn.style.color = approvalConfig?.denyButtonTextColor ?? "var(--persona-feedback-error, #dc2626)";
+    denyBtn.style.border = `1px solid ${approvalConfig?.denyButtonTextColor ? approvalConfig.denyButtonTextColor : "var(--persona-palette-colors-error-200, #fca5a5)"}`;
     denyBtn.setAttribute("data-approval-action", "deny");
-    const denyIcon = renderLucideIcon("shield-x", 14, approvalConfig?.denyButtonTextColor ?? "#dc2626", 2);
+    const denyIcon = renderLucideIcon("shield-x", 14, approvalConfig?.denyButtonTextColor ?? "var(--persona-feedback-error, #dc2626)", 2);
     if (denyIcon) {
       denyIcon.style.marginRight = "4px";
       denyBtn.appendChild(denyIcon);

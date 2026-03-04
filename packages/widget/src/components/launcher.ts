@@ -65,7 +65,7 @@ export const createLauncherButton = (
         if (launcher.agentIconName) {
           // Use Lucide icon
           const iconSizeNum = parseFloat(iconSize) || 24;
-          const iconSvg = renderLucideIcon(launcher.agentIconName, iconSizeNum * 0.6, "#ffffff", 2);
+          const iconSvg = renderLucideIcon(launcher.agentIconName, iconSizeNum * 0.6, "var(--persona-text-inverse, #ffffff)", 2);
           if (iconSvg) {
             icon.appendChild(iconSvg);
             icon.style.display = "";
@@ -166,8 +166,8 @@ export const createLauncherButton = (
     button.className = `${base} ${positionClass}`;
     
     // Apply launcher border and shadow from config (with defaults matching previous Tailwind classes)
-    const defaultBorder = "1px solid #e5e7eb";
-    const defaultShadow = "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)";
+    const defaultBorder = "1px solid var(--persona-border, #e5e7eb)";
+    const defaultShadow = "var(--persona-shadow, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1))";
     
     button.style.border = launcher.border ?? defaultBorder;
     button.style.boxShadow = launcher.shadow ?? defaultShadow;

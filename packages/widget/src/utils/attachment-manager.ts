@@ -333,7 +333,7 @@ export class AttachmentManager {
     removeBtn.style.width = "18px";
     removeBtn.style.height = "18px";
     removeBtn.style.borderRadius = "50%";
-    removeBtn.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+    removeBtn.style.backgroundColor = "var(--persona-palette-colors-black-alpha-60, rgba(0, 0, 0, 0.6))";
     removeBtn.style.border = "none";
     removeBtn.style.cursor = "pointer";
     removeBtn.style.display = "flex";
@@ -342,12 +342,12 @@ export class AttachmentManager {
     removeBtn.style.padding = "0";
 
     // Add X icon
-    const xIcon = renderLucideIcon("x", 10, "#ffffff", 2);
+    const xIcon = renderLucideIcon("x", 10, "var(--persona-text-inverse, #ffffff)", 2);
     if (xIcon) {
       removeBtn.appendChild(xIcon);
     } else {
       removeBtn.textContent = "×";
-      removeBtn.style.color = "#ffffff";
+      removeBtn.style.color = "var(--persona-text-inverse, #ffffff)";
       removeBtn.style.fontSize = "14px";
       removeBtn.style.lineHeight = "1";
     }

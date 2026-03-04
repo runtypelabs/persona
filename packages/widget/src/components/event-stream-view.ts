@@ -25,16 +25,16 @@ function applyCustomClasses(el: HTMLElement, classes?: string): void {
 // ============================================================================
 
 const DEFAULT_BADGE_COLORS: Record<string, EventStreamBadgeColor> = {
-  flow_: { bg: "#dcfce7", text: "#166534" },
-  step_: { bg: "#dbeafe", text: "#1e40af" },
-  reason_: { bg: "#ffedd5", text: "#9a3412" },
-  tool_: { bg: "#f3e8ff", text: "#6b21a8" },
-  agent_: { bg: "#ccfbf1", text: "#115e59" },
-  error: { bg: "#fecaca", text: "#991b1b" },
+  flow_: { bg: "var(--persona-palette-colors-success-100, #dcfce7)", text: "var(--persona-palette-colors-success-700, #166534)" },
+  step_: { bg: "var(--persona-palette-colors-primary-100, #dbeafe)", text: "var(--persona-palette-colors-primary-700, #1e40af)" },
+  reason_: { bg: "var(--persona-palette-colors-warning-100, #ffedd5)", text: "var(--persona-palette-colors-warning-700, #9a3412)" },
+  tool_: { bg: "var(--persona-palette-colors-purple-100, #f3e8ff)", text: "var(--persona-palette-colors-purple-700, #6b21a8)" },
+  agent_: { bg: "var(--persona-palette-colors-teal-100, #ccfbf1)", text: "var(--persona-palette-colors-teal-700, #115e59)" },
+  error: { bg: "var(--persona-palette-colors-error-100, #fecaca)", text: "var(--persona-palette-colors-error-700, #991b1b)" },
 };
 const DEFAULT_BADGE_COLOR: EventStreamBadgeColor = {
-  bg: "#f3f4f6",
-  text: "#4b5563",
+  bg: "var(--persona-palette-colors-gray-100, #f3f4f6)",
+  text: "var(--persona-palette-colors-gray-600, #4b5563)",
 };
 
 const DEFAULT_DESCRIPTION_FIELDS = [

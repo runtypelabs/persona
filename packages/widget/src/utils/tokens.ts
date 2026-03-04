@@ -278,6 +278,45 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       borderRadius: 'palette.radius.lg',
     },
   },
+  voice: {
+    recording: {
+      indicator: 'palette.colors.error.500',
+      background: 'palette.colors.error.50',
+      border: 'palette.colors.error.200',
+    },
+    processing: {
+      icon: 'palette.colors.primary.500',
+      background: 'palette.colors.primary.50',
+    },
+    speaking: {
+      icon: 'palette.colors.success.500',
+    },
+  },
+  approval: {
+    requested: {
+      background: 'palette.colors.warning.50',
+      border: 'palette.colors.warning.200',
+      text: 'palette.colors.gray.900',
+    },
+    approve: {
+      background: 'palette.colors.success.500',
+      foreground: 'palette.colors.gray.50',
+      borderRadius: 'palette.radius.md',
+      padding: 'semantic.spacing.sm',
+    },
+    deny: {
+      background: 'palette.colors.error.500',
+      foreground: 'palette.colors.gray.50',
+      borderRadius: 'palette.radius.md',
+      padding: 'semantic.spacing.sm',
+    },
+  },
+  attachment: {
+    image: {
+      background: 'palette.colors.gray.100',
+      border: 'palette.colors.gray.200',
+    },
+  },
 };
 
 function resolveTokenValue(theme: PersonaTheme, path: string): string | undefined {
@@ -474,6 +513,20 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-border'] = cssVars['--persona-semantic-colors-border'] ?? cssVars['--persona-palette-colors-gray-200'];
   cssVars['--persona-divider'] = cssVars['--persona-semantic-colors-divider'] ?? cssVars['--persona-palette-colors-gray-200'];
   cssVars['--persona-muted'] = cssVars['--persona-text-muted'];
+
+  cssVars['--persona-voice-recording-indicator'] = cssVars['--persona-components-voice-recording-indicator'] ?? cssVars['--persona-palette-colors-error-500'];
+  cssVars['--persona-voice-recording-bg'] = cssVars['--persona-components-voice-recording-background'] ?? cssVars['--persona-palette-colors-error-50'];
+  cssVars['--persona-voice-processing-icon'] = cssVars['--persona-components-voice-processing-icon'] ?? cssVars['--persona-palette-colors-primary-500'];
+  cssVars['--persona-voice-speaking-icon'] = cssVars['--persona-components-voice-speaking-icon'] ?? cssVars['--persona-palette-colors-success-500'];
+
+  cssVars['--persona-approval-bg'] = cssVars['--persona-components-approval-requested-background'] ?? cssVars['--persona-palette-colors-warning-50'];
+  cssVars['--persona-approval-border'] = cssVars['--persona-components-approval-requested-border'] ?? cssVars['--persona-palette-colors-warning-200'];
+  cssVars['--persona-approval-text'] = cssVars['--persona-components-approval-requested-text'] ?? cssVars['--persona-palette-colors-gray-900'];
+  cssVars['--persona-approval-approve-bg'] = cssVars['--persona-components-approval-approve-background'] ?? cssVars['--persona-palette-colors-success-500'];
+  cssVars['--persona-approval-deny-bg'] = cssVars['--persona-components-approval-deny-background'] ?? cssVars['--persona-palette-colors-error-500'];
+
+  cssVars['--persona-attachment-image-bg'] = cssVars['--persona-components-attachment-image-background'] ?? cssVars['--persona-palette-colors-gray-100'];
+  cssVars['--persona-attachment-image-border'] = cssVars['--persona-components-attachment-image-border'] ?? cssVars['--persona-palette-colors-gray-200'];
 
   return cssVars;
 }

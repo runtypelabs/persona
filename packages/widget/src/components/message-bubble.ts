@@ -82,8 +82,8 @@ const createMessageImagePreviews = (
       imageElement.style.height = "auto";
       imageElement.style.objectFit = "contain";
       imageElement.style.borderRadius = "10px";
-      imageElement.style.backgroundColor = "var(--cw-container, #f3f4f6)";
-      imageElement.style.border = "1px solid var(--cw-border, #e5e7eb)";
+      imageElement.style.backgroundColor = "var(--persona-attachment-image-bg, var(--persona-container, #f3f4f6))";
+      imageElement.style.border = "1px solid var(--persona-attachment-image-border, var(--persona-border, #e5e7eb))";
 
       let settled = false;
       visiblePreviewCount += 1;

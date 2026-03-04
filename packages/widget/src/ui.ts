@@ -1038,8 +1038,8 @@ export const createAgentExperience = (
     // Default values based on mode
     const defaultPanelBorder = sidebarMode ? 'none' : '1px solid var(--persona-persona-border)';
     const defaultPanelShadow = sidebarMode 
-      ? (isLeftSidebar ? '2px 0 12px rgba(0, 0, 0, 0.08)' : '-2px 0 12px rgba(0, 0, 0, 0.08)')
-      : '0 25px 50px -12px rgba(0, 0, 0, 0.25)';
+      ? (isLeftSidebar ? 'var(--persona-palette-shadows-sidebar-left, 2px 0 12px rgba(0, 0, 0, 0.08))' : 'var(--persona-palette-shadows-sidebar-right, -2px 0 12px rgba(0, 0, 0, 0.08))')
+      : 'var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25))';
     const defaultPanelBorderRadius = sidebarMode ? '0' : '16px';
     
     // Apply theme overrides or defaults
@@ -3902,7 +3902,7 @@ export const createAgentExperience = (
 
           // Add hover effect via mouseenter/mouseleave
           attachmentButton.addEventListener("mouseenter", () => {
-            attachmentButton!.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+            attachmentButton!.style.backgroundColor = "var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.05))";
           });
           attachmentButton.addEventListener("mouseleave", () => {
             attachmentButton!.style.backgroundColor = "transparent";

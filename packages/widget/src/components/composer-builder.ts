@@ -407,7 +407,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
 
     // Add hover effect via mouseenter/mouseleave
     attachmentButton.addEventListener("mouseenter", () => {
-      attachmentButton!.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+      attachmentButton!.style.backgroundColor = "var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.05))";
     });
     attachmentButton.addEventListener("mouseleave", () => {
       attachmentButton!.style.backgroundColor = "transparent";

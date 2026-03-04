@@ -127,7 +127,7 @@ export const buildExpandedHeader: HeaderLayoutRenderer = (context) => {
   const headerIconName = launcher.headerIconName;
   if (headerIconName) {
     const iconSize = parseFloat(headerIconSize) || 24;
-    const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.5, "#ffffff", 2);
+    const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.5, "var(--persona-text-inverse, #ffffff)", 2);
     if (iconSvg) {
       iconHolder.replaceChildren(iconSvg);
     } else {

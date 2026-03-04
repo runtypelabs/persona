@@ -214,6 +214,38 @@ export interface MessageTokens {
   };
 }
 
+export interface VoiceTokens {
+  recording: {
+    indicator: TokenReference<'color'>;
+    background: TokenReference<'color'>;
+    border: TokenReference<'color'>;
+  };
+  processing: {
+    icon: TokenReference<'color'>;
+    background: TokenReference<'color'>;
+  };
+  speaking: {
+    icon: TokenReference<'color'>;
+  };
+}
+
+export interface ApprovalTokens {
+  requested: {
+    background: TokenReference<'color'>;
+    border: TokenReference<'color'>;
+    text: TokenReference<'color'>;
+  };
+  approve: ComponentTokenSet;
+  deny: ComponentTokenSet;
+}
+
+export interface AttachmentTokens {
+  image: {
+    background: TokenReference<'color'>;
+    border: TokenReference<'color'>;
+  };
+}
+
 export interface ComponentTokens {
   button: ButtonTokens;
   input: InputTokens;
@@ -221,6 +253,9 @@ export interface ComponentTokens {
   panel: PanelTokens;
   header: HeaderTokens;
   message: MessageTokens;
+  voice: VoiceTokens;
+  approval: ApprovalTokens;
+  attachment: AttachmentTokens;
 }
 
 export interface PaletteExtras {
