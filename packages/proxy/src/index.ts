@@ -16,10 +16,7 @@ export type RuntypeFlowConfig = {
   steps: RuntypeFlowStep[];
 };
 
-/** @deprecated Use RuntypeFlowStep instead */
-export type TravrseFlowStep = RuntypeFlowStep;
-/** @deprecated Use RuntypeFlowConfig instead */
-export type TravrseFlowConfig = RuntypeFlowConfig;
+
 
 /**
  * Payload for message feedback (upvote/downvote)
@@ -210,7 +207,7 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
 
   // Chat dispatch endpoint
   app.post(path, async (c) => {
-    const apiKey = options.apiKey ?? process.env.RUNTYPE_API_KEY ?? process.env.TRAVRSE_API_KEY;
+    const apiKey = options.apiKey ?? process.env.RUNTYPE_API_KEY;
     if (!apiKey) {
       return c.json(
         { error: "Missing API key. Set RUNTYPE_API_KEY." },

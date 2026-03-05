@@ -10,7 +10,6 @@ import { Hono } from "hono";
 // Environment variables interface for Cloudflare Workers
 interface Env {
   RUNTYPE_API_KEY: string;
-  TRAVRSE_API_KEY?: string; // Deprecated, use RUNTYPE_API_KEY
   FLOW_ID_FORM_DIRECTIVE?: string;
   FLOW_ID_SHOPPING_ASSISTANT?: string;
   FLOW_ID_SHOPPING_ASSISTANT_METADATA?: string;
@@ -39,7 +38,7 @@ const app = new Hono<{ Bindings: Env }>();
 
 // Helper to get API key (supports both new and deprecated env var names)
 function getApiKey(env: Env): string {
-  return env.RUNTYPE_API_KEY || env.TRAVRSE_API_KEY || "";
+  return env.RUNTYPE_API_KEY || "";
 }
 
 // 1. Basic conversational assistant proxy

@@ -1,4 +1,4 @@
-import type { TravrseFlowConfig } from "../index.js";
+import type { RuntypeFlowConfig } from "../index.js";
 
 /**
  * Bakery assistant flow configuration for "Flour & Stone" bakery demo
@@ -10,7 +10,7 @@ import type { TravrseFlowConfig } from "../index.js";
  *
  * Designed to guide users toward the gift card when asking for gift recommendations.
  */
-export const BAKERY_ASSISTANT_FLOW: TravrseFlowConfig = {
+export const BAKERY_ASSISTANT_FLOW: RuntypeFlowConfig = {
   name: "Bakery Assistant Flow",
   description: "Flour & Stone bakery shopping assistant with gift recommendations",
   steps: [
