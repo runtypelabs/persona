@@ -28,22 +28,22 @@ function createWidget() {
 
     // Agent execution config (replaces flowId)
     agent: {
-      name: "Research Assistant",
+      name: "Travel Planner Assistant",
       // Primary: qwen/qwen3-8b (fast, cheap, supports tool calling)
       // Alternative if tool calling is unreliable: "openai:gpt-4o-mini"
       model: "qwen/qwen3-8b",
       systemPrompt:
-        "You are a research assistant with access to the Exa web search tool. " +
-        "When asked a question, search the web to find current, accurate information. " +
-        "Search multiple times if needed to gather comprehensive data from different angles, " +
-        "then synthesize your findings into a clear answer with sources. " +
-        "Use markdown formatting for readability.",
+        "You are a travel planning assistant with access to the Exa web search tool. " +
+        "For itinerary requests, complete work in exactly 3 iterations: " +
+        "Iteration 1 (Discovery), Iteration 2 (Structuring), Iteration 3 (Final). " +
+        "Provide a short heading for each iteration and do not skip directly to the final output. " +
+        "Use web search for current details when helpful and format the response in clear markdown.",
       temperature: 0.7,
       tools: {
         toolIds: ["builtin:exa"],
       },
       loopConfig: {
-        maxTurns: 5,
+        maxTurns: 3,
       },
     },
     agentOptions: {
@@ -72,13 +72,13 @@ function createWidget() {
       ...DEFAULT_WIDGET_CONFIG.copy,
       welcomeTitle: "Agent Loop Demo",
       welcomeSubtitle:
-        "This agent uses Exa web search with multi-turn execution. Ask a research question to see it in action.",
-      inputPlaceholder: "Ask a research question...",
+        "This agent runs a 3-turn loop for non-technical travel planning. Ask for an itinerary to see the iteration flow.",
+      inputPlaceholder: "Ask for a travel itinerary...",
     },
     suggestionChips: [
-      "What are the top AI news stories this week?",
-      "Compare React, Vue, and Svelte in 2026",
-      "What is Runtype and how does it work?",
+      "Plan a 2-day weekend itinerary for Kyoto for a first-time visitor who likes food, gardens, and quiet neighborhoods. Use exactly 3 iterations: Discovery, Structuring, and Final.",
+      "Plan a rainy-day weekend in Lisbon for a couple focused on food and bookstores.",
+      "Create a one-day family-friendly itinerary in Chicago with indoor backup options.",
     ],
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   });

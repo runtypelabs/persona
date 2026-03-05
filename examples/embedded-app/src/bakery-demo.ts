@@ -280,7 +280,7 @@ function showCartInWidget(): void {
   // Wait for widget to open, then show cart overlay
   setTimeout(() => {
     const launcherRoot = document.getElementById('launcher-root');
-    const container = launcherRoot?.querySelector('.tvw-widget-container');
+    const container = launcherRoot?.querySelector('.persona-widget-container');
     if (!container) return;
 
     // Remove existing cart overlay if any
@@ -445,7 +445,7 @@ function positionCartBadge(): void {
 
     if (widgetIsOpen) {
       // Position on top-left of the chat panel container (the white card)
-      const container = launcherRoot?.querySelector('.tvw-widget-container');
+      const container = launcherRoot?.querySelector('.persona-widget-container');
       if (container) {
         const rect = container.getBoundingClientRect();
         badge.style.top = `${rect.top - 10}px`;
@@ -629,8 +629,8 @@ function updateIntroCard(): void {
   const { title, subtitle } = getWelcomeConfig();
 
   // Find the intro card elements
-  const introTitle = launcherRoot.querySelector('.tvw-widget-body h2');
-  const introSubtitle = launcherRoot.querySelector('.tvw-widget-body p');
+  const introTitle = launcherRoot.querySelector('.persona-widget-body h2');
+  const introSubtitle = launcherRoot.querySelector('.persona-widget-body p');
 
   if (introTitle) {
     introTitle.textContent = title;

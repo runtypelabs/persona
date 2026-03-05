@@ -1,4 +1,4 @@
-# Vanilla Agent Proxy - Cloudflare Workers
+# Persona Proxy - Cloudflare Workers
 
 A production-ready chat proxy service deployed on Cloudflare Workers, powered by the `@runtypelabs/persona-proxy` package and Runtype AI.
 

@@ -177,7 +177,7 @@ app.get("/health", (c) => {
 // Root endpoint with usage information
 app.get("/", (c) => {
   return c.json({
-    name: "Vanilla Agent Proxy - Cloudflare Workers",
+    name: "Persona Proxy - Cloudflare Workers",
     description: "Chat proxy service powered by Runtype AI",
     endpoints: {
       "/api/chat/dispatch": "Basic conversational assistant",
