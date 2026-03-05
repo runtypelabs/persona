@@ -62,6 +62,7 @@ export type {
   // Agent execution types
   AgentConfig,
   AgentLoopConfig,
+  AgentToolsConfig,
   AgentRequestOptions,
   AgentExecutionState,
   AgentMessageMetadata,

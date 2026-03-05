@@ -653,8 +653,7 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
         systemPrompt: 'You are a test assistant.',
         temperature: 0.7,
         loopConfig: {
-          maxIterations: 3,
-          stopCondition: 'auto',
+          maxTurns: 3,
         },
       },
       agentOptions: {
@@ -679,7 +678,7 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
     expect(capturedPayload.agent.name).toBe('Test Agent');
     expect(capturedPayload.agent.model).toBe('openai:gpt-4o-mini');
     expect(capturedPayload.agent.systemPrompt).toBe('You are a test assistant.');
-    expect(capturedPayload.agent.loopConfig.maxIterations).toBe(3);
+    expect(capturedPayload.agent.loopConfig.maxTurns).toBe(3);
     expect(capturedPayload.messages).toHaveLength(1);
     expect(capturedPayload.messages[0].content).toBe('Hello agent');
     expect(capturedPayload.options.streamResponse).toBe(true);
@@ -735,10 +734,10 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', {
         executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
       }),
       sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxIterations: 1,
+        executionId: execId, iteration: 1, maxTurns: 1,
         startedAt: new Date().toISOString(), seq: 2,
       }),
       sseEvent('agent_turn_start', {
@@ -801,11 +800,11 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', {
         executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxIterations: 2, startedAt: new Date().toISOString(), seq: 1,
+        maxTurns: 2, startedAt: new Date().toISOString(), seq: 1,
       }),
       // Iteration 1
       sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxIterations: 2,
+        executionId: execId, iteration: 1, maxTurns: 2,
         startedAt: new Date().toISOString(), seq: 2,
       }),
       sseEvent('agent_turn_start', {
@@ -826,7 +825,7 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
       }),
       // Iteration 2
       sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 2, maxIterations: 2,
+        executionId: execId, iteration: 2, maxTurns: 2,
         startedAt: new Date().toISOString(), seq: 7,
       }),
       sseEvent('agent_turn_start', {
@@ -891,10 +890,10 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', {
         executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxIterations: 2, startedAt: new Date().toISOString(), seq: 1,
+        maxTurns: 2, startedAt: new Date().toISOString(), seq: 1,
       }),
       sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxIterations: 2,
+        executionId: execId, iteration: 1, maxTurns: 2,
         startedAt: new Date().toISOString(), seq: 2,
       }),
       sseEvent('agent_turn_delta', {
@@ -906,7 +905,7 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
         stopConditionMet: false, completedAt: new Date().toISOString(), seq: 4,
       }),
       sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 2, maxIterations: 2,
+        executionId: execId, iteration: 2, maxTurns: 2,
         startedAt: new Date().toISOString(), seq: 5,
       }),
       sseEvent('agent_turn_delta', {
@@ -954,10 +953,10 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', {
         executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
       }),
       sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxIterations: 1,
+        executionId: execId, iteration: 1, maxTurns: 1,
         startedAt: new Date().toISOString(), seq: 2,
       }),
       sseEvent('agent_tool_start', {
@@ -1026,10 +1025,10 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', {
         executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
       }),
       sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxIterations: 1,
+        executionId: execId, iteration: 1, maxTurns: 1,
         startedAt: new Date().toISOString(), seq: 2,
       }),
       sseEvent('agent_turn_delta', {
@@ -1090,7 +1089,7 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', {
         executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
       }),
       sseEvent('agent_error', {
         executionId: execId, iteration: 1,
@@ -1129,7 +1128,7 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', {
         executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxIterations: 2, startedAt: new Date().toISOString(), seq: 1,
+        maxTurns: 2, startedAt: new Date().toISOString(), seq: 1,
       }),
       sseEvent('agent_reflection', {
         executionId: execId, iteration: 1,
@@ -1175,7 +1174,7 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', {
         executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
       }),
       sseEvent('agent_ping', {
         executionId: execId, timestamp: new Date().toISOString(), seq: 2,
@@ -1300,10 +1299,10 @@ describe('AgentWidgetClient - Unified Event Names', () => {
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', {
         executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxIterations: 1, startedAt: new Date().toISOString(), seq: 1,
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
       }),
       sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxIterations: 1,
+        executionId: execId, iteration: 1, maxTurns: 1,
         startedAt: new Date().toISOString(), seq: 2,
       }),
       sseEvent('tool_start', {
@@ -1368,7 +1367,7 @@ describe('AgentWidgetClient - Unified Event Names', () => {
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', {
         executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxIterations: 2, startedAt: new Date().toISOString(), seq: 1,
+        maxTurns: 2, startedAt: new Date().toISOString(), seq: 1,
       }),
       sseEvent('agent_reflect', {
         executionId: execId, iteration: 1,

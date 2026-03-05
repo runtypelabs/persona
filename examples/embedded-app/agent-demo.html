@@ -178,7 +178,7 @@
     <!-- Left: Info Panel -->
     <div class="info-panel">
       <h1>Agent Loop Execution <span class="badge badge-new">New</span></h1>
-      <p>This demo shows the new agent execution mode with multi-iteration loops. Instead of dispatching to a pre-configured flow, the widget sends an agent configuration directly and handles streaming agent events.</p>
+      <p>This demo shows agent execution mode with multi-turn loops and tool calling. The agent uses Exa web search to find information, then synthesizes results across multiple iterations.</p>
 
       <div class="info-section">
         <h3>How it works</h3>
@@ -189,13 +189,14 @@
 <span class="comment">// Agent execution configuration</span>
 {
   <span class="prop">agent</span>: {
-    <span class="prop">name</span>: <span class="string">'Assistant'</span>,
-    <span class="prop">model</span>: <span class="string">'openai:gpt-4o-mini'</span>,
-    <span class="prop">systemPrompt</span>: <span class="string">'You are a helpful assistant.'</span>,
-    <span class="prop">temperature</span>: 0.7,
+    <span class="prop">name</span>: <span class="string">'Research Assistant'</span>,
+    <span class="prop">model</span>: <span class="string">'qwen/qwen3-8b'</span>,
+    <span class="prop">systemPrompt</span>: <span class="string">'You are a research assistant...'</span>,
+    <span class="prop">tools</span>: {
+      <span class="prop">toolIds</span>: [<span class="string">'builtin:exa'</span>]
+    },
     <span class="prop">loopConfig</span>: {
-      <span class="prop">maxIterations</span>: 3,
-      <span class="prop">stopCondition</span>: <span class="string">'auto'</span>
+      <span class="prop">maxTurns</span>: 5
     }
   },
   <span class="prop">agentOptions</span>: {

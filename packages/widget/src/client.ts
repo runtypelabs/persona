@@ -1842,7 +1842,7 @@ export class AgentWidgetClient {
             agentName: payload.agentName ?? '',
             status: 'running',
             currentIteration: 0,
-            maxIterations: payload.maxIterations ?? 1,
+            maxTurns: payload.maxTurns ?? 1,
             startedAt: resolveTimestamp(payload.startedAt)
           };
         } else if (payloadType === "agent_iteration_start") {

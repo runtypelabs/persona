@@ -1005,7 +1005,7 @@ export class AgentWidgetSession {
             agentName: event.message.agentMetadata.agentName ?? '',
             status: 'running',
             currentIteration: event.message.agentMetadata.iteration ?? 0,
-            maxIterations: 0
+            maxTurns: 0
           };
         } else if (event.message.agentMetadata.iteration !== undefined) {
           this.agentExecution.currentIteration = event.message.agentMetadata.iteration;

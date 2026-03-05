@@ -81,14 +81,37 @@ export type AgentWidgetRequestPayload = {
  * Configuration for agent loop behavior.
  */
 export type AgentLoopConfig = {
-  /** Maximum number of reasoning iterations */
-  maxIterations: number;
-  /** Stop condition: 'auto' for automatic detection, or a custom JS expression */
-  stopCondition?: 'auto' | string;
+  /** Maximum number of agent turns (1-100). The loop continues while the model calls tools. */
+  maxTurns: number;
+  /** Maximum cost budget in USD. Agent stops when exceeded. */
+  maxCost?: number;
   /** Enable periodic reflection during execution */
   enableReflection?: boolean;
-  /** Number of iterations between reflections */
+  /** Number of iterations between reflections (1-50) */
   reflectionInterval?: number;
+};
+
+/**
+ * Configuration for agent tools (search, code execution, MCP servers, etc.)
+ */
+export type AgentToolsConfig = {
+  /** Tool IDs to enable (e.g., "builtin:exa", "builtin:dalle", "builtin:openai_web_search") */
+  toolIds?: string[];
+  /** Per-tool configuration overrides keyed by tool ID */
+  toolConfigs?: Record<string, Record<string, unknown>>;
+  /** Inline tool definitions for runtime-defined tools */
+  runtimeTools?: Array<Record<string, unknown>>;
+  /** Custom MCP server connections */
+  mcpServers?: Array<Record<string, unknown>>;
+  /** Maximum number of tool invocations per execution */
+  maxToolCalls?: number;
+  /** Tool approval configuration for human-in-the-loop workflows */
+  approval?: {
+    /** Tool names/patterns to require approval for, or true for all tools */
+    require: string[] | boolean;
+    /** Approval timeout in milliseconds (default: 300000 / 5 minutes) */
+    timeout?: number;
+  };
 };
 
 /**
@@ -98,13 +121,15 @@ export type AgentLoopConfig = {
 export type AgentConfig = {
   /** Agent display name */
   name: string;
-  /** Model identifier (e.g., 'openai:gpt-4o-mini') */
+  /** Model identifier (e.g., 'openai:gpt-4o-mini', 'qwen/qwen3-8b') */
   model: string;
   /** System prompt for the agent */
   systemPrompt: string;
   /** Temperature for model responses */
   temperature?: number;
-  /** Loop configuration for multi-iteration execution */
+  /** Tool configuration for the agent */
+  tools?: AgentToolsConfig;
+  /** Loop configuration for multi-turn execution */
   loopConfig?: AgentLoopConfig;
 };
 
@@ -142,10 +167,10 @@ export type AgentExecutionState = {
   agentName: string;
   status: 'running' | 'complete' | 'error';
   currentIteration: number;
-  maxIterations: number;
+  maxTurns: number;
   startedAt?: number;
   completedAt?: number;
-  stopReason?: 'max_iterations' | 'complete' | 'error' | 'manual';
+  stopReason?: 'complete' | 'end_turn' | 'max_turns' | 'max_cost' | 'timeout' | 'error';
 };
 
 /**
@@ -1850,7 +1875,7 @@ export type AgentWidgetConfig = {
    *     name: 'Assistant',
    *     model: 'openai:gpt-4o-mini',
    *     systemPrompt: 'You are a helpful assistant.',
-   *     loopConfig: { maxIterations: 3, stopCondition: 'auto' }
+    *     loopConfig: { maxTurns: 5 }
    *   }
    * }
    * ```

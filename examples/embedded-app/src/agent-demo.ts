@@ -28,14 +28,22 @@ function createWidget() {
 
     // Agent execution config (replaces flowId)
     agent: {
-      name: "Assistant",
-      model: "openai:gpt-4o-mini",
+      name: "Research Assistant",
+      // Primary: qwen/qwen3-8b (fast, cheap, supports tool calling)
+      // Alternative if tool calling is unreliable: "openai:gpt-4o-mini"
+      model: "qwen/qwen3-8b",
       systemPrompt:
-        "You are a helpful, friendly AI assistant. Be concise and clear in your responses. Use markdown formatting when helpful.",
+        "You are a research assistant with access to the Exa web search tool. " +
+        "When asked a question, search the web to find current, accurate information. " +
+        "Search multiple times if needed to gather comprehensive data from different angles, " +
+        "then synthesize your findings into a clear answer with sources. " +
+        "Use markdown formatting for readability.",
       temperature: 0.7,
+      tools: {
+        toolIds: ["builtin:exa"],
+      },
       loopConfig: {
-        maxIterations: 3,
-        stopCondition: "auto",
+        maxTurns: 5,
       },
     },
     agentOptions: {
@@ -64,13 +72,13 @@ function createWidget() {
       ...DEFAULT_WIDGET_CONFIG.copy,
       welcomeTitle: "Agent Loop Demo",
       welcomeSubtitle:
-        "This widget uses agent execution mode with multi-iteration loops instead of a pre-configured flow.",
-      inputPlaceholder: "Ask the agent anything...",
+        "This agent uses Exa web search with multi-turn execution. Ask a research question to see it in action.",
+      inputPlaceholder: "Ask a research question...",
     },
     suggestionChips: [
-      "Write me a haiku about coding",
-      "What is the meaning of life?",
-      "Explain recursion simply",
+      "What are the top AI news stories this week?",
+      "Compare React, Vue, and Svelte in 2026",
+      "What is Runtype and how does it work?",
     ],
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   });
