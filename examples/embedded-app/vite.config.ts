@@ -1,10 +1,39 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import path from "node:path";
+import fs from "node:fs";
 
 const proxyPort = Number(process.env.PROXY_PORT ?? 43111);
 
+// Serve the widget's built dist files at /widget-dist/ so standalone examples
+// can load the local IIFE build instead of the CDN version during development.
+function serveWidgetDist(): Plugin {
+  const distDir = path.resolve(__dirname, "../../packages/widget/dist");
+  return {
+    name: "serve-widget-dist",
+    configureServer(server) {
+      server.middlewares.use("/widget-dist", (req, res, next) => {
+        const filePath = path.join(distDir, req.url ?? "");
+        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+          const ext = path.extname(filePath);
+          const contentType =
+            ext === ".js" ? "application/javascript" :
+            ext === ".css" ? "text/css" :
+            ext === ".map" ? "application/json" :
+            "application/octet-stream";
+          res.setHeader("Content-Type", contentType);
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          fs.createReadStream(filePath).pipe(res);
+        } else {
+          next();
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
+  plugins: [serveWidgetDist()],
   resolve: {
     alias: {
       "@runtypelabs/persona": path.resolve(

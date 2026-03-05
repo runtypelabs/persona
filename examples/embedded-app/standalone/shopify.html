@@ -1,0 +1,1077 @@
+<!-- Local dev: load from local build; production: load from CDN -->
+<!-- Run `pnpm build:widget` to update the local build -->
+<script>
+  window.__PERSONA_CDN_BASE__ = window.location.hostname === 'localhost'
+    ? '/widget-dist'
+    : 'https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist';
+</script>
+<link rel="stylesheet" id="persona-css">
+<script>document.getElementById('persona-css').href = window.__PERSONA_CDN_BASE__ + '/widget.css';</script>
+  
+<!-- Shopping Assistant Configuration -->
+  <script>
+    
+    window.ShoppingAssistantConfig = {
+      apiUrl: "https://persona-proxy.runtype.workers.dev/api/chat/dispatch-metadata",
+      theme: {
+        primary: "#111827",
+        accent: "#1d4ed8",
+        surface: "#ffffff",
+        muted: "#6b7280",
+        container: "#f8fafc",
+        border: "#f1f5f9",
+        divider: "#f1f5f9",
+        messageBorder: "#f1f5f9",
+        inputBackground: "#ffffff",
+        callToAction: "#000000",
+        callToActionBackground: "#ffffff",
+        sendButtonBackgroundColor: "#111827",
+        sendButtonTextColor: "#ffffff",
+        sendButtonBorderColor: "#60a5fa",
+        closeButtonColor: "#9ca3af",
+        closeButtonBackgroundColor: "transparent",
+        closeButtonBorderColor: "",
+        clearChatIconColor: "#9ca3af",
+        clearChatBackgroundColor: "transparent",
+        clearChatBorderColor: "transparent",
+        micIconColor: "#111827",
+        micBackgroundColor: "transparent",
+        micBorderColor: "transparent",
+        recordingIconColor: "#ffffff",
+        recordingBackgroundColor: "#ef4444",
+        recordingBorderColor: "transparent",
+        inputFontFamily: "sans-serif",
+        inputFontWeight: "400",
+        radiusSm: "0.75rem",
+        radiusMd: "1rem",
+        radiusLg: "1.5rem",
+        launcherRadius: "9999px",
+        buttonRadius: "9999px",
+      },
+      launcher: {
+        enabled: true,
+        title: "Shopping Assistant",
+        subtitle: "Here to help you get answers fast",
+        agentIconText: "🛍️",
+        position: "bottom-right",
+        width: "min(400px, calc(100vw - 24px))",
+        autoExpand: false,
+        callToActionIconHidden: false,
+        agentIconSize: "40px",
+        headerIconSize: "40px",
+        closeButtonSize: "32px",
+        callToActionIconName: "arrow-up-right",
+        callToActionIconText: "",
+        callToActionIconSize: "32px",
+        callToActionIconPadding: "5px",
+        callToActionIconColor: "#000000",
+        callToActionIconBackgroundColor: "#ffffff",
+        closeButtonColor: "#9ca3af",
+        closeButtonBackgroundColor: "transparent",
+        headerIconHidden: false,
+      },
+      copy: {
+        welcomeTitle: "Welcome to our shop!",
+        welcomeSubtitle: "I can help you find products and add them to your cart",
+        inputPlaceholder: "Ask me anything...",
+        sendButtonLabel: "Send"
+      },
+      features: {
+        showReasoning: true,
+        showToolCalls: true,
+      },
+      suggestionChips: [
+        "What can you help me with?",
+        "Tell me about your features",
+        "How does this work?",
+      ],
+    };
+  </script>
+
+  <!-- Shopping Assistant Widget Script -->
+  <script>
+    (function() {
+  'use strict';
+
+  const STORAGE_KEY = 'vanilla-agent-action-middleware';
+  const NAV_FLAG_KEY = 'vanilla-agent-nav-flag';
+  const PROCESSED_ACTIONS_KEY = 'vanilla-agent-processed-actions';
+  const VOICE_STATE_KEY = 'vanilla-agent-voice-state';
+
+  // ========================================================================
+  // SHOPPING ASSISTANT EXTENSIONS
+  // ========================================================================
+
+  /**
+   * Generate optimal CSS selector for element (NEW)
+   */
+  function generateElementSelector(element) {
+    if (element.id && element.id.trim()) {
+      return `#${element.id}`;
+    }
+
+    if (element.getAttribute && element.getAttribute('data-testid')) {
+      return `[data-testid="${element.getAttribute('data-testid')}"]`;
+    }
+
+    if (element.getAttribute && element.getAttribute('data-product-id')) {
+      return `[data-product-id="${element.getAttribute('data-product-id')}"]`;
+    }
+
+    const tag = element.tagName.toLowerCase();
+    const className = element.className || '';
+    const classes = className
+      .split(/\s+/)
+      .filter(c => c && !c.startsWith('motion-') && !c.startsWith('icon-') && !c.startsWith('persona-'))
+      .slice(0, 3);
+
+    if (classes.length > 0) {
+      return `${tag}.${classes.join('.')}`;
+    }
+
+    try {
+      const parent = element.parentElement;
+      if (parent && parent.id) {
+        const children = Array.from(parent.children || []);
+        const index = children.indexOf(element);
+        if (index >= 0) {
+          return `#${parent.id} > ${tag}:nth-child(${index + 1})`;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    return tag;
+  }
+
+  /**
+   * Get element text safely (NEW)
+   */
+  function getElementText(element) {
+    try {
+      if (element.innerText) {
+        return element.innerText.trim();
+      }
+      if (element.textContent) {
+        return element.textContent.trim();
+      }
+      return '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /**
+   * Check if element is visible and interactive (NEW)
+   */
+  function isElementInteractive(element) {
+    try {
+      const style = window.getComputedStyle(element);
+      if (style.display === 'none' || style.visibility === 'hidden') {
+        return false;
+      }
+
+      if (element.disabled) {
+        return false;
+      }
+
+      const hasText = getElementText(element).length > 0;
+      const hasHref = element.href?.length > 0;
+      const hasId = element.id?.length > 0;
+      const hasDataAttr = Array.from(element.attributes || [])
+        .some(attr => attr.name.startsWith('data-'));
+
+      return hasText || hasHref || hasId || hasDataAttr;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * Extract element data with smart details (ENHANCED)
+   * Replaces the basic collectPageContext with richer data
+   */
+  function collectShoppingPageContext() {
+    const elements = [];
+    const seen = new Set();
+
+    // Priority selectors for shopping
+    const selectors = {
+      products: '[data-product-id], .product-card, .product-item, [role="article"]',
+      buttons: 'button, [role="button"], .btn',
+      links: 'a[href]',
+      inputs: 'input, textarea, select',
+      images: 'img[alt]',
+      headings: 'h1, h2, h3, h4'
+    };
+
+    for (const [type, selectorString] of Object.entries(selectors)) {
+      try {
+        const queriedElements = document.querySelectorAll(selectorString);
+
+        queriedElements.forEach((element) => {
+          if (seen.has(element) || !isElementInteractive(element)) {
+            return;
+          }
+          seen.add(element);
+
+          const text = getElementText(element);
+          const selector = generateElementSelector(element);
+
+          if (selector && text) {
+            const data = {
+              className: element.className || '',
+              innerText: text.substring(0, 200),
+              tagName: element.tagName.toLowerCase(),
+              selector: selector,
+              type: type,
+              id: element.id || null,
+              href: element.href || null,
+              productId: element.getAttribute?.('data-product-id') || null,
+              price: text.match(/\$[\d,]+\.?\d*/)?.[0] || null
+            };
+
+            // Only include fields with values
+            const filtered = Object.fromEntries(
+              Object.entries(data).filter(([_, v]) => v !== null && v !== '')
+            );
+
+            elements.push(filtered);
+          }
+        });
+      } catch (e) {
+        console.error(`[Shopping Assistant] Error with selector ${selectorString}:`, e);
+      }
+    }
+
+    return elements;
+  }
+
+  /**
+   * Format page context for assistant (ENHANCED)
+   * Improved formatting with selectors
+   */
+  function formatPageContext(elements) {
+    if (elements.length === 0) {
+      return 'No interactive elements found on the page.';
+    }
+
+    const grouped = elements
+      .slice(0, 20)
+      .map(el => {
+        const text = el.innerText.substring(0, 80);
+        const selector = el.selector ? ` [${el.selector}]` : '';
+        const type = el.type ? ` (${el.type})` : '';
+        return `- ${el.tagName}.${el.className}${type}: "${text}"${selector}`;
+      })
+      .join('\n');
+
+    const summary = `Available elements (${elements.length} total):
+${grouped}${elements.length > 20 ? `\n... and ${elements.length - 20} more` : ''}`;
+
+    return summary;
+  }
+
+  // ========================================================================
+  // VOICE STATE MANAGEMENT
+  // ========================================================================
+
+  /**
+   * Save voice recognition state before navigation
+   */
+  function saveVoiceState(isActive) {
+    try {
+      const state = {
+        isActive: isActive,
+        timestamp: Date.now()
+      };
+      sessionStorage.setItem(VOICE_STATE_KEY, JSON.stringify(state));
+      console.log('[Shopping Assistant] Voice state saved:', isActive);
+    } catch (error) {
+      console.error('[Shopping Assistant] Failed to save voice state:', error);
+    }
+  }
+
+  /**
+   * Load voice recognition state after navigation
+   */
+  function loadVoiceState() {
+    try {
+      const stored = sessionStorage.getItem(VOICE_STATE_KEY);
+      if (stored) {
+        const state = JSON.parse(stored);
+        
+        sessionStorage.removeItem(VOICE_STATE_KEY);
+        
+        const age = Date.now() - state.timestamp;
+        if (age < 30000) {
+          console.log('[Shopping Assistant] Voice state loaded:', state.isActive);
+          return state.isActive;
+        }
+      }
+    } catch (error) {
+      console.error('[Shopping Assistant] Failed to load voice state:', error);
+    }
+    return false;
+  }
+
+  // ========================================================================
+  // PROCESSED ACTIONS MANAGEMENT
+  // ========================================================================
+
+  /**
+   * Load processed actions from localStorage
+   */
+  function loadProcessedActions() {
+    try {
+      const stored = localStorage.getItem(PROCESSED_ACTIONS_KEY);
+      if (stored) {
+        const data = JSON.parse(stored);
+        const now = Date.now();
+        const filtered = data.filter(action => {
+          return (now - action.timestamp) < 24 * 60 * 60 * 1000;
+        });
+        
+        if (filtered.length !== data.length) {
+          saveProcessedActions(filtered);
+        }
+        
+        return filtered;
+      }
+    } catch (error) {
+      console.error('[Shopping Assistant] Failed to load processed actions:', error);
+    }
+    return [];
+  }
+
+  /**
+   * Save processed actions to localStorage
+   */
+  function saveProcessedActions(actions) {
+    try {
+      localStorage.setItem(PROCESSED_ACTIONS_KEY, JSON.stringify(actions));
+    } catch (error) {
+      console.error('[Shopping Assistant] Failed to save processed actions:', error);
+    }
+  }
+
+  /**
+   * Generate a unique fingerprint for an action
+   */
+  function generateActionFingerprint(action, messageId) {
+    if (action.action === 'nav_then_click') {
+      // Use messageId instead of URL - each message can only trigger navigation once
+      return `nav:${messageId}`;
+    } else if (action.action === 'message_and_click') {
+      return `click:${action.element}`;
+    } else if (action.action === 'checkout') {
+      const itemIds = action.items.map(item => item.id || item.name).join(',');
+      return `checkout:${itemIds}`;
+    } else {
+      return `message:${messageId}`;
+    }
+  }
+
+  /**
+   * Check if action has been processed
+   * For navigation actions, check by messageId - each message can only trigger navigation once
+   */
+  function isActionProcessed(fingerprint, action) {
+    const processed = loadProcessedActions();
+    const found = processed.find(proc => proc.fingerprint === fingerprint);
+    
+    if (!found) {
+      return false;
+    }
+    
+    // For navigation actions, use simple check - if this message already triggered navigation, block it
+    // No time-based or page-based checks - each message can only navigate once
+    if (fingerprint.startsWith('nav:') && action && action.action === 'nav_then_click') {
+      // The fingerprint is now nav:messageId, so if it exists, this message already navigated
+      console.log('[Shopping Assistant] Navigation blocked - message already processed navigation');
+      return true;
+    }
+    
+    // For non-navigation actions, use standard check
+    return true;
+  }
+
+  /**
+   * Mark action as processed
+   */
+  function markActionProcessed(fingerprint, actionType) {
+    const processed = loadProcessedActions();
+    processed.push({
+      fingerprint: fingerprint,
+      actionType: actionType,
+      timestamp: Date.now()
+    });
+    saveProcessedActions(processed);
+  }
+
+  // ========================================================================
+  // ORIGINAL VANILLA-AGENT CODE (with enhancements)
+  // ========================================================================
+
+  function parseActionResponse(text) {
+    // Ensure text is a string
+    if (!text) {
+      return null;
+    }
+    const textStr = typeof text === 'string' ? text : String(text);
+
+    try {
+      let jsonText = textStr.trim();
+
+      const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        jsonText = codeBlockMatch[1].trim();
+      }
+
+      const firstBraceIndex = jsonText.indexOf('{');
+      if (firstBraceIndex === -1) {
+        return null;
+      }
+
+      let braceCount = 0;
+      let jsonEndIndex = -1;
+
+      for (let i = firstBraceIndex; i < jsonText.length; i++) {
+        if (jsonText[i] === '{') {
+          braceCount++;
+        } else if (jsonText[i] === '}') {
+          braceCount--;
+          if (braceCount === 0) {
+            jsonEndIndex = i;
+            break;
+          }
+        }
+      }
+
+      if (jsonEndIndex === -1) {
+        return null;
+      }
+
+      jsonText = jsonText.substring(firstBraceIndex, jsonEndIndex + 1);
+      const parsed = JSON.parse(jsonText);
+
+      // Validate action format
+      if (parsed.action === 'message' && typeof parsed.text === 'string') {
+        return parsed;
+      }
+
+      if (
+        parsed.action === 'nav_then_click' &&
+        typeof parsed.page === 'string' &&
+        typeof parsed.on_load_text === 'string'
+      ) {
+        return parsed;
+      }
+
+      if (
+        parsed.action === 'message_and_click' &&
+        typeof parsed.element === 'string' &&
+        typeof parsed.text === 'string'
+      ) {
+        return parsed;
+      }
+
+      if (
+        parsed.action === 'checkout' &&
+        typeof parsed.text === 'string' &&
+        Array.isArray(parsed.items)
+      ) {
+        return parsed;
+      }
+
+      console.warn('[Shopping Assistant] Invalid action response format:', parsed);
+      return null;
+    } catch (error) {
+      console.error('[Shopping Assistant] JSON parse error:', error);
+      return null;
+    }
+  }
+
+  let isNavigating = false;
+  const NAVIGATION_TIMEOUT = 2000;
+
+  function executeAction(action, onMessage, messageId) {
+    const fingerprint = generateActionFingerprint(action, messageId);
+    
+    if (isActionProcessed(fingerprint, action)) {
+      console.log('[Shopping Assistant] Action already processed, skipping:', fingerprint);
+      return;
+    }
+
+    if (action.action === 'message') {
+      onMessage(action.text);
+      markActionProcessed(fingerprint, 'message');
+    } else if (action.action === 'message_and_click') {
+      onMessage(action.text);
+
+      const element = document.querySelector(action.element);
+      if (element && element instanceof HTMLElement) {
+        setTimeout(() => {
+          element.click();
+          markActionProcessed(fingerprint, 'click');
+        }, 500);
+      } else {
+        console.warn('[Shopping Assistant] Element not found:', action.element);
+      }
+    } else if (action.action === 'checkout') {
+      onMessage(action.text);
+      markActionProcessed(fingerprint, 'checkout');
+    } else if (action.action === 'nav_then_click') {
+      const lastNavTime = parseInt(localStorage.getItem('vanilla-agent-last-nav-time') || '0');
+      const timeSinceLastNav = Date.now() - lastNavTime;
+      
+      if (timeSinceLastNav < 5000) {
+        console.warn('[Shopping Assistant] Navigation blocked - too soon after last navigation');
+        return;
+      }
+
+      if (isNavigating) {
+        console.warn('[Shopping Assistant] Navigation already in progress');
+        return;
+      }
+
+      isNavigating = true;
+      localStorage.setItem('vanilla-agent-last-nav-time', Date.now().toString());
+
+      let targetUrl = action.page;
+      if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+        targetUrl = new URL(targetUrl, window.location.origin).toString();
+      }
+
+      const navFlag = {
+        onLoadText: action.on_load_text,
+        timestamp: Date.now(),
+        targetUrl: targetUrl,
+        fingerprint: fingerprint
+      };
+      localStorage.setItem(NAV_FLAG_KEY, JSON.stringify(navFlag));
+
+      const voiceActive = window.chatWidgetVoiceActive || false;
+      saveVoiceState(voiceActive);
+
+      markActionProcessed(fingerprint, 'navigation');
+
+      setTimeout(() => {
+        if (isNavigating) {
+          window.location.href = targetUrl;
+        }
+      }, 500);
+    }
+  }
+
+  function saveChatHistory(messages) {
+    try {
+      const data = {
+        chatHistory: messages.map(msg => ({
+          ...msg,
+          streaming: false
+        })),
+        executedActionIds: (JSON.parse(localStorage.getItem(STORAGE_KEY))?.executedActionIds || [])
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error('[Shopping Assistant] Failed to save chat history:', error);
+    }
+  }
+
+  function loadChatHistory() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const data = JSON.parse(stored);
+        return data.chatHistory || [];
+      }
+    } catch (error) {
+      console.error('[Shopping Assistant] Failed to load chat history:', error);
+    }
+    return [];
+  }
+
+  function checkNavigationFlag() {
+    try {
+      const stored = localStorage.getItem(NAV_FLAG_KEY);
+      if (stored) {
+        const flag = JSON.parse(stored);
+        
+        if (flag.targetUrl) {
+          const currentUrl = window.location.href;
+          const targetUrl = flag.targetUrl.startsWith('http') 
+            ? flag.targetUrl 
+            : new URL(flag.targetUrl, window.location.origin).toString();
+          
+          const normalizedCurrent = currentUrl.replace(/\/$/, '');
+          const normalizedTarget = targetUrl.replace(/\/$/, '');
+          
+          if (normalizedCurrent !== normalizedTarget) {
+            console.warn('[Shopping Assistant] Navigation flag found but not on target page yet');
+            return null;
+          }
+        }
+        
+        localStorage.removeItem(NAV_FLAG_KEY);
+
+        const age = Date.now() - flag.timestamp;
+        if (age < 5 * 60 * 1000) {
+          return flag.onLoadText;
+        }
+      }
+    } catch (error) {
+      console.error('[Shopping Assistant] Failed to check navigation flag:', error);
+    }
+    return null;
+  }
+
+  // NEW: Auto-reactivate voice after assistant messages
+  function setupVoiceReactivation(controller) {
+    let lastMessageCount = 0;
+    let voiceWasManuallyDeactivated = false;
+    
+    // Monitor message stream completion
+    setInterval(() => {
+      if (!window.chatController) return;
+      
+      // Get the current messages from the widget (if exposed)
+      // Since we don't have direct access, we'll monitor DOM changes
+      const chatMessages = document.querySelectorAll('[data-role="assistant"], .assistant-message, [class*="assistant"]');
+      const currentMessageCount = chatMessages.length;
+      
+      if (currentMessageCount > lastMessageCount) {
+        // New assistant message detected
+        lastMessageCount = currentMessageCount;
+        
+        // Check if voice was previously active and not manually deactivated
+        if (window.chatWidgetVoiceActive && !voiceWasManuallyDeactivated) {
+          console.log('[Shopping Assistant] New assistant message detected, reactivating voice...');
+          
+          setTimeout(() => {
+            if (window.chatController && window.chatWidgetVoiceActive) {
+              const success = window.chatController.startVoiceRecognition();
+              if (success) {
+                console.log('[Shopping Assistant] Voice reactivated successfully');
+              } else {
+                console.warn('[Shopping Assistant] Failed to reactivate voice');
+              }
+            }
+          }, 500); // Small delay to ensure message is fully rendered
+        }
+      }
+    }, 500);
+    
+    // Track manual voice deactivation
+    document.addEventListener('click', function(e) {
+      const target = e.target;
+      if (target && target.closest && target.closest('[aria-label*="microphone"], [aria-label*="voice"], button[class*="voice"]')) {
+        // If voice is currently active and user clicks, they're deactivating it
+        if (window.chatWidgetVoiceActive) {
+          voiceWasManuallyDeactivated = true;
+          console.log('[Shopping Assistant] Voice manually deactivated');
+        } else {
+          // User is activating it
+          voiceWasManuallyDeactivated = false;
+          console.log('[Shopping Assistant] Voice manually activated');
+        }
+      }
+    }, true);
+  }
+
+  function initializeWidget() {
+    const config = window.ShoppingAssistantConfig || {};
+    const proxyUrl = config.apiUrl;
+
+    if (!proxyUrl) {
+      console.error('[Shopping Assistant] Error: proxyUrl required');
+      return;
+    }
+
+    const originalFetch = window.fetch;
+    window.fetch = async function(input, init) {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+
+      if (url.includes(proxyUrl) && init && init.method === 'POST') {
+        try {
+          const body = JSON.parse(init.body);
+
+          const elements = collectShoppingPageContext();
+
+          body.metadata = {
+            shopping_elements: elements,
+            shopping_element_count: elements.length,
+            element_types: {
+              products: elements.filter(e => e.type === 'products').length,
+              buttons: elements.filter(e => e.type === 'buttons').length,
+              links: elements.filter(e => e.type === 'links').length,
+              inputs: elements.filter(e => e.type === 'inputs').length
+            },
+            page_url: window.location.href,
+            page_title: document.title,
+            timestamp: new Date().toISOString()
+          };
+
+          init.body = JSON.stringify(body);
+        } catch (e) {
+          console.error('[Shopping Assistant] Failed to modify request:', e);
+        }
+      }
+
+      return originalFetch(input, init);
+    };
+
+    let savedMessages = loadChatHistory();
+    const navMessage = checkNavigationFlag();
+
+    if (navMessage) {
+      const exists = savedMessages.some(msg =>
+        msg.role === 'assistant' && msg.content === navMessage
+      );
+
+      if (!exists) {
+        savedMessages.push({
+          id: 'nav-' + Date.now(),
+          role: 'assistant',
+          content: navMessage,
+          createdAt: new Date().toISOString(),
+          streaming: false
+        });
+      }
+    }
+
+    let allMessages = [...savedMessages];
+    let processedActionIds = new Set(
+      (JSON.parse(localStorage.getItem(STORAGE_KEY))?.executedActionIds || [])
+    );
+    
+    // Track raw JSON by message ID for action parsing
+    let rawJsonByMessageId = new Map();
+    let lastRawJson = null;
+    
+    // Track if the last user message was sent via voice
+    let lastUserMessageWasVoice = false;
+
+    // Create a custom parser factory that wraps the JSON parser and stores raw content
+    function createActionAwareParser() {
+      if (!window.AgentWidget || !window.AgentWidget.createJsonStreamParser) {
+        console.warn('[Shopping Assistant] createJsonStreamParser not available, using default parser');
+        // Return a plain text parser as fallback
+        if (window.AgentWidget && window.AgentWidget.createPlainTextParser) {
+          return window.AgentWidget.createPlainTextParser();
+        }
+        // Ultimate fallback - return a minimal parser
+        return {
+          processChunk: function(accumulatedContent) {
+            return accumulatedContent;
+          },
+          getExtractedText: function() {
+            return null;
+          }
+        };
+      }
+
+      console.log('[Shopping Assistant] Creating JSON stream parser');
+
+      // Create the action-aware parser
+      const baseParser = window.AgentWidget.createJsonStreamParser();
+      
+      // Track raw JSON and parser instance for this message
+      let messageRawJson = null;
+      
+      return {
+        processChunk: function(accumulatedContent) {
+          const result = baseParser.processChunk(accumulatedContent);
+          
+          // Handle async result
+          if (result instanceof Promise) {
+            return result.then(function(resolvedResult) {
+              // Store raw JSON if available
+              if (resolvedResult && typeof resolvedResult === 'object' && 'raw' in resolvedResult && resolvedResult.raw) {
+                messageRawJson = resolvedResult.raw;
+                lastRawJson = resolvedResult.raw;
+                console.log('[Shopping Assistant] Parser captured raw JSON, length:', resolvedResult.raw.length);
+              }
+              return resolvedResult;
+            });
+          }
+          
+          // Handle synchronous result
+          if (result && typeof result === 'object' && 'raw' in result && result.raw) {
+            messageRawJson = result.raw;
+            lastRawJson = result.raw;
+            console.log('[Shopping Assistant] Parser captured raw JSON (sync), length:', result.raw.length);
+          }
+          
+          return result;
+        },
+        getExtractedText: function() {
+          const extracted = baseParser.getExtractedText();
+          if (extracted) {
+            console.log('[Shopping Assistant] Parser extracted text:', extracted.substring(0, 50) + '...');
+          }
+          return extracted;
+        },
+        getRawJson: function() {
+          return messageRawJson;
+        },
+        close: function() {
+          messageRawJson = null;
+          lastRawJson = null;
+          return baseParser.close ? baseParser.close() : undefined;
+        }
+      };
+    }
+
+    const widgetConfig = {
+      apiUrl: proxyUrl,
+      initialMessages: savedMessages.length > 0 ? savedMessages : undefined,
+      streamParser: createActionAwareParser,
+      launcher: config.launcher,
+      theme: config.theme,
+      copy: config.copy,
+      suggestionChips: config.suggestionChips,
+      postprocessMessage: function(params) {
+        const text = params.text;
+        const streaming = params.streaming;
+        const message = params.message;
+
+        // Ensure text is always a string (tool/reasoning messages might have non-string content)
+        const textStr = typeof text === 'string' ? text : String(text || '');
+
+        if (!streaming) {
+          const index = allMessages.findIndex(m => m.id === message.id);
+          if (index >= 0) {
+            allMessages[index] = { ...message, streaming: false };
+          } else {
+            allMessages.push({ ...message, streaming: false });
+          }
+          saveChatHistory(allMessages);
+          
+          // Track if user message was sent via voice
+          if (message.role === 'user') {
+            // Use the viaVoice field from the message
+            lastUserMessageWasVoice = message.viaVoice || false;
+            console.log('[Shopping Assistant] User message tracked, was voice:', lastUserMessageWasVoice);
+          }
+          
+          // NEW: Trigger voice reactivation after assistant message completes
+          // Only reactivate if the last user message was sent via voice
+          if (message.role === 'assistant' && message.variant !== 'reasoning' && message.variant !== 'tool') {
+            if (lastUserMessageWasVoice) {
+              setTimeout(() => {
+                if (!window.chatWidgetVoiceManuallyDeactivated && window.chatController) {
+                  console.log('[Shopping Assistant] Assistant message completed, reactivating voice (last message was voice)...');
+                  const success = window.chatController.startVoiceRecognition();
+                  if (success) {
+                    console.log('[Shopping Assistant] Voice reactivated after assistant message');
+                    window.chatWidgetVoiceActive = true;
+                  } else {
+                    console.warn('[Shopping Assistant] Failed to reactivate voice');
+                  }
+                } else {
+                  console.log('[Shopping Assistant] Voice not reactivated - manually deactivated');
+                }
+              }, 800);
+            } else {
+              console.log('[Shopping Assistant] Voice not reactivated - last message was not voice');
+            }
+          }
+        }
+
+        const isRegularAssistant = message.role === 'assistant' &&
+          message.variant !== 'reasoning' && message.variant !== 'tool';
+
+        if (isRegularAssistant) {
+          // Check if text looks like JSON (starts with { or contains {)
+          const trimmed = textStr.trim();
+          const looksLikeJson = trimmed.startsWith('{') || textStr.includes('{');
+
+          if (streaming) {
+            // During streaming: store raw JSON and let parser handle extraction
+            // The parser's getExtractedText() will provide the display text
+            if (looksLikeJson) {
+              // Store raw JSON for this message when available
+              if (lastRawJson) {
+                rawJsonByMessageId.set(message.id, lastRawJson);
+                console.log('[Shopping Assistant] Stored raw JSON for message:', message.id);
+              }
+              // Return empty to hide raw JSON chunks - the parser's extracted text will be shown by the widget
+              return '';
+            }
+            // Not JSON - return text as-is
+            if (window.AgentWidget && window.AgentWidget.markdownPostprocessor) {
+              return window.AgentWidget.markdownPostprocessor(textStr);
+            }
+            return textStr;
+          } else {
+            // Streaming complete - parse action and extract display text
+            const storedRawJson = rawJsonByMessageId.get(message.id) || lastRawJson;
+
+            if (storedRawJson || looksLikeJson) {
+              // Parse action from stored raw JSON or from text
+              const jsonToParse = storedRawJson || textStr;
+              
+              console.log('[Shopping Assistant] Parsing action from JSON, length:', jsonToParse.length);
+              
+              const action = parseActionResponse(jsonToParse);
+
+              if (action) {
+                // Only execute once when streaming completes
+                if (!processedActionIds.has(message.id)) {
+                  processedActionIds.add(message.id);
+
+                  setTimeout(() => {
+                    executeAction(action, function() {}, message.id);
+                  }, action.action === 'nav_then_click' ? 100 : 300);
+                }
+
+                // Extract display text from action
+                // The parser's getExtractedText() should have been used by the widget already
+                // So we just need to return the text from the action
+                let displayText = '';
+                
+                if (action.action === 'message') {
+                  displayText = action.text;
+                } else if (action.action === 'nav_then_click') {
+                  displayText = 'Navigating...';
+                } else if ('text' in action) {
+                  displayText = action.text;
+                }
+
+                if (displayText && window.AgentWidget && window.AgentWidget.markdownPostprocessor) {
+                  return window.AgentWidget.markdownPostprocessor(displayText);
+                }
+                return displayText || '';
+              } else {
+                // JSON detected but couldn't parse - might be invalid, return empty
+                console.warn('[Shopping Assistant] Failed to parse action JSON');
+                return '';
+              }
+            }
+          }
+        }
+
+        // For non-regular assistant messages (tool, reasoning) or other message types,
+        // return the text as-is (already converted to string)
+        if (window.AgentWidget?.markdownPostprocessor) {
+          return window.AgentWidget.markdownPostprocessor(textStr);
+        }
+        return textStr;
+      },
+      debug: config.debug || false
+    };
+
+    if (window.AgentWidget?.initAgentWidget) {
+      const controller = window.AgentWidget.initAgentWidget({
+        target: 'body',
+        config: widgetConfig,
+        useShadowDom: false,
+        windowKey: 'chatController',
+        onReady: function() {
+          console.log('[Shopping Assistant] Widget ready');
+          
+          const shouldRestoreVoice = loadVoiceState();
+          
+          if (shouldRestoreVoice && window.chatController) {
+            console.log('[Shopping Assistant] Restoring voice recognition...');
+            setTimeout(() => {
+              const success = window.chatController.startVoiceRecognition();
+              if (success) {
+                console.log('[Shopping Assistant] Voice recognition restored');
+                window.chatWidgetVoiceActive = true;
+              } else {
+                console.warn('[Shopping Assistant] Failed to restore voice recognition');
+              }
+            }, 1000);
+          }
+
+          // NEW: Setup voice reactivation monitoring
+          // Use window.chatController since it's set via windowKey config
+          if (window.chatController) {
+            setupVoiceReactivation(window.chatController);
+          }
+
+          if (navMessage) {
+            setTimeout(() => { }, 300);
+          }
+        }
+      });
+
+      window.chatWidgetVoiceActive = false;
+      window.chatWidgetVoiceManuallyDeactivated = false; // NEW: Track manual deactivation
+      
+      document.addEventListener('click', function(e) {
+        const target = e.target;
+        if (target && target.closest && target.closest('[aria-label*="microphone"], [aria-label*="voice"], button[class*="voice"]')) {
+          const wasActive = window.chatWidgetVoiceActive;
+          window.chatWidgetVoiceActive = !window.chatWidgetVoiceActive;
+          
+          // NEW: Track if user manually deactivated
+          if (wasActive && !window.chatWidgetVoiceActive) {
+            window.chatWidgetVoiceManuallyDeactivated = true;
+            console.log('[Shopping Assistant] Voice manually deactivated by user');
+          } else if (!wasActive && window.chatWidgetVoiceActive) {
+            window.chatWidgetVoiceManuallyDeactivated = false;
+            console.log('[Shopping Assistant] Voice manually activated by user');
+          }
+          
+          console.log('[Shopping Assistant] Voice state changed:', window.chatWidgetVoiceActive);
+        }
+      }, true);
+
+    } else {
+      console.error('[Shopping Assistant] AgentWidget not loaded');
+    }
+  }
+
+  // Load widget script
+  const script = document.createElement('script');
+  script.src = window.__PERSONA_CDN_BASE__ + '/index.global.js';
+  script.onload = function() {
+    console.log('[Shopping Assistant] Widget loaded' + (window.location.hostname === 'localhost' ? ' (local build)' : ' from CDN'));
+    initializeWidget();
+  };
+  script.onerror = function() {
+    console.error('[Shopping Assistant] Failed to load widget from CDN');
+  };
+  document.head.appendChild(script);
+
+  // ========================================================================
+  // EXPORT SHOPPING ASSISTANT API FOR CONSOLE/EXTERNAL USE
+  // ========================================================================
+
+  window.ShoppingAssistantBrowser = {
+    collectShoppingPageContext: collectShoppingPageContext,
+    formatPageContext: formatPageContext,
+    generateElementSelector: generateElementSelector,
+    getElementText: getElementText,
+    isElementInteractive: isElementInteractive,
+    clearProcessedActions: function() {
+      localStorage.removeItem(PROCESSED_ACTIONS_KEY);
+      console.log('[Shopping Assistant] Cleared all processed actions');
+    },
+    getProcessedActions: function() {
+      return loadProcessedActions();
+    },
+    setVoiceActive: function(active) {
+      window.chatWidgetVoiceActive = active;
+      console.log('[Shopping Assistant] Voice state manually set:', active);
+    },
+    getVoiceActive: function() {
+      return window.chatWidgetVoiceActive || false;
+    },
+    testVoiceRestore: function() {
+      saveVoiceState(true);
+      console.log('[Shopping Assistant] Voice state saved for testing. Reload the page to test restoration.');
+    },
+    resetVoiceManualDeactivation: function() {
+      window.chatWidgetVoiceManuallyDeactivated = false;
+      console.log('[Shopping Assistant] Reset manual deactivation flag');
+    }
+  };
+
+  console.log('[Shopping Assistant Browser] Ready - use window.ShoppingAssistantBrowser');
+})();
+</script>
