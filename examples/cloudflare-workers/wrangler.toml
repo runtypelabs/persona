@@ -2,6 +2,10 @@ name = "persona-proxy"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
+# Allow up to 5 minutes of active CPU time per request
+[limits]
+cpu_ms = 300_000
+
 # Environment variables (non-sensitive)
 [vars]
 # Add any non-secret environment variables here
