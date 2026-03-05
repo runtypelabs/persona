@@ -2503,7 +2503,7 @@ export const createAgentExperience = (
   /** Remove all voice state CSS classes */
   const removeAllVoiceStateClasses = () => {
     if (!micButton) return;
-    micButton.classList.remove("tvw-voice-recording", "tvw-voice-processing", "tvw-voice-speaking");
+    micButton.classList.remove("persona-voice-recording", "persona-voice-processing", "persona-voice-speaking");
   };
 
   // --- Per-state style application ---
@@ -2516,7 +2516,7 @@ export const createAgentExperience = (
     const recordingIconColor = voiceConfig.recordingIconColor;
     const recordingBorderColor = voiceConfig.recordingBorderColor;
     removeAllVoiceStateClasses();
-    micButton.classList.add("tvw-voice-recording");
+    micButton.classList.add("persona-voice-recording");
     micButton.style.backgroundColor = recordingBackgroundColor;
     if (recordingIconColor) {
       micButton.style.color = recordingIconColor;
@@ -2538,7 +2538,7 @@ export const createAgentExperience = (
     const borderColor = voiceConfig.processingBorderColor ?? originalMicStyles?.borderColor ?? "";
 
     removeAllVoiceStateClasses();
-    micButton.classList.add("tvw-voice-processing");
+    micButton.classList.add("persona-voice-processing");
     micButton.style.backgroundColor = bgColor;
     micButton.style.borderColor = borderColor;
     const resolvedColor = iconColor || "currentColor";
@@ -2570,7 +2570,7 @@ export const createAgentExperience = (
       ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBorderColor ?? "") : (originalMicStyles?.borderColor ?? ""));
 
     removeAllVoiceStateClasses();
-    micButton.classList.add("tvw-voice-speaking");
+    micButton.classList.add("persona-voice-speaking");
     micButton.style.backgroundColor = bgColor;
     micButton.style.borderColor = borderColor;
     const resolvedColor = iconColor || "currentColor";
@@ -2590,7 +2590,7 @@ export const createAgentExperience = (
     }
     // In "barge-in" mode, add recording class to show mic is hot
     if (interruptionMode === "barge-in") {
-      micButton.classList.add("tvw-voice-recording");
+      micButton.classList.add("persona-voice-recording");
     }
   };
 

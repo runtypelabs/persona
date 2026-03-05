@@ -1337,10 +1337,21 @@ Use agent loop execution instead of flow dispatch. Mutually exclusive with `flow
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `maxIterations` | `number` | Maximum number of reasoning iterations. |
-| `stopCondition` | `'auto' \| string?` | `'auto'` for automatic detection, or a custom JS expression. |
+| `maxTurns` | `number` | Maximum number of agent turns (1-100). The loop continues while the model calls tools. |
+| `maxCost` | `number?` | Maximum cost budget in USD. Agent stops when exceeded. |
 | `enableReflection` | `boolean?` | Enable periodic reflection during execution. |
-| `reflectionInterval` | `number?` | Number of iterations between reflections. |
+| `reflectionInterval` | `number?` | Number of iterations between reflections (1-50). |
+
+**`AgentToolsConfig`**
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `toolIds` | `string[]?` | Tool IDs to enable (e.g., `"builtin:exa"`, `"builtin:dalle"`). |
+| `toolConfigs` | `Record<string, Record<string, unknown>>?` | Per-tool configuration overrides keyed by tool ID. |
+| `runtimeTools` | `Array<Record<string, unknown>>?` | Inline tool definitions for runtime-defined tools. |
+| `mcpServers` | `Array<Record<string, unknown>>?` | Custom MCP server connections. |
+| `maxToolCalls` | `number?` | Maximum number of tool invocations per execution. |
+| `approval` | `{ require: string[] \| boolean; timeout?: number }?` | Tool approval configuration for human-in-the-loop workflows. |
 
 **`AgentRequestOptions`**
 
@@ -1354,10 +1365,11 @@ Use agent loop execution instead of flow dispatch. Mutually exclusive with `flow
 ```typescript
 config: {
   agent: {
-    name: 'Assistant',
-    model: 'openai:gpt-4o-mini',
-    systemPrompt: 'You are a helpful assistant.',
-    loopConfig: { maxIterations: 3, stopCondition: 'auto' }
+    name: 'Research Assistant',
+    model: 'qwen/qwen3-8b',
+    systemPrompt: 'You are a research assistant with access to web search.',
+    tools: { toolIds: ['builtin:exa'] },
+    loopConfig: { maxTurns: 5 }
   },
   agentOptions: { streamResponse: true, recordMode: 'virtual' },
   iterationDisplay: 'merged'

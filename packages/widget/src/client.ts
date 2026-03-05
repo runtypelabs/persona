@@ -1351,7 +1351,7 @@ export class AgentWidgetClient {
             id: toolId,
             status: "pending"
           };
-          tool.name = payload.toolName ?? tool.name;
+          tool.name = payload.toolName ?? payload.name ?? tool.name;
           tool.status = "running";
           if (payload.args !== undefined) {
             tool.args = payload.args;
@@ -1931,7 +1931,7 @@ export class AgentWidgetClient {
             result: undefined, duration: undefined, startedAt: undefined,
             completedAt: undefined, durationMs: undefined
           };
-          tool.name = payload.toolName ?? tool.name;
+          tool.name = payload.toolName ?? payload.name ?? tool.name;
           tool.status = "running";
           if (payload.parameters !== undefined) {
             tool.args = payload.parameters;

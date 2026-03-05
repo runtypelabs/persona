@@ -52,7 +52,7 @@ const createMessageImagePreviews = (
   try {
     const container = createElement(
       "div",
-      "tvw-flex tvw-flex-col tvw-gap-2"
+      "persona-flex persona-flex-col persona-gap-2"
     );
     container.setAttribute("data-message-attachments", "images");
     if (hasVisibleText) {

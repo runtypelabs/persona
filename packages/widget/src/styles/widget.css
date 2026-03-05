@@ -1061,27 +1061,27 @@
 }
 
 /* Voice processing animation (spinner) */
-@keyframes tvw-voice-processing-spin {
+@keyframes persona-voice-processing-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-.tvw-voice-processing svg {
-  animation: tvw-voice-processing-spin 1.2s linear infinite;
+.persona-voice-processing svg {
+  animation: persona-voice-processing-spin 1.2s linear infinite;
 }
 
 /* Voice speaking animation (gentle pulse — slower/subtler than recording) */
-@keyframes tvw-voice-speaking-pulse {
+@keyframes persona-voice-speaking-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.85; transform: scale(1.03); }
 }
 
-.tvw-voice-speaking {
-  animation: tvw-voice-speaking-pulse 2s ease-in-out infinite;
+.persona-voice-speaking {
+  animation: persona-voice-speaking-pulse 2s ease-in-out infinite;
 }
 
-.tvw-voice-speaking svg {
-  animation: tvw-voice-speaking-pulse 2s ease-in-out infinite;
+.persona-voice-speaking svg {
+  animation: persona-voice-speaking-pulse 2s ease-in-out infinite;
 }
 
 /* Markdown content overflow handling */
@@ -1846,14 +1846,14 @@
    Tool & Reasoning Bubble Theme Styles
    ============================================ */
 
-/* Content areas: replace ghost tvw-bg-gray-50 / tvw-border-gray-200 */
-.vanilla-tool-bubble .tvw-border-t,
-.vanilla-reasoning-bubble .tvw-border-t {
+/* Content areas: themed border and background for tool/reasoning bubbles */
+.vanilla-tool-bubble .persona-border-t,
+.vanilla-reasoning-bubble .persona-border-t {
   border-top-color: var(--cw-border, #e5e7eb);
   background-color: var(--cw-container, #f9fafb);
 }
 
-/* Tool bubble code blocks: replace ghost tvw-bg-white / tvw-border-gray-100 */
+/* Tool bubble code blocks: themed surface and border */
 .vanilla-tool-bubble pre {
   background-color: var(--cw-surface, #ffffff);
   border-color: var(--cw-border, #f1f5f9);
@@ -1877,20 +1877,6 @@
 .vanilla-approval-bubble {
   background-color: var(--cw-surface, #ffffff);
   border-color: var(--cw-border, #e5e7eb);
-}
-
-/* Approval status badges — rgba() so they work on any surface */
-.tvw-approval-badge-approved {
-  background-color: rgba(22, 163, 74, 0.12);
-  color: #16a34a;
-}
-.tvw-approval-badge-denied {
-  background-color: rgba(220, 38, 38, 0.12);
-  color: #dc2626;
-}
-.tvw-approval-badge-timeout {
-  background-color: rgba(202, 138, 4, 0.12);
-  color: #ca8a04;
 }
 
 /* Approval button hover/active states */
