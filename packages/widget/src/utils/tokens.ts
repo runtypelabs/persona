@@ -528,6 +528,12 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-attachment-image-bg'] = cssVars['--persona-components-attachment-image-background'] ?? cssVars['--persona-palette-colors-gray-100'];
   cssVars['--persona-attachment-image-border'] = cssVars['--persona-components-attachment-image-border'] ?? cssVars['--persona-palette-colors-gray-200'];
 
+  // Typography shorthand aliases
+  cssVars['--persona-font-family'] = cssVars['--persona-semantic-typography-fontFamily'] ?? cssVars['--persona-palette-typography-fontFamily-sans'];
+  cssVars['--persona-font-size'] = cssVars['--persona-semantic-typography-fontSize'] ?? cssVars['--persona-palette-typography-fontSize-base'];
+  cssVars['--persona-font-weight'] = cssVars['--persona-semantic-typography-fontWeight'] ?? cssVars['--persona-palette-typography-fontWeight-normal'];
+  cssVars['--persona-line-height'] = cssVars['--persona-semantic-typography-lineHeight'] ?? cssVars['--persona-palette-typography-lineHeight-normal'];
+
   return cssVars;
 }
 

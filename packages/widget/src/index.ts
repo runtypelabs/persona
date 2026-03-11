@@ -157,6 +157,12 @@ export {
   createThemeObserver
 } from "./utils/theme";
 export {
+  DEFAULT_PALETTE,
+  DEFAULT_SEMANTIC,
+  DEFAULT_COMPONENTS,
+  validateTheme
+} from "./utils/tokens";
+export {
   accessibilityPlugin,
   animationsPlugin,
   brandPlugin,
@@ -173,6 +179,7 @@ export type {
   PersonaThemePlugin,
   CreateThemeOptions,
   TokenReference,
+  ColorShade,
   ColorPalette,
   SpacingScale,
   TypographyScale,
