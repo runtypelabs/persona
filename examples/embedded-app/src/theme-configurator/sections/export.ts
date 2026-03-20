@@ -1,4 +1,4 @@
-/** Tab 4: Export — presets, code export, JSON import/export, reset */
+/** Actions — toolbar dropdown with export, import, presets, and reset utilities. */
 
 import type { OnChangeCallback, ControlResult } from '../types';
 import { setSearchContext } from '../search';
@@ -11,37 +11,57 @@ import {
   presetExists,
   type ThemePreset,
 } from '../presets';
-import { generateCodeSnippet, type CodeFormat, createTheme } from '@runtypelabs/persona';
+import { generateCodeSnippet, type CodeFormat } from '@runtypelabs/persona';
 
 export const TAB_ID = 'export';
-export const TAB_LABEL = 'Export';
+export const TAB_LABEL = 'Actions';
 
-// ─── Render ───────────────────────────────────────────────────────
+let exportDropdownOpen = false;
+let onSyncAllControls: (() => void) | null = null;
 
-export function render(
-  container: HTMLElement,
-  onChange: OnChangeCallback
-): ControlResult[] {
-  setSearchContext(TAB_ID, 'export');
+/** Check if the export dropdown is currently open */
+export function isExportOpen(): boolean {
+  return exportDropdownOpen;
+}
 
-  // ── Presets Section ──
-  const presetsSection = document.createElement('div');
-  presetsSection.className = 'export-section';
-  presetsSection.innerHTML = `
-    <h3 class="export-section-title">Theme Presets</h3>
-    <div class="preset-grid" id="preset-grid"></div>
-    <div class="preset-save-row">
-      <input type="text" id="preset-name-input" class="control-text-input" placeholder="Preset name…" />
-      <button type="button" id="save-preset-btn" class="btn btn-primary">Save Current</button>
-    </div>
-  `;
-  container.appendChild(presetsSection);
+/** Toggle the export dropdown open/closed */
+export function toggleExport(): void {
+  exportDropdownOpen = !exportDropdownOpen;
+  const dropdown = document.getElementById('export-dropdown');
+  if (!dropdown) return;
+
+  if (exportDropdownOpen) {
+    dropdown.classList.remove('hidden');
+    if (!dropdown.hasChildNodes()) {
+      renderDropdownContent(dropdown);
+    }
+  } else {
+    dropdown.classList.add('hidden');
+  }
+}
+
+/** Close the export dropdown */
+export function closeExport(): void {
+  exportDropdownOpen = false;
+  const dropdown = document.getElementById('export-dropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+}
+
+/** Set callback for syncing all controls after preset apply */
+export function setSyncCallback(callback: () => void): void {
+  onSyncAllControls = callback;
+}
+
+// ─── Dropdown content ──────────────────────────────────────────
+
+function renderDropdownContent(container: HTMLElement): void {
+  container.innerHTML = '';
 
   // ── Code Export Section ──
   const codeSection = document.createElement('div');
-  codeSection.className = 'export-section';
+  codeSection.className = 'export-dropdown-section';
   codeSection.innerHTML = `
-    <h3 class="export-section-title">Code Export</h3>
+    <h4 class="export-dropdown-title">Code Export</h4>
     <div class="export-format-row">
       <select id="code-format-select" class="control-select">
         <option value="script-installer">Script Tag (Installer)</option>
@@ -51,7 +71,7 @@ export function render(
         <option value="react-component">React Component</option>
         <option value="react-advanced">React Advanced</option>
       </select>
-      <button type="button" id="copy-code-btn" class="btn btn-primary">Copy Code</button>
+      <button type="button" id="copy-code-btn" class="btn btn-primary btn-sm">Copy</button>
     </div>
     <pre id="code-preview" class="code-preview"><code></code></pre>
   `;
@@ -59,109 +79,54 @@ export function render(
 
   // ── JSON Section ──
   const jsonSection = document.createElement('div');
-  jsonSection.className = 'export-section';
+  jsonSection.className = 'export-dropdown-section';
   jsonSection.innerHTML = `
-    <h3 class="export-section-title">JSON Import/Export</h3>
+    <h4 class="export-dropdown-title">Config JSON</h4>
     <div class="export-button-row">
-      <button type="button" id="copy-json-btn" class="btn">Copy Theme JSON</button>
-      <button type="button" id="load-json-btn" class="btn">Load Theme JSON</button>
+      <button type="button" id="copy-json-btn" class="btn btn-sm">Copy JSON</button>
+      <button type="button" id="load-json-btn" class="btn btn-sm">Load JSON</button>
     </div>
-    <textarea id="json-import-area" class="json-textarea hidden" placeholder="Paste JSON here…" rows="10"></textarea>
-    <button type="button" id="apply-json-btn" class="btn btn-primary hidden">Apply JSON</button>
+    <textarea id="json-import-area" class="json-textarea hidden" placeholder="Paste JSON here…" rows="6"></textarea>
+    <button type="button" id="apply-json-btn" class="btn btn-primary btn-sm hidden">Apply JSON</button>
   `;
   container.appendChild(jsonSection);
 
+  // ── Save Preset Section ──
+  const presetSection = document.createElement('div');
+  presetSection.className = 'export-dropdown-section';
+  presetSection.innerHTML = `
+    <h4 class="export-dropdown-title">Save Preset</h4>
+    <div class="preset-save-row">
+      <input type="text" id="export-preset-name" class="control-text-input" placeholder="Preset name…" />
+      <button type="button" id="export-save-preset-btn" class="btn btn-primary btn-sm">Save</button>
+    </div>
+  `;
+  container.appendChild(presetSection);
+
   // ── Reset Section ──
   const resetSection = document.createElement('div');
-  resetSection.className = 'export-section';
+  resetSection.className = 'export-dropdown-section export-dropdown-section-reset';
   resetSection.innerHTML = `
-    <h3 class="export-section-title">Reset</h3>
-    <button type="button" id="reset-defaults-btn" class="btn btn-danger">Reset to Defaults</button>
+    <button type="button" id="reset-defaults-btn" class="btn btn-danger btn-sm">Reset to Defaults</button>
   `;
   container.appendChild(resetSection);
 
-  // ── Wire up interactions ──
+  // Wire up interactions after DOM is ready
   requestAnimationFrame(() => {
-    setupPresetGrid();
     setupCodeExport();
     setupJsonExport();
+    setupPresetSave();
     setupReset();
   });
-
-  return [];
 }
 
-// ─── Preset Grid ──────────────────────────────────────────────────
+// ─── Render (legacy interface, now no-op for tab panels) ─────────
 
-function setupPresetGrid(): void {
-  const grid = document.getElementById('preset-grid');
-  const nameInput = document.getElementById('preset-name-input') as HTMLInputElement;
-  const saveBtn = document.getElementById('save-preset-btn');
-
-  if (!grid || !nameInput || !saveBtn) return;
-
-  const renderGrid = () => {
-    grid.innerHTML = '';
-    const presets = getAllPresets();
-
-    for (const preset of presets) {
-      const card = document.createElement('div');
-      card.className = `preset-card${preset.builtIn ? '' : ' preset-card-custom'}`;
-
-      const info = document.createElement('div');
-      info.className = 'preset-card-info';
-      info.innerHTML = `
-        <span class="preset-card-label">${preset.label}</span>
-        <span class="preset-card-desc">${preset.description}</span>
-      `;
-
-      const actions = document.createElement('div');
-      actions.className = 'preset-card-actions';
-
-      const applyBtn = document.createElement('button');
-      applyBtn.className = 'btn btn-sm';
-      applyBtn.textContent = 'Apply';
-      applyBtn.type = 'button';
-      applyBtn.addEventListener('click', () => {
-        applyPreset(preset);
-      });
-      actions.appendChild(applyBtn);
-
-      if (!preset.builtIn) {
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'btn btn-sm btn-danger';
-        deleteBtn.textContent = 'Delete';
-        deleteBtn.type = 'button';
-        deleteBtn.addEventListener('click', () => {
-          if (confirm(`Delete preset "${preset.label}"?`)) {
-            deleteCustomPreset(preset.id);
-            renderGrid();
-          }
-        });
-        actions.appendChild(deleteBtn);
-      }
-
-      card.appendChild(info);
-      card.appendChild(actions);
-      grid.appendChild(card);
-    }
-  };
-
-  renderGrid();
-
-  saveBtn.addEventListener('click', () => {
-    const name = nameInput.value.trim();
-    if (!name) {
-      alert('Please enter a preset name');
-      return;
-    }
-    if (presetExists(name)) {
-      if (!confirm(`Preset "${name}" already exists. Overwrite?`)) return;
-    }
-    saveCustomPreset(name);
-    nameInput.value = '';
-    renderGrid();
-  });
+export function render(
+  _container: HTMLElement,
+  _onChange: OnChangeCallback
+): ControlResult[] {
+  return [];
 }
 
 // ─── Code Export ──────────────────────────────────────────────────
@@ -175,8 +140,7 @@ function setupCodeExport(): void {
 
   const updatePreview = () => {
     const format = formatSelect.value as CodeFormat;
-    const config = state.getConfig();
-    // Build a config with the v2 theme for code generation
+    const config = state.getConfigForOutput();
     const configWithTheme = {
       ...config,
       theme: state.getTheme() as any,
@@ -187,6 +151,7 @@ function setupCodeExport(): void {
   };
 
   formatSelect.addEventListener('change', updatePreview);
+  state.onChange(() => updatePreview());
   updatePreview();
 
   copyBtn.addEventListener('click', async () => {
@@ -196,10 +161,9 @@ function setupCodeExport(): void {
         await navigator.clipboard.writeText(codeEl.textContent);
         copyBtn.textContent = 'Copied!';
         setTimeout(() => {
-          copyBtn.textContent = 'Copy Code';
+          copyBtn.textContent = 'Copy';
         }, 2000);
       } catch {
-        // Fallback
         const textarea = document.createElement('textarea');
         textarea.value = codeEl.textContent;
         document.body.appendChild(textarea);
@@ -208,7 +172,7 @@ function setupCodeExport(): void {
         document.body.removeChild(textarea);
         copyBtn.textContent = 'Copied!';
         setTimeout(() => {
-          copyBtn.textContent = 'Copy Code';
+          copyBtn.textContent = 'Copy';
         }, 2000);
       }
     }
@@ -226,16 +190,15 @@ function setupJsonExport(): void {
   if (!copyJsonBtn || !loadJsonBtn || !jsonArea || !applyJsonBtn) return;
 
   copyJsonBtn.addEventListener('click', async () => {
-    const theme = state.getTheme();
-    const json = JSON.stringify(theme, null, 2);
+    const snapshot = state.exportSnapshot();
+    const json = JSON.stringify(snapshot, null, 2);
     try {
       await navigator.clipboard.writeText(json);
       copyJsonBtn.textContent = 'Copied!';
       setTimeout(() => {
-        copyJsonBtn.textContent = 'Copy Theme JSON';
+        copyJsonBtn.textContent = 'Copy JSON';
       }, 2000);
     } catch {
-      // Fallback
       jsonArea.value = json;
       jsonArea.classList.remove('hidden');
       jsonArea.select();
@@ -255,14 +218,37 @@ function setupJsonExport(): void {
 
     try {
       const parsed = JSON.parse(json);
-      const theme = createTheme(parsed, { validate: false });
-      state.setTheme(theme);
+      state.importSnapshot(parsed);
       jsonArea.classList.add('hidden');
       applyJsonBtn.classList.add('hidden');
       jsonArea.value = '';
+      closeExport();
     } catch (e) {
       alert(`Invalid JSON: ${(e as Error).message}`);
     }
+  });
+}
+
+// ─── Preset Save ─────────────────────────────────────────────────
+
+function setupPresetSave(): void {
+  const nameInput = document.getElementById('export-preset-name') as HTMLInputElement;
+  const saveBtn = document.getElementById('export-save-preset-btn');
+
+  if (!nameInput || !saveBtn) return;
+
+  saveBtn.addEventListener('click', () => {
+    const name = nameInput.value.trim();
+    if (!name) {
+      alert('Please enter a preset name');
+      return;
+    }
+    if (presetExists(name)) {
+      if (!confirm(`Preset "${name}" already exists. Overwrite?`)) return;
+    }
+    saveCustomPreset(name);
+    nameInput.value = '';
+    closeExport();
   });
 }
 
@@ -275,7 +261,6 @@ function setupReset(): void {
   resetBtn.addEventListener('click', () => {
     if (confirm('Reset all settings to defaults? This cannot be undone.')) {
       state.resetToDefaults();
-      // Reload to refresh all controls
       window.location.reload();
     }
   });

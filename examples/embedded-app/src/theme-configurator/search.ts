@@ -2,6 +2,28 @@
 
 import type { FieldDef, ControlResult, SearchEntry } from './types';
 
+// ─── UX label mapping (tab/section ids → display labels) ───────────
+
+const TAB_LABELS: Record<string, string> = {
+  'style': 'Style',
+  'configure': 'Configure',
+};
+
+export function getTabDisplayLabel(tabId: string): string {
+  if (TAB_LABELS[tabId]) return TAB_LABELS[tabId];
+  return tabId
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+export function getSectionDisplayLabel(sectionId: string): string {
+  return sectionId
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 // ─── Search index ──────────────────────────────────────────────────
 
 const searchIndex: SearchEntry[] = [];
@@ -173,7 +195,7 @@ function displayResults(results: SearchResult[]): void {
 
     const pathSpan = document.createElement('span');
     pathSpan.className = 'search-result-path';
-    pathSpan.textContent = `${entry.tabId} → ${entry.sectionId}`;
+    pathSpan.textContent = `${getTabDisplayLabel(entry.tabId)} → ${getSectionDisplayLabel(entry.sectionId)}`;
 
     item.appendChild(labelSpan);
     item.appendChild(pathSpan);
@@ -215,4 +237,14 @@ function clearSearch(): void {
 /** Get the full search index (for debugging) */
 export function getSearchIndex(): SearchEntry[] {
   return searchIndex;
+}
+
+export function resetSearchIndex(): void {
+  searchIndex.length = 0;
+}
+
+export function pruneSearchIndex(predicate: (entry: SearchEntry) => boolean): void {
+  const kept = searchIndex.filter(predicate);
+  searchIndex.length = 0;
+  searchIndex.push(...kept);
 }

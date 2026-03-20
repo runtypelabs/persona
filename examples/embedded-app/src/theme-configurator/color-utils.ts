@@ -192,6 +192,32 @@ export function paletteColorPath(family: string, shade: string): string {
  * Get the display name for a token reference path.
  * e.g., 'palette.colors.primary.500' -> 'Primary 500'
  */
+/**
+ * Resolve a theme dot-path to a concrete CSS color string for display (e.g. inline color picker).
+ * Uses the same chaining rules as the Style tab summaries: refs may be semantic.* or palette.* and recurse.
+ */
+export function resolveThemeColorPath(
+  get: (path: string) => unknown,
+  path: string,
+  depth = 0
+): string {
+  if (depth > 5) return '#cbd5e1';
+
+  const raw = get(path);
+  if (typeof raw !== 'string') return '#cbd5e1';
+  if (raw.startsWith('#') || raw.startsWith('rgb') || raw === 'transparent') return raw;
+
+  if (
+    raw.startsWith('palette.') ||
+    raw.startsWith('semantic.') ||
+    raw.startsWith('components.')
+  ) {
+    return resolveThemeColorPath(get, `theme.${raw}`, depth + 1);
+  }
+
+  return '#cbd5e1';
+}
+
 export function tokenRefDisplayName(path: string): string {
   if (!path.startsWith('palette.') && !path.startsWith('semantic.')) {
     return path; // literal value

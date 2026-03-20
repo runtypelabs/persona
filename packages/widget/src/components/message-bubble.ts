@@ -460,6 +460,15 @@ export const createStandardBubble = (
   bubble.id = `bubble-${message.id}`;
   bubble.setAttribute("data-message-id", message.id);
 
+  // Apply component-level color overrides via CSS variables
+  if (message.role === "user") {
+    bubble.style.backgroundColor = 'var(--persona-message-user-bg, var(--persona-accent))';
+    bubble.style.color = 'var(--persona-message-user-text, white)';
+  } else if (message.role === "assistant") {
+    bubble.style.backgroundColor = 'var(--persona-message-assistant-bg, var(--persona-surface))';
+    bubble.style.color = 'var(--persona-message-assistant-text, var(--persona-text))';
+  }
+
   const imageParts = getMessageImageParts(message);
   const messageContentText = message.content?.trim() ?? "";
   const isImageOnlyFallbackMessage =
@@ -468,6 +477,7 @@ export const createStandardBubble = (
 
   // Add message content
   const contentDiv = document.createElement("div");
+  contentDiv.classList.add("persona-message-content");
   const transformedContent = transform({
     text: message.content,
     message,

@@ -648,7 +648,7 @@ Common tokens have short aliases for easier use in custom CSS:
 ### Header (`layout.header.*`)
 | Property | Description |
 |----------|-------------|
-| `layout` | `"default" \| "minimal" \| "expanded"` |
+| `layout` | `"default" \| "minimal"` |
 | `showIcon` / `showTitle` / `showSubtitle` | Show/hide elements |
 | `showCloseButton` / `showClearChat` | Show/hide buttons |
 | `render` | Custom render function |

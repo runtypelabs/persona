@@ -26,7 +26,7 @@ import { AttachmentManager } from "./utils/attachment-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver } from "./utils/theme";
 import { renderLucideIcon } from "./utils/icons";
-import { createElement } from "./utils/dom";
+import { createElement, createElementInDocument } from "./utils/dom";
 import { morphMessages } from "./utils/morph";
 import { statusCopy } from "./utils/constants";
 import { createLauncherButton } from "./components/launcher";
@@ -467,6 +467,7 @@ export const createAgentExperience = (
   let prevAutoExpand = autoExpand;
   let prevLauncherEnabled = launcherEnabled;
   let prevHeaderLayout = config.layout?.header?.layout;
+  let wasMobileFullscreen = false;
   let open = launcherEnabled ? autoExpand : true;
 
   // Track pending resubmit state for injection-triggered resubmit
@@ -1030,23 +1031,35 @@ export const createAgentExperience = (
     const sidebarMode = config.launcher?.sidebarMode ?? false;
     const fullHeight = sidebarMode || (config.launcher?.fullHeight ?? false);
     const theme = config.theme ?? {};
-    
+
+    // Mobile fullscreen detection
+    // Use mount's ownerDocument window to get correct viewport width when widget is inside an iframe
+    const ownerWindow = mount.ownerDocument.defaultView ?? window;
+    const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
+    const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
+    const isMobileViewport = ownerWindow.innerWidth <= mobileBreakpoint;
+    const shouldGoFullscreen = mobileFullscreen && isMobileViewport && launcherEnabled;
+
     // Determine panel styling based on mode, with theme overrides
     const position = config.launcher?.position ?? 'bottom-left';
     const isLeftSidebar = position === 'bottom-left' || position === 'top-left';
-    
+
     // Default values based on mode
-    const defaultPanelBorder = sidebarMode ? 'none' : '1px solid var(--persona-persona-border)';
-    const defaultPanelShadow = sidebarMode 
-      ? (isLeftSidebar ? 'var(--persona-palette-shadows-sidebar-left, 2px 0 12px rgba(0, 0, 0, 0.08))' : 'var(--persona-palette-shadows-sidebar-right, -2px 0 12px rgba(0, 0, 0, 0.08))')
-      : 'var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25))';
-    const defaultPanelBorderRadius = sidebarMode ? '0' : '16px';
-    
+    const defaultPanelBorder = (sidebarMode || shouldGoFullscreen) ? 'none' : '1px solid var(--persona-persona-border)';
+    const defaultPanelShadow = shouldGoFullscreen
+      ? 'none'
+      : sidebarMode
+        ? (isLeftSidebar ? 'var(--persona-palette-shadows-sidebar-left, 2px 0 12px rgba(0, 0, 0, 0.08))' : 'var(--persona-palette-shadows-sidebar-right, -2px 0 12px rgba(0, 0, 0, 0.08))')
+        : 'var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25))';
+    const defaultPanelBorderRadius = (sidebarMode || shouldGoFullscreen)
+      ? '0'
+      : 'var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))';
+
     // Apply theme overrides or defaults
     const panelBorder = theme.panelBorder ?? defaultPanelBorder;
     const panelShadow = theme.panelShadow ?? defaultPanelShadow;
     const panelBorderRadius = theme.panelBorderRadius ?? defaultPanelBorderRadius;
-    
+
     // Reset all inline styles first to handle mode toggling
     // This ensures styles don't persist when switching between modes
     mount.style.cssText = '';
@@ -1056,6 +1069,70 @@ export const createAgentExperience = (
     body.style.cssText = '';
     footer.style.cssText = '';
     
+    // Mobile fullscreen: fill entire viewport with no radius/shadow/margins
+    if (shouldGoFullscreen) {
+      // Remove position offset classes
+      wrapper.classList.remove(
+        'persona-bottom-6', 'persona-right-6', 'persona-left-6', 'persona-top-6',
+        'persona-bottom-4', 'persona-right-4', 'persona-left-4', 'persona-top-4'
+      );
+
+      // Wrapper — fill entire viewport
+      wrapper.style.cssText = `
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        z-index: inherit !important;
+      `;
+
+      // Panel — fill wrapper, no radius/shadow
+      panel.style.cssText = `
+        position: relative !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 0% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      `;
+
+      // Container — fill panel, no radius/border
+      container.style.cssText = `
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 0% !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+        border-radius: 0 !important;
+        border: none !important;
+      `;
+
+      // Body — scrollable messages
+      body.style.flex = '1 1 0%';
+      body.style.minHeight = '0';
+      body.style.overflowY = 'auto';
+
+      // Footer — pinned at bottom
+      footer.style.flexShrink = '0';
+
+      wasMobileFullscreen = true;
+      return; // Skip remaining mode logic
+    }
+
     // Re-apply panel width/maxWidth from initial setup
     const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
     const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
@@ -1063,7 +1140,7 @@ export const createAgentExperience = (
       panel.style.width = width;
       panel.style.maxWidth = width;
     }
-    
+
     // Apply panel styling
     // Box-shadow is applied to panel (parent) instead of container to avoid
     // rendering artifacts when container has overflow:hidden + border-radius
@@ -1072,7 +1149,7 @@ export const createAgentExperience = (
     panel.style.borderRadius = panelBorderRadius;
     container.style.border = panelBorder;
     container.style.borderRadius = panelBorderRadius;
-    
+
     // Check if this is inline embed mode (launcher disabled) vs launcher mode
     const isInlineEmbed = config.launcher?.enabled === false;
     
@@ -2782,13 +2859,33 @@ export const createAgentExperience = (
   const recalcPanelHeight = () => {
     const sidebarMode = config.launcher?.sidebarMode ?? false;
     const fullHeight = sidebarMode || (config.launcher?.fullHeight ?? false);
-    
+
+    // Mobile fullscreen: re-apply fullscreen styles on resize (handles orientation changes)
+    const ownerWindow = mount.ownerDocument.defaultView ?? window;
+    const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
+    const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
+    const isMobileViewport = ownerWindow.innerWidth <= mobileBreakpoint;
+    const shouldGoFullscreen = mobileFullscreen && isMobileViewport && launcherEnabled;
+
+    if (shouldGoFullscreen) {
+      applyFullHeightStyles();
+      applyThemeVariables(mount, config);
+      return;
+    }
+
+    // Exiting mobile fullscreen (e.g., orientation change to landscape) — reset all styles
+    if (wasMobileFullscreen) {
+      wasMobileFullscreen = false;
+      applyFullHeightStyles();
+      applyThemeVariables(mount, config);
+    }
+
     if (!launcherEnabled) {
       panel.style.height = "";
       panel.style.width = "";
       return;
     }
-    
+
     // In sidebar/fullHeight mode, don't override the width - it's handled by applyFullHeightStyles
     if (!sidebarMode) {
       const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
@@ -2796,7 +2893,7 @@ export const createAgentExperience = (
       panel.style.width = width;
       panel.style.maxWidth = width;
     }
-    
+
     // In fullHeight mode, don't set a fixed height
     if (!fullHeight) {
       const viewportHeight = window.innerHeight;
@@ -2958,6 +3055,8 @@ export const createAgentExperience = (
   const controller: Controller = {
     update(nextConfig: AgentWidgetConfig) {
       const previousToolCallConfig = config.toolCall;
+      const previousMessageActions = config.messageActions;
+      const previousLayoutMessages = config.layout?.messages;
       const previousColorScheme = config.colorScheme;
       config = { ...config, ...nextConfig };
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
@@ -3182,9 +3281,12 @@ export const createAgentExperience = (
       recalcPanelHeight();
       refreshCloseButton();
 
-      // Re-render messages if toolCall config changed (to apply new styles)
+      // Re-render messages if config affecting message rendering changed
       const toolCallConfigChanged = JSON.stringify(nextConfig.toolCall) !== JSON.stringify(previousToolCallConfig);
-      if (toolCallConfigChanged && session) {
+      const messageActionsChanged = JSON.stringify(config.messageActions) !== JSON.stringify(previousMessageActions);
+      const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages);
+      const messagesConfigChanged = toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged;
+      if (messagesConfigChanged && session) {
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
       }
 
@@ -3409,12 +3511,20 @@ export const createAgentExperience = (
             const showTooltip = () => {
               if (portaledTooltip || !closeButton) return; // Already showing or button doesn't exist
 
+              const tooltipDocument = closeButton.ownerDocument;
+              const tooltipContainer = tooltipDocument.body;
+              if (!tooltipContainer) return;
+
               // Create tooltip element
-              portaledTooltip = createElement("div", "persona-clear-chat-tooltip");
+              portaledTooltip = createElementInDocument(
+                tooltipDocument,
+                "div",
+                "persona-clear-chat-tooltip"
+              );
               portaledTooltip.textContent = closeButtonTooltipText;
 
               // Add arrow
-              const arrow = createElement("div");
+              const arrow = createElementInDocument(tooltipDocument, "div");
               arrow.className = "persona-clear-chat-tooltip-arrow";
               portaledTooltip.appendChild(arrow);
 
@@ -3428,7 +3538,7 @@ export const createAgentExperience = (
               portaledTooltip.style.transform = "translate(-50%, -100%)";
 
               // Append to body
-              document.body.appendChild(portaledTooltip);
+              tooltipContainer.appendChild(portaledTooltip);
             };
 
             const hideTooltip = () => {
@@ -3621,12 +3731,20 @@ export const createAgentExperience = (
               const showTooltip = () => {
                 if (portaledTooltip || !clearChatButton) return; // Already showing or button doesn't exist
 
+                const tooltipDocument = clearChatButton.ownerDocument;
+                const tooltipContainer = tooltipDocument.body;
+                if (!tooltipContainer) return;
+
                 // Create tooltip element
-                portaledTooltip = createElement("div", "persona-clear-chat-tooltip");
+                portaledTooltip = createElementInDocument(
+                  tooltipDocument,
+                  "div",
+                  "persona-clear-chat-tooltip"
+                );
                 portaledTooltip.textContent = clearChatTooltipText;
 
                 // Add arrow
-                const arrow = createElement("div");
+                const arrow = createElementInDocument(tooltipDocument, "div");
                 arrow.className = "persona-clear-chat-tooltip-arrow";
                 portaledTooltip.appendChild(arrow);
 
@@ -3640,7 +3758,7 @@ export const createAgentExperience = (
                 portaledTooltip.style.transform = "translate(-50%, -100%)";
 
                 // Append to body
-                document.body.appendChild(portaledTooltip);
+                tooltipContainer.appendChild(portaledTooltip);
               };
 
               const hideTooltip = () => {

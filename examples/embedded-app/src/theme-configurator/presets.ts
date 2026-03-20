@@ -12,6 +12,7 @@ export interface ThemePreset {
   label: string;
   description: string;
   theme: Partial<PersonaTheme>;
+  config?: Partial<AgentWidgetConfig>;
   /** Whether this is a built-in preset (cannot be deleted) */
   builtIn: boolean;
 }
@@ -160,6 +161,7 @@ export function loadCustomPresets(): ThemePreset[] {
         label: p.label,
         description: p.description,
         theme: p.theme,
+        config: p.config,
         builtIn: false,
       }));
     }
@@ -174,6 +176,7 @@ export function saveCustomPreset(name: string): boolean {
     const presets = loadStoredPresets();
     const id = `custom-${Date.now()}`;
     const theme = state.getTheme();
+    const config = state.exportSnapshot().config as Partial<AgentWidgetConfig>;
 
     const existingIndex = presets.findIndex(p => p.label === name);
 
@@ -182,6 +185,7 @@ export function saveCustomPreset(name: string): boolean {
       label: name,
       description: `Custom preset: ${name}`,
       theme,
+      config,
       timestamp: Date.now(),
     };
 
@@ -215,6 +219,16 @@ export function deleteCustomPreset(id: string): boolean {
 
 export function applyPreset(preset: ThemePreset): void {
   const theme = createTheme(preset.theme, { validate: false });
+  if (preset.config) {
+    state.setFullConfig(
+      {
+        ...state.getConfig(),
+        ...preset.config,
+      } as AgentWidgetConfig,
+      theme
+    );
+    return;
+  }
   state.setTheme(theme);
 }
 

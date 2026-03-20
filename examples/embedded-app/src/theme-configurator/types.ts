@@ -6,6 +6,7 @@ export type FieldType =
   | 'toggle'
   | 'select'
   | 'text'
+  | 'chip-list'
   | 'color-scale'
   | 'token-ref';
 
@@ -55,6 +56,10 @@ export interface FieldDef {
   cssProperty?: string;
   /** Whether this is a theme path (vs config path) */
   isThemePath?: boolean;
+  /** Convert stored value into a control-friendly value */
+  formatValue?: (value: any) => any;
+  /** Convert control input back into the stored value shape */
+  parseValue?: (value: any) => any;
 }
 
 export interface SectionDef {

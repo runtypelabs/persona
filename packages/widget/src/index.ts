@@ -234,8 +234,7 @@ export {
   getHeaderLayout,
   buildHeaderWithLayout,
   buildDefaultHeader,
-  buildMinimalHeader,
-  buildExpandedHeader
+  buildMinimalHeader
 } from "./components/header-layouts";
 export type {
   HeaderLayoutContext,

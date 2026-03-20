@@ -1,37 +1,16 @@
-/** Tab 1: Colors & Style — palette, semantic tokens, typography, radius, shadows */
+/** Colors & Style — palette scales and semantic tokens for drill-down views */
 
-import type { SectionDef, OnChangeCallback } from '../types';
+import type { FieldDef, SectionDef, SectionPreset, OnChangeCallback } from '../types';
 import type { ControlResult } from '../types';
 import { COLOR_FAMILIES, SHADE_KEYS } from '../color-utils';
 import { renderSection } from '../controls';
 import { setSearchContext } from '../search';
 import * as state from '../state';
 
-export const TAB_ID = 'colors-style';
-export const TAB_LABEL = 'Colors & Style';
+export const TAB_ID = 'style';
+export const TAB_LABEL = 'Style';
 
 // ─── Section Definitions ──────────────────────────────────────────
-
-const colorSchemeSectionDef: SectionDef = {
-  id: 'color-scheme',
-  title: 'Color Scheme',
-  collapsed: false,
-  fields: [
-    {
-      id: 'color-scheme',
-      label: 'Color Scheme',
-      description: 'Light, dark, or auto (follows system)',
-      type: 'select',
-      path: 'colorScheme',
-      defaultValue: 'light',
-      options: [
-        { value: 'light', label: 'Light' },
-        { value: 'dark', label: 'Dark' },
-        { value: 'auto', label: 'Auto (System)' },
-      ],
-    },
-  ],
-};
 
 function buildPaletteSectionDef(): SectionDef {
   const fields = COLOR_FAMILIES.map(family => ({
@@ -87,145 +66,148 @@ const semanticColorsSectionDef: SectionDef = {
   ],
 };
 
-const typographySectionDef: SectionDef = {
-  id: 'typography',
-  title: 'Typography',
-  collapsed: true,
-  fields: [
-    {
-      id: 'typo-font-family',
-      label: 'Font Family',
-      type: 'select',
-      path: 'theme.semantic.typography.fontFamily',
-      defaultValue: 'palette.typography.fontFamily.sans',
-      options: [
-        { value: 'palette.typography.fontFamily.sans', label: 'Sans Serif' },
-        { value: 'palette.typography.fontFamily.serif', label: 'Serif' },
-        { value: 'palette.typography.fontFamily.mono', label: 'Monospace' },
-      ],
-    },
-    {
-      id: 'typo-font-size',
-      label: 'Base Font Size',
-      type: 'select',
-      path: 'theme.semantic.typography.fontSize',
-      defaultValue: 'palette.typography.fontSize.base',
-      options: [
-        { value: 'palette.typography.fontSize.xs', label: 'Extra Small (0.75rem)' },
-        { value: 'palette.typography.fontSize.sm', label: 'Small (0.875rem)' },
-        { value: 'palette.typography.fontSize.base', label: 'Base (1rem)' },
-        { value: 'palette.typography.fontSize.lg', label: 'Large (1.125rem)' },
-        { value: 'palette.typography.fontSize.xl', label: 'Extra Large (1.25rem)' },
-      ],
-    },
-    {
-      id: 'typo-font-weight',
-      label: 'Font Weight',
-      type: 'select',
-      path: 'theme.semantic.typography.fontWeight',
-      defaultValue: 'palette.typography.fontWeight.normal',
-      options: [
-        { value: 'palette.typography.fontWeight.normal', label: 'Normal (400)' },
-        { value: 'palette.typography.fontWeight.medium', label: 'Medium (500)' },
-        { value: 'palette.typography.fontWeight.semibold', label: 'Semibold (600)' },
-        { value: 'palette.typography.fontWeight.bold', label: 'Bold (700)' },
-      ],
-    },
-    {
-      id: 'typo-line-height',
-      label: 'Line Height',
-      type: 'select',
-      path: 'theme.semantic.typography.lineHeight',
-      defaultValue: 'palette.typography.lineHeight.normal',
-      options: [
-        { value: 'palette.typography.lineHeight.tight', label: 'Tight (1.25)' },
-        { value: 'palette.typography.lineHeight.normal', label: 'Normal (1.5)' },
-        { value: 'palette.typography.lineHeight.relaxed', label: 'Relaxed (1.625)' },
-      ],
-    },
-  ],
-};
+type ThemeScope = 'theme' | 'darkTheme';
+type ThemeVariant = 'light' | 'dark';
 
-const radiusSectionDef: SectionDef = {
-  id: 'radius',
-  title: 'Border Radius',
-  collapsed: true,
-  fields: [
-    { id: 'radius-sm', label: 'Small', type: 'slider', path: 'theme.palette.radius.sm', defaultValue: '0.125rem', slider: { min: 0, max: 16, step: 1 } },
-    { id: 'radius-md', label: 'Medium', type: 'slider', path: 'theme.palette.radius.md', defaultValue: '0.375rem', slider: { min: 0, max: 24, step: 1 } },
-    { id: 'radius-lg', label: 'Large', type: 'slider', path: 'theme.palette.radius.lg', defaultValue: '0.5rem', slider: { min: 0, max: 32, step: 1 } },
-    { id: 'radius-xl', label: 'Extra Large', type: 'slider', path: 'theme.palette.radius.xl', defaultValue: '0.75rem', slider: { min: 0, max: 48, step: 1 } },
-    { id: 'radius-full', label: 'Full', type: 'slider', path: 'theme.palette.radius.full', defaultValue: '9999px', slider: { min: 0, max: 100, step: 1, isRadiusFull: true } },
-  ],
-  presets: [
-    { id: 'radius-default', label: 'Default', values: { 'theme.palette.radius.sm': '0.125rem', 'theme.palette.radius.md': '0.375rem', 'theme.palette.radius.lg': '0.5rem', 'theme.palette.radius.xl': '0.75rem', 'theme.palette.radius.full': '9999px' } },
-    { id: 'radius-sharp', label: 'Sharp', values: { 'theme.palette.radius.sm': '1px', 'theme.palette.radius.md': '2px', 'theme.palette.radius.lg': '3px', 'theme.palette.radius.xl': '4px', 'theme.palette.radius.full': '4px' } },
-    { id: 'radius-rounded', label: 'Rounded', values: { 'theme.palette.radius.sm': '0.5rem', 'theme.palette.radius.md': '0.75rem', 'theme.palette.radius.lg': '1rem', 'theme.palette.radius.xl': '1.5rem', 'theme.palette.radius.full': '9999px' } },
-  ],
-};
+function scopePath(path: string, scope: ThemeScope): string {
+  return path.startsWith('theme.') ? path.replace(/^theme\./, `${scope}.`) : path;
+}
 
-const shadowsSectionDef: SectionDef = {
-  id: 'shadows',
-  title: 'Shadows',
-  collapsed: true,
-  fields: [
-    { id: 'shadow-sm', label: 'Small', type: 'text', path: 'theme.palette.shadows.sm', defaultValue: '0 1px 2px 0 rgb(0 0 0 / 0.05)' },
-    { id: 'shadow-md', label: 'Medium', type: 'text', path: 'theme.palette.shadows.md', defaultValue: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' },
-    { id: 'shadow-lg', label: 'Large', type: 'text', path: 'theme.palette.shadows.lg', defaultValue: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)' },
-    { id: 'shadow-xl', label: 'Extra Large', type: 'text', path: 'theme.palette.shadows.xl', defaultValue: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' },
-  ],
-};
+function scopeField(field: FieldDef, scope: ThemeScope, variant: ThemeVariant): FieldDef {
+  return {
+    ...field,
+    id: `${variant}-${field.id}`,
+    path: scopePath(field.path, scope),
+  };
+}
 
-// ─── Render ───────────────────────────────────────────────────────
+function scopePreset(preset: SectionPreset, scope: ThemeScope, variant: ThemeVariant): SectionPreset {
+  return {
+    ...preset,
+    id: `${variant}-${preset.id}`,
+    values: Object.fromEntries(
+      Object.entries(preset.values).map(([path, value]) => [scopePath(path, scope), value])
+    ),
+  };
+}
 
+function scopeSection(
+  section: SectionDef,
+  scope: ThemeScope,
+  variant: ThemeVariant,
+  collapsed = section.collapsed
+): SectionDef {
+  const themeLabel = variant === 'light' ? 'Light' : 'Dark';
+  const descriptionPrefix =
+    variant === 'light'
+      ? 'Applies when the widget is in light mode.'
+      : 'Applies when the widget is in dark mode.';
+
+  return {
+    ...section,
+    id: `${variant}-${section.id}`,
+    title: `${themeLabel} ${section.title}`,
+    description: section.description
+      ? `${descriptionPrefix} ${section.description}`
+      : descriptionPrefix,
+    collapsed,
+    fields: section.fields.map(field => scopeField(field, scope, variant)),
+    presets: section.presets?.map(preset => scopePreset(preset, scope, variant)),
+  };
+}
+
+function buildScopedThemeSections(scope: ThemeScope, variant: ThemeVariant, darkCollapsed = false): SectionDef[] {
+  return [scopeSection(buildPaletteSectionDef(), scope, variant, darkCollapsed ? true : false)];
+}
+
+function buildScopedSemanticSections(
+  scope: ThemeScope,
+  variant: ThemeVariant,
+  collapsed = true
+): SectionDef[] {
+  return [scopeSection(semanticColorsSectionDef, scope, variant, collapsed)];
+}
+
+function renderScopedSections(
+  container: HTMLElement,
+  onChange: OnChangeCallback,
+  scopedSections: Record<ThemeVariant, SectionDef[]>,
+  searchTabId: string
+): ControlResult[] {
+  const allControls: ControlResult[] = [];
+
+  for (const [variant, sections] of Object.entries(scopedSections) as [ThemeVariant, SectionDef[]][]) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'editing-target-group';
+    wrapper.dataset.editingTarget = variant;
+
+    for (const section of sections) {
+      setSearchContext(searchTabId, section.id);
+      const { element, controls } = renderSection(section, onChange);
+
+      if (section.presets) {
+        const header = element.querySelector('.accordion-header');
+        if (header) {
+          const presetsDiv = document.createElement('div');
+          presetsDiv.className = 'accordion-presets';
+          for (const preset of section.presets) {
+            const btn = document.createElement('button');
+            btn.className = 'preset-btn';
+            btn.textContent = preset.label;
+            btn.type = 'button';
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              state.setBatch(preset.values);
+              for (const control of controls) {
+                const val = state.get(control.fieldDef.path);
+                if (val !== undefined) control.setValue(val);
+              }
+            });
+            presetsDiv.appendChild(btn);
+          }
+          header.appendChild(presetsDiv);
+        }
+      }
+
+      wrapper.appendChild(element);
+      allControls.push(...controls);
+    }
+
+    container.appendChild(wrapper);
+  }
+
+  return allControls;
+}
+
+/** Render palette scale editors (light + dark) for the palette drill-down */
+export function renderPaletteScales(
+  container: HTMLElement,
+  onChange: OnChangeCallback
+): ControlResult[] {
+  return renderScopedSections(container, onChange, {
+    light: buildScopedThemeSections('theme', 'light'),
+    dark: buildScopedThemeSections('darkTheme', 'dark', true),
+  }, 'style');
+}
+
+/** Render semantic color groups (light + dark) for the palette drill-down */
+export function renderSemanticGroup(
+  container: HTMLElement,
+  onChange: OnChangeCallback
+): ControlResult[] {
+  return renderScopedSections(container, onChange, {
+    light: buildScopedSemanticSections('theme', 'light'),
+    dark: buildScopedSemanticSections('darkTheme', 'dark'),
+  }, 'style');
+}
+
+/** Render the full palette drill-down: palette scales + semantic colors */
 export function render(
   container: HTMLElement,
   onChange: OnChangeCallback
 ): ControlResult[] {
   const allControls: ControlResult[] = [];
-
-  const sections = [
-    colorSchemeSectionDef,
-    buildPaletteSectionDef(),
-    semanticColorsSectionDef,
-    typographySectionDef,
-    radiusSectionDef,
-    shadowsSectionDef,
-  ];
-
-  for (const section of sections) {
-    setSearchContext(TAB_ID, section.id);
-    const { element, controls } = renderSection(section, onChange);
-
-    // Add preset buttons if defined
-    if (section.presets) {
-      const header = element.querySelector('.accordion-header');
-      if (header) {
-        const presetsDiv = document.createElement('div');
-        presetsDiv.className = 'accordion-presets';
-        for (const preset of section.presets) {
-          const btn = document.createElement('button');
-          btn.className = 'preset-btn';
-          btn.textContent = preset.label;
-          btn.type = 'button';
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            state.setBatch(preset.values);
-            // Refresh control values
-            for (const control of controls) {
-              const val = state.get(control.fieldDef.path);
-              if (val !== undefined) control.setValue(val);
-            }
-          });
-          presetsDiv.appendChild(btn);
-        }
-        header.appendChild(presetsDiv);
-      }
-    }
-
-    container.appendChild(element);
-    allControls.push(...controls);
-  }
-
+  allControls.push(...renderPaletteScales(container, onChange));
+  allControls.push(...renderSemanticGroup(container, onChange));
   return allControls;
 }

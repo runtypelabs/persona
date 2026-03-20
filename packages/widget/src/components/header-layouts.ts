@@ -97,128 +97,12 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 };
 
 /**
- * Build expanded header layout
- * Full branding area with additional space for custom content
- */
-export const buildExpandedHeader: HeaderLayoutRenderer = (context) => {
-  const { config, showClose = true, onClose, onClearChat: _onClearChat } = context;
-  const launcher = config?.launcher ?? {};
-
-  const header = createElement(
-    "div",
-    "persona-flex persona-flex-col persona-bg-persona-surface persona-px-6 persona-py-5 persona-border-b-persona-divider"
-  );
-
-  // Top row: icon + text + buttons
-  const topRow = createElement(
-    "div",
-    "persona-flex persona-items-center persona-gap-3"
-  );
-
-  // Icon
-  const headerIconSize = launcher.headerIconSize ?? "56px";
-  const iconHolder = createElement(
-    "div",
-    "persona-flex persona-items-center persona-justify-center persona-rounded-xl persona-bg-persona-primary persona-text-white persona-text-2xl"
-  );
-  iconHolder.style.height = headerIconSize;
-  iconHolder.style.width = headerIconSize;
-
-  const headerIconName = launcher.headerIconName;
-  if (headerIconName) {
-    const iconSize = parseFloat(headerIconSize) || 24;
-    const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.5, "var(--persona-text-inverse, #ffffff)", 2);
-    if (iconSvg) {
-      iconHolder.replaceChildren(iconSvg);
-    } else {
-      iconHolder.textContent = launcher.agentIconText ?? "💬";
-    }
-  } else if (launcher.iconUrl) {
-    const img = createElement("img") as HTMLImageElement;
-    img.src = launcher.iconUrl;
-    img.alt = "";
-    img.className = "persona-rounded-xl persona-object-cover";
-    img.style.height = headerIconSize;
-    img.style.width = headerIconSize;
-    iconHolder.replaceChildren(img);
-  } else {
-    iconHolder.textContent = launcher.agentIconText ?? "💬";
-  }
-
-  // Title and subtitle
-  const headerCopy = createElement("div", "persona-flex persona-flex-col persona-flex-1");
-  const title = createElement("span", "persona-text-lg persona-font-semibold");
-  title.textContent = launcher.title ?? "Chat Assistant";
-  const subtitle = createElement("span", "persona-text-sm persona-text-persona-muted");
-  subtitle.textContent = launcher.subtitle ?? "Here to help you get answers fast";
-  headerCopy.append(title, subtitle);
-
-  topRow.append(iconHolder, headerCopy);
-
-  // Close button
-  const closeButtonSize = launcher.closeButtonSize ?? "32px";
-  const closeButtonWrapper = createElement("div", "");
-
-  const closeButton = createElement(
-    "button",
-    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
-  ) as HTMLButtonElement;
-  closeButton.style.height = closeButtonSize;
-  closeButton.style.width = closeButtonSize;
-  closeButton.type = "button";
-  closeButton.setAttribute("aria-label", "Close chat");
-  closeButton.style.display = showClose ? "" : "none";
-
-  const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-  const closeIconSvg = renderLucideIcon(
-    closeButtonIconName,
-    "20px",
-    launcher.closeButtonColor || "",
-    2
-  );
-  if (closeIconSvg) {
-    closeButton.appendChild(closeIconSvg);
-  } else {
-    closeButton.textContent = "×";
-  }
-
-  if (onClose) {
-    closeButton.addEventListener("click", onClose);
-  }
-
-  closeButtonWrapper.appendChild(closeButton);
-  topRow.appendChild(closeButtonWrapper);
-
-  header.appendChild(topRow);
-
-  // Bottom row: additional space for status or branding
-  const bottomRow = createElement(
-    "div",
-    "persona-mt-3 persona-pt-3 persona-border-t persona-border-gray-100 persona-text-xs persona-text-persona-muted"
-  );
-  bottomRow.textContent = "Online and ready to help";
-  header.appendChild(bottomRow);
-
-  return {
-    header,
-    iconHolder,
-    headerTitle: title,
-    headerSubtitle: subtitle,
-    closeButton,
-    closeButtonWrapper,
-    clearChatButton: null,
-    clearChatButtonWrapper: null
-  };
-};
-
-/**
  * Header layout registry
  * Maps layout names to their renderer functions
  */
 export const headerLayouts: Record<string, HeaderLayoutRenderer> = {
   default: buildDefaultHeader,
-  minimal: buildMinimalHeader,
-  expanded: buildExpandedHeader
+  minimal: buildMinimalHeader
 };
 
 /**

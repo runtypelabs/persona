@@ -45,6 +45,15 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return element;
 }
 
+function getInitialFieldValue(field: FieldDef): any {
+  const rawValue = state.get(field.path) ?? field.defaultValue ?? '';
+  return field.formatValue ? field.formatValue(rawValue) : rawValue;
+}
+
+function parseFieldValue(field: FieldDef, value: any): any {
+  return field.parseValue ? field.parseValue(value) : value;
+}
+
 // ─── Color Control ─────────────────────────────────────────────────
 
 export function createColorControl(
@@ -351,10 +360,10 @@ export function createSelectControl(
   wrapper.appendChild(select);
 
   // Initialize
-  select.value = String(state.get(field.path) ?? field.defaultValue ?? '');
+  select.value = String(getInitialFieldValue(field));
 
   const handleChange = () => {
-    onChange(field.path, select.value);
+    onChange(field.path, parseFieldValue(field, select.value));
   };
 
   select.addEventListener('change', handleChange);
@@ -398,10 +407,15 @@ export function createTextControl(
   wrapper.appendChild(input);
 
   // Initialize
-  input.value = String(state.get(field.path) ?? field.defaultValue ?? '');
+  input.value = String(getInitialFieldValue(field));
 
   const handleInput = () => {
-    onChange(field.path, input.value);
+    try {
+      onChange(field.path, parseFieldValue(field, input.value));
+      input.setCustomValidity('');
+    } catch (error) {
+      input.setCustomValidity((error as Error).message || 'Invalid value');
+    }
   };
 
   input.addEventListener('input', handleInput);
@@ -416,6 +430,100 @@ export function createTextControl(
     destroy: () => {
       input.removeEventListener('input', handleInput);
     },
+  };
+
+  registerSearchEntry(field, result);
+  return result;
+}
+
+// ─── Chip List Control ──────────────────────────────────────────────
+
+export function createChipListControl(
+  field: FieldDef,
+  onChange: OnChangeCallback
+): ControlResult {
+  const CHIP_PLACEHOLDER = 'Type suggestion...';
+  const wrapper = el('div', { className: 'control-row' });
+  const label = el('label', { className: 'control-label' }, [field.label]);
+  const list = el('div', { className: 'chip-list' });
+  const addButton = el('button', { className: 'add-button', type: 'button' }, ['+ Add suggestion']);
+
+  wrapper.appendChild(label);
+  if (field.description) {
+    wrapper.appendChild(el('span', { className: 'control-description' }, [field.description]));
+  }
+  wrapper.appendChild(list);
+  wrapper.appendChild(addButton);
+
+  let chips = Array.isArray(state.get(field.path))
+    ? [...(state.get(field.path) as string[])]
+    : Array.isArray(field.defaultValue)
+      ? [...field.defaultValue]
+      : [];
+
+  const emitChange = () => {
+    onChange(
+      field.path,
+      chips
+        .map((chip) => chip.trim())
+        .filter(Boolean)
+    );
+  };
+
+  const renderChips = () => {
+    list.innerHTML = '';
+
+    for (const [index, chip] of chips.entries()) {
+      const item = el('div', { className: 'chip-item' });
+      const input = el('input', {
+        type: 'text',
+        value: chip,
+        placeholder: CHIP_PLACEHOLDER,
+        'aria-label': `${field.label} ${index + 1}`,
+      }) as HTMLInputElement;
+      const deleteButton = el('button', {
+        type: 'button',
+        className: 'delete-chip',
+        'aria-label': `Delete ${chip || 'suggestion chip'}`,
+      }, ['×']) as HTMLButtonElement;
+
+      input.addEventListener('input', () => {
+        chips[index] = input.value;
+        emitChange();
+      });
+
+      deleteButton.addEventListener('click', () => {
+        chips = chips.filter((_, chipIndex) => chipIndex !== index);
+        emitChange();
+        renderChips();
+      });
+
+      item.appendChild(input);
+      item.appendChild(deleteButton);
+      list.appendChild(item);
+    }
+  };
+
+  addButton.addEventListener('click', () => {
+    chips = [...chips, ''];
+    emitChange();
+    renderChips();
+    const lastInput = list.querySelector('.chip-item:last-child input') as HTMLInputElement | null;
+    lastInput?.focus();
+    lastInput?.select();
+  });
+
+  renderChips();
+
+  const result: ControlResult = {
+    element: wrapper,
+    fieldDef: field,
+    getValue: () => [...chips],
+    setValue: (value: any) => {
+      chips = Array.isArray(value) ? [...value] : [];
+      renderChips();
+    },
+    destroy: () => {},
   };
 
   registerSearchEntry(field, result);
@@ -662,6 +770,8 @@ export function createControl(field: FieldDef, onChange: OnChangeCallback): Cont
       return createSelectControl(field, onChange);
     case 'text':
       return createTextControl(field, onChange);
+    case 'chip-list':
+      return createChipListControl(field, onChange);
     case 'color-scale':
       return createColorScaleControl(field, onChange);
     case 'token-ref':
@@ -683,11 +793,13 @@ export function renderSection(
   });
 
   const header = el('div', { className: 'accordion-header' });
+  const headerRow = el('div', { className: 'accordion-header-row' });
   const title = el('h3', { className: 'accordion-title' }, [section.title]);
   const toggle = el('button', { className: 'accordion-toggle', type: 'button' }, ['▼']);
 
-  header.appendChild(title);
-  header.appendChild(toggle);
+  headerRow.appendChild(title);
+  headerRow.appendChild(toggle);
+  header.appendChild(headerRow);
   accordion.appendChild(header);
 
   const content = el('div', { className: 'accordion-content' });

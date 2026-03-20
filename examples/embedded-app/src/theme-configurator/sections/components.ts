@@ -1,15 +1,15 @@
 /** Tab 2: Components — panel, header, messages, input, launcher, buttons, voice, approval */
 
-import type { SectionDef, OnChangeCallback, ControlResult } from '../types';
+import type { FieldDef, SectionDef, OnChangeCallback, ControlResult } from '../types';
 import { renderSection } from '../controls';
 import { setSearchContext } from '../search';
 
-export const TAB_ID = 'components';
-export const TAB_LABEL = 'Components';
+export const TAB_ID = 'design-system';
+export const TAB_LABEL = 'Design System';
 
 // ─── Section Definitions ──────────────────────────────────────────
 
-const panelSectionDef: SectionDef = {
+const panelLayoutSectionDef: SectionDef = {
   id: 'comp-panel',
   title: 'Panel',
   collapsed: false,
@@ -35,93 +35,7 @@ const panelSectionDef: SectionDef = {
   ],
 };
 
-const headerSectionDef: SectionDef = {
-  id: 'comp-header',
-  title: 'Header',
-  collapsed: true,
-  fields: [
-    { id: 'header-bg', label: 'Background', type: 'token-ref', path: 'theme.components.header.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
-    { id: 'header-border', label: 'Border', type: 'token-ref', path: 'theme.components.header.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
-    { id: 'header-border-radius', label: 'Border Radius', type: 'select', path: 'theme.components.header.borderRadius', defaultValue: 'palette.radius.xl palette.radius.xl 0 0', options: [
-      { value: 'palette.radius.none', label: 'None' },
-      { value: 'palette.radius.md palette.radius.md 0 0', label: 'Medium (top only)' },
-      { value: 'palette.radius.lg palette.radius.lg 0 0', label: 'Large (top only)' },
-      { value: 'palette.radius.xl palette.radius.xl 0 0', label: 'Extra Large (top only)' },
-    ] },
-  ],
-};
-
-const messagesSectionDef: SectionDef = {
-  id: 'comp-messages',
-  title: 'Messages',
-  collapsed: true,
-  fields: [
-    // User messages
-    { id: 'msg-user-bg', label: 'User Bubble Background', type: 'token-ref', path: 'theme.components.message.user.background', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'msg-user-text', label: 'User Bubble Text', type: 'token-ref', path: 'theme.components.message.user.text', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'msg-user-radius', label: 'User Bubble Radius', type: 'select', path: 'theme.components.message.user.borderRadius', defaultValue: 'palette.radius.lg', options: [
-      { value: 'palette.radius.none', label: 'None' },
-      { value: 'palette.radius.sm', label: 'Small' },
-      { value: 'palette.radius.md', label: 'Medium' },
-      { value: 'palette.radius.lg', label: 'Large' },
-      { value: 'palette.radius.xl', label: 'Extra Large' },
-    ] },
-    // Assistant messages
-    { id: 'msg-assistant-bg', label: 'Assistant Bubble Background', type: 'token-ref', path: 'theme.components.message.assistant.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
-    { id: 'msg-assistant-text', label: 'Assistant Bubble Text', type: 'token-ref', path: 'theme.components.message.assistant.text', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
-    { id: 'msg-assistant-radius', label: 'Assistant Bubble Radius', type: 'select', path: 'theme.components.message.assistant.borderRadius', defaultValue: 'palette.radius.lg', options: [
-      { value: 'palette.radius.none', label: 'None' },
-      { value: 'palette.radius.sm', label: 'Small' },
-      { value: 'palette.radius.md', label: 'Medium' },
-      { value: 'palette.radius.lg', label: 'Large' },
-      { value: 'palette.radius.xl', label: 'Extra Large' },
-    ] },
-  ],
-};
-
-const inputSectionDef: SectionDef = {
-  id: 'comp-input',
-  title: 'Input',
-  collapsed: true,
-  fields: [
-    { id: 'input-bg', label: 'Background', type: 'token-ref', path: 'theme.components.input.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
-    { id: 'input-placeholder', label: 'Placeholder Color', type: 'token-ref', path: 'theme.components.input.placeholder', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
-    { id: 'input-focus-border', label: 'Focus Border', type: 'token-ref', path: 'theme.components.input.focus.border', defaultValue: 'semantic.colors.interactive.focus', tokenRef: { tokenType: 'color' } },
-    { id: 'input-focus-ring', label: 'Focus Ring', type: 'token-ref', path: 'theme.components.input.focus.ring', defaultValue: 'semantic.colors.interactive.focus', tokenRef: { tokenType: 'color' } },
-    { id: 'input-radius', label: 'Border Radius', type: 'select', path: 'theme.components.input.borderRadius', defaultValue: 'palette.radius.lg', options: [
-      { value: 'palette.radius.none', label: 'None' },
-      { value: 'palette.radius.sm', label: 'Small' },
-      { value: 'palette.radius.md', label: 'Medium' },
-      { value: 'palette.radius.lg', label: 'Large' },
-      { value: 'palette.radius.xl', label: 'Extra Large' },
-    ] },
-  ],
-};
-
-const buttonsSectionDef: SectionDef = {
-  id: 'comp-buttons',
-  title: 'Buttons',
-  collapsed: true,
-  fields: [
-    // Primary
-    { id: 'btn-primary-bg', label: 'Primary Background', type: 'token-ref', path: 'theme.components.button.primary.background', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'btn-primary-fg', label: 'Primary Foreground', type: 'token-ref', path: 'theme.components.button.primary.foreground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'btn-primary-radius', label: 'Primary Radius', type: 'select', path: 'theme.components.button.primary.borderRadius', defaultValue: 'palette.radius.lg', options: [
-      { value: 'palette.radius.sm', label: 'Small' },
-      { value: 'palette.radius.md', label: 'Medium' },
-      { value: 'palette.radius.lg', label: 'Large' },
-      { value: 'palette.radius.full', label: 'Full' },
-    ] },
-    // Secondary
-    { id: 'btn-secondary-bg', label: 'Secondary Background', type: 'token-ref', path: 'theme.components.button.secondary.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
-    { id: 'btn-secondary-fg', label: 'Secondary Foreground', type: 'token-ref', path: 'theme.components.button.secondary.foreground', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
-    // Ghost
-    { id: 'btn-ghost-bg', label: 'Ghost Background', type: 'color', path: 'theme.components.button.ghost.background', defaultValue: 'transparent' },
-    { id: 'btn-ghost-fg', label: 'Ghost Foreground', type: 'token-ref', path: 'theme.components.button.ghost.foreground', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
-  ],
-};
-
-const launcherSectionDef: SectionDef = {
+const launcherLayoutSectionDef: SectionDef = {
   id: 'comp-launcher',
   title: 'Launcher',
   collapsed: true,
@@ -144,71 +58,220 @@ const launcherSectionDef: SectionDef = {
   ],
 };
 
-const voiceSectionDef: SectionDef = {
-  id: 'comp-voice',
-  title: 'Voice',
+const messageShapeSectionDef: SectionDef = {
+  id: 'comp-message-shape',
+  title: 'Message Shape',
   collapsed: true,
   fields: [
-    { id: 'voice-rec-indicator', label: 'Recording Indicator', type: 'token-ref', path: 'theme.components.voice.recording.indicator', defaultValue: 'palette.colors.error.500', tokenRef: { tokenType: 'color' } },
-    { id: 'voice-rec-bg', label: 'Recording Background', type: 'token-ref', path: 'theme.components.voice.recording.background', defaultValue: 'palette.colors.error.50', tokenRef: { tokenType: 'color' } },
-    { id: 'voice-rec-border', label: 'Recording Border', type: 'token-ref', path: 'theme.components.voice.recording.border', defaultValue: 'palette.colors.error.200', tokenRef: { tokenType: 'color' } },
-    { id: 'voice-proc-icon', label: 'Processing Icon', type: 'token-ref', path: 'theme.components.voice.processing.icon', defaultValue: 'palette.colors.primary.500', tokenRef: { tokenType: 'color' } },
-    { id: 'voice-proc-bg', label: 'Processing Background', type: 'token-ref', path: 'theme.components.voice.processing.background', defaultValue: 'palette.colors.primary.50', tokenRef: { tokenType: 'color' } },
-    { id: 'voice-speak-icon', label: 'Speaking Icon', type: 'token-ref', path: 'theme.components.voice.speaking.icon', defaultValue: 'palette.colors.success.500', tokenRef: { tokenType: 'color' } },
+    { id: 'msg-user-radius', label: 'User Bubble Radius', type: 'select', path: 'theme.components.message.user.borderRadius', defaultValue: 'palette.radius.lg', options: [
+      { value: 'palette.radius.none', label: 'None' },
+      { value: 'palette.radius.sm', label: 'Small' },
+      { value: 'palette.radius.md', label: 'Medium' },
+      { value: 'palette.radius.lg', label: 'Large' },
+      { value: 'palette.radius.xl', label: 'Extra Large' },
+    ] },
+    { id: 'msg-assistant-radius', label: 'Assistant Bubble Radius', type: 'select', path: 'theme.components.message.assistant.borderRadius', defaultValue: 'palette.radius.lg', options: [
+      { value: 'palette.radius.none', label: 'None' },
+      { value: 'palette.radius.sm', label: 'Small' },
+      { value: 'palette.radius.md', label: 'Medium' },
+      { value: 'palette.radius.lg', label: 'Large' },
+      { value: 'palette.radius.xl', label: 'Extra Large' },
+    ] },
   ],
 };
 
-const approvalSectionDef: SectionDef = {
-  id: 'comp-approval',
-  title: 'Approval',
+const inputShapeSectionDef: SectionDef = {
+  id: 'comp-input-shape',
+  title: 'Input Shape',
   collapsed: true,
   fields: [
-    { id: 'approval-req-bg', label: 'Requested Background', type: 'token-ref', path: 'theme.components.approval.requested.background', defaultValue: 'palette.colors.warning.50', tokenRef: { tokenType: 'color' } },
-    { id: 'approval-req-border', label: 'Requested Border', type: 'token-ref', path: 'theme.components.approval.requested.border', defaultValue: 'palette.colors.warning.200', tokenRef: { tokenType: 'color' } },
-    { id: 'approval-req-text', label: 'Requested Text', type: 'token-ref', path: 'theme.components.approval.requested.text', defaultValue: 'palette.colors.gray.900', tokenRef: { tokenType: 'color' } },
-    { id: 'approval-approve-bg', label: 'Approve Background', type: 'token-ref', path: 'theme.components.approval.approve.background', defaultValue: 'palette.colors.success.500', tokenRef: { tokenType: 'color' } },
-    { id: 'approval-approve-fg', label: 'Approve Foreground', type: 'token-ref', path: 'theme.components.approval.approve.foreground', defaultValue: 'palette.colors.gray.50', tokenRef: { tokenType: 'color' } },
-    { id: 'approval-deny-bg', label: 'Deny Background', type: 'token-ref', path: 'theme.components.approval.deny.background', defaultValue: 'palette.colors.error.500', tokenRef: { tokenType: 'color' } },
-    { id: 'approval-deny-fg', label: 'Deny Foreground', type: 'token-ref', path: 'theme.components.approval.deny.foreground', defaultValue: 'palette.colors.gray.50', tokenRef: { tokenType: 'color' } },
+    { id: 'input-radius', label: 'Border Radius', type: 'select', path: 'theme.components.input.borderRadius', defaultValue: 'palette.radius.lg', options: [
+      { value: 'palette.radius.none', label: 'None' },
+      { value: 'palette.radius.sm', label: 'Small' },
+      { value: 'palette.radius.md', label: 'Medium' },
+      { value: 'palette.radius.lg', label: 'Large' },
+      { value: 'palette.radius.xl', label: 'Extra Large' },
+    ] },
   ],
 };
 
-const attachmentSectionDef: SectionDef = {
-  id: 'comp-attachment',
-  title: 'Attachments',
+const buttonShapeSectionDef: SectionDef = {
+  id: 'comp-button-shape',
+  title: 'Button Shape',
   collapsed: true,
   fields: [
-    { id: 'attach-img-bg', label: 'Image Background', type: 'token-ref', path: 'theme.components.attachment.image.background', defaultValue: 'palette.colors.gray.100', tokenRef: { tokenType: 'color' } },
-    { id: 'attach-img-border', label: 'Image Border', type: 'token-ref', path: 'theme.components.attachment.image.border', defaultValue: 'palette.colors.gray.200', tokenRef: { tokenType: 'color' } },
+    { id: 'btn-primary-radius', label: 'Primary Radius', type: 'select', path: 'theme.components.button.primary.borderRadius', defaultValue: 'palette.radius.lg', options: [
+      { value: 'palette.radius.sm', label: 'Small' },
+      { value: 'palette.radius.md', label: 'Medium' },
+      { value: 'palette.radius.lg', label: 'Large' },
+      { value: 'palette.radius.full', label: 'Full' },
+    ] },
   ],
 };
+
+const headerColorsSectionDef: SectionDef = {
+  id: 'comp-header-colors',
+  title: 'Header Colors',
+  collapsed: true,
+  fields: [
+    { id: 'header-bg', label: 'Background', type: 'token-ref', path: 'theme.components.header.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'header-border', label: 'Border', type: 'token-ref', path: 'theme.components.header.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
+  ],
+};
+
+const messageColorsSectionDef: SectionDef = {
+  id: 'comp-message-colors',
+  title: 'Message Colors',
+  collapsed: true,
+  fields: [
+    { id: 'msg-user-bg', label: 'User Bubble Background', type: 'token-ref', path: 'theme.components.message.user.background', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
+    { id: 'msg-user-text', label: 'User Bubble Text', type: 'token-ref', path: 'theme.components.message.user.text', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
+    { id: 'msg-assistant-bg', label: 'Assistant Bubble Background', type: 'token-ref', path: 'theme.components.message.assistant.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
+    { id: 'msg-assistant-text', label: 'Assistant Bubble Text', type: 'token-ref', path: 'theme.components.message.assistant.text', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
+  ],
+};
+
+const inputColorsSectionDef: SectionDef = {
+  id: 'comp-input-colors',
+  title: 'Input Colors',
+  collapsed: true,
+  fields: [
+    { id: 'input-bg', label: 'Background', type: 'token-ref', path: 'theme.components.input.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'input-placeholder', label: 'Placeholder Color', type: 'token-ref', path: 'theme.components.input.placeholder', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
+    { id: 'input-focus-border', label: 'Focus Border', type: 'token-ref', path: 'theme.components.input.focus.border', defaultValue: 'semantic.colors.interactive.focus', tokenRef: { tokenType: 'color' } },
+    { id: 'input-focus-ring', label: 'Focus Ring', type: 'token-ref', path: 'theme.components.input.focus.ring', defaultValue: 'semantic.colors.interactive.focus', tokenRef: { tokenType: 'color' } },
+  ],
+};
+
+const buttonColorsSectionDef: SectionDef = {
+  id: 'comp-button-colors',
+  title: 'Button Colors',
+  collapsed: true,
+  fields: [
+    { id: 'btn-primary-bg', label: 'Primary Background', type: 'token-ref', path: 'theme.components.button.primary.background', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
+    { id: 'btn-primary-fg', label: 'Primary Foreground', type: 'token-ref', path: 'theme.components.button.primary.foreground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
+    { id: 'btn-secondary-bg', label: 'Secondary Background', type: 'token-ref', path: 'theme.components.button.secondary.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'btn-secondary-fg', label: 'Secondary Foreground', type: 'token-ref', path: 'theme.components.button.secondary.foreground', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
+    { id: 'btn-ghost-bg', label: 'Ghost Background', type: 'color', path: 'theme.components.button.ghost.background', defaultValue: 'transparent' },
+    { id: 'btn-ghost-fg', label: 'Ghost Foreground', type: 'token-ref', path: 'theme.components.button.ghost.foreground', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
+  ],
+};
+
+type ThemeScope = 'theme' | 'darkTheme';
+type ThemeVariant = 'light' | 'dark';
+
+function scopePath(path: string, scope: ThemeScope): string {
+  return path.startsWith('theme.') ? path.replace(/^theme\./, `${scope}.`) : path;
+}
+
+function scopeField(field: FieldDef, scope: ThemeScope, variant: ThemeVariant): FieldDef {
+  return {
+    ...field,
+    id: `${variant}-${field.id}`,
+    path: scopePath(field.path, scope),
+  };
+}
+
+function scopeSection(
+  section: SectionDef,
+  scope: ThemeScope,
+  variant: ThemeVariant,
+  collapsed = section.collapsed
+): SectionDef {
+  const themeLabel = variant === 'light' ? 'Light' : 'Dark';
+  const descriptionPrefix =
+    variant === 'light'
+      ? 'Applies when the widget is in light mode.'
+      : 'Applies when the widget is in dark mode.';
+
+  return {
+    ...section,
+    id: `${variant}-${section.id}`,
+    title: `${themeLabel} ${section.title}`,
+    description: section.description
+      ? `${descriptionPrefix} ${section.description}`
+      : descriptionPrefix,
+    collapsed,
+    fields: section.fields.map(field => scopeField(field, scope, variant)),
+  };
+}
+
+function buildScopedColorSections(scope: ThemeScope, variant: ThemeVariant, collapseAll = false): SectionDef[] {
+  return [
+    scopeSection(headerColorsSectionDef, scope, variant, collapseAll ? true : false),
+    scopeSection(messageColorsSectionDef, scope, variant, true),
+    scopeSection(inputColorsSectionDef, scope, variant, true),
+    scopeSection(buttonColorsSectionDef, scope, variant, true),
+  ];
+}
+
+function buildSharedSections(): SectionDef[] {
+  return [
+    panelLayoutSectionDef,
+    launcherLayoutSectionDef,
+    messageShapeSectionDef,
+    inputShapeSectionDef,
+    buttonShapeSectionDef,
+  ];
+}
 
 // ─── Render ───────────────────────────────────────────────────────
 
-export function render(
+/** Render shared shape/layout sections for the component-shapes drill-down */
+export function renderShapeSections(
   container: HTMLElement,
   onChange: OnChangeCallback
 ): ControlResult[] {
   const allControls: ControlResult[] = [];
 
-  const sections = [
-    panelSectionDef,
-    headerSectionDef,
-    messagesSectionDef,
-    inputSectionDef,
-    buttonsSectionDef,
-    launcherSectionDef,
-    voiceSectionDef,
-    approvalSectionDef,
-    attachmentSectionDef,
-  ];
-
-  for (const section of sections) {
-    setSearchContext(TAB_ID, section.id);
+  for (const section of buildSharedSections()) {
+    setSearchContext('style', section.id);
     const { element, controls } = renderSection(section, onChange);
     container.appendChild(element);
     allControls.push(...controls);
   }
 
+  return allControls;
+}
+
+/** Render scoped color sections (light + dark) for the component-colors drill-down */
+export function renderColorSections(
+  container: HTMLElement,
+  onChange: OnChangeCallback
+): ControlResult[] {
+  const allControls: ControlResult[] = [];
+
+  const lightSections = buildScopedColorSections('theme', 'light');
+  const darkSections = buildScopedColorSections('darkTheme', 'dark', true);
+
+  for (const [variant, sections] of [
+    ['light', lightSections] as const,
+    ['dark', darkSections] as const,
+  ]) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'editing-target-group';
+    wrapper.dataset.editingTarget = variant;
+
+    for (const section of sections) {
+      setSearchContext('style', section.id);
+      const { element, controls } = renderSection(section, onChange);
+      wrapper.appendChild(element);
+      allControls.push(...controls);
+    }
+
+    container.appendChild(wrapper);
+  }
+
+  return allControls;
+}
+
+/** Render all component sections (shared + scoped) */
+export function render(
+  container: HTMLElement,
+  onChange: OnChangeCallback
+): ControlResult[] {
+  const allControls: ControlResult[] = [];
+  allControls.push(...renderShapeSections(container, onChange));
+  allControls.push(...renderColorSections(container, onChange));
   return allControls;
 }

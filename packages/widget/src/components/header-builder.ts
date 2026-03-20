@@ -1,4 +1,4 @@
-import { createElement } from "../utils/dom";
+import { createElement, createElementInDocument } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
 
@@ -29,8 +29,12 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
   const header = createElement(
     "div",
-    "persona-widget-header persona-flex persona-items-center persona-gap-3 persona-bg-persona-surface persona-px-6 persona-py-5 persona-border-b-persona-divider"
+    "persona-widget-header persona-flex persona-items-center persona-gap-3 persona-px-6 persona-py-5"
   );
+  header.style.backgroundColor = 'var(--persona-header-bg, var(--persona-surface, #ffffff))';
+  header.style.borderBottomWidth = '1px';
+  header.style.borderBottomStyle = 'solid';
+  header.style.borderBottomColor = 'var(--persona-header-border, var(--persona-divider, #f1f5f9))';
 
   const launcher = config?.launcher ?? {};
   const headerIconSize = launcher.headerIconSize ?? "48px";
@@ -199,12 +203,20 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
       const showTooltip = () => {
         if (portaledTooltip || !clearChatButton) return; // Already showing or button doesn't exist
 
+        const tooltipDocument = clearChatButton.ownerDocument;
+        const tooltipContainer = tooltipDocument.body;
+        if (!tooltipContainer) return;
+
         // Create tooltip element
-        portaledTooltip = createElement("div", "persona-clear-chat-tooltip");
+        portaledTooltip = createElementInDocument(
+          tooltipDocument,
+          "div",
+          "persona-clear-chat-tooltip"
+        );
         portaledTooltip.textContent = clearChatTooltipText;
 
         // Add arrow
-        const arrow = createElement("div");
+        const arrow = createElementInDocument(tooltipDocument, "div");
         arrow.className = "persona-clear-chat-tooltip-arrow";
         portaledTooltip.appendChild(arrow);
 
@@ -218,7 +230,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
         portaledTooltip.style.transform = "translate(-50%, -100%)";
 
         // Append to body
-        document.body.appendChild(portaledTooltip);
+        tooltipContainer.appendChild(portaledTooltip);
       };
 
       const hideTooltip = () => {
@@ -359,12 +371,20 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     const showTooltip = () => {
       if (portaledTooltip) return; // Already showing
 
+      const tooltipDocument = closeButton.ownerDocument;
+      const tooltipContainer = tooltipDocument.body;
+      if (!tooltipContainer) return;
+
       // Create tooltip element
-      portaledTooltip = createElement("div", "persona-clear-chat-tooltip");
+      portaledTooltip = createElementInDocument(
+        tooltipDocument,
+        "div",
+        "persona-clear-chat-tooltip"
+      );
       portaledTooltip.textContent = closeButtonTooltipText;
 
       // Add arrow
-      const arrow = createElement("div");
+      const arrow = createElementInDocument(tooltipDocument, "div");
       arrow.className = "persona-clear-chat-tooltip-arrow";
       portaledTooltip.appendChild(arrow);
 
@@ -378,7 +398,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
       portaledTooltip.style.transform = "translate(-50%, -100%)";
 
       // Append to body
-      document.body.appendChild(portaledTooltip);
+      tooltipContainer.appendChild(portaledTooltip);
     };
 
     const hideTooltip = () => {
@@ -451,5 +471,4 @@ export const attachHeaderToContainer = (
     container.appendChild(headerElements.clearChatButtonWrapper);
   }
 };
-
 

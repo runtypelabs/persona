@@ -1434,7 +1434,7 @@ Controls the floating launcher button and panel.
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `layout` | `'default' \| 'minimal' \| 'expanded'?` | Header preset. |
+| `layout` | `'default' \| 'minimal'?` | Header preset. |
 | `showIcon` | `boolean?` | Show/hide the header icon. |
 | `showTitle` | `boolean?` | Show/hide the title. |
 | `showSubtitle` | `boolean?` | Show/hide the subtitle. |

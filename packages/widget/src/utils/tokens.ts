@@ -425,6 +425,37 @@ export function validateTheme(theme: Partial<PersonaTheme>): ThemeValidationResu
   };
 }
 
+function mergeRecords(
+  base: Record<string, unknown>,
+  override: Record<string, unknown>
+): Record<string, unknown> {
+  const result = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const existing = result[key];
+    if (existing && typeof existing === 'object' && !Array.isArray(existing) &&
+        value && typeof value === 'object' && !Array.isArray(value)) {
+      result[key] = mergeRecords(
+        existing as Record<string, unknown>,
+        value as Record<string, unknown>
+      );
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function deepMergeComponents(
+  base: ComponentTokens,
+  override?: Partial<ComponentTokens>
+): ComponentTokens {
+  if (!override) return base;
+  return mergeRecords(
+    base as unknown as Record<string, unknown>,
+    override as unknown as Record<string, unknown>
+  ) as unknown as ComponentTokens;
+}
+
 export function createTheme(
   userConfig?: Partial<PersonaTheme>,
   options: CreateThemeOptions = {}
@@ -467,11 +498,28 @@ export function createTheme(
     semantic: {
       ...baseTheme.semantic,
       ...userConfig?.semantic,
+      colors: {
+        ...baseTheme.semantic.colors,
+        ...userConfig?.semantic?.colors,
+        interactive: {
+          ...baseTheme.semantic.colors.interactive,
+          ...userConfig?.semantic?.colors?.interactive,
+        },
+        feedback: {
+          ...baseTheme.semantic.colors.feedback,
+          ...userConfig?.semantic?.colors?.feedback,
+        },
+      },
+      spacing: {
+        ...baseTheme.semantic.spacing,
+        ...userConfig?.semantic?.spacing,
+      },
+      typography: {
+        ...baseTheme.semantic.typography,
+        ...userConfig?.semantic?.typography,
+      },
     },
-    components: {
-      ...baseTheme.components,
-      ...userConfig?.components,
-    },
+    components: deepMergeComponents(baseTheme.components, userConfig?.components),
   };
 
   if (options.validate !== false) {
@@ -533,6 +581,54 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-font-size'] = cssVars['--persona-semantic-typography-fontSize'] ?? cssVars['--persona-palette-typography-fontSize-base'];
   cssVars['--persona-font-weight'] = cssVars['--persona-semantic-typography-fontWeight'] ?? cssVars['--persona-palette-typography-fontWeight-normal'];
   cssVars['--persona-line-height'] = cssVars['--persona-semantic-typography-lineHeight'] ?? cssVars['--persona-palette-typography-lineHeight-normal'];
+
+  // Radius aliases used throughout the existing widget CSS.
+  cssVars['--persona-radius-sm'] = cssVars['--persona-palette-radius-sm'] ?? '0.125rem';
+  cssVars['--persona-radius-md'] = cssVars['--persona-palette-radius-md'] ?? '0.375rem';
+  cssVars['--persona-radius-lg'] = cssVars['--persona-palette-radius-lg'] ?? '0.5rem';
+  cssVars['--persona-radius-xl'] = cssVars['--persona-palette-radius-xl'] ?? '0.75rem';
+  cssVars['--persona-launcher-radius'] =
+    cssVars['--persona-components-launcher-borderRadius'] ??
+    cssVars['--persona-palette-radius-full'] ??
+    '9999px';
+  cssVars['--persona-button-radius'] =
+    cssVars['--persona-components-button-primary-borderRadius'] ??
+    cssVars['--persona-palette-radius-full'] ??
+    '9999px';
+  cssVars['--persona-panel-radius'] =
+    cssVars['--persona-components-panel-borderRadius'] ??
+    cssVars['--persona-radius-xl'] ??
+    '0.75rem';
+  cssVars['--persona-input-radius'] =
+    cssVars['--persona-components-input-borderRadius'] ??
+    cssVars['--persona-radius-lg'] ??
+    '0.5rem';
+  cssVars['--persona-message-user-radius'] =
+    cssVars['--persona-components-message-user-borderRadius'] ??
+    cssVars['--persona-radius-lg'] ??
+    '0.5rem';
+  cssVars['--persona-message-assistant-radius'] =
+    cssVars['--persona-components-message-assistant-borderRadius'] ??
+    cssVars['--persona-radius-lg'] ??
+    '0.5rem';
+
+  // Component-level color overrides — these map component tokens to
+  // dedicated CSS variables that the widget CSS reads for individual elements.
+  cssVars['--persona-header-bg'] =
+    cssVars['--persona-components-header-background'] ?? cssVars['--persona-surface'];
+  cssVars['--persona-header-border'] =
+    cssVars['--persona-components-header-border'] ?? cssVars['--persona-divider'];
+
+  cssVars['--persona-message-user-bg'] =
+    cssVars['--persona-components-message-user-background'] ?? cssVars['--persona-accent'];
+  cssVars['--persona-message-user-text'] =
+    cssVars['--persona-components-message-user-text'] ?? cssVars['--persona-text-inverse'];
+  cssVars['--persona-message-assistant-bg'] =
+    cssVars['--persona-components-message-assistant-background'] ?? cssVars['--persona-surface'];
+  cssVars['--persona-message-assistant-text'] =
+    cssVars['--persona-components-message-assistant-text'] ?? cssVars['--persona-text'];
+  cssVars['--persona-message-assistant-border'] =
+    cssVars['--persona-components-message-assistant-border'] ?? cssVars['--persona-border'];
 
   return cssVars;
 }

@@ -622,6 +622,21 @@ export type AgentWidgetLauncherConfig = {
    * @default 0
    */
   heightOffset?: number;
+  /**
+   * When true, the widget panel expands to fill the full viewport on mobile devices.
+   * Removes border-radius, margins, and shadows for a native app-like experience.
+   * Applies when viewport width is at or below `mobileBreakpoint`.
+   *
+   * @default true
+   */
+  mobileFullscreen?: boolean;
+  /**
+   * Viewport width (in pixels) at or below which the widget enters mobile fullscreen mode.
+   * Only applies when `mobileFullscreen` is true.
+   *
+   * @default 640
+   */
+  mobileBreakpoint?: number;
   callToActionIconText?: string;
   callToActionIconName?: string;
   callToActionIconColor?: string;
@@ -1192,12 +1207,11 @@ export type SlotRenderContext = {
  */
 export type AgentWidgetHeaderLayoutConfig = {
   /**
-   * Layout preset: "default" | "minimal" | "expanded"
+   * Layout preset: "default" | "minimal"
    * - default: Standard layout with icon, title, subtitle, and buttons
    * - minimal: Simplified layout with just title and close button
-   * - expanded: Full branding area with additional content space
    */
-  layout?: "default" | "minimal" | "expanded";
+  layout?: "default" | "minimal";
   /** Show/hide the header icon */
   showIcon?: boolean;
   /** Show/hide the title */

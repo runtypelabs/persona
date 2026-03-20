@@ -6,49 +6,300 @@
     <title>Persona Theme Editor</title>
   </head>
   <body>
+    <div
+      id="config-drawer-backdrop"
+      class="config-drawer-backdrop"
+      aria-hidden="true"
+    ></div>
     <main class="configurator-layout">
-      <!-- Left Panel: Configuration Controls -->
+      <header class="mobile-editor-toolbar" aria-label="Theme editor">
+        <div class="mobile-editor-toolbar-start">
+          <span class="mobile-editor-toolbar-title">Theme Editor</span>
+          <span class="mobile-editor-toolbar-subtitle">Tap to edit</span>
+        </div>
+        <button type="button" id="mobile-form-open-btn" class="mobile-form-open-btn" aria-expanded="false">
+          Form
+        </button>
+      </header>
       <aside class="config-panel">
         <div class="config-header">
-          <h1>Theme Editor</h1>
-          <p class="subtitle">Customize your Persona widget with the v2 semantic token system.</p>
+          <div class="config-header-row">
+            <h1>Theme Editor</h1>
+            <button
+              type="button"
+              id="config-drawer-close"
+              class="config-drawer-close"
+              aria-label="Close form panel"
+            >
+              ×
+            </button>
+          </div>
+          <p class="subtitle">Customize your Persona widget look and feel.</p>
         </div>
 
-        <!-- Search -->
-        <div class="search-section">
-          <div class="search-input-wrapper">
-            <input
-              type="text"
-              id="field-search"
-              class="search-input"
-              placeholder="Search fields… (⌘K)"
-              autocomplete="off"
-            />
-            <button type="button" id="clear-search" class="clear-search-btn" style="display: none;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
+        <div id="editor-toolbar" class="editor-toolbar">
+          <div class="editor-toolbar-group">
+            <button type="button" id="undo-btn" class="toolbar-btn toolbar-btn-icon" title="Undo">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.69 3L3 13"/></svg>
+            </button>
+            <button type="button" id="redo-btn" class="toolbar-btn toolbar-btn-icon" title="Redo">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6.69 3L21 13"/></svg>
+            </button>
+          </div>
+          <div class="editor-toolbar-group toolbar-dropdown-group">
+            <button type="button" id="presets-btn" class="toolbar-btn">Presets</button>
+          </div>
+          <div id="presets-menu" class="toolbar-menu hidden"></div>
+          <div class="editor-toolbar-spacer"></div>
+          <div class="editor-toolbar-group toolbar-dropdown-group">
+            <button type="button" id="export-btn" class="toolbar-btn" aria-label="Actions"><span>Actions</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+            <div id="export-dropdown" class="toolbar-menu export-dropdown hidden"></div>
+          </div>
+        </div>
+
+        <div class="editor-panel-card">
+          <div class="search-section">
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                id="field-search"
+                class="search-input"
+                placeholder="Search fields… (⌘K)"
+                autocomplete="off"
+              />
+              <button type="button" id="clear-search" class="clear-search-btn" style="display: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            <div id="search-results" class="search-results hidden"></div>
+          </div>
+
+          <nav class="editor-tabs" id="editor-tabs">
+            <button type="button" class="editor-tab active" data-tab="style">Style</button>
+            <button type="button" class="editor-tab" data-tab="configure">Configure</button>
+          </nav>
+
+          <div class="tab-panel active" data-tab-panel="style">
+            <p class="group-description">Colors, typography, shape, and visual design.</p>
+            <div id="style-summary" class="group-content">
+              <div id="style-group" class="group-content"></div>
+            </div>
+            <div id="style-drilldown" class="drilldown-container hidden">
+              <button type="button" id="drilldown-back-btn" class="drilldown-back-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                Back to Style
+              </button>
+              <div class="drilldown-header">
+                <h3 id="drilldown-title" class="drilldown-title"></h3>
+                <div class="drilldown-editing-toggle hidden" id="drilldown-editing-toggle">
+                  <div class="editor-control-stack">
+                    <div class="editor-control-label">Editing Tokens</div>
+                    <div class="segmented-control" id="editing-theme-toggle" data-control="editing">
+                      <button type="button" class="segment-btn" data-value="light">Light</button>
+                      <button type="button" class="segment-btn" data-value="dark">Dark</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div id="drilldown-content" class="group-content"></div>
+            </div>
+          </div>
+          <div class="tab-panel" data-tab-panel="configure">
+            <p class="group-description">Content, layout, and widget behavior.</p>
+            <div id="configure-group" class="group-content"></div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="preview-panel">
+        <div class="preview-canvas-toolbar" aria-label="Preview toolbar">
+          <div class="preview-toolbar-lead">
+            <div class="segmented-control preview-icon-toggle" id="preview-device-toggle" data-control="preview-device" aria-label="Preview device">
+              <button type="button" class="segment-btn preview-icon-btn" data-value="desktop" aria-label="Desktop preview" title="Desktop preview">
+                <svg class="preview-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="2" y="3" width="12" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"></rect>
+                  <path d="M6 13h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+                </svg>
+                <span class="visually-hidden">Desktop</span>
+              </button>
+              <button type="button" class="segment-btn preview-icon-btn" data-value="mobile" aria-label="Mobile preview" title="Mobile preview">
+                <svg class="preview-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="4.5" y="1.75" width="7" height="12.5" rx="1.75" fill="none" stroke="currentColor" stroke-width="1.5"></rect>
+                  <circle cx="8" cy="11.75" r="0.75" fill="currentColor"></circle>
+                </svg>
+                <span class="visually-hidden">Mobile</span>
+              </button>
+            </div>
+          </div>
+          <div class="preview-url-bar" id="preview-url-bar">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M12 12l2.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <input type="url" id="preview-bg-url" class="preview-url-input"
+                   placeholder="https://yoursite.com" aria-label="Background website URL" />
+            <span id="preview-url-badge" class="preview-url-badge" hidden></span>
+            <button type="button" id="preview-bg-url-clear" class="preview-url-clear"
+                    title="Clear URL" aria-label="Clear URL" style="display:none">
+              <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
             </button>
           </div>
-          <div id="search-results" class="search-results hidden"></div>
+          <div class="preview-toolbar-trail">
+            <div class="preview-pill-wrapper">
+              <button id="preview-pill-btn" class="preview-pill-btn" type="button">
+                <span id="preview-pill-scene">Conversation</span>
+                <div class="preview-pill-divider"></div>
+                <span id="preview-pill-theme-icon" class="preview-pill-theme-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2"></path><path d="M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715"></path><path d="M16 12a4 4 0 0 0-4-4"></path><path d="m19 5-1.256 1.256"></path><path d="M20 12h2"></path></svg>
+                </span>
+                <span id="preview-pill-badges"></span>
+                <span class="preview-pill-chevron">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+              </button>
+              <div id="preview-pill-dropdown" class="preview-pill-dropdown hidden">
+                <div class="preview-pill-section">
+                  <div class="preview-pill-section-label">Scene</div>
+                  <div class="preview-pill-scene-grid">
+                    <button type="button" class="preview-pill-scene-btn active" data-scene="conversation">Conversation</button>
+                    <button type="button" class="preview-pill-scene-btn" data-scene="home">Home</button>
+                    <button type="button" class="preview-pill-scene-btn" data-scene="minimized">Minimized</button>
+                  </div>
+                </div>
+                <div class="preview-pill-section">
+                  <div class="preview-pill-section-label">Theme</div>
+                  <div class="segmented-control preview-theme-toggle" id="preview-theme-toggle" data-control="preview-theme" aria-label="Preview theme">
+                    <button type="button" class="segment-btn preview-theme-btn" data-value="system" aria-label="System theme" title="System theme">
+                      <svg class="preview-theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 2v2"></path>
+                        <path d="M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715"></path>
+                        <path d="M16 12a4 4 0 0 0-4-4"></path>
+                        <path d="m19 5-1.256 1.256"></path>
+                        <path d="M20 12h2"></path>
+                      </svg>
+                      System
+                    </button>
+                    <button type="button" class="segment-btn preview-theme-btn" data-value="light" aria-label="Light theme" title="Light theme">
+                      <svg class="preview-theme-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                        <circle cx="8" cy="8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"></circle>
+                        <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+                      </svg>
+                      Light
+                    </button>
+                    <button type="button" class="segment-btn preview-theme-btn" data-value="dark" aria-label="Dark theme" title="Dark theme">
+                      <svg class="preview-theme-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M10.96 2.36A5.5 5.5 0 1 0 13.64 9c-.72.36-1.54.56-2.41.56A5.5 5.5 0 0 1 6.44 4.77c0-.87.2-1.69.56-2.41.94-.2 2.04-.2 3.96 0Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path>
+                      </svg>
+                      Dark
+                    </button>
+                  </div>
+                </div>
+                <div class="preview-pill-section">
+                  <div class="editor-control-stack preview-control-stack preview-control-stack-compare">
+                    <div class="preview-pill-section-label">Compare</div>
+                    <div class="preview-compare-control-row">
+                      <div id="compare-mode-toggle" class="preview-pill-scene-grid" role="radiogroup" aria-label="Compare mode">
+                        <button type="button" class="preview-pill-scene-btn active" data-compare="off" role="radio" aria-checked="true">Off</button>
+                        <button type="button" class="preview-pill-scene-btn" data-compare="baseline" role="radio" aria-checked="false">Changes</button>
+                        <button type="button" class="preview-pill-scene-btn" data-compare="themes" role="radio" aria-checked="false">Light vs Dark</button>
+                      </div>
+                      <button type="button" id="update-baseline-btn" class="preview-toggle-btn preview-baseline-btn hidden">Update baseline</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="preview-pill-section preview-pill-section-contrast">
+                  <div class="preview-pill-section-label">Contrast</div>
+                  <button
+                    type="button"
+                    id="preview-pill-contrast-btn"
+                    class="preview-pill-contrast-card"
+                    aria-pressed="false"
+                    aria-label="Toggle WCAG contrast overlay"
+                  >
+                    <span class="preview-pill-contrast-card-icon" aria-hidden="true">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 2a10 10 0 0 1 0 20z"/>
+                      </svg>
+                    </span>
+                    <span class="preview-pill-contrast-card-copy">
+                      <span class="preview-pill-contrast-card-title">Contrast ratios</span>
+                      <span class="preview-pill-contrast-card-desc">Show WCAG contrast summary on the preview</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div id="preview-pill-backdrop" class="preview-pill-backdrop" aria-hidden="true"></div>
+          </div>
         </div>
-
-        <!-- Tab Navigation -->
-        <nav id="tab-nav" class="tab-nav"></nav>
-
-        <!-- Tab Content (sections rendered dynamically) -->
-        <div id="tab-content" class="tab-content"></div>
-      </aside>
-
-      <!-- Right Panel: Live Preview -->
-      <section class="preview-panel">
-        <div class="preview-header">
-          <h2>Preview</h2>
+        <!-- Hidden select kept for scene state (used by initToolbarControls) -->
+        <select id="preview-scene-select" class="preview-select" aria-label="Preview scene" style="display:none;">
+          <option value="conversation">Conversation</option>
+          <option value="home">Home</option>
+          <option value="minimized">Minimized</option>
+        </select>
+        <div id="contrast-summary" class="contrast-summary hidden"></div>
+        <div id="mobile-inline-hint" class="preview-inline-hint" role="note" aria-hidden="true"></div>
+        <div class="preview-stage-wrapper">
+          <div id="preview-stage" class="preview-stage"></div>
         </div>
-        <div id="widget-preview" class="widget-preview-container"></div>
+        <div class="preview-status-bar">
+          <div class="preview-status-bar-start">
+            <button
+              type="button"
+              id="contrast-btn"
+              class="preview-zoom-btn preview-contrast-toggle"
+              title="Contrast ratios — show WCAG contrast summary for the preview"
+              aria-label="Toggle contrast ratio summary"
+              aria-pressed="false"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2a10 10 0 0 1 0 20z"/>
+              </svg>
+            </button>
+            <span class="preview-status-label"></span>
+          </div>
+          <div class="preview-zoom-controls">
+            <button type="button" id="zoom-out-btn" class="preview-zoom-btn" title="Zoom out" aria-label="Zoom out">
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <button type="button" id="zoom-level" class="preview-zoom-level" title="Reset to 100%" aria-label="Reset to 100%" aria-live="polite">100%</button>
+            <button type="button" id="zoom-in-btn" class="preview-zoom-btn" title="Zoom in" aria-label="Zoom in">
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 4v8M4 8h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <button type="button" id="zoom-fit-btn" class="preview-zoom-btn preview-zoom-btn-fit" title="Fit to window" aria-label="Fit to window">
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5.5V3.25a.75.75 0 01.75-.75H5.5M10.5 2.5h2.25a.75.75 0 01.75.75V5.5M13.5 10.5v2.25a.75.75 0 01-.75.75H10.5M5.5 13.5H3.25a.75.75 0 01-.75-.75V10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
       </section>
     </main>
+
+    <div id="wizard-overlay" class="wizard-overlay hidden">
+      <div class="wizard-dialog">
+        <h3>Generate Theme From Brand Color</h3>
+        <p>Pick one color and generate a full palette and semantic starting point.</p>
+        <div class="wizard-color-row">
+          <input type="color" id="wizard-color-input" value="#2563eb" />
+          <input type="text" id="wizard-color-text" class="control-text-input" value="#2563eb" />
+        </div>
+        <div class="wizard-actions">
+          <button type="button" id="wizard-cancel-btn" class="toolbar-btn">Cancel</button>
+          <button type="button" id="wizard-apply-btn" class="toolbar-btn toolbar-btn-primary">Generate</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="editor-toast" class="editor-toast hidden"></div>
+
+    <div id="inline-edit-popover" class="inline-edit-popover hidden"></div>
 
     <script type="module" src="/src/theme-configurator/index.ts"></script>
   </body>
