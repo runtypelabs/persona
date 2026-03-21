@@ -831,6 +831,14 @@ export const createAgentExperience = (
   ensureComposerAttachmentSurface(footer);
   bindComposerRefsFromFooter(footer);
 
+  // Apply contentMaxWidth to composer form if configured
+  const contentMaxWidth = config.layout?.contentMaxWidth;
+  if (contentMaxWidth && composerForm) {
+    composerForm.style.maxWidth = contentMaxWidth;
+    composerForm.style.marginLeft = "auto";
+    composerForm.style.marginRight = "auto";
+  }
+
   if (config.attachments?.enabled && attachmentInput && attachmentPreviewsContainer) {
     attachmentManager = AttachmentManager.fromConfig(config.attachments);
     attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);

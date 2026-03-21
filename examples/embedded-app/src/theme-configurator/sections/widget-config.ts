@@ -368,6 +368,34 @@ const attachmentsSectionDef: SectionDef = {
   ],
 };
 
+const artifactsSectionDef: SectionDef = {
+  id: 'artifacts-config',
+  title: 'Artifacts',
+  collapsed: true,
+  fields: [
+    { id: 'art-enabled', label: 'Enabled', description: 'Show artifact sidebar for documents and components', type: 'toggle', path: 'features.artifacts.enabled', defaultValue: false },
+    { id: 'art-appearance', label: 'Pane Appearance', type: 'select', path: 'features.artifacts.layout.paneAppearance', defaultValue: 'panel', options: [
+      { value: 'panel', label: 'Panel (bordered)' },
+      { value: 'seamless', label: 'Seamless' },
+    ] },
+    { id: 'art-toolbar', label: 'Toolbar Preset', type: 'select', path: 'features.artifacts.layout.toolbarPreset', defaultValue: 'default', options: [
+      { value: 'default', label: 'Default' },
+      { value: 'document', label: 'Document' },
+    ] },
+    { id: 'art-pane-width', label: 'Pane Width', description: 'CSS width (e.g. 40%, 28rem)', type: 'text', path: 'features.artifacts.layout.paneWidth', defaultValue: '40%' },
+    { id: 'art-pane-max-width', label: 'Pane Max Width', type: 'text', path: 'features.artifacts.layout.paneMaxWidth', defaultValue: '28rem' },
+    { id: 'art-split-gap', label: 'Split Gap', type: 'text', path: 'features.artifacts.layout.splitGap', defaultValue: '0.5rem' },
+    { id: 'art-pane-bg', label: 'Pane Background', type: 'color', path: 'features.artifacts.layout.paneBackground', defaultValue: '' },
+    { id: 'art-pane-padding', label: 'Pane Padding', type: 'text', path: 'features.artifacts.layout.panePadding', defaultValue: '' },
+    { id: 'art-unified', label: 'Unified Split Chrome', description: 'Wrap chat and artifact in a single container', type: 'toggle', path: 'features.artifacts.layout.unifiedSplitChrome', defaultValue: false },
+    { id: 'art-resizable', label: 'Resizable', description: 'Allow dragging the pane divider', type: 'toggle', path: 'features.artifacts.layout.resizable', defaultValue: false },
+    { id: 'art-expand-panel', label: 'Expand Panel When Open', description: 'Widen the launcher panel to fit artifacts', type: 'toggle', path: 'features.artifacts.layout.expandLauncherPanelWhenOpen', defaultValue: true },
+    { id: 'art-doc-copy-label', label: 'Show Copy Label', description: 'Document toolbar: show "Copy" text', type: 'toggle', path: 'features.artifacts.layout.documentToolbarShowCopyLabel', defaultValue: false },
+    { id: 'art-doc-copy-chevron', label: 'Show Copy Chevron', description: 'Document toolbar: show dropdown arrow on copy', type: 'toggle', path: 'features.artifacts.layout.documentToolbarShowCopyChevron', defaultValue: false },
+    { id: 'art-doc-icon-color', label: 'Toolbar Icon Color', description: 'Document toolbar icon color', type: 'color', path: 'features.artifacts.layout.documentToolbarIconColor', defaultValue: '' },
+  ],
+};
+
 // ─── Sub-group: Developer ────────────────────────────────────────
 
 const apiIntegrationSectionDef: SectionDef = {
@@ -425,7 +453,7 @@ const SUB_GROUPS: SubGroup[] = [
   { label: 'Content', sections: [copySectionDef, suggestionsSectionDef] },
   { label: 'Layout', sections: [headerLayoutSectionDef, messagesLayoutSectionDef, messageActionsSectionDef] },
   { label: 'Widget', sections: [launcherConfigSectionDef, sendButtonSectionDef, closeButtonSectionDef, clearChatSectionDef, statusIndicatorSectionDef] },
-  { label: 'Features', sections: [featuresSectionDef, attachmentsSectionDef] },
+  { label: 'Features', sections: [featuresSectionDef, attachmentsSectionDef, artifactsSectionDef] },
   { label: 'Developer', sections: [apiIntegrationSectionDef, debugSectionDef, markdownSectionDef] },
 ];
 
@@ -444,6 +472,22 @@ function renderSections(
     const { element, controls } = renderSection(section, onChange);
     container.appendChild(element);
     allControls.push(...controls);
+
+    // Add "Show Sample Artifact" button to the artifacts section
+    if (section.id === 'artifacts-config') {
+      const content = element.querySelector('.accordion-content');
+      if (content) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = 'Show Sample Artifact';
+        btn.className = 'config-action-btn';
+        btn.style.cssText = 'margin-top:8px;width:100%;padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:12px;cursor:pointer;';
+        btn.addEventListener('click', () => {
+          window.dispatchEvent(new CustomEvent('persona-configurator:inject-artifact'));
+        });
+        content.appendChild(btn);
+      }
+    }
   }
 
   return allControls;

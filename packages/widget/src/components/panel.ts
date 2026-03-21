@@ -138,6 +138,14 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     "persona-flex persona-flex-col persona-gap-3"
   );
 
+  const contentMaxWidth = config?.layout?.contentMaxWidth;
+  if (contentMaxWidth) {
+    messagesWrapper.style.maxWidth = contentMaxWidth;
+    messagesWrapper.style.marginLeft = "auto";
+    messagesWrapper.style.marginRight = "auto";
+    messagesWrapper.style.width = "100%";
+  }
+
   const showWelcomeCard = config?.copy?.showWelcomeCard !== false;
   if (!showWelcomeCard) {
     body.classList.remove("persona-gap-6");

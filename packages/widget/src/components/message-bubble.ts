@@ -354,6 +354,16 @@ export const createMessageActions = (
   const showCopy = actionsConfig.showCopy ?? true;
   const showUpvote = actionsConfig.showUpvote ?? true;
   const showDownvote = actionsConfig.showDownvote ?? true;
+
+  // Don't render the container at all when no actions are visible
+  if (!showCopy && !showUpvote && !showDownvote) {
+    const empty = createElement("div");
+    empty.style.display = "none";
+    empty.id = `actions-${message.id}`;
+    empty.setAttribute("data-actions-for", message.id);
+    return empty;
+  }
+
   const visibility = actionsConfig.visibility ?? "hover";
   const align = actionsConfig.align ?? "right";
   const layout = actionsConfig.layout ?? "pill-inside";

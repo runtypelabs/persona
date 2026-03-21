@@ -713,6 +713,14 @@ function init(): void {
   rebuildEditorSurface();
   syncEditorUi();
   bindPreviewBackgroundMessageListener();
+  window.addEventListener('persona-configurator:inject-artifact', () => {
+    if (!state.get('features.artifacts.enabled')) {
+      state.set('features.artifacts.enabled', true);
+      // onChange will trigger updatePreviewWidgets → injectPreviewArtifacts
+    } else {
+      injectPreviewArtifacts(true);
+    }
+  });
   mountPreviewWidgets();
   setupPreviewResizeObserver();
   initMobileConfigDrawer();
@@ -1703,6 +1711,7 @@ function mountPreviewWidgets(preserveBackgroundStates = false): void {
 
     previewStage.scrollTop = 0;
     updateContrastSummary();
+    injectPreviewArtifacts();
 
     // Set up inline editing zones on the preview iframes
     setupInlineZones(iframes, getCurrentScale);
@@ -1866,6 +1875,21 @@ function setupPreviewResizeObserver(): void {
   previewResizeObserver.observe(previewStage);
 }
 
+function injectPreviewArtifacts(force = false): void {
+  if (!force) {
+    const artifactsEnabled = state.get('features.artifacts.enabled');
+    if (!artifactsEnabled) return;
+  }
+  for (const controller of previewControllers) {
+    controller.upsertArtifact({
+      id: 'configurator-sample',
+      artifactType: 'markdown',
+      title: 'Sample Document',
+      content: '# Sample Artifact\n\nThis is a preview of the artifact sidebar.\n\n## Features\n\n- Markdown rendering\n- Document toolbar\n- Resizable panes',
+    });
+  }
+}
+
 function updatePreviewWidgets(): void {
   // Preserve iframe background load state across config edits; default false would reset
   // previewBackgroundStates to "loading" every call → wrapper vs spec mismatch → full remount.
@@ -1898,6 +1922,7 @@ function updatePreviewWidgets(): void {
   syncPreviewWrapperShellAndShellMode(specs);
   updatePreviewStatusLabel();
   refreshInlineZones();
+  injectPreviewArtifacts();
 }
 
 // ─── Contrast summary ────────────────────────────────────────────

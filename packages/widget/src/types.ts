@@ -1516,6 +1516,12 @@ export type AgentWidgetLayoutConfig = {
    * @default true
    */
   showFooter?: boolean;
+  /**
+   * Max width for the content area (messages + composer).
+   * Applied with `margin: 0 auto` for centering.
+   * Accepts any CSS width value (e.g. "90ch", "720px", "80%").
+   */
+  contentMaxWidth?: string;
 };
 
 // ============================================================================

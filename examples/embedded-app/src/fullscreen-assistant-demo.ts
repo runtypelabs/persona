@@ -64,6 +64,250 @@ if (!document.getElementById(fileCardStyleId)) {
       background-color: ${COLORS.userBubble} !important;
       border-color: ${COLORS.muted} !important;
     }
+    .persona-attachment-previews {
+      margin-bottom: 8px;
+    }
+    [data-persona-audio-bars-btn] {
+      transition: opacity 0.15s ease;
+    }
+    [data-persona-audio-bars-btn]:hover {
+      opacity: 0.7;
+    }
+    [data-persona-audio-bars-btn]:hover line {
+      animation: persona-audio-bars-bounce 0.6s ease-in-out infinite alternate;
+    }
+    [data-persona-audio-bars-btn]:hover line:nth-child(1) { animation-delay: 0s; }
+    [data-persona-audio-bars-btn]:hover line:nth-child(2) { animation-delay: 0.1s; }
+    [data-persona-audio-bars-btn]:hover line:nth-child(3) { animation-delay: 0.2s; }
+    [data-persona-audio-bars-btn]:hover line:nth-child(4) { animation-delay: 0.15s; }
+    [data-persona-audio-bars-btn]:hover line:nth-child(5) { animation-delay: 0.05s; }
+    @keyframes persona-audio-bars-bounce {
+      0%   { transform: scaleY(1); }
+      100% { transform: scaleY(0.5); }
+    }
+    [data-persona-audio-bars-btn] svg line {
+      transform-origin: center;
+    }
+    [data-persona-model-menu] {
+      position: absolute;
+      bottom: 100%;
+      right: 0;
+      margin-bottom: 4px;
+      min-width: 160px;
+      border: 1px solid ${COLORS.border};
+      background: ${COLORS.chat};
+      border-radius: 8px;
+      padding: 4px 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      z-index: 100;
+    }
+    [data-persona-model-menu] button {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 6px 12px;
+      border: none;
+      background: transparent;
+      color: ${COLORS.text};
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+    }
+    [data-persona-model-menu] button:hover {
+      background: ${COLORS.userBubble};
+    }
+    [data-persona-model-menu] button[data-selected]::after {
+      content: "\\2713";
+      color: ${COLORS.link};
+      margin-left: 8px;
+    }
+
+    /* ── Artifact document toolbar overrides ── */
+
+    /* All toolbar icon buttons: transparent bg, no border, muted color */
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn {
+      border: none !important;
+      background: transparent !important;
+      color: ${COLORS.muted} !important;
+      padding: 6px !important;
+      border-radius: 8px !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover {
+      background: ${COLORS.userBubble} !important;
+      color: ${COLORS.text} !important;
+    }
+
+    /* View/Source toggle: zero gap on parent container */
+    #fullscreen-assistant-demo-root :has(> .persona-artifact-view-btn) {
+      gap: 0 !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-view-btn,
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-code-btn {
+      border: 1px solid ${COLORS.border} !important;
+      background: transparent !important;
+      border-radius: 0 !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-view-btn {
+      border-radius: 8px 0 0 8px !important;
+      border-right: none !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-code-btn {
+      border-radius: 0 8px 8px 0 !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-view-btn[aria-pressed="true"],
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-code-btn[aria-pressed="true"] {
+      background: ${COLORS.userBubble} !important;
+      color: ${COLORS.text} !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-view-btn:hover,
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-code-btn:hover {
+      background: ${COLORS.userBubble} !important;
+    }
+
+    /* Copy button: pill with border */
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn {
+      border: 1px solid ${COLORS.border} !important;
+      background: transparent !important;
+      color: ${COLORS.text} !important;
+      padding: 4px 10px !important;
+      border-radius: 8px !important;
+      font-size: 12px !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover {
+      background: ${COLORS.userBubble} !important;
+    }
+
+    /* Copy + chevron connected group */
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-relative {
+      display: inline-flex;
+      border: 1px solid ${COLORS.border};
+      border-radius: 8px;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-relative .persona-artifact-doc-copy-btn {
+      border: none !important;
+      border-radius: 8px 0 0 8px !important;
+      border-right: 1px solid ${COLORS.border} !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-relative .persona-artifact-doc-copy-menu-chevron {
+      border: none !important;
+      border-radius: 0 8px 8px 0 !important;
+      padding: 4px 6px !important;
+    }
+
+    /* Copy dropdown menu — high specificity to beat #persona-root selectors */
+    #fullscreen-assistant-demo-root .persona-artifact-doc-copy-menu {
+      background: ${COLORS.chat} !important;
+      border: 1px solid ${COLORS.border} !important;
+      border-radius: 10px !important;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
+      padding: 4px 0 !important;
+      min-width: 180px !important;
+      position: absolute !important;
+      right: 0 !important;
+      top: 100% !important;
+      margin-top: 4px !important;
+      z-index: 50 !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-doc-copy-menu button {
+      color: ${COLORS.text} !important;
+      background: transparent !important;
+      font-size: 13px !important;
+      padding: 8px 14px !important;
+      white-space: nowrap !important;
+      display: block !important;
+      width: 100% !important;
+      text-align: left !important;
+      border: none !important;
+      cursor: pointer !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-doc-copy-menu button:hover {
+      background: ${COLORS.userBubble} !important;
+    }
+
+    /* Close button: same as other icon buttons, highlight only on hover */
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-label="Close"]:hover {
+      background: ${COLORS.userBubble} !important;
+    }
+
+    /* Header title+chevron: pill hover effect */
+    #fullscreen-assistant-demo-root .persona-border-b-persona-divider > .persona-flex:first-child {
+      border-radius: 10px;
+      padding: 6px 4px 6px 12px;
+      margin: -6px 0 -6px -12px;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+      border: 1px solid transparent;
+      cursor: pointer;
+      flex: none !important;
+      width: fit-content;
+    }
+    #fullscreen-assistant-demo-root .persona-border-b-persona-divider > .persona-flex:first-child:hover {
+      background: ${COLORS.userBubble};
+      border-color: ${COLORS.border};
+    }
+    #fullscreen-assistant-demo-root .persona-border-b-persona-divider > .persona-flex:first-child button {
+      border-left: 1px solid transparent;
+      padding-left: 8px;
+      margin-left: 4px;
+      transition: border-color 0.15s ease;
+    }
+    #fullscreen-assistant-demo-root .persona-border-b-persona-divider > .persona-flex:first-child:hover button {
+      border-left-color: ${COLORS.border};
+    }
+
+    /* Chat header: no border, fade shadow */
+    #fullscreen-assistant-demo-root .persona-border-b-persona-divider {
+      border-bottom: none !important;
+      box-shadow: 0 8px 16px 4px ${COLORS.chat} !important;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Header assistant menu dropdown */
+    [data-persona-header-menu] {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      min-width: 200px;
+      background: ${COLORS.chat};
+      border: 1px solid ${COLORS.border};
+      border-radius: 12px;
+      padding: 6px 0;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      z-index: 100;
+    }
+    [data-persona-header-menu] button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 14px;
+      border: none;
+      background: transparent;
+      color: ${COLORS.text};
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+      white-space: nowrap;
+    }
+    [data-persona-header-menu] button:hover {
+      background: ${COLORS.userBubble};
+    }
+    [data-persona-header-menu] button[data-destructive] {
+      color: #ef4444;
+    }
+    [data-persona-header-menu] hr {
+      border: none;
+      border-top: 1px solid ${COLORS.border};
+      margin: 4px 0;
+    }
+
+    /* Toolbar background matches artifact pane */
+    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document {
+      background: ${COLORS.artifact} !important;
+      border-bottom: none !important;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -127,8 +371,8 @@ const FullscreenAssistantFileCard: ComponentRenderer = (props) => {
 
 componentRegistry.register("FullscreenAssistantFileCard", FullscreenAssistantFileCard);
 
-const micSvg =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
+const audioBarsSvg =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="8" x2="4" y2="16"/><line x1="8" y1="4" x2="8" y2="20"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="16" y1="6" x2="16" y2="18"/><line x1="20" y1="10" x2="20" y2="14"/></svg>';
 
 const chevronSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
@@ -141,48 +385,74 @@ const fullscreenAssistantComposerPlugin: AgentWidgetPlugin = {
     openAttachmentPicker,
     models,
     selectedModelId,
-    onModelChange
+    onModelChange,
+    onVoiceToggle
   }) => {
     const footer = document.createElement("div");
-    footer.className =
-      "persona-widget-footer persona-border-t persona-border-persona-divider persona-bg-persona-surface persona-px-6 persona-py-4";
+    footer.className = "persona-widget-footer persona-px-6 persona-py-4";
+    footer.style.backgroundColor = COLORS.chat;
+    footer.style.borderTop = `1px solid ${COLORS.border}`;
 
     const suggestions = document.createElement("div");
     suggestions.className = "persona-mb-3 persona-flex persona-flex-wrap persona-gap-2";
 
     const form = document.createElement("form");
     form.setAttribute("data-persona-composer-form", "");
-    form.className =
-      "persona-flex persona-w-full persona-items-center persona-gap-3 persona-rounded-full persona-border persona-border-persona-border persona-bg-persona-input-background persona-px-4 persona-py-2";
+    form.className = "persona-flex persona-w-full persona-flex-col";
     form.style.outline = "none";
-    form.style.minHeight = "48px";
+    form.style.backgroundColor = COLORS.artifact;
+    form.style.border = `1px solid ${COLORS.border}`;
+    form.style.borderRadius = "14px";
 
-    const plus = document.createElement("button");
-    plus.type = "button";
-    plus.setAttribute("aria-label", "Attach");
-    plus.setAttribute("data-persona-composer-disable-when-streaming", "");
-    plus.className =
-      "persona-flex persona-h-8 persona-w-8 persona-flex-shrink-0 persona-items-center persona-justify-center persona-rounded-full persona-text-lg persona-leading-none persona-text-persona-muted";
-    plus.style.border = `1px solid ${COLORS.border}`;
-    plus.style.backgroundColor = "transparent";
-    plus.textContent = "+";
-    plus.addEventListener("click", () => openAttachmentPicker());
-
+    // ── Top: textarea ──
     const input = document.createElement("textarea");
     input.setAttribute("data-persona-composer-input", "");
     input.rows = 1;
     input.placeholder = config.copy?.inputPlaceholder ?? "Reply…";
     input.className =
-      "persona-min-h-[22px] persona-flex-1 persona-resize-none persona-border-none persona-bg-transparent persona-text-sm persona-text-persona-primary persona-outline-none";
+      "persona-w-full persona-resize-none persona-border-none persona-bg-transparent persona-text-sm persona-outline-none persona-px-5";
+    input.style.color = COLORS.text;
+    input.style.minHeight = "22px";
+    input.style.paddingTop = "16px";
+    input.style.paddingBottom = "8px";
+
+    // ── Bottom: action bar ──
+    const actionsRow = document.createElement("div");
+    actionsRow.className =
+      "persona-flex persona-items-center persona-justify-between persona-px-4";
+    actionsRow.style.paddingBottom = "14px";
+    actionsRow.style.paddingTop = "4px";
+
+    // Left: attach button
+    const plus = document.createElement("button");
+    plus.type = "button";
+    plus.setAttribute("aria-label", "Attach");
+    plus.setAttribute("data-persona-composer-disable-when-streaming", "");
+    plus.className =
+      "persona-flex persona-items-center persona-justify-center persona-text-lg persona-leading-none persona-bg-transparent persona-border-none persona-cursor-pointer";
+    plus.style.padding = "4px";
+    plus.style.color = COLORS.muted;
+    plus.textContent = "+";
+    plus.addEventListener("click", () => openAttachmentPicker());
+
+    // Right: model selector + send
+    const rightGroup = document.createElement("div");
+    rightGroup.className = "persona-flex persona-items-center persona-gap-3";
+
+    // Model selector with dropdown
+    const modelContainer = document.createElement("div");
+    modelContainer.style.position = "relative";
 
     const modelWrap = document.createElement("button");
     modelWrap.type = "button";
     modelWrap.setAttribute("data-persona-composer-disable-when-streaming", "");
     modelWrap.className =
-      "persona-flex persona-flex-shrink-0 persona-items-center persona-gap-1 persona-rounded-md persona-border persona-border-persona-border persona-bg-transparent persona-px-2 persona-py-1 persona-text-xs";
+      "persona-flex persona-items-center persona-gap-1 persona-bg-transparent persona-border-none persona-text-xs persona-cursor-pointer";
     modelWrap.style.color = COLORS.muted;
     const modelLabel = document.createElement("span");
     let selectedId = selectedModelId ?? models?.[0]?.id ?? "opus";
+    let menuOpen = false;
+
     const syncModelLabel = () => {
       const m = models?.find((x) => x.id === selectedId);
       modelLabel.textContent = m?.label ?? "Model";
@@ -190,27 +460,62 @@ const fullscreenAssistantComposerPlugin: AgentWidgetPlugin = {
     syncModelLabel();
     modelWrap.append(modelLabel);
     modelWrap.insertAdjacentHTML("beforeend", chevronSvg);
-    modelWrap.addEventListener("click", () => {
+
+    const buildMenu = () => {
+      const existing = modelContainer.querySelector("[data-persona-model-menu]");
+      if (existing) { existing.remove(); menuOpen = false; return; }
       if (!models?.length) return;
-      const idx = Math.max(
-        0,
-        models.findIndex((x) => x.id === selectedId)
-      );
-      const next = models[(idx + 1) % models.length];
-      selectedId = next.id;
-      onModelChange?.(selectedId);
-      syncModelLabel();
+
+      const menu = document.createElement("div");
+      menu.setAttribute("data-persona-model-menu", "");
+      for (const m of models) {
+        const opt = document.createElement("button");
+        opt.type = "button";
+        opt.textContent = m.label;
+        if (m.id === selectedId) opt.setAttribute("data-selected", "");
+        opt.addEventListener("click", (e) => {
+          e.stopPropagation();
+          selectedId = m.id;
+          onModelChange?.(selectedId);
+          syncModelLabel();
+          menu.remove();
+          menuOpen = false;
+        });
+        menu.appendChild(opt);
+      }
+      modelContainer.appendChild(menu);
+      menuOpen = true;
+
+      const closeMenu = (e: MouseEvent) => {
+        if (!modelContainer.contains(e.target as Node)) {
+          menu.remove();
+          menuOpen = false;
+          document.removeEventListener("click", closeMenu);
+        }
+      };
+      requestAnimationFrame(() => document.addEventListener("click", closeMenu));
+    };
+
+    modelWrap.addEventListener("click", (e) => {
+      e.stopPropagation();
+      buildMenu();
     });
 
-    const submit = document.createElement("button");
-    submit.type = "submit";
-    submit.setAttribute("data-persona-composer-submit", "");
-    submit.setAttribute("aria-label", "Send");
-    submit.className =
-      "persona-flex persona-h-9 persona-w-9 persona-flex-shrink-0 persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted";
-    submit.style.border = "none";
-    submit.style.backgroundColor = "transparent";
-    submit.innerHTML = micSvg;
+    modelContainer.appendChild(modelWrap);
+
+    const voiceBtn = document.createElement("button");
+    voiceBtn.type = "button";
+    voiceBtn.setAttribute("data-persona-composer-mic", "");
+    voiceBtn.setAttribute("data-persona-audio-bars-btn", "");
+    voiceBtn.setAttribute("aria-label", "Voice input");
+    voiceBtn.className =
+      "persona-flex persona-items-center persona-justify-center persona-bg-transparent persona-border-none persona-cursor-pointer";
+    voiceBtn.style.padding = "4px";
+    voiceBtn.style.color = COLORS.muted;
+    voiceBtn.innerHTML = audioBarsSvg;
+
+    rightGroup.append(modelContainer, voiceBtn);
+    actionsRow.append(plus, rightGroup);
 
     const trySend = () => {
       const v = input.value.trim();
@@ -230,12 +535,13 @@ const fullscreenAssistantComposerPlugin: AgentWidgetPlugin = {
       }
     });
 
-    form.append(plus, input, modelWrap, submit);
+    form.append(input, actionsRow);
     footer.append(suggestions, form);
 
     const status = document.createElement("div");
     status.setAttribute("data-persona-composer-status", "");
-    status.className = "persona-mt-2 persona-text-center persona-text-xs persona-text-persona-muted";
+    status.className = "persona-mt-2 persona-text-center persona-text-xs";
+    status.style.color = COLORS.muted;
     status.textContent =
       "Claude is AI and can make mistakes. Please double-check responses.";
     footer.append(status);
@@ -247,6 +553,7 @@ const fullscreenAssistantComposerPlugin: AgentWidgetPlugin = {
 const fullscreenAssistantDarkTokens = {
   semantic: {
     colors: {
+      primary: COLORS.text,
       surface: COLORS.chat,
       container: COLORS.chat,
       background: COLORS.page,
@@ -276,7 +583,7 @@ const fullscreenAssistantDarkTokens = {
     panel: {
       border: "none",
       shadow: "none",
-      borderRadius: "14px"
+      borderRadius: "0"
     },
     header: {
       background: COLORS.chat,
@@ -327,6 +634,50 @@ const fullscreenAssistantDarkTokens = {
 
 const demoCtl: { handle: AgentWidgetInitHandle | null } = { handle: null };
 
+function toggleAssistantMenu() {
+  const existing = document.querySelector("[data-persona-header-menu]");
+  if (existing) { existing.remove(); return; }
+
+  const chevronBtn = document.querySelector('[aria-label="Assistant options"]');
+  if (!chevronBtn) return;
+  const anchor = chevronBtn.closest(".persona-flex") as HTMLElement | null;
+  if (!anchor) return;
+  anchor.style.position = "relative";
+
+  const menu = document.createElement("div");
+  menu.setAttribute("data-persona-header-menu", "");
+
+  const items: { icon: string; label: string; id: string; destructive?: boolean }[] = [
+    { icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', label: "Star", id: "star" },
+    { icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>', label: "Rename", id: "rename" },
+    { icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>', label: "Add to project", id: "add-to-project" },
+    { icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>', label: "Delete", id: "delete", destructive: true }
+  ];
+
+  for (let i = 0; i < items.length; i++) {
+    if (i === items.length - 1) menu.appendChild(document.createElement("hr"));
+    const item = items[i];
+    const opt = document.createElement("button");
+    opt.type = "button";
+    opt.innerHTML = item.icon;
+    const span = document.createElement("span");
+    span.textContent = item.label;
+    opt.appendChild(span);
+    if (item.destructive) opt.setAttribute("data-destructive", "");
+    opt.addEventListener("click", () => { menu.remove(); });
+    menu.appendChild(opt);
+  }
+
+  anchor.appendChild(menu);
+  const closeMenu = (e: MouseEvent) => {
+    if (!menu.contains(e.target as Node) && !anchor.contains(e.target as Node)) {
+      menu.remove();
+      document.removeEventListener("click", closeMenu);
+    }
+  };
+  requestAnimationFrame(() => document.addEventListener("click", closeMenu));
+}
+
 const newFullscreenAssistantScriptStream = () => createFullscreenAssistantScriptedStream();
 
 const config = mergeWithDefaults({
@@ -341,7 +692,7 @@ const config = mergeWithDefaults({
     messageBorder: COLORS.border,
     panelBorder: "none",
     panelShadow: "none",
-    panelBorderRadius: "14px",
+    panelBorderRadius: "0",
     micIconColor: COLORS.muted,
     micBackgroundColor: "transparent",
     micBorderColor: "transparent"
@@ -351,15 +702,29 @@ const config = mergeWithDefaults({
     showWelcomeCard: false,
     inputPlaceholder: "Reply…"
   },
-  voiceRecognition: { enabled: false },
+  voiceRecognition: { enabled: true },
   messageActions: {
     showCopy: false,
     showUpvote: false,
     showDownvote: false
   },
-  statusIndicator: { visible: false },
+  statusIndicator: {
+    visible: true,
+    idleText: "This assistant is AI and can make mistakes. Please double-check responses.",
+    connectedText: "This assistant is AI and can make mistakes. Please double-check responses.",
+    connectingText: "Connecting…",
+    errorText: "Connection error"
+  },
   wrapComponentDirectiveInBubble: false,
   parserType: "json",
+  composer: {
+    models: [
+      { id: "opus-4-6-extended", label: "Opus 4.6 Extended" },
+      { id: "sonnet-4-6", label: "Sonnet 4.6" }
+    ],
+    selectedModelId: "opus-4-6-extended"
+  },
+  attachments: { enabled: true },
   plugins: [fullscreenAssistantComposerPlugin],
   layout: {
     header: {
@@ -369,17 +734,15 @@ const config = mergeWithDefaults({
         { id: "assistant-menu", icon: "chevron-down", ariaLabel: "Assistant options" }
       ],
       onAction: (actionId) => {
-        if (import.meta.env.DEV && typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
-          console.debug("[fullscreen-assistant-demo] header action:", actionId);
-        }
+        if (actionId === "assistant-menu") toggleAssistantMenu();
       }
     },
     messages: {
       layout: "bubble",
       timestamp: { show: false },
       avatar: { show: false }
-    }
+    },
+    contentMaxWidth: "72ch"
   },
   features: {
     showReasoning: false,
@@ -393,7 +756,7 @@ const config = mergeWithDefaults({
         paneMinWidth: "0",
         paneAppearance: "seamless",
         unifiedSplitChrome: true,
-        unifiedSplitOuterRadius: "14px",
+        unifiedSplitOuterRadius: "0",
         paneShadow: "none",
         paneBorderLeft: `1px solid ${COLORS.border}`,
         paneBackground: COLORS.artifact,
@@ -402,12 +765,13 @@ const config = mergeWithDefaults({
         expandLauncherPanelWhenOpen: false,
         documentToolbarShowCopyLabel: true,
         documentToolbarShowCopyChevron: true,
-        documentToolbarIconColor: COLORS.link,
+        documentToolbarIconColor: COLORS.muted,
         documentToolbarToggleActiveBackground: `${COLORS.chat}`,
         documentToolbarToggleActiveBorderColor: COLORS.border,
         documentToolbarCopyMenuItems: [
-          { id: "markdown", label: "Copy markdown" },
-          { id: "json", label: "Copy as JSON" }
+          { id: "download", label: "Download" },
+          { id: "download-pdf", label: "Download as PDF" },
+          { id: "publish", label: "Publish artifact" }
         ],
         onDocumentToolbarCopyMenuSelect: async (p) => {
           if (p.actionId === "primary") {
@@ -443,6 +807,16 @@ const handle = initAgentWidget({
   useShadowDom: false,
   config
 });
+
+// ── Make entire header title row toggle the assistant menu ──────────────────
+const titleRow = mount.querySelector(".persona-border-b-persona-divider > .persona-flex:first-child") as HTMLElement | null;
+if (titleRow) {
+  titleRow.addEventListener("click", (e) => {
+    // Don't double-fire if clicking the chevron button (onAction handles that)
+    if ((e.target as HTMLElement).closest('[aria-label="Assistant options"]')) return;
+    toggleAssistantMenu();
+  });
+}
 
 // ── File card event delegation ──────────────────────────────────────────────
 // Component elements lose addEventListener bindings when idiomorph morphs the
