@@ -91,6 +91,12 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   colorScheme: "light",
   launcher: {
     enabled: true,
+    mountMode: "floating",
+    dock: {
+      side: "right",
+      width: "420px",
+      collapsedWidth: "72px",
+    },
     title: "Chat Assistant",
     subtitle: "Here to help you get answers fast",
     agentIconText: "💬",
@@ -251,6 +257,10 @@ export function mergeWithDefaults(
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
       ...config.launcher,
+      dock: {
+        ...DEFAULT_WIDGET_CONFIG.launcher?.dock,
+        ...config.launcher?.dock,
+      },
       clearChat: {
         ...DEFAULT_WIDGET_CONFIG.launcher?.clearChat,
         ...config.launcher?.clearChat,

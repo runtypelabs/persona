@@ -714,6 +714,24 @@ export type AgentWidgetTheme = {
   panelBorderRadius?: string;
 };
 
+export type AgentWidgetDockConfig = {
+  /**
+   * Side of the wrapped container where the docked panel should render.
+   * @default "right"
+   */
+  side?: "left" | "right";
+  /**
+   * Expanded width of the docked panel.
+   * @default "420px"
+   */
+  width?: string;
+  /**
+   * Width of the collapsed launcher rail when the docked panel is closed.
+   * @default "72px"
+   */
+  collapsedWidth?: string;
+};
+
 export type AgentWidgetLauncherConfig = {
   enabled?: boolean;
   title?: string;
@@ -724,6 +742,18 @@ export type AgentWidgetLauncherConfig = {
   agentIconName?: string;
   agentIconHidden?: boolean;
   position?: "bottom-right" | "bottom-left" | "top-right" | "top-left";
+  /**
+   * Controls how the launcher panel is mounted relative to the host page.
+   * - "floating": default floating launcher / panel behavior
+   * - "docked": wraps the target container and renders as a sibling dock
+   *
+   * @default "floating"
+   */
+  mountMode?: "floating" | "docked";
+  /**
+   * Layout configuration for docked mode.
+   */
+  dock?: AgentWidgetDockConfig;
   autoExpand?: boolean;
   width?: string;
   /**

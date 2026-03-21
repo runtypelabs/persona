@@ -725,6 +725,10 @@ function normalizeConfig(configLike: any, defaults: AgentWidgetConfig = getDefau
     launcher: {
       ...defaults.launcher,
       ...rawLauncher,
+      dock: {
+        ...defaults.launcher?.dock,
+        ...rawLauncher.dock,
+      },
       clearChat: {
         ...defaults.launcher?.clearChat,
         ...rawLauncher.clearChat,

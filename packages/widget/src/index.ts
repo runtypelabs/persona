@@ -16,6 +16,7 @@ export type {
   AgentWidgetInitOptions,
   AgentWidgetMessage,
   AgentWidgetLauncherConfig,
+  AgentWidgetDockConfig,
   AgentWidgetEvent,
   AgentWidgetStreamParser,
   AgentWidgetStreamParserResult,
@@ -91,6 +92,11 @@ export type {
 
 export { initAgentWidgetFn as initAgentWidget };
 export {
+  createWidgetHostLayout,
+  type WidgetHostLayout,
+  type WidgetHostLayoutMode
+} from "./runtime/host-layout";
+export {
   createAgentExperience,
   type AgentWidgetController
 } from "./ui";
@@ -143,6 +149,7 @@ export {
   generateUserMessageId,
   generateAssistantMessageId
 } from "./utils/message-id";
+export { isDockedMountMode, resolveDockConfig } from "./utils/dock";
 export { generateCodeSnippet } from "./utils/code-generators";
 export type { CodeFormat, CodeGeneratorHooks, CodeGeneratorOptions } from "./utils/code-generators";
 export { VERSION } from "./version";

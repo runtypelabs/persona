@@ -31,6 +31,7 @@ import { renderLucideIcon } from "./utils/icons";
 import { createElement, createElementInDocument } from "./utils/dom";
 import { morphMessages } from "./utils/morph";
 import { statusCopy } from "./utils/constants";
+import { isDockedMountMode } from "./utils/dock";
 import { createLauncherButton } from "./components/launcher";
 import { createWrapper, buildPanel, buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
 import { buildHeaderWithLayout } from "./components/header-layouts";
@@ -1353,8 +1354,9 @@ export const createAgentExperience = (
   // Apply full-height and sidebar styles if enabled
   // This ensures the widget fills its container height with proper flex layout
   const applyFullHeightStyles = () => {
+    const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
-    const fullHeight = sidebarMode || (config.launcher?.fullHeight ?? false);
+    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
     /** Script-tag / div embed: launcher off, host supplies a sized mount. */
     const isInlineEmbed = config.launcher?.enabled === false;
     const theme = config.theme ?? {};
@@ -1463,7 +1465,7 @@ export const createAgentExperience = (
     // Re-apply panel width/maxWidth from initial setup
     const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
     const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
-    if (!sidebarMode) {
+    if (!sidebarMode && !dockedMode) {
       if (isInlineEmbed && fullHeight) {
         panel.style.width = "100%";
         panel.style.maxWidth = "100%";
@@ -1471,6 +1473,9 @@ export const createAgentExperience = (
         panel.style.width = width;
         panel.style.maxWidth = width;
       }
+    } else if (dockedMode) {
+      panel.style.width = "100%";
+      panel.style.maxWidth = "100%";
     }
     applyLauncherArtifactPanelWidth();
 
@@ -1539,7 +1544,7 @@ export const createAgentExperience = (
       'persona-bottom-4', 'persona-right-4', 'persona-left-4', 'persona-top-4'
     );
     
-    if (!sidebarMode && !isInlineEmbed) {
+    if (!sidebarMode && !isInlineEmbed && !dockedMode) {
       // Restore positioning classes when not in sidebar mode (launcher mode only)
       const positionClasses = positionMap[position as keyof typeof positionMap] ?? positionMap['bottom-right'];
       positionClasses.split(' ').forEach(cls => wrapper.classList.add(cls));
@@ -1612,7 +1617,7 @@ export const createAgentExperience = (
     // Use both -moz-available (Firefox) and stretch (standard) for cross-browser support
     // Append to cssText to allow multiple fallback values for the same property
     // Only apply to launcher mode (not sidebar or inline embed)
-    if (!isInlineEmbed) {
+    if (!isInlineEmbed && !dockedMode) {
       const maxHeightStyles = 'max-height: -moz-available !important; max-height: stretch !important;';
       const paddingStyles = sidebarMode ? '' : 'padding-top: 1.25em !important;';
       wrapper.style.cssText += maxHeightStyles + paddingStyles;
@@ -2324,7 +2329,9 @@ export const createAgentExperience = (
 
   const updateOpenState = () => {
     if (!launcherEnabled) return;
+    const dockedMode = isDockedMountMode(config);
     if (open) {
+      wrapper.style.display = dockedMode ? "flex" : "";
       wrapper.classList.remove("persona-pointer-events-none", "persona-opacity-0");
       panel.classList.remove("persona-scale-95", "persona-opacity-0");
       panel.classList.add("persona-scale-100", "persona-opacity-100");
@@ -2335,9 +2342,16 @@ export const createAgentExperience = (
         customLauncherElement.style.display = "none";
       }
     } else {
-      wrapper.classList.add("persona-pointer-events-none", "persona-opacity-0");
-      panel.classList.remove("persona-scale-100", "persona-opacity-100");
-      panel.classList.add("persona-scale-95", "persona-opacity-0");
+      if (dockedMode) {
+        wrapper.style.display = "none";
+        wrapper.classList.remove("persona-pointer-events-none", "persona-opacity-0");
+        panel.classList.remove("persona-scale-100", "persona-opacity-100", "persona-scale-95", "persona-opacity-0");
+      } else {
+        wrapper.style.display = "";
+        wrapper.classList.add("persona-pointer-events-none", "persona-opacity-0");
+        panel.classList.remove("persona-scale-100", "persona-opacity-100");
+        panel.classList.add("persona-scale-95", "persona-opacity-0");
+      }
       // Show launcher button when widget is closed
       if (launcherButtonInstance) {
         launcherButtonInstance.element.style.display = "";
@@ -3256,8 +3270,9 @@ export const createAgentExperience = (
   }
 
   const recalcPanelHeight = () => {
+    const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
-    const fullHeight = sidebarMode || (config.launcher?.fullHeight ?? false);
+    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
 
     // Mobile fullscreen: re-apply fullscreen styles on resize (handles orientation changes)
     const ownerWindow = mount.ownerDocument.defaultView ?? window;
@@ -3279,14 +3294,14 @@ export const createAgentExperience = (
       applyThemeVariables(mount, config);
     }
 
-    if (!launcherEnabled) {
+    if (!launcherEnabled && !dockedMode) {
       panel.style.height = "";
       panel.style.width = "";
       return;
     }
 
     // In sidebar/fullHeight mode, don't override the width - it's handled by applyFullHeightStyles
-    if (!sidebarMode) {
+    if (!sidebarMode && !dockedMode) {
       const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
       const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
       panel.style.width = width;
@@ -3296,7 +3311,7 @@ export const createAgentExperience = (
 
     // In fullHeight mode, don't set a fixed height
     if (!fullHeight) {
-      const viewportHeight = window.innerHeight;
+      const viewportHeight = ownerWindow.innerHeight;
       const verticalMargin = 64; // leave space for launcher's offset
       const heightOffset = config.launcher?.heightOffset ?? 0;
       const available = Math.max(200, viewportHeight - verticalMargin);
@@ -3307,8 +3322,9 @@ export const createAgentExperience = (
   };
 
   recalcPanelHeight();
-  window.addEventListener("resize", recalcPanelHeight);
-  destroyCallbacks.push(() => window.removeEventListener("resize", recalcPanelHeight));
+  const ownerWindow = mount.ownerDocument.defaultView ?? window;
+  ownerWindow.addEventListener("resize", recalcPanelHeight);
+  destroyCallbacks.push(() => ownerWindow.removeEventListener("resize", recalcPanelHeight));
 
   lastScrollTop = body.scrollTop;
 
@@ -3351,8 +3367,7 @@ export const createAgentExperience = (
     if (launcherEnabled) {
       closeButton.style.display = "";
       closeHandler = () => {
-        open = false;
-        updateOpenState();
+        setOpenState(false, "user");
       };
       closeButton.addEventListener("click", closeHandler);
     } else {

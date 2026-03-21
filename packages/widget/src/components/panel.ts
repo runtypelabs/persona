@@ -1,6 +1,7 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetConfig } from "../types";
 import { positionMap } from "../utils/positioning";
+import { isDockedMountMode } from "../utils/dock";
 import { buildHeader, attachHeaderToContainer, HeaderElements } from "./header-builder";
 import { buildHeaderWithLayout } from "./header-layouts";
 import { buildComposer, ComposerElements } from "./composer-builder";
@@ -12,6 +13,21 @@ export interface PanelWrapper {
 
 export const createWrapper = (config?: AgentWidgetConfig): PanelWrapper => {
   const launcherEnabled = config?.launcher?.enabled ?? true;
+  const dockedMode = isDockedMountMode(config);
+
+  if (dockedMode) {
+    const wrapper = createElement(
+      "div",
+      "persona-relative persona-h-full persona-w-full persona-flex persona-flex-1 persona-min-h-0 persona-flex-col"
+    );
+    const panel = createElement(
+      "div",
+      "persona-relative persona-h-full persona-w-full persona-flex persona-flex-1 persona-min-h-0 persona-flex-col"
+    );
+
+    wrapper.appendChild(panel);
+    return { wrapper, panel };
+  }
 
   if (!launcherEnabled) {
     // For inline embed mode, use flex layout to ensure the widget fills its container

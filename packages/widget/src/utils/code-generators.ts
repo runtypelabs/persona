@@ -497,6 +497,42 @@ function generateHooksConfig(hooks: CodeGeneratorHooks | undefined, indent: stri
   return lines;
 }
 
+function appendSerializableObjectEntries(
+  lines: string[],
+  value: Record<string, unknown>,
+  indent: string
+): void {
+  Object.entries(value).forEach(([key, entryValue]) => {
+    if (entryValue === undefined || typeof entryValue === "function") return;
+
+    if (Array.isArray(entryValue)) {
+      lines.push(`${indent}${key}: ${JSON.stringify(entryValue)},`);
+      return;
+    }
+
+    if (entryValue && typeof entryValue === "object") {
+      lines.push(`${indent}${key}: {`);
+      appendSerializableObjectEntries(lines, entryValue as Record<string, unknown>, `${indent}  `);
+      lines.push(`${indent}},`);
+      return;
+    }
+
+    lines.push(`${indent}${key}: ${JSON.stringify(entryValue)},`);
+  });
+}
+
+function appendSerializableObjectBlock(
+  lines: string[],
+  key: string,
+  value: Record<string, unknown> | undefined,
+  indent: string
+): void {
+  if (!value) return;
+  lines.push(`${indent}${key}: {`);
+  appendSerializableObjectEntries(lines, value, `${indent}  `);
+  lines.push(`${indent}},`);
+}
+
 export function generateCodeSnippet(
   config: any,
   format: CodeFormat = "esm",
@@ -555,15 +591,7 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
   }
 
   if (config.launcher) {
-    lines.push("    launcher: {");
-    Object.entries(config.launcher).forEach(([key, value]) => {
-      if (typeof value === "string") {
-        lines.push(`      ${key}: "${value}",`);
-      } else if (typeof value === "boolean") {
-        lines.push(`      ${key}: ${value},`);
-      }
-    });
-    lines.push("    },");
+    appendSerializableObjectBlock(lines, "launcher", config.launcher, "    ");
   }
 
   if (config.copy) {
@@ -713,15 +741,7 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
   }
 
   if (config.launcher) {
-    lines.push("        launcher: {");
-    Object.entries(config.launcher).forEach(([key, value]) => {
-      if (typeof value === "string") {
-        lines.push(`          ${key}: "${value}",`);
-      } else if (typeof value === "boolean") {
-        lines.push(`          ${key}: ${value},`);
-      }
-    });
-    lines.push("        },");
+    appendSerializableObjectBlock(lines, "launcher", config.launcher, "        ");
   }
 
   if (config.copy) {
@@ -988,15 +1008,7 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
   }
 
   if (config.launcher) {
-    lines.push("        launcher: {");
-    Object.entries(config.launcher).forEach(([key, value]) => {
-      if (typeof value === "string") {
-        lines.push(`          ${key}: "${value}",`);
-      } else if (typeof value === "boolean") {
-        lines.push(`          ${key}: ${value},`);
-      }
-    });
-    lines.push("        },");
+    appendSerializableObjectBlock(lines, "launcher", config.launcher, "        ");
   }
 
   if (config.copy) {
@@ -1388,15 +1400,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
   }
 
   if (config.launcher) {
-    lines.push("      launcher: {");
-    Object.entries(config.launcher).forEach(([key, value]) => {
-      if (typeof value === "string") {
-        lines.push(`        ${key}: "${value}",`);
-      } else if (typeof value === "boolean") {
-        lines.push(`        ${key}: ${value},`);
-      }
-    });
-    lines.push("      },");
+    appendSerializableObjectBlock(lines, "launcher", config.launcher, "      ");
   }
 
   if (config.copy) {

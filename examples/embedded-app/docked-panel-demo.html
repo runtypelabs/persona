@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docked Panel Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: "SF Pro Text", "Inter", system-ui, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(125, 211, 252, 0.25), transparent 32%),
+        linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+      color: #0f172a;
+    }
+    .page {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 28px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(14px);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0f172a, #2563eb);
+      color: white;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+    }
+    .brand-copy h1 {
+      margin: 0;
+      font-size: 17px;
+    }
+    .brand-copy p {
+      margin: 2px 0 0;
+      color: #64748b;
+      font-size: 13px;
+    }
+    .metrics {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .metric {
+      min-width: 110px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+    }
+    .metric-label {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+    }
+    .metric-value {
+      display: block;
+      margin-top: 6px;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      padding: 18px 28px;
+    }
+    .control {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .control label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .control input,
+    .control select,
+    .control button {
+      border: 1px solid rgba(148, 163, 184, 0.32);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #0f172a;
+      font: inherit;
+      padding: 10px 12px;
+    }
+    .control button {
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .workspace-frame {
+      min-height: 0;
+      padding: 0 28px 28px;
+    }
+    #workspace-main {
+      min-height: 680px;
+      height: calc(100vh - 196px);
+      border-radius: 28px;
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: 0 20px 70px rgba(15, 23, 42, 0.12);
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-width: 0;
+    }
+    .workspace-nav {
+      padding: 22px 18px;
+      background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+      color: #cbd5e1;
+    }
+    .workspace-nav h2 {
+      margin: 0 0 20px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+    }
+    .workspace-nav ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 10px;
+    }
+    .workspace-nav li {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .workspace-canvas {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 18px;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.09), transparent 28%),
+        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    }
+    .workspace-banner {
+      padding: 20px 24px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #eff6ff, #f8fafc);
+      border: 1px solid rgba(191, 219, 254, 0.85);
+    }
+    .workspace-banner h3 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    .workspace-banner p {
+      margin: 0;
+      color: #475569;
+      max-width: 70ch;
+      line-height: 1.5;
+    }
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .workspace-card {
+      padding: 18px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+    }
+    .workspace-card h4 {
+      margin: 0 0 10px;
+    }
+    .workspace-card p {
+      margin: 0;
+      color: #64748b;
+      line-height: 1.5;
+    }
+    .workspace-feed {
+      min-height: 0;
+      padding: 20px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: inset 0 0 0 1px rgba(248, 250, 252, 0.8);
+    }
+    .feed-item {
+      display: grid;
+      gap: 6px;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+    }
+    .feed-item:last-child {
+      border-bottom: none;
+    }
+    .feed-meta {
+      font-size: 12px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .feed-title {
+      font-weight: 700;
+    }
+    .status-row {
+      padding: 0 28px 18px;
+      color: #475569;
+      font-size: 13px;
+    }
+    @media (max-width: 1120px) {
+      #workspace-main {
+        grid-template-columns: 72px 1fr;
+      }
+      .workspace-nav li {
+        font-size: 0;
+        min-height: 44px;
+      }
+    }
+    @media (max-width: 860px) {
+      .workspace-grid {
+        grid-template-columns: 1fr;
+      }
+      #workspace-main {
+        height: calc(100vh - 238px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div class="brand-copy">
+          <h1>Persona Docked Panel Demo</h1>
+          <p>initAgentWidget wraps the content container and docks the assistant beside it.</p>
+        </div>
+      </div>
+      <div class="metrics">
+        <div class="metric">
+          <span class="metric-label">Open Width</span>
+          <span class="metric-value" id="metric-width">420px</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Rail Width</span>
+          <span class="metric-value" id="metric-collapsed">72px</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="controls">
+      <div class="control">
+        <label for="dock-side">Dock side</label>
+        <select id="dock-side">
+          <option value="right">Right</option>
+          <option value="left">Left</option>
+        </select>
+      </div>
+      <div class="control">
+        <label for="dock-width">Expanded width</label>
+        <input id="dock-width" type="text" value="420px" />
+      </div>
+      <div class="control">
+        <label for="dock-collapsed-width">Collapsed width</label>
+        <input id="dock-collapsed-width" type="text" value="72px" />
+      </div>
+      <div class="control">
+        <label>&nbsp;</label>
+        <button id="apply-settings" type="button">Apply layout</button>
+      </div>
+      <div class="control">
+        <label>&nbsp;</label>
+        <button id="open-dock" type="button">Open dock</button>
+      </div>
+      <div class="control">
+        <label>&nbsp;</label>
+        <button id="close-dock" type="button">Close dock</button>
+      </div>
+      <div class="control">
+        <label>&nbsp;</label>
+        <button id="toggle-dock" type="button">Toggle dock</button>
+      </div>
+    </section>
+
+    <div class="status-row" id="status-row">
+      Resize the window to see the docked layout keep the workspace intact while the widget can still use fullscreen behavior on small viewports.
+    </div>
+
+    <main class="workspace-frame">
+      <section id="workspace-main">
+        <aside class="workspace-nav">
+          <h2>Workspace</h2>
+          <ul>
+            <li>Overview</li>
+            <li>Automation</li>
+            <li>Audience</li>
+            <li>Catalog</li>
+            <li>Publishing</li>
+          </ul>
+        </aside>
+        <div class="workspace-canvas">
+          <div class="workspace-banner">
+            <h3>Control panel style layout</h3>
+            <p>
+              This canvas is the wrapped target container. Persona should stay outside the content itself and behave like a supporting assistant panel.
+            </p>
+          </div>
+          <div class="workspace-grid">
+            <article class="workspace-card">
+              <h4>Launch checklist</h4>
+              <p>Review assets, update pricing, and confirm event tracking before publication.</p>
+            </article>
+            <article class="workspace-card">
+              <h4>Team updates</h4>
+              <p>Two new comments need responses in the shared brand workspace.</p>
+            </article>
+            <article class="workspace-card">
+              <h4>Performance</h4>
+              <p>Conversion is up 8.4% this week after the latest merchandising changes.</p>
+            </article>
+          </div>
+          <div class="workspace-feed">
+            <div class="feed-item">
+              <span class="feed-meta">Today</span>
+              <span class="feed-title">Campaign brief approved</span>
+              <span>AI assistant suggested a shorter launch checklist for the team review.</span>
+            </div>
+            <div class="feed-item">
+              <span class="feed-meta">Yesterday</span>
+              <span class="feed-title">Homepage hero refreshed</span>
+              <span>Variant B is performing best on desktop traffic and retained its mobile score.</span>
+            </div>
+            <div class="feed-item">
+              <span class="feed-meta">This week</span>
+              <span class="feed-title">Partner onboarding queue</span>
+              <span>Three new partner submissions are awaiting audit and copy review.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="/src/docked-panel-demo.ts"></script>
+</body>
+</html>

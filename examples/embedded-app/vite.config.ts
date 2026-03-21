@@ -244,7 +244,8 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      input: {
+      input: Object.fromEntries(
+        Object.entries({
         main: path.resolve(__dirname, 'index.html'),
         'action-middleware': path.resolve(__dirname, 'action-middleware.html'),
         json: path.resolve(__dirname, 'json.html'),
@@ -258,6 +259,7 @@ export default defineConfig({
         'navigation-persist-demo': path.resolve(__dirname, 'navigation-persist-demo.html'),
         'navigation-persist-page2': path.resolve(__dirname, 'navigation-persist-page2.html'),
         'preview-mode-demo': path.resolve(__dirname, 'preview-mode-demo.html'),
+        'docked-panel-demo': path.resolve(__dirname, 'docked-panel-demo.html'),
         // Agent demo
         'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
         // Bakery demo pages
@@ -272,7 +274,8 @@ export default defineConfig({
         'focus-input-demo': path.resolve(__dirname, 'focus-input-demo.html'),
         'artifact-demo': path.resolve(__dirname, 'artifact-demo.html'),
         'fullscreen-assistant-demo': path.resolve(__dirname, 'fullscreen-assistant-demo.html'),
-      }
+      }).filter(([, entryPath]) => fs.existsSync(entryPath))
+      )
     }
   },
   server: {

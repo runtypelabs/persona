@@ -9,15 +9,47 @@ const mockCreateAgentExperience = vi.fn(() => ({
   close: vi.fn(),
   toggle: vi.fn(),
   clearChat: vi.fn(),
+  clearArtifacts: vi.fn(),
+  upsertArtifact: vi.fn(),
+  getState: vi.fn(() => ({
+    open: true,
+    launcherEnabled: true,
+    streaming: false,
+    voiceActive: false,
+  })),
+  on: vi.fn(() => vi.fn()),
 }));
+const mockCreateWidgetHostLayout = vi.fn((target: HTMLElement, config?: { launcher?: { mountMode?: string } }) => {
+  const host = target.ownerDocument.createElement('div');
+  host.dataset.mockPersonaPreviewHost = 'true';
+  target.appendChild(host);
+
+  return {
+    mode: (config?.launcher?.mountMode ?? 'floating') === 'docked' ? 'docked' : 'direct',
+    host,
+    shell: null,
+    syncWidgetState: vi.fn(),
+    updateConfig: vi.fn(),
+    destroy: vi.fn(() => host.remove()),
+  };
+});
 const fetchMock = vi.fn();
 
 vi.mock('@runtypelabs/persona', () => ({
   default: {},
   createAgentExperience: mockCreateAgentExperience,
+  createWidgetHostLayout: mockCreateWidgetHostLayout,
+  isDockedMountMode: vi.fn(
+    (config?: { launcher?: { mountMode?: string } }) => (config?.launcher?.mountMode ?? 'floating') === 'docked'
+  ),
   markdownPostprocessor: vi.fn((x: string) => x),
   DEFAULT_WIDGET_CONFIG: {
-    launcher: { enabled: true, clearChat: {} },
+    launcher: {
+      enabled: true,
+      clearChat: {},
+      mountMode: 'floating',
+      dock: { side: 'right', width: '420px', collapsedWidth: '72px' },
+    },
     copy: {},
     voiceRecognition: {},
     features: {},
@@ -130,6 +162,7 @@ describe('theme configurator shell', () => {
   beforeEach(() => {
     vi.resetModules();
     mockCreateAgentExperience.mockClear();
+    mockCreateWidgetHostLayout.mockClear();
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(createEmbedCheckResponse('allowed'));
     vi.stubGlobal('fetch', fetchMock);
@@ -534,6 +567,46 @@ describe('theme configurator shell', () => {
     const iframe = document.querySelector('iframe[data-mount-id="preview-current"]') as HTMLIFrameElement | null;
     expect(iframe).not.toBeNull();
     expect(iframe!.srcdoc).toContain('preview-iframe-mock');
+  });
+
+  test('docked preview renders a workspace shell and layout signature', async () => {
+    const state = await import('./state');
+    await import('./index');
+
+    state.setImmediate('launcher.mountMode', 'docked');
+    state.setImmediate('launcher.dock.side', 'left');
+    state.setImmediate('launcher.dock.width', '480px');
+    state.setImmediate('launcher.dock.collapsedWidth', '84px');
+
+    const wrapper = document.querySelector<HTMLElement>(
+      '.preview-iframe-wrapper[data-mount-id="preview-current"]'
+    );
+    const iframe = document.querySelector<HTMLIFrameElement>('iframe[data-mount-id="preview-current"]');
+
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.dataset.layoutSignature).toBe('docked:left:480px:84px');
+    expect(iframe).not.toBeNull();
+    expect(iframe!.srcdoc).toContain('preview-workspace-shell');
+    expect(iframe!.srcdoc).toMatch(/\.preview-workspace-shell \{[^}]*height: 100%/);
+    expect(iframe!.srcdoc).toContain('id="preview-content-preview-current"');
+    expect(iframe!.srcdoc).not.toContain('z-index:9999');
+  });
+
+  test('docked preview places background iframe inside the wrapped content pane', async () => {
+    const state = await import('./state');
+    await import('./index');
+
+    state.setImmediate('launcher.mountMode', 'docked');
+    state.setPreviewBackgroundUrl('https://example.com');
+    await flushPreviewEmbedCheck();
+
+    const iframe = document.querySelector<HTMLIFrameElement>('iframe[data-mount-id="preview-current"]');
+    expect(iframe).not.toBeNull();
+    expect(iframe!.srcdoc).toContain('preview-workspace-content');
+    expect(iframe!.srcdoc).toContain('id="preview-content-preview-current"');
+    expect(iframe!.srcdoc).toMatch(/\.preview-workspace-content \{[^}]*height: 100%/);
+    expect(iframe!.srcdoc).toContain('src="https://example.com"');
+    expect(iframe!.srcdoc).not.toContain('<div style="position:fixed;inset:0;z-index:9999;">');
   });
 
   test('preview uses iframe-based layout with mock page and widget mount', async () => {

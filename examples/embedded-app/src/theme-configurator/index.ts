@@ -6,8 +6,10 @@ import '../theme-configurator.css';
 
 import {
   createAgentExperience,
+  createWidgetHostLayout,
   componentRegistry,
   getActiveTheme,
+  isDockedMountMode,
   themeToCssVariables,
 } from '@runtypelabs/persona';
 import type {
@@ -42,6 +44,7 @@ componentRegistry.register('dynamic-form', (props, ctx) => {
 
 let allControls: ControlResult[] = [];
 let previewControllers: AgentWidgetController[] = [];
+let previewLayoutCleanups: Array<() => void> = [];
 type CompareMode = 'off' | 'baseline' | 'themes';
 
 let compareMode: CompareMode = 'off';
@@ -169,6 +172,7 @@ type PreviewMountSpec = {
   previewConfig: ReturnType<typeof state.buildPreviewConfig>;
   shellMode: state.PreviewShellMode;
   backgroundState: PreviewBackgroundState;
+  layoutSignature: string;
 };
 
 let previewBackgroundStates = new Map<string, PreviewBackgroundState>();
@@ -1004,13 +1008,11 @@ function initToolbarControls(): void {
     }
     previewBgUrlInput.value = normalized;
     state.setPreviewBackgroundUrl(normalized);
-    mountPreviewWidgets();
   });
 
   previewBgUrlClear?.addEventListener('click', () => {
     state.setPreviewBackgroundUrl('');
     if (previewBgUrlInput) previewBgUrlInput.value = '';
-    mountPreviewWidgets();
   });
 
   document.addEventListener('click', (event) => {
@@ -1360,14 +1362,33 @@ function getPreviewSpecs(preserveBackgroundStates = false): PreviewMountSpec[] {
 
   syncPreviewBackgroundStates(rawSpecs, preserveBackgroundStates);
 
-  return rawSpecs.map(({ mountId, label, subtitle, snapshot, previewMode }) => ({
-    mountId,
-    label,
-    subtitle,
-    previewConfig: state.buildPreviewConfig(snapshot, previewMode, previewScene),
-    shellMode: state.resolvePreviewShellMode(snapshot, previewMode, previewScene),
-    backgroundState: getPreviewBackgroundState(mountId),
-  }));
+  return rawSpecs.map(({ mountId, label, subtitle, snapshot, previewMode }) => {
+    const previewConfig = state.buildPreviewConfig(snapshot, previewMode, previewScene);
+
+    return {
+      mountId,
+      label,
+      subtitle,
+      previewConfig,
+      shellMode: state.resolvePreviewShellMode(snapshot, previewMode, previewScene),
+      backgroundState: getPreviewBackgroundState(mountId),
+      layoutSignature: getPreviewLayoutSignature(previewConfig),
+    };
+  });
+}
+
+function getPreviewLayoutSignature(config: AgentWidgetConfig): string {
+  if (!isDockedMountMode(config)) {
+    return 'floating';
+  }
+
+  const dock = config.launcher?.dock ?? {};
+  return [
+    'docked',
+    dock.side ?? 'right',
+    dock.width ?? '420px',
+    dock.collapsedWidth ?? '72px',
+  ].join(':');
 }
 
 function escapeHtml(str: string): string {
@@ -1421,7 +1442,19 @@ function buildPreviewIframeShellStyleText(shellMode: state.PreviewShellMode): st
     .preview-iframe-line.hero { width: 48%; height: 16px; }
     .preview-iframe-line.body { width: 72%; height: 10px; }
     .preview-iframe-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }
-    .preview-iframe-card { height: 84px; border-radius: 14px; background: ${shellTheme.cardBg}; box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }`;
+    .preview-iframe-card { height: 84px; border-radius: 14px; background: ${shellTheme.cardBg}; box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }
+    .preview-workspace-shell { height: 100%; min-height: 100%; display: flex; flex-direction: column; }
+    .preview-workspace-topbar { height: 52px; flex-shrink: 0; border-bottom: 1px solid ${shellTheme.chromeBorder}; background: ${shellTheme.chromeBg}; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; }
+    .preview-workspace-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .preview-workspace-topbar-badge { width: 18px; height: 18px; border-radius: 6px; background: ${shellTheme.cardBg}; box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }
+    .preview-workspace-topbar-line { width: 180px; height: 10px; border-radius: 999px; background: ${shellTheme.skeleton}; }
+    .preview-workspace-topbar-pill { width: 64px; height: 28px; border-radius: 999px; background: ${shellTheme.cardBg}; box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }
+    .preview-workspace-body { flex: 1; min-height: 0; display: flex; padding: 20px; }
+    .preview-workspace-content { position: relative; display: flex; flex-direction: column; flex: 1; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; border-radius: 24px; background: rgba(255,255,255,0.72); box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }
+    .preview-workspace-content-shell { position: relative; z-index: 1; flex: 1 1 auto; min-height: 100%; padding: 24px; }
+    .preview-workspace-row { display: flex; gap: 16px; margin-top: 20px; }
+    .preview-workspace-card { flex: 1; min-width: 0; height: 168px; border-radius: 18px; background: ${shellTheme.cardBg}; box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }
+    .preview-workspace-card.short { height: 96px; }`;
 }
 
 function applyShellThemeToPreviewIframe(iframe: HTMLIFrameElement, shellMode: state.PreviewShellMode): void {
@@ -1467,11 +1500,11 @@ function syncPreviewWrapperShellAndShellMode(specs: PreviewMountSpec[]): void {
 
 /** Generate the full HTML document for iframe srcdoc (mock page + widget mount) */
 function getIframeSrcdoc(
-  mountId: string,
-  shellMode: state.PreviewShellMode,
-  backgroundState: PreviewBackgroundState,
+  spec: PreviewMountSpec,
   renderToken: number
 ): string {
+  const { mountId, shellMode, backgroundState, previewConfig } = spec;
+  const dockedMode = isDockedMountMode(previewConfig);
   const bgUrl = state.getPreviewBackgroundUrl();
   const hasBgUrl = !!bgUrl;
   const showMockShell = shouldRenderMockPreviewShell(hasBgUrl, backgroundState);
@@ -1497,6 +1530,22 @@ function getIframeSrcdoc(
         </div>
         <div class="preview-iframe-line body"></div>
         <div class="preview-iframe-line body"></div>
+      </div>
+    </div>`
+    : '';
+  const dockedWorkspaceContent = showMockShell
+    ? `
+    <div class="preview-workspace-content-shell" aria-hidden="true">
+      <div class="preview-iframe-line hero"></div>
+      <div class="preview-iframe-line body"></div>
+      <div class="preview-workspace-row">
+        <div class="preview-workspace-card"></div>
+        <div class="preview-workspace-card"></div>
+      </div>
+      <div class="preview-workspace-row">
+        <div class="preview-workspace-card short"></div>
+        <div class="preview-workspace-card short"></div>
+        <div class="preview-workspace-card short"></div>
       </div>
     </div>`
     : '';
@@ -1600,9 +1649,31 @@ function getIframeSrcdoc(
   </style>
 </head>
 <body>
-  ${bgIframe}
-  ${mockContent}
-  <div style="position:fixed;inset:0;z-index:9999;"><div id="${mountId}" data-mount-id="${mountId}"></div></div>
+  ${
+    dockedMode
+      ? `
+        <div class="preview-workspace-shell">
+          <div class="preview-workspace-topbar">
+            <div class="preview-workspace-topbar-left">
+              <span class="preview-workspace-topbar-badge"></span>
+              <span class="preview-workspace-topbar-line"></span>
+            </div>
+            <span class="preview-workspace-topbar-pill"></span>
+          </div>
+          <div class="preview-workspace-body">
+            <div id="preview-content-${mountId}" class="preview-workspace-content" data-mount-id="${mountId}">
+              ${bgIframe}
+              ${dockedWorkspaceContent}
+            </div>
+          </div>
+        </div>
+      `
+      : `
+        ${bgIframe}
+        ${mockContent}
+        <div style="position:fixed;inset:0;z-index:9999;"><div id="${mountId}" data-mount-id="${mountId}"></div></div>
+      `
+  }
   ${bgScript}
 </body>
 </html>`;
@@ -1636,7 +1707,7 @@ function getPreviewFrameMarkup(spec: PreviewMountSpec, renderToken: number): str
     : '';
 
   return `
-    <div class="${wrapperClass}" data-mount-id="${spec.mountId}" data-device="${device}" data-shell-mode="${spec.shellMode}" data-background-state="${spec.backgroundState}" data-render-token="${renderToken}">
+    <div class="${wrapperClass}" data-mount-id="${spec.mountId}" data-device="${device}" data-shell-mode="${spec.shellMode}" data-background-state="${spec.backgroundState}" data-layout-signature="${escapeHtml(spec.layoutSignature)}" data-render-token="${renderToken}">
       ${
         isCompareActive()
           ? `
@@ -1653,12 +1724,32 @@ function getPreviewFrameMarkup(spec: PreviewMountSpec, renderToken: number): str
   `;
 }
 
+function createPreviewMount(host: HTMLElement, mountId: string, config: AgentWidgetConfig): HTMLElement {
+  const mount = host.ownerDocument.createElement('div');
+  mount.id = mountId;
+
+  if (config.launcher?.enabled === false || isDockedMountMode(config)) {
+    mount.style.height = '100%';
+    mount.style.display = 'flex';
+    mount.style.flexDirection = 'column';
+    mount.style.flex = '1';
+    mount.style.minHeight = '0';
+  }
+
+  host.appendChild(mount);
+  return mount;
+}
+
 function destroyPreviewControllers(): void {
   destroyInlineZones();
   for (const controller of previewControllers) {
     controller.destroy();
   }
+  for (const cleanup of previewLayoutCleanups) {
+    cleanup();
+  }
   previewControllers = [];
+  previewLayoutCleanups = [];
 }
 
 function mountPreviewWidgets(preserveBackgroundStates = false): void {
@@ -1687,22 +1778,53 @@ function mountPreviewWidgets(preserveBackgroundStates = false): void {
   let loadedCount = 0;
   const totalToLoad = iframes.length;
   let mounted = false;
+  const isCurrentRenderToken = (iframe: HTMLIFrameElement): boolean => {
+    const wrapper = iframe.closest<HTMLElement>('.preview-iframe-wrapper');
+    return (
+      wrapper?.dataset.renderToken === String(renderToken) &&
+      renderToken === previewRenderToken
+    );
+  };
 
   const mountAllWidgets = (): void => {
-    if (mounted) return;
+    if (mounted || renderToken !== previewRenderToken) return;
     mounted = true;
 
     for (const iframe of iframes) {
+      if (!isCurrentRenderToken(iframe)) continue;
       const mountId = iframe.dataset.mountId;
       if (!mountId) continue;
       const spec = specs.find((s) => s.mountId === mountId);
       if (!spec || !iframe.contentDocument) continue;
 
-      const mount = iframe.contentDocument.getElementById(mountId);
+      let layoutCleanup = () => {};
+      let syncDockState: (() => void) | null = null;
+      const mount = isDockedMountMode(spec.previewConfig)
+        ? (() => {
+            const contentRoot = iframe.contentDocument?.getElementById(`preview-content-${mountId}`) as HTMLElement | null;
+            if (!contentRoot) return null;
+            const hostLayout = createWidgetHostLayout(contentRoot, spec.previewConfig);
+            syncDockState = () => hostLayout.syncWidgetState(controller.getState());
+            layoutCleanup = () => hostLayout.destroy();
+            return createPreviewMount(hostLayout.host, mountId, spec.previewConfig);
+          })()
+        : iframe.contentDocument.getElementById(mountId);
       if (!mount) continue;
 
       const controller = createAgentExperience(mount, spec.previewConfig);
       previewControllers.push(controller);
+      if (syncDockState) {
+        const openUnsub = controller.on('widget:opened', syncDockState);
+        const closeUnsub = controller.on('widget:closed', syncDockState);
+        const previousCleanup = layoutCleanup;
+        layoutCleanup = () => {
+          openUnsub();
+          closeUnsub();
+          previousCleanup();
+        };
+        syncDockState();
+      }
+      previewLayoutCleanups.push(layoutCleanup);
 
       if (state.getPreviewScene() === 'minimized') {
         controller.close();
@@ -1735,17 +1857,20 @@ function mountPreviewWidgets(preserveBackgroundStates = false): void {
     iframe.addEventListener(
       'load',
       () => {
+        if (!isCurrentRenderToken(iframe)) return;
         loadedCount += 1;
         if (loadedCount >= totalToLoad) mountAllWidgets();
       },
       { once: true }
     );
-    iframe.srcdoc = getIframeSrcdoc(
+    iframe.srcdoc = getIframeSrcdoc(spec ?? {
       mountId,
-      spec?.shellMode ?? 'light',
-      spec?.backgroundState ?? 'none',
-      renderToken
-    );
+      label: '',
+      previewConfig: state.buildPreviewConfig(),
+      shellMode: 'light',
+      backgroundState: 'none',
+      layoutSignature: 'floating',
+    }, renderToken);
   }
 
   if (totalToLoad === 0) {
@@ -1829,10 +1954,13 @@ function resizePreviewFrames(): void {
 
   applyPreviewScale();
 
-  // The widget's recalcPanelHeight listens on the parent window's resize event
-  // but reads ownerWindow.innerWidth from the iframe. Dispatch resize so the
-  // widget re-evaluates its mobile/desktop layout after the iframe is resized.
-  window.dispatchEvent(new Event('resize'));
+  // The widget listens on its owner window, which is the iframe window in the
+  // configurator preview. Dispatch resize into each iframe so the widget
+  // re-evaluates its mobile/desktop layout after the preview shell is resized.
+  const iframes = Array.from(previewStage.querySelectorAll<HTMLIFrameElement>('iframe[data-mount-id]'));
+  for (const iframe of iframes) {
+    iframe.contentWindow?.dispatchEvent(new Event('resize'));
+  }
 }
 
 function scrollToWidgetArea(scale: number): void {
@@ -1902,7 +2030,8 @@ function updatePreviewWidgets(): void {
     return (
       !wrapper ||
       wrapper.dataset.shellMode !== spec.shellMode ||
-      wrapper.dataset.backgroundState !== spec.backgroundState
+      wrapper.dataset.backgroundState !== spec.backgroundState ||
+      wrapper.dataset.layoutSignature !== spec.layoutSignature
     );
   });
 
@@ -1922,7 +2051,14 @@ function updatePreviewWidgets(): void {
   syncPreviewWrapperShellAndShellMode(specs);
   updatePreviewStatusLabel();
   refreshInlineZones();
-  injectPreviewArtifacts();
+
+  if (state.get('features.artifacts.enabled')) {
+    injectPreviewArtifacts();
+  } else {
+    for (const controller of previewControllers) {
+      controller.clearArtifacts();
+    }
+  }
 }
 
 // ─── Contrast summary ────────────────────────────────────────────

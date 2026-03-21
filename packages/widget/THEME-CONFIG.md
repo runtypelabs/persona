@@ -484,6 +484,7 @@ Common tokens have short aliases for easier use in custom CSS:
 | `position` | `"bottom-right" \| "bottom-left" \| "top-right" \| "top-left"` |
 | `autoExpand` | Auto-open widget on page load |
 | `width` | Chat panel width |
+| `mountMode` | `"floating" \| "docked"` |
 
 ### Full Height & Sidebar
 | Property | Default | Description |
@@ -492,6 +493,15 @@ Common tokens have short aliases for easier use in custom CSS:
 | `sidebarMode` | `false` | Position as sidebar flush with viewport |
 | `sidebarWidth` | `"420px"` | Sidebar width |
 | `heightOffset` | `0` | Pixel offset to subtract from calculated panel height |
+
+### Docked Panel
+| Property | Default | Description |
+|----------|---------|-------------|
+| `dock.side` | `"right"` | Which side of the wrapped target container the panel should appear on |
+| `dock.width` | `"420px"` | Expanded dock width |
+| `dock.collapsedWidth` | `"72px"` | Collapsed launcher rail width |
+
+When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target container and renders Persona in a sibling dock slot. `body` and `html` are not valid targets. `position`, `fullHeight`, and `sidebarMode` are ignored in docked mode.
 
 ### Agent Icon
 | Property | Description |

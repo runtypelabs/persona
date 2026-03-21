@@ -1,6 +1,7 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetConfig } from "../types";
 import { positionMap } from "../utils/positioning";
+import { isDockedMountMode, resolveDockConfig } from "../utils/dock";
 import { renderLucideIcon } from "../utils/icons";
 
 export interface LauncherButton {
@@ -28,6 +29,7 @@ export const createLauncherButton = (
 
   const update = (newConfig: AgentWidgetConfig) => {
     const launcher = newConfig.launcher ?? {};
+    const dockedMode = isDockedMountMode(newConfig);
 
     const titleEl = button.querySelector("[data-role='launcher-title']");
     if (titleEl) {
@@ -42,7 +44,7 @@ export const createLauncherButton = (
     // Hide/show text container
     const textContainer = button.querySelector(".persona-flex-col");
     if (textContainer) {
-      if (launcher.textHidden) {
+      if (launcher.textHidden || dockedMode) {
         (textContainer as HTMLElement).style.display = "none";
       } else {
         (textContainer as HTMLElement).style.display = "";
@@ -130,7 +132,7 @@ export const createLauncherButton = (
       if (launcher.callToActionIconHidden) {
         callToActionIconEl.style.display = "none";
       } else {
-        callToActionIconEl.style.display = "";
+        callToActionIconEl.style.display = dockedMode ? "none" : "";
         
         // Clear existing content
         callToActionIconEl.innerHTML = "";
@@ -158,12 +160,12 @@ export const createLauncherButton = (
         ? positionMap[launcher.position]
         : positionMap["bottom-right"];
 
-    // Removed hardcoded border/shadow classes (persona-shadow-lg, persona-border, persona-border-gray-200)
-    // These are now applied via inline styles from config
-    const base =
+    const floatingBase =
       "persona-fixed persona-flex persona-items-center persona-gap-3 persona-rounded-launcher persona-bg-persona-surface persona-py-2.5 persona-pl-3 persona-pr-3 persona-transition hover:persona-translate-y-[-2px] persona-cursor-pointer persona-z-50";
+    const dockedBase =
+      "persona-relative persona-mt-4 persona-mb-4 persona-mx-auto persona-flex persona-items-center persona-justify-center persona-rounded-launcher persona-bg-persona-surface persona-transition hover:persona-translate-y-[-2px] persona-cursor-pointer";
 
-    button.className = `${base} ${positionClass}`;
+    button.className = dockedMode ? dockedBase : `${floatingBase} ${positionClass}`;
     
     // Apply launcher border and shadow from config (with defaults matching previous Tailwind classes)
     const defaultBorder = "1px solid var(--persona-border, #e5e7eb)";
@@ -171,6 +173,21 @@ export const createLauncherButton = (
     
     button.style.border = launcher.border ?? defaultBorder;
     button.style.boxShadow = launcher.shadow ?? defaultShadow;
+
+    if (dockedMode) {
+      const dock = resolveDockConfig(newConfig);
+      button.style.width = `calc(${dock.collapsedWidth} - 16px)`;
+      button.style.minWidth = "40px";
+      button.style.maxWidth = `calc(${dock.collapsedWidth} - 16px)`;
+      button.style.justifyContent = "center";
+      button.style.padding = "12px 0";
+    } else {
+      button.style.width = "";
+      button.style.minWidth = "";
+      button.style.maxWidth = "";
+      button.style.justifyContent = "";
+      button.style.padding = "";
+    }
   };
 
   const destroy = () => {
@@ -189,5 +206,3 @@ export const createLauncherButton = (
     destroy
   };
 };
-
-

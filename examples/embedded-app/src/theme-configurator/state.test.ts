@@ -25,7 +25,16 @@ function mockMatchMedia(matches: boolean): void {
 vi.mock('@runtypelabs/persona', () => ({
   createAgentExperience: vi.fn(() => mockController),
   markdownPostprocessor: vi.fn((x: string) => x),
-  DEFAULT_WIDGET_CONFIG: { apiUrl: 'http://test', parserType: 'plain' },
+  DEFAULT_WIDGET_CONFIG: {
+    apiUrl: 'http://test',
+    parserType: 'plain',
+    launcher: {
+      enabled: true,
+      clearChat: {},
+      mountMode: 'floating',
+      dock: { side: 'right', width: '420px', collapsedWidth: '72px' },
+    },
+  },
   createTheme: vi.fn((config?: Record<string, unknown>) => config ?? {}),
   applyThemeVariables: vi.fn(),
   migrateV1Theme: vi.fn((x: unknown) => x),
@@ -214,6 +223,19 @@ describe('theme configurator state - editor ui, preview fixtures, and history', 
     expect(previewConfig.launcher?.enabled).toBe(true);
     expect(previewConfig.launcher?.autoExpand).toBe(true);
     expect(previewConfig.initialMessages?.length).toBeGreaterThan(1);
+  });
+
+  test('buildPreviewConfig preserves dock config and merges dock defaults', () => {
+    state.set('launcher.mountMode', 'docked');
+    state.set('launcher.dock.side', 'left');
+    state.set('launcher.dock.width', '480px');
+
+    const previewConfig = state.buildPreviewConfig(undefined, 'light', 'conversation');
+
+    expect(previewConfig.launcher?.mountMode).toBe('docked');
+    expect(previewConfig.launcher?.dock?.side).toBe('left');
+    expect(previewConfig.launcher?.dock?.width).toBe('480px');
+    expect(previewConfig.launcher?.dock?.collapsedWidth).toBe('72px');
   });
 
   test('undo and redo restore snapshot history', () => {

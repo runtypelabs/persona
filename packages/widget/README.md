@@ -64,6 +64,24 @@ const controller = initAgentWidget({
 document.querySelector('#dark-mode')?.addEventListener('click', () => {
   controller.update({ theme: { surface: '#0f172a', primary: '#f8fafc' } });
 });
+
+// Docked panel that wraps a concrete workspace container
+const docked = initAgentWidget({
+  target: '#workspace-main',
+  config: {
+    ...DEFAULT_WIDGET_CONFIG,
+    apiUrl: proxyUrl,
+    launcher: {
+      ...DEFAULT_WIDGET_CONFIG.launcher,
+      mountMode: 'docked',
+      dock: {
+        side: 'right',
+        width: '420px',
+        collapsedWidth: '72px'
+      }
+    }
+  }
+});
 ```
 
 ### Initialization options
@@ -77,6 +95,8 @@ document.querySelector('#dark-mode')?.addEventListener('click', () => {
 | `useShadowDom` | `boolean` | Use Shadow DOM for style isolation (default: `true`). |
 | `onReady` | `() => void` | Callback fired when widget is initialized. |
 | `windowKey` | `string` | If provided, stores the controller on `window[windowKey]` for global access. Automatically cleaned up on `destroy()`. |
+
+When `config.launcher.mountMode` is `'docked'`, `target` is treated as the page container that Persona should wrap. Use a concrete element such as `#workspace-main`; `body` and `html` are rejected.
 
 > **Security note:** When you return HTML from `postprocessMessage`, make sure you sanitise it before injecting into the page. The provided postprocessors (`markdownPostprocessor`, `directivePostprocessor`) do not perform sanitisation.
 
@@ -1405,6 +1425,8 @@ Controls the floating launcher button and panel.
 | `subtitle` | `string?` | Launcher header subtitle text. |
 | `iconUrl` | `string?` | URL for the launcher icon image. |
 | `position` | `'bottom-right' \| 'bottom-left' \| 'top-right' \| 'top-left'?` | Screen corner position. |
+| `mountMode` | `'floating' \| 'docked'?` | Mount as the existing floating launcher or wrap the target with a docked side panel. Default: `'floating'`. |
+| `dock` | `{ side?: 'left' \| 'right'; width?: string; collapsedWidth?: string }?` | Docked panel sizing and side. Defaults: right / `420px` / `72px`. |
 | `width` | `string?` | Width of the launcher button. |
 | `fullHeight` | `boolean?` | Fill the full height of the container. Default: `false`. |
 | `sidebarMode` | `boolean?` | Flush sidebar layout with no border-radius or margins. Default: `false`. |
@@ -1413,6 +1435,8 @@ Controls the floating launcher button and panel.
 | `clearChat` | `AgentWidgetClearChatConfig?` | Clear chat button configuration (enabled, placement, icon, styling). |
 | `border` | `string?` | Border style for the launcher button. Default: `'1px solid #e5e7eb'`. |
 | `shadow` | `string?` | Box shadow for the launcher button. |
+
+In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because the widget fills the dock slot created around the target container.
 
 #### Layout
 
