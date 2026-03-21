@@ -270,6 +270,8 @@ export default defineConfig({
         'approval-demo': path.resolve(__dirname, 'approval-demo.html'),
         // Focus input demo
         'focus-input-demo': path.resolve(__dirname, 'focus-input-demo.html'),
+        'artifact-demo': path.resolve(__dirname, 'artifact-demo.html'),
+        'fullscreen-assistant-demo': path.resolve(__dirname, 'fullscreen-assistant-demo.html'),
       }
     }
   },

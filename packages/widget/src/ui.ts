@@ -20,7 +20,9 @@ import {
   InjectSystemMessageOptions,
   LoadingIndicatorRenderContext,
   IdleIndicatorRenderContext,
-  VoiceStatus
+  VoiceStatus,
+  PersonaArtifactRecord,
+  PersonaArtifactManualUpsert
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
@@ -43,6 +45,14 @@ import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
 import { createEventStreamView } from "./components/event-stream-view";
+import { createArtifactPane, type ArtifactPaneApi } from "./components/artifact-pane";
+import {
+  artifactsSidebarEnabled,
+  applyArtifactLayoutCssVars,
+  applyArtifactPaneAppearance,
+  shouldExpandLauncherForArtifacts
+} from "./utils/artifact-gate";
+import { readFlexGapPx, resolveArtifactPaneWidthPx } from "./utils/artifact-resize";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
 import { mergeWithDefaults } from "./defaults";
@@ -277,6 +287,14 @@ type Controller = {
   hideEventStream: () => void;
   /** Returns current visibility state of the event stream panel */
   isEventStreamVisible: () => boolean;
+  /** Show artifact sidebar (no-op if features.artifacts.enabled is false) */
+  showArtifacts: () => void;
+  /** Hide artifact sidebar */
+  hideArtifacts: () => void;
+  /** Upsert an artifact programmatically */
+  upsertArtifact: (manual: PersonaArtifactManualUpsert) => PersonaArtifactRecord | null;
+  selectArtifact: (id: string) => void;
+  clearArtifacts: () => void;
   /**
    * Focus the chat input. Returns true if focus succeeded, false if panel is closed
    * (launcher mode) or textarea is unavailable.
@@ -592,20 +610,11 @@ export const createAgentExperience = (
   let attachmentInput: HTMLInputElement | null = panelElements.attachmentInput;
   let attachmentPreviewsContainer: HTMLElement | null = panelElements.attachmentPreviewsContainer;
 
-  // Initialize attachment manager if attachments are enabled
+  // Initialized after composer plugins rebind footer DOM (see `bindComposerRefsFromFooter`)
   let attachmentManager: AttachmentManager | null = null;
-  if (config.attachments?.enabled && attachmentInput && attachmentPreviewsContainer) {
-    attachmentManager = AttachmentManager.fromConfig(config.attachments);
-    attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
 
-    // Wire up file input change event
-    attachmentInput.addEventListener("change", (e) => {
-      const target = e.target as HTMLInputElement;
-      attachmentManager?.handleFileSelect(target.files);
-      // Reset input so same file can be selected again
-      target.value = "";
-    });
-  }
+  /** Wired after `handleMicButtonClick` is defined; used by `renderComposer` `onVoiceToggle`. */
+  let composerVoiceBridge: (() => void) | null = null;
 
   // Plugin hook: renderHeader - allow plugins to provide custom header
   const headerPlugin = plugins.find(p => p.renderHeader);
@@ -724,9 +733,38 @@ export const createAgentExperience = (
     });
   }
 
+  const ensureComposerAttachmentSurface = (rootFooter: HTMLElement) => {
+    const att = config.attachments;
+    if (!att?.enabled) return;
+    let previews = rootFooter.querySelector<HTMLElement>(".persona-attachment-previews");
+    if (!previews) {
+      previews = createElement(
+        "div",
+        "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2"
+      );
+      previews.style.display = "none";
+      const form = rootFooter.querySelector("[data-persona-composer-form]");
+      if (form?.parentNode) {
+        form.parentNode.insertBefore(previews, form);
+      } else {
+        rootFooter.insertBefore(previews, rootFooter.firstChild);
+      }
+    }
+    if (!rootFooter.querySelector<HTMLInputElement>('input[type="file"]')) {
+      const fileIn = createElement("input") as HTMLInputElement;
+      fileIn.type = "file";
+      fileIn.accept = (att.allowedTypes ?? ALL_SUPPORTED_MIME_TYPES).join(",");
+      fileIn.multiple = (att.maxFiles ?? 4) > 1;
+      fileIn.style.display = "none";
+      fileIn.setAttribute("aria-label", att.buttonTooltipText ?? "Attach files");
+      rootFooter.appendChild(fileIn);
+    }
+  };
+
   // Plugin hook: renderComposer - allow plugins to provide custom composer
   const composerPlugin = plugins.find(p => p.renderComposer);
   if (composerPlugin?.renderComposer) {
+    const composerCfg = config.composer;
     const customComposer = composerPlugin.renderComposer({
       config,
       defaultRenderer: () => {
@@ -738,15 +776,69 @@ export const createAgentExperience = (
           session.sendMessage(text);
         }
       },
-      disabled: false
+      streaming: false,
+      disabled: false,
+      openAttachmentPicker: () => {
+        attachmentInput?.click();
+      },
+      models: composerCfg?.models,
+      selectedModelId: composerCfg?.selectedModelId,
+      onModelChange: (modelId: string) => {
+        config.composer = { ...config.composer, selectedModelId: modelId };
+      },
+      onVoiceToggle:
+        config.voiceRecognition?.enabled === true
+          ? () => {
+              composerVoiceBridge?.();
+            }
+          : undefined
     });
     if (customComposer) {
       // Replace the default footer with custom composer
       footer.replaceWith(customComposer);
       footer = customComposer;
-      // Note: When using custom composer, textarea/sendButton/etc may not exist
-      // The plugin is responsible for providing its own submit handling
     }
+  }
+
+  const bindComposerRefsFromFooter = (rootFooter: HTMLElement) => {
+    const form = rootFooter.querySelector<HTMLFormElement>("[data-persona-composer-form]");
+    const ta = rootFooter.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]");
+    const sb = rootFooter.querySelector<HTMLButtonElement>("[data-persona-composer-submit]");
+    const mic = rootFooter.querySelector<HTMLButtonElement>("[data-persona-composer-mic]");
+    const st = rootFooter.querySelector<HTMLElement>("[data-persona-composer-status]");
+    if (form) composerForm = form;
+    if (ta) textarea = ta;
+    if (sb) sendButton = sb;
+    if (mic) {
+      micButton = mic;
+      micButtonWrapper = mic.parentElement as HTMLElement | null;
+    }
+    if (st) statusText = st;
+    const sug = rootFooter.querySelector<HTMLElement>(
+      ".persona-mb-3.persona-flex.persona-flex-wrap.persona-gap-2"
+    );
+    if (sug) suggestions = sug;
+    const attBtn = rootFooter.querySelector<HTMLButtonElement>(".persona-attachment-button");
+    if (attBtn) {
+      attachmentButton = attBtn;
+      attachmentButtonWrapper = attBtn.parentElement as HTMLElement | null;
+    }
+    attachmentInput = rootFooter.querySelector<HTMLInputElement>('input[type="file"]');
+    attachmentPreviewsContainer = rootFooter.querySelector<HTMLElement>(".persona-attachment-previews");
+    const ar = rootFooter.querySelector<HTMLElement>(".persona-widget-composer .persona-flex.persona-items-center.persona-justify-between");
+    if (ar) _actionsRow = ar;
+  };
+  ensureComposerAttachmentSurface(footer);
+  bindComposerRefsFromFooter(footer);
+
+  if (config.attachments?.enabled && attachmentInput && attachmentPreviewsContainer) {
+    attachmentManager = AttachmentManager.fromConfig(config.attachments);
+    attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
+    attachmentInput.addEventListener("change", (e) => {
+      const target = e.target as HTMLInputElement;
+      attachmentManager?.handleFileSelect(target.files);
+      target.value = "";
+    });
   }
 
   // Slot system: allow custom content injection into specific regions
@@ -1022,7 +1114,232 @@ export const createAgentExperience = (
     session.resolveApproval(approvalMessage.approval, decision);
   });
 
-  panel.appendChild(container);
+  let artifactPaneApi: ArtifactPaneApi | null = null;
+  let artifactPanelResizeObs: ResizeObserver | null = null;
+  let lastArtifactsState: {
+    artifacts: PersonaArtifactRecord[];
+    selectedId: string | null;
+  } = { artifacts: [], selectedId: null };
+  let artifactsPaneUserHidden = false;
+  const sessionRef: { current: AgentWidgetSession | null } = { current: null };
+
+  let artifactSplitRoot: HTMLElement | null = null;
+  let artifactResizeHandle: HTMLElement | null = null;
+  let artifactResizeUnbind: (() => void) | null = null;
+  let artifactResizeDocEnd: (() => void) | null = null;
+  let reconcileArtifactResize: () => void = () => {};
+
+  function stopArtifactResizePointer() {
+    artifactResizeDocEnd?.();
+    artifactResizeDocEnd = null;
+  }
+
+  /** Flush split: overlay handle on the seam so it does not consume flex gap (extension + resizable). */
+  const positionExtensionArtifactResizeHandle = () => {
+    if (!artifactSplitRoot || !artifactResizeHandle) return;
+    const ext = mount.classList.contains("persona-artifact-appearance-seamless");
+    const ownerWin = mount.ownerDocument.defaultView ?? window;
+    const mobile = ownerWin.innerWidth <= 640;
+    if (!ext || mount.classList.contains("persona-artifact-narrow-host") || mobile) {
+      artifactResizeHandle.style.removeProperty("position");
+      artifactResizeHandle.style.removeProperty("left");
+      artifactResizeHandle.style.removeProperty("top");
+      artifactResizeHandle.style.removeProperty("bottom");
+      artifactResizeHandle.style.removeProperty("width");
+      artifactResizeHandle.style.removeProperty("z-index");
+      return;
+    }
+    const chat = artifactSplitRoot.firstElementChild as HTMLElement | null;
+    if (!chat || chat === artifactResizeHandle) return;
+    const hitW = 10;
+    artifactResizeHandle.style.position = "absolute";
+    artifactResizeHandle.style.top = "0";
+    artifactResizeHandle.style.bottom = "0";
+    artifactResizeHandle.style.width = `${hitW}px`;
+    artifactResizeHandle.style.zIndex = "5";
+    const left = chat.offsetWidth - hitW / 2;
+    artifactResizeHandle.style.left = `${Math.max(0, left)}px`;
+  };
+
+  /** No-op until artifact pane is created; replaced below when artifacts are enabled. */
+  let applyLauncherArtifactPanelWidth: () => void = () => {};
+
+  const syncArtifactPane = () => {
+    if (!artifactPaneApi || !artifactsSidebarEnabled(config)) return;
+    applyArtifactLayoutCssVars(mount, config);
+    applyArtifactPaneAppearance(mount, config);
+    applyLauncherArtifactPanelWidth();
+    const threshold = config.features?.artifacts?.layout?.narrowHostMaxWidth ?? 520;
+    const w = panel.getBoundingClientRect().width || 0;
+    mount.classList.toggle("persona-artifact-narrow-host", w > 0 && w <= threshold);
+    artifactPaneApi.update(lastArtifactsState);
+    if (artifactsPaneUserHidden) {
+      artifactPaneApi.setMobileOpen(false);
+      artifactPaneApi.element.classList.add("persona-hidden");
+      artifactPaneApi.backdrop?.classList.add("persona-hidden");
+    } else if (lastArtifactsState.artifacts.length > 0) {
+      // User chose “show” again (e.g. programmatic showArtifacts): clear dismiss chrome
+      // and force drawer open so narrow-host / mobile slide-out is not stuck off-screen.
+      artifactPaneApi.element.classList.remove("persona-hidden");
+      artifactPaneApi.setMobileOpen(true);
+    }
+    reconcileArtifactResize();
+  };
+
+  if (artifactsSidebarEnabled(config)) {
+    panel.style.position = "relative";
+    const chatColumn = createElement(
+      "div",
+      "persona-flex persona-flex-1 persona-flex-col persona-min-w-0 persona-min-h-0"
+    );
+    const splitRoot = createElement(
+      "div",
+      "persona-flex persona-h-full persona-w-full persona-min-h-0 persona-artifact-split-root"
+    );
+    chatColumn.appendChild(container);
+    artifactPaneApi = createArtifactPane(config, {
+      onSelect: (id) => sessionRef.current?.selectArtifact(id),
+      onDismiss: () => {
+        artifactsPaneUserHidden = true;
+        syncArtifactPane();
+      }
+    });
+    artifactPaneApi.element.classList.add("persona-hidden");
+    artifactSplitRoot = splitRoot;
+    splitRoot.appendChild(chatColumn);
+    splitRoot.appendChild(artifactPaneApi.element);
+    if (artifactPaneApi.backdrop) {
+      panel.appendChild(artifactPaneApi.backdrop);
+    }
+    panel.appendChild(splitRoot);
+
+    reconcileArtifactResize = () => {
+      if (!artifactSplitRoot || !artifactPaneApi) return;
+      const want = config.features?.artifacts?.layout?.resizable === true;
+      if (!want) {
+        artifactResizeUnbind?.();
+        artifactResizeUnbind = null;
+        stopArtifactResizePointer();
+        if (artifactResizeHandle) {
+          artifactResizeHandle.remove();
+          artifactResizeHandle = null;
+        }
+        artifactPaneApi.element.style.removeProperty("width");
+        artifactPaneApi.element.style.removeProperty("maxWidth");
+        return;
+      }
+      if (!artifactResizeHandle) {
+        const handle = createElement(
+          "div",
+          "persona-artifact-split-handle persona-shrink-0 persona-h-full"
+        );
+        handle.setAttribute("role", "separator");
+        handle.setAttribute("aria-orientation", "vertical");
+        handle.setAttribute("aria-label", "Resize artifacts panel");
+        handle.tabIndex = 0;
+
+        const doc = mount.ownerDocument;
+        const win = doc.defaultView ?? window;
+
+        const onPointerDown = (e: PointerEvent) => {
+          if (!artifactPaneApi || e.button !== 0) return;
+          if (mount.classList.contains("persona-artifact-narrow-host")) return;
+          if (win.innerWidth <= 640) return;
+          e.preventDefault();
+          stopArtifactResizePointer();
+          const startX = e.clientX;
+          const startW = artifactPaneApi.element.getBoundingClientRect().width;
+          const layout = config.features?.artifacts?.layout;
+          const onMove = (ev: PointerEvent) => {
+            const splitW = artifactSplitRoot!.getBoundingClientRect().width;
+            const extensionChrome = mount.classList.contains("persona-artifact-appearance-seamless");
+            const gapPx = extensionChrome ? 0 : readFlexGapPx(artifactSplitRoot!, win);
+            const handleW = extensionChrome ? 0 : handle.getBoundingClientRect().width || 6;
+            // Handle is left of the artifact: drag left widens artifact, drag right narrows it.
+            const next = startW - (ev.clientX - startX);
+            const clamped = resolveArtifactPaneWidthPx(
+              next,
+              splitW,
+              gapPx,
+              handleW,
+              layout?.resizableMinWidth,
+              layout?.resizableMaxWidth
+            );
+            artifactPaneApi!.element.style.width = `${clamped}px`;
+            artifactPaneApi!.element.style.maxWidth = "none";
+            positionExtensionArtifactResizeHandle();
+          };
+          const onUp = () => {
+            doc.removeEventListener("pointermove", onMove);
+            doc.removeEventListener("pointerup", onUp);
+            doc.removeEventListener("pointercancel", onUp);
+            artifactResizeDocEnd = null;
+            try {
+              handle.releasePointerCapture(e.pointerId);
+            } catch {
+              /* ignore */
+            }
+          };
+          artifactResizeDocEnd = onUp;
+          doc.addEventListener("pointermove", onMove);
+          doc.addEventListener("pointerup", onUp);
+          doc.addEventListener("pointercancel", onUp);
+          try {
+            handle.setPointerCapture(e.pointerId);
+          } catch {
+            /* ignore */
+          }
+        };
+
+        handle.addEventListener("pointerdown", onPointerDown);
+        artifactResizeHandle = handle;
+        artifactSplitRoot.insertBefore(handle, artifactPaneApi.element);
+        artifactResizeUnbind = () => {
+          handle.removeEventListener("pointerdown", onPointerDown);
+        };
+      }
+      if (artifactResizeHandle) {
+        const has =
+          lastArtifactsState.artifacts.length > 0 && !artifactsPaneUserHidden;
+        artifactResizeHandle.classList.toggle("persona-hidden", !has);
+        positionExtensionArtifactResizeHandle();
+      }
+    };
+
+    applyLauncherArtifactPanelWidth = () => {
+      if (!launcherEnabled || !artifactPaneApi) return;
+      const sidebarMode = config.launcher?.sidebarMode ?? false;
+      if (sidebarMode) return;
+      const ownerWindow = mount.ownerDocument.defaultView ?? window;
+      const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
+      const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
+      if (mobileFullscreen && ownerWindow.innerWidth <= mobileBreakpoint) return;
+      if (!shouldExpandLauncherForArtifacts(config, launcherEnabled)) return;
+
+      const base = config.launcher?.width ?? config.launcherWidth ?? "min(400px, calc(100vw - 24px))";
+      const expanded =
+        config.features?.artifacts?.layout?.expandedPanelWidth ??
+        "min(720px, calc(100vw - 24px))";
+      const hasVisible =
+        lastArtifactsState.artifacts.length > 0 && !artifactsPaneUserHidden;
+      if (hasVisible) {
+        panel.style.width = expanded;
+        panel.style.maxWidth = expanded;
+      } else {
+        panel.style.width = base;
+        panel.style.maxWidth = base;
+      }
+    };
+
+    if (typeof ResizeObserver !== "undefined") {
+      artifactPanelResizeObs = new ResizeObserver(() => {
+        syncArtifactPane();
+      });
+      artifactPanelResizeObs.observe(panel);
+    }
+  } else {
+    panel.appendChild(container);
+  }
   mount.appendChild(wrapper);
 
   // Apply full-height and sidebar styles if enabled
@@ -1030,6 +1347,8 @@ export const createAgentExperience = (
   const applyFullHeightStyles = () => {
     const sidebarMode = config.launcher?.sidebarMode ?? false;
     const fullHeight = sidebarMode || (config.launcher?.fullHeight ?? false);
+    /** Script-tag / div embed: launcher off, host supplies a sized mount. */
+    const isInlineEmbed = config.launcher?.enabled === false;
     const theme = config.theme ?? {};
 
     // Mobile fullscreen detection
@@ -1137,9 +1456,15 @@ export const createAgentExperience = (
     const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
     const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
     if (!sidebarMode) {
-      panel.style.width = width;
-      panel.style.maxWidth = width;
+      if (isInlineEmbed && fullHeight) {
+        panel.style.width = "100%";
+        panel.style.maxWidth = "100%";
+      } else {
+        panel.style.width = width;
+        panel.style.maxWidth = width;
+      }
     }
+    applyLauncherArtifactPanelWidth();
 
     // Apply panel styling
     // Box-shadow is applied to panel (parent) instead of container to avoid
@@ -1150,15 +1475,15 @@ export const createAgentExperience = (
     container.style.border = panelBorder;
     container.style.borderRadius = panelBorderRadius;
 
-    // Check if this is inline embed mode (launcher disabled) vs launcher mode
-    const isInlineEmbed = config.launcher?.enabled === false;
-    
     if (fullHeight) {
       // Mount container
       mount.style.display = 'flex';
       mount.style.flexDirection = 'column';
       mount.style.height = '100%';
       mount.style.minHeight = '0';
+      if (isInlineEmbed) {
+        mount.style.width = '100%';
+      }
       
       // Wrapper
       // - Inline embed: needs overflow:hidden to contain the flex layout
@@ -1288,8 +1613,29 @@ export const createAgentExperience = (
   applyFullHeightStyles();
   // Apply theme variables after applyFullHeightStyles since it resets mount.style.cssText
   applyThemeVariables(mount, config);
+  applyArtifactLayoutCssVars(mount, config);
+  applyArtifactPaneAppearance(mount, config);
 
   const destroyCallbacks: Array<() => void> = [];
+
+  if (artifactPanelResizeObs) {
+    destroyCallbacks.push(() => {
+      artifactPanelResizeObs?.disconnect();
+      artifactPanelResizeObs = null;
+    });
+  }
+
+  destroyCallbacks.push(() => {
+    artifactResizeUnbind?.();
+    artifactResizeUnbind = null;
+    stopArtifactResizePointer();
+    if (artifactResizeHandle) {
+      artifactResizeHandle.remove();
+      artifactResizeHandle = null;
+    }
+    artifactPaneApi?.element.style.removeProperty("width");
+    artifactPaneApi?.element.style.removeProperty("maxWidth");
+  });
 
   // Event stream cleanup
   if (showEventStreamToggle) {
@@ -1689,36 +2035,59 @@ export const createAgentExperience = (
               transform
             });
             if (componentBubble) {
-              // Wrap component in standard bubble styling
-              const componentWrapper = document.createElement("div");
-              componentWrapper.className = [
-                "vanilla-message-bubble",
-                "persona-max-w-[85%]",
-                "persona-rounded-2xl",
-                "persona-bg-persona-surface",
-                "persona-border",
-                "persona-border-persona-message-border",
-                "persona-p-4"
-              ].join(" ");
-              // Set id for idiomorph matching
-              componentWrapper.id = `bubble-${message.id}`;
-              componentWrapper.setAttribute("data-message-id", message.id);
+              const wrapChrome = config.wrapComponentDirectiveInBubble !== false;
+              if (wrapChrome) {
+                const componentWrapper = document.createElement("div");
+                componentWrapper.className = [
+                  "vanilla-message-bubble",
+                  "persona-max-w-[85%]",
+                  "persona-rounded-2xl",
+                  "persona-bg-persona-surface",
+                  "persona-border",
+                  "persona-border-persona-message-border",
+                  "persona-p-4"
+                ].join(" ");
+                componentWrapper.id = `bubble-${message.id}`;
+                componentWrapper.setAttribute("data-message-id", message.id);
 
-              // Add text content above component if present (combined text+component response)
-              if (message.content && message.content.trim()) {
-                const textDiv = document.createElement("div");
-                textDiv.className = "persona-mb-3 persona-text-sm persona-leading-relaxed";
-                textDiv.innerHTML = transform({
-                  text: message.content,
-                  message,
-                  streaming: Boolean(message.streaming),
-                  raw: message.rawContent
-                });
-                componentWrapper.appendChild(textDiv);
+                if (message.content && message.content.trim()) {
+                  const textDiv = document.createElement("div");
+                  textDiv.className = "persona-mb-3 persona-text-sm persona-leading-relaxed";
+                  textDiv.innerHTML = transform({
+                    text: message.content,
+                    message,
+                    streaming: Boolean(message.streaming),
+                    raw: message.rawContent
+                  });
+                  componentWrapper.appendChild(textDiv);
+                }
+
+                componentWrapper.appendChild(componentBubble);
+                bubble = componentWrapper;
+              } else {
+                const stack = document.createElement("div");
+                stack.className =
+                  "persona-flex persona-flex-col persona-w-full persona-max-w-full persona-gap-3 persona-items-stretch";
+                stack.id = `bubble-${message.id}`;
+                stack.setAttribute("data-message-id", message.id);
+                stack.setAttribute("data-persona-component-directive", "true");
+
+                if (message.content && message.content.trim()) {
+                  const textDiv = document.createElement("div");
+                  textDiv.className =
+                    "persona-text-sm persona-leading-relaxed persona-text-persona-primary persona-w-full";
+                  textDiv.innerHTML = transform({
+                    text: message.content,
+                    message,
+                    streaming: Boolean(message.streaming),
+                    raw: message.rawContent
+                  });
+                  stack.appendChild(textDiv);
+                }
+
+                stack.appendChild(componentBubble);
+                bubble = stack;
               }
-
-              componentWrapper.appendChild(componentBubble);
-              bubble = componentWrapper;
             }
           }
         }
@@ -1776,6 +2145,9 @@ export const createAgentExperience = (
       wrapper.setAttribute("data-wrapper-id", message.id);
       if (message.role === "user") {
         wrapper.classList.add("persona-justify-end");
+      }
+      if (bubble?.getAttribute("data-persona-component-directive") === "true") {
+        wrapper.classList.add("persona-w-full");
       }
       wrapper.appendChild(bubble);
       tempContainer.appendChild(wrapper);
@@ -2012,6 +2384,17 @@ export const createAgentExperience = (
     suggestionsManager.buttons.forEach((btn) => {
       btn.disabled = disabled;
     });
+    footer.dataset.personaComposerStreaming = disabled ? "true" : "false";
+    footer.querySelectorAll<HTMLElement>("[data-persona-composer-disable-when-streaming]").forEach((el) => {
+      if (
+        el instanceof HTMLButtonElement ||
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el instanceof HTMLSelectElement
+      ) {
+        el.disabled = disabled;
+      }
+    });
   };
 
   const maybeFocusInput = () => {
@@ -2159,8 +2542,14 @@ export const createAgentExperience = (
           }
           break;
       }
+    },
+    onArtifactsState(state) {
+      lastArtifactsState = state;
+      syncArtifactPane();
     }
   });
+
+  sessionRef.current = session;
 
   // Setup Runtype voice provider when configured (connects WebSocket for server-side STT)
   if (config.voiceRecognition?.provider?.type === 'runtype') {
@@ -2754,6 +3143,8 @@ export const createAgentExperience = (
     }
   };
 
+  composerVoiceBridge = handleMicButtonClick;
+
   if (micButton) {
     micButton.addEventListener("click", handleMicButtonClick);
 
@@ -2893,6 +3284,7 @@ export const createAgentExperience = (
       panel.style.width = width;
       panel.style.maxWidth = width;
     }
+    applyLauncherArtifactPanelWidth();
 
     // In fullHeight mode, don't set a fixed height
     if (!fullHeight) {
@@ -3028,14 +3420,18 @@ export const createAgentExperience = (
 
   setupClearChatButton();
 
-  composerForm.addEventListener("submit", handleSubmit);
-  textarea.addEventListener("keydown", handleInputEnter);
-  textarea.addEventListener("paste", handleInputPaste);
+  if (composerForm) {
+    composerForm.addEventListener("submit", handleSubmit);
+  }
+  textarea?.addEventListener("keydown", handleInputEnter);
+  textarea?.addEventListener("paste", handleInputPaste);
 
   destroyCallbacks.push(() => {
-    composerForm.removeEventListener("submit", handleSubmit);
-    textarea.removeEventListener("keydown", handleInputEnter);
-    textarea.removeEventListener("paste", handleInputPaste);
+    if (composerForm) {
+      composerForm.removeEventListener("submit", handleSubmit);
+    }
+    textarea?.removeEventListener("keydown", handleInputEnter);
+    textarea?.removeEventListener("paste", handleInputPaste);
   });
 
   destroyCallbacks.push(() => {
@@ -3062,6 +3458,9 @@ export const createAgentExperience = (
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
       applyThemeVariables(mount, config);
+      applyArtifactLayoutCssVars(mount, config);
+      applyArtifactPaneAppearance(mount, config);
+      syncArtifactPane();
 
       // Re-setup theme observer if colorScheme changed
       if (config.colorScheme !== previousColorScheme) {
@@ -4257,6 +4656,7 @@ export const createAgentExperience = (
     },
     clearChat() {
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
+      artifactsPaneUserHidden = false;
       session.clearMessages();
 
       // Always clear the default localStorage key
@@ -4473,6 +4873,31 @@ export const createAgentExperience = (
     isEventStreamVisible(): boolean {
       return eventStreamVisible;
     },
+    showArtifacts(): void {
+      if (!artifactsSidebarEnabled(config)) return;
+      artifactsPaneUserHidden = false;
+      syncArtifactPane();
+      artifactPaneApi?.setMobileOpen(true);
+    },
+    hideArtifacts(): void {
+      if (!artifactsSidebarEnabled(config)) return;
+      artifactsPaneUserHidden = true;
+      syncArtifactPane();
+    },
+    upsertArtifact(manual: PersonaArtifactManualUpsert): PersonaArtifactRecord | null {
+      if (!artifactsSidebarEnabled(config)) return null;
+      // Programmatic adds should surface the pane even if the user previously hit Close.
+      artifactsPaneUserHidden = false;
+      return session.upsertArtifact(manual);
+    },
+    selectArtifact(id: string): void {
+      if (!artifactsSidebarEnabled(config)) return;
+      session.selectArtifact(id);
+    },
+    clearArtifacts(): void {
+      if (!artifactsSidebarEnabled(config)) return;
+      session.clearArtifacts();
+    },
     focusInput(): boolean {
       if (launcherEnabled && !open) return false;
       if (!textarea) return false;
@@ -4658,6 +5083,51 @@ export const createAgentExperience = (
         window.removeEventListener("persona:hideEventStream", handleHideEvent);
       });
     }
+
+    const handleShowArtifacts = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.showArtifacts();
+      }
+    };
+    const handleHideArtifacts = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.hideArtifacts();
+      }
+    };
+    const handleUpsertArtifact = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.instanceId && detail.instanceId !== instanceId) return;
+      if (detail?.artifact) {
+        controller.upsertArtifact(detail.artifact as PersonaArtifactManualUpsert);
+      }
+    };
+    const handleSelectArtifact = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.instanceId && detail.instanceId !== instanceId) return;
+      if (typeof detail?.id === "string") {
+        controller.selectArtifact(detail.id);
+      }
+    };
+    const handleClearArtifacts = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.clearArtifacts();
+      }
+    };
+    window.addEventListener("persona:showArtifacts", handleShowArtifacts);
+    window.addEventListener("persona:hideArtifacts", handleHideArtifacts);
+    window.addEventListener("persona:upsertArtifact", handleUpsertArtifact);
+    window.addEventListener("persona:selectArtifact", handleSelectArtifact);
+    window.addEventListener("persona:clearArtifacts", handleClearArtifacts);
+    destroyCallbacks.push(() => {
+      window.removeEventListener("persona:showArtifacts", handleShowArtifacts);
+      window.removeEventListener("persona:hideArtifacts", handleHideArtifacts);
+      window.removeEventListener("persona:upsertArtifact", handleUpsertArtifact);
+      window.removeEventListener("persona:selectArtifact", handleSelectArtifact);
+      window.removeEventListener("persona:clearArtifacts", handleClearArtifacts);
+    });
   }
 
   // ============================================================================

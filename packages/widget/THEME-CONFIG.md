@@ -761,10 +761,24 @@ config: {
 }
 ```
 
+### Persona theme `components.markdown` (SDK)
+
+These merge into `PersonaTheme` and are exposed as CSS variables on the widget root (`applyThemeVariables`).
+
+| Path | Consumer variable |
+|------|-------------------|
+| `inlineCode.background` / `foreground` | `--persona-md-inline-code-bg`, `--persona-md-inline-code-color` |
+| `link.foreground` | `--persona-md-link-color` (assistant chat markdown links + artifact pane markdown) |
+| `heading.h1.fontSize` / `fontWeight` | `--persona-md-h1-size`, `--persona-md-h1-weight` (only when set) |
+| `heading.h2.fontSize` / `fontWeight` | `--persona-md-h2-size`, `--persona-md-h2-weight` (only when set) |
+
 ### Markdown CSS Variables Reference
 
 ```css
 :root {
+  /* Links (theme-driven via --persona-md-link-color when set) */
+  --persona-md-link-color: var(--persona-accent, #3b82f6);
+
   /* Headers */
   --persona-md-h1-size: 1.5rem;
   --persona-md-h1-weight: 700;
@@ -841,6 +855,7 @@ config: {
 |----------|-------------|
 | `showReasoning` | Show AI reasoning/thinking steps |
 | `showToolCalls` | Show tool call invocations |
+| `artifacts` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (split/drawer sizing, launcher widen, resize handle, `paneAppearance`, `toolbarPreset` `default` \| `document`, `documentToolbarShowCopyLabel`, `documentToolbarShowCopyChevron`, `documentToolbarIconColor`, `documentToolbarToggleActiveBackground`, `documentToolbarToggleActiveBorderColor`, borders, `unifiedSplitChrome`, etc.). See README **Features** table for defaults. |
 
 ---
 

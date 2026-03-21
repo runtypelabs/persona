@@ -211,6 +211,39 @@ export interface MessageTokens {
     background: TokenReference<'color'>;
     text: TokenReference<'color'>;
     borderRadius: TokenReference<'radius'>;
+    /** Assistant bubble border color (CSS color). */
+    border?: TokenReference<'color'>;
+    /** Assistant bubble box-shadow (token ref or raw CSS, e.g. `none`). */
+    shadow?: string;
+  };
+}
+
+export interface MarkdownTokens {
+  inlineCode: {
+    background: TokenReference<'color'>;
+    foreground: TokenReference<'color'>;
+  };
+  /** Foreground for `<a>` in rendered markdown (assistant bubbles + artifact pane). */
+  link?: {
+    foreground: TokenReference<'color'>;
+  };
+  /**
+   * Body font for rendered markdown blocks (artifact pane + markdown bubbles).
+   * Use a raw CSS `font-family` value, e.g. `Georgia, serif`.
+   */
+  prose?: {
+    fontFamily?: string;
+  };
+  /** Optional heading scale overrides (raw CSS or resolvable token paths). */
+  heading?: {
+    h1?: {
+      fontSize?: string;
+      fontWeight?: string;
+    };
+    h2?: {
+      fontSize?: string;
+      fontWeight?: string;
+    };
   };
 }
 
@@ -253,6 +286,8 @@ export interface ComponentTokens {
   panel: PanelTokens;
   header: HeaderTokens;
   message: MessageTokens;
+  /** Markdown surfaces (chat + artifact pane). */
+  markdown?: MarkdownTokens;
   voice: VoiceTokens;
   approval: ApprovalTokens;
   attachment: AttachmentTokens;

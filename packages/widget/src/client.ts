@@ -16,7 +16,8 @@ import {
   ClientInitResponse,
   ClientChatRequest,
   ClientFeedbackRequest,
-  ClientFeedbackType
+  ClientFeedbackType,
+  PersonaArtifactKind
 } from "./types";
 import { 
   extractTextFromJson, 
@@ -25,6 +26,7 @@ import {
   createRegexJsonParser,
   createXmlParser
 } from "./utils/formatting";
+import { artifactsSidebarEnabled, artifactKindAllowedByFeature } from "./utils/artifact-gate";
 
 type DispatchOptions = {
   messages: AgentWidgetMessage[];
@@ -2106,6 +2108,104 @@ export class AgentWidgetClient {
             };
             emitMessage(existingMessage);
           }
+        } else if (
+          payloadType === "artifact_start" ||
+          payloadType === "artifact_delta" ||
+          payloadType === "artifact_update" ||
+          payloadType === "artifact_complete" ||
+          payloadType === "artifact"
+        ) {
+          if (!artifactsSidebarEnabled(this.config)) {
+            // Spec: ignore artifact events when sidebar feature is off
+          } else if (payloadType === "artifact_start") {
+            const at = payload.artifactType as PersonaArtifactKind;
+            if (!artifactKindAllowedByFeature(this.config, at)) {
+              /* filtered */
+            } else {
+              onEvent({
+                type: "artifact_start",
+                id: String(payload.id),
+                artifactType: at,
+                title: typeof payload.title === "string" ? payload.title : undefined,
+                component: typeof payload.component === "string" ? payload.component : undefined
+              });
+            }
+          } else if (payloadType === "artifact_delta") {
+            if (!artifactKindAllowedByFeature(this.config, "markdown")) {
+              /* */
+            } else {
+              onEvent({
+                type: "artifact_delta",
+                id: String(payload.id),
+                artDelta: typeof payload.delta === "string" ? payload.delta : String(payload.delta ?? "")
+              });
+            }
+          } else if (payloadType === "artifact_update") {
+            if (!artifactKindAllowedByFeature(this.config, "component")) {
+              /* */
+            } else {
+              const props =
+                payload.props && typeof payload.props === "object" && !Array.isArray(payload.props)
+                  ? (payload.props as Record<string, unknown>)
+                  : {};
+              onEvent({
+                type: "artifact_update",
+                id: String(payload.id),
+                props,
+                component: typeof payload.component === "string" ? payload.component : undefined
+              });
+            }
+          } else if (payloadType === "artifact_complete") {
+            onEvent({ type: "artifact_complete", id: String(payload.id) });
+          } else if (payloadType === "artifact") {
+            const at = payload.artifactType as PersonaArtifactKind;
+            if (!artifactKindAllowedByFeature(this.config, at)) {
+              /* */
+            } else {
+              const props =
+                payload.props && typeof payload.props === "object" && !Array.isArray(payload.props)
+                  ? (payload.props as Record<string, unknown>)
+                  : undefined;
+              onEvent({
+                type: "artifact",
+                id: String(payload.id),
+                artifactType: at,
+                title: typeof payload.title === "string" ? payload.title : undefined,
+                content: typeof payload.content === "string" ? payload.content : undefined,
+                component: typeof payload.component === "string" ? payload.component : undefined,
+                props
+              });
+            }
+          }
+        } else if (payloadType === "transcript_insert") {
+          const m = payload.message as Record<string, unknown> | undefined;
+          if (!m || typeof m !== "object") {
+            continue;
+          }
+          const id = String(m.id ?? `msg-${nextSequence()}`);
+          const roleRaw = m.role;
+          const role =
+            roleRaw === "user" ? "user" : roleRaw === "system" ? "system" : "assistant";
+          const msg: AgentWidgetMessage = {
+            id,
+            role,
+            content: typeof m.content === "string" ? m.content : "",
+            rawContent: typeof m.rawContent === "string" ? m.rawContent : undefined,
+            createdAt:
+              typeof m.createdAt === "string" ? m.createdAt : new Date().toISOString(),
+            streaming: m.streaming === true,
+            // Omit variant unless the stream specifies it. Do not default to `"assistant"`:
+            // that value is truthy and skips the component-directive branch (`!message.variant` in ui.ts).
+            ...(typeof m.variant === "string"
+              ? { variant: m.variant as AgentWidgetMessage["variant"] }
+              : {}),
+            sequence: nextSequence()
+          };
+          emitMessage(msg);
+          assistantMessage = null;
+          assistantMessageRef.current = null;
+          streamParsers.delete(id);
+          rawContentBuffers.delete(id);
         } else if (payloadType === "error" && payload.error) {
           onEvent({
             type: "error",

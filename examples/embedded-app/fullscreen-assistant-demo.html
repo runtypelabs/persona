@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fullscreen assistant demo – Persona</title>
+    <style>
+      /* Page shell only: full-viewport host for inline embed (no widget-internal selectors). */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        min-height: 100%;
+        background: #000000;
+      }
+      #fullscreen-assistant-demo-root {
+        box-sizing: border-box;
+        width: 100%;
+        height: 100%;
+        min-height: 100dvh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="fullscreen-assistant-demo-root"></div>
+    <script type="module" src="/src/fullscreen-assistant-demo.ts"></script>
+  </body>
+</html>

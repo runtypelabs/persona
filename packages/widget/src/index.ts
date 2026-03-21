@@ -7,6 +7,12 @@ export type {
   AgentWidgetConfig,
   AgentWidgetTheme,
   AgentWidgetFeatureFlags,
+  AgentWidgetArtifactsFeature,
+  AgentWidgetArtifactsLayoutConfig,
+  PersonaArtifactKind,
+  PersonaArtifactRecord,
+  PersonaArtifactManualUpsert,
+  ArtifactConfigPayload,
   AgentWidgetInitOptions,
   AgentWidgetMessage,
   AgentWidgetLauncherConfig,
@@ -25,6 +31,7 @@ export type {
   MessageContent,
   // Attachment config type
   AgentWidgetAttachmentsConfig,
+  AgentWidgetComposerConfig,
   // Layout types
   AgentWidgetLayoutConfig,
   AgentWidgetHeaderLayoutConfig,

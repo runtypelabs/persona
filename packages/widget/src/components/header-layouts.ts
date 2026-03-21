@@ -1,6 +1,10 @@
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
-import { AgentWidgetConfig, AgentWidgetHeaderLayoutConfig } from "../types";
+import {
+  AgentWidgetConfig,
+  AgentWidgetHeaderLayoutConfig,
+  AgentWidgetHeaderTrailingAction
+} from "../types";
 import { buildHeader, HeaderElements, attachHeaderToContainer as _attachHeaderToContainer } from "./header-builder";
 
 export interface HeaderLayoutContext {
@@ -8,6 +12,9 @@ export interface HeaderLayoutContext {
   showClose?: boolean;
   onClose?: () => void;
   onClearChat?: () => void;
+  /** Passed from `buildHeaderWithLayout` for minimal/default chrome extensions */
+  layoutHeaderConfig?: AgentWidgetHeaderLayoutConfig;
+  onHeaderAction?: (actionId: string) => void;
 }
 
 export type HeaderLayoutRenderer = (context: HeaderLayoutContext) => HeaderElements;
@@ -29,8 +36,32 @@ export const buildDefaultHeader: HeaderLayoutRenderer = (context) => {
  * Build minimal header layout
  * Simplified layout with just title and close button
  */
+function appendTrailingHeaderActions(
+  container: HTMLElement,
+  actions: AgentWidgetHeaderTrailingAction[] | undefined,
+  onAction?: (id: string) => void
+): void {
+  if (!actions?.length) return;
+  for (const a of actions) {
+    const btn = createElement(
+      "button",
+      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-md persona-border-none persona-bg-transparent persona-p-0 persona-text-persona-muted hover:persona-opacity-80"
+    ) as HTMLButtonElement;
+    btn.type = "button";
+    btn.setAttribute("aria-label", a.ariaLabel ?? a.label ?? a.id);
+    if (a.icon) {
+      const ic = renderLucideIcon(a.icon, 14, "currentColor", 2);
+      if (ic) btn.appendChild(ic);
+    } else if (a.label) {
+      btn.textContent = a.label;
+    }
+    btn.addEventListener("click", () => onAction?.(a.id));
+    container.appendChild(btn);
+  }
+}
+
 export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
-  const { config, showClose = true, onClose } = context;
+  const { config, showClose = true, onClose, layoutHeaderConfig, onHeaderAction } = context;
   const launcher = config?.launcher ?? {};
 
   const header = createElement(
@@ -38,11 +69,23 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     "persona-flex persona-items-center persona-justify-between persona-bg-persona-surface persona-px-6 persona-py-4 persona-border-b-persona-divider"
   );
 
+  const titleRow = createElement(
+    "div",
+    "persona-flex persona-min-w-0 persona-flex-1 persona-items-center persona-gap-1"
+  );
+
   // Title only (no icon, no subtitle)
-  const title = createElement("span", "persona-text-base persona-font-semibold");
+  const title = createElement("span", "persona-text-base persona-font-semibold persona-truncate");
   title.textContent = launcher.title ?? "Chat Assistant";
 
-  header.appendChild(title);
+  titleRow.appendChild(title);
+  appendTrailingHeaderActions(
+    titleRow,
+    layoutHeaderConfig?.trailingActions,
+    layoutHeaderConfig?.onAction ?? onHeaderAction
+  );
+
+  header.appendChild(titleRow);
 
   // Close button
   const closeButtonSize = launcher.closeButtonSize ?? "32px";
@@ -77,6 +120,8 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 
   closeButtonWrapper.appendChild(closeButton);
   header.appendChild(closeButtonWrapper);
+
+  // title was moved into titleRow; keep headerTitle ref pointing at title for updateController
 
   // Create placeholder elements for compatibility
   const iconHolder = createElement("div");
@@ -126,7 +171,9 @@ export const buildHeaderWithLayout = (
     const customHeader = layoutConfig.render({
       config,
       onClose: context?.onClose,
-      onClearChat: context?.onClearChat
+      onClearChat: context?.onClearChat,
+      trailingActions: layoutConfig.trailingActions,
+      onAction: layoutConfig.onAction
     });
     
     // Wrap in HeaderElements structure
@@ -160,7 +207,9 @@ export const buildHeaderWithLayout = (
     config,
     showClose: layoutConfig?.showCloseButton ?? context?.showClose ?? true,
     onClose: context?.onClose,
-    onClearChat: context?.onClearChat
+    onClearChat: context?.onClearChat,
+    layoutHeaderConfig: layoutConfig,
+    onHeaderAction: layoutConfig?.onAction
   });
 
   // Apply visibility settings from layout config

@@ -48,6 +48,7 @@ describe('theme utils', () => {
     const theme = createTheme({
       palette: {
         radius: {
+          none: '0px',
           sm: '2px',
           md: '6px',
           lg: '10px',
@@ -79,7 +80,7 @@ describe('theme utils', () => {
           },
         },
       },
-    });
+    } as any);
 
     const cssVars = themeToCssVariables(theme);
 
@@ -92,5 +93,33 @@ describe('theme utils', () => {
     expect(cssVars['--persona-message-assistant-radius']).toBe('10px');
     expect(cssVars['--persona-launcher-radius']).toBe('9999px');
     expect(cssVars['--persona-button-radius']).toBe('6px');
+  });
+
+  it('maps markdown link and optional heading tokens to consumer CSS vars', () => {
+    const theme = createTheme({
+      components: {
+        markdown: {
+          link: {
+            foreground: '#60a5fa',
+          },
+          prose: {
+            fontFamily: 'Georgia, serif',
+          },
+          heading: {
+            h1: { fontSize: '1.375rem', fontWeight: '650' },
+            h2: { fontSize: '1.125rem', fontWeight: '600' },
+          },
+        },
+      },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-md-link-color']).toBe('#60a5fa');
+    expect(cssVars['--persona-md-h1-size']).toBe('1.375rem');
+    expect(cssVars['--persona-md-h1-weight']).toBe('650');
+    expect(cssVars['--persona-md-h2-size']).toBe('1.125rem');
+    expect(cssVars['--persona-md-h2-weight']).toBe('600');
+    expect(cssVars['--persona-md-prose-font-family']).toBe('Georgia, serif');
   });
 });

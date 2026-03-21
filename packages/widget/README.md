@@ -1674,6 +1674,37 @@ config: {
 | `showToolCalls` | `boolean?` | Show tool usage bubbles. Default: `true`. |
 | `showEventStreamToggle` | `boolean?` | Show the event stream inspector toggle in the header. Default: `false`. |
 | `eventStream` | `EventStreamConfig?` | Event stream inspector configuration: `badgeColors`, `timestampFormat`, `showSequenceNumbers`, `maxEvents`, `descriptionFields`, `classNames`. |
+| `artifacts` | `AgentWidgetArtifactsFeature?` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (see below). |
+
+**`features.artifacts`** — `AgentWidgetArtifactsFeature`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `enabled` | `boolean?` | When `true`, shows the artifact pane and handles `artifact_*` SSE events. |
+| `allowedTypes` | `('markdown' \| 'component')[]?` | If set, other artifact kinds are ignored client-side. |
+| `layout` | `AgentWidgetArtifactsLayoutConfig?` | Split/drawer sizing and launcher widen behavior. |
+
+**`features.artifacts.layout`** — `AgentWidgetArtifactsLayoutConfig`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `splitGap` | `string?` | CSS gap between chat column and artifact pane. Default: `0.5rem`. |
+| `paneWidth` | `string?` | Artifact column width in split mode. Default: `40%`. |
+| `paneMaxWidth` | `string?` | Max width of artifact column. Default: `28rem`. |
+| `paneMinWidth` | `string?` | Optional min width of artifact column. |
+| `narrowHostMaxWidth` | `number?` | If the **panel** is at most this many px wide, artifacts use an in-panel drawer instead of split. Default: `520`. |
+| `expandLauncherPanelWhenOpen` | `boolean?` | When not `false`, the floating panel grows while artifacts are visible (not user-dismissed). Default: widens for launcher mode. |
+| `expandedPanelWidth` | `string?` | CSS width when expanded. Default: `min(720px, calc(100vw - 24px))`. |
+| `resizable` | `boolean?` | When `true`, draggable handle between chat and artifact in desktop split mode. Default: `false`. |
+| `resizableMinWidth` | `string?` | Min artifact width while resizing; `px` only (e.g. `"200px"`). Default: `200px`. |
+| `resizableMaxWidth` | `string?` | Optional max artifact width cap (`px` only); layout still limits by panel width. |
+| `paneAppearance` | `'panel' \| 'seamless'?` | `panel` (default) — bordered sidebar with left border, gap, and shadow. `seamless` — flush with chat: no border or shadow, container background, zero gap (with `resizable`, the drag handle overlays the seam). |
+| `paneBorderRadius` | `string?` | Border radius on the artifact pane. Works with any `paneAppearance`. |
+| `paneShadow` | `string?` | CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow. |
+| `paneBorder` | `string?` | Full CSS `border` shorthand on the artifact pane (e.g. `"1px solid #cccccc"`). Overrides default/`rounded` borders. If set, `paneBorderLeft` is ignored. |
+| `paneBorderLeft` | `string?` | `border-left` shorthand only — typical for the split edge next to chat (works with or without `resizable`). Example: `"1px solid #cccccc"`. |
+| `unifiedSplitChrome` | `boolean?` | Desktop split only: square the main chat card’s **top-right / bottom-right** radii and round the artifact pane’s **top-right / bottom-right** to match the panel (`--persona-radius-lg`) so both columns read as one shell. |
+| `unifiedSplitOuterRadius` | `string?` | Outer-right radius on the artifact side when `unifiedSplitChrome` is true. If omitted, uses `--persona-radius-lg`, or `paneBorderRadius` when `paneAppearance: 'rounded'`. |
 
 #### State & Storage
 

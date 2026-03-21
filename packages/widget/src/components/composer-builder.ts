@@ -79,10 +79,12 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     "form",
     `persona-widget-composer persona-flex persona-flex-col persona-gap-2 persona-rounded-2xl persona-border persona-border-gray-200 persona-bg-persona-input-background persona-px-4 persona-py-3`
   ) as HTMLFormElement;
+  composerForm.setAttribute("data-persona-composer-form", "");
   // Prevent form from getting focus styles
   composerForm.style.outline = "none";
 
   const textarea = createElement("textarea") as HTMLTextAreaElement;
+  textarea.setAttribute("data-persona-composer-input", "");
   textarea.placeholder = config?.copy?.inputPlaceholder ?? "Type your message…";
   textarea.className =
     "persona-w-full persona-min-h-[24px] persona-resize-none persona-border-none persona-bg-transparent persona-text-sm persona-text-persona-primary focus:persona-outline-none focus:persona-border-none persona-composer-textarea";
@@ -156,6 +158,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   ) as HTMLButtonElement;
 
   sendButton.type = "submit";
+  sendButton.setAttribute("data-persona-composer-submit", "");
 
   if (useIcon) {
     // Icon mode: circular button
@@ -270,6 +273,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     ) as HTMLButtonElement;
 
     micButton.type = "button";
+    micButton.setAttribute("data-persona-composer-mic", "");
     micButton.setAttribute("aria-label", "Start voice recognition");
 
     const micIconName = voiceRecognitionConfig.iconName ?? "mic";
@@ -499,6 +503,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     "div",
     "persona-mt-2 persona-text-right persona-text-xs persona-text-persona-muted"
   );
+  statusText.setAttribute("data-persona-composer-status", "");
 
   // Apply status indicator config
   const statusConfig = config?.statusIndicator ?? {};

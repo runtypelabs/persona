@@ -276,6 +276,20 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       background: 'semantic.colors.container',
       text: 'semantic.colors.text',
       borderRadius: 'palette.radius.lg',
+      border: 'semantic.colors.border',
+      shadow: 'palette.shadows.sm',
+    },
+  },
+  markdown: {
+    inlineCode: {
+      background: 'semantic.colors.container',
+      foreground: 'semantic.colors.text',
+    },
+    link: {
+      foreground: 'semantic.colors.accent',
+    },
+    prose: {
+      fontFamily: 'inherit',
     },
   },
   voice: {
@@ -629,6 +643,32 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-message-assistant-text'] ?? cssVars['--persona-text'];
   cssVars['--persona-message-assistant-border'] =
     cssVars['--persona-components-message-assistant-border'] ?? cssVars['--persona-border'];
+  cssVars['--persona-message-assistant-shadow'] =
+    cssVars['--persona-components-message-assistant-shadow'] ?? '0 1px 2px 0 rgb(0 0 0 / 0.05)';
+
+  cssVars['--persona-md-inline-code-bg'] =
+    cssVars['--persona-components-markdown-inlineCode-background'] ?? cssVars['--persona-container'];
+  cssVars['--persona-md-inline-code-color'] =
+    cssVars['--persona-components-markdown-inlineCode-foreground'] ?? cssVars['--persona-text'];
+
+  cssVars['--persona-md-link-color'] =
+    cssVars['--persona-components-markdown-link-foreground'] ??
+    cssVars['--persona-accent'] ??
+    '#3b82f6';
+
+  const mdH1Size = cssVars['--persona-components-markdown-heading-h1-fontSize'];
+  if (mdH1Size) cssVars['--persona-md-h1-size'] = mdH1Size;
+  const mdH1Weight = cssVars['--persona-components-markdown-heading-h1-fontWeight'];
+  if (mdH1Weight) cssVars['--persona-md-h1-weight'] = mdH1Weight;
+  const mdH2Size = cssVars['--persona-components-markdown-heading-h2-fontSize'];
+  if (mdH2Size) cssVars['--persona-md-h2-size'] = mdH2Size;
+  const mdH2Weight = cssVars['--persona-components-markdown-heading-h2-fontWeight'];
+  if (mdH2Weight) cssVars['--persona-md-h2-weight'] = mdH2Weight;
+
+  const mdProseFont = cssVars['--persona-components-markdown-prose-fontFamily'];
+  if (mdProseFont && mdProseFont !== 'inherit') {
+    cssVars['--persona-md-prose-font-family'] = mdProseFont;
+  }
 
   return cssVars;
 }

@@ -138,7 +138,14 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     "persona-flex persona-flex-col persona-gap-3"
   );
 
-  body.append(introCard, messagesWrapper);
+  const showWelcomeCard = config?.copy?.showWelcomeCard !== false;
+  if (!showWelcomeCard) {
+    body.classList.remove("persona-gap-6");
+    body.classList.add("persona-gap-3");
+    body.append(messagesWrapper);
+  } else {
+    body.append(introCard, messagesWrapper);
+  }
 
   // Build composer/footer using extracted builder
   const composerElements: ComposerElements = buildComposer({ config });
