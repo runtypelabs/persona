@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { createTheme, getActiveTheme, themeToCssVariables } from './theme';
+import { applyThemeVariables, createTheme, getActiveTheme, themeToCssVariables } from './theme';
 
 describe('theme utils', () => {
   afterEach(() => {
@@ -121,5 +121,37 @@ describe('theme utils', () => {
     expect(cssVars['--persona-md-h2-size']).toBe('1.125rem');
     expect(cssVars['--persona-md-h2-weight']).toBe('600');
     expect(cssVars['--persona-md-prose-font-family']).toBe('Georgia, serif');
+  });
+
+  it('maps flat AgentWidgetTheme bubble shadow keys to consumer CSS variables', () => {
+    const cfg = {
+      colorScheme: 'light' as const,
+      theme: {
+        toolBubbleShadow: 'none',
+        reasoningBubbleShadow: 'none',
+        messageUserShadow: 'none',
+        messageAssistantShadow: 'none',
+        composerShadow: 'none',
+      },
+    };
+
+    const active = getActiveTheme(cfg as any);
+    const cssVars = themeToCssVariables(active);
+
+    expect(cssVars['--persona-tool-bubble-shadow']).toBe('none');
+    expect(cssVars['--persona-reasoning-bubble-shadow']).toBe('none');
+    expect(cssVars['--persona-message-user-shadow']).toBe('none');
+    expect(cssVars['--persona-message-assistant-shadow']).toBe('none');
+    expect(cssVars['--persona-composer-shadow']).toBe('none');
+  });
+
+  it('lets config.toolCall.shadow override theme tool bubble shadow on the root element', () => {
+    const el = document.createElement('div');
+    applyThemeVariables(el, {
+      colorScheme: 'light',
+      theme: { toolBubbleShadow: '0 1px 2px rgba(255,0,0,0.5)' },
+      toolCall: { shadow: 'none' },
+    } as any);
+    expect(el.style.getPropertyValue('--persona-tool-bubble-shadow').trim()).toBe('none');
   });
 });

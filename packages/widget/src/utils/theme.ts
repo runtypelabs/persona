@@ -220,6 +220,14 @@ export const applyThemeVariables = (
   for (const [name, value] of Object.entries(cssVars)) {
     element.style.setProperty(name, value);
   }
+
+  const toolCallShadow = (config as AgentWidgetConfig | undefined)?.toolCall?.shadow;
+  if (toolCallShadow !== undefined) {
+    element.style.setProperty(
+      '--persona-tool-bubble-shadow',
+      toolCallShadow.trim() === '' ? 'none' : toolCallShadow
+    );
+  }
 };
 
 export const createThemeObserver = (

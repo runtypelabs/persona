@@ -271,6 +271,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       background: 'semantic.colors.primary',
       text: 'semantic.colors.textInverse',
       borderRadius: 'palette.radius.lg',
+      shadow: 'palette.shadows.sm',
     },
     assistant: {
       background: 'semantic.colors.container',
@@ -279,6 +280,15 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       border: 'semantic.colors.border',
       shadow: 'palette.shadows.sm',
     },
+  },
+  toolBubble: {
+    shadow: 'palette.shadows.sm',
+  },
+  reasoningBubble: {
+    shadow: 'palette.shadows.sm',
+  },
+  composer: {
+    shadow: 'none',
   },
   markdown: {
     inlineCode: {
@@ -637,6 +647,8 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-message-user-background'] ?? cssVars['--persona-accent'];
   cssVars['--persona-message-user-text'] =
     cssVars['--persona-components-message-user-text'] ?? cssVars['--persona-text-inverse'];
+  cssVars['--persona-message-user-shadow'] =
+    cssVars['--persona-components-message-user-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
   cssVars['--persona-message-assistant-bg'] =
     cssVars['--persona-components-message-assistant-background'] ?? cssVars['--persona-surface'];
   cssVars['--persona-message-assistant-text'] =
@@ -645,6 +657,13 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-message-assistant-border'] ?? cssVars['--persona-border'];
   cssVars['--persona-message-assistant-shadow'] =
     cssVars['--persona-components-message-assistant-shadow'] ?? '0 1px 2px 0 rgb(0 0 0 / 0.05)';
+
+  cssVars['--persona-tool-bubble-shadow'] =
+    cssVars['--persona-components-toolBubble-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
+  cssVars['--persona-reasoning-bubble-shadow'] =
+    cssVars['--persona-components-reasoningBubble-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
+  cssVars['--persona-composer-shadow'] =
+    cssVars['--persona-components-composer-shadow'] ?? 'none';
 
   cssVars['--persona-md-inline-code-bg'] =
     cssVars['--persona-components-markdown-inlineCode-background'] ?? cssVars['--persona-container'];

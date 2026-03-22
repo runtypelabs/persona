@@ -714,6 +714,28 @@ export type AgentWidgetTheme = {
    * @default "16px"
    */
   panelBorderRadius?: string;
+  /**
+   * Box-shadow for user message bubbles (bubble message layout).
+   * @example "none" | "0 1px 2px rgba(0,0,0,0.05)"
+   */
+  messageUserShadow?: string;
+  /**
+   * Box-shadow for assistant message bubbles (bubble message layout).
+   * Overrides the default subtle assistant shadow when set.
+   */
+  messageAssistantShadow?: string;
+  /**
+   * Box-shadow for tool-call / function-call rows.
+   */
+  toolBubbleShadow?: string;
+  /**
+   * Box-shadow for reasoning (“thinking”) rows.
+   */
+  reasoningBubbleShadow?: string;
+  /**
+   * Box-shadow on the composer (input) container.
+   */
+  composerShadow?: string;
 };
 
 export type AgentWidgetDockConfig = {
@@ -1141,6 +1163,8 @@ export type AgentWidgetApprovalConfig = {
 };
 
 export type AgentWidgetToolCallConfig = {
+  /** Box-shadow for tool-call bubbles; overrides `theme.toolBubbleShadow` when set. */
+  shadow?: string;
   backgroundColor?: string;
   borderColor?: string;
   borderWidth?: string;

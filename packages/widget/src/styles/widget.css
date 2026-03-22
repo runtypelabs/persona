@@ -927,6 +927,7 @@
 
 .persona-widget-composer {
   border-radius: var(--persona-input-radius, var(--persona-radius-lg, 0.5rem));
+  box-shadow: var(--persona-composer-shadow, none);
 }
 
 .persona-form-grid {
@@ -1166,6 +1167,18 @@
 
 #persona-root .vanilla-message-assistant-bubble.persona-shadow-sm {
   box-shadow: var(--persona-message-assistant-shadow, 0 1px 2px 0 rgb(0 0 0 / 0.05));
+}
+
+#persona-root .vanilla-message-user-bubble.persona-shadow-sm {
+  box-shadow: var(--persona-message-user-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
+}
+
+#persona-root .vanilla-tool-bubble.persona-shadow-sm {
+  box-shadow: var(--persona-tool-bubble-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
+}
+
+#persona-root .vanilla-reasoning-bubble.persona-shadow-sm {
+  box-shadow: var(--persona-reasoning-bubble-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
 }
 
 /* Artifact markdown (no .vanilla-message-bubble wrapper) */
