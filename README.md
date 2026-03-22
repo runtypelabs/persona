@@ -1,4 +1,4 @@
-## 💻 Vanilla Agent ✨ A configurable agent widget in plain JS for websites
+## 💻 Persona ✨ A configurable agent widget in plain JS for the web
 It's an AI chat SDK plus local demos and tooling. Flexible foundation to ship an always on custom assistant on a website.
 
 Runtype is pre-integrated as the AI platform powering the agent, while the UI and proxy are written so that you can point them at any SSE-capable platform.
