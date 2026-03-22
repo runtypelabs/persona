@@ -19,8 +19,6 @@ const DEFAULT_MAX_CONTEXT_MESSAGES = 20;
 const asError = (value: unknown) =>
   value instanceof Error ? value : new Error(String(value));
 
-const safeAwait = async <T>(value: T | Promise<T>) => Promise.resolve(value);
-
 const getModelContext = (): ModelContextLike | null => {
   if (typeof navigator === "undefined") return null;
   const modelContext = (navigator as any).modelContext;
@@ -36,6 +34,8 @@ export class WebMcpRuntime {
   private readonly registeredTools = new Set<string>();
   private initialized = false;
   private disabledAfterError = false;
+  private currentMessages: AgentWidgetMessage[] = [];
+  private currentSignal?: AbortSignal;
 
   constructor(
     private readonly config: AgentWidgetWebMcpConfig,
@@ -81,10 +81,13 @@ export class WebMcpRuntime {
       registeredTools: [...this.registeredTools]
     });
 
+    this.currentMessages = messages;
+    this.currentSignal = signal;
+
     try {
       const isFirstSync = !this.initialized;
       await this.syncContext(modelContext, messages);
-      await this.syncTools(modelContext, messages, signal);
+      await this.syncTools(modelContext, signal);
       this.initialized = true;
       this.status = {
         state: "ready",
@@ -124,7 +127,7 @@ export class WebMcpRuntime {
 
     try {
       if (typeof modelContext.clearContext === "function") {
-        await safeAwait(modelContext.clearContext());
+        await Promise.resolve(modelContext.clearContext());
       }
     } catch (error) {
       this.emit("dispose", this.getStatus(), asError(error));
@@ -160,7 +163,6 @@ export class WebMcpRuntime {
 
   private async syncTools(
     modelContext: ModelContextLike,
-    messages: AgentWidgetMessage[],
     signal?: AbortSignal
   ) {
     if (typeof modelContext.registerTool !== "function") return;
@@ -168,7 +170,7 @@ export class WebMcpRuntime {
     for (const tool of tools) {
       if (signal?.aborted) return;
       if (this.registeredTools.has(tool.name)) continue;
-      await this.tryRegisterTool(modelContext, tool, messages, signal);
+      await this.tryRegisterTool(modelContext, tool);
       this.registeredTools.add(tool.name);
       this.emit("tool-register", {
         state: "ready",
@@ -183,8 +185,8 @@ export class WebMcpRuntime {
     payload: Record<string, unknown>
   ) {
     const attempts: Array<() => Promise<unknown>> = [
-      () => safeAwait(provideContext(payload)),
-      () => safeAwait(provideContext("persona", payload))
+      () => Promise.resolve(provideContext(payload)),
+      () => Promise.resolve(provideContext("persona", payload))
     ];
     let lastError: Error | null = null;
     for (const attempt of attempts) {
@@ -202,9 +204,7 @@ export class WebMcpRuntime {
 
   private async tryRegisterTool(
     modelContext: ModelContextLike,
-    tool: AgentWidgetWebMcpToolDefinition,
-    messages: AgentWidgetMessage[],
-    signal?: AbortSignal
+    tool: AgentWidgetWebMcpToolDefinition
   ) {
     const registerTool = modelContext.registerTool!.bind(modelContext);
     const definition = {
@@ -218,16 +218,16 @@ export class WebMcpRuntime {
         return { ok: false, error: "No tool handler configured" };
       }
       return tool.handler(input, {
-        messages,
+        messages: this.currentMessages,
         config: this.widgetConfig,
-        signal
+        signal: this.currentSignal
       });
     };
 
     const attempts: Array<() => Promise<unknown>> = [
-      () => safeAwait(registerTool(definition, handler)),
-      () => safeAwait(registerTool(tool.name, definition, handler)),
-      () => safeAwait(registerTool(tool.name, handler))
+      () => Promise.resolve(registerTool(definition, handler)),
+      () => Promise.resolve(registerTool(tool.name, definition, handler)),
+      () => Promise.resolve(registerTool(tool.name, handler))
     ];
 
     let lastError: Error | null = null;
@@ -248,8 +248,8 @@ export class WebMcpRuntime {
     if (typeof modelContext.unregisterTool !== "function") return;
     const unregisterTool = modelContext.unregisterTool.bind(modelContext);
     const attempts: Array<() => Promise<unknown>> = [
-      () => safeAwait(unregisterTool(name)),
-      () => safeAwait(unregisterTool({ name }))
+      () => Promise.resolve(unregisterTool(name)),
+      () => Promise.resolve(unregisterTool({ name }))
     ];
 
     let lastError: Error | null = null;

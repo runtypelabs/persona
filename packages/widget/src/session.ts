@@ -496,9 +496,9 @@ export class AgentWidgetSession {
     return this.client.submitNPSFeedback(rating, comment);
   }
 
-  public updateConfig(next: AgentWidgetConfig) {
-    void this.client.destroy();
+  public async updateConfig(next: AgentWidgetConfig) {
     const prevSSECallback = this.client.getSSEEventCallback();
+    await this.client.destroy();
     this.config = { ...this.config, ...next };
     this.client = new AgentWidgetClient(this.config);
     if (prevSSECallback) {
