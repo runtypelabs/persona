@@ -404,54 +404,30 @@
       const STORAGE_KEY = 'vanilla-agent-action-middleware';
       const NAV_FLAG_KEY = 'vanilla-agent-nav-flag';
 
-      function collectPageContext() {
-        const elements = [];
-        const seen = new Set();
-
-        const walker = document.createTreeWalker(
-          document.body,
-          NodeFilter.SHOW_ELEMENT,
-          null
-        );
-
-        let node = walker.currentNode;
-        while (node) {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            const element = node;
-            const className = element.className;
-
-            if (
-              typeof className === 'string' &&
-              className.trim() &&
-              element.innerText && element.innerText.trim()
-            ) {
-              const key = element.tagName + '.' + className;
-              if (!seen.has(key)) {
-                seen.add(key);
-                elements.push({
-                  className: className.trim(),
-                  innerText: element.innerText.trim().substring(0, 200),
-                  tagName: element.tagName.toLowerCase()
-                });
-              }
-            }
-          }
-          node = walker.nextNode();
+      function buildEnrichedPageContextAppendix() {
+        var AW = window.AgentWidget;
+        if (!AW || typeof AW.collectEnrichedPageContext !== 'function') {
+          return '\n\n---\n\n(Page context unavailable: load @runtypelabs/persona with collectEnrichedPageContext.)';
         }
-
-        return elements;
-      }
-
-      function formatPageContext(elements) {
-        if (elements.length === 0) {
-          return 'No interactive elements found on the page.';
+        try {
+          var elements = AW.collectEnrichedPageContext({
+            options: { mode: 'structured', maxElements: 80 },
+            rules: AW.defaultParseRules || []
+          });
+          var slice = elements.slice(0, 50);
+          var pageContext = AW.formatEnrichedContext(slice);
+          return (
+            '\n\n---\n\n## Page context (enriched)\n' +
+            'current_page: ' + JSON.stringify(window.location.pathname) + '\n' +
+            'page_url: ' + JSON.stringify(window.location.href) + '\n' +
+            'page_title: ' + JSON.stringify(document.title) + '\n\n' +
+            'page_elements (JSON):\n' + JSON.stringify(slice) + '\n\n' +
+            'page_context:\n' + pageContext
+          );
+        } catch (err) {
+          console.error('[Shopping Assistant] Enriched page context failed:', err);
+          return '\n\n---\n\n(Page context collection failed.)';
         }
-
-        const grouped = elements
-          .map(el => `- ${el.tagName}.${el.className}: "${el.innerText.substring(0, 100)}"`)
-          .join('\n');
-
-        return `Available page elements:\n${grouped}`;
       }
 
       function parseActionResponse(text) {
@@ -722,13 +698,12 @@
               const body = JSON.parse(init.body);
               const messages = body.messages || [];
 
-              const elements = collectPageContext();
-              const pageContext = formatPageContext(elements);
+              const appendix = buildEnrichedPageContextAppendix();
 
               if (messages.length > 0) {
                 const lastMessage = messages[messages.length - 1];
                 if (lastMessage.role === 'user') {
-                  lastMessage.content = lastMessage.content + '\n\n---\n\n' + pageContext;
+                  lastMessage.content = lastMessage.content + appendix;
                 }
               }
 
@@ -855,8 +830,8 @@
                       displayText = action.text;
                     }
 
-                    if (displayText && window.ChatWidget && window.ChatWidget.markdownPostprocessor) {
-                      return window.ChatWidget.markdownPostprocessor(displayText);
+                    if (displayText && window.AgentWidget && window.AgentWidget.markdownPostprocessor) {
+                      return window.AgentWidget.markdownPostprocessor(displayText);
                     }
                     return displayText;
                   } else {
@@ -864,23 +839,23 @@
                   }
                 }
 
-                if (window.ChatWidget && window.ChatWidget.markdownPostprocessor) {
-                  return window.ChatWidget.markdownPostprocessor(text);
+                if (window.AgentWidget && window.AgentWidget.markdownPostprocessor) {
+                  return window.AgentWidget.markdownPostprocessor(text);
                 }
                 return text;
               }
             }
 
-            if (window.ChatWidget && window.ChatWidget.markdownPostprocessor) {
-              return window.ChatWidget.markdownPostprocessor(text);
+            if (window.AgentWidget && window.AgentWidget.markdownPostprocessor) {
+              return window.AgentWidget.markdownPostprocessor(text);
             }
             return text;
           },
           debug: config.debug || false
         };
 
-        if (window.ChatWidget && window.ChatWidget.initChatWidget) {
-          const widgetController = window.ChatWidget.initChatWidget({
+        if (window.AgentWidget && window.AgentWidget.initAgentWidget) {
+          const widgetController = window.AgentWidget.initAgentWidget({
             target: '#shopping-assistant-root',
             config: widgetConfig,
             onReady: function() {
@@ -896,7 +871,7 @@
             window.shoppingAssistantController = widgetController;
           }
         } else {
-          console.error('[Shopping Assistant] ChatWidget not loaded. Make sure the widget script is loaded from CDN.');
+          console.error('[Shopping Assistant] AgentWidget not loaded. Make sure the widget script is loaded from CDN.');
         }
       }
 

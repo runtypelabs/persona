@@ -991,6 +991,10 @@ export class AgentWidgetSession {
     return [...this.artifacts.values()];
   }
 
+  public getArtifactById(id: string): PersonaArtifactRecord | undefined {
+    return this.artifacts.get(id);
+  }
+
   public getSelectedArtifactId(): string | null {
     return this.selectedArtifactId;
   }
@@ -1093,19 +1097,6 @@ export class AgentWidgetSession {
         if (row) row.status = "complete";
         break;
       }
-      case "artifact": {
-        this.artifacts.set(ev.id, {
-          id: ev.id,
-          artifactType: ev.artifactType,
-          title: ev.title,
-          status: "complete",
-          markdown: ev.artifactType === "markdown" ? (ev.content ?? "") : undefined,
-          component: ev.component,
-          props: ev.props
-        });
-        this.selectedArtifactId = ev.id;
-        break;
-      }
       default:
         return;
     }
@@ -1170,8 +1161,7 @@ export class AgentWidgetSession {
       event.type === "artifact_start" ||
       event.type === "artifact_delta" ||
       event.type === "artifact_update" ||
-      event.type === "artifact_complete" ||
-      event.type === "artifact"
+      event.type === "artifact_complete"
     ) {
       this.applyArtifactStreamEvent(event);
     }

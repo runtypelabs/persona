@@ -140,6 +140,21 @@ export {
   validateImageFile
 } from "./utils/content";
 export {
+  collectEnrichedPageContext,
+  formatEnrichedContext,
+  generateStableSelector,
+  defaultParseRules
+} from "./utils/dom-context";
+export type {
+  EnrichedPageElement,
+  DomContextOptions,
+  DomContextMode,
+  ParseOptionsConfig,
+  ParseRule,
+  RuleScoringContext,
+  FormatEnrichedContextOptions
+} from "./utils/dom-context";
+export {
   AttachmentManager,
   type PendingAttachment,
   type AttachmentManagerConfig

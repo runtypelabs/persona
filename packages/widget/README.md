@@ -344,6 +344,71 @@ const chat = initAgentWidget({ /* ... */ })
 window.chatController = chat
 ```
 
+### Enriched DOM context
+
+Use `collectEnrichedPageContext` and `formatEnrichedContext` to summarize the visible page for tools or metadata (selectors, roles, text, and optional structured card summaries). By default the collector runs in **structured** mode: it gathers candidates, scores them with built-in `ParseRule` definitions in `defaultParseRules` (product/result-style cards), suppresses redundant descendants, then applies `maxElements`. Pass `options: { mode: "simple" }` for the legacy path (traverse with an early cap only, no rules or `formattedSummary`).
+
+```ts
+import {
+  collectEnrichedPageContext,
+  formatEnrichedContext,
+  defaultParseRules
+} from '@runtypelabs/persona';
+
+const elements = collectEnrichedPageContext({
+  options: {
+    mode: 'structured',
+    maxElements: 80,
+    excludeSelector: '.persona-host',
+    maxTextLength: 200,
+    visibleOnly: true
+  },
+  rules: defaultParseRules
+});
+
+const pageContext = formatEnrichedContext(elements);
+// Structured mode: "Structured summaries:" blocks for matched cards, then grouped interactivity sections.
+```
+
+- Omit both `options` and `rules` → structured defaults (`defaultParseRules`, sensible limits).
+- `options: { mode: 'structured' }` → explicit structured behavior (same as default).
+- `rules: [...]` → custom rules with default options.
+- `options: { mode: 'simple' }` → no relation-based scoring or rule-owned formatting. If you also pass `rules`, they are ignored and a console warning is emitted.
+
+Pass `formatEnrichedContext(elements, { mode: 'simple' })` to ignore any `formattedSummary` fields on elements (for example when re-formatting data collected earlier).
+
+**Where things live:** `defaultParseRules` and the rule/config types are part of the public package API — import them from `@runtypelabs/persona` (same entry as `collectEnrichedPageContext`). Exported names you will use most often:
+
+| Export | Role |
+| --- | --- |
+| `defaultParseRules` | Built-in `ParseRule[]` (commerce-style cards + generic result rows). |
+| `ParseRule` | Type for a custom rule: `id`, `scoreElement`, optional `shouldSuppressDescendant`, optional `formatSummary`. |
+| `RuleScoringContext` | Argument to rule hooks (`doc`, `maxTextLength`). |
+| `ParseOptionsConfig` | `mode`, `maxElements`, `maxCandidates`, `excludeSelector`, `maxTextLength`, `visibleOnly`, `root`. |
+| `DomContextOptions` | What you pass to `collectEnrichedPageContext` (`options`, `rules`, plus legacy top-level limits). |
+| `FormatEnrichedContextOptions` | Second argument to `formatEnrichedContext` (`mode`). |
+| `EnrichedPageElement` | One collected node; optional `formattedSummary` in structured mode. |
+
+Use **Go to definition** (or open `node_modules/@runtypelabs/persona/dist/index.d.ts` after install) for the authoritative field list and JSDoc. Implementation source in this repo: `packages/widget/src/utils/dom-context.ts`.
+
+Custom rule sketch:
+
+```ts
+import type { ParseRule } from '@runtypelabs/persona';
+
+const myRules: ParseRule[] = [
+  {
+    id: 'kpi-tile',
+    scoreElement: (el, enriched, ctx) =>
+      el.classList.contains('kpi-tile') ? 2000 : 0,
+    formatSummary: (el, enriched, ctx) =>
+      el.classList.contains('kpi-tile')
+        ? `${enriched.text.trim()}\nselector: ${enriched.selector}`
+        : null
+  }
+];
+```
+
 ### DOM Events
 
 The widget dispatches custom DOM events that you can listen to for integration with your application:

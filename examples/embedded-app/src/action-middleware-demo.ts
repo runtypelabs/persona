@@ -13,8 +13,6 @@ import {
   defaultActionHandlers
 } from "@runtypelabs/persona";
 import {
-  collectPageContext,
-  formatPageContext,
   parseActionResponse,
   executeAction,
   loadExecutedActionIds,
@@ -30,7 +28,12 @@ import {
   clearOrder,
   type OrderData
 } from "./middleware";
-import { createFlexibleJsonStreamParser } from "@runtypelabs/persona";
+import {
+  createFlexibleJsonStreamParser,
+  collectEnrichedPageContext,
+  formatEnrichedContext,
+  defaultParseRules
+} from "@runtypelabs/persona";
 // Import types directly from the widget package
 import type {
   AgentWidgetStorageAdapter,
@@ -39,10 +42,11 @@ import type {
   AgentWidgetActionHandler
 } from "@runtypelabs/persona";
 
+const clientToken = import.meta.env.VITE_CLIENT_TOKEN || '';
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
-const proxyUrl =
-  import.meta.env.VITE_PROXY_URL ??
-  `http://localhost:${proxyPort}/api/chat/dispatch-action`;
+const apiUrl = clientToken
+  ? (import.meta.env.VITE_API_URL || 'https://api.runtype.com/v1/dispatch')
+  : (import.meta.env.VITE_PROXY_URL ?? `http://localhost:${proxyPort}/api/chat/dispatch-action`);
 
 // ============================================================================
 // Order State Management
@@ -108,10 +112,16 @@ const { title: welcomeTitle, subtitle: welcomeSubtitle } = getWelcomeConfig();
 // Page Context Provider
 // ============================================================================
 
-// Create a context provider that collects page context for metadata
+// Create a context provider that collects enriched page context for metadata
 const pageContextProvider = () => {
-  const elements = collectPageContext();
-  const formattedContext = formatPageContext(elements);
+  const elements = collectEnrichedPageContext({
+    options: {
+      mode: "structured",
+      maxElements: 80
+    },
+    rules: defaultParseRules
+  });
+  const formattedContext = formatEnrichedContext(elements);
   const order = loadOrder();
 
   // Return context in a format suitable for metadata
@@ -327,9 +337,36 @@ const createActionAwareParser = (): AgentWidgetStreamParser => {
   };
 };
 
+// Navigate to a URL (e.g. /checkout) and stash on-load copy for after navigation.
+// Widget defaults do not include nav_then_click — must wire to middleware.executeAction.
+const navThenClickHandler: AgentWidgetActionHandler = (action) => {
+  if (action.type !== "nav_then_click") return;
+
+  const payload = action.payload as Record<string, unknown>;
+  const page = typeof payload.page === "string" ? payload.page : "";
+  const onLoadText =
+    typeof payload.on_load_text === "string"
+      ? payload.on_load_text
+      : typeof payload.text === "string"
+        ? payload.text
+        : "Navigating…";
+
+  if (page) {
+    executeAction(
+      { action: "nav_then_click", page, on_load_text: onLoadText },
+      () => {}
+    );
+  }
+
+  return {
+    handled: true,
+    displayText: onLoadText
+  };
+};
+
 // Custom checkout handler that uses executeAction from middleware
 // Note: Action manager prevents re-execution via processedActionMessageIds
-const checkoutHandler: AgentWidgetActionHandler = (action, context) => {
+const checkoutHandler: AgentWidgetActionHandler = (action) => {
   if (action.type !== "checkout") return;
 
   const payload = action.payload as Record<string, unknown>;
@@ -353,13 +390,15 @@ const checkoutHandler: AgentWidgetActionHandler = (action, context) => {
 // Create a custom config with middleware hooks
 const config: AgentWidgetConfig = {
   ...DEFAULT_WIDGET_CONFIG,
-  apiUrl: proxyUrl,
+  apiUrl,
+  ...(clientToken && { clientToken }),
 clearChatHistoryStorageKey: "persona-action-middleware",  // Automatically clear localStorage on clear chat
   streamParser: createActionAwareParser,  // Use our custom parser that provides both text and raw
   // Use widget SDK's default action handlers - they work with the action manager's built-in deduplication
   actionHandlers: [
     defaultActionHandlers.message,
     defaultActionHandlers.messageAndClick,
+    navThenClickHandler,
     checkoutHandler
   ],
   // Use custom storage adapter that syncs our executedActionIds with widget SDK metadata
@@ -376,19 +415,28 @@ clearChatHistoryStorageKey: "persona-action-middleware",  // Automatically clear
     }
     return state;
   },
-  // Add context provider to send DOM content in metadata
+  // Add context provider to send DOM content for each request
   contextProviders: [pageContextProvider],
-  // Move context to metadata in request (like sample.html)
-  requestMiddleware: ({ payload }) => {
-    if (payload.context) {
-      // Return a new payload with metadata instead of context
+  // Client token: `inputs` only (root {{page_url}} etc.; avoids duplicating heavy DOM into record.metadata).
+  // Proxy: `metadata` + `inputs` so {{_record.metadata.*}} and {{page_*}} both work during prompt migration.
+  requestMiddleware: ({ payload, config }) => {
+    if (!payload.context) {
+      return payload;
+    }
+    const ctx = payload.context;
+    if (config.clientToken) {
       return {
         ...payload,
-        metadata: payload.context,
+        inputs: ctx,
         context: undefined
-      } as AgentWidgetRequestPayload & { metadata?: Record<string, unknown> };
+      };
     }
-    return payload;
+    return {
+      ...payload,
+      inputs: ctx,
+      metadata: ctx,
+      context: undefined
+    };
   },
   launcher: {
     ...DEFAULT_WIDGET_CONFIG.launcher,
@@ -430,9 +478,7 @@ clearChatHistoryStorageKey: "persona-action-middleware",  // Automatically clear
     // Note: Message persistence is handled automatically by the widget SDK's storage adapter
     // No need to manually save here - the widget SDK saves messages and metadata automatically
     
-    // Note: Action execution is now handled by the widget SDK's action manager and default handlers
-    // The widget SDK automatically prevents re-execution via processedActionMessageIds in metadata
-    // We only need to handle custom actions (like nav_then_click) if needed
+    // Action execution: action manager + handlers (including navThenClickHandler → executeAction, checkoutHandler)
     
     // For streaming of non-JSON or no action: return text as-is (the parser already extracted any needed text)
     // For non-assistant messages: return as-is

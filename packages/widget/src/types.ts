@@ -71,6 +71,8 @@ export type AgentWidgetRequestPayload = {
   flowId?: string;
   context?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  /** Per-turn template variables for /v1/client/chat (merged as root-level {{var}} in Runtype). */
+  inputs?: Record<string, unknown>;
 };
 
 // ============================================================================
@@ -1327,6 +1329,8 @@ export type ClientChatRequest = {
   /** ID for the expected assistant response message */
   assistantMessageId?: string;
   metadata?: Record<string, unknown>;
+  /** Per-turn inputs for Runtype prompt templates (e.g. {{page_url}}). */
+  inputs?: Record<string, unknown>;
   context?: Record<string, unknown>;
 };
 
@@ -2894,16 +2898,7 @@ export type AgentWidgetEvent =
       props: Record<string, unknown>;
       component?: string;
     }
-  | { type: "artifact_complete"; id: string }
-  | {
-      type: "artifact";
-      id: string;
-      artifactType: PersonaArtifactKind;
-      title?: string;
-      content?: string;
-      component?: string;
-      props?: Record<string, unknown>;
-    };
+  | { type: "artifact_complete"; id: string };
 
 export type AgentWidgetInitOptions = {
   target: string | HTMLElement;

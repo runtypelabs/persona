@@ -188,89 +188,41 @@
     }
   }
 
-  /**
-   * Extract element data with smart details (ENHANCED)
-   * Replaces the basic collectPageContext with richer data
-   */
-  function collectShoppingPageContext() {
-    const elements = [];
-    const seen = new Set();
-
-    // Priority selectors for shopping
-    const selectors = {
-      products: '[data-product-id], .product-card, .product-item, [role="article"]',
-      buttons: 'button, [role="button"], .btn',
-      links: 'a[href]',
-      inputs: 'input, textarea, select',
-      images: 'img[alt]',
-      headings: 'h1, h2, h3, h4'
+  function buildEnrichedShopifyMetadata() {
+    var AW = window.AgentWidget;
+    if (!AW || typeof AW.collectEnrichedPageContext !== 'function') {
+      return {
+        page_url: window.location.href,
+        page_title: document.title,
+        current_page: window.location.pathname,
+        error: 'collectEnrichedPageContext unavailable'
+      };
+    }
+    var enriched = AW.collectEnrichedPageContext({
+      options: { mode: 'structured', maxElements: 80 },
+      rules: AW.defaultParseRules || []
+    });
+    var slice = enriched.slice(0, 50);
+    var types = { products: 0, buttons: 0, links: 0, inputs: 0 };
+    for (var i = 0; i < slice.length; i++) {
+      var el = slice[i];
+      if (el.interactivity === 'navigable') types.links++;
+      else if (el.interactivity === 'input') types.inputs++;
+      else if (el.interactivity === 'clickable') types.buttons++;
+      var attr = el.attributes || {};
+      if (attr['data-product-id'] || attr['data-product']) types.products++;
+    }
+    return {
+      current_page: window.location.pathname,
+      page_url: window.location.href,
+      page_title: document.title,
+      timestamp: new Date().toISOString(),
+      page_elements: slice,
+      page_context: AW.formatEnrichedContext(slice),
+      shopping_elements: slice,
+      shopping_element_count: slice.length,
+      element_types: types
     };
-
-    for (const [type, selectorString] of Object.entries(selectors)) {
-      try {
-        const queriedElements = document.querySelectorAll(selectorString);
-
-        queriedElements.forEach((element) => {
-          if (seen.has(element) || !isElementInteractive(element)) {
-            return;
-          }
-          seen.add(element);
-
-          const text = getElementText(element);
-          const selector = generateElementSelector(element);
-
-          if (selector && text) {
-            const data = {
-              className: element.className || '',
-              innerText: text.substring(0, 200),
-              tagName: element.tagName.toLowerCase(),
-              selector: selector,
-              type: type,
-              id: element.id || null,
-              href: element.href || null,
-              productId: element.getAttribute?.('data-product-id') || null,
-              price: text.match(/\$[\d,]+\.?\d*/)?.[0] || null
-            };
-
-            // Only include fields with values
-            const filtered = Object.fromEntries(
-              Object.entries(data).filter(([_, v]) => v !== null && v !== '')
-            );
-
-            elements.push(filtered);
-          }
-        });
-      } catch (e) {
-        console.error(`[Shopping Assistant] Error with selector ${selectorString}:`, e);
-      }
-    }
-
-    return elements;
-  }
-
-  /**
-   * Format page context for assistant (ENHANCED)
-   * Improved formatting with selectors
-   */
-  function formatPageContext(elements) {
-    if (elements.length === 0) {
-      return 'No interactive elements found on the page.';
-    }
-
-    const grouped = elements
-      .slice(0, 20)
-      .map(el => {
-        const text = el.innerText.substring(0, 80);
-        const selector = el.selector ? ` [${el.selector}]` : '';
-        const type = el.type ? ` (${el.type})` : '';
-        return `- ${el.tagName}.${el.className}${type}: "${text}"${selector}`;
-      })
-      .join('\n');
-
-    const summary = `Available elements (${elements.length} total):
-${grouped}${elements.length > 20 ? `\n... and ${elements.length - 20} more` : ''}`;
-
-    return summary;
   }
 
   // ========================================================================
@@ -697,21 +649,7 @@ ${grouped}${elements.length > 20 ? `\n... and ${elements.length - 20} more` : ''
         try {
           const body = JSON.parse(init.body);
 
-          const elements = collectShoppingPageContext();
-
-          body.metadata = {
-            shopping_elements: elements,
-            shopping_element_count: elements.length,
-            element_types: {
-              products: elements.filter(e => e.type === 'products').length,
-              buttons: elements.filter(e => e.type === 'buttons').length,
-              links: elements.filter(e => e.type === 'links').length,
-              inputs: elements.filter(e => e.type === 'inputs').length
-            },
-            page_url: window.location.href,
-            page_title: document.title,
-            timestamp: new Date().toISOString()
-          };
+          body.metadata = buildEnrichedShopifyMetadata();
 
           init.body = JSON.stringify(body);
         } catch (e) {
@@ -1043,8 +981,7 @@ ${grouped}${elements.length > 20 ? `\n... and ${elements.length - 20} more` : ''
   // ========================================================================
 
   window.ShoppingAssistantBrowser = {
-    collectShoppingPageContext: collectShoppingPageContext,
-    formatPageContext: formatPageContext,
+    buildEnrichedShopifyMetadata: buildEnrichedShopifyMetadata,
     generateElementSelector: generateElementSelector,
     getElementText: getElementText,
     isElementInteractive: isElementInteractive,

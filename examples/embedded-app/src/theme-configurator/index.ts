@@ -1824,6 +1824,35 @@ function mountPreviewWidgets(preserveBackgroundStates = false): void {
         };
         syncDockState();
       }
+
+      // Inline edit overlays use getBoundingClientRect() inside the iframe. The panel applies
+      // transform scale (0.95 closed → 1 open) with a CSS transition; minimized preview starts
+      // closed, so zones are laid out for the scaled geometry unless we reflow on open/close.
+      {
+        let reflowAfterTransition: ReturnType<typeof setTimeout> | null = null;
+        const scheduleInlineZoneReflow = (): void => {
+          refreshInlineZones();
+          if (reflowAfterTransition !== null) {
+            clearTimeout(reflowAfterTransition);
+          }
+          reflowAfterTransition = setTimeout(() => {
+            reflowAfterTransition = null;
+            refreshInlineZones();
+          }, 200);
+        };
+        const openUnsub = controller.on('widget:opened', scheduleInlineZoneReflow);
+        const closeUnsub = controller.on('widget:closed', scheduleInlineZoneReflow);
+        const previousCleanup = layoutCleanup;
+        layoutCleanup = () => {
+          openUnsub();
+          closeUnsub();
+          if (reflowAfterTransition !== null) {
+            clearTimeout(reflowAfterTransition);
+          }
+          previousCleanup();
+        };
+      }
+
       previewLayoutCleanups.push(layoutCleanup);
 
       if (state.getPreviewScene() === 'minimized') {

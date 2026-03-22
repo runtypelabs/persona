@@ -308,6 +308,30 @@ if (!document.getElementById(fileCardStyleId)) {
       background: ${COLORS.artifact} !important;
       border-bottom: none !important;
     }
+
+    /* Artifact tab list: more padding, match pane background */
+    #fullscreen-assistant-demo-root .persona-artifact-list {
+      background: ${COLORS.artifact} !important;
+      border-bottom-color: ${COLORS.border} !important;
+      padding: 8px 12px 8px 12px !important;
+    }
+
+    /* Artifact tabs: dark theme styling */
+    #fullscreen-assistant-demo-root .persona-artifact-tab {
+      color: ${COLORS.muted} !important;
+      background: transparent !important;
+      border-color: transparent !important;
+      padding: 6px 12px !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-tab:hover {
+      color: ${COLORS.text} !important;
+      background: ${COLORS.userBubble} !important;
+    }
+    #fullscreen-assistant-demo-root .persona-artifact-tab.persona-bg-persona-container {
+      color: ${COLORS.text} !important;
+      background: ${COLORS.userBubble} !important;
+      border-color: ${COLORS.border} !important;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -370,6 +394,8 @@ const FullscreenAssistantFileCard: ComponentRenderer = (props) => {
 };
 
 componentRegistry.register("FullscreenAssistantFileCard", FullscreenAssistantFileCard);
+// Override the built-in artifact card with the demo's custom card (adds Download button, custom styling)
+componentRegistry.register("PersonaArtifactCard", FullscreenAssistantFileCard);
 
 const audioBarsSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="8" x2="4" y2="16"/><line x1="8" y1="4" x2="8" y2="20"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="16" y1="6" x2="16" y2="18"/><line x1="20" y1="10" x2="20" y2="14"/></svg>';
@@ -682,6 +708,12 @@ const newFullscreenAssistantScriptStream = () => createFullscreenAssistantScript
 
 const config = mergeWithDefaults({
   apiUrl,
+  agent: {
+    name: "Chat Assistant",
+    model: "claude-sonnet-4-5",
+    systemPrompt: "You are a helpful assistant. Be friendly, concise, and helpful. If you don't know something, say so.",
+    artifacts: { enabled: true, types: ["markdown", "component"] },
+  },
   colorScheme: "dark",
   darkTheme: {
     ...DEFAULT_WIDGET_CONFIG.darkTheme,

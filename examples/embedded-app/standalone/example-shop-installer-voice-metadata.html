@@ -315,95 +315,42 @@
         }
       });
 
-      const generateSelector = (element) => {
-        if (element.id) return `#${element.id}`;
-        const dataTestId = element.getAttribute?.("data-testid");
-        if (dataTestId) return `[data-testid="${dataTestId}"]`;
-        const productId = element.getAttribute?.("data-product-id");
-        if (productId) return `[data-product-id="${productId}"]`;
-        const tag = element.tagName.toLowerCase();
-        const classes = (element.className || "")
-          .split(/\s+/)
-          .filter(Boolean)
-          .slice(0, 3);
-        return classes.length ? `${tag}.${classes.join('.')}` : tag;
-      };
-
-      const getElementText = (element) => {
-        try {
-          return (element.innerText || element.textContent || "").trim();
-        } catch {
-          return "";
+      const elementTypeCounts = (slice) => {
+        const counts = { products: 0, buttons: 0, links: 0, inputs: 0 };
+        for (const el of slice) {
+          if (el.interactivity === "navigable") counts.links += 1;
+          else if (el.interactivity === "input") counts.inputs += 1;
+          else if (el.interactivity === "clickable") counts.buttons += 1;
+          const attr = el.attributes || {};
+          if (attr["data-product-id"] || attr["data-product"]) counts.products += 1;
         }
-      };
-
-      const isInteractive = (element) => {
-        try {
-          const style = window.getComputedStyle(element);
-          if (style.display === "none" || style.visibility === "hidden") return false;
-          if (element.disabled) return false;
-          return (
-            getElementText(element).length ||
-            Boolean(element.href) ||
-            Boolean(element.id) ||
-            Array.from(element.attributes || []).some((attr) =>
-              attr.name.startsWith("data-")
-            )
-          );
-        } catch {
-          return false;
-        }
-      };
-
-      const collectShoppingPageContext = () => {
-        const selectors = {
-          products: "[data-product-id], .product-card, .product-item, [role='article']",
-          buttons: "button, [role='button'], .btn",
-          links: "a[href]",
-          inputs: "input, textarea, select"
-        };
-
-        const elements = [];
-        Object.entries(selectors).forEach(([type, selector]) => {
-          document.querySelectorAll(selector).forEach((element) => {
-            if (!isInteractive(element)) return;
-            const text = getElementText(element);
-            if (!text) return;
-            elements.push({
-              type,
-              tagName: element.tagName.toLowerCase(),
-              selector: generateSelector(element),
-              innerText: text.substring(0, 160),
-              id: element.id || undefined,
-              href: element.href || undefined,
-              productId: element.getAttribute?.("data-product-id") || undefined,
-              price: text.match(/\$[\d,]+\.?\d*/)?.[0] || undefined
-            });
-          });
-        });
-
-        return elements.slice(0, 50);
+        return counts;
       };
 
       const shoppingContextProvider = () => {
-        const elements = collectShoppingPageContext();
-        const counts = elements.reduce(
-          (acc, element) => {
-            if (element.type && acc[element.type] !== undefined) {
-              acc[element.type] += 1;
-            }
-            return acc;
-          },
-          { products: 0, buttons: 0, links: 0, inputs: 0 }
-        );
-
+        const AW = window.AgentWidget;
+        if (!AW || typeof AW.collectEnrichedPageContext !== "function") {
+          return {
+            page_url: window.location.href,
+            page_title: document.title,
+            error: "collectEnrichedPageContext unavailable"
+          };
+        }
+        const enriched = AW.collectEnrichedPageContext({
+          options: { mode: "structured", maxElements: 80 },
+          rules: AW.defaultParseRules || []
+        });
+        const slice = enriched.slice(0, 50);
         return {
-          shopping_elements: elements,
-          shopping_element_count: elements.length,
-          element_types: counts,
+          current_page: window.location.pathname,
           page_url: window.location.href,
           page_title: document.title,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          page_elements: slice,
+          page_context: AW.formatEnrichedContext(slice),
+          shopping_elements: slice,
+          shopping_element_count: slice.length,
+          element_types: elementTypeCounts(slice)
         };
       };
 
@@ -544,18 +491,11 @@
       const exposeHelpers = (controller) => {
         if (typeof window === "undefined") return;
         window.ShoppingAssistantBrowser = {
-          collectShoppingPageContext,
-          formatPageContext: (elements) => {
-            if (!elements.length) {
-              return "No interactive elements found on the page.";
-            }
-            return elements
-              .map((element) => {
-                const text = element.innerText.replace(/\s+/g, " ").substring(0, 80);
-                return `- ${element.type ?? element.tagName}: "${text}" [${element.selector}]`;
-              })
-              .join("\n");
-          },
+          getShoppingContext: shoppingContextProvider,
+          formatEnrichedPageContext: (elements) =>
+            window.AgentWidget && window.AgentWidget.formatEnrichedContext
+              ? window.AgentWidget.formatEnrichedContext(Array.isArray(elements) ? elements : [])
+              : "",
           controller
         };
       };

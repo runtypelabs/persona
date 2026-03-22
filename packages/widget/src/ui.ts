@@ -30,6 +30,7 @@ import { applyThemeVariables, createThemeObserver } from "./utils/theme";
 import { renderLucideIcon } from "./utils/icons";
 import { createElement, createElementInDocument } from "./utils/dom";
 import { morphMessages } from "./utils/morph";
+import { computeMessageFingerprint, createMessageCache, getCachedWrapper, setCachedWrapper, pruneCache } from "./utils/message-fingerprint";
 import { statusCopy } from "./utils/constants";
 import { isDockedMountMode } from "./utils/dock";
 import { createLauncherButton } from "./components/launcher";
@@ -1132,6 +1133,68 @@ export const createAgentExperience = (
   let artifactsPaneUserHidden = false;
   const sessionRef: { current: AgentWidgetSession | null } = { current: null };
 
+  // Click delegation for artifact download buttons
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const dlBtn = target.closest('[data-download-artifact]') as HTMLElement;
+    if (!dlBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const artifactId = dlBtn.getAttribute('data-download-artifact');
+    if (!artifactId) return;
+    // Try session state first, fall back to content stored in the card's rawContent props
+    const artifact = session.getArtifactById(artifactId);
+    let markdown = artifact?.markdown;
+    let title = artifact?.title || 'artifact';
+    if (!markdown) {
+      // After page refresh, session state is gone — read from the persisted card message
+      const cardEl = dlBtn.closest('[data-open-artifact]');
+      const msgEl = cardEl?.closest('[data-message-id]');
+      const msgId = msgEl?.getAttribute('data-message-id');
+      if (msgId) {
+        const msgs = session.getMessages();
+        const msg = msgs.find(m => m.id === msgId);
+        if (msg?.rawContent) {
+          try {
+            const parsed = JSON.parse(msg.rawContent);
+            markdown = parsed?.props?.markdown;
+            title = parsed?.props?.title || title;
+          } catch { /* ignore */ }
+        }
+      }
+    }
+    if (!markdown) return;
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Click delegation for artifact reference cards
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const card = target.closest('[data-open-artifact]') as HTMLElement;
+    if (!card) return;
+    const artifactId = card.getAttribute('data-open-artifact');
+    if (!artifactId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    session.selectArtifact(artifactId);
+    syncArtifactPane();
+  });
+
+  // Keyboard support for artifact cards
+  messagesWrapper.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const target = event.target as HTMLElement;
+    if (!target.hasAttribute('data-open-artifact')) return;
+    event.preventDefault();
+    target.click();
+  });
+
   let artifactSplitRoot: HTMLElement | null = null;
   let artifactResizeHandle: HTMLElement | null = null;
   let artifactResizeUnbind: (() => void) | null = null;
@@ -1693,6 +1756,8 @@ export const createAgentExperience = (
   let closeHandler: (() => void) | null = null;
   let session: AgentWidgetSession;
   let isStreaming = false;
+  const messageCache = createMessageCache();
+  let configVersion = 0;
   let shouldAutoScroll = true;
   let lastScrollTop = 0;
   let lastAutoScrollTime = 0;
@@ -1966,7 +2031,20 @@ export const createAgentExperience = (
 
     const inlineLoadingRenderer = getInlineLoadingIndicatorRenderer();
 
+    // Track active message IDs for cache pruning
+    const activeMessageIds = new Set<string>();
+
     messages.forEach((message) => {
+      activeMessageIds.add(message.id);
+
+      // Fingerprint cache: skip re-rendering unchanged messages
+      const fingerprint = computeMessageFingerprint(message, configVersion);
+      const cachedWrapper = getCachedWrapper(messageCache, message.id, fingerprint);
+      if (cachedWrapper) {
+        tempContainer.appendChild(cachedWrapper.cloneNode(true));
+        return;
+      }
+
       let bubble: HTMLElement | null = null;
 
       // Try plugins first
@@ -2163,8 +2241,12 @@ export const createAgentExperience = (
         wrapper.classList.add("persona-w-full");
       }
       wrapper.appendChild(bubble);
+      setCachedWrapper(messageCache, message.id, fingerprint, wrapper);
       tempContainer.appendChild(wrapper);
     });
+
+    // Remove cache entries for messages that no longer exist
+    pruneCache(messageCache, activeMessageIds);
 
     // Add standalone typing indicator only if streaming but no assistant message is streaming yet
     // (This shows while waiting for the stream to start)
@@ -3385,6 +3467,7 @@ export const createAgentExperience = (
     clearChatButton.addEventListener("click", () => {
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
       session.clearMessages();
+      messageCache.clear();
 
       // Always clear the default localStorage key
       try {
@@ -3709,6 +3792,7 @@ export const createAgentExperience = (
       const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages);
       const messagesConfigChanged = toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged;
       if (messagesConfigChanged && session) {
+        configVersion++;
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
       }
 
@@ -4681,6 +4765,7 @@ export const createAgentExperience = (
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
       artifactsPaneUserHidden = false;
       session.clearMessages();
+      messageCache.clear();
 
       // Always clear the default localStorage key
       try {

@@ -26,7 +26,8 @@ import {
   createRegexJsonParser,
   createXmlParser
 } from "./utils/formatting";
-import { artifactsSidebarEnabled, artifactKindAllowedByFeature } from "./utils/artifact-gate";
+// artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
+// artifact events are always processed here regardless of config.
 
 type DispatchOptions = {
   messages: AgentWidgetMessage[];
@@ -470,6 +471,7 @@ export class AgentWidgetClient {
         ...(options.assistantMessageId && { assistantMessageId: options.assistantMessageId }),
         // Include metadata/context from middleware if present (excluding sessionId)
         ...(sanitizedMetadata && Object.keys(sanitizedMetadata).length > 0 && { metadata: sanitizedMetadata }),
+        ...(basePayload.inputs && Object.keys(basePayload.inputs).length > 0 && { inputs: basePayload.inputs }),
         ...(basePayload.context && { context: basePayload.context }),
       };
 
@@ -1112,6 +1114,20 @@ export class AgentWidgetClient {
       }
     };
 
+    // Track tool call IDs for artifact emit tools so we can suppress their UI
+    const artifactToolCallIds = new Set<string>();
+    // Track artifact reference card messages so we can update them on artifact_complete
+    const artifactCardMessages = new Map<string, AgentWidgetMessage>();
+    // Track artifact IDs that already have a reference card (from auto-creation or transcript_insert)
+    const artifactIdsWithCards = new Set<string>();
+    // Accumulate artifact markdown content for embedding in card props on complete
+    const artifactContent = new Map<string, { markdown: string; title?: string }>();
+    const isArtifactEmitToolName = (name: string | undefined): boolean => {
+      if (!name) return false;
+      const normalized = name.replace(/_+/g, "_").replace(/^_|_$/g, "");
+      return normalized === "emit_artifact_markdown" || normalized === "emit_artifact_component";
+    };
+
     const resolveToolId = (
       payload: Record<string, any>,
       allowCreate: boolean
@@ -1348,12 +1364,18 @@ export class AgentWidgetClient {
         } else if (payloadType === "tool_start") {
           const toolId =
             resolveToolId(payload, true) ?? `tool-${nextSequence()}`;
+          const toolName = payload.toolName ?? payload.name;
+          // Suppress tool UI for artifact emit tools — artifacts are handled via artifact_* events
+          if (isArtifactEmitToolName(toolName)) {
+            artifactToolCallIds.add(toolId);
+            continue;
+          }
           const toolMessage = ensureToolMessage(toolId);
           const tool = toolMessage.toolCall ?? {
             id: toolId,
             status: "pending"
           };
-          tool.name = payload.toolName ?? payload.name ?? tool.name;
+          tool.name = toolName ?? tool.name;
           tool.status = "running";
           if (payload.args !== undefined) {
             tool.args = payload.args;
@@ -1380,6 +1402,7 @@ export class AgentWidgetClient {
             resolveToolId(payload, false) ??
             resolveToolId(payload, true) ??
             `tool-${nextSequence()}`;
+          if (artifactToolCallIds.has(toolId)) continue;
           const toolMessage = ensureToolMessage(toolId);
           const tool = toolMessage.toolCall ?? {
             id: toolId,
@@ -1410,6 +1433,10 @@ export class AgentWidgetClient {
             resolveToolId(payload, false) ??
             resolveToolId(payload, true) ??
             `tool-${nextSequence()}`;
+          if (artifactToolCallIds.has(toolId)) {
+            artifactToolCallIds.delete(toolId);
+            continue;
+          }
           const toolMessage = ensureToolMessage(toolId);
           const tool = toolMessage.toolCall ?? {
             id: toolId,
@@ -2112,69 +2139,81 @@ export class AgentWidgetClient {
           payloadType === "artifact_start" ||
           payloadType === "artifact_delta" ||
           payloadType === "artifact_update" ||
-          payloadType === "artifact_complete" ||
-          payloadType === "artifact"
+          payloadType === "artifact_complete"
         ) {
-          if (!artifactsSidebarEnabled(this.config)) {
-            // Spec: ignore artifact events when sidebar feature is off
-          } else if (payloadType === "artifact_start") {
+          if (payloadType === "artifact_start") {
             const at = payload.artifactType as PersonaArtifactKind;
-            if (!artifactKindAllowedByFeature(this.config, at)) {
-              /* filtered */
-            } else {
-              onEvent({
-                type: "artifact_start",
-                id: String(payload.id),
-                artifactType: at,
-                title: typeof payload.title === "string" ? payload.title : undefined,
-                component: typeof payload.component === "string" ? payload.component : undefined
-              });
+            const artId = String(payload.id);
+            const artTitle = typeof payload.title === "string" ? payload.title : undefined;
+            onEvent({
+              type: "artifact_start",
+              id: artId,
+              artifactType: at,
+              title: artTitle,
+              component: typeof payload.component === "string" ? payload.component : undefined
+            });
+            artifactContent.set(artId, { markdown: "", title: artTitle });
+            // Insert inline artifact reference card (skip if already present from transcript_insert)
+            if (!artifactIdsWithCards.has(artId)) {
+              artifactIdsWithCards.add(artId);
+              const cardMsg: AgentWidgetMessage = {
+                id: `artifact-ref-${artId}`,
+                role: "assistant",
+                content: "",
+                createdAt: new Date().toISOString(),
+                streaming: true,
+                sequence: nextSequence(),
+                rawContent: JSON.stringify({
+                  component: "PersonaArtifactCard",
+                  props: { artifactId: artId, title: artTitle, artifactType: at, status: "streaming" },
+                }),
+              };
+              artifactCardMessages.set(artId, cardMsg);
+              emitMessage(cardMsg);
             }
           } else if (payloadType === "artifact_delta") {
-            if (!artifactKindAllowedByFeature(this.config, "markdown")) {
-              /* */
-            } else {
-              onEvent({
-                type: "artifact_delta",
-                id: String(payload.id),
-                artDelta: typeof payload.delta === "string" ? payload.delta : String(payload.delta ?? "")
-              });
-            }
+            const deltaId = String(payload.id);
+            const deltaText = typeof payload.delta === "string" ? payload.delta : String(payload.delta ?? "");
+            onEvent({
+              type: "artifact_delta",
+              id: deltaId,
+              artDelta: deltaText
+            });
+            const acc = artifactContent.get(deltaId);
+            if (acc) acc.markdown += deltaText;
           } else if (payloadType === "artifact_update") {
-            if (!artifactKindAllowedByFeature(this.config, "component")) {
-              /* */
-            } else {
-              const props =
-                payload.props && typeof payload.props === "object" && !Array.isArray(payload.props)
-                  ? (payload.props as Record<string, unknown>)
-                  : {};
-              onEvent({
-                type: "artifact_update",
-                id: String(payload.id),
-                props,
-                component: typeof payload.component === "string" ? payload.component : undefined
-              });
-            }
+            const props =
+              payload.props && typeof payload.props === "object" && !Array.isArray(payload.props)
+                ? (payload.props as Record<string, unknown>)
+                : {};
+            onEvent({
+              type: "artifact_update",
+              id: String(payload.id),
+              props,
+              component: typeof payload.component === "string" ? payload.component : undefined
+            });
           } else if (payloadType === "artifact_complete") {
-            onEvent({ type: "artifact_complete", id: String(payload.id) });
-          } else if (payloadType === "artifact") {
-            const at = payload.artifactType as PersonaArtifactKind;
-            if (!artifactKindAllowedByFeature(this.config, at)) {
-              /* */
-            } else {
-              const props =
-                payload.props && typeof payload.props === "object" && !Array.isArray(payload.props)
-                  ? (payload.props as Record<string, unknown>)
-                  : undefined;
-              onEvent({
-                type: "artifact",
-                id: String(payload.id),
-                artifactType: at,
-                title: typeof payload.title === "string" ? payload.title : undefined,
-                content: typeof payload.content === "string" ? payload.content : undefined,
-                component: typeof payload.component === "string" ? payload.component : undefined,
-                props
-              });
+            const artCompleteId = String(payload.id);
+            onEvent({ type: "artifact_complete", id: artCompleteId });
+            // Update the inline card to show completed state
+            const refMsg = artifactCardMessages.get(artCompleteId);
+            if (refMsg) {
+              refMsg.streaming = false;
+              try {
+                const parsed = JSON.parse(refMsg.rawContent ?? "{}");
+                if (parsed.props) {
+                  parsed.props.status = "complete";
+                  // Store markdown content in card props so download works after page refresh
+                  const acc = artifactContent.get(artCompleteId);
+                  if (acc?.markdown) {
+                    parsed.props.markdown = acc.markdown;
+                  }
+                }
+                refMsg.rawContent = JSON.stringify(parsed);
+              } catch { /* ignore parse errors */ }
+              artifactContent.delete(artCompleteId);
+              emitMessage(refMsg);
+              artifactCardMessages.delete(artCompleteId);
             }
           }
         } else if (payloadType === "transcript_insert") {
@@ -2202,6 +2241,16 @@ export class AgentWidgetClient {
             sequence: nextSequence()
           };
           emitMessage(msg);
+          // Detect artifact references in transcript_insert to prevent duplicate auto-cards
+          if (msg.rawContent) {
+            try {
+              const parsed = JSON.parse(msg.rawContent);
+              const refArtId = parsed?.props?.artifactId;
+              if (typeof refArtId === "string") {
+                artifactIdsWithCards.add(refArtId);
+              }
+            } catch { /* not JSON or no artifactId */ }
+          }
           assistantMessage = null;
           assistantMessageRef.current = null;
           streamParsers.delete(id);

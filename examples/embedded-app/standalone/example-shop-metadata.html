@@ -303,54 +303,43 @@
       const STORAGE_KEY = 'vanilla-agent-action-middleware';
       const NAV_FLAG_KEY = 'vanilla-agent-nav-flag';
 
-      function collectPageContext() {
-        const elements = [];
-        const seen = new Set();
-
-        const walker = document.createTreeWalker(
-          document.body,
-          NodeFilter.SHOW_ELEMENT,
-          null
-        );
-
-        let node = walker.currentNode;
-        while (node) {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            const element = node;
-            const className = element.className;
-
-            if (
-              typeof className === 'string' &&
-              className.trim() &&
-              element.innerText && element.innerText.trim()
-            ) {
-              const key = element.tagName + '.' + className;
-              if (!seen.has(key)) {
-                seen.add(key);
-                elements.push({
-                  className: className.trim(),
-                  innerText: element.innerText.trim().substring(0, 200),
-                  tagName: element.tagName.toLowerCase()
-                });
-              }
-            }
-          }
-          node = walker.nextNode();
+      function buildEnrichedRequestMetadata() {
+        var AW = window.AgentWidget;
+        if (!AW || typeof AW.collectEnrichedPageContext !== 'function') {
+          return {
+            page_url: window.location.href,
+            page_title: document.title,
+            current_page: window.location.pathname,
+            error: 'AgentWidget.collectEnrichedPageContext not available'
+          };
         }
-
-        return elements;
-      }
-
-      function formatPageContext(elements) {
-        if (elements.length === 0) {
-          return 'No interactive elements found on the page.';
+        try {
+          var elements = AW.collectEnrichedPageContext({
+            options: { mode: 'structured', maxElements: 80 },
+            rules: AW.defaultParseRules || []
+          });
+          var slice = elements.slice(0, 50);
+          var page_context = AW.formatEnrichedContext(slice);
+          var bodyText = document.body && document.body.innerText ? document.body.innerText.slice(0, 8000) : '';
+          return {
+            current_page: window.location.pathname,
+            page_url: window.location.href,
+            page_title: document.title,
+            timestamp: new Date().toISOString(),
+            page_elements: slice,
+            page_context: page_context,
+            dom_elements: slice,
+            dom_body: bodyText
+          };
+        } catch (err) {
+          console.error('[Shopping Assistant] Enriched metadata failed:', err);
+          return {
+            page_url: window.location.href,
+            page_title: document.title,
+            current_page: window.location.pathname,
+            error: String(err && err.message ? err.message : err)
+          };
         }
-
-        const grouped = elements
-          .map(el => `- ${el.tagName}.${el.className}: "${el.innerText.substring(0, 100)}"`)
-          .join('\n');
-
-        return `Available page elements:\n${grouped}`;
       }
 
       function parseActionResponse(text) {
@@ -620,17 +609,7 @@
             try {
               const body = JSON.parse(init.body);
 
-              // Collect page context and send as metadata (not appended to messages)
-              const elements = collectPageContext();
-
-              // Send DOM context as record metadata
-              body.metadata = {
-                dom_elements: elements,
-                dom_body: document.body.innerHTML,
-                page_url: window.location.href,
-                page_title: document.title,
-                timestamp: new Date().toISOString()
-              };
+              body.metadata = buildEnrichedRequestMetadata();
 
               init.body = JSON.stringify(body);
             } catch (e) {

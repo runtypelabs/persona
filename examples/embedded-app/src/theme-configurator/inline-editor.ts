@@ -15,6 +15,10 @@ import {
   parseCssValue,
   convertToPx,
 } from './color-utils';
+import {
+  getPopoverPosition,
+  getRectRelativeToParent,
+} from './inline-editor-geometry';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -63,6 +67,13 @@ interface ZoneDef {
 interface ActiveZone {
   id: string;
   cleanup: () => void;
+}
+
+interface PopoverAnchor {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 // ─── Zone Definitions ───────────────────────────────────────────
@@ -274,19 +285,25 @@ function positionOverlay(overlay: HTMLElement, target: HTMLElement, zone: ZoneDe
 
   const rect = target.getBoundingClientRect();
   const parentRect = parent.getBoundingClientRect();
+  const relativeRect = getRectRelativeToParent(
+    rect,
+    parentRect,
+    parent.scrollLeft,
+    parent.scrollTop
+  );
   overlay.style.position = 'absolute';
 
   if (zone.hitTarget === 'corner-br') {
     const corner = 40;
-    overlay.style.left = `${rect.left - parentRect.left + rect.width - corner}px`;
-    overlay.style.top = `${rect.top - parentRect.top + rect.height - corner}px`;
+    overlay.style.left = `${relativeRect.left + relativeRect.width - corner}px`;
+    overlay.style.top = `${relativeRect.top + relativeRect.height - corner}px`;
     overlay.style.width = `${corner}px`;
     overlay.style.height = `${corner}px`;
   } else {
-    overlay.style.left = `${rect.left - parentRect.left}px`;
-    overlay.style.top = `${rect.top - parentRect.top}px`;
-    overlay.style.width = `${rect.width}px`;
-    overlay.style.height = `${rect.height}px`;
+    overlay.style.left = `${relativeRect.left}px`;
+    overlay.style.top = `${relativeRect.top}px`;
+    overlay.style.width = `${relativeRect.width}px`;
+    overlay.style.height = `${relativeRect.height}px`;
   }
 }
 
@@ -296,7 +313,7 @@ function iframeToParent(
   iframe: HTMLIFrameElement,
   targetRect: DOMRect,
   scale: number
-): { x: number; y: number; width: number; height: number } {
+): PopoverAnchor {
   const iframeRect = iframe.getBoundingClientRect();
   return {
     x: iframeRect.left + targetRect.left * scale,
@@ -320,9 +337,7 @@ function getPopover(): HTMLElement {
 }
 
 function showPopover(
-  x: number,
-  yTop: number,
-  yBottom: number,
+  anchor: PopoverAnchor,
   title: string,
   body: HTMLElement,
   placeAbove: boolean,
@@ -365,21 +380,7 @@ function showPopover(
   popover.innerHTML = '';
   popover.appendChild(shell);
   popover.classList.remove('hidden');
-
-  const popoverHeight = opts?.variant === 'compound' ? 420 : 268;
-  const popoverWidth = opts?.variant === 'compound' ? 280 : 260;
-
-  let top: number;
-  if (placeAbove) {
-    top = Math.max(8, yTop - popoverHeight - 8);
-  } else {
-    const preferred = yBottom + 8;
-    top = Math.min(preferred, window.innerHeight - popoverHeight - 8);
-    top = Math.max(8, top);
-  }
-
-  popover.style.top = `${top}px`;
-  popover.style.left = `${Math.max(8, Math.min(x, window.innerWidth - popoverWidth - 8))}px`;
+  positionPopoverElement(popover, anchor, placeAbove, opts);
 }
 
 function computePopoverPlaceAbove(iframe: HTMLIFrameElement, target: HTMLElement): boolean {
@@ -395,6 +396,32 @@ function hidePopover(): void {
   const popover = getPopover();
   popover.classList.add('hidden');
   popover.innerHTML = '';
+}
+
+function positionPopoverElement(
+  popover: HTMLElement,
+  anchor: PopoverAnchor,
+  placeAbove: boolean,
+  opts?: { variant?: 'default' | 'compound' }
+): void {
+  const measured = popover.getBoundingClientRect();
+  const fallbackHeight = opts?.variant === 'compound' ? 300 : 268;
+  const fallbackWidth = opts?.variant === 'compound' ? 280 : 260;
+  const position = getPopoverPosition(
+    anchor,
+    {
+      width: measured.width || fallbackWidth,
+      height: measured.height || fallbackHeight,
+    },
+    {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    },
+    placeAbove
+  );
+
+  popover.style.top = `${position.top}px`;
+  popover.style.left = `${position.left}px`;
 }
 
 // ─── Zone Click Handlers ────────────────────────────────────────
@@ -429,7 +456,7 @@ function handleZoneClick(
       showSliderEditor(zone, pos, placeAbove);
       break;
     case 'text':
-      showTextEditor(zone, target, iframe, pos, scale, placeAbove);
+      showTextEditor(zone, target, pos, placeAbove);
       break;
     case 'compound':
       if (zone.compound?.length) {
@@ -540,7 +567,7 @@ function appendColorFieldToContainer(
 
 function showColorEditor(
   zone: ZoneDef,
-  pos: { x: number; y: number; width: number; height: number },
+  pos: PopoverAnchor,
   placeAbove: boolean
 ): void {
   const container = document.createElement('div');
@@ -552,7 +579,7 @@ function showColorEditor(
   };
   appendColorFieldToContainer(container, undefined, field);
 
-  showPopover(pos.x, pos.y, pos.y + pos.height, zone.label, container, placeAbove);
+  showPopover(pos, zone.label, container, placeAbove);
 }
 
 function appendSliderFieldToContainer(
@@ -590,7 +617,7 @@ function appendSliderFieldToContainer(
 
 function showCompoundEditor(
   zone: ZoneDef,
-  pos: { x: number; y: number; width: number; height: number },
+  pos: PopoverAnchor,
   placeAbove: boolean
 ): void {
   const parts = zone.compound ?? [];
@@ -727,21 +754,7 @@ function showCompoundEditor(
   popover.appendChild(shell);
   popover.classList.remove('hidden');
   renderStep();
-
-  const popoverHeight = 300;
-  const popoverWidth = 280;
-
-  let top: number;
-  if (placeAbove) {
-    top = Math.max(8, pos.y - popoverHeight - 8);
-  } else {
-    const preferred = pos.y + pos.height + 8;
-    top = Math.min(preferred, window.innerHeight - popoverHeight - 8);
-    top = Math.max(8, top);
-  }
-
-  popover.style.top = `${top}px`;
-  popover.style.left = `${Math.max(8, Math.min(pos.x, window.innerWidth - popoverWidth - 8))}px`;
+  positionPopoverElement(popover, pos, placeAbove, { variant: 'compound' });
 }
 
 function applyColorValueForField(field: InlineColorField, hex: string): void {
@@ -821,7 +834,7 @@ function resolveRadiusSliderInitialPx(statePath: string): number {
 
 function showSliderEditor(
   zone: ZoneDef,
-  pos: { x: number; y: number; width: number; height: number },
+  pos: PopoverAnchor,
   placeAbove: boolean
 ): void {
   const opts = zone.slider ?? { min: 0, max: 32, step: 1 };
@@ -855,7 +868,7 @@ function showSliderEditor(
   row.appendChild(display);
   container.appendChild(row);
 
-  showPopover(pos.x, pos.y, pos.y + pos.height, zone.label, container, placeAbove);
+  showPopover(pos, zone.label, container, placeAbove);
 }
 
 // ─── Text Editor ────────────────────────────────────────────────
@@ -863,9 +876,7 @@ function showSliderEditor(
 function showTextEditor(
   zone: ZoneDef,
   target: HTMLElement,
-  iframe: HTMLIFrameElement,
-  pos: { x: number; y: number; width: number; height: number },
-  scale: number,
+  pos: PopoverAnchor,
   placeAbove: boolean
 ): void {
   const container = document.createElement('div');
@@ -885,7 +896,7 @@ function showTextEditor(
 
   container.appendChild(input);
 
-  showPopover(pos.x, pos.y, pos.y + pos.height, zone.label, container, placeAbove);
+  showPopover(pos, zone.label, container, placeAbove);
 
   // Auto-focus the input
   requestAnimationFrame(() => input.focus());
@@ -967,8 +978,15 @@ export function refreshInlineZones(): void {
       const overlay = doc.querySelector<HTMLElement>(`.inline-zone-overlay[data-zone-id="${zone.id}"]`);
 
       if (target && overlay) {
-        const zone = ZONE_DEFS.find((z) => z.id === overlay.dataset.zoneId);
-        if (zone) positionOverlay(overlay, target, zone);
+        const currentZone = ZONE_DEFS.find((z) => z.id === overlay.dataset.zoneId);
+        if (currentZone) {
+          positionOverlay(overlay, target, currentZone);
+          if (activeZone?.id === currentZone.id) {
+            const scale = getScaleFn?.() ?? currentScale;
+            const pos = iframeToParent(iframe, target.getBoundingClientRect(), scale);
+            positionPopoverElement(getPopover(), pos, computePopoverPlaceAbove(iframe, target));
+          }
+        }
       } else if (target && !overlay) {
         // Target appeared after last mount
         const newOverlay = createOverlay(doc, target, zone, iframe);

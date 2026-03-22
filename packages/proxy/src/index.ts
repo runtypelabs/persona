@@ -266,6 +266,11 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
         }
       };
 
+      const clientInputs = clientPayload.inputs;
+      if (clientInputs && typeof clientInputs === "object" && !Array.isArray(clientInputs)) {
+        runtypePayload.inputs = clientInputs;
+      }
+
       if (flowId) {
         runtypePayload.flow = { id: flowId };
       } else {
