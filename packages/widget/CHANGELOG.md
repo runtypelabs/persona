@@ -1,5 +1,114 @@
 # @runtypelabs/persona
 
+## 2.0.0
+
+### Major Changes
+
+- 8c6684d: Align agent config with Runtype API and add tool support
+
+  **Breaking:**
+
+  - `AgentLoopConfig.maxIterations` renamed to `maxTurns` to match the Runtype API
+  - `AgentLoopConfig.stopCondition` removed (API auto-detects completion)
+  - `AgentExecutionState.maxIterations` renamed to `maxTurns`
+  - `AgentExecutionState.stopReason` type updated: `'max_iterations'` replaced with `'max_turns'`, added `'end_turn' | 'max_cost' | 'timeout'`
+
+  **Features:**
+
+  - `AgentConfig` now supports a `tools` field (`AgentToolsConfig`) for configuring built-in tools (e.g., `builtin:exa`, `builtin:dalle`), MCP servers, runtime tools, and approval workflows
+  - `AgentLoopConfig` now supports `maxCost` (USD budget cap)
+  - New exported type: `AgentToolsConfig`
+
+  **Fixes:**
+
+  - Agent loop execution now works correctly — the widget was sending `maxIterations` but the API expects `maxTurns`, causing every agent request to default to a single turn
+  - SSE event parsing now correctly reads `maxTurns` from `agent_start` events
+
+- 41ffc07: Support Runtype `/v1/client/chat` `inputs` for per-turn template variables, artifact reference cards in the transcript, and related stream handling.
+
+  **`@runtypelabs/persona`**
+
+  - `AgentWidgetRequestPayload` and `ClientChatRequest` accept optional `inputs`
+  - Client-token dispatch sends `inputs` in the chat request body alongside optional `metadata`
+  - Artifact stream events (`artifact_start` / `artifact_delta` / `artifact_update` / `artifact_complete`) drive an inline **`PersonaArtifactCard`** message in the transcript (streaming → complete), including accumulated markdown on the card when the artifact is markdown
+  - Tool-call UI for `emit_artifact_markdown` and `emit_artifact_component` is suppressed so artifacts are not duplicated as tool rows
+  - `AgentWidgetSession.getArtifactById(id)` returns the current `PersonaArtifactRecord` for a sidebar or custom UI
+  - Faster transcript morphing via message fingerprinting when reconciling assistant bubbles
+
+  **`@runtypelabs/persona-proxy`**
+
+  - Flow dispatch forwards client `inputs` to the upstream Runtype `/v1/dispatch` body when present
+  - Bundled **bakery assistant** flow prompt updated to use root-level `inputs` placeholders (e.g. `{{page_url}}`, `{{page_context}}`) instead of metadata-only page context
+
+  Requires Runtype API support for `inputs` on `POST /v1/client/chat` (merge into dispatch `inputs`). Agent prompts can use root-level `{{page_url}}` style variables instead of `{{_record.metadata.page_url}}` when the client sends page context as `inputs`.
+
+- ed770cc: Complete tvw- to persona- CSS prefix migration and fix related bugs
+
+  **Fixes:**
+
+  - Tool call bubbles now correctly show tool names in flow mode (was reading
+    `toolName` but the API sends `name` for flow-mode `tool_start` events)
+  - Image attachment container now has proper flexbox layout (stale `tvw-flex`
+    classes replaced with `persona-flex`)
+  - Tool and reasoning bubble content areas now receive themed border and
+    background colors (CSS selector targeted `.tvw-border-t` but elements
+    had class `persona-border-t`)
+  - Voice recording pulse animation now fires (CSS defined
+    `.persona-voice-recording` but JS was adding `tvw-voice-recording`)
+
+  **Cleanup:**
+
+  - Migrated all remaining `tvw-` prefixed CSS classes and keyframes to
+    `persona-` prefix for consistency. Zero `tvw-` references remain in source.
+  - Removed dead `.tvw-approval-badge-*` CSS rules (never referenced)
+  - Updated README to reflect `maxTurns`, `AgentToolsConfig`, and removed
+    stale `maxIterations`/`stopCondition` documentation
+
+  **Known limitation:**
+
+  - Context providers configured via `contextProviders` are silently dropped
+    in agent mode because the API's dispatch schema does not accept a top-level
+    `context` field. This requires an API-side change to resolve.
+
+### Minor Changes
+
+- 85e2e7f: Add optional artifact sidebar: SSE handling for artifact events, in-session artifact store, split-pane / mobile drawer UI, `features.artifacts`, and controller / `persona:*` window hooks. Dispatch payloads accept optional `artifacts` on agent config (API parity). Includes demo page in `examples/embedded-app/artifact-demo.html`.
+- 39e7b0e: Add a docked panel launcher mode that wraps a target container and renders Persona as a sibling side panel, with theme editor preview support, codegen updates, and a dedicated docked demo page.
+- 41ffc07: Structured DOM context collection: score candidates before applying `maxElements`, add extensible `ParseRule` hooks with `defaultParseRules` for card-like UIs, rule-owned markdown-style summaries, and `options.mode` (`structured` default vs `simple` legacy). `formatEnrichedContext` accepts options to emit structured summaries.
+
+  - Package README adds an **Enriched DOM context** section (imports, mode matrix, export table, custom `ParseRule` sketch) aligned with the new APIs
+
+- 85e2e7f: Improve launcher-mode artifact layout: split gap and pane styling, configurable `features.artifacts.layout` (CSS vars, narrow-host in-panel drawer, optional launcher panel widen when artifacts are visible), optional draggable split resize (`layout.resizable`), artifact pane appearance (`paneAppearance`: `panel` / `seamless`), `paneBorderRadius`, `paneShadow`, themed borders (`paneBorder` / `paneBorderLeft`), unified split chrome (`unifiedSplitChrome`), and documentation.
+- 85e2e7f: Add `components.markdown.link` and optional `heading` (h1/h2) tokens mapping to `--persona-md-link-color` and optional `--persona-md-h1-*` / `--persona-md-h2-*` overrides. Artifact `layout`: `documentToolbarShowCopyLabel`, `documentToolbarShowCopyChevron`, `documentToolbarIconColor`, `documentToolbarToggleActiveBackground`, `documentToolbarToggleActiveBorderColor` (root CSS variables). Document toolbar uses `aria-pressed` on view/source and theme-driven icon button styles.
+- 85e2e7f: Artifact pane: optional `layout.paneBackground`, `layout.panePadding`, and `layout.toolbarPreset` (`document` shows view/source, copy/refresh/close, and hides the tab strip for a single artifact). Theme: `components.markdown.inlineCode`, assistant `message` border/shadow CSS vars (`--persona-message-assistant-shadow`, `--persona-md-inline-code-color`), artifact markdown styling for `.persona-markdown-bubble`. Config: `copy.showWelcomeCard`, `wrapComponentDirectiveInBubble`. Composer: `data-persona-composer-*` hooks on the default footer; rebind refs after `renderComposer` plugins. Optional `composerForm`/`textarea` guards when custom composers omit controls.
+- 85e2e7f: - Extend custom `renderComposer` context with `streaming`, `openAttachmentPicker`, optional `models` / `selectedModelId` / `onModelChange`, and `onVoiceToggle` when voice is enabled.
+  - Ensure attachment file input + previews exist for custom composers when `attachments.enabled` is true.
+  - Reflect streaming state on the composer footer via `data-persona-composer-streaming` and optional `data-persona-composer-disable-when-streaming` controls.
+  - Add optional markdown `components.markdown.prose.fontFamily` mapped to `--persona-md-prose-font-family` for `.persona-markdown-bubble`.
+  - Document artifact pane desktop close behavior on `AgentWidgetArtifactsLayoutConfig`.
+  - Export `AgentWidgetComposerConfig` from the package entry.
+
+### Patch Changes
+
+- 85e2e7f: Document artifact toolbar title: strip a trailing `· MD` from `artifact` titles before appending ` · MD` so streams that already include the suffix are not shown twice.
+- 85e2e7f: Fix artifact pane not reopening after the user dismisses it: clear `persona-hidden`, force mobile drawer open when artifacts exist, and complete mobile visibility branches in the artifact pane.
+- 85e2e7f: Fix artifact pane **Close** (and mobile backdrop tap) so they call the same hide path as `hideArtifacts()`, including split-desktop layouts. `syncArtifactPane` now resets mobile drawer state when the user dismisses the pane.
+- 99658f7: Fix message action buttons (copy, upvote, downvote) not responding to clicks
+
+  The event delegation handler in ui.ts used stale `tvw-` class name selectors that
+  didn't match the actual `persona-` prefixed classes on the rendered buttons. This
+  meant clicks were silently ignored after the class naming migration.
+
+  Also consolidates click handling: `createMessageActions` is now a pure rendering
+  function that emits buttons with `data-action` attributes. All behavior (clipboard,
+  vote state, callbacks, API submission) is handled exclusively via event delegation
+  in ui.ts, eliminating duplicated logic and divergent vote state that previously
+  existed between the two code paths.
+
+- 85e2e7f: Inline embed (`launcher.enabled: false`) with `launcher.fullHeight: true` now sizes the panel to 100% of the host mount width instead of the default launcher width (`min(400px, …)`).
+- a4e740e: Add `persona-message-content` class on the message body wrapper for stable theme-editor / integration targeting.
+- 85e2e7f: Fix `transcript_insert` SSE messages omitting `variant`: stop defaulting to `"assistant"`, which prevented component-directive rendering for messages with JSON `rawContent`.
+
 ## 1.48.0
 
 ### Minor Changes
