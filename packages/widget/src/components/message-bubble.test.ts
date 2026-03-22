@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { isSafeImageSrc } from "./message-bubble";
+import { createStandardBubble, isSafeImageSrc } from "./message-bubble";
+import type { AgentWidgetMessage } from "../types";
+
+const makeMessage = (overrides: Partial<AgentWidgetMessage> = {}): AgentWidgetMessage => ({
+  id: "msg-1",
+  role: "assistant",
+  content: "",
+  createdAt: new Date().toISOString(),
+  ...overrides,
+});
 
 describe("isSafeImageSrc", () => {
   it("allows https URLs", () => {
@@ -62,5 +71,26 @@ describe("isSafeImageSrc", () => {
 
   it("allows empty string", () => {
     expect(isSafeImageSrc("")).toBe(true);
+  });
+});
+
+describe("createStandardBubble", () => {
+  it("skips rendering blocked image previews while keeping safe ones", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        content: "Image attachments",
+        contentParts: [
+          { type: "image", image: "https://example.com/safe.png", alt: "Safe image" },
+          { type: "image", image: "data:image/svg+xml,<svg onload=alert(1)>", alt: "Blocked image" },
+        ],
+      }),
+      ({ text }) => text
+    );
+
+    const previewImages = bubble.querySelectorAll('[data-message-attachments="images"] img');
+
+    expect(previewImages).toHaveLength(1);
+    expect(previewImages[0]?.getAttribute("src")).toBe("https://example.com/safe.png");
+    expect(previewImages[0]?.getAttribute("alt")).toBe("Safe image");
   });
 });

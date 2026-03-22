@@ -113,13 +113,13 @@ const createMessageImagePreviews = (
 
       if (isSafeImageSrc(imagePart.image)) {
         imageElement.src = imagePart.image;
+        container.appendChild(imageElement);
       } else {
         // Treat blocked images like load errors so fallback triggers correctly
         settled = true;
         visiblePreviewCount = Math.max(0, visiblePreviewCount - 1);
         imageElement.remove();
       }
-      container.appendChild(imageElement);
     });
 
     if (visiblePreviewCount === 0) {
