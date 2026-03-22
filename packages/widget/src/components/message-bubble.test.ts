@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { createStandardBubble, isSafeImageSrc } from "./message-bubble";
 import type { AgentWidgetMessage } from "../types";
