@@ -45,7 +45,6 @@ const DEFAULT_CLIENT_API_BASE = "https://api.runtype.com";
  * Check if a message has valid (non-empty) content for sending to the API.
  * Filters out messages with empty content that would cause validation errors.
  *
- * @see https://github.com/anthropics/claude-code/issues/XXX - Empty assistant messages from failed requests
  */
 const hasValidContent = (message: AgentWidgetMessage): boolean => {
   // Check contentParts (multi-modal content)
