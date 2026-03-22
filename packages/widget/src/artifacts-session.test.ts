@@ -46,10 +46,14 @@ describe("AgentWidgetSession artifacts", () => {
       }
     );
     session.injectTestEvent({
-      type: "artifact",
+      type: "artifact_start",
       id: "x",
-      artifactType: "markdown",
-      content: "Hi"
+      artifactType: "markdown"
+    });
+    session.injectTestEvent({
+      type: "artifact_delta",
+      id: "x",
+      artDelta: "Hi"
     });
     expect(session.getArtifacts().length).toBe(1);
     session.clearMessages();
