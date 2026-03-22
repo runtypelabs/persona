@@ -172,8 +172,11 @@ function registerPreviewEmbedCheckMiddleware(
 
 // Serve the widget's built dist files at /widget-dist/ so standalone examples
 // can load the local IIFE build instead of the CDN version during development.
+// During production builds, copies the files into the output directory.
 function serveWidgetDist(): Plugin {
   const distDir = path.resolve(__dirname, "../../packages/widget/dist");
+  const filesToCopy = ["widget.css", "index.global.js", "index.global.js.map"];
+
   return {
     name: "serve-widget-dist",
     configureServer(server) {
@@ -211,6 +214,19 @@ function serveWidgetDist(): Plugin {
           next();
         }
       });
+    },
+    writeBundle(options) {
+      const outDir = options.dir ?? path.resolve(__dirname, "dist");
+      const targetDir = path.join(outDir, "widget-dist");
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      for (const file of filesToCopy) {
+        const src = path.join(distDir, file);
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, path.join(targetDir, file));
+        }
+      }
     },
   };
 }
