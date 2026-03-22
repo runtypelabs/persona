@@ -28,14 +28,22 @@ function createWidget() {
 
     // Agent execution config (replaces flowId)
     agent: {
-      name: "Assistant",
-      model: "openai:gpt-4o-mini",
+      name: "Travel Planner Assistant",
+      // Primary: qwen/qwen3-8b (fast, cheap, supports tool calling)
+      // Alternative if tool calling is unreliable: "openai:gpt-4o-mini"
+      model: "qwen/qwen3-8b",
       systemPrompt:
-        "You are a helpful, friendly AI assistant. Be concise and clear in your responses. Use markdown formatting when helpful.",
+        "You are a travel planning assistant with access to the Exa web search tool. " +
+        "For itinerary requests, complete work in exactly 3 iterations: " +
+        "Iteration 1 (Discovery), Iteration 2 (Structuring), Iteration 3 (Final). " +
+        "Provide a short heading for each iteration and do not skip directly to the final output. " +
+        "Use web search for current details when helpful and format the response in clear markdown.",
       temperature: 0.7,
+      tools: {
+        toolIds: ["builtin:exa"],
+      },
       loopConfig: {
-        maxIterations: 3,
-        stopCondition: "auto",
+        maxTurns: 3,
       },
     },
     agentOptions: {
@@ -64,13 +72,13 @@ function createWidget() {
       ...DEFAULT_WIDGET_CONFIG.copy,
       welcomeTitle: "Agent Loop Demo",
       welcomeSubtitle:
-        "This widget uses agent execution mode with multi-iteration loops instead of a pre-configured flow.",
-      inputPlaceholder: "Ask the agent anything...",
+        "This agent runs a 3-turn loop for non-technical travel planning. Ask for an itinerary to see the iteration flow.",
+      inputPlaceholder: "Ask for a travel itinerary...",
     },
     suggestionChips: [
-      "Write me a haiku about coding",
-      "What is the meaning of life?",
-      "Explain recursion simply",
+      "Plan a 2-day weekend itinerary for Kyoto for a first-time visitor who likes food, gardens, and quiet neighborhoods. Use exactly 3 iterations: Discovery, Structuring, and Final.",
+      "Plan a rainy-day weekend in Lisbon for a couple focused on food and bookstores.",
+      "Create a one-day family-friendly itinerary in Chicago with indoor backup options.",
     ],
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   });

@@ -66,26 +66,28 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
 
   const footer = createElement(
     "div",
-    "tvw-widget-footer tvw-border-t-cw-divider tvw-bg-cw-surface tvw-px-6 tvw-py-4"
+    "persona-widget-footer persona-border-t-persona-divider persona-bg-persona-surface persona-px-6 persona-py-4"
   );
 
   const suggestions = createElement(
     "div",
-    "tvw-mb-3 tvw-flex tvw-flex-wrap tvw-gap-2"
+    "persona-mb-3 persona-flex persona-flex-wrap persona-gap-2"
   );
 
   // Composer form uses column layout: textarea on top, actions row below
   const composerForm = createElement(
     "form",
-    `tvw-widget-composer tvw-flex tvw-flex-col tvw-gap-2 tvw-rounded-2xl tvw-border tvw-border-gray-200 tvw-bg-cw-input-background tvw-px-4 tvw-py-3`
+    `persona-widget-composer persona-flex persona-flex-col persona-gap-2 persona-rounded-2xl persona-border persona-border-gray-200 persona-bg-persona-input-background persona-px-4 persona-py-3`
   ) as HTMLFormElement;
+  composerForm.setAttribute("data-persona-composer-form", "");
   // Prevent form from getting focus styles
   composerForm.style.outline = "none";
 
   const textarea = createElement("textarea") as HTMLTextAreaElement;
+  textarea.setAttribute("data-persona-composer-input", "");
   textarea.placeholder = config?.copy?.inputPlaceholder ?? "Type your message…";
   textarea.className =
-    "tvw-w-full tvw-min-h-[24px] tvw-resize-none tvw-border-none tvw-bg-transparent tvw-text-sm tvw-text-cw-primary focus:tvw-outline-none focus:tvw-border-none tvw-composer-textarea";
+    "persona-w-full persona-min-h-[24px] persona-resize-none persona-border-none persona-bg-transparent persona-text-sm persona-text-persona-primary focus:persona-outline-none focus:persona-border-none persona-composer-textarea";
   textarea.rows = 1;
 
   // Apply font family and weight from config
@@ -146,16 +148,17 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   const textColor = sendButtonConfig.textColor;
 
   // Create wrapper for tooltip positioning
-  const sendButtonWrapper = createElement("div", "tvw-send-button-wrapper");
+  const sendButtonWrapper = createElement("div", "persona-send-button-wrapper");
 
   const sendButton = createElement(
     "button",
     useIcon
-      ? "tvw-rounded-button tvw-flex tvw-items-center tvw-justify-center disabled:tvw-opacity-50 tvw-cursor-pointer"
-      : "tvw-rounded-button tvw-bg-cw-accent tvw-px-4 tvw-py-2 tvw-text-sm tvw-font-semibold disabled:tvw-opacity-50 tvw-cursor-pointer"
+      ? "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer"
+      : "persona-rounded-button persona-bg-persona-accent persona-px-4 persona-py-2 persona-text-sm persona-font-semibold disabled:persona-opacity-50 persona-cursor-pointer"
   ) as HTMLButtonElement;
 
   sendButton.type = "submit";
+  sendButton.setAttribute("data-persona-composer-submit", "");
 
   if (useIcon) {
     // Icon mode: circular button
@@ -186,7 +189,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
         if (textColor) {
           sendButton.style.color = textColor;
         } else {
-          sendButton.classList.add("tvw-text-white");
+          sendButton.classList.add("persona-text-white");
         }
       }
     } else {
@@ -194,14 +197,14 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
       if (textColor) {
         sendButton.style.color = textColor;
       } else {
-        sendButton.classList.add("tvw-text-white");
+        sendButton.classList.add("persona-text-white");
       }
     }
 
     if (backgroundColor) {
       sendButton.style.backgroundColor = backgroundColor;
     } else {
-      sendButton.classList.add("tvw-bg-cw-primary");
+      sendButton.classList.add("persona-bg-persona-primary");
     }
   } else {
     // Text mode: existing behavior
@@ -209,7 +212,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     if (textColor) {
       sendButton.style.color = textColor;
     } else {
-      sendButton.classList.add("tvw-text-white");
+      sendButton.classList.add("persona-text-white");
     }
   }
 
@@ -240,7 +243,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
 
   // Add tooltip if enabled
   if (showTooltip && tooltipText) {
-    const tooltip = createElement("div", "tvw-send-button-tooltip");
+    const tooltip = createElement("div", "persona-send-button-tooltip");
     tooltip.textContent = tooltipText;
     sendButtonWrapper.appendChild(tooltip);
   }
@@ -263,13 +266,14 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider;
 
   if (voiceRecognitionEnabled && hasVoiceInput) {
-    micButtonWrapper = createElement("div", "tvw-send-button-wrapper");
+    micButtonWrapper = createElement("div", "persona-send-button-wrapper");
     micButton = createElement(
       "button",
-      "tvw-rounded-button tvw-flex tvw-items-center tvw-justify-center disabled:tvw-opacity-50 tvw-cursor-pointer"
+      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer"
     ) as HTMLButtonElement;
 
     micButton.type = "button";
+    micButton.setAttribute("data-persona-composer-mic", "");
     micButton.setAttribute("aria-label", "Start voice recognition");
 
     const micIconName = voiceRecognitionConfig.iconName ?? "mic";
@@ -309,14 +313,14 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     if (micBackgroundColor) {
       micButton.style.backgroundColor = micBackgroundColor;
     } else {
-      micButton.classList.add("tvw-bg-cw-primary");
+      micButton.classList.add("persona-bg-persona-primary");
     }
 
     // Apply icon/text color
     if (micIconColor) {
       micButton.style.color = micIconColor;
     } else if (!micIconColor && !textColor) {
-      micButton.classList.add("tvw-text-white");
+      micButton.classList.add("persona-text-white");
     }
 
     // Apply border styling
@@ -345,7 +349,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
       voiceRecognitionConfig.tooltipText ?? "Start voice recognition";
     const showMicTooltip = voiceRecognitionConfig.showTooltip ?? false;
     if (showMicTooltip && micTooltipText) {
-      const tooltip = createElement("div", "tvw-send-button-tooltip");
+      const tooltip = createElement("div", "persona-send-button-tooltip");
       tooltip.textContent = micTooltipText;
       micButtonWrapper.appendChild(tooltip);
     }
@@ -363,7 +367,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     // Create previews container (shown above textarea when attachments are added)
     attachmentPreviewsContainer = createElement(
       "div",
-      "tvw-attachment-previews tvw-flex tvw-flex-wrap tvw-gap-2 tvw-mb-2"
+      "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2"
     );
     attachmentPreviewsContainer.style.display = "none"; // Hidden until attachments added
 
@@ -376,12 +380,12 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     attachmentInput.setAttribute("aria-label", "Attach files");
 
     // Create attachment button wrapper for tooltip
-    attachmentButtonWrapper = createElement("div", "tvw-send-button-wrapper");
+    attachmentButtonWrapper = createElement("div", "persona-send-button-wrapper");
 
     // Create attachment button
     attachmentButton = createElement(
       "button",
-      "tvw-rounded-button tvw-flex tvw-items-center tvw-justify-center disabled:tvw-opacity-50 tvw-cursor-pointer tvw-attachment-button"
+      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button"
     ) as HTMLButtonElement;
     attachmentButton.type = "button";
     attachmentButton.setAttribute("aria-label", attachmentsConfig.buttonTooltipText ?? "Attach file");
@@ -400,14 +404,14 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     attachmentButton.style.fontSize = "18px";
     attachmentButton.style.lineHeight = "1";
     attachmentButton.style.backgroundColor = "transparent";
-    attachmentButton.style.color = "var(--cw-primary, #111827)";
+    attachmentButton.style.color = "var(--persona-primary, #111827)";
     attachmentButton.style.border = "none";
     attachmentButton.style.borderRadius = "6px";
     attachmentButton.style.transition = "background-color 0.15s ease";
 
     // Add hover effect via mouseenter/mouseleave
     attachmentButton.addEventListener("mouseenter", () => {
-      attachmentButton!.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+      attachmentButton!.style.backgroundColor = "var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.05))";
     });
     attachmentButton.addEventListener("mouseleave", () => {
       attachmentButton!.style.backgroundColor = "transparent";
@@ -436,7 +440,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
 
     // Add tooltip if configured
     const attachTooltipText = attachmentsConfig.buttonTooltipText ?? "Attach file";
-    const tooltip = createElement("div", "tvw-send-button-tooltip");
+    const tooltip = createElement("div", "persona-send-button-tooltip");
     tooltip.textContent = attachTooltipText;
     attachmentButtonWrapper.appendChild(tooltip);
   }
@@ -477,16 +481,16 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   composerForm.append(textarea);
 
   // Actions row: attachment on left, mic/send on right
-  const actionsRow = createElement("div", "tvw-flex tvw-items-center tvw-justify-between tvw-w-full");
+  const actionsRow = createElement("div", "persona-flex persona-items-center persona-justify-between persona-w-full");
 
   // Left side: attachment button
-  const leftActions = createElement("div", "tvw-flex tvw-items-center tvw-gap-2");
+  const leftActions = createElement("div", "persona-flex persona-items-center persona-gap-2");
   if (attachmentButtonWrapper) {
     leftActions.append(attachmentButtonWrapper);
   }
 
   // Right side: mic and send buttons
-  const rightActions = createElement("div", "tvw-flex tvw-items-center tvw-gap-1");
+  const rightActions = createElement("div", "persona-flex persona-items-center persona-gap-1");
   if (micButtonWrapper) {
     rightActions.append(micButtonWrapper);
   }
@@ -497,8 +501,9 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
 
   const statusText = createElement(
     "div",
-    "tvw-mt-2 tvw-text-right tvw-text-xs tvw-text-cw-muted"
+    "persona-mt-2 persona-text-right persona-text-xs persona-text-persona-muted"
   );
+  statusText.setAttribute("data-persona-composer-status", "");
 
   // Apply status indicator config
   const statusConfig = config?.statusIndicator ?? {};

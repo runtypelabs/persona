@@ -26,12 +26,6 @@ export type ActionResponse =
       }>;
     };
 
-export type PageElement = {
-  className: string;
-  innerText: string;
-  tagName: string;
-};
-
 export const STORAGE_KEY = "runtype-persona-action-middleware";
 const NAV_FLAG_KEY = "runtype-persona-nav-flag";
 const EXECUTED_ACTIONS_KEY = "runtype-persona-executed-actions"; // Track which message IDs have had actions executed
@@ -73,76 +67,6 @@ export interface OrderData {
 export interface CheckoutReturn {
   status: 'success' | 'cancelled' | null;
   sessionId?: string;
-}
-
-/**
- * Collects all DOM elements with their classnames and innerText
- * to provide context to the LLM about available page elements
- */
-export function collectPageContext(): PageElement[] {
-  const elements: PageElement[] = [];
-  const seen = new Set<string>();
-
-  // Walk through all elements in the document
-  const walker = document.createTreeWalker(
-    document.body,
-    NodeFilter.SHOW_ELEMENT,
-    null
-  );
-
-  let node: Node | null = walker.currentNode;
-  while (node) {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      const element = node as HTMLElement;
-      
-      // Exclude elements within the widget
-      const widgetHost = element.closest('.persona-host');
-      if (widgetHost) {
-        node = walker.nextNode();
-        continue;
-      }
-      
-      const className = element.className;
-      
-      // Skip elements without meaningful class names or text
-      if (
-        typeof className === "string" &&
-        className.trim() &&
-        element.innerText.trim()
-      ) {
-        const key = `${element.tagName}.${className}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          elements.push({
-            className: className.trim(),
-            innerText: element.innerText.trim().substring(0, 200), // Limit text length
-            tagName: element.tagName.toLowerCase()
-          });
-        }
-      }
-    }
-    node = walker.nextNode();
-  }
-
-  return elements;
-}
-
-/**
- * Formats page context as a string for inclusion in LLM prompt
- */
-export function formatPageContext(elements: PageElement[]): string {
-  if (elements.length === 0) {
-    return "No interactive elements found on the page.";
-  }
-
-  const grouped = elements
-    .map(
-      (el) =>
-        `- ${el.tagName}.${el.className}: "${el.innerText.substring(0, 100)}"`
-    )
-    .join("\n");
-
-  return `Available page elements:\n${grouped}`;
 }
 
 /**

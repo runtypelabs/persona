@@ -267,7 +267,7 @@ export class AttachmentManager {
 
     const previewWrapper = createElement(
       "div",
-      "tvw-attachment-preview tvw-relative tvw-inline-block"
+      "persona-attachment-preview persona-relative persona-inline-block"
     );
     previewWrapper.setAttribute("data-attachment-id", attachment.id);
     previewWrapper.style.width = "48px";
@@ -279,7 +279,7 @@ export class AttachmentManager {
       img.src = attachment.previewUrl;
       img.alt = attachment.file.name;
       img.className =
-        "tvw-w-full tvw-h-full tvw-object-cover tvw-rounded-lg tvw-border tvw-border-gray-200";
+        "persona-w-full persona-h-full persona-object-cover persona-rounded-lg persona-border persona-border-gray-200";
       img.style.width = "48px";
       img.style.height = "48px";
       img.style.objectFit = "cover";
@@ -291,8 +291,8 @@ export class AttachmentManager {
       filePreview.style.width = "48px";
       filePreview.style.height = "48px";
       filePreview.style.borderRadius = "8px";
-      filePreview.style.backgroundColor = "var(--cw-container, #f3f4f6)";
-      filePreview.style.border = "1px solid var(--cw-border, #e5e7eb)";
+      filePreview.style.backgroundColor = "var(--persona-container, #f3f4f6)";
+      filePreview.style.border = "1px solid var(--persona-border, #e5e7eb)";
       filePreview.style.display = "flex";
       filePreview.style.flexDirection = "column";
       filePreview.style.alignItems = "center";
@@ -302,7 +302,7 @@ export class AttachmentManager {
 
       // File icon
       const iconName = getFileIconName(attachment.file.type);
-      const fileIcon = renderLucideIcon(iconName, 20, "var(--cw-muted, #6b7280)", 1.5);
+      const fileIcon = renderLucideIcon(iconName, 20, "var(--persona-muted, #6b7280)", 1.5);
       if (fileIcon) {
         filePreview.appendChild(fileIcon);
       }
@@ -312,7 +312,7 @@ export class AttachmentManager {
       typeLabel.textContent = getFileTypeName(attachment.file.type, attachment.file.name);
       typeLabel.style.fontSize = "8px";
       typeLabel.style.fontWeight = "600";
-      typeLabel.style.color = "var(--cw-muted, #6b7280)";
+      typeLabel.style.color = "var(--persona-muted, #6b7280)";
       typeLabel.style.textTransform = "uppercase";
       typeLabel.style.lineHeight = "1";
       filePreview.appendChild(typeLabel);
@@ -323,7 +323,7 @@ export class AttachmentManager {
     // Create remove button
     const removeBtn = createElement(
       "button",
-      "tvw-attachment-remove tvw-absolute tvw-flex tvw-items-center tvw-justify-center"
+      "persona-attachment-remove persona-absolute persona-flex persona-items-center persona-justify-center"
     ) as HTMLButtonElement;
     removeBtn.type = "button";
     removeBtn.setAttribute("aria-label", "Remove attachment");
@@ -333,7 +333,7 @@ export class AttachmentManager {
     removeBtn.style.width = "18px";
     removeBtn.style.height = "18px";
     removeBtn.style.borderRadius = "50%";
-    removeBtn.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+    removeBtn.style.backgroundColor = "var(--persona-palette-colors-black-alpha-60, rgba(0, 0, 0, 0.6))";
     removeBtn.style.border = "none";
     removeBtn.style.cursor = "pointer";
     removeBtn.style.display = "flex";
@@ -342,12 +342,12 @@ export class AttachmentManager {
     removeBtn.style.padding = "0";
 
     // Add X icon
-    const xIcon = renderLucideIcon("x", 10, "#ffffff", 2);
+    const xIcon = renderLucideIcon("x", 10, "var(--persona-text-inverse, #ffffff)", 2);
     if (xIcon) {
       removeBtn.appendChild(xIcon);
     } else {
       removeBtn.textContent = "×";
-      removeBtn.style.color = "#ffffff";
+      removeBtn.style.color = "var(--persona-text-inverse, #ffffff)";
       removeBtn.style.fontSize = "14px";
       removeBtn.style.lineHeight = "1";
     }

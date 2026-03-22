@@ -7,9 +7,16 @@ export type {
   AgentWidgetConfig,
   AgentWidgetTheme,
   AgentWidgetFeatureFlags,
+  AgentWidgetArtifactsFeature,
+  AgentWidgetArtifactsLayoutConfig,
+  PersonaArtifactKind,
+  PersonaArtifactRecord,
+  PersonaArtifactManualUpsert,
+  ArtifactConfigPayload,
   AgentWidgetInitOptions,
   AgentWidgetMessage,
   AgentWidgetLauncherConfig,
+  AgentWidgetDockConfig,
   AgentWidgetEvent,
   AgentWidgetStreamParser,
   AgentWidgetStreamParserResult,
@@ -25,6 +32,7 @@ export type {
   MessageContent,
   // Attachment config type
   AgentWidgetAttachmentsConfig,
+  AgentWidgetComposerConfig,
   // Layout types
   AgentWidgetLayoutConfig,
   AgentWidgetHeaderLayoutConfig,
@@ -62,6 +70,7 @@ export type {
   // Agent execution types
   AgentConfig,
   AgentLoopConfig,
+  AgentToolsConfig,
   AgentRequestOptions,
   AgentExecutionState,
   AgentMessageMetadata,
@@ -82,6 +91,11 @@ export type {
 } from "./types";
 
 export { initAgentWidgetFn as initAgentWidget };
+export {
+  createWidgetHostLayout,
+  type WidgetHostLayout,
+  type WidgetHostLayoutMode
+} from "./runtime/host-layout";
 export {
   createAgentExperience,
   type AgentWidgetController
@@ -126,6 +140,21 @@ export {
   validateImageFile
 } from "./utils/content";
 export {
+  collectEnrichedPageContext,
+  formatEnrichedContext,
+  generateStableSelector,
+  defaultParseRules
+} from "./utils/dom-context";
+export type {
+  EnrichedPageElement,
+  DomContextOptions,
+  DomContextMode,
+  ParseOptionsConfig,
+  ParseRule,
+  RuleScoringContext,
+  FormatEnrichedContextOptions
+} from "./utils/dom-context";
+export {
   AttachmentManager,
   type PendingAttachment,
   type AttachmentManagerConfig
@@ -135,6 +164,7 @@ export {
   generateUserMessageId,
   generateAssistantMessageId
 } from "./utils/message-id";
+export { isDockedMountMode, resolveDockConfig } from "./utils/dock";
 export { generateCodeSnippet } from "./utils/code-generators";
 export type { CodeFormat, CodeGeneratorHooks, CodeGeneratorOptions } from "./utils/code-generators";
 export { VERSION } from "./version";
@@ -143,6 +173,55 @@ export type { AgentWidgetInitHandle };
 // Plugin system exports
 export type { AgentWidgetPlugin } from "./plugins/types";
 export { pluginRegistry } from "./plugins/registry";
+
+// Theme system exports
+export {
+  createTheme,
+  resolveTokens,
+  themeToCssVariables,
+  applyThemeVariables,
+  getActiveTheme,
+  getColorScheme,
+  detectColorScheme,
+  createThemeObserver
+} from "./utils/theme";
+export {
+  DEFAULT_PALETTE,
+  DEFAULT_SEMANTIC,
+  DEFAULT_COMPONENTS,
+  validateTheme
+} from "./utils/tokens";
+export {
+  accessibilityPlugin,
+  animationsPlugin,
+  brandPlugin,
+  reducedMotionPlugin,
+  highContrastPlugin,
+  createPlugin
+} from "./utils/plugins";
+export {
+  migrateV1Theme,
+  validateV1Theme
+} from "./utils/migration";
+export type {
+  PersonaTheme,
+  PersonaThemePlugin,
+  CreateThemeOptions,
+  TokenReference,
+  ColorShade,
+  ColorPalette,
+  SpacingScale,
+  TypographyScale,
+  ShadowScale,
+  BorderScale,
+  RadiusScale,
+  SemanticColors,
+  SemanticSpacing,
+  SemanticTypography,
+  ComponentTokens,
+  ThemeValidationResult,
+  ThemeValidationError
+} from "./types/theme";
 
 // Component system exports
 export { componentRegistry } from "./components/registry";
@@ -184,8 +263,7 @@ export {
   getHeaderLayout,
   buildHeaderWithLayout,
   buildDefaultHeader,
-  buildMinimalHeader,
-  buildExpandedHeader
+  buildMinimalHeader
 } from "./components/header-layouts";
 export type {
   HeaderLayoutContext,

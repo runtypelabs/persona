@@ -1,0 +1,663 @@
+<!doctype html>
+<meta charset="UTF-8" />
+<!-- Shopping Assistant Configuration -->
+<script>
+    window.ShoppingAssistantConfig = {
+      apiUrl: "https://persona-proxy.runtype.workers.dev/api/chat/dispatch-metadata",
+      theme: {
+        primary: "#111827",
+        accent: "#1d4ed8",
+        surface: "#ffffff",
+        muted: "#6b7280",
+        container: "#f8fafc",
+        border: "#f1f5f9",
+        divider: "#f1f5f9",
+        messageBorder: "#f1f5f9",
+        inputBackground: "#ffffff",
+        callToAction: "#000000",
+        callToActionBackground: "#ffffff",
+        sendButtonBackgroundColor: "#111827",
+        sendButtonTextColor: "#ffffff",
+        sendButtonBorderColor: "#60a5fa",
+        closeButtonColor: "#9ca3af",
+        closeButtonBackgroundColor: "transparent",
+        closeButtonBorderColor: "",
+        clearChatIconColor: "#9ca3af",
+        clearChatBackgroundColor: "transparent",
+        clearChatBorderColor: "transparent",
+        micIconColor: "#111827",
+        micBackgroundColor: "transparent",
+        micBorderColor: "transparent",
+        recordingIconColor: "#ffffff",
+        recordingBackgroundColor: "#ef4444",
+        recordingBorderColor: "transparent",
+        inputFontFamily: "sans-serif",
+        inputFontWeight: "400",
+        radiusSm: "0.75rem",
+        radiusMd: "1rem",
+        radiusLg: "1.5rem",
+        launcherRadius: "9999px",
+        buttonRadius: "9999px",
+      },
+      launcher: {
+        enabled: true,
+        title: "Shopping Assistant",
+        subtitle: "Here to help you get answers fast",
+        agentIconText: "🛍️",
+        position: "bottom-right",
+        width: "min(600px, calc(100vw - 24px))",
+        autoExpand: false,
+        callToActionIconHidden: false,
+        agentIconSize: "40px",
+        headerIconSize: "40px",
+        closeButtonSize: "32px",
+        callToActionIconName: "arrow-up-right",
+        callToActionIconText: "",
+        callToActionIconSize: "32px",
+        callToActionIconPadding: "5px",
+        callToActionIconColor: "#000000",
+        callToActionIconBackgroundColor: "#ffffff",
+        closeButtonColor: "#9ca3af",
+        closeButtonBackgroundColor: "transparent",
+        headerIconHidden: false,
+      },
+      copy: {
+        welcomeTitle: "Welcome to our shop!",
+        welcomeSubtitle: "I can help you find products and add them to your cart",
+        inputPlaceholder: "Ask me anything...",
+        sendButtonLabel: "Send"
+      },
+      features: {
+        showReasoning: true,
+        showToolCalls: true,
+      },
+      suggestionChips: [
+        "What can you help me with?",
+        "Tell me about your features",
+        "How does this work?",
+      ],
+    };
+  </script>
+
+  <!-- Shopping Assistant Widget Script -->
+  <script>
+    (function () {
+      'use strict';
+      
+      console.log('[Shopping Assistant] Script starting...');
+
+      const STORAGE_KEY = 'shopping-assistant-state';
+      const PROCESSED_ACTIONS_KEY = 'shopping-assistant-processed-actions';
+
+      const shoppingContextProvider = () => {
+        const selectors = {
+          products: '[data-product-id], .product-card, .product-item, [role="article"]',
+          buttons: 'button, [role="button"], .btn',
+          links: 'a[href]',
+          inputs: 'input, textarea, select'
+        };
+
+        const elements = [];
+        Object.entries(selectors).forEach(([type, selector]) => {
+          document.querySelectorAll(selector).forEach((element) => {
+            if (!(element instanceof HTMLElement)) return;
+            const text = element.innerText?.trim();
+            if (!text) return;
+
+            const selectorString =
+              element.id ? `#${element.id}` :
+              element.getAttribute('data-testid') ? `[data-testid="${element.getAttribute('data-testid')}"]` :
+              element.getAttribute('data-product-id') ? `[data-product-id="${element.getAttribute('data-product-id')}"]` :
+              element.tagName.toLowerCase();
+
+            const elementData = {
+              type,
+              tagName: element.tagName.toLowerCase(),
+              selector: selectorString,
+              innerText: text.substring(0, 200)
+            };
+
+            // Add href for links
+            if (type === 'links' && element instanceof HTMLAnchorElement && element.href) {
+              elementData.href = element.href;
+            }
+
+            elements.push(elementData);
+          });
+        });
+
+        const counts = elements.reduce(
+          (acc, el) => {
+            acc[el.type] = (acc[el.type] || 0) + 1;
+            return acc;
+          },
+          {}
+        );
+
+        return {
+          page_elements: elements.slice(0, 50),
+          page_element_count: elements.length,
+          element_types: counts,
+          page_url: window.location.href,
+          page_title: document.title,
+          timestamp: new Date().toISOString()
+        };
+      };
+
+      const createWidgetConfig = (agentWidget) => ({
+        ...window.ShoppingAssistantConfig,
+        // Use the flexible JSON stream parser with custom text extraction
+        // streamParser must be a factory function that returns a parser
+        streamParser: () => agentWidget.createFlexibleJsonStreamParser((parsed) => {
+          if (!parsed || typeof parsed !== 'object') return null;
+          
+          // Custom text extraction based on action type
+          if (parsed.action === 'nav_then_click') {
+            // Don't show the on_load_text yet - it will be injected after navigation
+            return 'Navigating...';
+          } else if (parsed.action === 'message') {
+            return parsed.text || '';
+          } else if (parsed.action === 'message_and_click') {
+            return parsed.text || 'Processing...';
+          } else if (parsed.action === 'checkout') {
+            return parsed.text || 'Setting up checkout...';
+          }
+          
+          // Fallback to text field
+          return parsed.text || null;
+        }),
+        actionParsers: [
+          // Enhanced logging wrapper for default JSON parser
+          (context) => {
+            console.log('[Shopping Assistant] === ACTION PARSER CALLED ===');
+            console.log('[Shopping Assistant] Parser context:', {
+              textLength: context.text?.length,
+              messageId: context.message?.id,
+              messageRole: context.message?.role,
+              streaming: context.message?.streaming,
+              hasRawContent: !!context.message?.rawContent
+            });
+            
+            // Call the default JSON parser
+            const result = agentWidget.defaultJsonActionParser(context);
+            
+            if (result) {
+              console.log('[Shopping Assistant] ✅ Default JSON parser found action:', {
+                type: result.type,
+                payload: result.payload,
+                raw: result.raw
+              });
+            } else {
+              console.log('[Shopping Assistant] ❌ Default JSON parser returned null');
+            }
+            
+            return result;
+          },
+          // Custom parser as fallback to log and detect nav_then_click
+          ({ text, message, streaming }) => {
+            console.log('[Shopping Assistant] === CUSTOM PARSER CALLED ===');
+            console.log('[Shopping Assistant] Custom parser details:', {
+              streaming: streaming,
+              textLength: text?.length,
+              textPreview: text?.substring(0, 100),
+              rawContentLength: message.rawContent?.length,
+              rawContentPreview: message.rawContent?.substring(0, 100),
+              contentLength: message.content?.length,
+              contentPreview: message.content?.substring(0, 100)
+            });
+            
+            // The rawContent should contain the full JSON
+            const jsonSource = message.rawContent || text || message.content;
+            
+            if (!jsonSource || typeof jsonSource !== 'string') {
+              console.log('[Shopping Assistant] ❌ No JSON source available');
+              return null;
+            }
+            
+            console.log('[Shopping Assistant] JSON source:', {
+              length: jsonSource.length,
+              full: jsonSource
+            });
+            
+            // Strip markdown code fences if present
+            let cleanJson = jsonSource;
+            
+            // Remove leading ```json or ``` 
+            cleanJson = cleanJson.replace(/^```(?:json)?\s*\n?/, '');
+            
+            // Remove trailing ```
+            cleanJson = cleanJson.replace(/\n?```\s*$/, '');
+            
+            // Now trim whitespace
+            const trimmed = cleanJson.trim();
+            
+            // Only try to parse if it looks like complete JSON
+            if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+              console.log('[Shopping Assistant] ❌ JSON not complete - starts:', trimmed.substring(0, 20), 'ends:', trimmed.substring(trimmed.length - 20));
+              return null;
+            }
+            
+            try {
+              const parsed = JSON.parse(trimmed);
+              console.log('[Shopping Assistant] ✅ Successfully parsed JSON:', parsed);
+              
+              // Return in the format the action system expects
+              if (parsed.action) {
+                const actionResult = {
+                  type: parsed.action,
+                  payload: parsed
+                };
+                console.log('[Shopping Assistant] 🎯 Returning action:', actionResult);
+                return actionResult;
+              } else {
+                console.log('[Shopping Assistant] ❌ No action field in parsed JSON');
+              }
+            } catch (e) {
+              console.log('[Shopping Assistant] ❌ JSON parse error:', e.message);
+              console.log('[Shopping Assistant] Failed to parse:', trimmed);
+            }
+            
+            return null;
+          }
+        ],
+        contextProviders: [shoppingContextProvider],
+        actionHandlers: [
+          // Log all actions being handled
+          (action, context) => {
+            console.log('[Shopping Assistant] === ACTION HANDLER CHECKING ===');
+            console.log('[Shopping Assistant] Action received:', {
+              type: action.type,
+              hasPayload: !!action.payload,
+              hasRaw: !!action.raw,
+              messageId: context.message?.id
+            });
+            // Don't handle, just log
+            return;
+          },
+          agentWidget.defaultActionHandlers.message,
+          agentWidget.defaultActionHandlers.messageAndClick,
+          // Custom handler for nav_then_click
+          (action, context) => {
+            console.log('[Shopping Assistant] === NAV_THEN_CLICK HANDLER ===');
+            console.log('[Shopping Assistant] Full action object:', JSON.stringify(action, null, 2));
+            console.log('[Shopping Assistant] Full context:', {
+              messageId: context.message?.id,
+              messageRole: context.message?.role,
+              messageContent: context.message?.content?.substring(0, 100)
+            });
+            
+            if (action.type !== 'nav_then_click') {
+              console.log('[Shopping Assistant] ❌ Not nav_then_click, type is:', action.type);
+              return;
+            }
+            
+            console.log('[Shopping Assistant] ✅ nav_then_click action matched!');
+            
+            // Support both formats: payload as separate fields or raw as complete JSON
+            const payload = action.payload || action.raw || {};
+            console.log('[Shopping Assistant] Extracted payload:', payload);
+            
+            const url = payload?.page;
+            const text = payload?.on_load_text || 'Navigating...';
+            
+            console.log('[Shopping Assistant] URL:', url);
+            console.log('[Shopping Assistant] Display text:', text);
+            
+            if (!url) {
+              console.log('[Shopping Assistant] ❌ No URL in payload');
+              return { handled: true, displayText: text };
+            }
+            
+            // Check if this navigation was already processed
+            const messageId = context.message?.id;
+            const processedActions = JSON.parse(localStorage.getItem(PROCESSED_ACTIONS_KEY) || '[]');
+            const actionKey = `nav_${messageId}_${url}`;
+            
+            console.log('[Shopping Assistant] Checking if already processed:', actionKey);
+            console.log('[Shopping Assistant] Processed actions:', processedActions);
+            
+            if (processedActions.includes(actionKey)) {
+              console.log('[Shopping Assistant] ⚠️ Navigation already processed, skipping:', actionKey);
+              return { handled: true, displayText: text };
+            }
+            
+            // Mark this navigation as processed
+            processedActions.push(actionKey);
+            localStorage.setItem(PROCESSED_ACTIONS_KEY, JSON.stringify(processedActions));
+            console.log('[Shopping Assistant] Marked as processed:', actionKey);
+            
+            console.log('[Shopping Assistant] ✅ Preparing to navigate to:', url);
+            
+            const targetUrl = url.startsWith('http')
+              ? url
+              : new URL(url, window.location.origin).toString();
+            
+            console.log('[Shopping Assistant] Final target URL:', targetUrl);
+            console.log('[Shopping Assistant] Setting timeout for navigation...');
+            
+            // Store navigation context using the new SDK APIs
+            if (window.chatController) {
+              // Use the new isOpen() method instead of DOM inspection
+              const isWidgetOpen = window.chatController.isOpen();
+              
+              console.log('[Shopping Assistant] Widget state:', {
+                isOpen: isWidgetOpen,
+                isVoiceActive: window.chatController.isVoiceActive()
+              });
+              
+              if (isWidgetOpen) {
+                console.log('[Shopping Assistant] Storing navigation context for post-navigation handling');
+                
+                const navContextData = {
+                  shouldReopenAfterNav: true,
+                  onLoadText: text,
+                  targetUrl: targetUrl,
+                  timestamp: Date.now()
+                };
+                
+                // Store in both localStorage AND widget metadata for reliability
+                // localStorage ensures immediate availability on next page load
+                localStorage.setItem('nav-context', JSON.stringify(navContextData));
+                
+                // Also store in widget metadata as backup
+                window.chatController.updatePersistentMetadata((prev) => ({
+                  ...prev,
+                  navigationContext: navContextData
+                }));
+                
+                console.log('[Shopping Assistant] Navigation context stored:', { onLoadText: text, targetUrl });
+              } else {
+                console.log('[Shopping Assistant] Widget is not open, skipping navigation context storage');
+              }
+            }
+            
+            // Navigate after a short delay to allow message to render
+            const timeoutId = setTimeout(() => {
+              console.log('[Shopping Assistant] 🚀 NAVIGATING NOW to:', targetUrl);
+              console.log('[Shopping Assistant] Current location before nav:', window.location.href);
+              window.location.href = targetUrl;
+              console.log('[Shopping Assistant] Navigation command executed');
+            }, 800);
+            
+            console.log('[Shopping Assistant] Timeout set with ID:', timeoutId);
+            
+            // Return "Navigating..." message with persistMessage: false to prevent it from being saved
+            // The actual on_load_text will be injected after navigation completes
+            const result = { 
+              handled: true, 
+              displayText: 'Navigating...',
+              persistMessage: false  // Don't save this temporary message
+            };
+            console.log('[Shopping Assistant] Returning from handler:', result);
+            return result;
+          }
+        ],
+        storageAdapter: agentWidget.createLocalStorageAdapter(STORAGE_KEY),
+        postprocessMessage: ({ text, streaming, message, raw }) => {
+          // Always log to verify this is being called
+          console.log('[Shopping Assistant] === POSTPROCESS MESSAGE ===');
+          console.log('[Shopping Assistant] Message details:', {
+            role: message.role,
+            variant: message.variant,
+            streaming,
+            messageId: message.id,
+            textLength: text?.length,
+            textPreview: text?.substring(0, 80),
+            rawLength: raw?.length,
+            rawPreview: raw?.substring(0, 80),
+            rawContentLength: message.rawContent?.length,
+            rawContentPreview: message.rawContent?.substring(0, 100),
+            contentLength: message.content?.length,
+            contentPreview: message.content?.substring(0, 100)
+          });
+          
+          // Check if this message should trigger action parsing
+          if (message.role === 'assistant' && !streaming) {
+            console.log('[Shopping Assistant] 🔍 CHECKING FOR ACTIONS (not streaming, assistant role)');
+            console.log('[Shopping Assistant] Has text?', !!text);
+            console.log('[Shopping Assistant] Has rawContent?', !!message.rawContent);
+            console.log('[Shopping Assistant] Full rawContent:', message.rawContent);
+          }
+          
+          // The flexible JSON parser handles text extraction
+          // We just need to apply markdown processing
+          const result = agentWidget.markdownPostprocessor
+            ? agentWidget.markdownPostprocessor(text)
+            : text;
+          console.log('[Shopping Assistant] postprocessMessage returning:', result?.substring(0, 80));
+          return result;
+        },
+        requestMiddleware: ({ payload }) => {
+          if (payload.context) {
+            payload.metadata = payload.context;
+            delete payload.context;
+          }
+          return payload;
+        },
+        voiceRecognition: {
+          ...window.ShoppingAssistantConfig.voiceRecognition,
+          autoResume: 'assistant'
+        }
+      });
+
+      let widgetInitialized = false;
+      
+      const initializeWidget = () => {
+        console.log('[Shopping Assistant] Initializing widget...');
+        
+        if (widgetInitialized) {
+          console.log('[Shopping Assistant] Widget already initialized, skipping');
+          return true;
+        }
+        
+        if (!window.AgentWidget?.initAgentWidget) {
+          console.log('[Shopping Assistant] AgentWidget not available yet');
+          return false;
+        }
+
+        // Check if widget was already initialized by installer
+        if (document.querySelector('.persona-host') || document.querySelector('[data-persona-widget]')) {
+          console.warn('[Shopping Assistant] Widget already exists in DOM! May have been auto-initialized.');
+          // Try to destroy it first
+          if (window.chatController?.destroy) {
+            console.log('[Shopping Assistant] Destroying existing widget...');
+            window.chatController.destroy();
+          }
+        }
+
+        console.log('[Shopping Assistant] AgentWidget available, creating config');
+        const config = createWidgetConfig(window.AgentWidget);
+        console.log('[Shopping Assistant] Config created:', config);
+        
+        const controller = window.AgentWidget.initAgentWidget({
+          target: window.siteAgentConfig?.target || 'body',
+          config,
+          useShadowDom: false,
+          windowKey: 'chatController'
+        });
+        
+        console.log('[Shopping Assistant] Widget initialized, controller:', controller);
+        widgetInitialized = true;
+        
+        // Verify our configuration is registered
+        if (window.chatController) {
+          console.log('[Shopping Assistant] Testing - window.chatController is available');
+          console.log('[Shopping Assistant] Config has', config.actionHandlers?.length, 'action handlers');
+          console.log('[Shopping Assistant] Config has', config.actionParsers?.length, 'action parsers');
+          
+          // Listen to action events
+          window.chatController.on('action:detected', (event) => {
+            console.log('[Shopping Assistant] 🎯 ACTION DETECTED EVENT:', {
+              action: event.action,
+              messageId: event.message?.id
+            });
+          });
+          
+          window.chatController.on('action:handled', (event) => {
+            console.log('[Shopping Assistant] ✅ ACTION HANDLED EVENT:', {
+              action: event.action,
+              result: event.result,
+              messageId: event.message?.id
+            });
+          });
+          
+          window.chatController.on('message', (message) => {
+            console.log('[Shopping Assistant] 📨 MESSAGE EVENT:', {
+              id: message.id,
+              role: message.role,
+              streaming: message.streaming,
+              contentLength: message.content?.length,
+              rawContentLength: message.rawContent?.length
+            });
+          });
+          
+          // Check for navigation context - use localStorage for immediate availability
+          const navContextStr = localStorage.getItem('nav-context');
+          let navContext = null;
+
+          if (navContextStr) {
+            try {
+              navContext = JSON.parse(navContextStr);
+              console.log('[Shopping Assistant] Found navigation context in localStorage');
+            } catch (e) {
+              console.error('[Shopping Assistant] Failed to parse nav-context:', e);
+            }
+          }
+
+          // Also check widget metadata as fallback
+          if (!navContext) {
+            const metadata = window.chatController.getPersistentMetadata();
+            navContext = metadata?.navigationContext;
+            if (navContext) {
+              console.log('[Shopping Assistant] Found navigation context in widget metadata');
+            }
+          }
+
+          if (navContext && typeof navContext === 'object') {
+            const timeSinceNav = Date.now() - (navContext.timestamp || 0);
+            
+            console.log('[Shopping Assistant] Navigation context detected:', {
+              shouldReopen: navContext.shouldReopenAfterNav,
+              hasOnLoadText: !!navContext.onLoadText,
+              timeSinceNav: timeSinceNav,
+              targetUrl: navContext.targetUrl
+            });
+            
+            // If navigation happened recently (within 5 seconds)
+            if (navContext.shouldReopenAfterNav && timeSinceNav < 5000) {
+              console.log('[Shopping Assistant] Processing post-navigation actions');
+              
+              // Clear from both storage locations
+              localStorage.removeItem('nav-context');
+              window.chatController.updatePersistentMetadata((prev) => {
+                const { navigationContext, ...rest } = prev;
+                return rest;
+              });
+              
+              // Open the widget and inject the on_load_text message
+              setTimeout(() => {
+                if (window.chatController?.open) {
+                  console.log('[Shopping Assistant] Opening widget after navigation');
+                  window.chatController.open();
+                  
+                  // Inject the on_load_text as a message AFTER navigation completes
+                  if (navContext.onLoadText) {
+                    console.log('[Shopping Assistant] Injecting on_load_text message:', navContext.onLoadText);
+                    setTimeout(() => {
+                      window.chatController.injectTestMessage({
+                        type: 'message',
+                        message: {
+                          id: `assistant-nav-${Date.now()}`,
+                          role: 'assistant',
+                          content: navContext.onLoadText,
+                          createdAt: new Date().toISOString()
+                        }
+                      });
+                      console.log('[Shopping Assistant] on_load_text message injected');
+                      
+                      // Widget's built-in voice restoration (maybeRestoreVoiceFromMetadata) 
+                      // will automatically handle reactivating voice if it was active within the 30s window
+                    }, 500);
+                  }
+                }
+              }, 300);
+            } else if (timeSinceNav >= 5000) {
+              console.log('[Shopping Assistant] Navigation context expired, clearing');
+              // Clear expired navigation context from both locations
+              localStorage.removeItem('nav-context');
+              window.chatController.updatePersistentMetadata((prev) => {
+                const { navigationContext, ...rest } = prev;
+                return rest;
+              });
+            }
+          }
+        }
+        
+        return true;
+      };
+
+      // IMPORTANT: Set config BEFORE loading installer to prevent auto-init
+      // On localhost, use locally served build artifacts to avoid CDN version drift.
+      var isLocalhost = window.location.hostname === 'localhost';
+      window.siteAgentConfig = {
+        target: 'body',
+        autoInit: false,  // We'll initialize manually with our custom config
+        config: null, // Explicitly null to ensure no auto-init
+        ...(isLocalhost
+          ? {
+              cssUrl: '/widget-dist/widget.css',
+              jsUrl: '/widget-dist/index.global.js'
+            }
+          : {
+              version: 'latest',
+              cdn: 'jsdelivr'
+            })
+      };
+
+      console.log('[Shopping Assistant] Setting up siteAgentConfig');
+      
+      const installerScript = document.createElement('script');
+      var cdnBase = window.location.hostname === 'localhost'
+        ? '/widget-dist'
+        : 'https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist';
+      installerScript.src = cdnBase + '/install.global.js';
+      
+      console.log('[Shopping Assistant] Loading installer script from:', installerScript.src);
+      
+      installerScript.onload = () => {
+        console.log('[Shopping Assistant] Installer script loaded successfully');
+        const attemptInit = () => {
+          console.log('[Shopping Assistant] Attempting to initialize widget...');
+          if (!initializeWidget()) {
+            console.log('[Shopping Assistant] Widget not ready, retrying in 50ms...');
+            setTimeout(attemptInit, 50);
+          } else {
+            console.log('[Shopping Assistant] Widget initialization complete!');
+          }
+        };
+        attemptInit();
+      };
+      
+      installerScript.onerror = () => {
+        console.error('[Shopping Assistant] Failed to load installer script');
+      };
+      
+      document.head.appendChild(installerScript);
+      console.log('[Shopping Assistant] Installer script appended to document head');
+      
+      // Listen for clear chat event to also clear processed actions and navigation context
+      window.addEventListener('persona:clear-chat', () => {
+        console.log('[Shopping Assistant] Chat cleared, resetting processed actions and navigation context');
+        localStorage.removeItem(PROCESSED_ACTIONS_KEY);
+        localStorage.removeItem('nav-context');
+        
+        // Clear navigation context from widget metadata
+        if (window.chatController) {
+          window.chatController.updatePersistentMetadata((prev) => {
+            const { navigationContext, ...rest } = prev;
+            return rest;
+          });
+        }
+      });
+    })();
+  </script>

@@ -1,6 +1,7 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetConfig } from "../types";
 import { positionMap } from "../utils/positioning";
+import { isDockedMountMode } from "../utils/dock";
 import { buildHeader, attachHeaderToContainer, HeaderElements } from "./header-builder";
 import { buildHeaderWithLayout } from "./header-layouts";
 import { buildComposer, ComposerElements } from "./composer-builder";
@@ -12,17 +13,32 @@ export interface PanelWrapper {
 
 export const createWrapper = (config?: AgentWidgetConfig): PanelWrapper => {
   const launcherEnabled = config?.launcher?.enabled ?? true;
+  const dockedMode = isDockedMountMode(config);
+
+  if (dockedMode) {
+    const wrapper = createElement(
+      "div",
+      "persona-relative persona-h-full persona-w-full persona-flex persona-flex-1 persona-min-h-0 persona-flex-col"
+    );
+    const panel = createElement(
+      "div",
+      "persona-relative persona-h-full persona-w-full persona-flex persona-flex-1 persona-min-h-0 persona-flex-col"
+    );
+
+    wrapper.appendChild(panel);
+    return { wrapper, panel };
+  }
 
   if (!launcherEnabled) {
     // For inline embed mode, use flex layout to ensure the widget fills its container
     // and only the chat messages area scrolls
     const wrapper = createElement(
       "div",
-      "tvw-relative tvw-h-full tvw-flex tvw-flex-col tvw-flex-1 tvw-min-h-0"
+      "persona-relative persona-h-full persona-flex persona-flex-col persona-flex-1 persona-min-h-0"
     );
     const panel = createElement(
       "div",
-      "tvw-relative tvw-flex-1 tvw-flex tvw-flex-col tvw-min-h-0"
+      "persona-relative persona-flex-1 persona-flex persona-flex-col persona-min-h-0"
     );
     
     // Apply width from config, defaulting to 100% for inline embed mode
@@ -42,12 +58,12 @@ export const createWrapper = (config?: AgentWidgetConfig): PanelWrapper => {
 
   const wrapper = createElement(
     "div",
-    `tvw-widget-wrapper tvw-fixed ${position} tvw-z-50 tvw-transition`
+    `persona-widget-wrapper persona-fixed ${position} persona-z-50 persona-transition`
   );
 
   const panel = createElement(
     "div",
-    "tvw-widget-panel tvw-relative tvw-min-h-[320px]"
+    "persona-widget-panel persona-relative persona-min-h-[320px]"
   );
   const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
   const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
@@ -98,7 +114,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
   // the body (chat messages area) to scroll while header/footer stay fixed
   const container = createElement(
     "div",
-    "tvw-widget-container tvw-flex tvw-h-full tvw-w-full tvw-flex-1 tvw-min-h-0 tvw-flex-col tvw-bg-cw-surface tvw-text-cw-primary tvw-rounded-2xl tvw-overflow-hidden tvw-border tvw-border-cw-border"
+    "persona-widget-container persona-flex persona-h-full persona-w-full persona-flex-1 persona-min-h-0 persona-flex-col persona-bg-persona-surface persona-text-persona-primary persona-rounded-2xl persona-overflow-hidden persona-border persona-border-persona-border"
   );
 
   // Build header using layout config if available, otherwise use standard builder
@@ -111,22 +127,22 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
   // Build body with intro card and messages wrapper
   const body = createElement(
     "div",
-    "tvw-widget-body tvw-flex tvw-flex-1 tvw-min-h-0 tvw-flex-col tvw-gap-6 tvw-overflow-y-auto tvw-bg-cw-container tvw-px-6 tvw-py-6"
+    "persona-widget-body persona-flex persona-flex-1 persona-min-h-0 persona-flex-col persona-gap-6 persona-overflow-y-auto persona-bg-persona-container persona-px-6 persona-py-6"
   );
   body.id = "persona-scroll-container";
   
   const introCard = createElement(
     "div",
-    "tvw-rounded-2xl tvw-bg-cw-surface tvw-p-6 tvw-shadow-sm"
+    "persona-rounded-2xl persona-bg-persona-surface persona-p-6 persona-shadow-sm"
   );
   const introTitle = createElement(
     "h2",
-    "tvw-text-lg tvw-font-semibold tvw-text-cw-primary"
+    "persona-text-lg persona-font-semibold persona-text-persona-primary"
   );
   introTitle.textContent = config?.copy?.welcomeTitle ?? "Hello 👋";
   const introSubtitle = createElement(
     "p",
-    "tvw-mt-2 tvw-text-sm tvw-text-cw-muted"
+    "persona-mt-2 persona-text-sm persona-text-persona-muted"
   );
   introSubtitle.textContent =
     config?.copy?.welcomeSubtitle ??
@@ -135,10 +151,25 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
 
   const messagesWrapper = createElement(
     "div",
-    "tvw-flex tvw-flex-col tvw-gap-3"
+    "persona-flex persona-flex-col persona-gap-3"
   );
 
-  body.append(introCard, messagesWrapper);
+  const contentMaxWidth = config?.layout?.contentMaxWidth;
+  if (contentMaxWidth) {
+    messagesWrapper.style.maxWidth = contentMaxWidth;
+    messagesWrapper.style.marginLeft = "auto";
+    messagesWrapper.style.marginRight = "auto";
+    messagesWrapper.style.width = "100%";
+  }
+
+  const showWelcomeCard = config?.copy?.showWelcomeCard !== false;
+  if (!showWelcomeCard) {
+    body.classList.remove("persona-gap-6");
+    body.classList.add("persona-gap-3");
+    body.append(messagesWrapper);
+  } else {
+    body.append(introCard, messagesWrapper);
+  }
 
   // Build composer/footer using extracted builder
   const composerElements: ComposerElements = buildComposer({ config });

@@ -18,6 +18,8 @@ interface SiteAgentInstallConfig {
   clientToken?: string;
   flowId?: string;
   apiUrl?: string;
+  // Optional query param key that gates widget installation in preview mode
+  previewQueryParam?: string;
   // Shadow DOM option (defaults to false for better CSS compatibility)
   useShadowDom?: boolean;
 }
@@ -84,6 +86,12 @@ declare global {
       scriptConfig.apiUrl = apiUrl;
     }
 
+    // Optional preview query param gate
+    const previewQueryParam = script.getAttribute('data-preview-param');
+    if (previewQueryParam) {
+      scriptConfig.previewQueryParam = previewQueryParam;
+    }
+
     return scriptConfig;
   };
 
@@ -93,6 +101,20 @@ declare global {
   // Merge script attributes with window config (script attributes take precedence)
   const windowConfig: SiteAgentInstallConfig = window.siteAgentConfig || {};
   const config: SiteAgentInstallConfig = { ...windowConfig, ...scriptConfig };
+
+  const isPreviewModeEnabled = (): boolean => {
+    if (!config.previewQueryParam) {
+      return true;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const value = params.get(config.previewQueryParam);
+    return value !== null && value !== "" && value.toLowerCase() !== "false" && value !== "0";
+  };
+
+  if (!isPreviewModeEnabled()) {
+    return;
+  }
   
   const version = config.version || "latest";
   const cdn = config.cdn || "jsdelivr";

@@ -162,7 +162,7 @@ export const createDirectivePostprocessor = (markdownConfig?: AgentWidgetMarkdow
     placeholders.forEach(({ token, type }) => {
       const tokenRegex = new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
       const safeType = escapeAttribute(type);
-      const replacement = `<div class="tvw-form-directive" data-tv-form="${safeType}"></div>`;
+      const replacement = `<div class="persona-form-directive" data-tv-form="${safeType}"></div>`;
       html = html.replace(tokenRegex, replacement);
     });
 
@@ -186,7 +186,7 @@ export const directivePostprocessor = (text: string): string => {
   placeholders.forEach(({ token, type }) => {
     const tokenRegex = new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
     const safeType = escapeAttribute(type);
-    const replacement = `<div class="tvw-form-directive" data-tv-form="${safeType}"></div>`;
+    const replacement = `<div class="persona-form-directive" data-tv-form="${safeType}"></div>`;
     html = html.replace(tokenRegex, replacement);
   });
 

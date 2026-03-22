@@ -47,7 +47,7 @@ function createWidget() {
     customFetch: async (_url, init, _payload) => {
       // Simulate: assistant starts typing, then pauses for approval
       const events = [
-        { type: "agent_start", executionId: "exec-demo-1", agentId: "demo-agent", agentName: "Demo Agent", maxIterations: 3, startedAt: Date.now() },
+        { type: "agent_start", executionId: "exec-demo-1", agentId: "demo-agent", agentName: "Demo Agent", maxTurns: 3, startedAt: Date.now() },
         { type: "agent_iteration_start", executionId: "exec-demo-1", iteration: 1 },
         { type: "agent_turn_start", executionId: "exec-demo-1", turnId: "turn-1" },
         { type: "agent_turn_delta", executionId: "exec-demo-1", turnId: "turn-1", delta: "Let me search for that information using Exa..." },

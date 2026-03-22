@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview Mode Demo</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    h1 { color: #333; }
+    .info-box {
+      background: #f0f9ff;
+      border: 1px solid #0ea5e9;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      margin: 1rem 0;
+    }
+    .info-box h3 {
+      margin: 0 0 0.5rem;
+      color: #0369a1;
+    }
+    code {
+      background: #e5e7eb;
+      padding: 0.2em 0.4em;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #1f2937;
+      color: #f9fafb;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+    }
+    .status {
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .status.active {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .status.inactive {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    a {
+      color: #0ea5e9;
+    }
+  </style>
+</head>
+<body>
+  <h1>Widget Preview Mode Demo</h1>
+  
+  <div class="info-box">
+    <h3>Current Status</h3>
+    <p id="status-text">Checking...</p>
+  </div>
+
+  <h2>How it works</h2>
+  <p>
+    The widget is configured with <code>data-preview-param="preview-agent"</code>.
+    This means the widget will <strong>only load</strong> when the URL contains 
+    <code>?preview-agent=true</code>.
+  </p>
+
+  <h3>Try it:</h3>
+  <ul>
+    <li><a href="?preview-agent=true">Load with preview mode ON</a> (widget will appear)</li>
+    <li><a href="?">Load without param</a> (widget will NOT appear)</li>
+    <li><a href="?preview-agent=false">Load with param=false</a> (widget will NOT appear)</li>
+  </ul>
+
+  <h2>Script Tag Usage</h2>
+  <pre><code>&lt;script 
+  src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"
+  data-runtype-token="YOUR_TOKEN"
+  data-preview-param="preview-agent"
+&gt;&lt;/script&gt;</code></pre>
+
+  <h2>Programmatic Usage</h2>
+  <pre><code>import { initAgentWidget } from '@runtypelabs/persona';
+
+const widget = initAgentWidget({
+  target: 'body',
+  previewQueryParam: 'preview-agent',
+  config: {
+    clientToken: 'YOUR_TOKEN'
+  }
+});
+
+// widget will be null if preview param is missing
+if (widget) {
+  console.log('Widget initialized!');
+}</code></pre>
+
+  <h2>Use Cases</h2>
+  <ul>
+    <li><strong>Testing:</strong> Share preview links with clients before going live</li>
+    <li><strong>Staging:</strong> Load widget only on staging URLs</li>
+    <li><strong>Beta testing:</strong> Give select users access via special URLs</li>
+    <li><strong>A/B testing:</strong> Combine with feature flags</li>
+  </ul>
+
+  <script>
+    // Show current status
+    const params = new URLSearchParams(window.location.search);
+    const previewParam = params.get('preview-agent');
+    const statusEl = document.getElementById('status-text');
+    
+    const isTruthy = previewParam !== null && previewParam !== '' && 
+                     previewParam.toLowerCase() !== 'false' && previewParam !== '0';
+    
+    if (isTruthy) {
+      statusEl.innerHTML = '<span class="status active">✓ Preview mode active - Widget will load</span>';
+    } else {
+      statusEl.innerHTML = '<span class="status inactive">⚠ Preview mode inactive - Widget will NOT load</span>';
+    }
+  </script>
+
+  <!-- 
+    Widget installer with preview mode enabled.
+    The widget will only load when ?preview-agent=true is in the URL.
+    Run `pnpm build:widget` to update the local build.
+  -->
+  <script>
+    (function() {
+      var base = window.location.hostname === 'localhost'
+        ? '/widget-dist'
+        : 'https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist';
+      var s = document.createElement('script');
+      s.src = base + '/install.global.js';
+      s.setAttribute('data-runtype-token', 'ct_demo_token_replace_with_your_own');
+      s.setAttribute('data-preview-param', 'preview-agent');
+      document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
+    })();
+  </script>
+</body>
+</html>

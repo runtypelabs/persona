@@ -52,31 +52,31 @@ export const enhanceWithForms = (
       placeholder.dataset.enhanced = "true";
 
       const definition = formDefinitions[type] ?? formDefinitions.init;
-      placeholder.classList.add("tvw-form-card", "tvw-space-y-4");
+      placeholder.classList.add("persona-form-card", "persona-space-y-4");
 
-      const heading = createElement("div", "tvw-space-y-1");
+      const heading = createElement("div", "persona-space-y-1");
       const title = createElement(
         "h3",
-        "tvw-text-base tvw-font-semibold tvw-text-cw-primary"
+        "persona-text-base persona-font-semibold persona-text-persona-primary"
       );
       title.textContent = definition.title;
       heading.appendChild(title);
       if (definition.description) {
         const desc = createElement(
           "p",
-          "tvw-text-sm tvw-text-cw-muted"
+          "persona-text-sm persona-text-persona-muted"
         );
         desc.textContent = definition.description;
         heading.appendChild(desc);
       }
 
       const form = document.createElement("form");
-      form.className = "tvw-form-grid tvw-space-y-3";
+      form.className = "persona-form-grid persona-space-y-3";
 
       definition.fields.forEach((field) => {
-        const group = createElement("label", "tvw-form-field tvw-flex tvw-flex-col tvw-gap-1");
+        const group = createElement("label", "persona-form-field persona-flex persona-flex-col persona-gap-1");
         group.htmlFor = `${message.id}-${type}-${field.name}`;
-        const label = createElement("span", "tvw-text-xs tvw-font-medium tvw-text-cw-muted");
+        const label = createElement("span", "persona-text-xs persona-font-medium persona-text-persona-muted");
         label.textContent = field.label;
         group.appendChild(label);
 
@@ -90,7 +90,7 @@ export const enhanceWithForms = (
           control.type = inputType;
         }
         control.className =
-          "tvw-rounded-xl tvw-border tvw-border-gray-200 tvw-bg-white tvw-px-3 tvw-py-2 tvw-text-sm tvw-text-cw-primary focus:tvw-outline-none focus:tvw-border-cw-primary";
+          "persona-rounded-xl persona-border persona-border-gray-200 persona-bg-white persona-px-3 persona-py-2 persona-text-sm persona-text-persona-primary focus:persona-outline-none focus:persona-border-persona-primary";
         control.id = `${message.id}-${type}-${field.name}`;
         control.name = field.name;
         control.placeholder = field.placeholder ?? "";
@@ -103,15 +103,15 @@ export const enhanceWithForms = (
 
       const actions = createElement(
         "div",
-        "tvw-flex tvw-items-center tvw-justify-between tvw-gap-2"
+        "persona-flex persona-items-center persona-justify-between persona-gap-2"
       );
       const status = createElement(
         "div",
-        "tvw-text-xs tvw-text-cw-muted tvw-min-h-[1.5rem]"
+        "persona-text-xs persona-text-persona-muted persona-min-h-[1.5rem]"
       );
       const submit = createElement(
         "button",
-        "tvw-inline-flex tvw-items-center tvw-rounded-full tvw-bg-cw-primary tvw-px-4 tvw-py-2 tvw-text-sm tvw-font-semibold tvw-text-white disabled:tvw-opacity-60 tvw-cursor-pointer"
+        "persona-inline-flex persona-items-center persona-rounded-full persona-bg-persona-primary persona-px-4 persona-py-2 persona-text-sm persona-font-semibold persona-text-white disabled:persona-opacity-60 persona-cursor-pointer"
       ) as HTMLButtonElement;
       submit.type = "submit";
       submit.textContent = definition.submitLabel ?? "Submit";

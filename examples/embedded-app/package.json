@@ -8,11 +8,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "partial-json": "^0.1.7",
-    "@runtypelabs/persona": "workspace:^"
+    "@runtypelabs/persona": "workspace:^",
+    "idiomorph": "^0.7.4",
+    "partial-json": "^0.1.7"
   },
   "devDependencies": {
+    "jsdom": "^28.1.0",
     "typescript": "^5.4.5",
-    "vite": "^5.4.1"
+    "vite": "^5.4.1",
+    "vitest": "^4.0.18"
   }
 }

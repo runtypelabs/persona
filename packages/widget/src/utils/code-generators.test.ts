@@ -24,6 +24,18 @@ const fullConfig = {
   },
 };
 
+const dockedConfig = {
+  apiUrl: "https://api.example.com/chat",
+  launcher: {
+    mountMode: "docked",
+    dock: {
+      side: "left",
+      width: "480px",
+      collapsedWidth: "84px",
+    },
+  },
+};
+
 // =============================================================================
 // Hook Serialization Tests
 // =============================================================================
@@ -109,6 +121,16 @@ describe("Hook Serialization", () => {
 // =============================================================================
 
 describe("ESM Format Hooks", () => {
+  it("should serialize docked launcher config", () => {
+    const code = generateCodeSnippet(dockedConfig, "esm");
+
+    expect(code).toContain('mountMode: "docked"');
+    expect(code).toContain('dock: {');
+    expect(code).toContain('side: "left"');
+    expect(code).toContain('width: "480px"');
+    expect(code).toContain('collapsedWidth: "84px"');
+  });
+
   it("should inject getHeaders hook", () => {
     const code = generateCodeSnippet(minimalConfig, "esm", {
       hooks: {
@@ -165,6 +187,16 @@ describe("ESM Format Hooks", () => {
 });
 
 describe("React Component Format Hooks", () => {
+  it("should serialize docked launcher config in React component format", () => {
+    const code = generateCodeSnippet(dockedConfig, "react-component");
+
+    expect(code).toContain('mountMode: "docked"');
+    expect(code).toContain('dock: {');
+    expect(code).toContain('side: "left"');
+    expect(code).toContain('width: "480px"');
+    expect(code).toContain('collapsedWidth: "84px"');
+  });
+
   it("should inject hooks in React component format", () => {
     const code = generateCodeSnippet(minimalConfig, "react-component", {
       hooks: {
@@ -191,6 +223,16 @@ describe("React Component Format Hooks", () => {
 });
 
 describe("React Advanced Format Hooks", () => {
+  it("should serialize docked launcher config in React advanced format", () => {
+    const code = generateCodeSnippet(dockedConfig, "react-advanced");
+
+    expect(code).toContain('mountMode: "docked"');
+    expect(code).toContain('dock: {');
+    expect(code).toContain('side: "left"');
+    expect(code).toContain('width: "480px"');
+    expect(code).toContain('collapsedWidth: "84px"');
+  });
+
   it("should inject custom action handlers alongside defaults", () => {
     const code = generateCodeSnippet(minimalConfig, "react-advanced", {
       hooks: {
@@ -242,6 +284,16 @@ describe("React Advanced Format Hooks", () => {
 });
 
 describe("Script Manual Format Hooks", () => {
+  it("should serialize docked launcher config in script-manual format", () => {
+    const code = generateCodeSnippet(dockedConfig, "script-manual");
+
+    expect(code).toContain('mountMode: "docked"');
+    expect(code).toContain('dock: {');
+    expect(code).toContain('side: "left"');
+    expect(code).toContain('width: "480px"');
+    expect(code).toContain('collapsedWidth: "84px"');
+  });
+
   it("should inject hooks in script-manual format", () => {
     const code = generateCodeSnippet(minimalConfig, "script-manual", {
       hooks: {

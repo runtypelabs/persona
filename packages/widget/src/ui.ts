@@ -20,15 +20,19 @@ import {
   InjectSystemMessageOptions,
   LoadingIndicatorRenderContext,
   IdleIndicatorRenderContext,
-  VoiceStatus
+  VoiceStatus,
+  PersonaArtifactRecord,
+  PersonaArtifactManualUpsert
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver } from "./utils/theme";
 import { renderLucideIcon } from "./utils/icons";
-import { createElement } from "./utils/dom";
+import { createElement, createElementInDocument } from "./utils/dom";
 import { morphMessages } from "./utils/morph";
+import { computeMessageFingerprint, createMessageCache, getCachedWrapper, setCachedWrapper, pruneCache } from "./utils/message-fingerprint";
 import { statusCopy } from "./utils/constants";
+import { isDockedMountMode } from "./utils/dock";
 import { createLauncherButton } from "./components/launcher";
 import { createWrapper, buildPanel, buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
 import { buildHeaderWithLayout } from "./components/header-layouts";
@@ -43,6 +47,14 @@ import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
 import { createEventStreamView } from "./components/event-stream-view";
+import { createArtifactPane, type ArtifactPaneApi } from "./components/artifact-pane";
+import {
+  artifactsSidebarEnabled,
+  applyArtifactLayoutCssVars,
+  applyArtifactPaneAppearance,
+  shouldExpandLauncherForArtifacts
+} from "./utils/artifact-gate";
+import { readFlexGapPx, resolveArtifactPaneWidthPx } from "./utils/artifact-resize";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
 import { mergeWithDefaults } from "./defaults";
@@ -277,6 +289,14 @@ type Controller = {
   hideEventStream: () => void;
   /** Returns current visibility state of the event stream panel */
   isEventStreamVisible: () => boolean;
+  /** Show artifact sidebar (no-op if features.artifacts.enabled is false) */
+  showArtifacts: () => void;
+  /** Hide artifact sidebar */
+  hideArtifacts: () => void;
+  /** Upsert an artifact programmatically */
+  upsertArtifact: (manual: PersonaArtifactManualUpsert) => PersonaArtifactRecord | null;
+  selectArtifact: (id: string) => void;
+  clearArtifacts: () => void;
   /**
    * Focus the chat input. Returns true if focus succeeded, false if panel is closed
    * (launcher mode) or textarea is unavailable.
@@ -467,6 +487,7 @@ export const createAgentExperience = (
   let prevAutoExpand = autoExpand;
   let prevLauncherEnabled = launcherEnabled;
   let prevHeaderLayout = config.layout?.header?.layout;
+  let wasMobileFullscreen = false;
   let open = launcherEnabled ? autoExpand : true;
 
   // Track pending resubmit state for injection-triggered resubmit
@@ -591,20 +612,11 @@ export const createAgentExperience = (
   let attachmentInput: HTMLInputElement | null = panelElements.attachmentInput;
   let attachmentPreviewsContainer: HTMLElement | null = panelElements.attachmentPreviewsContainer;
 
-  // Initialize attachment manager if attachments are enabled
+  // Initialized after composer plugins rebind footer DOM (see `bindComposerRefsFromFooter`)
   let attachmentManager: AttachmentManager | null = null;
-  if (config.attachments?.enabled && attachmentInput && attachmentPreviewsContainer) {
-    attachmentManager = AttachmentManager.fromConfig(config.attachments);
-    attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
 
-    // Wire up file input change event
-    attachmentInput.addEventListener("change", (e) => {
-      const target = e.target as HTMLInputElement;
-      attachmentManager?.handleFileSelect(target.files);
-      // Reset input so same file can be selected again
-      target.value = "";
-    });
-  }
+  /** Wired after `handleMicButtonClick` is defined; used by `renderComposer` `onVoiceToggle`. */
+  let composerVoiceBridge: (() => void) | null = null;
 
   // Plugin hook: renderHeader - allow plugins to provide custom header
   const headerPlugin = plugins.find(p => p.renderHeader);
@@ -620,7 +632,7 @@ export const createAgentExperience = (
     });
     if (customHeader) {
       // Replace the default header with custom header
-      const existingHeader = container.querySelector('.tvw-border-b-cw-divider');
+      const existingHeader = container.querySelector('.persona-border-b-persona-divider');
       if (existingHeader) {
         existingHeader.replaceWith(customHeader);
         header = customHeader;
@@ -647,9 +659,9 @@ export const createAgentExperience = (
       eventStreamView.update();
     }
     if (eventStreamToggleBtn) {
-      eventStreamToggleBtn.classList.remove("tvw-text-cw-muted");
-      eventStreamToggleBtn.classList.add("tvw-text-cw-accent");
-      eventStreamToggleBtn.style.boxShadow = "inset 0 0 0 1.5px var(--cw-accent, #3b82f6)";
+      eventStreamToggleBtn.classList.remove("persona-text-persona-muted");
+      eventStreamToggleBtn.classList.add("persona-text-persona-accent");
+      eventStreamToggleBtn.style.boxShadow = "inset 0 0 0 1.5px var(--persona-accent, #3b82f6)";
       const activeClasses = config.features?.eventStream?.classNames?.toggleButtonActive;
       if (activeClasses) activeClasses.split(/\s+/).forEach(c => c && eventStreamToggleBtn!.classList.add(c));
     }
@@ -676,8 +688,8 @@ export const createAgentExperience = (
     }
     body.style.display = "";
     if (eventStreamToggleBtn) {
-      eventStreamToggleBtn.classList.remove("tvw-text-cw-accent");
-      eventStreamToggleBtn.classList.add("tvw-text-cw-muted");
+      eventStreamToggleBtn.classList.remove("persona-text-persona-accent");
+      eventStreamToggleBtn.classList.add("persona-text-persona-muted");
       eventStreamToggleBtn.style.boxShadow = "";
       const activeClasses = config.features?.eventStream?.classNames?.toggleButtonActive;
       if (activeClasses) activeClasses.split(/\s+/).forEach(c => c && eventStreamToggleBtn!.classList.remove(c));
@@ -694,7 +706,7 @@ export const createAgentExperience = (
   let eventStreamToggleBtn: HTMLButtonElement | null = null;
   if (showEventStreamToggle) {
     const esClassNames = config.features?.eventStream?.classNames;
-    const toggleBtnClasses = "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-1" + (esClassNames?.toggleButton ? " " + esClassNames.toggleButton : "");
+    const toggleBtnClasses = "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-1" + (esClassNames?.toggleButton ? " " + esClassNames.toggleButton : "");
     eventStreamToggleBtn = createElement("button", toggleBtnClasses) as HTMLButtonElement;
     eventStreamToggleBtn.style.width = "28px";
     eventStreamToggleBtn.style.height = "28px";
@@ -723,9 +735,38 @@ export const createAgentExperience = (
     });
   }
 
+  const ensureComposerAttachmentSurface = (rootFooter: HTMLElement) => {
+    const att = config.attachments;
+    if (!att?.enabled) return;
+    let previews = rootFooter.querySelector<HTMLElement>(".persona-attachment-previews");
+    if (!previews) {
+      previews = createElement(
+        "div",
+        "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2"
+      );
+      previews.style.display = "none";
+      const form = rootFooter.querySelector("[data-persona-composer-form]");
+      if (form?.parentNode) {
+        form.parentNode.insertBefore(previews, form);
+      } else {
+        rootFooter.insertBefore(previews, rootFooter.firstChild);
+      }
+    }
+    if (!rootFooter.querySelector<HTMLInputElement>('input[type="file"]')) {
+      const fileIn = createElement("input") as HTMLInputElement;
+      fileIn.type = "file";
+      fileIn.accept = (att.allowedTypes ?? ALL_SUPPORTED_MIME_TYPES).join(",");
+      fileIn.multiple = (att.maxFiles ?? 4) > 1;
+      fileIn.style.display = "none";
+      fileIn.setAttribute("aria-label", att.buttonTooltipText ?? "Attach files");
+      rootFooter.appendChild(fileIn);
+    }
+  };
+
   // Plugin hook: renderComposer - allow plugins to provide custom composer
   const composerPlugin = plugins.find(p => p.renderComposer);
   if (composerPlugin?.renderComposer) {
+    const composerCfg = config.composer;
     const customComposer = composerPlugin.renderComposer({
       config,
       defaultRenderer: () => {
@@ -737,15 +778,77 @@ export const createAgentExperience = (
           session.sendMessage(text);
         }
       },
-      disabled: false
+      streaming: false,
+      disabled: false,
+      openAttachmentPicker: () => {
+        attachmentInput?.click();
+      },
+      models: composerCfg?.models,
+      selectedModelId: composerCfg?.selectedModelId,
+      onModelChange: (modelId: string) => {
+        config.composer = { ...config.composer, selectedModelId: modelId };
+      },
+      onVoiceToggle:
+        config.voiceRecognition?.enabled === true
+          ? () => {
+              composerVoiceBridge?.();
+            }
+          : undefined
     });
     if (customComposer) {
       // Replace the default footer with custom composer
       footer.replaceWith(customComposer);
       footer = customComposer;
-      // Note: When using custom composer, textarea/sendButton/etc may not exist
-      // The plugin is responsible for providing its own submit handling
     }
+  }
+
+  const bindComposerRefsFromFooter = (rootFooter: HTMLElement) => {
+    const form = rootFooter.querySelector<HTMLFormElement>("[data-persona-composer-form]");
+    const ta = rootFooter.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]");
+    const sb = rootFooter.querySelector<HTMLButtonElement>("[data-persona-composer-submit]");
+    const mic = rootFooter.querySelector<HTMLButtonElement>("[data-persona-composer-mic]");
+    const st = rootFooter.querySelector<HTMLElement>("[data-persona-composer-status]");
+    if (form) composerForm = form;
+    if (ta) textarea = ta;
+    if (sb) sendButton = sb;
+    if (mic) {
+      micButton = mic;
+      micButtonWrapper = mic.parentElement as HTMLElement | null;
+    }
+    if (st) statusText = st;
+    const sug = rootFooter.querySelector<HTMLElement>(
+      ".persona-mb-3.persona-flex.persona-flex-wrap.persona-gap-2"
+    );
+    if (sug) suggestions = sug;
+    const attBtn = rootFooter.querySelector<HTMLButtonElement>(".persona-attachment-button");
+    if (attBtn) {
+      attachmentButton = attBtn;
+      attachmentButtonWrapper = attBtn.parentElement as HTMLElement | null;
+    }
+    attachmentInput = rootFooter.querySelector<HTMLInputElement>('input[type="file"]');
+    attachmentPreviewsContainer = rootFooter.querySelector<HTMLElement>(".persona-attachment-previews");
+    const ar = rootFooter.querySelector<HTMLElement>(".persona-widget-composer .persona-flex.persona-items-center.persona-justify-between");
+    if (ar) _actionsRow = ar;
+  };
+  ensureComposerAttachmentSurface(footer);
+  bindComposerRefsFromFooter(footer);
+
+  // Apply contentMaxWidth to composer form if configured
+  const contentMaxWidth = config.layout?.contentMaxWidth;
+  if (contentMaxWidth && composerForm) {
+    composerForm.style.maxWidth = contentMaxWidth;
+    composerForm.style.marginLeft = "auto";
+    composerForm.style.marginRight = "auto";
+  }
+
+  if (config.attachments?.enabled && attachmentInput && attachmentPreviewsContainer) {
+    attachmentManager = AttachmentManager.fromConfig(config.attachments);
+    attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
+    attachmentInput.addEventListener("change", (e) => {
+      const target = e.target as HTMLInputElement;
+      attachmentManager?.handleFileSelect(target.files);
+      target.value = "";
+    });
   }
 
   // Slot system: allow custom content injection into specific regions
@@ -757,7 +860,7 @@ export const createAgentExperience = (
       switch (slot) {
         case "body-top":
           // Default: the intro card
-          return container.querySelector(".tvw-rounded-2xl.tvw-bg-cw-surface.tvw-p-6") as HTMLElement || null;
+          return container.querySelector(".persona-rounded-2xl.persona-bg-persona-surface.persona-p-6") as HTMLElement || null;
         case "messages":
           return messagesWrapper;
         case "footer-top":
@@ -784,7 +887,7 @@ export const createAgentExperience = (
             header.appendChild(element);
           } else {
             // header-center: insert after icon/title
-            const titleSection = header.querySelector(".tvw-flex-col");
+            const titleSection = header.querySelector(".persona-flex-col");
             if (titleSection) {
               titleSection.parentNode?.insertBefore(element, titleSection.nextSibling);
             } else {
@@ -794,7 +897,7 @@ export const createAgentExperience = (
           break;
         case "body-top": {
           // Replace or prepend to body
-          const introCard = body.querySelector(".tvw-rounded-2xl.tvw-bg-cw-surface.tvw-p-6");
+          const introCard = body.querySelector(".persona-rounded-2xl.persona-bg-persona-surface.persona-p-6");
           if (introCard) {
             introCard.replaceWith(element);
           } else {
@@ -904,7 +1007,7 @@ export const createAgentExperience = (
 
   messagesWrapper.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    const actionBtn = target.closest('.tvw-message-action-btn[data-action]') as HTMLElement;
+    const actionBtn = target.closest('.persona-message-action-btn[data-action]') as HTMLElement;
     if (!actionBtn) return;
 
     event.preventDefault();
@@ -926,14 +1029,14 @@ export const createAgentExperience = (
         const textToCopy = message.content || "";
         navigator.clipboard.writeText(textToCopy).then(() => {
           // Show success feedback - swap icon temporarily
-          actionBtn.classList.add("tvw-message-action-success");
+          actionBtn.classList.add("persona-message-action-success");
           const checkIcon = renderLucideIcon("check", 14, "currentColor", 2);
           if (checkIcon) {
             actionBtn.innerHTML = "";
             actionBtn.appendChild(checkIcon);
           }
           setTimeout(() => {
-            actionBtn.classList.remove("tvw-message-action-success");
+            actionBtn.classList.remove("persona-message-action-success");
             const originalIcon = renderLucideIcon("copy", 14, "currentColor", 2);
             if (originalIcon) {
               actionBtn.innerHTML = "";
@@ -955,17 +1058,17 @@ export const createAgentExperience = (
       if (wasActive) {
         // Toggle off
         messageVoteState.delete(messageId);
-        actionBtn.classList.remove("tvw-message-action-active");
+        actionBtn.classList.remove("persona-message-action-active");
       } else {
         // Clear opposite vote button
         const oppositeAction = action === 'upvote' ? 'downvote' : 'upvote';
         const oppositeBtn = actionsContainer.querySelector(`[data-action="${oppositeAction}"]`);
         if (oppositeBtn) {
-          oppositeBtn.classList.remove("tvw-message-action-active");
+          oppositeBtn.classList.remove("persona-message-action-active");
         }
 
         messageVoteState.set(messageId, action);
-        actionBtn.classList.add("tvw-message-action-active");
+        actionBtn.classList.add("persona-message-action-active");
 
         // Trigger feedback
         const messages = session.getMessages();
@@ -1021,32 +1124,334 @@ export const createAgentExperience = (
     session.resolveApproval(approvalMessage.approval, decision);
   });
 
-  panel.appendChild(container);
+  let artifactPaneApi: ArtifactPaneApi | null = null;
+  let artifactPanelResizeObs: ResizeObserver | null = null;
+  let lastArtifactsState: {
+    artifacts: PersonaArtifactRecord[];
+    selectedId: string | null;
+  } = { artifacts: [], selectedId: null };
+  let artifactsPaneUserHidden = false;
+  const sessionRef: { current: AgentWidgetSession | null } = { current: null };
+
+  // Click delegation for artifact download buttons
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const dlBtn = target.closest('[data-download-artifact]') as HTMLElement;
+    if (!dlBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const artifactId = dlBtn.getAttribute('data-download-artifact');
+    if (!artifactId) return;
+    // Try session state first, fall back to content stored in the card's rawContent props
+    const artifact = session.getArtifactById(artifactId);
+    let markdown = artifact?.markdown;
+    let title = artifact?.title || 'artifact';
+    if (!markdown) {
+      // After page refresh, session state is gone — read from the persisted card message
+      const cardEl = dlBtn.closest('[data-open-artifact]');
+      const msgEl = cardEl?.closest('[data-message-id]');
+      const msgId = msgEl?.getAttribute('data-message-id');
+      if (msgId) {
+        const msgs = session.getMessages();
+        const msg = msgs.find(m => m.id === msgId);
+        if (msg?.rawContent) {
+          try {
+            const parsed = JSON.parse(msg.rawContent);
+            markdown = parsed?.props?.markdown;
+            title = parsed?.props?.title || title;
+          } catch { /* ignore */ }
+        }
+      }
+    }
+    if (!markdown) return;
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Click delegation for artifact reference cards
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const card = target.closest('[data-open-artifact]') as HTMLElement;
+    if (!card) return;
+    const artifactId = card.getAttribute('data-open-artifact');
+    if (!artifactId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    session.selectArtifact(artifactId);
+    syncArtifactPane();
+  });
+
+  // Keyboard support for artifact cards
+  messagesWrapper.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const target = event.target as HTMLElement;
+    if (!target.hasAttribute('data-open-artifact')) return;
+    event.preventDefault();
+    target.click();
+  });
+
+  let artifactSplitRoot: HTMLElement | null = null;
+  let artifactResizeHandle: HTMLElement | null = null;
+  let artifactResizeUnbind: (() => void) | null = null;
+  let artifactResizeDocEnd: (() => void) | null = null;
+  let reconcileArtifactResize: () => void = () => {};
+
+  function stopArtifactResizePointer() {
+    artifactResizeDocEnd?.();
+    artifactResizeDocEnd = null;
+  }
+
+  /** Flush split: overlay handle on the seam so it does not consume flex gap (extension + resizable). */
+  const positionExtensionArtifactResizeHandle = () => {
+    if (!artifactSplitRoot || !artifactResizeHandle) return;
+    const ext = mount.classList.contains("persona-artifact-appearance-seamless");
+    const ownerWin = mount.ownerDocument.defaultView ?? window;
+    const mobile = ownerWin.innerWidth <= 640;
+    if (!ext || mount.classList.contains("persona-artifact-narrow-host") || mobile) {
+      artifactResizeHandle.style.removeProperty("position");
+      artifactResizeHandle.style.removeProperty("left");
+      artifactResizeHandle.style.removeProperty("top");
+      artifactResizeHandle.style.removeProperty("bottom");
+      artifactResizeHandle.style.removeProperty("width");
+      artifactResizeHandle.style.removeProperty("z-index");
+      return;
+    }
+    const chat = artifactSplitRoot.firstElementChild as HTMLElement | null;
+    if (!chat || chat === artifactResizeHandle) return;
+    const hitW = 10;
+    artifactResizeHandle.style.position = "absolute";
+    artifactResizeHandle.style.top = "0";
+    artifactResizeHandle.style.bottom = "0";
+    artifactResizeHandle.style.width = `${hitW}px`;
+    artifactResizeHandle.style.zIndex = "5";
+    const left = chat.offsetWidth - hitW / 2;
+    artifactResizeHandle.style.left = `${Math.max(0, left)}px`;
+  };
+
+  /** No-op until artifact pane is created; replaced below when artifacts are enabled. */
+  let applyLauncherArtifactPanelWidth: () => void = () => {};
+
+  const syncArtifactPane = () => {
+    if (!artifactPaneApi || !artifactsSidebarEnabled(config)) return;
+    applyArtifactLayoutCssVars(mount, config);
+    applyArtifactPaneAppearance(mount, config);
+    applyLauncherArtifactPanelWidth();
+    const threshold = config.features?.artifacts?.layout?.narrowHostMaxWidth ?? 520;
+    const w = panel.getBoundingClientRect().width || 0;
+    mount.classList.toggle("persona-artifact-narrow-host", w > 0 && w <= threshold);
+    artifactPaneApi.update(lastArtifactsState);
+    if (artifactsPaneUserHidden) {
+      artifactPaneApi.setMobileOpen(false);
+      artifactPaneApi.element.classList.add("persona-hidden");
+      artifactPaneApi.backdrop?.classList.add("persona-hidden");
+    } else if (lastArtifactsState.artifacts.length > 0) {
+      // User chose “show” again (e.g. programmatic showArtifacts): clear dismiss chrome
+      // and force drawer open so narrow-host / mobile slide-out is not stuck off-screen.
+      artifactPaneApi.element.classList.remove("persona-hidden");
+      artifactPaneApi.setMobileOpen(true);
+    }
+    reconcileArtifactResize();
+  };
+
+  if (artifactsSidebarEnabled(config)) {
+    panel.style.position = "relative";
+    const chatColumn = createElement(
+      "div",
+      "persona-flex persona-flex-1 persona-flex-col persona-min-w-0 persona-min-h-0"
+    );
+    const splitRoot = createElement(
+      "div",
+      "persona-flex persona-h-full persona-w-full persona-min-h-0 persona-artifact-split-root"
+    );
+    chatColumn.appendChild(container);
+    artifactPaneApi = createArtifactPane(config, {
+      onSelect: (id) => sessionRef.current?.selectArtifact(id),
+      onDismiss: () => {
+        artifactsPaneUserHidden = true;
+        syncArtifactPane();
+      }
+    });
+    artifactPaneApi.element.classList.add("persona-hidden");
+    artifactSplitRoot = splitRoot;
+    splitRoot.appendChild(chatColumn);
+    splitRoot.appendChild(artifactPaneApi.element);
+    if (artifactPaneApi.backdrop) {
+      panel.appendChild(artifactPaneApi.backdrop);
+    }
+    panel.appendChild(splitRoot);
+
+    reconcileArtifactResize = () => {
+      if (!artifactSplitRoot || !artifactPaneApi) return;
+      const want = config.features?.artifacts?.layout?.resizable === true;
+      if (!want) {
+        artifactResizeUnbind?.();
+        artifactResizeUnbind = null;
+        stopArtifactResizePointer();
+        if (artifactResizeHandle) {
+          artifactResizeHandle.remove();
+          artifactResizeHandle = null;
+        }
+        artifactPaneApi.element.style.removeProperty("width");
+        artifactPaneApi.element.style.removeProperty("maxWidth");
+        return;
+      }
+      if (!artifactResizeHandle) {
+        const handle = createElement(
+          "div",
+          "persona-artifact-split-handle persona-shrink-0 persona-h-full"
+        );
+        handle.setAttribute("role", "separator");
+        handle.setAttribute("aria-orientation", "vertical");
+        handle.setAttribute("aria-label", "Resize artifacts panel");
+        handle.tabIndex = 0;
+
+        const doc = mount.ownerDocument;
+        const win = doc.defaultView ?? window;
+
+        const onPointerDown = (e: PointerEvent) => {
+          if (!artifactPaneApi || e.button !== 0) return;
+          if (mount.classList.contains("persona-artifact-narrow-host")) return;
+          if (win.innerWidth <= 640) return;
+          e.preventDefault();
+          stopArtifactResizePointer();
+          const startX = e.clientX;
+          const startW = artifactPaneApi.element.getBoundingClientRect().width;
+          const layout = config.features?.artifacts?.layout;
+          const onMove = (ev: PointerEvent) => {
+            const splitW = artifactSplitRoot!.getBoundingClientRect().width;
+            const extensionChrome = mount.classList.contains("persona-artifact-appearance-seamless");
+            const gapPx = extensionChrome ? 0 : readFlexGapPx(artifactSplitRoot!, win);
+            const handleW = extensionChrome ? 0 : handle.getBoundingClientRect().width || 6;
+            // Handle is left of the artifact: drag left widens artifact, drag right narrows it.
+            const next = startW - (ev.clientX - startX);
+            const clamped = resolveArtifactPaneWidthPx(
+              next,
+              splitW,
+              gapPx,
+              handleW,
+              layout?.resizableMinWidth,
+              layout?.resizableMaxWidth
+            );
+            artifactPaneApi!.element.style.width = `${clamped}px`;
+            artifactPaneApi!.element.style.maxWidth = "none";
+            positionExtensionArtifactResizeHandle();
+          };
+          const onUp = () => {
+            doc.removeEventListener("pointermove", onMove);
+            doc.removeEventListener("pointerup", onUp);
+            doc.removeEventListener("pointercancel", onUp);
+            artifactResizeDocEnd = null;
+            try {
+              handle.releasePointerCapture(e.pointerId);
+            } catch {
+              /* ignore */
+            }
+          };
+          artifactResizeDocEnd = onUp;
+          doc.addEventListener("pointermove", onMove);
+          doc.addEventListener("pointerup", onUp);
+          doc.addEventListener("pointercancel", onUp);
+          try {
+            handle.setPointerCapture(e.pointerId);
+          } catch {
+            /* ignore */
+          }
+        };
+
+        handle.addEventListener("pointerdown", onPointerDown);
+        artifactResizeHandle = handle;
+        artifactSplitRoot.insertBefore(handle, artifactPaneApi.element);
+        artifactResizeUnbind = () => {
+          handle.removeEventListener("pointerdown", onPointerDown);
+        };
+      }
+      if (artifactResizeHandle) {
+        const has =
+          lastArtifactsState.artifacts.length > 0 && !artifactsPaneUserHidden;
+        artifactResizeHandle.classList.toggle("persona-hidden", !has);
+        positionExtensionArtifactResizeHandle();
+      }
+    };
+
+    applyLauncherArtifactPanelWidth = () => {
+      if (!launcherEnabled || !artifactPaneApi) return;
+      const sidebarMode = config.launcher?.sidebarMode ?? false;
+      if (sidebarMode) return;
+      const ownerWindow = mount.ownerDocument.defaultView ?? window;
+      const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
+      const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
+      if (mobileFullscreen && ownerWindow.innerWidth <= mobileBreakpoint) return;
+      if (!shouldExpandLauncherForArtifacts(config, launcherEnabled)) return;
+
+      const base = config.launcher?.width ?? config.launcherWidth ?? "min(400px, calc(100vw - 24px))";
+      const expanded =
+        config.features?.artifacts?.layout?.expandedPanelWidth ??
+        "min(720px, calc(100vw - 24px))";
+      const hasVisible =
+        lastArtifactsState.artifacts.length > 0 && !artifactsPaneUserHidden;
+      if (hasVisible) {
+        panel.style.width = expanded;
+        panel.style.maxWidth = expanded;
+      } else {
+        panel.style.width = base;
+        panel.style.maxWidth = base;
+      }
+    };
+
+    if (typeof ResizeObserver !== "undefined") {
+      artifactPanelResizeObs = new ResizeObserver(() => {
+        syncArtifactPane();
+      });
+      artifactPanelResizeObs.observe(panel);
+    }
+  } else {
+    panel.appendChild(container);
+  }
   mount.appendChild(wrapper);
 
   // Apply full-height and sidebar styles if enabled
   // This ensures the widget fills its container height with proper flex layout
   const applyFullHeightStyles = () => {
+    const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
-    const fullHeight = sidebarMode || (config.launcher?.fullHeight ?? false);
+    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
+    /** Script-tag / div embed: launcher off, host supplies a sized mount. */
+    const isInlineEmbed = config.launcher?.enabled === false;
     const theme = config.theme ?? {};
-    
+
+    // Mobile fullscreen detection
+    // Use mount's ownerDocument window to get correct viewport width when widget is inside an iframe
+    const ownerWindow = mount.ownerDocument.defaultView ?? window;
+    const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
+    const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
+    const isMobileViewport = ownerWindow.innerWidth <= mobileBreakpoint;
+    const shouldGoFullscreen = mobileFullscreen && isMobileViewport && launcherEnabled;
+
     // Determine panel styling based on mode, with theme overrides
     const position = config.launcher?.position ?? 'bottom-left';
     const isLeftSidebar = position === 'bottom-left' || position === 'top-left';
-    
+
     // Default values based on mode
-    const defaultPanelBorder = sidebarMode ? 'none' : '1px solid var(--tvw-cw-border)';
-    const defaultPanelShadow = sidebarMode 
-      ? (isLeftSidebar ? '2px 0 12px rgba(0, 0, 0, 0.08)' : '-2px 0 12px rgba(0, 0, 0, 0.08)')
-      : '0 25px 50px -12px rgba(0, 0, 0, 0.25)';
-    const defaultPanelBorderRadius = sidebarMode ? '0' : '16px';
-    
+    const defaultPanelBorder = (sidebarMode || shouldGoFullscreen) ? 'none' : '1px solid var(--persona-persona-border)';
+    const defaultPanelShadow = shouldGoFullscreen
+      ? 'none'
+      : sidebarMode
+        ? (isLeftSidebar ? 'var(--persona-palette-shadows-sidebar-left, 2px 0 12px rgba(0, 0, 0, 0.08))' : 'var(--persona-palette-shadows-sidebar-right, -2px 0 12px rgba(0, 0, 0, 0.08))')
+        : 'var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25))';
+    const defaultPanelBorderRadius = (sidebarMode || shouldGoFullscreen)
+      ? '0'
+      : 'var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))';
+
     // Apply theme overrides or defaults
     const panelBorder = theme.panelBorder ?? defaultPanelBorder;
     const panelShadow = theme.panelShadow ?? defaultPanelShadow;
     const panelBorderRadius = theme.panelBorderRadius ?? defaultPanelBorderRadius;
-    
+
     // Reset all inline styles first to handle mode toggling
     // This ensures styles don't persist when switching between modes
     mount.style.cssText = '';
@@ -1056,14 +1461,87 @@ export const createAgentExperience = (
     body.style.cssText = '';
     footer.style.cssText = '';
     
+    // Mobile fullscreen: fill entire viewport with no radius/shadow/margins
+    if (shouldGoFullscreen) {
+      // Remove position offset classes
+      wrapper.classList.remove(
+        'persona-bottom-6', 'persona-right-6', 'persona-left-6', 'persona-top-6',
+        'persona-bottom-4', 'persona-right-4', 'persona-left-4', 'persona-top-4'
+      );
+
+      // Wrapper — fill entire viewport
+      wrapper.style.cssText = `
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        z-index: inherit !important;
+      `;
+
+      // Panel — fill wrapper, no radius/shadow
+      panel.style.cssText = `
+        position: relative !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 0% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      `;
+
+      // Container — fill panel, no radius/border
+      container.style.cssText = `
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 0% !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+        border-radius: 0 !important;
+        border: none !important;
+      `;
+
+      // Body — scrollable messages
+      body.style.flex = '1 1 0%';
+      body.style.minHeight = '0';
+      body.style.overflowY = 'auto';
+
+      // Footer — pinned at bottom
+      footer.style.flexShrink = '0';
+
+      wasMobileFullscreen = true;
+      return; // Skip remaining mode logic
+    }
+
     // Re-apply panel width/maxWidth from initial setup
     const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
     const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
-    if (!sidebarMode) {
-      panel.style.width = width;
-      panel.style.maxWidth = width;
+    if (!sidebarMode && !dockedMode) {
+      if (isInlineEmbed && fullHeight) {
+        panel.style.width = "100%";
+        panel.style.maxWidth = "100%";
+      } else {
+        panel.style.width = width;
+        panel.style.maxWidth = width;
+      }
+    } else if (dockedMode) {
+      panel.style.width = "100%";
+      panel.style.maxWidth = "100%";
     }
-    
+    applyLauncherArtifactPanelWidth();
+
     // Apply panel styling
     // Box-shadow is applied to panel (parent) instead of container to avoid
     // rendering artifacts when container has overflow:hidden + border-radius
@@ -1072,16 +1550,16 @@ export const createAgentExperience = (
     panel.style.borderRadius = panelBorderRadius;
     container.style.border = panelBorder;
     container.style.borderRadius = panelBorderRadius;
-    
-    // Check if this is inline embed mode (launcher disabled) vs launcher mode
-    const isInlineEmbed = config.launcher?.enabled === false;
-    
+
     if (fullHeight) {
       // Mount container
       mount.style.display = 'flex';
       mount.style.flexDirection = 'column';
       mount.style.height = '100%';
       mount.style.minHeight = '0';
+      if (isInlineEmbed) {
+        mount.style.width = '100%';
+      }
       
       // Wrapper
       // - Inline embed: needs overflow:hidden to contain the flex layout
@@ -1125,11 +1603,11 @@ export const createAgentExperience = (
     // Handle positioning classes based on mode
     // First remove all position classes to reset state
     wrapper.classList.remove(
-      'tvw-bottom-6', 'tvw-right-6', 'tvw-left-6', 'tvw-top-6',
-      'tvw-bottom-4', 'tvw-right-4', 'tvw-left-4', 'tvw-top-4'
+      'persona-bottom-6', 'persona-right-6', 'persona-left-6', 'persona-top-6',
+      'persona-bottom-4', 'persona-right-4', 'persona-left-4', 'persona-top-4'
     );
     
-    if (!sidebarMode && !isInlineEmbed) {
+    if (!sidebarMode && !isInlineEmbed && !dockedMode) {
       // Restore positioning classes when not in sidebar mode (launcher mode only)
       const positionClasses = positionMap[position as keyof typeof positionMap] ?? positionMap['bottom-right'];
       positionClasses.split(' ').forEach(cls => wrapper.classList.add(cls));
@@ -1202,7 +1680,7 @@ export const createAgentExperience = (
     // Use both -moz-available (Firefox) and stretch (standard) for cross-browser support
     // Append to cssText to allow multiple fallback values for the same property
     // Only apply to launcher mode (not sidebar or inline embed)
-    if (!isInlineEmbed) {
+    if (!isInlineEmbed && !dockedMode) {
       const maxHeightStyles = 'max-height: -moz-available !important; max-height: stretch !important;';
       const paddingStyles = sidebarMode ? '' : 'padding-top: 1.25em !important;';
       wrapper.style.cssText += maxHeightStyles + paddingStyles;
@@ -1211,8 +1689,29 @@ export const createAgentExperience = (
   applyFullHeightStyles();
   // Apply theme variables after applyFullHeightStyles since it resets mount.style.cssText
   applyThemeVariables(mount, config);
+  applyArtifactLayoutCssVars(mount, config);
+  applyArtifactPaneAppearance(mount, config);
 
   const destroyCallbacks: Array<() => void> = [];
+
+  if (artifactPanelResizeObs) {
+    destroyCallbacks.push(() => {
+      artifactPanelResizeObs?.disconnect();
+      artifactPanelResizeObs = null;
+    });
+  }
+
+  destroyCallbacks.push(() => {
+    artifactResizeUnbind?.();
+    artifactResizeUnbind = null;
+    stopArtifactResizePointer();
+    if (artifactResizeHandle) {
+      artifactResizeHandle.remove();
+      artifactResizeHandle = null;
+    }
+    artifactPaneApi?.element.style.removeProperty("width");
+    artifactPaneApi?.element.style.removeProperty("maxWidth");
+  });
 
   // Event stream cleanup
   if (showEventStreamToggle) {
@@ -1257,6 +1756,8 @@ export const createAgentExperience = (
   let closeHandler: (() => void) | null = null;
   let session: AgentWidgetSession;
   let isStreaming = false;
+  const messageCache = createMessageCache();
+  let configVersion = 0;
   let shouldAutoScroll = true;
   let lastScrollTop = 0;
   let lastAutoScrollTime = 0;
@@ -1530,7 +2031,20 @@ export const createAgentExperience = (
 
     const inlineLoadingRenderer = getInlineLoadingIndicatorRenderer();
 
+    // Track active message IDs for cache pruning
+    const activeMessageIds = new Set<string>();
+
     messages.forEach((message) => {
+      activeMessageIds.add(message.id);
+
+      // Fingerprint cache: skip re-rendering unchanged messages
+      const fingerprint = computeMessageFingerprint(message, configVersion);
+      const cachedWrapper = getCachedWrapper(messageCache, message.id, fingerprint);
+      if (cachedWrapper) {
+        tempContainer.appendChild(cachedWrapper.cloneNode(true));
+        return;
+      }
+
       let bubble: HTMLElement | null = null;
 
       // Try plugins first
@@ -1612,36 +2126,59 @@ export const createAgentExperience = (
               transform
             });
             if (componentBubble) {
-              // Wrap component in standard bubble styling
-              const componentWrapper = document.createElement("div");
-              componentWrapper.className = [
-                "vanilla-message-bubble",
-                "tvw-max-w-[85%]",
-                "tvw-rounded-2xl",
-                "tvw-bg-cw-surface",
-                "tvw-border",
-                "tvw-border-cw-message-border",
-                "tvw-p-4"
-              ].join(" ");
-              // Set id for idiomorph matching
-              componentWrapper.id = `bubble-${message.id}`;
-              componentWrapper.setAttribute("data-message-id", message.id);
+              const wrapChrome = config.wrapComponentDirectiveInBubble !== false;
+              if (wrapChrome) {
+                const componentWrapper = document.createElement("div");
+                componentWrapper.className = [
+                  "vanilla-message-bubble",
+                  "persona-max-w-[85%]",
+                  "persona-rounded-2xl",
+                  "persona-bg-persona-surface",
+                  "persona-border",
+                  "persona-border-persona-message-border",
+                  "persona-p-4"
+                ].join(" ");
+                componentWrapper.id = `bubble-${message.id}`;
+                componentWrapper.setAttribute("data-message-id", message.id);
 
-              // Add text content above component if present (combined text+component response)
-              if (message.content && message.content.trim()) {
-                const textDiv = document.createElement("div");
-                textDiv.className = "tvw-mb-3 tvw-text-sm tvw-leading-relaxed";
-                textDiv.innerHTML = transform({
-                  text: message.content,
-                  message,
-                  streaming: Boolean(message.streaming),
-                  raw: message.rawContent
-                });
-                componentWrapper.appendChild(textDiv);
+                if (message.content && message.content.trim()) {
+                  const textDiv = document.createElement("div");
+                  textDiv.className = "persona-mb-3 persona-text-sm persona-leading-relaxed";
+                  textDiv.innerHTML = transform({
+                    text: message.content,
+                    message,
+                    streaming: Boolean(message.streaming),
+                    raw: message.rawContent
+                  });
+                  componentWrapper.appendChild(textDiv);
+                }
+
+                componentWrapper.appendChild(componentBubble);
+                bubble = componentWrapper;
+              } else {
+                const stack = document.createElement("div");
+                stack.className =
+                  "persona-flex persona-flex-col persona-w-full persona-max-w-full persona-gap-3 persona-items-stretch";
+                stack.id = `bubble-${message.id}`;
+                stack.setAttribute("data-message-id", message.id);
+                stack.setAttribute("data-persona-component-directive", "true");
+
+                if (message.content && message.content.trim()) {
+                  const textDiv = document.createElement("div");
+                  textDiv.className =
+                    "persona-text-sm persona-leading-relaxed persona-text-persona-primary persona-w-full";
+                  textDiv.innerHTML = transform({
+                    text: message.content,
+                    message,
+                    streaming: Boolean(message.streaming),
+                    raw: message.rawContent
+                  });
+                  stack.appendChild(textDiv);
+                }
+
+                stack.appendChild(componentBubble);
+                bubble = stack;
               }
-
-              componentWrapper.appendChild(componentBubble);
-              bubble = componentWrapper;
             }
           }
         }
@@ -1693,16 +2230,23 @@ export const createAgentExperience = (
       }
 
       const wrapper = document.createElement("div");
-      wrapper.className = "tvw-flex";
+      wrapper.className = "persona-flex";
       // Set id for idiomorph matching
       wrapper.id = `wrapper-${message.id}`;
       wrapper.setAttribute("data-wrapper-id", message.id);
       if (message.role === "user") {
-        wrapper.classList.add("tvw-justify-end");
+        wrapper.classList.add("persona-justify-end");
+      }
+      if (bubble?.getAttribute("data-persona-component-directive") === "true") {
+        wrapper.classList.add("persona-w-full");
       }
       wrapper.appendChild(bubble);
+      setCachedWrapper(messageCache, message.id, fingerprint, wrapper);
       tempContainer.appendChild(wrapper);
     });
+
+    // Remove cache entries for messages that no longer exist
+    pruneCache(messageCache, activeMessageIds);
 
     // Add standalone typing indicator only if streaming but no assistant message is streaming yet
     // (This shows while waiting for the stream to start)
@@ -1752,30 +2296,30 @@ export const createAgentExperience = (
         const showBubble = config.loadingIndicator?.showBubble !== false; // default true
         typingBubble.className = showBubble
           ? [
-              "tvw-max-w-[85%]",
-              "tvw-rounded-2xl",
-              "tvw-text-sm",
-              "tvw-leading-relaxed",
-              "tvw-shadow-sm",
-              "tvw-bg-cw-surface",
-              "tvw-border",
-              "tvw-border-cw-message-border",
-              "tvw-text-cw-primary",
-              "tvw-px-5",
-              "tvw-py-3"
+              "persona-max-w-[85%]",
+              "persona-rounded-2xl",
+              "persona-text-sm",
+              "persona-leading-relaxed",
+              "persona-shadow-sm",
+              "persona-bg-persona-surface",
+              "persona-border",
+              "persona-border-persona-message-border",
+              "persona-text-persona-primary",
+              "persona-px-5",
+              "persona-py-3"
             ].join(" ")
           : [
-              "tvw-max-w-[85%]",
-              "tvw-text-sm",
-              "tvw-leading-relaxed",
-              "tvw-text-cw-primary"
+              "persona-max-w-[85%]",
+              "persona-text-sm",
+              "persona-leading-relaxed",
+              "persona-text-persona-primary"
             ].join(" ");
         typingBubble.setAttribute("data-typing-indicator", "true");
 
         typingBubble.appendChild(typingIndicator);
 
         const typingWrapper = document.createElement("div");
-        typingWrapper.className = "tvw-flex";
+        typingWrapper.className = "persona-flex";
         // Set id for idiomorph matching
         typingWrapper.id = "wrapper-typing-indicator";
         typingWrapper.setAttribute("data-wrapper-id", "typing-indicator");
@@ -1816,30 +2360,30 @@ export const createAgentExperience = (
         const showBubble = config.loadingIndicator?.showBubble !== false; // default true
         idleBubble.className = showBubble
           ? [
-              "tvw-max-w-[85%]",
-              "tvw-rounded-2xl",
-              "tvw-text-sm",
-              "tvw-leading-relaxed",
-              "tvw-shadow-sm",
-              "tvw-bg-cw-surface",
-              "tvw-border",
-              "tvw-border-cw-message-border",
-              "tvw-text-cw-primary",
-              "tvw-px-5",
-              "tvw-py-3"
+              "persona-max-w-[85%]",
+              "persona-rounded-2xl",
+              "persona-text-sm",
+              "persona-leading-relaxed",
+              "persona-shadow-sm",
+              "persona-bg-persona-surface",
+              "persona-border",
+              "persona-border-persona-message-border",
+              "persona-text-persona-primary",
+              "persona-px-5",
+              "persona-py-3"
             ].join(" ")
           : [
-              "tvw-max-w-[85%]",
-              "tvw-text-sm",
-              "tvw-leading-relaxed",
-              "tvw-text-cw-primary"
+              "persona-max-w-[85%]",
+              "persona-text-sm",
+              "persona-leading-relaxed",
+              "persona-text-persona-primary"
             ].join(" ");
         idleBubble.setAttribute("data-idle-indicator", "true");
 
         idleBubble.appendChild(idleIndicator);
 
         const idleWrapper = document.createElement("div");
-        idleWrapper.className = "tvw-flex";
+        idleWrapper.className = "persona-flex";
         // Set id for idiomorph matching
         idleWrapper.id = "wrapper-idle-indicator";
         idleWrapper.setAttribute("data-wrapper-id", "idle-indicator");
@@ -1867,10 +2411,12 @@ export const createAgentExperience = (
 
   const updateOpenState = () => {
     if (!launcherEnabled) return;
+    const dockedMode = isDockedMountMode(config);
     if (open) {
-      wrapper.classList.remove("tvw-pointer-events-none", "tvw-opacity-0");
-      panel.classList.remove("tvw-scale-95", "tvw-opacity-0");
-      panel.classList.add("tvw-scale-100", "tvw-opacity-100");
+      wrapper.style.display = dockedMode ? "flex" : "";
+      wrapper.classList.remove("persona-pointer-events-none", "persona-opacity-0");
+      panel.classList.remove("persona-scale-95", "persona-opacity-0");
+      panel.classList.add("persona-scale-100", "persona-opacity-100");
       // Hide launcher button when widget is open
       if (launcherButtonInstance) {
         launcherButtonInstance.element.style.display = "none";
@@ -1878,9 +2424,16 @@ export const createAgentExperience = (
         customLauncherElement.style.display = "none";
       }
     } else {
-      wrapper.classList.add("tvw-pointer-events-none", "tvw-opacity-0");
-      panel.classList.remove("tvw-scale-100", "tvw-opacity-100");
-      panel.classList.add("tvw-scale-95", "tvw-opacity-0");
+      if (dockedMode) {
+        wrapper.style.display = "none";
+        wrapper.classList.remove("persona-pointer-events-none", "persona-opacity-0");
+        panel.classList.remove("persona-scale-100", "persona-opacity-100", "persona-scale-95", "persona-opacity-0");
+      } else {
+        wrapper.style.display = "";
+        wrapper.classList.add("persona-pointer-events-none", "persona-opacity-0");
+        panel.classList.remove("persona-scale-100", "persona-opacity-100");
+        panel.classList.add("persona-scale-95", "persona-opacity-0");
+      }
       // Show launcher button when widget is closed
       if (launcherButtonInstance) {
         launcherButtonInstance.element.style.display = "";
@@ -1934,6 +2487,17 @@ export const createAgentExperience = (
     }
     suggestionsManager.buttons.forEach((btn) => {
       btn.disabled = disabled;
+    });
+    footer.dataset.personaComposerStreaming = disabled ? "true" : "false";
+    footer.querySelectorAll<HTMLElement>("[data-persona-composer-disable-when-streaming]").forEach((el) => {
+      if (
+        el instanceof HTMLButtonElement ||
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el instanceof HTMLSelectElement
+      ) {
+        el.disabled = disabled;
+      }
     });
   };
 
@@ -2082,8 +2646,14 @@ export const createAgentExperience = (
           }
           break;
       }
+    },
+    onArtifactsState(state) {
+      lastArtifactsState = state;
+      syncArtifactPane();
     }
   });
+
+  sessionRef.current = session;
 
   // Setup Runtype voice provider when configured (connects WebSocket for server-side STT)
   if (config.voiceRecognition?.provider?.type === 'runtype') {
@@ -2312,7 +2882,7 @@ export const createAgentExperience = (
         const recordingIconColor = voiceConfig.recordingIconColor;
         const recordingBorderColor = voiceConfig.recordingBorderColor;
         
-        micButton.classList.add("tvw-voice-recording");
+        micButton.classList.add("persona-voice-recording");
         micButton.style.backgroundColor = recordingBackgroundColor;
         
         if (recordingIconColor) {
@@ -2360,7 +2930,24 @@ export const createAgentExperience = (
     persistVoiceMetadata();
 
     if (micButton) {
-      removeRuntypeMicStateStyles();
+      micButton.classList.remove("persona-voice-recording");
+      
+      // Restore original styles
+      if (originalMicStyles) {
+        micButton.style.backgroundColor = originalMicStyles.backgroundColor;
+        micButton.style.color = originalMicStyles.color;
+        micButton.style.borderColor = originalMicStyles.borderColor;
+        
+        // Restore SVG stroke color if present
+        const svg = micButton.querySelector("svg");
+        if (svg) {
+          svg.setAttribute("stroke", originalMicStyles.color || "currentColor");
+        }
+        
+        originalMicStyles = null;
+      }
+      
+      micButton.setAttribute("aria-label", "Start voice recognition");
     }
   };
 
@@ -2375,10 +2962,10 @@ export const createAgentExperience = (
 
     if (!hasVoiceInput) return null;
 
-    const micButtonWrapper = createElement("div", "tvw-send-button-wrapper");
+    const micButtonWrapper = createElement("div", "persona-send-button-wrapper");
     const micButton = createElement(
       "button",
-      "tvw-rounded-button tvw-flex tvw-items-center tvw-justify-center disabled:tvw-opacity-50 tvw-cursor-pointer"
+      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer"
     ) as HTMLButtonElement;
     
     micButton.type = "button";
@@ -2416,14 +3003,14 @@ export const createAgentExperience = (
     if (backgroundColor) {
       micButton.style.backgroundColor = backgroundColor;
     } else {
-      micButton.classList.add("tvw-bg-cw-primary");
+      micButton.classList.add("persona-bg-persona-primary");
     }
     
     // Apply icon/text color
     if (iconColor) {
       micButton.style.color = iconColor;
     } else if (!iconColor && !sendButtonConfig?.textColor) {
-      micButton.classList.add("tvw-text-white");
+      micButton.classList.add("persona-text-white");
     }
     
     // Apply border styling
@@ -2451,7 +3038,7 @@ export const createAgentExperience = (
     const tooltipText = voiceConfig?.tooltipText ?? "Start voice recognition";
     const showTooltip = voiceConfig?.showTooltip ?? false;
     if (showTooltip && tooltipText) {
-      const tooltip = createElement("div", "tvw-send-button-tooltip");
+      const tooltip = createElement("div", "persona-send-button-tooltip");
       tooltip.textContent = tooltipText;
       micButtonWrapper.appendChild(tooltip);
     }
@@ -2486,7 +3073,7 @@ export const createAgentExperience = (
   /** Remove all voice state CSS classes */
   const removeAllVoiceStateClasses = () => {
     if (!micButton) return;
-    micButton.classList.remove("tvw-voice-recording", "tvw-voice-processing", "tvw-voice-speaking");
+    micButton.classList.remove("persona-voice-recording", "persona-voice-processing", "persona-voice-speaking");
   };
 
   // --- Per-state style application ---
@@ -2499,7 +3086,7 @@ export const createAgentExperience = (
     const recordingIconColor = voiceConfig.recordingIconColor;
     const recordingBorderColor = voiceConfig.recordingBorderColor;
     removeAllVoiceStateClasses();
-    micButton.classList.add("tvw-voice-recording");
+    micButton.classList.add("persona-voice-recording");
     micButton.style.backgroundColor = recordingBackgroundColor;
     if (recordingIconColor) {
       micButton.style.color = recordingIconColor;
@@ -2521,7 +3108,7 @@ export const createAgentExperience = (
     const borderColor = voiceConfig.processingBorderColor ?? originalMicStyles?.borderColor ?? "";
 
     removeAllVoiceStateClasses();
-    micButton.classList.add("tvw-voice-processing");
+    micButton.classList.add("persona-voice-processing");
     micButton.style.backgroundColor = bgColor;
     micButton.style.borderColor = borderColor;
     const resolvedColor = iconColor || "currentColor";
@@ -2553,7 +3140,7 @@ export const createAgentExperience = (
       ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBorderColor ?? "") : (originalMicStyles?.borderColor ?? ""));
 
     removeAllVoiceStateClasses();
-    micButton.classList.add("tvw-voice-speaking");
+    micButton.classList.add("persona-voice-speaking");
     micButton.style.backgroundColor = bgColor;
     micButton.style.borderColor = borderColor;
     const resolvedColor = iconColor || "currentColor";
@@ -2573,7 +3160,7 @@ export const createAgentExperience = (
     }
     // In "barge-in" mode, add recording class to show mic is hot
     if (interruptionMode === "barge-in") {
-      micButton.classList.add("tvw-voice-recording");
+      micButton.classList.add("persona-voice-recording");
     }
   };
 
@@ -2659,6 +3246,8 @@ export const createAgentExperience = (
       startVoiceRecognition("user");
     }
   };
+
+  composerVoiceBridge = handleMicButtonClick;
 
   if (micButton) {
     micButton.addEventListener("click", handleMicButtonClick);
@@ -2763,26 +3352,48 @@ export const createAgentExperience = (
   }
 
   const recalcPanelHeight = () => {
+    const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
-    const fullHeight = sidebarMode || (config.launcher?.fullHeight ?? false);
-    
-    if (!launcherEnabled) {
+    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
+
+    // Mobile fullscreen: re-apply fullscreen styles on resize (handles orientation changes)
+    const ownerWindow = mount.ownerDocument.defaultView ?? window;
+    const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
+    const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
+    const isMobileViewport = ownerWindow.innerWidth <= mobileBreakpoint;
+    const shouldGoFullscreen = mobileFullscreen && isMobileViewport && launcherEnabled;
+
+    if (shouldGoFullscreen) {
+      applyFullHeightStyles();
+      applyThemeVariables(mount, config);
+      return;
+    }
+
+    // Exiting mobile fullscreen (e.g., orientation change to landscape) — reset all styles
+    if (wasMobileFullscreen) {
+      wasMobileFullscreen = false;
+      applyFullHeightStyles();
+      applyThemeVariables(mount, config);
+    }
+
+    if (!launcherEnabled && !dockedMode) {
       panel.style.height = "";
       panel.style.width = "";
       return;
     }
-    
+
     // In sidebar/fullHeight mode, don't override the width - it's handled by applyFullHeightStyles
-    if (!sidebarMode) {
+    if (!sidebarMode && !dockedMode) {
       const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
       const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
       panel.style.width = width;
       panel.style.maxWidth = width;
     }
-    
+    applyLauncherArtifactPanelWidth();
+
     // In fullHeight mode, don't set a fixed height
     if (!fullHeight) {
-      const viewportHeight = window.innerHeight;
+      const viewportHeight = ownerWindow.innerHeight;
       const verticalMargin = 64; // leave space for launcher's offset
       const heightOffset = config.launcher?.heightOffset ?? 0;
       const available = Math.max(200, viewportHeight - verticalMargin);
@@ -2793,8 +3404,9 @@ export const createAgentExperience = (
   };
 
   recalcPanelHeight();
-  window.addEventListener("resize", recalcPanelHeight);
-  destroyCallbacks.push(() => window.removeEventListener("resize", recalcPanelHeight));
+  const ownerWindow = mount.ownerDocument.defaultView ?? window;
+  ownerWindow.addEventListener("resize", recalcPanelHeight);
+  destroyCallbacks.push(() => ownerWindow.removeEventListener("resize", recalcPanelHeight));
 
   lastScrollTop = body.scrollTop;
 
@@ -2837,8 +3449,7 @@ export const createAgentExperience = (
     if (launcherEnabled) {
       closeButton.style.display = "";
       closeHandler = () => {
-        open = false;
-        updateOpenState();
+        setOpenState(false, "user");
       };
       closeButton.addEventListener("click", closeHandler);
     } else {
@@ -2856,6 +3467,7 @@ export const createAgentExperience = (
     clearChatButton.addEventListener("click", () => {
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
       session.clearMessages();
+      messageCache.clear();
 
       // Always clear the default localStorage key
       try {
@@ -2914,14 +3526,18 @@ export const createAgentExperience = (
 
   setupClearChatButton();
 
-  composerForm.addEventListener("submit", handleSubmit);
-  textarea.addEventListener("keydown", handleInputEnter);
-  textarea.addEventListener("paste", handleInputPaste);
+  if (composerForm) {
+    composerForm.addEventListener("submit", handleSubmit);
+  }
+  textarea?.addEventListener("keydown", handleInputEnter);
+  textarea?.addEventListener("paste", handleInputPaste);
 
   destroyCallbacks.push(() => {
-    composerForm.removeEventListener("submit", handleSubmit);
-    textarea.removeEventListener("keydown", handleInputEnter);
-    textarea.removeEventListener("paste", handleInputPaste);
+    if (composerForm) {
+      composerForm.removeEventListener("submit", handleSubmit);
+    }
+    textarea?.removeEventListener("keydown", handleInputEnter);
+    textarea?.removeEventListener("paste", handleInputPaste);
   });
 
   destroyCallbacks.push(() => {
@@ -2941,11 +3557,16 @@ export const createAgentExperience = (
   const controller: Controller = {
     update(nextConfig: AgentWidgetConfig) {
       const previousToolCallConfig = config.toolCall;
+      const previousMessageActions = config.messageActions;
+      const previousLayoutMessages = config.layout?.messages;
       const previousColorScheme = config.colorScheme;
       config = { ...config, ...nextConfig };
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
       applyThemeVariables(mount, config);
+      applyArtifactLayoutCssVars(mount, config);
+      applyArtifactPaneAppearance(mount, config);
+      syncArtifactPane();
 
       // Re-setup theme observer if colorScheme changed
       if (config.colorScheme !== previousColorScheme) {
@@ -2984,7 +3605,7 @@ export const createAgentExperience = (
         // Add header toggle button if not present
         if (!eventStreamToggleBtn && header) {
           const dynEsClassNames = config.features?.eventStream?.classNames;
-          const dynToggleBtnClasses = "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none tvw-bg-transparent tvw-p-1" + (dynEsClassNames?.toggleButton ? " " + dynEsClassNames.toggleButton : "");
+          const dynToggleBtnClasses = "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-1" + (dynEsClassNames?.toggleButton ? " " + dynEsClassNames.toggleButton : "");
           eventStreamToggleBtn = createElement("button", dynToggleBtnClasses) as HTMLButtonElement;
           eventStreamToggleBtn.style.width = "28px";
           eventStreamToggleBtn.style.height = "28px";
@@ -3116,11 +3737,11 @@ export const createAgentExperience = (
             panelElements.clearChatButtonWrapper.style.display = showClearChat ? "" : "none";
             // When clear chat is hidden, close button needs ml-auto to stay right-aligned
             const { closeButtonWrapper } = panelElements;
-            if (closeButtonWrapper && !closeButtonWrapper.classList.contains("tvw-absolute")) {
+            if (closeButtonWrapper && !closeButtonWrapper.classList.contains("persona-absolute")) {
               if (showClearChat) {
-                closeButtonWrapper.classList.remove("tvw-ml-auto");
+                closeButtonWrapper.classList.remove("persona-ml-auto");
               } else {
-                closeButtonWrapper.classList.add("tvw-ml-auto");
+                closeButtonWrapper.classList.add("persona-ml-auto");
               }
             }
           }
@@ -3165,9 +3786,13 @@ export const createAgentExperience = (
       recalcPanelHeight();
       refreshCloseButton();
 
-      // Re-render messages if toolCall config changed (to apply new styles)
+      // Re-render messages if config affecting message rendering changed
       const toolCallConfigChanged = JSON.stringify(nextConfig.toolCall) !== JSON.stringify(previousToolCallConfig);
-      if (toolCallConfigChanged && session) {
+      const messageActionsChanged = JSON.stringify(config.messageActions) !== JSON.stringify(previousMessageActions);
+      const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages);
+      const messagesConfigChanged = toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged;
+      if (messagesConfigChanged && session) {
+        configVersion++;
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
       }
 
@@ -3181,8 +3806,8 @@ export const createAgentExperience = (
       const headerIconSize = launcher.headerIconSize ?? "48px";
 
       if (iconHolder) {
-        const headerEl = container.querySelector(".tvw-border-b-cw-divider");
-        const headerCopy = headerEl?.querySelector(".tvw-flex-col");
+        const headerEl = container.querySelector(".persona-border-b-persona-divider");
+        const headerCopy = headerEl?.querySelector(".persona-flex-col");
 
         // Handle hide/show
         if (shouldHideIcon) {
@@ -3232,7 +3857,7 @@ export const createAgentExperience = (
               const newImg = document.createElement("img");
               newImg.src = launcher.iconUrl;
               newImg.alt = "";
-              newImg.className = "tvw-rounded-xl tvw-object-cover";
+              newImg.className = "persona-rounded-xl persona-object-cover";
               newImg.style.height = headerIconSize;
               newImg.style.width = headerIconSize;
               iconHolder.replaceChildren(newImg);
@@ -3283,7 +3908,7 @@ export const createAgentExperience = (
         // Update placement if changed - move the wrapper (not just the button) to preserve tooltip
         const { closeButtonWrapper } = panelElements;
         const isTopRight = closeButtonPlacement === "top-right";
-        const currentlyTopRight = closeButtonWrapper?.classList.contains("tvw-absolute");
+        const currentlyTopRight = closeButtonWrapper?.classList.contains("persona-absolute");
         
         if (closeButtonWrapper && isTopRight !== currentlyTopRight) {
           // Placement changed - need to move wrapper and update classes
@@ -3291,16 +3916,16 @@ export const createAgentExperience = (
           
           // Update wrapper classes
           if (isTopRight) {
-            closeButtonWrapper.className = "tvw-absolute tvw-top-4 tvw-right-4 tvw-z-50";
+            closeButtonWrapper.className = "persona-absolute persona-top-4 persona-right-4 persona-z-50";
             container.style.position = "relative";
             container.appendChild(closeButtonWrapper);
           } else {
             // Check if clear chat is inline to determine if we need ml-auto
             const clearChatPlacement = launcher.clearChat?.placement ?? "inline";
             const clearChatEnabled = launcher.clearChat?.enabled ?? true;
-            closeButtonWrapper.className = (clearChatEnabled && clearChatPlacement === "inline") ? "" : "tvw-ml-auto";
+            closeButtonWrapper.className = (clearChatEnabled && clearChatPlacement === "inline") ? "" : "persona-ml-auto";
             // Find header element
-            const header = container.querySelector(".tvw-border-b-cw-divider");
+            const header = container.querySelector(".persona-border-b-persona-divider");
             if (header) {
               header.appendChild(closeButtonWrapper);
             }
@@ -3310,18 +3935,18 @@ export const createAgentExperience = (
         // Apply close button styling from config
         if (launcher.closeButtonColor) {
           closeButton.style.color = launcher.closeButtonColor;
-          closeButton.classList.remove("tvw-text-cw-muted");
+          closeButton.classList.remove("persona-text-persona-muted");
         } else {
           closeButton.style.color = "";
-          closeButton.classList.add("tvw-text-cw-muted");
+          closeButton.classList.add("persona-text-persona-muted");
         }
         
         if (launcher.closeButtonBackgroundColor) {
           closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
-          closeButton.classList.remove("hover:tvw-bg-gray-100");
+          closeButton.classList.remove("hover:persona-bg-gray-100");
         } else {
           closeButton.style.backgroundColor = "";
-          closeButton.classList.add("hover:tvw-bg-gray-100");
+          closeButton.classList.add("hover:persona-bg-gray-100");
         }
         
         // Apply border if width and/or color are provided
@@ -3329,18 +3954,18 @@ export const createAgentExperience = (
           const borderWidth = launcher.closeButtonBorderWidth || "0px";
           const borderColor = launcher.closeButtonBorderColor || "transparent";
           closeButton.style.border = `${borderWidth} solid ${borderColor}`;
-          closeButton.classList.remove("tvw-border-none");
+          closeButton.classList.remove("persona-border-none");
         } else {
           closeButton.style.border = "";
-          closeButton.classList.add("tvw-border-none");
+          closeButton.classList.add("persona-border-none");
         }
         
         if (launcher.closeButtonBorderRadius) {
           closeButton.style.borderRadius = launcher.closeButtonBorderRadius;
-          closeButton.classList.remove("tvw-rounded-full");
+          closeButton.classList.remove("persona-rounded-full");
         } else {
           closeButton.style.borderRadius = "";
-          closeButton.classList.add("tvw-rounded-full");
+          closeButton.classList.add("persona-rounded-full");
         }
 
         // Update padding
@@ -3392,13 +4017,21 @@ export const createAgentExperience = (
             const showTooltip = () => {
               if (portaledTooltip || !closeButton) return; // Already showing or button doesn't exist
 
+              const tooltipDocument = closeButton.ownerDocument;
+              const tooltipContainer = tooltipDocument.body;
+              if (!tooltipContainer) return;
+
               // Create tooltip element
-              portaledTooltip = createElement("div", "tvw-clear-chat-tooltip");
+              portaledTooltip = createElementInDocument(
+                tooltipDocument,
+                "div",
+                "persona-clear-chat-tooltip"
+              );
               portaledTooltip.textContent = closeButtonTooltipText;
 
               // Add arrow
-              const arrow = createElement("div");
-              arrow.className = "tvw-clear-chat-tooltip-arrow";
+              const arrow = createElementInDocument(tooltipDocument, "div");
+              arrow.className = "persona-clear-chat-tooltip-arrow";
               portaledTooltip.appendChild(arrow);
 
               // Get button position
@@ -3411,7 +4044,7 @@ export const createAgentExperience = (
               portaledTooltip.style.transform = "translate(-50%, -100%)";
 
               // Append to body
-              document.body.appendChild(portaledTooltip);
+              tooltipContainer.appendChild(portaledTooltip);
             };
 
             const hideTooltip = () => {
@@ -3462,36 +4095,36 @@ export const createAgentExperience = (
 
           // When clear chat is hidden, close button needs ml-auto to stay right-aligned
           const { closeButtonWrapper } = panelElements;
-          if (closeButtonWrapper && !closeButtonWrapper.classList.contains("tvw-absolute")) {
+          if (closeButtonWrapper && !closeButtonWrapper.classList.contains("persona-absolute")) {
             if (shouldShowClearChat) {
-              closeButtonWrapper.classList.remove("tvw-ml-auto");
+              closeButtonWrapper.classList.remove("persona-ml-auto");
             } else {
-              closeButtonWrapper.classList.add("tvw-ml-auto");
+              closeButtonWrapper.classList.add("persona-ml-auto");
             }
           }
 
           // Update placement if changed
           const isTopRight = clearChatPlacement === "top-right";
-          const currentlyTopRight = clearChatButtonWrapper.classList.contains("tvw-absolute");
+          const currentlyTopRight = clearChatButtonWrapper.classList.contains("persona-absolute");
 
           if (isTopRight !== currentlyTopRight && shouldShowClearChat) {
             clearChatButtonWrapper.remove();
 
             if (isTopRight) {
-              // Don't use tvw-clear-chat-button-wrapper class for top-right mode as its
+              // Don't use persona-clear-chat-button-wrapper class for top-right mode as its
               // display: inline-flex causes alignment issues with the close button
-              clearChatButtonWrapper.className = "tvw-absolute tvw-top-4 tvw-z-50";
+              clearChatButtonWrapper.className = "persona-absolute persona-top-4 persona-z-50";
               // Position to the left of the close button (which is at right: 1rem/16px)
               // Close button is ~32px wide, plus small gap = 48px from right
               clearChatButtonWrapper.style.right = "48px";
               container.style.position = "relative";
               container.appendChild(clearChatButtonWrapper);
             } else {
-              clearChatButtonWrapper.className = "tvw-relative tvw-ml-auto tvw-clear-chat-button-wrapper";
+              clearChatButtonWrapper.className = "persona-relative persona-ml-auto persona-clear-chat-button-wrapper";
               // Clear the inline right style when switching back to inline mode
               clearChatButtonWrapper.style.right = "";
               // Find header and insert before close button
-              const header = container.querySelector(".tvw-border-b-cw-divider");
+              const header = container.querySelector(".persona-border-b-persona-divider");
               const closeButtonWrapperEl = panelElements.closeButtonWrapper;
               if (header && closeButtonWrapperEl && closeButtonWrapperEl.parentElement === header) {
                 header.insertBefore(clearChatButtonWrapper, closeButtonWrapperEl);
@@ -3502,13 +4135,13 @@ export const createAgentExperience = (
 
             // Also update close button's ml-auto class based on clear chat position
             const closeButtonWrapperEl = panelElements.closeButtonWrapper;
-            if (closeButtonWrapperEl && !closeButtonWrapperEl.classList.contains("tvw-absolute")) {
+            if (closeButtonWrapperEl && !closeButtonWrapperEl.classList.contains("persona-absolute")) {
               if (isTopRight) {
                 // Clear chat moved to top-right, close needs ml-auto
-                closeButtonWrapperEl.classList.add("tvw-ml-auto");
+                closeButtonWrapperEl.classList.add("persona-ml-auto");
               } else {
                 // Clear chat is inline, close doesn't need ml-auto
-                closeButtonWrapperEl.classList.remove("tvw-ml-auto");
+                closeButtonWrapperEl.classList.remove("persona-ml-auto");
               }
             }
           }
@@ -3534,19 +4167,19 @@ export const createAgentExperience = (
           // Update icon color
           if (clearChatIconColor) {
             clearChatButton.style.color = clearChatIconColor;
-            clearChatButton.classList.remove("tvw-text-cw-muted");
+            clearChatButton.classList.remove("persona-text-persona-muted");
           } else {
             clearChatButton.style.color = "";
-            clearChatButton.classList.add("tvw-text-cw-muted");
+            clearChatButton.classList.add("persona-text-persona-muted");
           }
 
           // Update background color
           if (clearChatConfig.backgroundColor) {
             clearChatButton.style.backgroundColor = clearChatConfig.backgroundColor;
-            clearChatButton.classList.remove("hover:tvw-bg-gray-100");
+            clearChatButton.classList.remove("hover:persona-bg-gray-100");
           } else {
             clearChatButton.style.backgroundColor = "";
-            clearChatButton.classList.add("hover:tvw-bg-gray-100");
+            clearChatButton.classList.add("hover:persona-bg-gray-100");
           }
 
           // Update border
@@ -3554,19 +4187,19 @@ export const createAgentExperience = (
             const borderWidth = clearChatConfig.borderWidth || "0px";
             const borderColor = clearChatConfig.borderColor || "transparent";
             clearChatButton.style.border = `${borderWidth} solid ${borderColor}`;
-            clearChatButton.classList.remove("tvw-border-none");
+            clearChatButton.classList.remove("persona-border-none");
           } else {
             clearChatButton.style.border = "";
-            clearChatButton.classList.add("tvw-border-none");
+            clearChatButton.classList.add("persona-border-none");
           }
 
           // Update border radius
           if (clearChatConfig.borderRadius) {
             clearChatButton.style.borderRadius = clearChatConfig.borderRadius;
-            clearChatButton.classList.remove("tvw-rounded-full");
+            clearChatButton.classList.remove("persona-rounded-full");
           } else {
             clearChatButton.style.borderRadius = "";
-            clearChatButton.classList.add("tvw-rounded-full");
+            clearChatButton.classList.add("persona-rounded-full");
           }
 
           // Update padding
@@ -3604,13 +4237,21 @@ export const createAgentExperience = (
               const showTooltip = () => {
                 if (portaledTooltip || !clearChatButton) return; // Already showing or button doesn't exist
 
+                const tooltipDocument = clearChatButton.ownerDocument;
+                const tooltipContainer = tooltipDocument.body;
+                if (!tooltipContainer) return;
+
                 // Create tooltip element
-                portaledTooltip = createElement("div", "tvw-clear-chat-tooltip");
+                portaledTooltip = createElementInDocument(
+                  tooltipDocument,
+                  "div",
+                  "persona-clear-chat-tooltip"
+                );
                 portaledTooltip.textContent = clearChatTooltipText;
 
                 // Add arrow
-                const arrow = createElement("div");
-                arrow.className = "tvw-clear-chat-tooltip-arrow";
+                const arrow = createElementInDocument(tooltipDocument, "div");
+                arrow.className = "persona-clear-chat-tooltip-arrow";
                 portaledTooltip.appendChild(arrow);
 
                 // Get button position
@@ -3623,7 +4264,7 @@ export const createAgentExperience = (
                 portaledTooltip.style.transform = "translate(-50%, -100%)";
 
                 // Append to body
-                document.body.appendChild(portaledTooltip);
+                tooltipContainer.appendChild(portaledTooltip);
               };
 
               const hideTooltip = () => {
@@ -3744,18 +4385,18 @@ export const createAgentExperience = (
           const backgroundColor = voiceConfig.backgroundColor ?? sendButtonConfig.backgroundColor;
           if (backgroundColor) {
             micButton.style.backgroundColor = backgroundColor;
-            micButton.classList.remove("tvw-bg-cw-primary");
+            micButton.classList.remove("persona-bg-persona-primary");
           } else {
             micButton.style.backgroundColor = "";
-            micButton.classList.add("tvw-bg-cw-primary");
+            micButton.classList.add("persona-bg-persona-primary");
           }
           
           if (iconColor) {
             micButton.style.color = iconColor;
-            micButton.classList.remove("tvw-text-white");
+            micButton.classList.remove("persona-text-white");
           } else if (!iconColor && !sendButtonConfig.textColor) {
             micButton.style.color = "";
-            micButton.classList.add("tvw-text-white");
+            micButton.classList.add("persona-text-white");
           }
           
           // Update border styling
@@ -3789,14 +4430,14 @@ export const createAgentExperience = (
           }
           
           // Update tooltip
-          const tooltip = micButtonWrapper?.querySelector(".tvw-send-button-tooltip") as HTMLElement | null;
+          const tooltip = micButtonWrapper?.querySelector(".persona-send-button-tooltip") as HTMLElement | null;
           const tooltipText = voiceConfig.tooltipText ?? "Start voice recognition";
           const showTooltip = voiceConfig.showTooltip ?? false;
           if (showTooltip && tooltipText) {
             if (!tooltip) {
               // Create tooltip if it doesn't exist
               const newTooltip = document.createElement("div");
-              newTooltip.className = "tvw-send-button-tooltip";
+              newTooltip.className = "persona-send-button-tooltip";
               newTooltip.textContent = tooltipText;
               micButtonWrapper?.insertBefore(newTooltip, micButton);
             } else {
@@ -3837,7 +4478,7 @@ export const createAgentExperience = (
 
           // Create previews container if not exists
           if (!attachmentPreviewsContainer) {
-            attachmentPreviewsContainer = createElement("div", "tvw-attachment-previews tvw-flex tvw-flex-wrap tvw-gap-2 tvw-mb-2");
+            attachmentPreviewsContainer = createElement("div", "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2");
             attachmentPreviewsContainer.style.display = "none";
             composerForm.insertBefore(attachmentPreviewsContainer, textarea);
           }
@@ -3854,12 +4495,12 @@ export const createAgentExperience = (
           }
 
           // Create attachment button wrapper
-          attachmentButtonWrapper = createElement("div", "tvw-send-button-wrapper");
+          attachmentButtonWrapper = createElement("div", "persona-send-button-wrapper");
 
           // Create attachment button
           attachmentButton = createElement(
             "button",
-            "tvw-rounded-button tvw-flex tvw-items-center tvw-justify-center disabled:tvw-opacity-50 tvw-cursor-pointer tvw-attachment-button"
+            "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button"
           ) as HTMLButtonElement;
           attachmentButton.type = "button";
           attachmentButton.setAttribute("aria-label", attachmentsConfig.buttonTooltipText ?? "Attach file");
@@ -3878,14 +4519,14 @@ export const createAgentExperience = (
           attachmentButton.style.fontSize = "18px";
           attachmentButton.style.lineHeight = "1";
           attachmentButton.style.backgroundColor = "transparent";
-          attachmentButton.style.color = "var(--cw-primary, #111827)";
+          attachmentButton.style.color = "var(--persona-primary, #111827)";
           attachmentButton.style.border = "none";
           attachmentButton.style.borderRadius = "6px";
           attachmentButton.style.transition = "background-color 0.15s ease";
 
           // Add hover effect via mouseenter/mouseleave
           attachmentButton.addEventListener("mouseenter", () => {
-            attachmentButton!.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+            attachmentButton!.style.backgroundColor = "var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.05))";
           });
           attachmentButton.addEventListener("mouseleave", () => {
             attachmentButton!.style.backgroundColor = "transparent";
@@ -3907,7 +4548,7 @@ export const createAgentExperience = (
 
           // Add tooltip
           const attachTooltipText = attachmentsConfig.buttonTooltipText ?? "Attach file";
-          const tooltip = createElement("div", "tvw-send-button-tooltip");
+          const tooltip = createElement("div", "persona-send-button-tooltip");
           tooltip.textContent = attachTooltipText;
           attachmentButtonWrapper.appendChild(tooltip);
 
@@ -3995,7 +4636,7 @@ export const createAgentExperience = (
             if (textColor) {
               sendButton.style.color = textColor;
             } else {
-              sendButton.classList.add("tvw-text-white");
+              sendButton.classList.add("persona-text-white");
             }
           }
         } else {
@@ -4003,18 +4644,18 @@ export const createAgentExperience = (
           if (textColor) {
             sendButton.style.color = textColor;
           } else {
-            sendButton.classList.add("tvw-text-white");
+            sendButton.classList.add("persona-text-white");
           }
         }
         
         // Update classes
-        sendButton.className = "tvw-rounded-button tvw-flex tvw-items-center tvw-justify-center disabled:tvw-opacity-50 tvw-cursor-pointer";
+        sendButton.className = "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer";
         
         if (backgroundColor) {
           sendButton.style.backgroundColor = backgroundColor;
-          sendButton.classList.remove("tvw-bg-cw-primary");
+          sendButton.classList.remove("persona-bg-persona-primary");
         } else {
-          sendButton.classList.add("tvw-bg-cw-primary");
+          sendButton.classList.add("persona-bg-persona-primary");
         }
       } else {
         // Text mode: existing behavior
@@ -4027,19 +4668,19 @@ export const createAgentExperience = (
         sendButton.style.lineHeight = "";
         
         // Update classes
-        sendButton.className = "tvw-rounded-button tvw-bg-cw-accent tvw-px-4 tvw-py-2 tvw-text-sm tvw-font-semibold tvw-text-white disabled:tvw-opacity-50 tvw-cursor-pointer";
+        sendButton.className = "persona-rounded-button persona-bg-persona-accent persona-px-4 persona-py-2 persona-text-sm persona-font-semibold persona-text-white disabled:persona-opacity-50 persona-cursor-pointer";
         
         if (backgroundColor) {
           sendButton.style.backgroundColor = backgroundColor;
-          sendButton.classList.remove("tvw-bg-cw-accent");
+          sendButton.classList.remove("persona-bg-persona-accent");
         } else {
-          sendButton.classList.add("tvw-bg-cw-accent");
+          sendButton.classList.add("persona-bg-persona-accent");
         }
         
         if (textColor) {
           sendButton.style.color = textColor;
         } else {
-          sendButton.classList.add("tvw-text-white");
+          sendButton.classList.add("persona-text-white");
         }
       }
 
@@ -4074,12 +4715,12 @@ export const createAgentExperience = (
       }
 
       // Update tooltip
-      const tooltip = sendButtonWrapper?.querySelector(".tvw-send-button-tooltip") as HTMLElement | null;
+      const tooltip = sendButtonWrapper?.querySelector(".persona-send-button-tooltip") as HTMLElement | null;
       if (showTooltip && tooltipText) {
         if (!tooltip) {
           // Create tooltip if it doesn't exist
           const newTooltip = document.createElement("div");
-          newTooltip.className = "tvw-send-button-tooltip";
+          newTooltip.className = "persona-send-button-tooltip";
           newTooltip.textContent = tooltipText;
           sendButtonWrapper?.insertBefore(newTooltip, sendButton);
         } else {
@@ -4122,7 +4763,9 @@ export const createAgentExperience = (
     },
     clearChat() {
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
+      artifactsPaneUserHidden = false;
       session.clearMessages();
+      messageCache.clear();
 
       // Always clear the default localStorage key
       try {
@@ -4338,6 +4981,31 @@ export const createAgentExperience = (
     isEventStreamVisible(): boolean {
       return eventStreamVisible;
     },
+    showArtifacts(): void {
+      if (!artifactsSidebarEnabled(config)) return;
+      artifactsPaneUserHidden = false;
+      syncArtifactPane();
+      artifactPaneApi?.setMobileOpen(true);
+    },
+    hideArtifacts(): void {
+      if (!artifactsSidebarEnabled(config)) return;
+      artifactsPaneUserHidden = true;
+      syncArtifactPane();
+    },
+    upsertArtifact(manual: PersonaArtifactManualUpsert): PersonaArtifactRecord | null {
+      if (!artifactsSidebarEnabled(config)) return null;
+      // Programmatic adds should surface the pane even if the user previously hit Close.
+      artifactsPaneUserHidden = false;
+      return session.upsertArtifact(manual);
+    },
+    selectArtifact(id: string): void {
+      if (!artifactsSidebarEnabled(config)) return;
+      session.selectArtifact(id);
+    },
+    clearArtifacts(): void {
+      if (!artifactsSidebarEnabled(config)) return;
+      session.clearArtifacts();
+    },
     focusInput(): boolean {
       if (launcherEnabled && !open) return false;
       if (!textarea) return false;
@@ -4397,7 +5065,7 @@ export const createAgentExperience = (
       }
       
       // Remove any existing feedback forms
-      const existingFeedback = messagesWrapper.querySelector('.tvw-feedback-container');
+      const existingFeedback = messagesWrapper.querySelector('.persona-feedback-container');
       if (existingFeedback) {
         existingFeedback.remove();
       }
@@ -4424,7 +5092,7 @@ export const createAgentExperience = (
       }
       
       // Remove any existing feedback forms
-      const existingFeedback = messagesWrapper.querySelector('.tvw-feedback-container');
+      const existingFeedback = messagesWrapper.querySelector('.persona-feedback-container');
       if (existingFeedback) {
         existingFeedback.remove();
       }
@@ -4523,6 +5191,51 @@ export const createAgentExperience = (
         window.removeEventListener("persona:hideEventStream", handleHideEvent);
       });
     }
+
+    const handleShowArtifacts = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.showArtifacts();
+      }
+    };
+    const handleHideArtifacts = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.hideArtifacts();
+      }
+    };
+    const handleUpsertArtifact = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.instanceId && detail.instanceId !== instanceId) return;
+      if (detail?.artifact) {
+        controller.upsertArtifact(detail.artifact as PersonaArtifactManualUpsert);
+      }
+    };
+    const handleSelectArtifact = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.instanceId && detail.instanceId !== instanceId) return;
+      if (typeof detail?.id === "string") {
+        controller.selectArtifact(detail.id);
+      }
+    };
+    const handleClearArtifacts = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.clearArtifacts();
+      }
+    };
+    window.addEventListener("persona:showArtifacts", handleShowArtifacts);
+    window.addEventListener("persona:hideArtifacts", handleHideArtifacts);
+    window.addEventListener("persona:upsertArtifact", handleUpsertArtifact);
+    window.addEventListener("persona:selectArtifact", handleSelectArtifact);
+    window.addEventListener("persona:clearArtifacts", handleClearArtifacts);
+    destroyCallbacks.push(() => {
+      window.removeEventListener("persona:showArtifacts", handleShowArtifacts);
+      window.removeEventListener("persona:hideArtifacts", handleHideArtifacts);
+      window.removeEventListener("persona:upsertArtifact", handleUpsertArtifact);
+      window.removeEventListener("persona:selectArtifact", handleSelectArtifact);
+      window.removeEventListener("persona:clearArtifacts", handleClearArtifacts);
+    });
   }
 
   // ============================================================================

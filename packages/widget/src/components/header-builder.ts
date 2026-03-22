@@ -1,4 +1,4 @@
-import { createElement } from "../utils/dom";
+import { createElement, createElementInDocument } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
 
@@ -29,8 +29,12 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
   const header = createElement(
     "div",
-    "tvw-widget-header tvw-flex tvw-items-center tvw-gap-3 tvw-bg-cw-surface tvw-px-6 tvw-py-5 tvw-border-b-cw-divider"
+    "persona-widget-header persona-flex persona-items-center persona-gap-3 persona-px-6 persona-py-5"
   );
+  header.style.backgroundColor = 'var(--persona-header-bg, var(--persona-surface, #ffffff))';
+  header.style.borderBottomWidth = '1px';
+  header.style.borderBottomStyle = 'solid';
+  header.style.borderBottomColor = 'var(--persona-header-border, var(--persona-divider, #f1f5f9))';
 
   const launcher = config?.launcher ?? {};
   const headerIconSize = launcher.headerIconSize ?? "48px";
@@ -41,7 +45,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
   const iconHolder = createElement(
     "div",
-    "tvw-flex tvw-items-center tvw-justify-center tvw-rounded-xl tvw-bg-cw-primary tvw-text-white tvw-text-xl"
+    "persona-flex persona-items-center persona-justify-center persona-rounded-xl persona-bg-persona-primary persona-text-white persona-text-xl"
   );
   iconHolder.style.height = headerIconSize;
   iconHolder.style.width = headerIconSize;
@@ -51,7 +55,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     if (headerIconName) {
       // Use Lucide icon
       const iconSize = parseFloat(headerIconSize) || 24;
-      const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "#ffffff", 1);
+      const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "var(--persona-text-inverse, #ffffff)", 1);
       if (iconSvg) {
         iconHolder.replaceChildren(iconSvg);
       } else {
@@ -63,7 +67,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
       const img = createElement("img") as HTMLImageElement;
       img.src = config.launcher.iconUrl;
       img.alt = "";
-      img.className = "tvw-rounded-xl tvw-object-cover";
+      img.className = "persona-rounded-xl persona-object-cover";
       img.style.height = headerIconSize;
       img.style.width = headerIconSize;
       iconHolder.replaceChildren(img);
@@ -73,10 +77,10 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     }
   }
 
-  const headerCopy = createElement("div", "tvw-flex tvw-flex-col");
-  const title = createElement("span", "tvw-text-base tvw-font-semibold");
+  const headerCopy = createElement("div", "persona-flex persona-flex-col");
+  const title = createElement("span", "persona-text-base persona-font-semibold");
   title.textContent = config?.launcher?.title ?? "Chat Assistant";
-  const subtitle = createElement("span", "tvw-text-xs tvw-text-cw-muted");
+  const subtitle = createElement("span", "persona-text-xs persona-text-persona-muted");
   subtitle.textContent =
     config?.launcher?.subtitle ?? "Here to help you get answers fast";
 
@@ -110,13 +114,13 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     const clearChatShowTooltip = clearChatConfig.showTooltip ?? true;
 
     // Create button wrapper for tooltip - positioned based on placement
-    // Note: Don't use tvw-clear-chat-button-wrapper class for top-right mode as its
+    // Note: Don't use persona-clear-chat-button-wrapper class for top-right mode as its
     // display: inline-flex causes alignment issues with the close button
     clearChatButtonWrapper = createElement(
       "div",
       clearChatPlacement === "top-right"
-        ? "tvw-absolute tvw-top-4 tvw-z-50"
-        : "tvw-relative tvw-ml-auto tvw-clear-chat-button-wrapper"
+        ? "persona-absolute persona-top-4 persona-z-50"
+        : "persona-relative persona-ml-auto persona-clear-chat-button-wrapper"
     );
 
     // Position to the left of the close button (which is at right: 1rem/16px)
@@ -127,7 +131,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
     clearChatButton = createElement(
       "button",
-      "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none"
+      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
     ) as HTMLButtonElement;
 
     clearChatButton.style.height = clearChatSize;
@@ -149,24 +153,24 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     // Apply styling from config
     if (clearChatIconColor) {
       clearChatButton.style.color = clearChatIconColor;
-      clearChatButton.classList.remove("tvw-text-cw-muted");
+      clearChatButton.classList.remove("persona-text-persona-muted");
     }
 
     if (clearChatBgColor) {
       clearChatButton.style.backgroundColor = clearChatBgColor;
-      clearChatButton.classList.remove("hover:tvw-bg-gray-100");
+      clearChatButton.classList.remove("hover:persona-bg-gray-100");
     }
 
     if (clearChatBorderWidth || clearChatBorderColor) {
       const borderWidth = clearChatBorderWidth || "0px";
       const borderColor = clearChatBorderColor || "transparent";
       clearChatButton.style.border = `${borderWidth} solid ${borderColor}`;
-      clearChatButton.classList.remove("tvw-border-none");
+      clearChatButton.classList.remove("persona-border-none");
     }
 
     if (clearChatBorderRadius) {
       clearChatButton.style.borderRadius = clearChatBorderRadius;
-      clearChatButton.classList.remove("tvw-rounded-full");
+      clearChatButton.classList.remove("persona-rounded-full");
     }
 
     // Apply padding styling
@@ -199,13 +203,21 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
       const showTooltip = () => {
         if (portaledTooltip || !clearChatButton) return; // Already showing or button doesn't exist
 
+        const tooltipDocument = clearChatButton.ownerDocument;
+        const tooltipContainer = tooltipDocument.body;
+        if (!tooltipContainer) return;
+
         // Create tooltip element
-        portaledTooltip = createElement("div", "tvw-clear-chat-tooltip");
+        portaledTooltip = createElementInDocument(
+          tooltipDocument,
+          "div",
+          "persona-clear-chat-tooltip"
+        );
         portaledTooltip.textContent = clearChatTooltipText;
 
         // Add arrow
-        const arrow = createElement("div");
-        arrow.className = "tvw-clear-chat-tooltip-arrow";
+        const arrow = createElementInDocument(tooltipDocument, "div");
+        arrow.className = "persona-clear-chat-tooltip-arrow";
         portaledTooltip.appendChild(arrow);
 
         // Get button position
@@ -218,7 +230,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
         portaledTooltip.style.transform = "translate(-50%, -100%)";
 
         // Append to body
-        document.body.appendChild(portaledTooltip);
+        tooltipContainer.appendChild(portaledTooltip);
       };
 
       const hideTooltip = () => {
@@ -259,16 +271,16 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   const closeButtonWrapper = createElement(
     "div",
     closeButtonPlacement === "top-right"
-      ? "tvw-absolute tvw-top-4 tvw-right-4 tvw-z-50"
+      ? "persona-absolute persona-top-4 persona-right-4 persona-z-50"
       : clearChatEnabled && clearChatPlacement === "inline"
         ? ""
-        : "tvw-ml-auto"
+        : "persona-ml-auto"
   );
 
   // Create close button with base classes
   const closeButton = createElement(
     "button",
-    "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none"
+    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
   ) as HTMLButtonElement;
   closeButton.style.height = closeButtonSize;
   closeButton.style.width = closeButtonSize;
@@ -301,18 +313,18 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   // Apply close button styling from config
   if (launcher.closeButtonColor) {
     closeButton.style.color = launcher.closeButtonColor;
-    closeButton.classList.remove("tvw-text-cw-muted");
+    closeButton.classList.remove("persona-text-persona-muted");
   } else {
     closeButton.style.color = "";
-    closeButton.classList.add("tvw-text-cw-muted");
+    closeButton.classList.add("persona-text-persona-muted");
   }
 
   if (launcher.closeButtonBackgroundColor) {
     closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
-    closeButton.classList.remove("hover:tvw-bg-gray-100");
+    closeButton.classList.remove("hover:persona-bg-gray-100");
   } else {
     closeButton.style.backgroundColor = "";
-    closeButton.classList.add("hover:tvw-bg-gray-100");
+    closeButton.classList.add("hover:persona-bg-gray-100");
   }
 
   // Apply border if width and/or color are provided
@@ -320,18 +332,18 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     const borderWidth = launcher.closeButtonBorderWidth || "0px";
     const borderColor = launcher.closeButtonBorderColor || "transparent";
     closeButton.style.border = `${borderWidth} solid ${borderColor}`;
-    closeButton.classList.remove("tvw-border-none");
+    closeButton.classList.remove("persona-border-none");
   } else {
     closeButton.style.border = "";
-    closeButton.classList.add("tvw-border-none");
+    closeButton.classList.add("persona-border-none");
   }
 
   if (launcher.closeButtonBorderRadius) {
     closeButton.style.borderRadius = launcher.closeButtonBorderRadius;
-    closeButton.classList.remove("tvw-rounded-full");
+    closeButton.classList.remove("persona-rounded-full");
   } else {
     closeButton.style.borderRadius = "";
-    closeButton.classList.add("tvw-rounded-full");
+    closeButton.classList.add("persona-rounded-full");
   }
 
   // Apply padding styling
@@ -359,13 +371,21 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     const showTooltip = () => {
       if (portaledTooltip) return; // Already showing
 
+      const tooltipDocument = closeButton.ownerDocument;
+      const tooltipContainer = tooltipDocument.body;
+      if (!tooltipContainer) return;
+
       // Create tooltip element
-      portaledTooltip = createElement("div", "tvw-clear-chat-tooltip");
+      portaledTooltip = createElementInDocument(
+        tooltipDocument,
+        "div",
+        "persona-clear-chat-tooltip"
+      );
       portaledTooltip.textContent = closeButtonTooltipText;
 
       // Add arrow
-      const arrow = createElement("div");
-      arrow.className = "tvw-clear-chat-tooltip-arrow";
+      const arrow = createElementInDocument(tooltipDocument, "div");
+      arrow.className = "persona-clear-chat-tooltip-arrow";
       portaledTooltip.appendChild(arrow);
 
       // Get button position
@@ -378,7 +398,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
       portaledTooltip.style.transform = "translate(-50%, -100%)";
 
       // Append to body
-      document.body.appendChild(portaledTooltip);
+      tooltipContainer.appendChild(portaledTooltip);
     };
 
     const hideTooltip = () => {
@@ -451,5 +471,4 @@ export const attachHeaderToContainer = (
     container.appendChild(headerElements.clearChatButtonWrapper);
   }
 };
-
 

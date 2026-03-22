@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Artifact sidebar demo – Persona</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        padding: 1.5rem;
+        padding-bottom: 6rem;
+        background: #0c1222;
+        color: #e2e8f0;
+        min-height: 100vh;
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+      }
+      h1 {
+        margin-top: 0;
+        font-size: 1.35rem;
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin: 2rem 0 0.75rem;
+        color: #e2e8f0;
+      }
+      p,
+      li {
+        color: #94a3b8;
+        line-height: 1.55;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin: 1rem 0;
+      }
+      .toolbar button {
+        background: #334155;
+        color: #f8fafc;
+        border: none;
+        padding: 0.45rem 0.85rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.875rem;
+      }
+      .toolbar button:hover {
+        background: #475569;
+      }
+      .toolbar--launcher button {
+        background: #1e3a5f;
+      }
+      .toolbar--launcher button:hover {
+        background: #2d4a73;
+      }
+      .toolbar-label {
+        width: 100%;
+        flex-basis: 100%;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        margin: 0.25rem 0 0;
+      }
+      .toolbar + .toolbar-label {
+        margin-top: 0.75rem;
+      }
+      .embed {
+        height: min(72vh, 640px);
+        border: 1px solid #334155;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #1e293b;
+      }
+      code {
+        background: #1e293b;
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+        font-size: 0.85em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Artifact sidebar</h1>
+      <p>
+        Two setups: an <strong>inline</strong> embed and a <strong>floating launcher</strong> (bottom-right).
+        Both use <code>features.artifacts</code>. Inline toolbar talks to the embedded instance; launcher toolbar
+        opens the bubble first, then runs the same actions. Globals:
+        <code>window.personaArtifactDemo</code> and <code>window.personaArtifactLauncherDemo</code>.
+      </p>
+      <ul>
+        <li><strong>Markdown</strong> — rendered note in the artifact pane.</li>
+        <li>
+          <strong>Known component</strong> — <code>ArtifactDemoPill</code> is registered in the demo.
+        </li>
+        <li><strong>Unknown component</strong> — fallback inspector card in the pane.</li>
+      </ul>
+
+      <h2>Inline embed</h2>
+      <div class="toolbar">
+        <button type="button" id="btn-md">Add markdown artifact</button>
+        <button type="button" id="btn-comp">Add known component</button>
+        <button type="button" id="btn-unknown">Add unknown component</button>
+        <button type="button" id="btn-clear">Clear chat + artifacts</button>
+      </div>
+      <div class="embed" id="artifact-root"></div>
+
+      <h2>Floating launcher</h2>
+      <p>
+        Use the sparkle button in the corner, or use the buttons below — they open the panel automatically, then
+        inject artifacts. <code>persona:upsertArtifact</code> works with <code>detail.instanceId</code> if you set
+        <code>data-persona-instance</code> on the mount target (here: <code>artifact-launcher-root</code>).
+      </p>
+      <div class="toolbar toolbar--launcher">
+        <button type="button" id="btn-md-launcher">Add markdown (launcher)</button>
+        <button type="button" id="btn-comp-launcher">Add known component (launcher)</button>
+        <button type="button" id="btn-unknown-launcher">Add unknown component (launcher)</button>
+        <button type="button" id="btn-clear-launcher">Clear chat + artifacts (launcher)</button>
+      </div>
+      <p class="toolbar-label">Launcher base width (<code>launcher.width</code>)</p>
+      <div class="toolbar toolbar--launcher" id="toolbar-launcher-width">
+        <button type="button" data-launcher-width="min(320px, calc(100vw - 24px))">320px cap</button>
+        <button type="button" data-launcher-width="min(400px, calc(100vw - 24px))">400px cap (default)</button>
+        <button type="button" data-launcher-width="min(480px, calc(100vw - 24px))">480px cap</button>
+      </div>
+      <p class="toolbar-label">
+        Expanded width with artifacts (<code>features.artifacts.layout.expandedPanelWidth</code>)
+      </p>
+      <div class="toolbar toolbar--launcher" id="toolbar-artifact-expanded">
+        <button type="button" data-expanded-width="min(560px, calc(100vw - 24px))">560px cap</button>
+        <button type="button" data-expanded-width="min(640px, calc(100vw - 24px))">640px cap</button>
+        <button type="button" data-expanded-width="min(720px, calc(100vw - 24px))">720px cap (default)</button>
+        <button type="button" data-expanded-width="min(880px, calc(100vw - 24px))">880px cap</button>
+      </div>
+      <p class="toolbar-label">Artifact column (<code>layout.paneWidth</code> / <code>paneMaxWidth</code>)</p>
+      <div class="toolbar toolbar--launcher" id="toolbar-artifact-pane">
+        <button type="button" data-pane="32">32% / max 22rem</button>
+        <button type="button" data-pane="40">40% / max 28rem (default)</button>
+        <button type="button" data-pane="48">48% / max 32rem</button>
+      </div>
+      <p class="toolbar-label">Pane look (<code>layout.paneAppearance</code>)</p>
+      <div class="toolbar toolbar--launcher" id="toolbar-artifact-appearance">
+        <button type="button" data-appearance="panel">Panel (border + gap)</button>
+        <button type="button" data-appearance="seamless">Seamless (flush)</button>
+      </div>
+      <p class="toolbar-label">
+        Unified shell (<code>layout.unifiedSplitChrome</code>) — one card across chat + artifact
+      </p>
+      <div class="toolbar toolbar--launcher" id="toolbar-artifact-unified">
+        <button type="button" id="btn-unified-on">Enable unified split chrome</button>
+        <button type="button" id="btn-unified-off">Disable unified split chrome</button>
+      </div>
+      <p class="toolbar-label">
+        Pane border (<code>layout.paneBorderLeft</code> / <code>paneBorder</code>)
+      </p>
+      <div class="toolbar toolbar--launcher" id="toolbar-artifact-border">
+        <button type="button" data-border-left="1px solid #cccccc">Left: 1px #ccc</button>
+        <button type="button" data-border-full="1px solid #cccccc">Full: 1px #ccc</button>
+        <button type="button" data-border-left="2px solid #0ea5e9">Left: 2px accent</button>
+        <button type="button" id="btn-artifact-border-clear">Clear custom borders</button>
+      </div>
+      <p class="toolbar-label">
+        Pane radius + shadow (<code>layout.paneBorderRadius</code> / <code>paneShadow</code>)
+      </p>
+      <div class="toolbar toolbar--launcher" id="toolbar-artifact-radius-shadow">
+        <button type="button" data-radius="0.75rem">Radius: 0.75rem</button>
+        <button type="button" data-radius="1rem">Radius: 1rem</button>
+        <button type="button" data-shadow="none">Shadow: none</button>
+        <button type="button" data-shadow="-4px 0 24px rgba(0,0,0,0.15)">Shadow: heavy</button>
+        <button type="button" id="btn-artifact-radius-shadow-clear">Clear radius + shadow</button>
+      </div>
+      <p class="toolbar-label">Split resize (<code>layout.resizable</code>)</p>
+      <div class="toolbar toolbar--launcher" id="toolbar-artifact-resize">
+        <button type="button" id="btn-resize-on">Enable draggable split resize</button>
+        <button type="button" id="btn-resize-off">Disable split resize</button>
+      </div>
+      <p class="toolbar-label">Drawer threshold (<code>layout.narrowHostMaxWidth</code> px)</p>
+      <div class="toolbar toolbar--launcher" id="toolbar-artifact-narrow">
+        <button type="button" data-narrow="420">420</button>
+        <button type="button" data-narrow="520">520 (default)</button>
+        <button type="button" data-narrow="640">640</button>
+      </div>
+      <div class="toolbar toolbar--launcher">
+        <button type="button" id="btn-artifact-layout-reset">Reset layout + base width to defaults</button>
+      </div>
+    </div>
+    <!-- Empty mount: the widget creates the FAB + panel here -->
+    <div id="artifact-launcher-root"></div>
+    <script type="module" src="/src/artifact-demo.ts"></script>
+  </body>
+</html>

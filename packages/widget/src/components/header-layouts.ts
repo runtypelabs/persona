@@ -1,6 +1,10 @@
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
-import { AgentWidgetConfig, AgentWidgetHeaderLayoutConfig } from "../types";
+import {
+  AgentWidgetConfig,
+  AgentWidgetHeaderLayoutConfig,
+  AgentWidgetHeaderTrailingAction
+} from "../types";
 import { buildHeader, HeaderElements, attachHeaderToContainer as _attachHeaderToContainer } from "./header-builder";
 
 export interface HeaderLayoutContext {
@@ -8,6 +12,9 @@ export interface HeaderLayoutContext {
   showClose?: boolean;
   onClose?: () => void;
   onClearChat?: () => void;
+  /** Passed from `buildHeaderWithLayout` for minimal/default chrome extensions */
+  layoutHeaderConfig?: AgentWidgetHeaderLayoutConfig;
+  onHeaderAction?: (actionId: string) => void;
 }
 
 export type HeaderLayoutRenderer = (context: HeaderLayoutContext) => HeaderElements;
@@ -29,20 +36,56 @@ export const buildDefaultHeader: HeaderLayoutRenderer = (context) => {
  * Build minimal header layout
  * Simplified layout with just title and close button
  */
+function appendTrailingHeaderActions(
+  container: HTMLElement,
+  actions: AgentWidgetHeaderTrailingAction[] | undefined,
+  onAction?: (id: string) => void
+): void {
+  if (!actions?.length) return;
+  for (const a of actions) {
+    const btn = createElement(
+      "button",
+      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-md persona-border-none persona-bg-transparent persona-p-0 persona-text-persona-muted hover:persona-opacity-80"
+    ) as HTMLButtonElement;
+    btn.type = "button";
+    btn.setAttribute("aria-label", a.ariaLabel ?? a.label ?? a.id);
+    if (a.icon) {
+      const ic = renderLucideIcon(a.icon, 14, "currentColor", 2);
+      if (ic) btn.appendChild(ic);
+    } else if (a.label) {
+      btn.textContent = a.label;
+    }
+    btn.addEventListener("click", () => onAction?.(a.id));
+    container.appendChild(btn);
+  }
+}
+
 export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
-  const { config, showClose = true, onClose } = context;
+  const { config, showClose = true, onClose, layoutHeaderConfig, onHeaderAction } = context;
   const launcher = config?.launcher ?? {};
 
   const header = createElement(
     "div",
-    "tvw-flex tvw-items-center tvw-justify-between tvw-bg-cw-surface tvw-px-6 tvw-py-4 tvw-border-b-cw-divider"
+    "persona-flex persona-items-center persona-justify-between persona-bg-persona-surface persona-px-6 persona-py-4 persona-border-b-persona-divider"
+  );
+
+  const titleRow = createElement(
+    "div",
+    "persona-flex persona-min-w-0 persona-flex-1 persona-items-center persona-gap-1"
   );
 
   // Title only (no icon, no subtitle)
-  const title = createElement("span", "tvw-text-base tvw-font-semibold");
+  const title = createElement("span", "persona-text-base persona-font-semibold persona-truncate");
   title.textContent = launcher.title ?? "Chat Assistant";
 
-  header.appendChild(title);
+  titleRow.appendChild(title);
+  appendTrailingHeaderActions(
+    titleRow,
+    layoutHeaderConfig?.trailingActions,
+    layoutHeaderConfig?.onAction ?? onHeaderAction
+  );
+
+  header.appendChild(titleRow);
 
   // Close button
   const closeButtonSize = launcher.closeButtonSize ?? "32px";
@@ -50,7 +93,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 
   const closeButton = createElement(
     "button",
-    "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none"
+    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
   ) as HTMLButtonElement;
   closeButton.style.height = closeButtonSize;
   closeButton.style.width = closeButtonSize;
@@ -78,6 +121,8 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
   closeButtonWrapper.appendChild(closeButton);
   header.appendChild(closeButtonWrapper);
 
+  // title was moved into titleRow; keep headerTitle ref pointing at title for updateController
+
   // Create placeholder elements for compatibility
   const iconHolder = createElement("div");
   iconHolder.style.display = "none";
@@ -97,128 +142,12 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 };
 
 /**
- * Build expanded header layout
- * Full branding area with additional space for custom content
- */
-export const buildExpandedHeader: HeaderLayoutRenderer = (context) => {
-  const { config, showClose = true, onClose, onClearChat: _onClearChat } = context;
-  const launcher = config?.launcher ?? {};
-
-  const header = createElement(
-    "div",
-    "tvw-flex tvw-flex-col tvw-bg-cw-surface tvw-px-6 tvw-py-5 tvw-border-b-cw-divider"
-  );
-
-  // Top row: icon + text + buttons
-  const topRow = createElement(
-    "div",
-    "tvw-flex tvw-items-center tvw-gap-3"
-  );
-
-  // Icon
-  const headerIconSize = launcher.headerIconSize ?? "56px";
-  const iconHolder = createElement(
-    "div",
-    "tvw-flex tvw-items-center tvw-justify-center tvw-rounded-xl tvw-bg-cw-primary tvw-text-white tvw-text-2xl"
-  );
-  iconHolder.style.height = headerIconSize;
-  iconHolder.style.width = headerIconSize;
-
-  const headerIconName = launcher.headerIconName;
-  if (headerIconName) {
-    const iconSize = parseFloat(headerIconSize) || 24;
-    const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.5, "#ffffff", 2);
-    if (iconSvg) {
-      iconHolder.replaceChildren(iconSvg);
-    } else {
-      iconHolder.textContent = launcher.agentIconText ?? "💬";
-    }
-  } else if (launcher.iconUrl) {
-    const img = createElement("img") as HTMLImageElement;
-    img.src = launcher.iconUrl;
-    img.alt = "";
-    img.className = "tvw-rounded-xl tvw-object-cover";
-    img.style.height = headerIconSize;
-    img.style.width = headerIconSize;
-    iconHolder.replaceChildren(img);
-  } else {
-    iconHolder.textContent = launcher.agentIconText ?? "💬";
-  }
-
-  // Title and subtitle
-  const headerCopy = createElement("div", "tvw-flex tvw-flex-col tvw-flex-1");
-  const title = createElement("span", "tvw-text-lg tvw-font-semibold");
-  title.textContent = launcher.title ?? "Chat Assistant";
-  const subtitle = createElement("span", "tvw-text-sm tvw-text-cw-muted");
-  subtitle.textContent = launcher.subtitle ?? "Here to help you get answers fast";
-  headerCopy.append(title, subtitle);
-
-  topRow.append(iconHolder, headerCopy);
-
-  // Close button
-  const closeButtonSize = launcher.closeButtonSize ?? "32px";
-  const closeButtonWrapper = createElement("div", "");
-
-  const closeButton = createElement(
-    "button",
-    "tvw-inline-flex tvw-items-center tvw-justify-center tvw-rounded-full tvw-text-cw-muted hover:tvw-bg-gray-100 tvw-cursor-pointer tvw-border-none"
-  ) as HTMLButtonElement;
-  closeButton.style.height = closeButtonSize;
-  closeButton.style.width = closeButtonSize;
-  closeButton.type = "button";
-  closeButton.setAttribute("aria-label", "Close chat");
-  closeButton.style.display = showClose ? "" : "none";
-
-  const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-  const closeIconSvg = renderLucideIcon(
-    closeButtonIconName,
-    "20px",
-    launcher.closeButtonColor || "",
-    2
-  );
-  if (closeIconSvg) {
-    closeButton.appendChild(closeIconSvg);
-  } else {
-    closeButton.textContent = "×";
-  }
-
-  if (onClose) {
-    closeButton.addEventListener("click", onClose);
-  }
-
-  closeButtonWrapper.appendChild(closeButton);
-  topRow.appendChild(closeButtonWrapper);
-
-  header.appendChild(topRow);
-
-  // Bottom row: additional space for status or branding
-  const bottomRow = createElement(
-    "div",
-    "tvw-mt-3 tvw-pt-3 tvw-border-t tvw-border-gray-100 tvw-text-xs tvw-text-cw-muted"
-  );
-  bottomRow.textContent = "Online and ready to help";
-  header.appendChild(bottomRow);
-
-  return {
-    header,
-    iconHolder,
-    headerTitle: title,
-    headerSubtitle: subtitle,
-    closeButton,
-    closeButtonWrapper,
-    clearChatButton: null,
-    clearChatButtonWrapper: null
-  };
-};
-
-/**
  * Header layout registry
  * Maps layout names to their renderer functions
  */
 export const headerLayouts: Record<string, HeaderLayoutRenderer> = {
   default: buildDefaultHeader,
-  minimal: buildMinimalHeader,
-  expanded: buildExpandedHeader
+  minimal: buildMinimalHeader
 };
 
 /**
@@ -242,7 +171,9 @@ export const buildHeaderWithLayout = (
     const customHeader = layoutConfig.render({
       config,
       onClose: context?.onClose,
-      onClearChat: context?.onClearChat
+      onClearChat: context?.onClearChat,
+      trailingActions: layoutConfig.trailingActions,
+      onAction: layoutConfig.onAction
     });
     
     // Wrap in HeaderElements structure
@@ -276,7 +207,9 @@ export const buildHeaderWithLayout = (
     config,
     showClose: layoutConfig?.showCloseButton ?? context?.showClose ?? true,
     onClose: context?.onClose,
-    onClearChat: context?.onClearChat
+    onClearChat: context?.onClearChat,
+    layoutHeaderConfig: layoutConfig,
+    onHeaderAction: layoutConfig?.onAction
   });
 
   // Apply visibility settings from layout config

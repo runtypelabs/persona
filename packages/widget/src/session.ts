@@ -10,7 +10,9 @@ import {
   InjectMessageOptions,
   InjectAssistantMessageOptions,
   InjectUserMessageOptions,
-  InjectSystemMessageOptions
+  InjectSystemMessageOptions,
+  PersonaArtifactRecord,
+  PersonaArtifactManualUpsert
 } from "./types";
 import {
   generateUserMessageId,
@@ -40,6 +42,10 @@ type SessionCallbacks = {
   onStreamingChanged: (streaming: boolean) => void;
   onError?: (error: Error) => void;
   onVoiceStatusChanged?: (status: VoiceStatus) => void;
+  onArtifactsState?: (state: {
+    artifacts: PersonaArtifactRecord[];
+    selectedId: string | null;
+  }) => void;
 };
 
 export class AgentWidgetSession {
@@ -55,6 +61,9 @@ export class AgentWidgetSession {
 
   // Agent execution state
   private agentExecution: AgentExecutionState | null = null;
+
+  private artifacts = new Map<string, PersonaArtifactRecord>();
+  private selectedArtifactId: string | null = null;
 
   // Voice support
   private voiceProvider: VoiceProvider | null = null;
@@ -972,9 +981,126 @@ export class AgentWidgetSession {
     this.abortController = null;
     this.messages = [];
     this.agentExecution = null;
+    this.clearArtifactState();
     this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);
+  }
+
+  public getArtifacts(): PersonaArtifactRecord[] {
+    return [...this.artifacts.values()];
+  }
+
+  public getArtifactById(id: string): PersonaArtifactRecord | undefined {
+    return this.artifacts.get(id);
+  }
+
+  public getSelectedArtifactId(): string | null {
+    return this.selectedArtifactId;
+  }
+
+  public selectArtifact(id: string | null): void {
+    this.selectedArtifactId = id;
+    this.emitArtifactsState();
+  }
+
+  public clearArtifacts(): void {
+    this.clearArtifactState();
+  }
+
+  public upsertArtifact(manual: PersonaArtifactManualUpsert): PersonaArtifactRecord {
+    const id =
+      manual.id ||
+      `art_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+    if (manual.artifactType === "markdown") {
+      const rec: PersonaArtifactRecord = {
+        id,
+        artifactType: "markdown",
+        title: manual.title,
+        status: "complete",
+        markdown: manual.content
+      };
+      this.artifacts.set(id, rec);
+      this.selectedArtifactId = id;
+      this.emitArtifactsState();
+      return rec;
+    }
+    const rec: PersonaArtifactRecord = {
+      id,
+      artifactType: "component",
+      title: manual.title,
+      status: "complete",
+      component: manual.component,
+      props: manual.props ?? {}
+    };
+    this.artifacts.set(id, rec);
+    this.selectedArtifactId = id;
+    this.emitArtifactsState();
+    return rec;
+  }
+
+  private clearArtifactState(): void {
+    if (this.artifacts.size === 0 && this.selectedArtifactId === null) return;
+    this.artifacts.clear();
+    this.selectedArtifactId = null;
+    this.emitArtifactsState();
+  }
+
+  private emitArtifactsState(): void {
+    this.callbacks.onArtifactsState?.({
+      artifacts: [...this.artifacts.values()],
+      selectedId: this.selectedArtifactId
+    });
+  }
+
+  private applyArtifactStreamEvent(ev: AgentWidgetEvent): void {
+    switch (ev.type) {
+      case "artifact_start": {
+        if (ev.artifactType === "markdown") {
+          this.artifacts.set(ev.id, {
+            id: ev.id,
+            artifactType: "markdown",
+            title: ev.title,
+            status: "streaming",
+            markdown: ""
+          });
+        } else {
+          this.artifacts.set(ev.id, {
+            id: ev.id,
+            artifactType: "component",
+            title: ev.title,
+            status: "streaming",
+            component: ev.component ?? "",
+            props: {}
+          });
+        }
+        this.selectedArtifactId = ev.id;
+        break;
+      }
+      case "artifact_delta": {
+        const row = this.artifacts.get(ev.id);
+        if (row?.artifactType === "markdown") {
+          row.markdown = (row.markdown ?? "") + ev.artDelta;
+        }
+        break;
+      }
+      case "artifact_update": {
+        const row = this.artifacts.get(ev.id);
+        if (row?.artifactType === "component") {
+          row.props = { ...row.props, ...ev.props };
+          if (ev.component) row.component = ev.component;
+        }
+        break;
+      }
+      case "artifact_complete": {
+        const row = this.artifacts.get(ev.id);
+        if (row) row.status = "complete";
+        break;
+      }
+      default:
+        return;
+    }
+    this.emitArtifactsState();
   }
 
   public hydrateMessages(messages: AgentWidgetMessage[]) {
@@ -1005,7 +1131,7 @@ export class AgentWidgetSession {
             agentName: event.message.agentMetadata.agentName ?? '',
             status: 'running',
             currentIteration: event.message.agentMetadata.iteration ?? 0,
-            maxIterations: 0
+            maxTurns: 0
           };
         } else if (event.message.agentMetadata.iteration !== undefined) {
           this.agentExecution.currentIteration = event.message.agentMetadata.iteration;
@@ -1031,6 +1157,13 @@ export class AgentWidgetSession {
         this.agentExecution.status = 'error';
       }
       this.callbacks.onError?.(event.error);
+    } else if (
+      event.type === "artifact_start" ||
+      event.type === "artifact_delta" ||
+      event.type === "artifact_update" ||
+      event.type === "artifact_complete"
+    ) {
+      this.applyArtifactStreamEvent(event);
     }
   };
 

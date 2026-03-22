@@ -35,9 +35,9 @@ export const renderMessages = (
       );
     }
 
-    const wrapper = createElement("div", "tvw-flex");
+    const wrapper = createElement("div", "persona-flex");
     if (message.role === "user") {
-      wrapper.classList.add("tvw-justify-end");
+      wrapper.classList.add("persona-justify-end");
     }
     wrapper.appendChild(bubble);
     fragment.appendChild(wrapper);

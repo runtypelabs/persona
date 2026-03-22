@@ -1,29 +1,119 @@
 # Widget Theme & Configuration Reference
 
-This document provides definitions of all themable configuration options.
+This document provides definitions of all themable configuration options for Persona Widget v2.0.
+
+## Theme Architecture
+
+The v2 theme system uses a **three-layer token architecture**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     COMPONENT TOKENS                        │
+│  button.background, launcher.size, panel.borderRadius       │
+├─────────────────────────────────────────────────────────────┤
+│                    SEMANTIC TOKENS                          │
+│  colors.primary, colors.text, spacing.md, typography.base   │
+├─────────────────────────────────────────────────────────────┤
+│                      BASE TOKENS                            │
+│  palette.colors.blue.500, palette.spacing.4, palette.radius │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Palette** — Raw design values (color scales, spacing, typography, shadows, radii)
+- **Semantic** — Intent-based tokens that reference palette values (e.g., `primary`, `surface`, `text`)
+- **Components** — Component-specific tokens that reference semantic or palette values
+
+Token references are resolved at runtime:
+
+```
+semantic.colors.primary → palette.colors.primary.500 → #3b82f6
+```
+
+## Quick Start
+
+### Simple Color Override
+
+```typescript
+initAgentWidget({
+  target: '#chat',
+  config: {
+    theme: {
+      palette: {
+        colors: {
+          primary: { 500: '#7c3aed', 600: '#6d28d9' }
+        }
+      }
+    }
+  }
+});
+```
+
+### Using the Theme API
+
+```typescript
+import { createTheme, brandPlugin, accessibilityPlugin } from '@runtypelabs/persona';
+
+const theme = createTheme({
+  palette: {
+    colors: {
+      primary: { 500: '#7c3aed' }
+    }
+  },
+  semantic: {
+    colors: {
+      primary: 'palette.colors.primary.500',
+      surface: 'palette.colors.gray.50'
+    }
+  }
+}, {
+  plugins: [
+    accessibilityPlugin(),
+    brandPlugin({ colors: { primary: '#7c3aed' } })
+  ]
+});
+
+initAgentWidget({
+  config: { theme }
+});
+```
+
+### v1 Flat Theme (Still Supported)
+
+The v1 flat theme format is automatically migrated to v2 tokens:
+
+```typescript
+// These flat properties still work
+config: {
+  theme: {
+    primary: '#111827',
+    accent: '#3b82f6',
+    surface: '#ffffff',
+    muted: '#6b7280'
+  }
+}
+```
+
+---
 
 ## Dark Mode Support
-
-The widget supports automatic dark mode detection and theme switching.
 
 ### Configuration Options
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `theme` | `AgentWidgetTheme` | (light colors) | Theme colors for light mode |
-| `darkTheme` | `AgentWidgetTheme` | (dark colors) | Theme colors for dark mode |
+| `theme` | `Partial<PersonaTheme>` | (light defaults) | Theme tokens for light mode |
 | `colorScheme` | `'light' \| 'dark' \| 'auto'` | `'light'` | Color scheme mode |
 
 ### Color Scheme Modes
 
-- **`'light'`** (default): Always use `theme` colors
-- **`'dark'`**: Always use `darkTheme` colors (falls back to `theme` if not provided)
-- **`'auto'`**: Automatically detect and switch based on page settings
+- **`'light'`** (default): Always use light palette
+- **`'dark'`**: Always use dark palette (inverted grays)
+- **`'auto'`**: Detect from page settings and switch automatically
 
 ### Auto Detection Order
 
 When `colorScheme: 'auto'`, the widget detects dark mode by:
-1. Checking if `<html>` element has `dark` class (e.g., `<html class="dark">`)
+1. Checking if `<html>` has `dark` class (e.g., `<html class="dark">`)
 2. Falling back to `prefers-color-scheme: dark` media query
 
 The widget automatically updates when:
@@ -32,7 +122,7 @@ The widget automatically updates when:
 
 ### Usage Examples
 
-**Basic dark mode with auto-detection:**
+**Auto-detection with custom colors:**
 
 ```typescript
 initAgentWidget({
@@ -40,30 +130,11 @@ initAgentWidget({
   config: {
     colorScheme: 'auto',
     theme: {
-      primary: '#111827',
-      surface: '#ffffff',
-      container: '#f8fafc',
-    },
-    darkTheme: {
-      primary: '#f9fafb',
-      surface: '#1f2937',
-      container: '#111827',
-    }
-  }
-});
-```
-
-**Force dark mode:**
-
-```typescript
-initAgentWidget({
-  target: '#chat',
-  config: {
-    colorScheme: 'dark',
-    darkTheme: {
-      primary: '#f9fafb',
-      surface: '#1f2937',
-      accent: '#3b82f6',
+      palette: {
+        colors: {
+          primary: { 500: '#6366f1', 600: '#4f46e5' }
+        }
+      }
     }
   }
 });
@@ -84,64 +155,321 @@ controller.update({ colorScheme: 'dark' });
 controller.update({ colorScheme: 'auto' });
 ```
 
-### Default Dark Theme
+---
 
-When using `colorScheme: 'auto'` or `colorScheme: 'dark'` without providing a `darkTheme`, the widget uses these default dark colors:
+## Palette Tokens (`theme.palette.*`)
 
-| Property | Value |
-|----------|-------|
-| `primary` | `#f9fafb` |
-| `accent` | `#3b82f6` |
-| `surface` | `#1f2937` |
-| `muted` | `#9ca3af` |
-| `container` | `#111827` |
-| `border` | `#374151` |
-| `divider` | `#374151` |
-| `inputBackground` | `#111827` |
+### Color Scales (`palette.colors.*`)
+
+Each color has shades from 50 (lightest) to 950 (darkest):
+
+| Scale | Colors |
+|-------|--------|
+| `primary` | Main brand color (default: blue) |
+| `secondary` | Secondary color (default: purple) |
+| `accent` | Accent color (default: cyan) |
+| `gray` | Neutral grays |
+| `success` | Success states (default: green) |
+| `warning` | Warning states (default: yellow) |
+| `error` | Error states (default: red) |
+
+```typescript
+palette: {
+  colors: {
+    primary: {
+      50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe',
+      300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6',
+      600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af',
+      900: '#1e3a8a', 950: '#172554'
+    }
+  }
+}
+```
+
+### Spacing (`palette.spacing.*`)
+
+| Key | Value |
+|-----|-------|
+| `0` | `0px` |
+| `1` | `0.25rem` |
+| `2` | `0.5rem` |
+| `3` | `0.75rem` |
+| `4` | `1rem` |
+| `6` | `1.5rem` |
+| `8` | `2rem` |
+| `12` | `3rem` |
+
+### Typography (`palette.typography.*`)
+
+| Key | Values |
+|-----|--------|
+| `fontFamily` | `sans`, `serif`, `mono` |
+| `fontSize` | `xs` (0.75rem), `sm` (0.875rem), `base` (1rem), `lg`, `xl`, `2xl`, `3xl`, `4xl` |
+| `fontWeight` | `normal` (400), `medium` (500), `semibold` (600), `bold` (700) |
+| `lineHeight` | `tight` (1.25), `normal` (1.5), `relaxed` (1.625) |
+
+### Shadows (`palette.shadows.*`)
+
+| Key | Description |
+|-----|-------------|
+| `none` | No shadow |
+| `sm` | Subtle shadow |
+| `md` | Medium shadow |
+| `lg` | Large shadow |
+| `xl` | Extra-large shadow |
+| `2xl` | Maximum shadow |
+
+### Radius (`palette.radius.*`)
+
+| Key | Value |
+|-----|-------|
+| `none` | `0px` |
+| `sm` | `0.125rem` |
+| `md` | `0.375rem` |
+| `lg` | `0.5rem` |
+| `xl` | `0.75rem` |
+| `2xl` | `1rem` |
+| `full` | `9999px` |
 
 ---
 
-## Theme Colors (`config.theme.*`)
+## Semantic Tokens (`theme.semantic.*`)
 
-| Property | Description |
-|----------|-------------|
-| `primary` | Main text color for headings, body text, and icons |
-| `secondary` | Secondary text color for less prominent text |
-| `surface` | Background for panel, input area, and assistant message bubbles |
-| `muted` | Muted text color for timestamps, hints |
-| `accent` | User message bubbles and interactive elements |
-| `container` | Message container/body area background |
-| `border` | Default border color for panel and elements |
-| `divider` | Color for divider lines between sections |
-| `messageBorder` | Border color for message bubbles |
-| `inputBackground` | Background for the text input/composer |
-| `callToAction` | Launcher call-to-action icon color |
-| `callToActionBackground` | Launcher call-to-action button background |
+Semantic tokens provide intent-based naming that references palette values.
 
-## Panel Styling (`config.theme.*`)
+### Colors (`semantic.colors.*`)
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `panelBorder` | `"1px solid var(--tvw-cw-border)"` | Border style for the chat panel |
-| `panelShadow` | `"0 25px 50px -12px rgba(0,0,0,0.25)"` | Box shadow for the panel |
-| `panelBorderRadius` | `"16px"` | Border radius for panel corners |
+| Token | Default Reference | Description |
+|-------|-------------------|-------------|
+| `primary` | `palette.colors.primary.500` | Primary brand color |
+| `secondary` | `palette.colors.gray.500` | Secondary color |
+| `accent` | `palette.colors.primary.600` | Accent/interactive color |
+| `surface` | `palette.colors.gray.50` | Panel/card backgrounds |
+| `background` | `palette.colors.gray.50` | Page background |
+| `container` | `palette.colors.gray.100` | Container backgrounds |
+| `text` | `palette.colors.gray.900` | Primary text |
+| `textMuted` | `palette.colors.gray.500` | Muted/secondary text |
+| `textInverse` | `palette.colors.gray.50` | Text on dark backgrounds |
+| `border` | `palette.colors.gray.200` | Default border color |
+| `divider` | `palette.colors.gray.200` | Divider lines |
 
-## Border Radius (`config.theme.*`)
+### Interactive States (`semantic.colors.interactive.*`)
 
-| Property | Description |
-|----------|-------------|
-| `radiusSm` | Small radius (chips, small elements) |
-| `radiusMd` | Medium radius (buttons, inputs) |
-| `radiusLg` | Large radius (cards, panels) |
-| `launcherRadius` | Launcher button radius |
-| `buttonRadius` | Button radius |
+| Token | Default Reference |
+|-------|-------------------|
+| `default` | `palette.colors.primary.500` |
+| `hover` | `palette.colors.primary.600` |
+| `focus` | `palette.colors.primary.700` |
+| `active` | `palette.colors.primary.800` |
+| `disabled` | `palette.colors.gray.300` |
 
-## Typography (`config.theme.*`)
+### Feedback Colors (`semantic.colors.feedback.*`)
 
-| Property | Description |
-|----------|-------------|
-| `inputFontFamily` | `"sans-serif" \| "serif" \| "mono"` - Input font family |
-| `inputFontWeight` | Input font weight |
+| Token | Default Reference |
+|-------|-------------------|
+| `success` | `palette.colors.success.500` |
+| `warning` | `palette.colors.warning.500` |
+| `error` | `palette.colors.error.500` |
+| `info` | `palette.colors.primary.500` |
+
+### Spacing (`semantic.spacing.*`)
+
+| Token | Default Reference |
+|-------|-------------------|
+| `xs` | `palette.spacing.1` (0.25rem) |
+| `sm` | `palette.spacing.2` (0.5rem) |
+| `md` | `palette.spacing.4` (1rem) |
+| `lg` | `palette.spacing.6` (1.5rem) |
+| `xl` | `palette.spacing.8` (2rem) |
+| `2xl` | `palette.spacing.10` (2.5rem) |
+
+---
+
+## Component Tokens (`theme.components.*`)
+
+### Button (`components.button.*`)
+
+| Variant | Properties |
+|---------|-----------|
+| `primary` | `background`, `foreground`, `borderRadius`, `padding` |
+| `secondary` | `background`, `foreground`, `borderRadius`, `padding` |
+| `ghost` | `background`, `foreground`, `borderRadius`, `padding` |
+
+### Input (`components.input.*`)
+
+| Token | Default Reference |
+|-------|-------------------|
+| `background` | `semantic.colors.surface` |
+| `placeholder` | `semantic.colors.textMuted` |
+| `focus.border` | `semantic.colors.interactive.focus` |
+| `focus.ring` | `semantic.colors.interactive.focus` |
+
+### Launcher (`components.launcher.*`)
+
+| Token | Default |
+|-------|---------|
+| `size` | `60px` |
+| `iconSize` | `28px` |
+| `borderRadius` | `palette.radius.full` |
+| `shadow` | `palette.shadows.lg` |
+
+### Panel (`components.panel.*`)
+
+| Token | Default |
+|-------|---------|
+| `width` | `min(400px, calc(100vw - 24px))` |
+| `maxWidth` | `400px` |
+| `height` | `600px` |
+| `maxHeight` | `calc(100vh - 80px)` |
+| `borderRadius` | `palette.radius.xl` |
+| `shadow` | `palette.shadows.xl` |
+
+### Header (`components.header.*`)
+
+| Token | Default Reference |
+|-------|-------------------|
+| `background` | `semantic.colors.surface` |
+| `border` | `semantic.colors.border` |
+| `borderRadius` | `palette.radius.xl palette.radius.xl 0 0` |
+| `padding` | `semantic.spacing.md` |
+
+### Message (`components.message.*`)
+
+| Token | Default Reference |
+|-------|-------------------|
+| `user.background` | `semantic.colors.primary` |
+| `user.text` | `semantic.colors.textInverse` |
+| `user.borderRadius` | `palette.radius.lg` |
+| `assistant.background` | `semantic.colors.container` |
+| `assistant.text` | `semantic.colors.text` |
+| `assistant.borderRadius` | `palette.radius.lg` |
+
+### Voice (`components.voice.*`)
+
+| Token | Default Reference |
+|-------|-------------------|
+| `recording.indicator` | `palette.colors.error.500` |
+| `recording.background` | `palette.colors.error.50` |
+| `recording.border` | `palette.colors.error.200` |
+| `processing.icon` | `palette.colors.primary.500` |
+| `processing.background` | `palette.colors.primary.50` |
+| `speaking.icon` | `palette.colors.success.500` |
+
+### Approval (`components.approval.*`)
+
+| Token | Default Reference |
+|-------|-------------------|
+| `requested.background` | `palette.colors.warning.50` |
+| `requested.border` | `palette.colors.warning.200` |
+| `requested.text` | `palette.colors.gray.900` |
+| `approve.background` | `palette.colors.success.500` |
+| `approve.foreground` | `palette.colors.gray.50` |
+| `deny.background` | `palette.colors.error.500` |
+| `deny.foreground` | `palette.colors.gray.50` |
+
+### Attachment (`components.attachment.*`)
+
+| Token | Default Reference |
+|-------|-------------------|
+| `image.background` | `palette.colors.gray.100` |
+| `image.border` | `palette.colors.gray.200` |
+
+---
+
+## Plugin System
+
+Plugins transform theme tokens before they are resolved.
+
+```typescript
+import { createTheme, createPlugin } from '@runtypelabs/persona';
+
+const myPlugin = createPlugin({
+  name: '@mycompany/persona-theme',
+  version: '1.0.0',
+  transform(theme) {
+    return { ...theme, /* modifications */ };
+  },
+  cssVariables: {
+    '--company-brand': '#ff0000'
+  },
+  afterResolve(resolved) {
+    return { ...resolved, /* post-processing */ };
+  }
+});
+
+const theme = createTheme(undefined, { plugins: [myPlugin] });
+```
+
+### Built-in Plugins
+
+| Plugin | Description |
+|--------|-------------|
+| `accessibilityPlugin()` | Enhanced focus indicators and disabled states |
+| `animationsPlugin()` | Adds transition and easing tokens |
+| `brandPlugin({ colors: { primary: '#hex' } })` | Auto-generates color scales from a single brand color |
+| `reducedMotionPlugin()` | Disables all animations (sets transitions to 0ms) |
+| `highContrastPlugin()` | Enhances contrast for visual accessibility |
+
+---
+
+## CSS Variables
+
+### Naming Convention
+
+All CSS variables use the `--persona-` prefix:
+
+```
+palette.colors.primary.500     → --persona-palette-colors-primary-500
+semantic.colors.primary        → --persona-semantic-colors-primary
+components.button.background   → --persona-components-button-background
+```
+
+### Convenience Aliases
+
+Common tokens have short aliases for easier use in custom CSS:
+
+```css
+--persona-primary         /* semantic.colors.primary */
+--persona-secondary       /* semantic.colors.secondary */
+--persona-accent          /* semantic.colors.accent */
+--persona-surface         /* semantic.colors.surface */
+--persona-background      /* semantic.colors.background */
+--persona-container       /* semantic.colors.container */
+--persona-text            /* semantic.colors.text */
+--persona-text-muted      /* semantic.colors.textMuted */
+--persona-text-inverse    /* semantic.colors.textInverse */
+--persona-border          /* semantic.colors.border */
+--persona-divider         /* semantic.colors.divider */
+--persona-muted           /* alias for --persona-text-muted */
+```
+
+### Voice Aliases
+
+```css
+--persona-voice-recording-indicator
+--persona-voice-recording-bg
+--persona-voice-processing-icon
+--persona-voice-speaking-icon
+```
+
+### Approval Aliases
+
+```css
+--persona-approval-bg
+--persona-approval-border
+--persona-approval-text
+--persona-approval-approve-bg
+--persona-approval-deny-bg
+```
+
+### Attachment Aliases
+
+```css
+--persona-attachment-image-bg
+--persona-attachment-image-border
+```
+
+---
 
 ## Launcher (`config.launcher.*`)
 
@@ -156,6 +484,7 @@ When using `colorScheme: 'auto'` or `colorScheme: 'dark'` without providing a `d
 | `position` | `"bottom-right" \| "bottom-left" \| "top-right" \| "top-left"` |
 | `autoExpand` | Auto-open widget on page load |
 | `width` | Chat panel width |
+| `mountMode` | `"floating" \| "docked"` |
 
 ### Full Height & Sidebar
 | Property | Default | Description |
@@ -164,6 +493,15 @@ When using `colorScheme: 'auto'` or `colorScheme: 'dark'` without providing a `d
 | `sidebarMode` | `false` | Position as sidebar flush with viewport |
 | `sidebarWidth` | `"420px"` | Sidebar width |
 | `heightOffset` | `0` | Pixel offset to subtract from calculated panel height |
+
+### Docked Panel
+| Property | Default | Description |
+|----------|---------|-------------|
+| `dock.side` | `"right"` | Which side of the wrapped target container the panel should appear on |
+| `dock.width` | `"420px"` | Expanded dock width |
+| `dock.collapsedWidth` | `"72px"` | Collapsed launcher rail width |
+
+When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target container and renders Persona in a sibling dock slot. `body` and `html` are not valid targets. `position`, `fullHeight`, and `sidebarMode` are ignored in docked mode.
 
 ### Agent Icon
 | Property | Description |
@@ -188,7 +526,7 @@ When using `colorScheme: 'auto'` or `colorScheme: 'dark'` without providing a `d
 | Property | Default | Description |
 |----------|---------|-------------|
 | `border` | `"1px solid #e5e7eb"` | Border style for the launcher button |
-| `shadow` | `"0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)"` | Box shadow for the launcher button |
+| `shadow` | `"0 10px 15px -3px rgba(0,0,0,0.1), ..."` | Box shadow for the launcher button |
 
 ### Header Icon
 | Property | Description |
@@ -213,8 +551,6 @@ When using `colorScheme: 'auto'` or `colorScheme: 'dark'` without providing a `d
 | `tooltipText` | Tooltip text |
 | `showTooltip` | Show tooltip |
 
-**Theme overrides:** `sendButtonBackgroundColor`, `sendButtonTextColor`, `sendButtonBorderColor`
-
 ## Close Button (`config.launcher.*`)
 
 | Property | Description |
@@ -232,8 +568,6 @@ When using `colorScheme: 'auto'` or `colorScheme: 'dark'` without providing a `d
 | `closeButtonTooltipText` | Tooltip text |
 | `closeButtonShowTooltip` | Show tooltip |
 
-**Theme overrides:** `closeButtonColor`, `closeButtonBackgroundColor`, `closeButtonBorderColor`
-
 ## Clear Chat Button (`config.launcher.clearChat.*`)
 
 | Property | Description |
@@ -248,8 +582,6 @@ When using `colorScheme: 'auto'` or `colorScheme: 'dark'` without providing a `d
 | `paddingX` / `paddingY` | Padding |
 | `tooltipText` | Tooltip text |
 | `showTooltip` | Show tooltip |
-
-**Theme overrides:** `clearChatIconColor`, `clearChatBackgroundColor`, `clearChatBorderColor`
 
 ## Voice Recognition (`config.voiceRecognition.*`)
 
@@ -266,8 +598,6 @@ When using `colorScheme: 'auto'` or `colorScheme: 'dark'` without providing a `d
 | `recordingBorderColor` | Border when recording |
 | `showRecordingIndicator` | Show recording indicator |
 | `autoResume` | `boolean \| "assistant"` - Auto-resume listening |
-
-**Theme overrides:** `micIconColor`, `micBackgroundColor`, `micBorderColor`, `recordingIconColor`, `recordingBackgroundColor`, `recordingBorderColor`
 
 ## Status Indicator (`config.statusIndicator.*`)
 
@@ -292,8 +622,6 @@ When using `colorScheme: 'auto'` or `colorScheme: 'dark'` without providing a `d
 
 ## Message Actions (`config.messageActions.*`)
 
-Action buttons (copy, upvote, downvote) that appear on assistant messages.
-
 ### Basic Options
 | Property | Default | Description |
 |----------|---------|-------------|
@@ -307,7 +635,7 @@ Action buttons (copy, upvote, downvote) that appear on assistant messages.
 |----------|---------|-------------|
 | `visibility` | `"hover"` | `"always"` shows buttons always, `"hover"` shows on hover only |
 | `align` | `"right"` | Horizontal alignment: `"left"` \| `"center"` \| `"right"` |
-| `layout` | `"pill-inside"` | Layout style: `"pill-inside"` (compact floating pill) \| `"row-inside"` (full-width row) |
+| `layout` | `"pill-inside"` | Layout style: `"pill-inside"` \| `"row-inside"` |
 
 ### Callbacks
 | Property | Description |
@@ -330,7 +658,7 @@ Action buttons (copy, upvote, downvote) that appear on assistant messages.
 ### Header (`layout.header.*`)
 | Property | Description |
 |----------|-------------|
-| `layout` | `"default" \| "minimal" \| "expanded"` |
+| `layout` | `"default" \| "minimal"` |
 | `showIcon` / `showTitle` / `showSubtitle` | Show/hide elements |
 | `showCloseButton` / `showClearChat` | Show/hide buttons |
 | `render` | Custom render function |
@@ -349,65 +677,57 @@ Available: `header-left`, `header-center`, `header-right`, `body-top`, `messages
 
 ## Markdown (`config.markdown.*`)
 
-The widget supports markdown rendering with multiple levels of customization.
-
 ### Options (`markdown.options.*`)
 | Property | Default | Description |
 |----------|---------|-------------|
-| `gfm` | `true` | Enable GitHub Flavored Markdown (tables, strikethrough) |
-| `breaks` | `true` | Convert `\n` in paragraphs into `<br>` |
-| `pedantic` | `false` | Conform to original markdown.pl behavior |
+| `gfm` | `true` | Enable GitHub Flavored Markdown |
+| `breaks` | `true` | Convert `\n` to `<br>` |
+| `pedantic` | `false` | Original markdown.pl behavior |
 | `headerIds` | `false` | Add id attributes to headings |
-| `headerPrefix` | `""` | Prefix for heading id attributes |
-| `mangle` | `true` | Mangle email addresses for spam protection |
-| `silent` | `false` | Silent mode - don't throw on parse errors |
+| `headerPrefix` | `""` | Prefix for heading ids |
+| `mangle` | `true` | Mangle email addresses |
+| `silent` | `false` | Don't throw on parse errors |
 
 ### Other Options
 | Property | Default | Description |
 |----------|---------|-------------|
-| `disableDefaultStyles` | `false` | Disable default markdown CSS styles |
-| `renderer` | `undefined` | Custom renderer overrides (see examples below) |
+| `disableDefaultStyles` | `false` | Disable default markdown CSS |
+| `renderer` | `undefined` | Custom renderer overrides |
 
 ### Override Methods (4 Levels)
 
 **Level 1: CSS Variables** (simplest)
 
-Override markdown element styles via CSS custom properties:
-
 ```css
 :root {
   /* Headers */
-  --cw-md-h1-size: 1.5rem;
-  --cw-md-h1-weight: 700;
-  --cw-md-h2-size: 1.25rem;
-  --cw-md-h3-size: 1.125rem;
-  
+  --persona-md-h1-size: 1.5rem;
+  --persona-md-h1-weight: 700;
+  --persona-md-h2-size: 1.25rem;
+  --persona-md-h3-size: 1.125rem;
+
   /* Tables */
-  --cw-md-table-border-color: #e5e7eb;
-  --cw-md-table-header-bg: #f8fafc;
-  --cw-md-table-cell-padding: 0.5rem 0.75rem;
-  
+  --persona-md-table-border-color: #e5e7eb;
+  --persona-md-table-header-bg: #f8fafc;
+  --persona-md-table-cell-padding: 0.5rem 0.75rem;
+
   /* Blockquotes */
-  --cw-md-blockquote-border-color: #3b82f6;
-  --cw-md-blockquote-text-color: #6b7280;
-  
+  --persona-md-blockquote-border-color: var(--persona-accent);
+  --persona-md-blockquote-text-color: var(--persona-muted);
+
   /* Code blocks */
-  --cw-md-code-block-bg: #1f2937;  /* Dark background for dark themes */
-  --cw-md-code-block-border-color: #374151;
-  
+  --persona-md-code-block-bg: var(--persona-container);
+  --persona-md-code-block-border-color: var(--persona-border);
+
   /* Inline code */
-  --cw-md-inline-code-bg: #1f2937;
-  
+  --persona-md-inline-code-bg: var(--persona-container);
+
   /* Horizontal rules */
-  --cw-md-hr-color: #e5e7eb;
+  --persona-md-hr-color: var(--persona-divider);
 }
 ```
 
-> **Dark Theme Support:** Code blocks, inline code, tables, blockquotes, and horizontal rules automatically inherit from theme colors (`--cw-container`, `--cw-border`, `--cw-divider`, `--cw-accent`, `--cw-muted`). When you configure a dark theme via `config.theme`, these markdown elements adapt automatically.
-
 **Level 2: Markdown Options** (moderate)
-
-Configure markdown parsing behavior via config:
 
 ```typescript
 config: {
@@ -424,24 +744,15 @@ config: {
 
 **Level 3: Custom Renderers** (full control)
 
-Override rendering of specific elements:
-
 ```typescript
 config: {
   markdown: {
     renderer: {
-      // Custom heading renderer
       heading(token) {
         return `<h${token.depth} class="custom-h${token.depth}">${token.text}</h${token.depth}>`;
       },
-      // Open links in new tab
       link(token) {
         return `<a href="${token.href}" target="_blank" rel="noopener">${token.text}</a>`;
-      },
-      // Wrap tables in scrollable container
-      table(token) {
-        // Return false to use default renderer
-        return false;
       }
     }
   }
@@ -452,101 +763,90 @@ Available renderer overrides: `heading`, `code`, `blockquote`, `table`, `link`, 
 
 **Level 4: postprocessMessage** (complete override)
 
-Full control over message transformation:
-
 ```typescript
-import { markdownPostprocessor, createMarkdownProcessorFromConfig } from '@runtypelabs/persona';
+import { markdownPostprocessor } from '@runtypelabs/persona';
 
 config: {
-  // Option A: Use built-in markdown processor
-  postprocessMessage: ({ text }) => markdownPostprocessor(text),
-  
-  // Option B: Create custom processor with config
-  postprocessMessage: ({ text }) => {
-    const processor = createMarkdownProcessorFromConfig({
-      options: { gfm: true },
-      renderer: {
-        link(token) {
-          return `<a href="${token.href}" class="custom-link">${token.text}</a>`;
-        }
-      }
-    });
-    return processor(text);
-  },
-  
-  // Option C: Use any markdown library
-  postprocessMessage: ({ text }) => myCustomMarkdownRenderer(text)
+  postprocessMessage: ({ text }) => markdownPostprocessor(text)
 }
 ```
 
-### CSS Variables Reference
+### Persona theme `components.markdown` (SDK)
+
+These merge into `PersonaTheme` and are exposed as CSS variables on the widget root (`applyThemeVariables`).
+
+| Path | Consumer variable |
+|------|-------------------|
+| `inlineCode.background` / `foreground` | `--persona-md-inline-code-bg`, `--persona-md-inline-code-color` |
+| `link.foreground` | `--persona-md-link-color` (assistant chat markdown links + artifact pane markdown) |
+| `heading.h1.fontSize` / `fontWeight` | `--persona-md-h1-size`, `--persona-md-h1-weight` (only when set) |
+| `heading.h2.fontSize` / `fontWeight` | `--persona-md-h2-size`, `--persona-md-h2-weight` (only when set) |
+
+### Markdown CSS Variables Reference
 
 ```css
 :root {
+  /* Links (theme-driven via --persona-md-link-color when set) */
+  --persona-md-link-color: var(--persona-accent, #3b82f6);
+
   /* Headers */
-  --cw-md-h1-size: 1.5rem;
-  --cw-md-h1-weight: 700;
-  --cw-md-h1-margin: 1rem 0 0.5rem;
-  --cw-md-h1-line-height: 1.25;
-  --cw-md-h2-size: 1.25rem;
-  --cw-md-h2-weight: 700;
-  --cw-md-h2-margin: 0.875rem 0 0.5rem;
-  --cw-md-h2-line-height: 1.3;
-  --cw-md-h3-size: 1.125rem;
-  --cw-md-h3-weight: 600;
-  --cw-md-h3-margin: 0.75rem 0 0.375rem;
-  --cw-md-h3-line-height: 1.4;
-  --cw-md-h4-size: 1rem;
-  --cw-md-h4-weight: 600;
-  --cw-md-h4-margin: 0.625rem 0 0.25rem;
-  --cw-md-h4-line-height: 1.5;
-  --cw-md-h5-size: 0.875rem;
-  --cw-md-h5-weight: 600;
-  --cw-md-h5-margin: 0.5rem 0 0.25rem;
-  --cw-md-h5-line-height: 1.5;
-  --cw-md-h6-size: 0.75rem;
-  --cw-md-h6-weight: 600;
-  --cw-md-h6-margin: 0.5rem 0 0.25rem;
-  --cw-md-h6-line-height: 1.5;
+  --persona-md-h1-size: 1.5rem;
+  --persona-md-h1-weight: 700;
+  --persona-md-h1-margin: 1rem 0 0.5rem;
+  --persona-md-h1-line-height: 1.25;
+  --persona-md-h2-size: 1.25rem;
+  --persona-md-h2-weight: 700;
+  --persona-md-h2-margin: 0.875rem 0 0.5rem;
+  --persona-md-h2-line-height: 1.3;
+  --persona-md-h3-size: 1.125rem;
+  --persona-md-h3-weight: 600;
+  --persona-md-h3-margin: 0.75rem 0 0.375rem;
+  --persona-md-h3-line-height: 1.4;
+  --persona-md-h4-size: 1rem;
+  --persona-md-h4-weight: 600;
+  --persona-md-h5-size: 0.875rem;
+  --persona-md-h5-weight: 600;
+  --persona-md-h6-size: 0.75rem;
+  --persona-md-h6-weight: 600;
 
   /* Tables */
-  --cw-md-table-border-color: var(--cw-border, #e5e7eb);
-  --cw-md-table-header-bg: var(--cw-container, #f8fafc);
-  --cw-md-table-header-weight: 600;
-  --cw-md-table-cell-padding: 0.5rem 0.75rem;
-  --cw-md-table-border-radius: 0.375rem;
+  --persona-md-table-border-color: var(--persona-border, #e5e7eb);
+  --persona-md-table-header-bg: var(--persona-container, #f8fafc);
+  --persona-md-table-header-weight: 600;
+  --persona-md-table-cell-padding: 0.5rem 0.75rem;
+  --persona-md-table-border-radius: 0.375rem;
 
   /* Horizontal Rule */
-  --cw-md-hr-color: var(--cw-divider, #e5e7eb);
-  --cw-md-hr-height: 1px;
-  --cw-md-hr-margin: 1rem 0;
+  --persona-md-hr-color: var(--persona-divider, #e5e7eb);
+  --persona-md-hr-height: 1px;
+  --persona-md-hr-margin: 1rem 0;
 
   /* Blockquotes */
-  --cw-md-blockquote-border-color: var(--cw-accent, #3b82f6);
-  --cw-md-blockquote-border-width: 3px;
-  --cw-md-blockquote-padding: 0.5rem 1rem;
-  --cw-md-blockquote-margin: 0.5rem 0;
-  --cw-md-blockquote-bg: transparent;
-  --cw-md-blockquote-text-color: var(--cw-muted, #6b7280);
-  --cw-md-blockquote-font-style: italic;
+  --persona-md-blockquote-border-color: var(--persona-accent, #3b82f6);
+  --persona-md-blockquote-border-width: 3px;
+  --persona-md-blockquote-padding: 0.5rem 1rem;
+  --persona-md-blockquote-margin: 0.5rem 0;
+  --persona-md-blockquote-bg: transparent;
+  --persona-md-blockquote-text-color: var(--persona-muted, #6b7280);
+  --persona-md-blockquote-font-style: italic;
 
-  /* Code Blocks (fenced code) - inherits from --cw-container */
-  --cw-md-code-block-bg: #f3f4f6;           /* auto: var(--cw-container) */
-  --cw-md-code-block-border-color: #e5e7eb; /* auto: var(--cw-border) */
-  --cw-md-code-block-text-color: inherit;
-  --cw-md-code-block-padding: 0.75rem;
-  --cw-md-code-block-border-radius: 0.375rem;
-  --cw-md-code-block-font-size: 0.875rem;
+  /* Code Blocks */
+  --persona-md-code-block-bg: var(--persona-container, #f3f4f6);
+  --persona-md-code-block-border-color: var(--persona-border, #e5e7eb);
+  --persona-md-code-block-text-color: inherit;
+  --persona-md-code-block-padding: 0.75rem;
+  --persona-md-code-block-border-radius: 0.375rem;
+  --persona-md-code-block-font-size: 0.875rem;
 
-  /* Inline Code - inherits from --cw-container */
-  --cw-md-inline-code-bg: #f3f4f6;          /* auto: var(--cw-container) */
-  --cw-md-inline-code-padding: 0.125rem 0.375rem;
-  --cw-md-inline-code-border-radius: 0.25rem;
-  --cw-md-inline-code-font-size: 0.875em;
+  /* Inline Code */
+  --persona-md-inline-code-bg: var(--persona-container, #f3f4f6);
+  --persona-md-inline-code-padding: 0.125rem 0.375rem;
+  --persona-md-inline-code-border-radius: 0.25rem;
+  --persona-md-inline-code-font-size: 0.875em;
 
   /* Strong/Emphasis */
-  --cw-md-strong-weight: 600;
-  --cw-md-em-style: italic;
+  --persona-md-strong-weight: 600;
+  --persona-md-em-style: italic;
 }
 ```
 
@@ -565,23 +865,46 @@ config: {
 |----------|-------------|
 | `showReasoning` | Show AI reasoning/thinking steps |
 | `showToolCalls` | Show tool call invocations |
+| `artifacts` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (split/drawer sizing, launcher widen, resize handle, `paneAppearance`, `toolbarPreset` `default` \| `document`, `documentToolbarShowCopyLabel`, `documentToolbarShowCopyChevron`, `documentToolbarIconColor`, `documentToolbarToggleActiveBackground`, `documentToolbarToggleActiveBorderColor`, borders, `unifiedSplitChrome`, etc.). See README **Features** table for defaults. |
 
-## CSS Variables
+---
 
-```css
-:root {
-  --tvw-cw-primary: #1f2937;
-  --tvw-cw-secondary: #6b7280;
-  --tvw-cw-surface: #ffffff;
-  --tvw-cw-muted: #9ca3af;
-  --tvw-cw-accent: #3b82f6;
-  --tvw-cw-container: #f8fafc;
-  --tvw-cw-border: #e5e7eb;
-  --tvw-cw-divider: #e5e7eb;
-  --tvw-cw-message-border: #e5e7eb;
-  --tvw-cw-input-background: #ffffff;
-  --tvw-cw-call-to-action: #ffffff;
-  --tvw-cw-call-to-action-background: #1f2937;
-}
+## Theme API Exports
+
+```typescript
+import {
+  // Theme creation
+  createTheme,
+  resolveTokens,
+  themeToCssVariables,
+  applyThemeVariables,
+  getActiveTheme,
+  getColorScheme,
+  detectColorScheme,
+  createThemeObserver,
+
+  // Plugins
+  accessibilityPlugin,
+  animationsPlugin,
+  brandPlugin,
+  reducedMotionPlugin,
+  highContrastPlugin,
+  createPlugin,
+
+  // Migration (v1 → v2)
+  migrateV1Theme,
+  validateV1Theme,
+} from '@runtypelabs/persona';
 ```
 
+---
+
+## Breaking Changes from v1
+
+| Change | v1 | v2 |
+|--------|-----|-----|
+| CSS variables | `--cw-*` | `--persona-*` |
+| Tailwind prefix | `tvw-*` | `persona-*` |
+| Theme config | Flat properties | Layered tokens (palette/semantic/components) |
+| Dark mode | Separate `darkTheme` object | Unified via `colorScheme` + auto dark palette |
+| Host element | `.tvw-widget-root` | `.persona-host` |

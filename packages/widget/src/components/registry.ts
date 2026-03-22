@@ -1,4 +1,5 @@
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
+import { PersonaArtifactCard } from "./artifact-card";
 
 /**
  * Context provided to component renderers
@@ -85,3 +86,6 @@ class ComponentRegistry {
  * Global component registry instance
  */
 export const componentRegistry = new ComponentRegistry();
+
+// Register built-in components
+componentRegistry.register("PersonaArtifactCard", PersonaArtifactCard);

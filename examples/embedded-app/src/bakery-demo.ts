@@ -10,11 +10,13 @@ import {
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
   createLocalStorageAdapter,
-  defaultActionHandlers
+  defaultActionHandlers,
+  createFlexibleJsonStreamParser,
+  collectEnrichedPageContext,
+  formatEnrichedContext,
+  defaultParseRules
 } from "@runtypelabs/persona";
 import {
-  collectPageContext,
-  formatPageContext,
   parseActionResponse,
   executeAction,
   loadChatHistory,
@@ -28,7 +30,6 @@ import {
   saveOrder,
   STORAGE_KEY
 } from "./middleware";
-import { createFlexibleJsonStreamParser } from "@runtypelabs/persona";
 import type {
   AgentWidgetStorageAdapter,
   AgentWidgetStoredState,
@@ -280,7 +281,7 @@ function showCartInWidget(): void {
   // Wait for widget to open, then show cart overlay
   setTimeout(() => {
     const launcherRoot = document.getElementById('launcher-root');
-    const container = launcherRoot?.querySelector('.tvw-widget-container');
+    const container = launcherRoot?.querySelector('.persona-widget-container');
     if (!container) return;
 
     // Remove existing cart overlay if any
@@ -445,7 +446,7 @@ function positionCartBadge(): void {
 
     if (widgetIsOpen) {
       // Position on top-left of the chat panel container (the white card)
-      const container = launcherRoot?.querySelector('.tvw-widget-container');
+      const container = launcherRoot?.querySelector('.persona-widget-container');
       if (container) {
         const rect = container.getBoundingClientRect();
         badge.style.top = `${rect.top - 10}px`;
@@ -629,8 +630,8 @@ function updateIntroCard(): void {
   const { title, subtitle } = getWelcomeConfig();
 
   // Find the intro card elements
-  const introTitle = launcherRoot.querySelector('.tvw-widget-body h2');
-  const introSubtitle = launcherRoot.querySelector('.tvw-widget-body p');
+  const introTitle = launcherRoot.querySelector('.persona-widget-body h2');
+  const introSubtitle = launcherRoot.querySelector('.persona-widget-body p');
 
   if (introTitle) {
     introTitle.textContent = title;
@@ -644,34 +645,43 @@ function updateIntroCard(): void {
 // Page Context Provider
 // ============================================================================
 
+/** Keys referenced by `BAKERY_ASSISTANT_FLOW` — keep in sync with `packages/proxy/src/flows/bakery-assistant.ts`. */
 const pageContextProvider = () => {
-  const elements = collectPageContext();
-  const formattedContext = formatPageContext(elements);
+  const elements = collectEnrichedPageContext({
+    options: {
+      mode: "structured",
+      maxElements: 80
+    },
+    rules: defaultParseRules
+  });
+  const pageSlice = elements.slice(0, 50);
   const order = loadOrder();
   const cart = getCart();
-  const currentPage = window.location.pathname;
 
   return {
-    page_elements: elements.slice(0, 50),
-    page_element_count: elements.length,
-    page_context: formattedContext,
+    current_page: window.location.pathname,
     page_url: window.location.href,
     page_title: document.title,
-    current_page: currentPage,
-    timestamp: new Date().toISOString(),
-    cart: cart.length > 0 ? {
-      items: cart,
-      total: (cart.reduce((sum, i) => sum + i.price * i.quantity, 0) / 100).toFixed(2),
-      item_count: cart.reduce((sum, i) => sum + i.quantity, 0)
-    } : null,
-    recent_order: order ? {
-      session_id: order.sessionId,
-      items: order.items,
-      total: (order.totalCents / 100).toFixed(2),
-      status: order.status,
-      created_at: order.createdAt,
-      completed_at: order.completedAt,
-    } : null,
+    page_elements: pageSlice,
+    page_context: formatEnrichedContext(pageSlice),
+    cart:
+      cart.length > 0
+        ? {
+            items: cart,
+            total: (cart.reduce((sum, i) => sum + i.price * i.quantity, 0) / 100).toFixed(2),
+            item_count: cart.reduce((sum, i) => sum + i.quantity, 0)
+          }
+        : null,
+    recent_order: order
+      ? {
+          session_id: order.sessionId,
+          items: order.items,
+          total: (order.totalCents / 100).toFixed(2),
+          status: order.status,
+          created_at: order.createdAt,
+          completed_at: order.completedAt
+        }
+      : null
   };
 };
 
@@ -1114,15 +1124,16 @@ const config: AgentWidgetConfig = {
   ],
   storageAdapter: createBakeryStorageAdapter(),
   contextProviders: [pageContextProvider],
+  // Bakery flow substitutes only **inputs** (see BAKERY_ASSISTANT_FLOW) — no duplicate metadata.
   requestMiddleware: ({ payload }) => {
-    if (payload.context) {
-      return {
-        ...payload,
-        metadata: payload.context,
-        context: undefined
-      } as AgentWidgetRequestPayload & { metadata?: Record<string, unknown> };
+    if (!payload.context) {
+      return payload;
     }
-    return payload;
+    return {
+      ...payload,
+      inputs: payload.context,
+      context: undefined
+    } as AgentWidgetRequestPayload & { inputs?: Record<string, unknown> };
   },
   launcher: {
     ...DEFAULT_WIDGET_CONFIG.launcher,

@@ -71,6 +71,8 @@ export type AgentWidgetRequestPayload = {
   flowId?: string;
   context?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  /** Per-turn template variables for /v1/client/chat (merged as root-level {{var}} in Runtype). */
+  inputs?: Record<string, unknown>;
 };
 
 // ============================================================================
@@ -81,30 +83,65 @@ export type AgentWidgetRequestPayload = {
  * Configuration for agent loop behavior.
  */
 export type AgentLoopConfig = {
-  /** Maximum number of reasoning iterations */
-  maxIterations: number;
-  /** Stop condition: 'auto' for automatic detection, or a custom JS expression */
-  stopCondition?: 'auto' | string;
+  /** Maximum number of agent turns (1-100). The loop continues while the model calls tools. */
+  maxTurns: number;
+  /** Maximum cost budget in USD. Agent stops when exceeded. */
+  maxCost?: number;
   /** Enable periodic reflection during execution */
   enableReflection?: boolean;
-  /** Number of iterations between reflections */
+  /** Number of iterations between reflections (1-50) */
   reflectionInterval?: number;
 };
+
+/**
+ * Configuration for agent tools (search, code execution, MCP servers, etc.)
+ */
+export type AgentToolsConfig = {
+  /** Tool IDs to enable (e.g., "builtin:exa", "builtin:dalle", "builtin:openai_web_search") */
+  toolIds?: string[];
+  /** Per-tool configuration overrides keyed by tool ID */
+  toolConfigs?: Record<string, Record<string, unknown>>;
+  /** Inline tool definitions for runtime-defined tools */
+  runtimeTools?: Array<Record<string, unknown>>;
+  /** Custom MCP server connections */
+  mcpServers?: Array<Record<string, unknown>>;
+  /** Maximum number of tool invocations per execution */
+  maxToolCalls?: number;
+  /** Tool approval configuration for human-in-the-loop workflows */
+  approval?: {
+    /** Tool names/patterns to require approval for, or true for all tools */
+    require: string[] | boolean;
+    /** Approval timeout in milliseconds (default: 300000 / 5 minutes) */
+    timeout?: number;
+  };
+};
+
+/** Artifact kinds for the Persona sidebar and dispatch payload */
+export type PersonaArtifactKind = "markdown" | "component";
 
 /**
  * Agent configuration for agent execution mode.
  * When provided in the widget config, enables agent loop execution instead of flow dispatch.
  */
+export type ArtifactConfigPayload = {
+  enabled: true;
+  types: PersonaArtifactKind[];
+};
+
 export type AgentConfig = {
   /** Agent display name */
   name: string;
-  /** Model identifier (e.g., 'openai:gpt-4o-mini') */
+  /** Model identifier (e.g., 'openai:gpt-4o-mini', 'qwen/qwen3-8b') */
   model: string;
   /** System prompt for the agent */
   systemPrompt: string;
   /** Temperature for model responses */
   temperature?: number;
-  /** Loop configuration for multi-iteration execution */
+  /** Tool configuration for the agent */
+  tools?: AgentToolsConfig;
+  /** Persona artifacts — sibling of tools (virtual agent / API parity) */
+  artifacts?: ArtifactConfigPayload;
+  /** Loop configuration for multi-turn execution */
   loopConfig?: AgentLoopConfig;
 };
 
@@ -142,10 +179,10 @@ export type AgentExecutionState = {
   agentName: string;
   status: 'running' | 'complete' | 'error';
   currentIteration: number;
-  maxIterations: number;
+  maxTurns: number;
   startedAt?: number;
   completedAt?: number;
-  stopReason?: 'max_iterations' | 'complete' | 'error' | 'manual';
+  stopReason?: 'complete' | 'end_turn' | 'max_turns' | 'max_cost' | 'timeout' | 'error';
 };
 
 /**
@@ -361,12 +398,143 @@ export type AgentWidgetControllerEventMap = {
   "approval:resolved": { approval: AgentWidgetApproval; decision: string };
 };
 
+/**
+ * Layout for the artifact split / drawer (CSS lengths unless noted).
+ *
+ * **Close behavior:** In desktop split mode, the artifact chrome `Close` control uses the same
+ * dismiss path as the mobile drawer (`onDismiss` on the artifact pane): the pane is hidden until
+ * new artifact content arrives or the host calls `showArtifacts()` on the widget handle.
+ */
+export type AgentWidgetArtifactsLayoutConfig = {
+  /** Flex gap between chat column and artifact pane. @default 0.5rem */
+  splitGap?: string;
+  /** Artifact column width in split mode. @default 40% */
+  paneWidth?: string;
+  /** Max width of artifact column. @default 28rem */
+  paneMaxWidth?: string;
+  /** Min width of artifact column (optional). */
+  paneMinWidth?: string;
+  /**
+   * When the floating panel is at most this wide (px), use in-panel drawer for artifacts
+   * instead of a side-by-side split (viewport can still be wide).
+   * @default 520
+   */
+  narrowHostMaxWidth?: number;
+  /**
+   * When true (default), widen the launcher panel while artifacts are visible and not user-dismissed.
+   * No-op for inline embed (`launcher.enabled === false`).
+   */
+  expandLauncherPanelWhenOpen?: boolean;
+  /** Panel width when expanded (launcher + artifacts visible). @default min(720px, calc(100vw - 24px)) */
+  expandedPanelWidth?: string;
+  /**
+   * When true, shows a drag handle between chat and artifact columns in desktop split mode only
+   * (hidden in narrow-host drawer and viewport ≤640px). Width is not persisted across reloads.
+   */
+  resizable?: boolean;
+  /** Min artifact column width while resizing. Only `px` strings are supported. @default 200px */
+  resizableMinWidth?: string;
+  /** Optional max artifact width cap while resizing (`px` only). Layout still bounds by chat min width. */
+  resizableMaxWidth?: string;
+  /**
+   * Visual treatment for the artifact column in split mode.
+   * - `'panel'` — bordered sidebar with left border, gap, and shadow (default).
+   * - `'seamless'` — flush with chat: no border or shadow, container background, zero gap.
+   * @default 'panel'
+   */
+  paneAppearance?: "panel" | "seamless";
+  /** Border radius on the artifact pane (CSS length). Works with any `paneAppearance`. */
+  paneBorderRadius?: string;
+  /** CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow. */
+  paneShadow?: string;
+  /**
+   * Full `border` shorthand for the artifact `<aside>` (all sides). Overrides default pane borders.
+   * Example: `"1px solid #cccccc"`.
+   */
+  paneBorder?: string;
+  /**
+   * `border-left` shorthand only — typical for split view next to chat (with or without resizer).
+   * Ignored if `paneBorder` is set. Example: `"1px solid #cccccc"`.
+   */
+  paneBorderLeft?: string;
+  /**
+   * Desktop split only (not narrow-host drawer / not ≤640px): square the **main chat card’s**
+   * top-right and bottom-right radii, and round the **artifact pane’s** top-right and bottom-right
+   * to match `persona-rounded-2xl` (`--persona-radius-lg`) so the two columns read as one shell.
+   */
+  unifiedSplitChrome?: boolean;
+  /**
+   * When `unifiedSplitChrome` is true, outer-right corner radius on the artifact column (CSS length).
+   * @default matches theme large radius (`--persona-radius-lg`)
+   */
+  unifiedSplitOuterRadius?: string;
+  /**
+   * Background color for the artifact column (CSS color). Sets `--persona-artifact-pane-bg` on the widget root.
+   */
+  paneBackground?: string;
+  /**
+   * Horizontal padding for artifact toolbar and content (CSS length), e.g. `24px`.
+   */
+  panePadding?: string;
+  /**
+   * Toolbar layout preset.
+   * - `default` — "Artifacts" title, horizontal tabs, text close.
+   * - `document` — view/source toggle, document title, copy / refresh / close; tab strip hidden when only one artifact.
+   * @default 'default'
+   */
+  toolbarPreset?: "default" | "document";
+  /**
+   * When `toolbarPreset` is `document`, show a visible "Copy" label next to the copy icon.
+   */
+  documentToolbarShowCopyLabel?: boolean;
+  /**
+   * When `toolbarPreset` is `document`, show a small chevron after the copy control (e.g. menu affordance).
+   */
+  documentToolbarShowCopyChevron?: boolean;
+  /** Document toolbar icon buttons (view, code, copy, refresh, close) — CSS color. Sets `--persona-artifact-doc-toolbar-icon-color` on the widget root. */
+  documentToolbarIconColor?: string;
+  /** Active view/source toggle background. Sets `--persona-artifact-doc-toggle-active-bg`. */
+  documentToolbarToggleActiveBackground?: string;
+  /** Active view/source toggle border color. Sets `--persona-artifact-doc-toggle-active-border`. */
+  documentToolbarToggleActiveBorderColor?: string;
+  /**
+   * Invoked when the document toolbar Refresh control is used (before the pane re-renders).
+   * Use to replay `connectStream`, refetch, etc.
+   */
+  onDocumentToolbarRefresh?: () => void | Promise<void>;
+  /**
+   * Optional copy dropdown entries (shown when `documentToolbarShowCopyChevron` is true and this array is non-empty).
+   * The main Copy control still performs default copy unless `onDocumentToolbarCopyMenuSelect` handles everything.
+   */
+  documentToolbarCopyMenuItems?: Array<{ id: string; label: string }>;
+  /**
+   * When set, invoked for the chevron menu (and can override default copy per `actionId`).
+   */
+  onDocumentToolbarCopyMenuSelect?: (payload: {
+    actionId: string;
+    artifactId: string | null;
+    markdown: string;
+    jsonPayload: string;
+  }) => void | Promise<void>;
+};
+
+export type AgentWidgetArtifactsFeature = {
+  /** When true, Persona shows the artifact pane and handles artifact_* SSE events */
+  enabled?: boolean;
+  /** If set, artifact events for other types are ignored */
+  allowedTypes?: PersonaArtifactKind[];
+  /** Split / drawer dimensions and launcher widen behavior */
+  layout?: AgentWidgetArtifactsLayoutConfig;
+};
+
 export type AgentWidgetFeatureFlags = {
   showReasoning?: boolean;
   showToolCalls?: boolean;
   showEventStreamToggle?: boolean;
   /** Configuration for the Event Stream inspector view */
   eventStream?: EventStreamConfig;
+  /** Optional artifact sidebar (split pane / mobile drawer) */
+  artifacts?: AgentWidgetArtifactsFeature;
 };
 
 export type SSEEventRecord = {
@@ -531,7 +699,7 @@ export type AgentWidgetTheme = {
   /**
    * Border style for the chat panel container.
    * @example "1px solid #e5e7eb" | "none"
-   * @default "1px solid var(--tvw-cw-border)"
+   * @default "1px solid var(--persona-border)"
    */
   panelBorder?: string;
   /**
@@ -548,6 +716,24 @@ export type AgentWidgetTheme = {
   panelBorderRadius?: string;
 };
 
+export type AgentWidgetDockConfig = {
+  /**
+   * Side of the wrapped container where the docked panel should render.
+   * @default "right"
+   */
+  side?: "left" | "right";
+  /**
+   * Expanded width of the docked panel.
+   * @default "420px"
+   */
+  width?: string;
+  /**
+   * Width of the collapsed launcher rail when the docked panel is closed.
+   * @default "72px"
+   */
+  collapsedWidth?: string;
+};
+
 export type AgentWidgetLauncherConfig = {
   enabled?: boolean;
   title?: string;
@@ -558,6 +744,18 @@ export type AgentWidgetLauncherConfig = {
   agentIconName?: string;
   agentIconHidden?: boolean;
   position?: "bottom-right" | "bottom-left" | "top-right" | "top-left";
+  /**
+   * Controls how the launcher panel is mounted relative to the host page.
+   * - "floating": default floating launcher / panel behavior
+   * - "docked": wraps the target container and renders as a sibling dock
+   *
+   * @default "floating"
+   */
+  mountMode?: "floating" | "docked";
+  /**
+   * Layout configuration for docked mode.
+   */
+  dock?: AgentWidgetDockConfig;
   autoExpand?: boolean;
   width?: string;
   /**
@@ -597,6 +795,21 @@ export type AgentWidgetLauncherConfig = {
    * @default 0
    */
   heightOffset?: number;
+  /**
+   * When true, the widget panel expands to fill the full viewport on mobile devices.
+   * Removes border-radius, margins, and shadows for a native app-like experience.
+   * Applies when viewport width is at or below `mobileBreakpoint`.
+   *
+   * @default true
+   */
+  mobileFullscreen?: boolean;
+  /**
+   * Viewport width (in pixels) at or below which the widget enters mobile fullscreen mode.
+   * Only applies when `mobileFullscreen` is true.
+   *
+   * @default 640
+   */
+  mobileBreakpoint?: number;
   callToActionIconText?: string;
   callToActionIconName?: string;
   callToActionIconColor?: string;
@@ -649,6 +862,13 @@ export type AgentWidgetSendButtonConfig = {
   backgroundColor?: string;
   textColor?: string;
   size?: string;
+};
+
+/** Optional composer UI state for custom `renderComposer` implementations. */
+export type AgentWidgetComposerConfig = {
+  models?: Array<{ id: string; label: string }>;
+  /** Current selection; host or plugin may update this at runtime. */
+  selectedModelId?: string;
 };
 
 export type AgentWidgetClearChatConfig = {
@@ -1109,6 +1329,8 @@ export type ClientChatRequest = {
   /** ID for the expected assistant response message */
   assistantMessageId?: string;
   metadata?: Record<string, unknown>;
+  /** Per-turn inputs for Runtype prompt templates (e.g. {{page_url}}). */
+  inputs?: Record<string, unknown>;
   context?: Record<string, unknown>;
 };
 
@@ -1135,6 +1357,15 @@ export type ClientFeedbackRequest = {
 // Layout Configuration Types
 // ============================================================================
 
+/** Icon button in the header title row (minimal layout). */
+export type AgentWidgetHeaderTrailingAction = {
+  id: string;
+  /** Lucide icon name, e.g. `chevron-down` */
+  icon?: string;
+  label?: string;
+  ariaLabel?: string;
+};
+
 /**
  * Context provided to header render functions
  */
@@ -1142,6 +1373,10 @@ export type HeaderRenderContext = {
   config: AgentWidgetConfig;
   onClose?: () => void;
   onClearChat?: () => void;
+  /** Built from `layout.header.trailingActions` for custom `render` implementations. */
+  trailingActions?: AgentWidgetHeaderTrailingAction[];
+  /** Fired when a built-in trailing action is activated (same as `layout.header.onAction`). */
+  onAction?: (actionId: string) => void;
 };
 
 /**
@@ -1167,12 +1402,11 @@ export type SlotRenderContext = {
  */
 export type AgentWidgetHeaderLayoutConfig = {
   /**
-   * Layout preset: "default" | "minimal" | "expanded"
+   * Layout preset: "default" | "minimal"
    * - default: Standard layout with icon, title, subtitle, and buttons
    * - minimal: Simplified layout with just title and close button
-   * - expanded: Full branding area with additional content space
    */
-  layout?: "default" | "minimal" | "expanded";
+  layout?: "default" | "minimal";
   /** Show/hide the header icon */
   showIcon?: boolean;
   /** Show/hide the title */
@@ -1188,6 +1422,12 @@ export type AgentWidgetHeaderLayoutConfig = {
    * When provided, replaces the entire header with custom content
    */
   render?: (context: HeaderRenderContext) => HTMLElement;
+  /**
+   * Shown after the title in `minimal` header layout (e.g. chevron menu affordance).
+   */
+  trailingActions?: AgentWidgetHeaderTrailingAction[];
+  /** Called when a `trailingActions` button is clicked. */
+  onAction?: (actionId: string) => void;
 };
 
 /**
@@ -1310,6 +1550,12 @@ export type AgentWidgetLayoutConfig = {
    * @default true
    */
   showFooter?: boolean;
+  /**
+   * Max width for the content area (messages + composer).
+   * Applied with `margin: 0 auto` for centering.
+   * Accepts any CSS width value (e.g. "90ch", "720px", "80%").
+   */
+  contentMaxWidth?: string;
 };
 
 // ============================================================================
@@ -1850,7 +2096,7 @@ export type AgentWidgetConfig = {
    *     name: 'Assistant',
    *     model: 'openai:gpt-4o-mini',
    *     systemPrompt: 'You are a helpful assistant.',
-   *     loopConfig: { maxIterations: 3, stopCondition: 'auto' }
+    *     loopConfig: { maxTurns: 5 }
    *   }
    * }
    * ```
@@ -1966,6 +2212,11 @@ export type AgentWidgetConfig = {
     welcomeSubtitle?: string;
     inputPlaceholder?: string;
     sendButtonLabel?: string;
+    /**
+     * When false, the welcome / intro card is not shown above the message list.
+     * @default true
+     */
+    showWelcomeCard?: boolean;
   };
   theme?: AgentWidgetTheme;
   /**
@@ -2117,6 +2368,12 @@ export type AgentWidgetConfig = {
    * @default true
    */
   enableComponentStreaming?: boolean;
+  /**
+   * When false, JSON component directives render without the default bubble chrome
+   * (surface background, border, extra padding). Use for wide custom cards in the transcript.
+   * @default true
+   */
+  wrapComponentDirectiveInBubble?: boolean;
   /**
    * Custom stream parser for extracting text from streaming structured responses.
    * Handles incremental parsing of JSON, XML, or other formats.
@@ -2318,6 +2575,12 @@ export type AgentWidgetConfig = {
    * ```
    */
   attachments?: AgentWidgetAttachmentsConfig;
+
+  /**
+   * Composer extras for custom `renderComposer` plugins (model picker, etc.).
+   * `selectedModelId` may be updated at runtime by the host.
+   */
+  composer?: AgentWidgetComposerConfig;
 
   /**
    * Persist widget state (open/closed, voice mode) across page navigations.
@@ -2596,10 +2859,46 @@ export type InjectUserMessageOptions = Omit<InjectMessageOptions, "role">;
  */
 export type InjectSystemMessageOptions = Omit<InjectMessageOptions, "role">;
 
+export type PersonaArtifactRecord = {
+  id: string;
+  artifactType: PersonaArtifactKind;
+  title?: string;
+  status: "streaming" | "complete";
+  markdown?: string;
+  component?: string;
+  props?: Record<string, unknown>;
+};
+
+/** Programmatic artifact upsert (controller / window API) */
+export type PersonaArtifactManualUpsert =
+  | { id?: string; artifactType: "markdown"; title?: string; content: string }
+  | {
+      id?: string;
+      artifactType: "component";
+      title?: string;
+      component: string;
+      props?: Record<string, unknown>;
+    };
+
 export type AgentWidgetEvent =
   | { type: "message"; message: AgentWidgetMessage }
   | { type: "status"; status: "connecting" | "connected" | "error" | "idle" }
-  | { type: "error"; error: Error };
+  | { type: "error"; error: Error }
+  | {
+      type: "artifact_start";
+      id: string;
+      artifactType: PersonaArtifactKind;
+      title?: string;
+      component?: string;
+    }
+  | { type: "artifact_delta"; id: string; artDelta: string }
+  | {
+      type: "artifact_update";
+      id: string;
+      props: Record<string, unknown>;
+      component?: string;
+    }
+  | { type: "artifact_complete"; id: string };
 
 export type AgentWidgetInitOptions = {
   target: string | HTMLElement;

@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Example Shop - Installer Version Demo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    header {
+      background: white;
+      padding: 1.5rem 2rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin-bottom: 2rem;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.75rem;
+      color: #0f172a;
+    }
+    .subtitle {
+      margin-top: 0.5rem;
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    .product-card {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .product-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .product-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .product-image {
+      width: 100%;
+      height: 200px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 3rem;
+    }
+    .product-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #0f172a;
+    }
+    .product-description {
+      color: #64748b;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      flex-grow: 1;
+    }
+    .product-price {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #0ea5e9;
+      margin-bottom: 1rem;
+    }
+    .AddToCartButton-button {
+      width: 100%;
+      padding: 0.75rem;
+      background: #0ea5e9;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .AddToCartButton-button:hover {
+      background: #0284c7;
+    }
+    .cart-section {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin-top: 2rem;
+    }
+    .notification {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      background: #10b981;
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 6px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      animation: slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    .banner {
+      background: #dbeafe;
+      border: 1px solid #60a5fa;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 2rem;
+      color: #1e40af;
+    }
+    .banner strong {
+      color: #1e3a8a;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🛒 Example Shop (Installer Version)</h1>
+    <p class="subtitle">Shopping Assistant using install.global.js</p>
+  </header>
+
+  <div class="container">
+    <div class="banner">
+      <strong>🎉 This version uses install.global.js!</strong> Click the chat icon in the bottom-right corner and try asking:
+      "What products do you have?" or "Add the blue t-shirt to my cart"
+    </div>
+
+    <div class="products-grid">
+      <div class="product-card product-item">
+        <div class="product-image">👕</div>
+        <div class="product-title">Blue T-Shirt</div>
+        <div class="product-description">
+          Comfortable cotton t-shirt in sky blue. Perfect for casual wear.
+        </div>
+        <div class="product-price">$29.99</div>
+        <button class="AddToCartButton-button AddToCartButton-blue-tshirt" data-product="blue-tshirt">
+          Add to Cart
+        </button>
+      </div>
+
+      <div class="product-card product-item">
+        <div class="product-image">👔</div>
+        <div class="product-title">Classic White Shirt</div>
+        <div class="product-description">
+          Elegant white dress shirt. Great for office or formal occasions.
+        </div>
+        <div class="product-price">$44.99</div>
+        <button class="AddToCartButton-button AddToCartButton-white-shirt" data-product="white-shirt">
+          Add to Cart
+        </button>
+      </div>
+
+      <div class="product-card product-item">
+        <div class="product-image">🧥</div>
+        <div class="product-title">Red Hoodie</div>
+        <div class="product-description">
+          Cozy red hoodie with fleece lining. Perfect for cold weather.
+        </div>
+        <div class="product-price">$49.99</div>
+        <button class="AddToCartButton-button AddToCartButton-red-hoodie" data-product="red-hoodie">
+          Add to Cart
+        </button>
+      </div>
+
+      <div class="product-card product-item">
+        <div class="product-image">👖</div>
+        <div class="product-title">Black Jeans</div>
+        <div class="product-description">
+          Classic black denim jeans. Comfortable fit for all day wear.
+        </div>
+        <div class="product-price">$59.99</div>
+        <button class="AddToCartButton-button AddToCartButton-black-jeans" data-product="black-jeans">
+          Add to Cart
+        </button>
+      </div>
+    </div>
+
+    <div class="cart-section">
+      <h2>Shopping Cart</h2>
+      <div id="cart-items" style="color: #64748b; padding: 2rem; text-align: center;">
+        Your cart is empty
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Simple cart functionality for demo
+    document.querySelectorAll('.AddToCartButton-button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.product-card');
+        const title = card.querySelector('.product-title').textContent;
+
+        // Show notification
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.textContent = `${title} added to cart!`;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+          notification.remove();
+        }, 2000);
+      });
+    });
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SHOPPING ASSISTANT WIDGET (INSTALLER VERSION)
+       ══════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Shopping Assistant Middleware & Configuration -->
+  <script>
+    (function() {
+      'use strict';
+
+      const userConfig = {
+        proxyUrl: "http://localhost:43111/api/chat/dispatch-action",
+        theme: {
+          primary: "#111827",
+          accent: "#0ea5e9",
+          surface: "#ffffff",
+          muted: "#64748b"
+        },
+        copy: {
+          welcomeTitle: "Welcome to our shop!",
+          welcomeSubtitle: "I can help you find products and add them to your cart",
+          inputPlaceholder: "Ask me anything...",
+          sendButtonLabel: "Send"
+        },
+        suggestionChips: [
+          "What products do you have?",
+          "Show me t-shirts",
+          "Add the blue t-shirt to cart"
+        ],
+        launcher: {
+          enabled: true,
+          autoExpand: false,
+          width: "min(920px, 95vw)",
+          title: "Shopping Assistant",
+          subtitle: "We're here to help!",
+          iconText: "🛍️"
+        },
+        debug: true
+      };
+
+      const STORAGE_KEY = 'vanilla-agent-action-middleware';
+      const NAV_FLAG_KEY = 'vanilla-agent-nav-flag';
+
+      let allMessages = [];
+      let processedActionIds = new Set();
+      let rawJsonByMessageId = new Map();
+      let lastRawJson = null;
+
+      function buildEnrichedPageContextAppendix() {
+        var AW = window.AgentWidget;
+        if (!AW || typeof AW.collectEnrichedPageContext !== 'function') {
+          return '\n\n---\n\n(Page context unavailable: load @runtypelabs/persona with collectEnrichedPageContext.)';
+        }
+        try {
+          var elements = AW.collectEnrichedPageContext({
+            options: { mode: 'structured', maxElements: 80 },
+            rules: AW.defaultParseRules || []
+          });
+          var slice = elements.slice(0, 50);
+          var pageContext = AW.formatEnrichedContext(slice);
+          return (
+            '\n\n---\n\n## Page context (enriched)\n' +
+            'current_page: ' + JSON.stringify(window.location.pathname) + '\n' +
+            'page_url: ' + JSON.stringify(window.location.href) + '\n' +
+            'page_title: ' + JSON.stringify(document.title) + '\n\n' +
+            'page_elements (JSON):\n' + JSON.stringify(slice) + '\n\n' +
+            'page_context:\n' + pageContext
+          );
+        } catch (err) {
+          console.error('[Shopping Assistant] Enriched page context failed:', err);
+          return '\n\n---\n\n(Page context collection failed.)';
+        }
+      }
+
+      function parseActionResponse(text) {
+        if (!text || typeof text !== 'string') {
+          return null;
+        }
+
+        try {
+          let jsonText = text.trim();
+
+          const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (codeBlockMatch) {
+            jsonText = codeBlockMatch[1].trim();
+          }
+
+          const firstBraceIndex = jsonText.indexOf('{');
+          if (firstBraceIndex === -1) {
+            return null;
+          }
+
+          let braceCount = 0;
+          let jsonEndIndex = -1;
+
+          for (let i = firstBraceIndex; i < jsonText.length; i++) {
+            if (jsonText[i] === '{') {
+              braceCount++;
+            } else if (jsonText[i] === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                jsonEndIndex = i;
+                break;
+              }
+            }
+          }
+
+          if (jsonEndIndex === -1) {
+            return null;
+          }
+
+          jsonText = jsonText.substring(firstBraceIndex, jsonEndIndex + 1);
+          const parsed = JSON.parse(jsonText);
+
+          if (parsed.action === 'message' && typeof parsed.text === 'string') {
+            return parsed;
+          }
+
+          if (
+            parsed.action === 'nav_then_click' &&
+            typeof parsed.page === 'string' &&
+            typeof parsed.on_load_text === 'string'
+          ) {
+            return parsed;
+          }
+
+          if (
+            parsed.action === 'message_and_click' &&
+            typeof parsed.element === 'string' &&
+            typeof parsed.text === 'string'
+          ) {
+            return parsed;
+          }
+
+          if (
+            parsed.action === 'checkout' &&
+            typeof parsed.text === 'string' &&
+            Array.isArray(parsed.items) &&
+            parsed.items.every(item =>
+              typeof item === 'object' &&
+              item !== null &&
+              typeof item.name === 'string' &&
+              typeof item.price === 'number' &&
+              typeof item.quantity === 'number'
+            )
+          ) {
+            return parsed;
+          }
+
+          console.warn('[Shopping Assistant] Invalid action response format:', parsed);
+          return null;
+        } catch (error) {
+          console.error('[Shopping Assistant] JSON parse error:', error);
+          return null;
+        }
+      }
+
+      let isNavigating = false;
+      const NAVIGATION_TIMEOUT = 2000;
+
+      function executeAction(action) {
+        if (action.action === 'message') {
+          // Message handled by return value
+        } else if (action.action === 'message_and_click') {
+          const element = document.querySelector(action.element);
+          if (element && element instanceof HTMLElement) {
+            setTimeout(() => {
+              element.click();
+            }, 500);
+          } else {
+            console.warn('[Shopping Assistant] Element not found:', action.element);
+          }
+        } else if (action.action === 'checkout') {
+          const proxyOrigin = userConfig.proxyUrl.replace(/\/api\/.*$/, '');
+          const checkoutUrl = proxyOrigin + '/api/checkout';
+
+          fetch(checkoutUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: action.items }),
+          })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success && data.checkoutUrl) {
+                window.location.href = data.checkoutUrl;
+              } else {
+                console.error('[Shopping Assistant] Checkout failed:', data.error);
+                alert('Failed to create checkout session. Please try again.');
+              }
+            })
+            .catch(error => {
+              console.error('[Shopping Assistant] Checkout error:', error);
+              alert('Failed to create checkout session. Please try again.');
+            });
+        } else if (action.action === 'nav_then_click') {
+          if (isNavigating) return;
+
+          const lastNavTime = sessionStorage.getItem('vanilla-agent-last-nav-time');
+          const now = Date.now();
+          if (lastNavTime && (now - parseInt(lastNavTime, 10)) < NAVIGATION_TIMEOUT) {
+            return;
+          }
+
+          isNavigating = true;
+          sessionStorage.setItem('vanilla-agent-last-nav-time', now.toString());
+
+          localStorage.setItem(NAV_FLAG_KEY, JSON.stringify({
+            onLoadText: action.on_load_text,
+            timestamp: Date.now()
+          }));
+
+          let targetUrl = action.page;
+          if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+            targetUrl = new URL(targetUrl, window.location.origin).toString();
+          }
+
+          setTimeout(() => {
+            if (isNavigating) {
+              window.location.href = targetUrl;
+            }
+          }, 500);
+        }
+      }
+
+      function saveChatHistory(messages) {
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          const existingData = stored ? JSON.parse(stored) : { chatHistory: [] };
+
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            chatHistory: messages.map(msg => ({ ...msg, streaming: false })),
+            executedActionIds: existingData.executedActionIds || []
+          }));
+        } catch (error) {
+          console.error('[Shopping Assistant] Failed to save chat history:', error);
+        }
+      }
+
+      function loadChatHistory() {
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            const data = JSON.parse(stored);
+            return data.chatHistory || [];
+          }
+        } catch (error) {
+          console.error('[Shopping Assistant] Failed to load chat history:', error);
+        }
+        return [];
+      }
+
+      function loadExecutedActionIds() {
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            const data = JSON.parse(stored);
+            return new Set(data.executedActionIds || []);
+          }
+        } catch (error) {
+          console.error('[Shopping Assistant] Failed to load executed action IDs:', error);
+        }
+        return new Set();
+      }
+
+      function saveExecutedActionId(messageId) {
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          const existingData = stored ? JSON.parse(stored) : { chatHistory: [] };
+
+          const executedIds = existingData.executedActionIds || [];
+          if (!executedIds.includes(messageId)) {
+            executedIds.push(messageId);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+              ...existingData,
+              executedActionIds: executedIds.slice(-100)
+            }));
+          }
+        } catch (error) {
+          console.error('[Shopping Assistant] Failed to save executed action ID:', error);
+        }
+      }
+
+      function checkNavigationFlag() {
+        try {
+          const stored = localStorage.getItem(NAV_FLAG_KEY);
+          if (stored) {
+            const flag = JSON.parse(stored);
+            localStorage.removeItem(NAV_FLAG_KEY);
+
+            const age = Date.now() - flag.timestamp;
+            if (age < 5 * 60 * 1000) {
+              return flag.onLoadText;
+            }
+          }
+        } catch (error) {
+          console.error('[Shopping Assistant] Failed to check navigation flag:', error);
+        }
+        return null;
+      }
+
+      if (!userConfig.proxyUrl) {
+        console.error('[Shopping Assistant] Error: proxyUrl is required');
+        return;
+      }
+
+      // Set up fetch interception
+      const originalFetch = window.fetch;
+      window.fetch = async function(input, init) {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+
+        if (url.includes(userConfig.proxyUrl) && init && init.method === 'POST') {
+          try {
+            const body = JSON.parse(init.body);
+            const messages = body.messages || [];
+
+            const appendix = buildEnrichedPageContextAppendix();
+
+            if (messages.length > 0) {
+              const lastMessage = messages[messages.length - 1];
+              if (lastMessage.role === 'user') {
+                lastMessage.content = lastMessage.content + appendix;
+              }
+            }
+
+            init.body = JSON.stringify(body);
+          } catch (e) {
+            console.error('[Shopping Assistant] Failed to modify request:', e);
+          }
+        }
+
+        return originalFetch(input, init);
+      };
+
+      // Load state
+      let savedMessages = loadChatHistory();
+      const navMessage = checkNavigationFlag();
+      const shouldAutoOpen = navMessage !== null;
+
+      if (navMessage) {
+        const navMessageExists = savedMessages.some(msg =>
+          msg.role === 'assistant' && msg.content === navMessage
+        );
+
+        if (!navMessageExists) {
+          savedMessages = [...savedMessages, {
+            id: 'nav-' + Date.now(),
+            role: 'assistant',
+            content: navMessage,
+            createdAt: new Date().toISOString(),
+            streaming: false
+          }];
+        }
+      }
+
+      allMessages = savedMessages.length > 0 ? [...savedMessages] : [];
+      processedActionIds = loadExecutedActionIds();
+
+      // Create a custom parser factory that wraps the JSON parser and stores raw content
+      // This function will be called by the widget when it needs a parser instance
+      function createActionAwareParser() {
+        if (userConfig.debug) {
+          console.log('[Shopping Assistant] createActionAwareParser called, AgentWidget available:', !!window.AgentWidget);
+        }
+        
+        // Check for AgentWidget when parser is actually needed (not during config setup)
+        if (!window.AgentWidget || !window.AgentWidget.createJsonStreamParser) {
+          console.warn('[Shopping Assistant] createJsonStreamParser not available, using default parser');
+          // Return a plain text parser as fallback
+          if (window.AgentWidget && window.AgentWidget.createPlainTextParser) {
+            return window.AgentWidget.createPlainTextParser();
+          }
+          // Ultimate fallback - return a minimal parser
+          return {
+            processChunk: function(accumulatedContent) {
+              return accumulatedContent;
+            },
+            getExtractedText: function() {
+              return null;
+            }
+          };
+        }
+
+        if (userConfig.debug) {
+          console.log('[Shopping Assistant] Creating JSON stream parser');
+        }
+
+        // Create the action-aware parser
+        const baseParser = window.AgentWidget.createJsonStreamParser();
+        
+        return {
+          processChunk: function(accumulatedContent) {
+            const result = baseParser.processChunk(accumulatedContent);
+            
+            // Handle async result
+            if (result instanceof Promise) {
+              return result.then(function(resolvedResult) {
+                if (resolvedResult && typeof resolvedResult === 'object' && 'raw' in resolvedResult && resolvedResult.raw) {
+                  lastRawJson = resolvedResult.raw;
+                }
+                return resolvedResult;
+              });
+            }
+            
+            // Handle synchronous result
+            if (result && typeof result === 'object' && 'raw' in result && result.raw) {
+              lastRawJson = result.raw;
+            }
+            
+            return result;
+          },
+          getExtractedText: function() {
+            return baseParser.getExtractedText();
+          },
+          close: function() {
+            lastRawJson = null;
+            return baseParser.close ? baseParser.close() : undefined;
+          }
+        };
+      }
+
+      // Configure installer
+      window.siteAgentConfig = {
+        version: "1.4.1",
+        cdn: "jsdelivr",
+        target: "body",
+        config: {
+          apiUrl: userConfig.proxyUrl,
+          initialMessages: savedMessages.length > 0 ? savedMessages : undefined,
+          clearChatHistoryStorageKey: STORAGE_KEY,
+          streamParser: createActionAwareParser,
+          launcher: {
+            enabled: userConfig.launcher.enabled !== false,
+            autoExpand: shouldAutoOpen || userConfig.launcher.autoExpand,
+            width: userConfig.launcher.width || "min(920px, 95vw)",
+            title: userConfig.launcher.title || "Shopping Assistant",
+            subtitle: userConfig.launcher.subtitle || "I can help you find products and add them to your cart",
+            iconText: userConfig.launcher.iconText || "🛍️"
+          },
+          theme: userConfig.theme,
+          copy: userConfig.copy,
+          suggestionChips: userConfig.suggestionChips,
+          postprocessMessage: function(params) {
+            const text = params.text;
+            const streaming = params.streaming;
+            const message = params.message;
+
+            if (userConfig.debug) {
+              console.log('[Shopping Assistant] postprocessMessage:', {
+                role: message.role,
+                streaming: streaming,
+                textLength: text.length,
+                messageId: message.id
+              });
+            }
+
+            // Track all messages
+            if (!streaming) {
+              const existingIndex = allMessages.findIndex(m => m.id === message.id);
+              if (existingIndex >= 0) {
+                allMessages[existingIndex] = Object.assign({}, message, { streaming: false });
+              } else {
+                allMessages.push(Object.assign({}, message, { streaming: false }));
+              }
+              saveChatHistory(allMessages);
+            }
+
+            // Parse and execute actions for assistant messages
+            const isRegularAssistant = message.role === 'assistant' &&
+              message.variant !== 'reasoning' && message.variant !== 'tool';
+
+            if (isRegularAssistant) {
+              // The parser stores raw JSON in lastRawJson
+              // During streaming, capture it and associate with this message
+              if (streaming && lastRawJson) {
+                rawJsonByMessageId.set(message.id, lastRawJson);
+                if (userConfig.debug) {
+                  console.log('[Shopping Assistant] Associated raw JSON with message:', message.id, 'length:', lastRawJson.length);
+                }
+              }
+
+              if (!streaming) {
+                // Streaming complete - check if we have a stored raw JSON for action parsing
+                const storedRawJson = rawJsonByMessageId.get(message.id);
+
+                if (storedRawJson) {
+                  if (userConfig.debug) {
+                    console.log('[Shopping Assistant] Parsing action from stored raw JSON');
+                  }
+                  const action = parseActionResponse(storedRawJson);
+
+                  if (action) {
+                    // Only execute once when streaming completes
+                    if (!processedActionIds.has(message.id)) {
+                      processedActionIds.add(message.id);
+                      saveExecutedActionId(message.id);
+
+                      if (userConfig.debug) {
+                        console.log('[Shopping Assistant] Executing action:', action.action);
+                      }
+
+                      setTimeout(function() {
+                        executeAction(action);
+                      }, action.action === 'nav_then_click' ? 100 : 300);
+                    }
+
+                    // Extract display text from action
+                    let displayText = '';
+                    if (action.action === 'message') {
+                      displayText = action.text;
+                    } else if ('text' in action) {
+                      displayText = action.text;
+                    }
+
+                    if (displayText && window.AgentWidget && window.AgentWidget.markdownPostprocessor) {
+                      return window.AgentWidget.markdownPostprocessor(displayText);
+                    }
+                    return displayText || '';
+                }
+                }
+              }
+            }
+
+            // For streaming of non-JSON or no action: return text as-is (the parser already extracted any needed text)
+            // For non-assistant messages: return as-is
+            if (window.AgentWidget && window.AgentWidget.markdownPostprocessor) {
+              return window.AgentWidget.markdownPostprocessor(text);
+            }
+            return text;
+          },
+          debug: userConfig.debug || false
+        }
+      };
+
+      console.log('[Shopping Assistant] Installer version configured');
+    })();
+  </script>
+
+  <!-- Load Widget Installer (local build on localhost, CDN in production) -->
+  <!-- Run `pnpm build:widget` to update the local build -->
+  <script>
+    (function() {
+      var base = window.location.hostname === 'localhost'
+        ? '/widget-dist'
+        : 'https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist';
+      var s = document.createElement('script');
+      s.src = base + '/install.global.js';
+      document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
+    })();
+  </script>
+
+</body>
+</html>

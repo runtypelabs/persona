@@ -52,7 +52,7 @@ const createMessageImagePreviews = (
   try {
     const container = createElement(
       "div",
-      "tvw-flex tvw-flex-col tvw-gap-2"
+      "persona-flex persona-flex-col persona-gap-2"
     );
     container.setAttribute("data-message-attachments", "images");
     if (hasVisibleText) {
@@ -82,8 +82,8 @@ const createMessageImagePreviews = (
       imageElement.style.height = "auto";
       imageElement.style.objectFit = "contain";
       imageElement.style.borderRadius = "10px";
-      imageElement.style.backgroundColor = "var(--cw-container, #f3f4f6)";
-      imageElement.style.border = "1px solid var(--cw-border, #e5e7eb)";
+      imageElement.style.backgroundColor = "var(--persona-attachment-image-bg, var(--persona-container, #f3f4f6))";
+      imageElement.style.border = "1px solid var(--persona-attachment-image-border, var(--persona-border, #e5e7eb))";
 
       let settled = false;
       visiblePreviewCount += 1;
@@ -119,22 +119,22 @@ const createMessageImagePreviews = (
 // Create typing indicator element
 export const createTypingIndicator = (): HTMLElement => {
   const container = document.createElement("div");
-  container.className = "tvw-flex tvw-items-center tvw-space-x-1 tvw-h-5 tvw-mt-2";
+  container.className = "persona-flex persona-items-center persona-space-x-1 persona-h-5 persona-mt-2";
 
   const dot1 = document.createElement("div");
-  dot1.className = "tvw-bg-cw-primary tvw-animate-typing tvw-rounded-full tvw-h-1.5 tvw-w-1.5";
+  dot1.className = "persona-bg-persona-primary persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
   dot1.style.animationDelay = "0ms";
 
   const dot2 = document.createElement("div");
-  dot2.className = "tvw-bg-cw-primary tvw-animate-typing tvw-rounded-full tvw-h-1.5 tvw-w-1.5";
+  dot2.className = "persona-bg-persona-primary persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
   dot2.style.animationDelay = "250ms";
 
   const dot3 = document.createElement("div");
-  dot3.className = "tvw-bg-cw-primary tvw-animate-typing tvw-rounded-full tvw-h-1.5 tvw-w-1.5";
+  dot3.className = "persona-bg-persona-primary persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
   dot3.style.animationDelay = "500ms";
 
   const srOnly = document.createElement("span");
-  srOnly.className = "tvw-sr-only";
+  srOnly.className = "persona-sr-only";
   srOnly.textContent = "Loading";
 
   container.appendChild(dot1);
@@ -183,7 +183,7 @@ const createAvatar = (
 ): HTMLElement => {
   const avatar = createElement(
     "div",
-    "tvw-flex-shrink-0 tvw-w-8 tvw-h-8 tvw-rounded-full tvw-flex tvw-items-center tvw-justify-center tvw-text-sm"
+    "persona-flex-shrink-0 persona-w-8 persona-h-8 persona-rounded-full persona-flex persona-items-center persona-justify-center persona-text-sm"
   );
 
   const avatarContent = role === "user" 
@@ -196,22 +196,22 @@ const createAvatar = (
       const img = createElement("img") as HTMLImageElement;
       img.src = avatarContent;
       img.alt = role === "user" ? "User" : "Assistant";
-      img.className = "tvw-w-full tvw-h-full tvw-rounded-full tvw-object-cover";
+      img.className = "persona-w-full persona-h-full persona-rounded-full persona-object-cover";
       avatar.appendChild(img);
     } else {
       // Emoji or text
       avatar.textContent = avatarContent;
       avatar.classList.add(
-        role === "user" ? "tvw-bg-cw-accent" : "tvw-bg-cw-primary",
-        "tvw-text-white"
+        role === "user" ? "persona-bg-persona-accent" : "persona-bg-persona-primary",
+        "persona-text-white"
       );
     }
   } else {
     // Default avatar
     avatar.textContent = role === "user" ? "U" : "A";
     avatar.classList.add(
-      role === "user" ? "tvw-bg-cw-accent" : "tvw-bg-cw-primary",
-      "tvw-text-white"
+      role === "user" ? "persona-bg-persona-accent" : "persona-bg-persona-primary",
+      "persona-text-white"
     );
   }
 
@@ -227,7 +227,7 @@ const createTimestamp = (
 ): HTMLElement => {
   const timestamp = createElement(
     "div",
-    "tvw-text-xs tvw-text-cw-muted"
+    "persona-text-xs persona-text-persona-muted"
   );
 
   const date = new Date(message.createdAt);
@@ -252,7 +252,7 @@ const getBubbleClasses = (
   role: "user" | "assistant" | "system",
   layout: AgentWidgetMessageLayoutConfig["layout"] = "bubble"
 ): string[] => {
-  const baseClasses = ["vanilla-message-bubble", "tvw-max-w-[85%]"];
+  const baseClasses = ["vanilla-message-bubble", "persona-max-w-[85%]"];
 
   switch (layout) {
     case "flat":
@@ -260,15 +260,15 @@ const getBubbleClasses = (
       if (role === "user") {
         baseClasses.push(
           "vanilla-message-user-bubble",
-          "tvw-ml-auto",
-          "tvw-text-cw-primary",
-          "tvw-py-2"
+          "persona-ml-auto",
+          "persona-text-persona-primary",
+          "persona-py-2"
         );
       } else {
         baseClasses.push(
           "vanilla-message-assistant-bubble",
-          "tvw-text-cw-primary",
-          "tvw-py-2"
+          "persona-text-persona-primary",
+          "persona-py-2"
         );
       }
       break;
@@ -276,27 +276,27 @@ const getBubbleClasses = (
     case "minimal":
       // Minimal layout: reduced padding and styling
       baseClasses.push(
-        "tvw-text-sm",
-        "tvw-leading-relaxed"
+        "persona-text-sm",
+        "persona-leading-relaxed"
       );
       if (role === "user") {
         baseClasses.push(
           "vanilla-message-user-bubble",
-          "tvw-ml-auto",
-          "tvw-bg-cw-accent",
-          "tvw-text-white",
-          "tvw-px-3",
-          "tvw-py-2",
-          "tvw-rounded-lg"
+          "persona-ml-auto",
+          "persona-bg-persona-accent",
+          "persona-text-white",
+          "persona-px-3",
+          "persona-py-2",
+          "persona-rounded-lg"
         );
       } else {
         baseClasses.push(
           "vanilla-message-assistant-bubble",
-          "tvw-bg-cw-surface",
-          "tvw-text-cw-primary",
-          "tvw-px-3",
-          "tvw-py-2",
-          "tvw-rounded-lg"
+          "persona-bg-persona-surface",
+          "persona-text-persona-primary",
+          "persona-px-3",
+          "persona-py-2",
+          "persona-rounded-lg"
         );
       }
       break;
@@ -305,29 +305,29 @@ const getBubbleClasses = (
     default:
       // Default bubble layout
       baseClasses.push(
-        "tvw-rounded-2xl",
-        "tvw-text-sm",
-        "tvw-leading-relaxed",
-        "tvw-shadow-sm"
+        "persona-rounded-2xl",
+        "persona-text-sm",
+        "persona-leading-relaxed",
+        "persona-shadow-sm"
       );
       if (role === "user") {
         baseClasses.push(
           "vanilla-message-user-bubble",
-          "tvw-ml-auto",
-          "tvw-bg-cw-accent",
-          "tvw-text-white",
-          "tvw-px-5",
-          "tvw-py-3"
+          "persona-ml-auto",
+          "persona-bg-persona-accent",
+          "persona-text-white",
+          "persona-px-5",
+          "persona-py-3"
         );
       } else {
         baseClasses.push(
           "vanilla-message-assistant-bubble",
-          "tvw-bg-cw-surface",
-          "tvw-border",
-          "tvw-border-cw-message-border",
-          "tvw-text-cw-primary",
-          "tvw-px-5",
-          "tvw-py-3"
+          "persona-bg-persona-surface",
+          "persona-border",
+          "persona-border-persona-message-border",
+          "persona-text-persona-primary",
+          "persona-px-5",
+          "persona-py-3"
         );
       }
       break;
@@ -338,36 +338,53 @@ const getBubbleClasses = (
 
 /**
  * Create message action buttons (copy, upvote, downvote)
+ *
+ * This is a pure rendering function. It creates button elements with the
+ * correct `data-action` attributes, icons, and CSS classes. All click
+ * handling, vote state management, clipboard logic, and callback dispatch
+ * is handled via event delegation in `ui.ts` so that handlers survive
+ * idiomorph DOM morphing.
  */
 export const createMessageActions = (
   message: AgentWidgetMessage,
   actionsConfig: AgentWidgetMessageActionsConfig,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _callbacks?: MessageActionCallbacks
 ): HTMLElement => {
   const showCopy = actionsConfig.showCopy ?? true;
   const showUpvote = actionsConfig.showUpvote ?? true;
   const showDownvote = actionsConfig.showDownvote ?? true;
+
+  // Don't render the container at all when no actions are visible
+  if (!showCopy && !showUpvote && !showDownvote) {
+    const empty = createElement("div");
+    empty.style.display = "none";
+    empty.id = `actions-${message.id}`;
+    empty.setAttribute("data-actions-for", message.id);
+    return empty;
+  }
+
   const visibility = actionsConfig.visibility ?? "hover";
   const align = actionsConfig.align ?? "right";
   const layout = actionsConfig.layout ?? "pill-inside";
 
   // Map alignment to CSS class
   const alignClass = {
-    left: "tvw-message-actions-left",
-    center: "tvw-message-actions-center",
-    right: "tvw-message-actions-right",
+    left: "persona-message-actions-left",
+    center: "persona-message-actions-center",
+    right: "persona-message-actions-right",
   }[align];
 
   // Map layout to CSS class
   const layoutClass = {
-    "pill-inside": "tvw-message-actions-pill",
-    "row-inside": "tvw-message-actions-row",
+    "pill-inside": "persona-message-actions-pill",
+    "row-inside": "persona-message-actions-row",
   }[layout];
 
   const container = createElement(
     "div",
-    `tvw-message-actions tvw-flex tvw-items-center tvw-gap-1 tvw-mt-2 ${alignClass} ${layoutClass} ${
-      visibility === "hover" ? "tvw-message-actions-hover" : ""
+    `persona-message-actions persona-flex persona-items-center persona-gap-1 persona-mt-2 ${alignClass} ${layoutClass} ${
+      visibility === "hover" ? "persona-message-actions-hover" : ""
     }`
   );
   // Set id for idiomorph matching (prevents recreation on morph)
@@ -380,7 +397,7 @@ export const createMessageActions = (
     dataAction: string
   ): HTMLButtonElement => {
     const button = document.createElement("button");
-    button.className = "tvw-message-action-btn";
+    button.className = "persona-message-action-btn";
     button.setAttribute("aria-label", label);
     button.setAttribute("title", label);
     button.setAttribute("data-action", dataAction);
@@ -393,17 +410,17 @@ export const createMessageActions = (
     return button;
   };
 
-  // Copy button - click handled via event delegation in ui.ts
+  // Copy button
   if (showCopy) {
     container.appendChild(createActionButton("copy", "Copy message", "copy"));
   }
 
-  // Upvote button - click handled via event delegation in ui.ts
+  // Upvote button
   if (showUpvote) {
     container.appendChild(createActionButton("thumbs-up", "Upvote", "upvote"));
   }
 
-  // Downvote button - click handled via event delegation in ui.ts
+  // Downvote button
   if (showDownvote) {
     container.appendChild(createActionButton("thumbs-down", "Downvote", "downvote"));
   }
@@ -453,6 +470,15 @@ export const createStandardBubble = (
   bubble.id = `bubble-${message.id}`;
   bubble.setAttribute("data-message-id", message.id);
 
+  // Apply component-level color overrides via CSS variables
+  if (message.role === "user") {
+    bubble.style.backgroundColor = 'var(--persona-message-user-bg, var(--persona-accent))';
+    bubble.style.color = 'var(--persona-message-user-text, white)';
+  } else if (message.role === "assistant") {
+    bubble.style.backgroundColor = 'var(--persona-message-assistant-bg, var(--persona-surface))';
+    bubble.style.color = 'var(--persona-message-assistant-text, var(--persona-text))';
+  }
+
   const imageParts = getMessageImageParts(message);
   const messageContentText = message.content?.trim() ?? "";
   const isImageOnlyFallbackMessage =
@@ -461,6 +487,7 @@ export const createStandardBubble = (
 
   // Add message content
   const contentDiv = document.createElement("div");
+  contentDiv.classList.add("persona-message-content");
   const transformedContent = transform({
     text: message.content,
     message,
@@ -481,7 +508,7 @@ export const createStandardBubble = (
   // Add inline timestamp if configured
   if (showTimestamp && timestampPosition === "inline" && message.createdAt) {
     const timestamp = createTimestamp(message, timestampConfig!);
-    timestamp.classList.add("tvw-ml-2", "tvw-inline");
+    timestamp.classList.add("persona-ml-2", "persona-inline");
     contentDiv.appendChild(timestamp);
   }
 
@@ -508,7 +535,7 @@ export const createStandardBubble = (
   // Add timestamp below if configured
   if (showTimestamp && timestampPosition === "below" && message.createdAt) {
     const timestamp = createTimestamp(message, timestampConfig!);
-    timestamp.classList.add("tvw-mt-1");
+    timestamp.classList.add("persona-mt-1");
     bubble.appendChild(timestamp);
   }
 
@@ -548,7 +575,7 @@ export const createStandardBubble = (
   // Create wrapper with avatar
   const wrapper = createElement(
     "div",
-    `tvw-flex tvw-gap-2 ${message.role === "user" ? "tvw-flex-row-reverse" : ""}`
+    `persona-flex persona-gap-2 ${message.role === "user" ? "persona-flex-row-reverse" : ""}`
   );
 
   const avatar = createAvatar(avatarConfig!, message.role);
@@ -560,8 +587,8 @@ export const createStandardBubble = (
   }
 
   // Adjust bubble max-width when avatar is present
-  bubble.classList.remove("tvw-max-w-[85%]");
-  bubble.classList.add("tvw-max-w-[calc(85%-2.5rem)]");
+  bubble.classList.remove("persona-max-w-[85%]");
+  bubble.classList.add("persona-max-w-[calc(85%-2.5rem)]");
 
   return wrapper;
 };

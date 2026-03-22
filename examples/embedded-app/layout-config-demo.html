@@ -87,7 +87,7 @@
 <body>
   <div class="demo-container">
     <h1>Layout Configuration Demo</h1>
-    <p class="subtitle">Three different header layouts using the new layout system</p>
+    <p class="subtitle">Two preset header layouts plus a custom header rendered with the SDK hook</p>
 
     <div class="layout-grid">
       <!-- Default Layout -->
@@ -108,11 +108,11 @@
         <div class="chat-container" id="chat-minimal"></div>
       </div>
 
-      <!-- With Avatars & Timestamps -->
+      <!-- Custom Header -->
       <div class="layout-card">
         <div class="layout-card-header">
-          <h3>Messages with Avatars</h3>
-          <p>Shows avatars and timestamps</p>
+          <h3>Custom Header Hook</h3>
+          <p>Uses <code>layout.header.render</code> for a fully custom header</p>
         </div>
         <div class="chat-container" id="chat-avatars"></div>
       </div>
@@ -211,7 +211,7 @@
       }
     );
 
-    // 3. With Avatars & Timestamps
+    // 3. Custom header via layout.header.render
     createAgentExperience(
       document.getElementById('chat-avatars'),
       {
@@ -224,20 +224,87 @@
         },
         layout: {
           header: {
-            layout: 'expanded'
+            render: ({ onClose }) => {
+              const header = document.createElement('div');
+              header.style.display = 'flex';
+              header.style.flexDirection = 'column';
+              header.style.gap = '12px';
+              header.style.padding = '20px 24px';
+              header.style.background = 'linear-gradient(135deg, #111827 0%, #1f2937 100%)';
+              header.style.color = '#ffffff';
+              header.style.borderBottom = '1px solid rgba(255, 255, 255, 0.08)';
+
+              const topRow = document.createElement('div');
+              topRow.style.display = 'flex';
+              topRow.style.alignItems = 'center';
+              topRow.style.justifyContent = 'space-between';
+              topRow.style.gap = '12px';
+
+              const titleWrap = document.createElement('div');
+
+              const badge = document.createElement('div');
+              badge.textContent = 'CUSTOM HEADER';
+              badge.style.fontSize = '10px';
+              badge.style.fontWeight = '700';
+              badge.style.letterSpacing = '0.12em';
+              badge.style.opacity = '0.7';
+              badge.style.marginBottom = '6px';
+
+              const title = document.createElement('div');
+              title.textContent = 'Concierge Support';
+              title.style.fontSize = '18px';
+              title.style.fontWeight = '700';
+
+              const subtitle = document.createElement('div');
+              subtitle.textContent = 'Priority routing with a custom action row';
+              subtitle.style.fontSize = '13px';
+              subtitle.style.opacity = '0.8';
+              subtitle.style.marginTop = '2px';
+
+              titleWrap.append(badge, title, subtitle);
+
+              const closeButton = document.createElement('button');
+              closeButton.type = 'button';
+              closeButton.textContent = '×';
+              closeButton.setAttribute('aria-label', 'Close chat');
+              closeButton.style.width = '32px';
+              closeButton.style.height = '32px';
+              closeButton.style.border = 'none';
+              closeButton.style.borderRadius = '999px';
+              closeButton.style.background = 'rgba(255, 255, 255, 0.12)';
+              closeButton.style.color = '#ffffff';
+              closeButton.style.cursor = 'pointer';
+              closeButton.style.fontSize = '20px';
+              closeButton.style.lineHeight = '1';
+              if (onClose) closeButton.addEventListener('click', onClose);
+
+              topRow.append(titleWrap, closeButton);
+
+              const actionsRow = document.createElement('div');
+              actionsRow.style.display = 'flex';
+              actionsRow.style.gap = '8px';
+              actionsRow.style.flexWrap = 'wrap';
+
+              ['Talk to sales', 'View docs', 'Check status'].forEach((label) => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.textContent = label;
+                chip.style.padding = '6px 10px';
+                chip.style.borderRadius = '999px';
+                chip.style.border = '1px solid rgba(255, 255, 255, 0.16)';
+                chip.style.background = 'rgba(255, 255, 255, 0.08)';
+                chip.style.color = '#ffffff';
+                chip.style.fontSize = '12px';
+                chip.style.cursor = 'pointer';
+                actionsRow.appendChild(chip);
+              });
+
+              header.append(topRow, actionsRow);
+              return header;
+            }
           },
           messages: {
-            layout: 'bubble',
-            avatar: {
-              show: true,
-              position: 'left',
-              userAvatar: '👤',
-              assistantAvatar: '🤖'
-            },
-            timestamp: {
-              show: true,
-              position: 'below'
-            }
+            layout: 'bubble'
           }
         }
       }

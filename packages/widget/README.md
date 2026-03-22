@@ -64,6 +64,24 @@ const controller = initAgentWidget({
 document.querySelector('#dark-mode')?.addEventListener('click', () => {
   controller.update({ theme: { surface: '#0f172a', primary: '#f8fafc' } });
 });
+
+// Docked panel that wraps a concrete workspace container
+const docked = initAgentWidget({
+  target: '#workspace-main',
+  config: {
+    ...DEFAULT_WIDGET_CONFIG,
+    apiUrl: proxyUrl,
+    launcher: {
+      ...DEFAULT_WIDGET_CONFIG.launcher,
+      mountMode: 'docked',
+      dock: {
+        side: 'right',
+        width: '420px',
+        collapsedWidth: '72px'
+      }
+    }
+  }
+});
 ```
 
 ### Initialization options
@@ -77,6 +95,8 @@ document.querySelector('#dark-mode')?.addEventListener('click', () => {
 | `useShadowDom` | `boolean` | Use Shadow DOM for style isolation (default: `true`). |
 | `onReady` | `() => void` | Callback fired when widget is initialized. |
 | `windowKey` | `string` | If provided, stores the controller on `window[windowKey]` for global access. Automatically cleaned up on `destroy()`. |
+
+When `config.launcher.mountMode` is `'docked'`, `target` is treated as the page container that Persona should wrap. Use a concrete element such as `#workspace-main`; `body` and `html` are rejected.
 
 > **Security note:** When you return HTML from `postprocessMessage`, make sure you sanitise it before injecting into the page. The provided postprocessors (`markdownPostprocessor`, `directivePostprocessor`) do not perform sanitisation.
 
@@ -322,6 +342,71 @@ Alternatively, manually assign the controller:
 ```ts
 const chat = initAgentWidget({ /* ... */ })
 window.chatController = chat
+```
+
+### Enriched DOM context
+
+Use `collectEnrichedPageContext` and `formatEnrichedContext` to summarize the visible page for tools or metadata (selectors, roles, text, and optional structured card summaries). By default the collector runs in **structured** mode: it gathers candidates, scores them with built-in `ParseRule` definitions in `defaultParseRules` (product/result-style cards), suppresses redundant descendants, then applies `maxElements`. Pass `options: { mode: "simple" }` for the legacy path (traverse with an early cap only, no rules or `formattedSummary`).
+
+```ts
+import {
+  collectEnrichedPageContext,
+  formatEnrichedContext,
+  defaultParseRules
+} from '@runtypelabs/persona';
+
+const elements = collectEnrichedPageContext({
+  options: {
+    mode: 'structured',
+    maxElements: 80,
+    excludeSelector: '.persona-host',
+    maxTextLength: 200,
+    visibleOnly: true
+  },
+  rules: defaultParseRules
+});
+
+const pageContext = formatEnrichedContext(elements);
+// Structured mode: "Structured summaries:" blocks for matched cards, then grouped interactivity sections.
+```
+
+- Omit both `options` and `rules` → structured defaults (`defaultParseRules`, sensible limits).
+- `options: { mode: 'structured' }` → explicit structured behavior (same as default).
+- `rules: [...]` → custom rules with default options.
+- `options: { mode: 'simple' }` → no relation-based scoring or rule-owned formatting. If you also pass `rules`, they are ignored and a console warning is emitted.
+
+Pass `formatEnrichedContext(elements, { mode: 'simple' })` to ignore any `formattedSummary` fields on elements (for example when re-formatting data collected earlier).
+
+**Where things live:** `defaultParseRules` and the rule/config types are part of the public package API — import them from `@runtypelabs/persona` (same entry as `collectEnrichedPageContext`). Exported names you will use most often:
+
+| Export | Role |
+| --- | --- |
+| `defaultParseRules` | Built-in `ParseRule[]` (commerce-style cards + generic result rows). |
+| `ParseRule` | Type for a custom rule: `id`, `scoreElement`, optional `shouldSuppressDescendant`, optional `formatSummary`. |
+| `RuleScoringContext` | Argument to rule hooks (`doc`, `maxTextLength`). |
+| `ParseOptionsConfig` | `mode`, `maxElements`, `maxCandidates`, `excludeSelector`, `maxTextLength`, `visibleOnly`, `root`. |
+| `DomContextOptions` | What you pass to `collectEnrichedPageContext` (`options`, `rules`, plus legacy top-level limits). |
+| `FormatEnrichedContextOptions` | Second argument to `formatEnrichedContext` (`mode`). |
+| `EnrichedPageElement` | One collected node; optional `formattedSummary` in structured mode. |
+
+Use **Go to definition** (or open `node_modules/@runtypelabs/persona/dist/index.d.ts` after install) for the authoritative field list and JSDoc. Implementation source in this repo: `packages/widget/src/utils/dom-context.ts`.
+
+Custom rule sketch:
+
+```ts
+import type { ParseRule } from '@runtypelabs/persona';
+
+const myRules: ParseRule[] = [
+  {
+    id: 'kpi-tile',
+    scoreElement: (el, enriched, ctx) =>
+      el.classList.contains('kpi-tile') ? 2000 : 0,
+    formatSummary: (el, enriched, ctx) =>
+      el.classList.contains('kpi-tile')
+        ? `${enriched.text.trim()}\nselector: ${enriched.selector}`
+        : null
+  }
+];
 ```
 
 ### DOM Events
@@ -1337,10 +1422,21 @@ Use agent loop execution instead of flow dispatch. Mutually exclusive with `flow
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `maxIterations` | `number` | Maximum number of reasoning iterations. |
-| `stopCondition` | `'auto' \| string?` | `'auto'` for automatic detection, or a custom JS expression. |
+| `maxTurns` | `number` | Maximum number of agent turns (1-100). The loop continues while the model calls tools. |
+| `maxCost` | `number?` | Maximum cost budget in USD. Agent stops when exceeded. |
 | `enableReflection` | `boolean?` | Enable periodic reflection during execution. |
-| `reflectionInterval` | `number?` | Number of iterations between reflections. |
+| `reflectionInterval` | `number?` | Number of iterations between reflections (1-50). |
+
+**`AgentToolsConfig`**
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `toolIds` | `string[]?` | Tool IDs to enable (e.g., `"builtin:exa"`, `"builtin:dalle"`). |
+| `toolConfigs` | `Record<string, Record<string, unknown>>?` | Per-tool configuration overrides keyed by tool ID. |
+| `runtimeTools` | `Array<Record<string, unknown>>?` | Inline tool definitions for runtime-defined tools. |
+| `mcpServers` | `Array<Record<string, unknown>>?` | Custom MCP server connections. |
+| `maxToolCalls` | `number?` | Maximum number of tool invocations per execution. |
+| `approval` | `{ require: string[] \| boolean; timeout?: number }?` | Tool approval configuration for human-in-the-loop workflows. |
 
 **`AgentRequestOptions`**
 
@@ -1354,10 +1450,11 @@ Use agent loop execution instead of flow dispatch. Mutually exclusive with `flow
 ```typescript
 config: {
   agent: {
-    name: 'Assistant',
-    model: 'openai:gpt-4o-mini',
-    systemPrompt: 'You are a helpful assistant.',
-    loopConfig: { maxIterations: 3, stopCondition: 'auto' }
+    name: 'Research Assistant',
+    model: 'qwen/qwen3-8b',
+    systemPrompt: 'You are a research assistant with access to web search.',
+    tools: { toolIds: ['builtin:exa'] },
+    loopConfig: { maxTurns: 5 }
   },
   agentOptions: { streamResponse: true, recordMode: 'virtual' },
   iterationDisplay: 'merged'
@@ -1393,6 +1490,8 @@ Controls the floating launcher button and panel.
 | `subtitle` | `string?` | Launcher header subtitle text. |
 | `iconUrl` | `string?` | URL for the launcher icon image. |
 | `position` | `'bottom-right' \| 'bottom-left' \| 'top-right' \| 'top-left'?` | Screen corner position. |
+| `mountMode` | `'floating' \| 'docked'?` | Mount as the existing floating launcher or wrap the target with a docked side panel. Default: `'floating'`. |
+| `dock` | `{ side?: 'left' \| 'right'; width?: string; collapsedWidth?: string }?` | Docked panel sizing and side. Defaults: right / `420px` / `72px`. |
 | `width` | `string?` | Width of the launcher button. |
 | `fullHeight` | `boolean?` | Fill the full height of the container. Default: `false`. |
 | `sidebarMode` | `boolean?` | Flush sidebar layout with no border-radius or margins. Default: `false`. |
@@ -1401,6 +1500,8 @@ Controls the floating launcher button and panel.
 | `clearChat` | `AgentWidgetClearChatConfig?` | Clear chat button configuration (enabled, placement, icon, styling). |
 | `border` | `string?` | Border style for the launcher button. Default: `'1px solid #e5e7eb'`. |
 | `shadow` | `string?` | Box shadow for the launcher button. |
+
+In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because the widget fills the dock slot created around the target container.
 
 #### Layout
 
@@ -1422,7 +1523,7 @@ Controls the floating launcher button and panel.
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `layout` | `'default' \| 'minimal' \| 'expanded'?` | Header preset. |
+| `layout` | `'default' \| 'minimal'?` | Header preset. |
 | `showIcon` | `boolean?` | Show/hide the header icon. |
 | `showTitle` | `boolean?` | Show/hide the title. |
 | `showSubtitle` | `boolean?` | Show/hide the subtitle. |
@@ -1662,6 +1763,37 @@ config: {
 | `showToolCalls` | `boolean?` | Show tool usage bubbles. Default: `true`. |
 | `showEventStreamToggle` | `boolean?` | Show the event stream inspector toggle in the header. Default: `false`. |
 | `eventStream` | `EventStreamConfig?` | Event stream inspector configuration: `badgeColors`, `timestampFormat`, `showSequenceNumbers`, `maxEvents`, `descriptionFields`, `classNames`. |
+| `artifacts` | `AgentWidgetArtifactsFeature?` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (see below). |
+
+**`features.artifacts`** — `AgentWidgetArtifactsFeature`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `enabled` | `boolean?` | When `true`, shows the artifact pane and handles `artifact_*` SSE events. |
+| `allowedTypes` | `('markdown' \| 'component')[]?` | If set, other artifact kinds are ignored client-side. |
+| `layout` | `AgentWidgetArtifactsLayoutConfig?` | Split/drawer sizing and launcher widen behavior. |
+
+**`features.artifacts.layout`** — `AgentWidgetArtifactsLayoutConfig`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `splitGap` | `string?` | CSS gap between chat column and artifact pane. Default: `0.5rem`. |
+| `paneWidth` | `string?` | Artifact column width in split mode. Default: `40%`. |
+| `paneMaxWidth` | `string?` | Max width of artifact column. Default: `28rem`. |
+| `paneMinWidth` | `string?` | Optional min width of artifact column. |
+| `narrowHostMaxWidth` | `number?` | If the **panel** is at most this many px wide, artifacts use an in-panel drawer instead of split. Default: `520`. |
+| `expandLauncherPanelWhenOpen` | `boolean?` | When not `false`, the floating panel grows while artifacts are visible (not user-dismissed). Default: widens for launcher mode. |
+| `expandedPanelWidth` | `string?` | CSS width when expanded. Default: `min(720px, calc(100vw - 24px))`. |
+| `resizable` | `boolean?` | When `true`, draggable handle between chat and artifact in desktop split mode. Default: `false`. |
+| `resizableMinWidth` | `string?` | Min artifact width while resizing; `px` only (e.g. `"200px"`). Default: `200px`. |
+| `resizableMaxWidth` | `string?` | Optional max artifact width cap (`px` only); layout still limits by panel width. |
+| `paneAppearance` | `'panel' \| 'seamless'?` | `panel` (default) — bordered sidebar with left border, gap, and shadow. `seamless` — flush with chat: no border or shadow, container background, zero gap (with `resizable`, the drag handle overlays the seam). |
+| `paneBorderRadius` | `string?` | Border radius on the artifact pane. Works with any `paneAppearance`. |
+| `paneShadow` | `string?` | CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow. |
+| `paneBorder` | `string?` | Full CSS `border` shorthand on the artifact pane (e.g. `"1px solid #cccccc"`). Overrides default/`rounded` borders. If set, `paneBorderLeft` is ignored. |
+| `paneBorderLeft` | `string?` | `border-left` shorthand only — typical for the split edge next to chat (works with or without `resizable`). Example: `"1px solid #cccccc"`. |
+| `unifiedSplitChrome` | `boolean?` | Desktop split only: square the main chat card’s **top-right / bottom-right** radii and round the artifact pane’s **top-right / bottom-right** to match the panel (`--persona-radius-lg`) so both columns read as one shell. |
+| `unifiedSplitOuterRadius` | `string?` | Outer-right radius on the artifact side when `unifiedSplitChrome` is true. If omitted, uses `--persona-radius-lg`, or `paneBorderRadius` when `paneAppearance: 'rounded'`. |
 
 #### State & Storage
 

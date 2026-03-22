@@ -91,6 +91,12 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   colorScheme: "light",
   launcher: {
     enabled: true,
+    mountMode: "floating",
+    dock: {
+      side: "right",
+      width: "420px",
+      collapsedWidth: "72px",
+    },
     title: "Chat Assistant",
     subtitle: "Here to help you get answers fast",
     agentIconText: "💬",
@@ -251,6 +257,10 @@ export function mergeWithDefaults(
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
       ...config.launcher,
+      dock: {
+        ...DEFAULT_WIDGET_CONFIG.launcher?.dock,
+        ...config.launcher?.dock,
+      },
       clearChat: {
         ...DEFAULT_WIDGET_CONFIG.launcher?.clearChat,
         ...config.launcher?.clearChat,
@@ -272,10 +282,26 @@ export function mergeWithDefaults(
       ...DEFAULT_WIDGET_CONFIG.voiceRecognition,
       ...config.voiceRecognition,
     },
-    features: {
-      ...DEFAULT_WIDGET_CONFIG.features,
-      ...config.features,
-    },
+    features: (() => {
+      const da = DEFAULT_WIDGET_CONFIG.features?.artifacts;
+      const ca = config.features?.artifacts;
+      const mergedArtifacts =
+        da === undefined && ca === undefined
+          ? undefined
+          : {
+              ...da,
+              ...ca,
+              layout: {
+                ...da?.layout,
+                ...ca?.layout,
+              },
+            };
+      return {
+        ...DEFAULT_WIDGET_CONFIG.features,
+        ...config.features,
+        ...(mergedArtifacts !== undefined ? { artifacts: mergedArtifacts } : {}),
+      };
+    })(),
     suggestionChips: config.suggestionChips ?? DEFAULT_WIDGET_CONFIG.suggestionChips,
     suggestionChipsConfig: {
       ...DEFAULT_WIDGET_CONFIG.suggestionChipsConfig,

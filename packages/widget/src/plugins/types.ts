@@ -61,7 +61,30 @@ export interface AgentWidgetPlugin {
     config: AgentWidgetConfig;
     defaultRenderer: () => HTMLElement;
     onSubmit: (text: string) => void;
+    /**
+     * When true, the assistant stream is active — same moment `session.isStreaming()` becomes true.
+     * Prefer wiring controls to `data-persona-composer-disable-when-streaming` plus `setComposerDisabled`
+     * in the host, or react to `footer.dataset.personaComposerStreaming === "true"`.
+     */
+    streaming: boolean;
+    /**
+     * Legacy alias: host disables the primary submit control while `streaming` is true.
+     * @deprecated Use `streaming` for new plugins.
+     */
     disabled: boolean;
+    /** Opens the hidden file input when `config.attachments.enabled` is true (no-op otherwise). */
+    openAttachmentPicker: () => void;
+    /** From `config.composer.models` */
+    models?: Array<{ id: string; label: string }>;
+    /** From `config.composer.selectedModelId` */
+    selectedModelId?: string;
+    /** Updates `config.composer.selectedModelId` for the running widget instance. */
+    onModelChange?: (modelId: string) => void;
+    /**
+     * Same behavior as the built-in mic when voice is enabled.
+     * Omitted when `config.voiceRecognition.enabled` is not true.
+     */
+    onVoiceToggle?: () => void;
   }) => HTMLElement | null;
 
   /**
