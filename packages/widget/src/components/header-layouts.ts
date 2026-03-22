@@ -24,12 +24,32 @@ export type HeaderLayoutRenderer = (context: HeaderLayoutContext) => HeaderEleme
  * Full header with icon, title, subtitle, clear chat, and close button
  */
 export const buildDefaultHeader: HeaderLayoutRenderer = (context) => {
-  return buildHeader({
+  const elements = buildHeader({
     config: context.config,
     showClose: context.showClose,
     onClose: context.onClose,
     onClearChat: context.onClearChat
   });
+
+  // Make the title/subtitle area clickable when onTitleClick is provided
+  const onTitleClick = context.layoutHeaderConfig?.onTitleClick;
+  if (onTitleClick) {
+    const headerCopy = elements.headerTitle.parentElement;
+    if (headerCopy) {
+      headerCopy.style.cursor = "pointer";
+      headerCopy.setAttribute("role", "button");
+      headerCopy.setAttribute("tabindex", "0");
+      headerCopy.addEventListener("click", () => onTitleClick());
+      headerCopy.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onTitleClick();
+        }
+      });
+    }
+  }
+
+  return elements;
 };
 
 /**
@@ -68,6 +88,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     "div",
     "persona-flex persona-items-center persona-justify-between persona-bg-persona-surface persona-px-6 persona-py-4 persona-border-b-persona-divider"
   );
+  header.setAttribute("data-persona-theme-zone", "header");
 
   const titleRow = createElement(
     "div",
@@ -84,6 +105,25 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     layoutHeaderConfig?.trailingActions,
     layoutHeaderConfig?.onAction ?? onHeaderAction
   );
+
+  // Make title row clickable when onTitleClick is provided
+  if (layoutHeaderConfig?.onTitleClick) {
+    titleRow.style.cursor = "pointer";
+    titleRow.setAttribute("role", "button");
+    titleRow.setAttribute("tabindex", "0");
+    const handleTitleClick = layoutHeaderConfig.onTitleClick;
+    titleRow.addEventListener("click", (e) => {
+      // Skip if the click was on a trailing action button
+      if ((e.target as HTMLElement).closest("button")) return;
+      handleTitleClick();
+    });
+    titleRow.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleTitleClick();
+      }
+    });
+  }
 
   header.appendChild(titleRow);
 

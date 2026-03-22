@@ -470,6 +470,8 @@ export const createStandardBubble = (
   bubble.id = `bubble-${message.id}`;
   bubble.setAttribute("data-message-id", message.id);
 
+  bubble.setAttribute("data-persona-theme-zone", message.role === "user" ? "user-message" : "assistant-message");
+
   // Apply component-level color overrides via CSS variables
   if (message.role === "user") {
     bubble.style.backgroundColor = 'var(--persona-message-user-bg, var(--persona-accent))';

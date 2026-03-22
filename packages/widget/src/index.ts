@@ -189,8 +189,10 @@ export {
   DEFAULT_PALETTE,
   DEFAULT_SEMANTIC,
   DEFAULT_COMPONENTS,
-  validateTheme
+  validateTheme,
+  THEME_ZONES
 } from "./utils/tokens";
+export type { ThemeZone } from "./utils/tokens";
 export {
   accessibilityPlugin,
   animationsPlugin,
@@ -219,6 +221,9 @@ export type {
   SemanticSpacing,
   SemanticTypography,
   ComponentTokens,
+  ArtifactToolbarTokens,
+  ArtifactTabTokens,
+  ArtifactPaneTokens,
   ThemeValidationResult,
   ThemeValidationError
 } from "./types/theme";
@@ -245,6 +250,14 @@ export {
   DEFAULT_DARK_THEME,
   mergeWithDefaults
 } from "./defaults";
+export {
+  PRESETS,
+  getPreset,
+  PRESET_SHOP,
+  PRESET_MINIMAL,
+  PRESET_FULLSCREEN
+} from "./presets";
+export type { WidgetPreset } from "./presets";
 
 // Layout system exports
 export {

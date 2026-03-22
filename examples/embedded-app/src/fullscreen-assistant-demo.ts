@@ -767,7 +767,8 @@ const config = mergeWithDefaults({
       ],
       onAction: (actionId) => {
         if (actionId === "assistant-menu") toggleAssistantMenu();
-      }
+      },
+      onTitleClick: () => toggleAssistantMenu()
     },
     messages: {
       layout: "bubble",
@@ -823,6 +824,38 @@ const config = mergeWithDefaults({
           h.clearChat();
           await h.connectStream(newFullscreenAssistantScriptStream());
         }
+      },
+      onArtifactAction: (action) => {
+        if (action.type === "download") {
+          try {
+            const blob = new Blob([FULLSCREEN_ASSISTANT_SPOTLIGHT_MARKDOWN], {
+              type: "text/markdown;charset=utf-8"
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "runtype-fullscreen-assistant-spotlight.md";
+            a.rel = "noopener";
+            a.click();
+            URL.revokeObjectURL(url);
+          } catch {
+            /* ignore */
+          }
+          return true;
+        }
+        if (action.type === "open") {
+          window.dispatchEvent(
+            new CustomEvent("persona:showArtifacts", {
+              detail: { instanceId: FULLSCREEN_ASSISTANT_DEMO_INSTANCE_ID }
+            })
+          );
+          window.dispatchEvent(
+            new CustomEvent("persona:selectArtifact", {
+              detail: { instanceId: FULLSCREEN_ASSISTANT_DEMO_INSTANCE_ID, id: action.artifactId }
+            })
+          );
+          return true;
+        }
       }
     }
   },
@@ -838,71 +871,6 @@ const handle = initAgentWidget({
   target: mount,
   useShadowDom: false,
   config
-});
-
-// ── Make entire header title row toggle the assistant menu ──────────────────
-const titleRow = mount.querySelector(".persona-border-b-persona-divider > .persona-flex:first-child") as HTMLElement | null;
-if (titleRow) {
-  titleRow.addEventListener("click", (e) => {
-    // Don't double-fire if clicking the chevron button (onAction handles that)
-    if ((e.target as HTMLElement).closest('[aria-label="Assistant options"]')) return;
-    toggleAssistantMenu();
-  });
-}
-
-// ── File card event delegation ──────────────────────────────────────────────
-// Component elements lose addEventListener bindings when idiomorph morphs the
-// message list (it serialises to innerHTML). We attach delegation handlers on
-// the stable mount element instead — these survive any number of morphs.
-mount.addEventListener("click", (e) => {
-  const target = e.target as HTMLElement;
-
-  // Download button — must check first so we can stop the card handler from firing.
-  const dlBtn = target.closest("[data-download-artifact]") as HTMLElement | null;
-  if (dlBtn) {
-    e.stopPropagation();
-    try {
-      const blob = new Blob([FULLSCREEN_ASSISTANT_SPOTLIGHT_MARKDOWN], {
-        type: "text/markdown;charset=utf-8"
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "runtype-fullscreen-assistant-spotlight.md";
-      a.rel = "noopener";
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      /* ignore */
-    }
-    return;
-  }
-
-  // Card body → open / focus the artifact in the document pane.
-  const card = target.closest("[data-open-artifact]") as HTMLElement | null;
-  if (card) {
-    const id = card.getAttribute("data-open-artifact");
-    if (id) {
-      window.dispatchEvent(
-        new CustomEvent("persona:showArtifacts", {
-          detail: { instanceId: FULLSCREEN_ASSISTANT_DEMO_INSTANCE_ID }
-        })
-      );
-      window.dispatchEvent(
-        new CustomEvent("persona:selectArtifact", {
-          detail: { instanceId: FULLSCREEN_ASSISTANT_DEMO_INSTANCE_ID, id }
-        })
-      );
-    }
-  }
-});
-
-mount.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" && e.key !== " ") return;
-  const card = (e.target as HTMLElement).closest("[data-open-artifact]") as HTMLElement | null;
-  if (!card) return;
-  e.preventDefault();
-  card.click();
 });
 
 demoCtl.handle = handle;

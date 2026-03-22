@@ -525,6 +525,14 @@ export type AgentWidgetArtifactsFeature = {
   allowedTypes?: PersonaArtifactKind[];
   /** Split / drawer dimensions and launcher widen behavior */
   layout?: AgentWidgetArtifactsLayoutConfig;
+  /**
+   * Called when an artifact card action is triggered (open, download).
+   * Return `true` to prevent the default behavior.
+   */
+  onArtifactAction?: (action: {
+    type: 'open' | 'download';
+    artifactId: string;
+  }) => boolean | void;
 };
 
 export type AgentWidgetFeatureFlags = {
@@ -1452,6 +1460,12 @@ export type AgentWidgetHeaderLayoutConfig = {
   trailingActions?: AgentWidgetHeaderTrailingAction[];
   /** Called when a `trailingActions` button is clicked. */
   onAction?: (actionId: string) => void;
+  /**
+   * Called when the header title row is clicked.
+   * Useful for dropdown menus or navigation triggered from the header.
+   * When set, the title row becomes visually interactive (cursor: pointer).
+   */
+  onTitleClick?: () => void;
 };
 
 /**

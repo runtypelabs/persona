@@ -1142,6 +1142,9 @@ export const createAgentExperience = (
     event.stopPropagation();
     const artifactId = dlBtn.getAttribute('data-download-artifact');
     if (!artifactId) return;
+    // Let integrator intercept
+    const dlPrevented = config.features?.artifacts?.onArtifactAction?.({ type: 'download', artifactId });
+    if (dlPrevented === true) return;
     // Try session state first, fall back to content stored in the card's rawContent props
     const artifact = session.getArtifactById(artifactId);
     let markdown = artifact?.markdown;
@@ -1180,6 +1183,9 @@ export const createAgentExperience = (
     if (!card) return;
     const artifactId = card.getAttribute('data-open-artifact');
     if (!artifactId) return;
+    // Let integrator intercept
+    const openPrevented = config.features?.artifacts?.onArtifactAction?.({ type: 'open', artifactId });
+    if (openPrevented === true) return;
     event.preventDefault();
     event.stopPropagation();
     session.selectArtifact(artifactId);
@@ -3560,6 +3566,8 @@ export const createAgentExperience = (
       const previousMessageActions = config.messageActions;
       const previousLayoutMessages = config.layout?.messages;
       const previousColorScheme = config.colorScheme;
+      const previousLoadingIndicator = config.loadingIndicator;
+      const previousIterationDisplay = config.iterationDisplay;
       config = { ...config, ...nextConfig };
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
@@ -3790,7 +3798,12 @@ export const createAgentExperience = (
       const toolCallConfigChanged = JSON.stringify(nextConfig.toolCall) !== JSON.stringify(previousToolCallConfig);
       const messageActionsChanged = JSON.stringify(config.messageActions) !== JSON.stringify(previousMessageActions);
       const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages);
-      const messagesConfigChanged = toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged;
+      const loadingIndicatorChanged = config.loadingIndicator?.render !== previousLoadingIndicator?.render
+        || config.loadingIndicator?.renderIdle !== previousLoadingIndicator?.renderIdle
+        || config.loadingIndicator?.showBubble !== previousLoadingIndicator?.showBubble;
+      const iterationDisplayChanged = config.iterationDisplay !== previousIterationDisplay;
+      const messagesConfigChanged = toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged
+        || loadingIndicatorChanged || iterationDisplayChanged;
       if (messagesConfigChanged && session) {
         configVersion++;
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);

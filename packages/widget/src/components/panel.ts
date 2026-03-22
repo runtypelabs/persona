@@ -116,6 +116,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     "div",
     "persona-widget-container persona-flex persona-h-full persona-w-full persona-flex-1 persona-min-h-0 persona-flex-col persona-bg-persona-surface persona-text-persona-primary persona-rounded-2xl persona-overflow-hidden persona-border persona-border-persona-border"
   );
+  container.setAttribute("data-persona-theme-zone", "container");
 
   // Build header using layout config if available, otherwise use standard builder
   const headerLayoutConfig = config?.layout?.header;
@@ -130,6 +131,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     "persona-widget-body persona-flex persona-flex-1 persona-min-h-0 persona-flex-col persona-gap-6 persona-overflow-y-auto persona-bg-persona-container persona-px-6 persona-py-6"
   );
   body.id = "persona-scroll-container";
+  body.setAttribute("data-persona-theme-zone", "messages");
   
   const introCard = createElement(
     "div",

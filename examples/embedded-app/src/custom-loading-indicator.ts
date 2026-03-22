@@ -421,63 +421,52 @@ if (!mount) throw new Error("Widget mount not found");
 let showBubble = false;
 let showIdleIndicator = false;
 
-function createWidget(showBubbleOption: boolean, showIdleOption: boolean) {
-  // Clear existing content
-  mount.innerHTML = "";
-
-  return createAgentExperience(mount, {
-    ...DEFAULT_WIDGET_CONFIG,
-    apiUrl: proxyUrl,
-    launcher: {
-      ...DEFAULT_WIDGET_CONFIG.launcher,
-      enabled: false,
-      width: "100%"
-    },
-    theme: {
-      ...DEFAULT_WIDGET_CONFIG.theme,
-      primary: "#1a1a2e",
-      accent: "#00ff88",
-      surface: "#ffffff"
-    },
-    copy: {
-      ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Custom Loading Demo",
-      welcomeSubtitle: "Send a message to see the custom loading indicator!",
-      inputPlaceholder: "Type a message..."
-    },
-    suggestionChips: [
-      "Tell me a story",
-      "What's the weather like?",
-      "Help me plan a trip"
-    ],
-
-    // Custom loading indicator configuration
-    loadingIndicator: {
-      // Control bubble background/border visibility
-      showBubble: showBubbleOption,
-      render: (context: LoadingIndicatorRenderContext) => {
-        // Use custom Runtype loader for standalone indicator
-        // Use default bouncing dots for inline (inside message bubble)
-        if (context.location === "standalone") {
-          return createRuntypeLoader();
-        }
-        return createTypingIndicator();
-      },
-      // Idle state indicator - shows when assistant is waiting for next message
-      renderIdle: (context: IdleIndicatorRenderContext) => {
-        // Only show idle indicator if enabled and after assistant responses
-        if (!showIdleOption) return null;
-        if (context.lastMessage?.role !== "assistant") return null;
-        return createIdleIndicator();
+function buildLoadingIndicatorConfig() {
+  const currentShowIdle = showIdleIndicator;
+  return {
+    showBubble,
+    render: (context: LoadingIndicatorRenderContext) => {
+      if (context.location === "standalone") {
+        return createRuntypeLoader();
       }
+      return createTypingIndicator();
     },
-
-    postprocessMessage: ({ text }) => markdownPostprocessor(text)
-  });
+    renderIdle: (context: IdleIndicatorRenderContext) => {
+      if (!currentShowIdle) return null;
+      if (context.lastMessage?.role !== "assistant") return null;
+      return createIdleIndicator();
+    }
+  };
 }
 
-// Create initial widget
-let controller = createWidget(showBubble, showIdleIndicator);
+const controller = createAgentExperience(mount, {
+  ...DEFAULT_WIDGET_CONFIG,
+  apiUrl: proxyUrl,
+  launcher: {
+    ...DEFAULT_WIDGET_CONFIG.launcher,
+    enabled: false,
+    width: "100%"
+  },
+  theme: {
+    ...DEFAULT_WIDGET_CONFIG.theme,
+    primary: "#1a1a2e",
+    accent: "#00ff88",
+    surface: "#ffffff"
+  },
+  copy: {
+    ...DEFAULT_WIDGET_CONFIG.copy,
+    welcomeTitle: "Custom Loading Demo",
+    welcomeSubtitle: "Send a message to see the custom loading indicator!",
+    inputPlaceholder: "Type a message..."
+  },
+  suggestionChips: [
+    "Tell me a story",
+    "What's the weather like?",
+    "Help me plan a trip"
+  ],
+  loadingIndicator: buildLoadingIndicatorConfig(),
+  postprocessMessage: ({ text }) => markdownPostprocessor(text)
+});
 
 // Set up toggle listeners
 const bubbleToggle = document.getElementById("bubble-toggle") as HTMLInputElement | null;
@@ -501,12 +490,6 @@ function updateIdleToggleStatus(checked: boolean) {
   }
 }
 
-function recreateWidget() {
-  controller = createWidget(showBubble, showIdleIndicator);
-  // Update window reference
-  (window as unknown as { loadingController: typeof controller }).loadingController = controller;
-}
-
 if (bubbleToggle) {
   // Set initial state
   bubbleToggle.checked = showBubble;
@@ -515,7 +498,8 @@ if (bubbleToggle) {
   bubbleToggle.addEventListener("change", () => {
     showBubble = bubbleToggle.checked;
     updateToggleStatus(showBubble);
-    recreateWidget();
+    // Update without destroying — preserves message history
+    controller.update({ loadingIndicator: buildLoadingIndicatorConfig() } as any);
     console.log(`Bubble visibility changed to: ${showBubble}`);
   });
 }
@@ -528,7 +512,8 @@ if (idleToggle) {
   idleToggle.addEventListener("change", () => {
     showIdleIndicator = idleToggle.checked;
     updateIdleToggleStatus(showIdleIndicator);
-    recreateWidget();
+    // Update without destroying — preserves message history
+    controller.update({ loadingIndicator: buildLoadingIndicatorConfig() } as any);
     console.log(`Idle indicator changed to: ${showIdleIndicator}`);
   });
 }

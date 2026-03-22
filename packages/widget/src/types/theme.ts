@@ -298,6 +298,41 @@ export interface ComposerChromeTokens {
   shadow: string;
 }
 
+/** Artifact toolbar chrome. */
+export interface ArtifactToolbarTokens {
+  iconHoverColor?: string;
+  iconHoverBackground?: string;
+  iconPadding?: string;
+  iconBorderRadius?: string;
+  iconBorder?: string;
+  toggleGroupGap?: string;
+  toggleBorderRadius?: string;
+  copyBackground?: string;
+  copyBorder?: string;
+  copyColor?: string;
+  copyBorderRadius?: string;
+  copyPadding?: string;
+  copyMenuBackground?: string;
+  copyMenuBorder?: string;
+  copyMenuShadow?: string;
+  copyMenuBorderRadius?: string;
+  copyMenuItemHoverBackground?: string;
+}
+
+/** Artifact tab strip chrome. */
+export interface ArtifactTabTokens {
+  background?: string;
+  activeBackground?: string;
+  activeBorder?: string;
+  borderRadius?: string;
+  textColor?: string;
+}
+
+/** Artifact pane chrome. */
+export interface ArtifactPaneTokens {
+  toolbarBackground?: string;
+}
+
 export interface ComponentTokens {
   button: ButtonTokens;
   input: InputTokens;
@@ -313,6 +348,12 @@ export interface ComponentTokens {
   toolBubble: ToolBubbleTokens;
   reasoningBubble: ReasoningBubbleTokens;
   composer: ComposerChromeTokens;
+  /** Artifact toolbar, tab strip, and pane chrome. */
+  artifact?: {
+    toolbar?: ArtifactToolbarTokens;
+    tab?: ArtifactTabTokens;
+    pane?: ArtifactPaneTokens;
+  };
 }
 
 export interface PaletteExtras {

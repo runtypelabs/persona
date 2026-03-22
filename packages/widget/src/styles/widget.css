@@ -2064,9 +2064,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.25rem;
-  border-radius: var(--persona-radius-md, 0.375rem);
-  border: 1px solid var(--persona-border, #e5e7eb);
+  padding: var(--persona-artifact-toolbar-icon-padding, 0.25rem);
+  border-radius: var(--persona-artifact-toolbar-icon-radius, var(--persona-radius-md, 0.375rem));
+  border: var(--persona-artifact-toolbar-icon-border, 1px solid var(--persona-border, #e5e7eb));
   background: var(--persona-surface, #ffffff);
   color: var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827));
   cursor: pointer;
@@ -2074,7 +2074,8 @@
 }
 
 #persona-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover {
-  background: var(--persona-container, #f3f4f6);
+  color: var(--persona-artifact-toolbar-icon-hover-color, inherit);
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-container, #f3f4f6));
 }
 
 #persona-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-pressed="true"] {
@@ -2086,22 +2087,51 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--persona-radius-md, 0.375rem);
-  border: 1px solid var(--persona-border, #e5e7eb);
-  background: var(--persona-surface, #ffffff);
-  color: var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827));
+  padding: var(--persona-artifact-toolbar-copy-padding, 0.25rem 0.5rem);
+  border-radius: var(--persona-artifact-toolbar-copy-radius, var(--persona-radius-md, 0.375rem));
+  border: var(--persona-artifact-toolbar-copy-border, 1px solid var(--persona-border, #e5e7eb));
+  background: var(--persona-artifact-toolbar-copy-bg, var(--persona-surface, #ffffff));
+  color: var(--persona-artifact-toolbar-copy-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
   cursor: pointer;
   font-size: 0.75rem;
   line-height: 1.25;
 }
 
 #persona-root .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover {
-  background: var(--persona-container, #f3f4f6);
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-container, #f3f4f6));
 }
 
 #persona-root .persona-artifact-toolbar-document .persona-artifact-doc-copy-label {
   font-weight: 500;
+}
+
+/* Copy menu dropdown theming */
+#persona-root .persona-artifact-doc-copy-menu {
+  background: var(--persona-artifact-toolbar-copy-menu-bg, var(--persona-surface, #fff));
+  border: var(--persona-artifact-toolbar-copy-menu-border, 1px solid var(--persona-border, #e5e7eb));
+  box-shadow: var(--persona-artifact-toolbar-copy-menu-shadow, 0 4px 6px -1px rgba(0,0,0,.1));
+  border-radius: var(--persona-artifact-toolbar-copy-menu-radius, 0.375rem);
+}
+
+#persona-root .persona-artifact-doc-copy-menu button:hover {
+  background: var(--persona-artifact-toolbar-copy-menu-item-hover-bg, var(--persona-container, #f3f4f6));
+}
+
+/* Artifact tab theming */
+#persona-root .persona-artifact-tab {
+  background: var(--persona-artifact-tab-bg, transparent);
+  border-radius: var(--persona-artifact-tab-radius, 0.5rem);
+  color: var(--persona-artifact-tab-color, inherit);
+}
+
+#persona-root .persona-artifact-tab.persona-bg-persona-container {
+  background: var(--persona-artifact-tab-active-bg, var(--persona-container, #f3f4f6));
+  border-color: var(--persona-artifact-tab-active-border, var(--persona-border, #e5e7eb));
+}
+
+/* Artifact toolbar background theming */
+#persona-root .persona-artifact-toolbar {
+  background: var(--persona-artifact-toolbar-bg, var(--persona-surface, #fff));
 }
 
 /* Draggable split handle (desktop split only; hidden in drawer / narrow host / small viewport) */

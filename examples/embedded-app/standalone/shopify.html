@@ -102,92 +102,6 @@
   // SHOPPING ASSISTANT EXTENSIONS
   // ========================================================================
 
-  /**
-   * Generate optimal CSS selector for element (NEW)
-   */
-  function generateElementSelector(element) {
-    if (element.id && element.id.trim()) {
-      return `#${element.id}`;
-    }
-
-    if (element.getAttribute && element.getAttribute('data-testid')) {
-      return `[data-testid="${element.getAttribute('data-testid')}"]`;
-    }
-
-    if (element.getAttribute && element.getAttribute('data-product-id')) {
-      return `[data-product-id="${element.getAttribute('data-product-id')}"]`;
-    }
-
-    const tag = element.tagName.toLowerCase();
-    const className = element.className || '';
-    const classes = className
-      .split(/\s+/)
-      .filter(c => c && !c.startsWith('motion-') && !c.startsWith('icon-') && !c.startsWith('persona-'))
-      .slice(0, 3);
-
-    if (classes.length > 0) {
-      return `${tag}.${classes.join('.')}`;
-    }
-
-    try {
-      const parent = element.parentElement;
-      if (parent && parent.id) {
-        const children = Array.from(parent.children || []);
-        const index = children.indexOf(element);
-        if (index >= 0) {
-          return `#${parent.id} > ${tag}:nth-child(${index + 1})`;
-        }
-      }
-    } catch (e) {
-      // Ignore
-    }
-
-    return tag;
-  }
-
-  /**
-   * Get element text safely (NEW)
-   */
-  function getElementText(element) {
-    try {
-      if (element.innerText) {
-        return element.innerText.trim();
-      }
-      if (element.textContent) {
-        return element.textContent.trim();
-      }
-      return '';
-    } catch (e) {
-      return '';
-    }
-  }
-
-  /**
-   * Check if element is visible and interactive (NEW)
-   */
-  function isElementInteractive(element) {
-    try {
-      const style = window.getComputedStyle(element);
-      if (style.display === 'none' || style.visibility === 'hidden') {
-        return false;
-      }
-
-      if (element.disabled) {
-        return false;
-      }
-
-      const hasText = getElementText(element).length > 0;
-      const hasHref = element.href?.length > 0;
-      const hasId = element.id?.length > 0;
-      const hasDataAttr = Array.from(element.attributes || [])
-        .some(attr => attr.name.startsWith('data-'));
-
-      return hasText || hasHref || hasId || hasDataAttr;
-    } catch (e) {
-      return false;
-    }
-  }
-
   function buildEnrichedShopifyMetadata() {
     var AW = window.AgentWidget;
     if (!AW || typeof AW.collectEnrichedPageContext !== 'function') {
@@ -982,9 +896,11 @@
 
   window.ShoppingAssistantBrowser = {
     buildEnrichedShopifyMetadata: buildEnrichedShopifyMetadata,
-    generateElementSelector: generateElementSelector,
-    getElementText: getElementText,
-    isElementInteractive: isElementInteractive,
+    generateElementSelector: function(el) {
+      return window.AgentWidget && window.AgentWidget.generateStableSelector
+        ? window.AgentWidget.generateStableSelector(el)
+        : el.tagName.toLowerCase();
+    },
     clearProcessedActions: function() {
       localStorage.removeItem(PROCESSED_ACTIONS_KEY);
       console.log('[Shopping Assistant] Cleared all processed actions');

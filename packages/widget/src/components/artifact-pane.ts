@@ -127,6 +127,7 @@ export function createArtifactPane(
     "aside",
     "persona-artifact-pane persona-flex persona-flex-col persona-min-h-0 persona-min-w-0 persona-bg-persona-surface persona-text-persona-primary persona-border-l persona-border-persona-border"
   );
+  shell.setAttribute("data-persona-theme-zone", "artifact-pane");
   if (documentChrome) {
     shell.classList.add("persona-artifact-pane-document");
   }
@@ -135,6 +136,7 @@ export function createArtifactPane(
     "div",
     "persona-artifact-toolbar persona-flex persona-items-center persona-justify-between persona-gap-2 persona-px-2 persona-py-2 persona-border-b persona-border-persona-border persona-shrink-0"
   );
+  toolbar.setAttribute("data-persona-theme-zone", "artifact-toolbar");
   if (documentChrome) {
     toolbar.classList.add("persona-artifact-toolbar-document");
   }
