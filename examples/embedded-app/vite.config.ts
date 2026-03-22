@@ -232,14 +232,14 @@ export default defineConfig({
   plugins: [serveWidgetDist(), previewEmbedCheck()],
   resolve: {
     alias: {
+      "@runtypelabs/persona/widget.css": path.resolve(
+        __dirname,
+        "../../packages/widget/src/styles/widget.css"
+      ),
       "@runtypelabs/persona": path.resolve(
         __dirname,
         "../../packages/widget/src"
       ),
-      "@runtypelabs/persona/widget.css": path.resolve(
-        __dirname,
-        "../../packages/widget/src/styles/widget.css"
-      )
     }
   },
   build: {
