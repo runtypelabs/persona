@@ -93,6 +93,9 @@
           `http://localhost:${proxyPort}/api/chat/dispatch`;
 
       // Widget in 500px container using initAgentWidget
+      // useShadowDom: false lets the widget inherit the host page's CSS cascade,
+      // so the parent container's height constraints flow into the widget layout
+      // and scroll behavior works correctly within fixed-height containers.
       initAgentWidget({
         target: "#widget-500",
         useShadowDom: false,
@@ -121,6 +124,8 @@
       });
 
       // Widget in 350px container using initAgentWidget
+      // useShadowDom: false — same rationale as above; required for inline embeds
+      // where the widget must participate in the host page's flex/height layout.
       initAgentWidget({
         target: "#widget-350",
         useShadowDom: false,

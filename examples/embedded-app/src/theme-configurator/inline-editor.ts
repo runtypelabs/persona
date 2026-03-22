@@ -81,7 +81,7 @@ interface PopoverAnchor {
 const ZONE_DEFS: ZoneDef[] = [
   {
     id: 'primaryColor',
-    selector: '.persona-widget-header',
+    selector: '[data-persona-theme-zone="header"]',
     editor: 'color',
     statePath: 'theme.palette.colors.primary.500',
     isBrandColor: true,
@@ -89,8 +89,7 @@ const ZONE_DEFS: ZoneDef[] = [
   },
   {
     id: 'userMessageCompound',
-    // User bubble fill uses primary scale → semantic primary → components.message.user.background
-    selector: '.persona-justify-end .vanilla-message-bubble',
+    selector: '[data-persona-theme-zone="user-message"]',
     editor: 'compound',
     label: 'User message',
     compound: [
@@ -116,8 +115,7 @@ const ZONE_DEFS: ZoneDef[] = [
   },
   {
     id: 'assistantMessageCompound',
-    selector:
-      '.persona-widget-body .persona-flex:not(.persona-justify-end) .vanilla-message-bubble',
+    selector: '[data-persona-theme-zone="assistant-message"]',
     editor: 'compound',
     label: 'Assistant message',
     compound: [
@@ -143,7 +141,7 @@ const ZONE_DEFS: ZoneDef[] = [
   },
   {
     id: 'inputRadius',
-    selector: '.persona-widget-composer form, .persona-widget-composer textarea',
+    selector: '[data-persona-theme-zone="composer"] form, [data-persona-theme-zone="composer"] textarea',
     editor: 'slider',
     statePath: 'theme.components.input.borderRadius',
     slider: { min: 0, max: 40, step: 1 },
@@ -151,36 +149,35 @@ const ZONE_DEFS: ZoneDef[] = [
   },
   {
     id: 'headerTitle',
-    selector: '.persona-widget-header .persona-flex-col > span:first-child',
+    selector: '[data-persona-theme-zone="header"] .persona-flex-col > span:first-child',
     editor: 'text',
     statePath: 'launcher.title',
     label: 'Header Title',
   },
   {
     id: 'headerSubtitle',
-    selector: '.persona-widget-header .persona-flex-col > span:nth-child(2)',
+    selector: '[data-persona-theme-zone="header"] .persona-flex-col > span:nth-child(2)',
     editor: 'text',
     statePath: 'launcher.subtitle',
     label: 'Header Subtitle',
   },
   {
     id: 'welcomeTitle',
-    selector: '.persona-rounded-2xl.persona-bg-persona-surface h2, [class*="persona-rounded-2xl"] h2',
+    selector: '[data-persona-theme-zone="messages"] h2',
     editor: 'text',
     statePath: 'copy.welcomeTitle',
     label: 'Welcome Title',
   },
   {
     id: 'welcomeSubtitle',
-    selector: '.persona-rounded-2xl.persona-bg-persona-surface p, [class*="persona-rounded-2xl"] p',
+    selector: '[data-persona-theme-zone="messages"] p',
     editor: 'text',
     statePath: 'copy.welcomeSubtitle',
     label: 'Welcome Subtitle',
   },
   {
     id: 'chipRadius',
-    // Suggestion chips live in .persona-widget-footer > suggestions row, not inside .persona-widget-composer (that matches send/attach).
-    selector: '.persona-widget-footer .persona-flex-wrap .persona-rounded-button',
+    selector: '[data-persona-theme-zone="composer"] .persona-flex-wrap .persona-rounded-button',
     editor: 'slider',
     statePath: 'theme.components.button.secondary.borderRadius',
     slider: { min: 0, max: 24, step: 1 },

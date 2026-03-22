@@ -68,6 +68,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     "div",
     "persona-widget-footer persona-border-t-persona-divider persona-bg-persona-surface persona-px-6 persona-py-4"
   );
+  footer.setAttribute("data-persona-theme-zone", "composer");
 
   const suggestions = createElement(
     "div",

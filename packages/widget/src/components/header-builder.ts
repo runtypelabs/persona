@@ -31,6 +31,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     "div",
     "persona-widget-header persona-flex persona-items-center persona-gap-3 persona-px-6 persona-py-5"
   );
+  header.setAttribute("data-persona-theme-zone", "header");
   header.style.backgroundColor = 'var(--persona-header-bg, var(--persona-surface, #ffffff))';
   header.style.borderBottomWidth = '1px';
   header.style.borderBottomStyle = 'solid';

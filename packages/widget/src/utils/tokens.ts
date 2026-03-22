@@ -689,6 +689,42 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-md-prose-font-family'] = mdProseFont;
   }
 
+  // Artifact tokens
+  const components = theme.components;
+  const artifact = components?.artifact;
+  if (artifact?.toolbar) {
+    const t = artifact.toolbar;
+    if (t.iconHoverColor) cssVars['--persona-artifact-toolbar-icon-hover-color'] = t.iconHoverColor;
+    if (t.iconHoverBackground) cssVars['--persona-artifact-toolbar-icon-hover-bg'] = t.iconHoverBackground;
+    if (t.iconPadding) cssVars['--persona-artifact-toolbar-icon-padding'] = t.iconPadding;
+    if (t.iconBorderRadius) cssVars['--persona-artifact-toolbar-icon-radius'] = t.iconBorderRadius;
+    if (t.iconBorder) cssVars['--persona-artifact-toolbar-icon-border'] = t.iconBorder;
+    if (t.toggleGroupGap) cssVars['--persona-artifact-toolbar-toggle-group-gap'] = t.toggleGroupGap;
+    if (t.toggleBorderRadius) cssVars['--persona-artifact-toolbar-toggle-radius'] = t.toggleBorderRadius;
+    if (t.copyBackground) cssVars['--persona-artifact-toolbar-copy-bg'] = t.copyBackground;
+    if (t.copyBorder) cssVars['--persona-artifact-toolbar-copy-border'] = t.copyBorder;
+    if (t.copyColor) cssVars['--persona-artifact-toolbar-copy-color'] = t.copyColor;
+    if (t.copyBorderRadius) cssVars['--persona-artifact-toolbar-copy-radius'] = t.copyBorderRadius;
+    if (t.copyPadding) cssVars['--persona-artifact-toolbar-copy-padding'] = t.copyPadding;
+    if (t.copyMenuBackground) cssVars['--persona-artifact-toolbar-copy-menu-bg'] = t.copyMenuBackground;
+    if (t.copyMenuBorder) cssVars['--persona-artifact-toolbar-copy-menu-border'] = t.copyMenuBorder;
+    if (t.copyMenuShadow) cssVars['--persona-artifact-toolbar-copy-menu-shadow'] = t.copyMenuShadow;
+    if (t.copyMenuBorderRadius) cssVars['--persona-artifact-toolbar-copy-menu-radius'] = t.copyMenuBorderRadius;
+    if (t.copyMenuItemHoverBackground) cssVars['--persona-artifact-toolbar-copy-menu-item-hover-bg'] = t.copyMenuItemHoverBackground;
+  }
+  if (artifact?.tab) {
+    const t = artifact.tab;
+    if (t.background) cssVars['--persona-artifact-tab-bg'] = t.background;
+    if (t.activeBackground) cssVars['--persona-artifact-tab-active-bg'] = t.activeBackground;
+    if (t.activeBorder) cssVars['--persona-artifact-tab-active-border'] = t.activeBorder;
+    if (t.borderRadius) cssVars['--persona-artifact-tab-radius'] = t.borderRadius;
+    if (t.textColor) cssVars['--persona-artifact-tab-color'] = t.textColor;
+  }
+  if (artifact?.pane) {
+    const t = artifact.pane;
+    if (t.toolbarBackground) cssVars['--persona-artifact-toolbar-bg'] = t.toolbarBackground;
+  }
+
   return cssVars;
 }
 
@@ -699,3 +735,21 @@ export function applyThemeVariables(element: HTMLElement, theme: PersonaTheme): 
     element.style.setProperty(name, value);
   }
 }
+
+/**
+ * Stable `data-persona-theme-zone` values applied to key widget regions.
+ * Visual editors should use `[data-persona-theme-zone="header"]` selectors
+ * rather than internal class names.
+ */
+export const THEME_ZONES = {
+  header: 'Widget header bar',
+  messages: 'Message list area',
+  'user-message': 'User message bubble',
+  'assistant-message': 'Assistant message bubble',
+  composer: 'Footer / composer area',
+  container: 'Main widget container',
+  'artifact-pane': 'Artifact sidebar',
+  'artifact-toolbar': 'Artifact toolbar',
+} as const;
+
+export type ThemeZone = keyof typeof THEME_ZONES;

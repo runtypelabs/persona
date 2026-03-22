@@ -72,16 +72,6 @@
       flex-direction: column;
     }
 
-    /* Override widget styles for demo */
-    .chat-container #persona-root {
-      display: flex !important;
-      flex-direction: column !important;
-      flex: 1 !important;
-      min-height: 0 !important;
-      height: 100% !important;
-      border-radius: 0 !important;
-      box-shadow: none !important;
-    }
   </style>
 </head>
 <body>
@@ -125,7 +115,8 @@
 
     const baseConfig = {
       apiUrl: '/api/chat/dispatch',
-      launcher: { enabled: false },
+      launcher: { enabled: false, fullHeight: true },
+      theme: { panelBorderRadius: '0', panelShadow: 'none' },
       statusIndicator: { visible: false },
       voiceRecognition: { enabled: false },
       suggestionChips: [],
@@ -168,7 +159,7 @@
       {
         ...baseConfig,
         launcher: {
-          enabled: false,
+          ...baseConfig.launcher,
           title: 'Support Agent',
           subtitle: 'Here to help',
           headerIconName: 'message-circle',
@@ -195,7 +186,7 @@
       {
         ...baseConfig,
         launcher: {
-          enabled: false,
+          ...baseConfig.launcher,
           title: 'Quick Chat',
           subtitle: 'Here to help you get answers fast',
         },
@@ -217,7 +208,7 @@
       {
         ...baseConfig,
         launcher: {
-          enabled: false,
+          ...baseConfig.launcher,
           title: 'AI Assistant',
           subtitle: 'Always online',
           headerIconName: 'bot',
