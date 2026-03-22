@@ -122,6 +122,11 @@ export {
 } from "./postprocessors";
 export type { MarkdownProcessorOptions } from "./postprocessors";
 export {
+  createDefaultSanitizer,
+  resolveSanitizer
+} from "./utils/sanitize";
+export type { SanitizeFunction } from "./utils/sanitize";
+export {
   createPlainTextParser,
   createJsonStreamParser,
   createFlexibleJsonStreamParser,

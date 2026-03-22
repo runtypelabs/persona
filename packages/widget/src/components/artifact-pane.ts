@@ -1,6 +1,7 @@
 import { createElement } from "../utils/dom";
 import type { AgentWidgetConfig, AgentWidgetMessage, PersonaArtifactRecord } from "../types";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors";
+import { resolveSanitizer } from "../utils/sanitize";
 import { componentRegistry, type ComponentContext } from "./registry";
 import { renderLucideIcon } from "../utils/icons";
 
@@ -102,7 +103,11 @@ export function createArtifactPane(
   const panePadding = layout?.panePadding?.trim();
 
   const md = config.markdown ? createMarkdownProcessorFromConfig(config.markdown) : null;
-  const toHtml = (text: string) => (md ? md(text) : escapeHtml(text));
+  const sanitize = resolveSanitizer(config.sanitize);
+  const toHtml = (text: string) => {
+    const raw = md ? md(text) : escapeHtml(text);
+    return sanitize ? sanitize(raw) : raw;
+  };
 
   const backdrop =
     typeof document !== "undefined"
