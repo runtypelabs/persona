@@ -1,6 +1,5 @@
 import type {
   AgentWidgetConfig,
-  AgentWidgetDockConfig,
   AgentWidgetStateSnapshot,
 } from "../types";
 import { isDockedMountMode, resolveDockConfig } from "../utils/dock";
