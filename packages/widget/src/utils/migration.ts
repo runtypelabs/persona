@@ -139,6 +139,28 @@ export function migrateV1Theme(
         migrated.components.panel = {};
       }
       migrated.components.panel.borderRadius = value;
+    } else if (key === 'messageUserShadow') {
+      if (!migrated.components) migrated.components = {};
+      if (!migrated.components.message) migrated.components.message = {};
+      if (!migrated.components.message.user) migrated.components.message.user = {};
+      (migrated.components.message.user as { shadow?: string }).shadow = value as string;
+    } else if (key === 'messageAssistantShadow') {
+      if (!migrated.components) migrated.components = {};
+      if (!migrated.components.message) migrated.components.message = {};
+      if (!migrated.components.message.assistant) migrated.components.message.assistant = {};
+      (migrated.components.message.assistant as { shadow?: string }).shadow = value as string;
+    } else if (key === 'toolBubbleShadow') {
+      if (!migrated.components) migrated.components = {};
+      if (!migrated.components.toolBubble) migrated.components.toolBubble = {};
+      (migrated.components.toolBubble as { shadow?: string }).shadow = value as string;
+    } else if (key === 'reasoningBubbleShadow') {
+      if (!migrated.components) migrated.components = {};
+      if (!migrated.components.reasoningBubble) migrated.components.reasoningBubble = {};
+      (migrated.components.reasoningBubble as { shadow?: string }).shadow = value as string;
+    } else if (key === 'composerShadow') {
+      if (!migrated.components) migrated.components = {};
+      if (!migrated.components.composer) migrated.components.composer = {};
+      (migrated.components.composer as { shadow?: string }).shadow = value as string;
     }
   }
 
@@ -165,8 +187,27 @@ export function validateV1Theme(v1Theme: unknown): {
     return { valid: true, warnings: [] };
   }
 
+  const v1ThemeChromeKeys = new Set([
+    'panelBorder',
+    'panelShadow',
+    'panelBorderRadius',
+    'messageUserShadow',
+    'messageAssistantShadow',
+    'toolBubbleShadow',
+    'reasoningBubbleShadow',
+    'composerShadow',
+  ]);
+
   const deprecatedProperties = Object.keys(theme).filter(
-    (key) => !(key in v1ToV2Mapping || key in v1RadiusMapping || key === 'inputFontFamily' || key === 'inputFontWeight' || key.startsWith('panel'))
+    (key) =>
+      !(
+        key in v1ToV2Mapping ||
+        key in v1RadiusMapping ||
+        key === 'inputFontFamily' ||
+        key === 'inputFontWeight' ||
+        key.startsWith('panel') ||
+        v1ThemeChromeKeys.has(key)
+      )
   );
 
   if (deprecatedProperties.length > 0) {

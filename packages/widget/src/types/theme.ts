@@ -206,6 +206,8 @@ export interface MessageTokens {
     background: TokenReference<'color'>;
     text: TokenReference<'color'>;
     borderRadius: TokenReference<'radius'>;
+    /** User bubble box-shadow (token ref or raw CSS, e.g. `none`). */
+    shadow?: string;
   };
   assistant: {
     background: TokenReference<'color'>;
@@ -279,6 +281,23 @@ export interface AttachmentTokens {
   };
 }
 
+/** Tool-call row chrome (collapsible tool bubbles). */
+export interface ToolBubbleTokens {
+  /** Box-shadow for tool bubbles (token ref or raw CSS, e.g. `none`). */
+  shadow: string;
+}
+
+/** Reasoning / “thinking” row chrome. */
+export interface ReasoningBubbleTokens {
+  shadow: string;
+}
+
+/** Composer (message input) chrome. */
+export interface ComposerChromeTokens {
+  /** Box-shadow on the composer form (raw CSS, e.g. `none`). */
+  shadow: string;
+}
+
 export interface ComponentTokens {
   button: ButtonTokens;
   input: InputTokens;
@@ -291,6 +310,9 @@ export interface ComponentTokens {
   voice: VoiceTokens;
   approval: ApprovalTokens;
   attachment: AttachmentTokens;
+  toolBubble: ToolBubbleTokens;
+  reasoningBubble: ReasoningBubbleTokens;
+  composer: ComposerChromeTokens;
 }
 
 export interface PaletteExtras {
