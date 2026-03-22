@@ -1,5 +1,5 @@
 ---
-"@runtypelabs/persona": minor
+"@runtypelabs/persona": major
 ---
 
 Align agent config with Runtype API and add tool support

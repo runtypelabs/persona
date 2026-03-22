@@ -1,6 +1,6 @@
 ---
-"@runtypelabs/persona": minor
-"@runtypelabs/persona-proxy": patch
+"@runtypelabs/persona": major
+"@runtypelabs/persona-proxy": major
 ---
 
 Support Runtype `/v1/client/chat` `inputs` for per-turn template variables, artifact reference cards in the transcript, and related stream handling.

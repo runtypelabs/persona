@@ -1,5 +1,5 @@
 ---
-"@runtypelabs/persona": patch
+"@runtypelabs/persona": major
 ---
 
 Complete tvw- to persona- CSS prefix migration and fix related bugs
