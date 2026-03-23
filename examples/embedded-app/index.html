@@ -1,70 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Persona Widget Demo</title>
 </head>
-
 <body>
-  <main class="demo-container">
-    <section>
-      <h1>Persona Widget Demo</h1>
-      <p>
-        This page renders the widget two ways: once through the vanilla
-        initializer and once as a floating launcher wired up to user actions.
-      </p>
-      <p>
-        The frontend proxy below lives at <code>/api/chat/dispatch</code>
-        and is powered by a Hono server.
-      </p>
-      <p>
-        Looking for other examples?
-      </p>
-      <ul>
-        <li><a href="/theme.html">Agent Editor (Style it visually)</a></li>
-        <li><a href="/action-middleware.html">Action middleware / e-commerce example</a></li>
-        <li><a href="/bakery.html">Bakery assistant demo</a></li>
-        <li><a href="/docked-panel-demo.html">Docked Panel Demo</a></li>
-        <li><a href="/feedback-demo.html">Message Feedback Demo (Copy, Upvote, Downvote)</a></li>
-        <li><a href="/feedback-integration-demo.html">Feedback Integration Demo</a></li>
-        <li><a href="/custom-loading-indicator.html">Custom Loading Indicator</a></li>
-        <li><a href="/agent-demo.html">Agent Loop Execution Demo</a></li>
-        <li><a href="/approval-demo.html">Tool Approval Demo</a></li>
-        <li><a href="/focus-input-demo.html">Focus Input Demo</a></li>
-        <li><a href="/artifact-demo.html">Artifact sidebar demo</a></li>
-        <li><a href="/fullscreen-assistant-demo.html">Fullscreen assistant (split chat + artifact)</a></li>
-        <li><a href="/voice-integration-demo.html">🎤 Voice Integration Demo (ElevenLabs)</a></li>
-      </ul>
-      <h3>Standalone (CDN / Copy-Paste)</h3>
-      <p><small>These load the widget via IIFE build (local on localhost, CDN in production). Run <code>pnpm build:widget</code> first.</small></p>
-      <ul>
-        <li><a href="/standalone/example-shop.html">Example Shop (Manual)</a></li>
-        <li><a href="/standalone/example-shop-metadata.html">Example Shop (Metadata)</a></li>
-        <li><a href="/standalone/example-shop-installer.html">Example Shop (Installer)</a></li>
-        <li><a href="/standalone/example-shop-installer-voice-metadata.html">Example Shop (Installer + Voice + Metadata)</a></li>
-        <li><a href="/standalone/sample.html">Sample Widget</a></li>
-        <li><a href="/standalone/preview-mode.html">Preview Mode</a></li>
-      </ul>
-      <div class="cta-row">
-        <button id="open-chat" type="button">Open Launcher</button>
-        <button id="toggle-chat" type="button">Toggle Launcher</button>
-        <select id="target-widget">
-          <option value="inline">Inline Widget</option>
-          <option value="launcher">Launcher Widget</option>
-        </select>
-        <button id="load-messages" type="button">Load 1000 Messages</button>
+  <div class="page">
+    <main class="shell">
+      <section class="hero cardFull">
+        <h1>Persona Widget Demo</h1>
+        <p>This page renders the widget two ways: once through the vanilla initializer and once as a floating launcher wired up to user actions.</p>
+        <p><small>The frontend proxy below lives at <code>/api/chat/dispatch</code> and is powered by a Hono server.</small></p>
+        
+        <div class="cta-row">
+          <button id="open-chat" class="primaryButton" type="button">Open Launcher</button>
+          <button id="toggle-chat" class="secondaryButton" type="button">Toggle Launcher</button>
+          <select id="target-widget">
+            <option value="inline">Inline Widget</option>
+            <option value="launcher">Launcher Widget</option>
+          </select>
+          <button id="load-messages" class="secondaryButton" type="button">Load 1000 Messages</button>
+        </div>
+      </section>
+
+      <div class="section-grid">
+        <section class="card">
+          <h2 class="card-title">More Examples</h2>
+          <p>Explore different use-cases and widget configurations below.</p>
+          <ul class="examples-list">
+            <li><a class="example-item" href="/theme.html">Agent Editor <small>Style it visually</small></a></li>
+            <li><a class="example-item" href="/action-middleware.html">Action Middleware <small>E-commerce example</small></a></li>
+            <li><a class="example-item" href="/bakery.html">Bakery Assistant Demo <small>Industry specific persona</small></a></li>
+            <li><a class="example-item" href="/docked-panel-demo.html">Docked Panel Demo <small>Alternative layout</small></a></li>
+            <li><a class="example-item" href="/feedback-demo.html">Message Feedback Demo <small>Copy, Upvote, Downvote</small></a></li>
+            <li><a class="example-item" href="/feedback-integration-demo.html">Feedback Integration Demo <small>With external API</small></a></li>
+            <li><a class="example-item" href="/custom-loading-indicator.html">Custom Loading Indicator <small>Unique UX</small></a></li>
+            <li><a class="example-item" href="/agent-demo.html">Agent Loop Execution Demo <small>Internal thought processes</small></a></li>
+            <li><a class="example-item" href="/approval-demo.html">Tool Approval Demo <small>Action confirmation</small></a></li>
+            <li><a class="example-item" href="/focus-input-demo.html">Focus Input Demo <small>Input state handling</small></a></li>
+            <li><a class="example-item" href="/artifact-demo.html">Artifact Sidebar Demo <small>Multi-pane interface</small></a></li>
+            <li><a class="example-item" href="/fullscreen-assistant-demo.html">Fullscreen Assistant <small>Split chat + artifact</small></a></li>
+            <li><a class="example-item" href="/voice-integration-demo.html">🎤 Voice Integration Demo <small>Powered by ElevenLabs</small></a></li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Standalone Scripts</h2>
+          <p>These load the widget via IIFE build (local on localhost, CDN in production). Run <code>pnpm build:widget</code> first.</p>
+          <ul class="examples-list">
+            <li><a class="example-item" href="/standalone/example-shop.html">Example Shop (Manual)</a></li>
+            <li><a class="example-item" href="/standalone/example-shop-metadata.html">Example Shop (Metadata)</a></li>
+            <li><a class="example-item" href="/standalone/example-shop-installer.html">Example Shop (Installer)</a></li>
+            <li><a class="example-item" href="/standalone/example-shop-installer-voice-metadata.html">Example Shop (Installer + Voice + Metadata)</a></li>
+            <li><a class="example-item" href="/standalone/sample.html">Sample Widget</a></li>
+            <li><a class="example-item" href="/standalone/preview-mode.html">Preview Mode</a></li>
+          </ul>
+        </section>
       </div>
-    </section>
-    <section>
-      <h2>Programmatic Control</h2>
-      <p>
-        The widget controller returned by <code>initAgentWidget</code> provides methods to programmatically control the
-        widget:
-      </p>
-      <div class="code-example">
-        <pre><code>const launcherController = initAgentWidget({
+
+      <div class="section-grid">
+        <section class="card">
+          <h2 class="card-title">Programmatic Control</h2>
+          <p>The widget controller returned by <code>initAgentWidget</code> provides methods to programmatically control the widget:</p>
+          <div class="code-example">
+            <pre><code>const launcherController = initAgentWidget({
   target: "#launcher-root",
   config: { /* ... */ }
 });
@@ -75,48 +75,54 @@ launcherController.open();
 // Close the widget
 launcherController.close();
 
-// Toggle the widget (open if closed, close if open)
+// Toggle the widget
 launcherController.toggle();</code></pre>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Event Stream Testing</h2>
+          <p>Test the event stream SDK methods, window events, and instance scoping.</p>
+          
+          <h3>Controller Methods</h3>
+          <div class="cta-row" style="justify-content: flex-start;">
+            <select id="event-stream-target">
+              <option value="inline">Inline Widget</option>
+              <option value="launcher">Launcher Widget</option>
+            </select>
+            <button id="es-show" class="secondaryButton" type="button">Show Event Stream</button>
+            <button id="es-hide" class="secondaryButton" type="button">Hide Event Stream</button>
+            <button id="es-check" class="secondaryButton" type="button">Check Visibility</button>
+          </div>
+          
+          <h3 style="margin-top: 16px;">Window Events</h3>
+          <div class="cta-row" style="justify-content: flex-start;">
+            <button id="es-win-show-all" class="secondaryButton" type="button">Show All (window)</button>
+            <button id="es-win-hide-all" class="secondaryButton" type="button">Hide All (window)</button>
+            <button id="es-win-show-inline" class="secondaryButton" type="button">Show Inline Only</button>
+            <button id="es-win-show-launcher" class="secondaryButton" type="button">Show Launcher Only</button>
+            <button id="es-win-show-wrong" class="secondaryButton" type="button">Show Wrong ID</button>
+          </div>
+          
+          <h3 style="margin-top: 16px;">Event Listeners</h3>
+          <div class="cta-row" style="justify-content: flex-start;">
+            <button id="es-listen" class="secondaryButton" type="button">Register Listeners</button>
+          </div>
+          
+          <div id="es-log" class="code-example" style="margin-top: 16px; max-height:150px; overflow-y:auto; display:none;">
+            <pre id="es-log-pre"></pre>
+          </div>
+        </section>
       </div>
-      <p>
-        You can use these methods with your own UI elements, event handlers, or any JavaScript code. The buttons above
-        demonstrate this functionality.
-      </p>
-    </section>
-    <section>
-      <h2>Event Stream Testing</h2>
-      <p>Test the event stream SDK methods, window events, and instance scoping.</p>
-      <h3>Controller Methods</h3>
-      <div class="cta-row">
-        <select id="event-stream-target">
-          <option value="inline">Inline Widget</option>
-          <option value="launcher">Launcher Widget</option>
-        </select>
-        <button id="es-show" type="button">Show Event Stream</button>
-        <button id="es-hide" type="button">Hide Event Stream</button>
-        <button id="es-check" type="button">Check Visibility</button>
-      </div>
-      <h3>Window Events</h3>
-      <div class="cta-row">
-        <button id="es-win-show-all" type="button">Show All (window)</button>
-        <button id="es-win-hide-all" type="button">Hide All (window)</button>
-        <button id="es-win-show-inline" type="button">Show Inline Only</button>
-        <button id="es-win-show-launcher" type="button">Show Launcher Only</button>
-        <button id="es-win-show-wrong" type="button">Show Wrong ID</button>
-      </div>
-      <h3>Event Listeners</h3>
-      <div class="cta-row">
-        <button id="es-listen" type="button">Register Listeners</button>
-      </div>
-      <div id="es-log" class="code-example" style="max-height:150px;overflow-y:auto;display:none"><pre id="es-log-pre"></pre></div>
-    </section>
-    <section>
-      <h2>Inline Embed</h2>
-      <div class="embedded-target" id="inline-widget"></div>
-    </section>
-  </main>
+
+      <section class="card cardFull">
+        <h2 class="card-title">Inline Embed</h2>
+        <div class="embedded-target" id="inline-widget"></div>
+      </section>
+    </main>
+  </div>
+  
   <div id="launcher-root"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
-
 </html>
