@@ -272,9 +272,6 @@ export default defineConfig({
         'feedback-integration-demo': path.resolve(__dirname, 'feedback-integration-demo.html'),
         'client-token-demo': path.resolve(__dirname, 'client-token-demo.html'),
         'client-token-feedback-demo': path.resolve(__dirname, 'client-token-feedback-demo.html'),
-        'navigation-persist-demo': path.resolve(__dirname, 'navigation-persist-demo.html'),
-        'navigation-persist-page2': path.resolve(__dirname, 'navigation-persist-page2.html'),
-        'preview-mode-demo': path.resolve(__dirname, 'preview-mode-demo.html'),
         'docked-panel-demo': path.resolve(__dirname, 'docked-panel-demo.html'),
         // Agent demo
         'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
@@ -290,6 +287,8 @@ export default defineConfig({
         'focus-input-demo': path.resolve(__dirname, 'focus-input-demo.html'),
         'artifact-demo': path.resolve(__dirname, 'artifact-demo.html'),
         'fullscreen-assistant-demo': path.resolve(__dirname, 'fullscreen-assistant-demo.html'),
+        'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
+        'voice-integration-demo': path.resolve(__dirname, 'voice-integration-demo.html'),
       }).filter(([, entryPath]) => fs.existsSync(entryPath))
       )
     }
