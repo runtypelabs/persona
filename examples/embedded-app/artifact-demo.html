@@ -3,17 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
     <title>Artifact sidebar demo – Persona</title>
     <style>
       body {
-        font-family: system-ui, sans-serif;
-        margin: 0;
         padding: 1.5rem;
         padding-bottom: 6rem;
-        background: #0c1222;
-        color: #e2e8f0;
-        min-height: 100vh;
       }
       .wrap {
         max-width: 960px;
@@ -26,11 +22,9 @@
       h2 {
         font-size: 1.1rem;
         margin: 2rem 0 0.75rem;
-        color: #e2e8f0;
       }
       p,
       li {
-        color: #94a3b8;
         line-height: 1.55;
       }
       .toolbar {
@@ -40,22 +34,24 @@
         margin: 1rem 0;
       }
       .toolbar button {
-        background: #334155;
-        color: #f8fafc;
-        border: none;
+        background: var(--accent);
+        color: var(--foreground);
+        border: 1px solid var(--border);
         padding: 0.45rem 0.85rem;
         border-radius: 6px;
         cursor: pointer;
         font-size: 0.875rem;
       }
       .toolbar button:hover {
-        background: #475569;
+        background: var(--border);
       }
       .toolbar--launcher button {
-        background: #1e3a5f;
+        background: var(--accent);
+        border: 1px solid var(--border);
+        color: var(--foreground);
       }
       .toolbar--launcher button:hover {
-        background: #2d4a73;
+        background: var(--border);
       }
       .toolbar-label {
         width: 100%;
@@ -63,7 +59,7 @@
         font-size: 0.75rem;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: #64748b;
+        color: var(--muted);
         margin: 0.25rem 0 0;
       }
       .toolbar + .toolbar-label {
@@ -71,20 +67,14 @@
       }
       .embed {
         height: min(72vh, 640px);
-        border: 1px solid #334155;
+        border: 1px solid var(--border);
         border-radius: 12px;
         overflow: hidden;
-        background: #1e293b;
-      }
-      code {
-        background: #1e293b;
-        padding: 0.15rem 0.4rem;
-        border-radius: 4px;
-        font-size: 0.85em;
+        background: var(--accent);
       }
     </style>
   </head>
-  <body>
+  <body class="theme-dark">
     <div class="wrap">
       <h1>Artifact sidebar</h1>
       <p>

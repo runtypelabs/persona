@@ -5,15 +5,16 @@
   max-width: 960px;
   margin: 0 auto;
   padding: 2rem 1.5rem 6rem;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #0f172a;
+  font-family: var(--font-sans, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  color: var(--foreground, #262626);
 }
 
 .demo-container section {
-  background: #ffffff;
-  border-radius: 1rem;
+  background: var(--card, #ffffff);
+  border-radius: 0.75rem;
   padding: 1.75rem;
-  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border, #e0e0e0);
 }
 
 .demo-container h1 {
@@ -30,7 +31,7 @@
   font-size: 1.1rem;
   margin-bottom: 0.5rem;
   margin-top: 1rem;
-  color: #334155;
+  color: var(--foreground, #262626);
 }
 
 .embedded-target {
@@ -45,20 +46,21 @@
 }
 
 .cta-row button {
-  background: #111827;
-  color: #ffffff;
+  background: var(--primary, #262626);
+  color: var(--primary-foreground, #fafafa);
   border: none;
-  border-radius: 9999px;
+  border-radius: 6px;
   padding: 0.6rem 1.4rem;
   font-size: 0.95rem;
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .cta-row button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
 }
 
 .cta-row button:active {
@@ -66,8 +68,8 @@
 }
 
 .code-example {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #141414;
+  border: 1px solid var(--border, #e0e0e0);
   border-radius: 0.5rem;
   padding: 1rem;
   margin: 1rem 0;
@@ -76,10 +78,10 @@
 
 .code-example pre {
   margin: 0;
-  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", "Fira Mono", "Droid Sans Mono", "Source Code Pro", monospace;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
   font-size: 0.875rem;
   line-height: 1.6;
-  color: #0f172a;
+  color: #c9c9c9;
 }
 
 .code-example code {
@@ -88,10 +90,10 @@
 }
 
 .demo-container code {
-  background: #f1f5f9;
+  background: var(--accent, #f5f5f5);
   padding: 0.2rem 0.4rem;
   border-radius: 0.25rem;
-  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", "Fira Mono", "Droid Sans Mono", "Source Code Pro", monospace;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
   font-size: 0.9em;
-  color: #1e293b;
+  color: var(--foreground, #262626);
 }

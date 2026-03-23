@@ -3,26 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
     <title>Inline Scroll Test - Persona</title>
     <style>
-      * {
-        box-sizing: border-box;
-      }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         padding: 2rem;
-        background: #f1f5f9;
-        margin: 0;
-      }
-      h1 {
-        margin-bottom: 1rem;
-        color: #1e293b;
-      }
-      p {
-        color: #64748b;
-        margin-bottom: 1.5rem;
-        max-width: 600px;
       }
       .container-examples {
         display: grid;
@@ -31,32 +17,32 @@
         max-width: 1400px;
       }
       .example-card {
-        background: white;
-        border-radius: 1rem;
+        background: var(--card);
+        border-radius: var(--radius-lg);
         padding: 1.5rem;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        box-shadow: var(--shadow-md);
       }
       .example-card h2 {
         font-size: 1.125rem;
         margin: 0 0 0.75rem 0;
-        color: #1e293b;
+        color: var(--foreground);
       }
       .example-card p {
         font-size: 0.875rem;
         margin: 0 0 1rem 0;
-        color: #64748b;
+        color: var(--muted);
       }
       /* Fixed height container - the widget should fill this and scroll internally */
       .fixed-height-container {
         height: 500px;
-        border: 2px dashed #cbd5e1;
-        border-radius: 0.5rem;
+        border: 2px dashed var(--border);
+        border-radius: var(--radius-sm);
       }
       /* Smaller height to demonstrate scroll */
       .small-height-container {
         height: 350px;
-        border: 2px dashed #cbd5e1;
-        border-radius: 0.5rem;
+        border: 2px dashed var(--border);
+        border-radius: var(--radius-sm);
       }
     </style>
   </head>
