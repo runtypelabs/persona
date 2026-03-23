@@ -1,5 +1,12 @@
 # @runtypelabs/persona
 
+## 3.1.1
+
+### Patch Changes
+
+- 99d688f: Prevent host page paragraph and list styles from overriding message bubble text colors.
+- 87a2ef8: `onStateLoaded` can now return `{ state, open: true }` to signal that the widget panel should open after initialization. Useful for post-navigation flows where injecting messages into state should also reveal the panel to the user.
+
 ## 3.1.0
 
 ### Minor Changes
