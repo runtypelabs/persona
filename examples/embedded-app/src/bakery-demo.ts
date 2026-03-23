@@ -55,8 +55,9 @@ let widgetControllerRef: ReturnType<typeof initAgentWidget> | null = null;
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
-  import.meta.env.VITE_PROXY_URL ??
-  `http://localhost:${proxyPort}/api/chat/dispatch-bakery`;
+  import.meta.env.VITE_PROXY_URL ?
+    `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-bakery` :
+    `http://localhost:${proxyPort}/api/chat/dispatch-bakery`;
 
 // ============================================================================
 // Cart Management
