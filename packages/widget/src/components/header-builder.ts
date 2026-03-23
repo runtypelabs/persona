@@ -2,7 +2,7 @@ import { createElement, createElementInDocument } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
 
-/** CSS `color` values; variables are set on `#persona-root` from `theme.components.header`. */
+/** CSS `color` values; variables are set on `[data-persona-root]` from `theme.components.header`. */
 export const HEADER_THEME_CSS = {
   titleColor:
     "var(--persona-header-title-fg, var(--persona-primary, #2563eb))",

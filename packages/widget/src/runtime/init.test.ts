@@ -301,6 +301,41 @@ describe("initAgentWidget docked mode", () => {
     });
 
     expect(handle.host.shadowRoot).not.toBeNull();
-    expect(handle.host.shadowRoot?.querySelector("#persona-root")).not.toBeNull();
+    expect(handle.host.shadowRoot?.querySelector("[data-persona-root]")).not.toBeNull();
+  });
+
+  it("mounts two widgets with independent roots in light DOM", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `
+      <div id="widget-a"></div>
+      <div id="widget-b"></div>
+    `;
+
+    const handleA = initAgentWidget({
+      target: "#widget-a",
+      config: {
+        launcher: { enabled: false },
+      },
+    });
+
+    const handleB = initAgentWidget({
+      target: "#widget-b",
+      config: {
+        launcher: { enabled: false },
+      },
+    });
+
+    const roots = document.querySelectorAll("[data-persona-root]");
+    expect(roots.length).toBe(2);
+
+    // Each root should be inside its respective target
+    const rootA = document.querySelector("#widget-a [data-persona-root]");
+    const rootB = document.querySelector("#widget-b [data-persona-root]");
+    expect(rootA).not.toBeNull();
+    expect(rootB).not.toBeNull();
+    expect(rootA).not.toBe(rootB);
+
+    handleA.destroy();
+    handleB.destroy();
   });
 });

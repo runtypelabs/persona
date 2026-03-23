@@ -1,4 +1,4 @@
-#persona-root {
+[data-persona-root] {
   all: initial;
   font-family: var(--persona-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif);
   font-size: var(--persona-font-size, 1rem);
@@ -17,7 +17,7 @@
   --persona-md-blockquote-text-color: var(--persona-muted, #6b7280);
 }
 
-#persona-root * {
+[data-persona-root] * {
   box-sizing: border-box;
 }
 
@@ -94,7 +94,7 @@
 }
 
 /* Widget CSS Variables - scoped to widget root to avoid polluting global namespace */
-#persona-root {
+[data-persona-root] {
   --persona-radius-sm: 0.125rem;
   --persona-radius-md: 0.375rem;
   --persona-radius-lg: 0.5rem;
@@ -1165,37 +1165,37 @@
   border-color: var(--persona-message-assistant-border, var(--persona-border, #e5e7eb));
 }
 
-#persona-root .vanilla-message-assistant-bubble.persona-shadow-sm {
+[data-persona-root] .vanilla-message-assistant-bubble.persona-shadow-sm {
   box-shadow: var(--persona-message-assistant-shadow, 0 1px 2px 0 rgb(0 0 0 / 0.05));
 }
 
-#persona-root .vanilla-message-user-bubble.persona-shadow-sm {
+[data-persona-root] .vanilla-message-user-bubble.persona-shadow-sm {
   box-shadow: var(--persona-message-user-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
 }
 
-#persona-root .vanilla-tool-bubble.persona-shadow-sm {
+[data-persona-root] .vanilla-tool-bubble.persona-shadow-sm {
   box-shadow: var(--persona-tool-bubble-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
 }
 
-#persona-root .vanilla-reasoning-bubble.persona-shadow-sm {
+[data-persona-root] .vanilla-reasoning-bubble.persona-shadow-sm {
   box-shadow: var(--persona-reasoning-bubble-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
 }
 
 /* Artifact markdown (no .vanilla-message-bubble wrapper) */
-#persona-root .persona-markdown-bubble {
+[data-persona-root] .persona-markdown-bubble {
   color: var(--persona-text, #111827);
   font-family: var(--persona-md-prose-font-family, inherit);
 }
 
-#persona-root .persona-markdown-bubble p {
+[data-persona-root] .persona-markdown-bubble p {
   margin: 0 0 1.5em;
 }
 
-#persona-root .persona-markdown-bubble p:last-child {
+[data-persona-root] .persona-markdown-bubble p:last-child {
   margin-bottom: 0;
 }
 
-#persona-root .persona-markdown-bubble code:not(pre code) {
+[data-persona-root] .persona-markdown-bubble code:not(pre code) {
   background-color: var(--persona-md-inline-code-bg);
   color: var(--persona-md-inline-code-color, inherit);
   padding: var(--persona-md-inline-code-padding);
@@ -1203,12 +1203,12 @@
   font-size: var(--persona-md-inline-code-font-size);
 }
 
-#persona-root .persona-markdown-bubble a {
+[data-persona-root] .persona-markdown-bubble a {
   color: var(--persona-md-link-color, var(--persona-accent, #3b82f6));
   text-decoration: underline;
 }
 
-#persona-root .persona-markdown-bubble pre {
+[data-persona-root] .persona-markdown-bubble pre {
   background-color: var(--persona-md-code-block-bg);
   border: 1px solid var(--persona-md-code-block-border-color);
   border-radius: var(--persona-radius-md, 0.375rem);
@@ -1243,7 +1243,7 @@
   text-decoration: underline;
 }
 
-#persona-root .vanilla-message-assistant-bubble a {
+[data-persona-root] .vanilla-message-assistant-bubble a {
   color: var(--persona-md-link-color, var(--persona-accent, #3b82f6));
 }
 
@@ -1328,7 +1328,7 @@
    Markdown Header Styles
    ============================================ */
 .vanilla-message-bubble h1,
-#persona-root .persona-markdown-bubble h1 {
+[data-persona-root] .persona-markdown-bubble h1 {
   font-size: var(--persona-md-h1-size);
   font-weight: var(--persona-md-h1-weight);
   margin: var(--persona-md-h1-margin);
@@ -1337,7 +1337,7 @@
 }
 
 .vanilla-message-bubble h2,
-#persona-root .persona-markdown-bubble h2 {
+[data-persona-root] .persona-markdown-bubble h2 {
   font-size: var(--persona-md-h2-size);
   font-weight: var(--persona-md-h2-weight);
   margin: var(--persona-md-h2-margin);
@@ -1346,7 +1346,7 @@
 }
 
 .vanilla-message-bubble h3,
-#persona-root .persona-markdown-bubble h3 {
+[data-persona-root] .persona-markdown-bubble h3 {
   font-size: var(--persona-md-h3-size);
   font-weight: var(--persona-md-h3-weight);
   margin: var(--persona-md-h3-margin);
@@ -1355,7 +1355,7 @@
 }
 
 .vanilla-message-bubble h4,
-#persona-root .persona-markdown-bubble h4 {
+[data-persona-root] .persona-markdown-bubble h4 {
   font-size: var(--persona-md-h4-size);
   font-weight: var(--persona-md-h4-weight);
   margin: var(--persona-md-h4-margin);
@@ -1364,7 +1364,7 @@
 }
 
 .vanilla-message-bubble h5,
-#persona-root .persona-markdown-bubble h5 {
+[data-persona-root] .persona-markdown-bubble h5 {
   font-size: var(--persona-md-h5-size);
   font-weight: var(--persona-md-h5-weight);
   margin: var(--persona-md-h5-margin);
@@ -1373,7 +1373,7 @@
 }
 
 .vanilla-message-bubble h6,
-#persona-root .persona-markdown-bubble h6 {
+[data-persona-root] .persona-markdown-bubble h6 {
   font-size: var(--persona-md-h6-size);
   font-weight: var(--persona-md-h6-weight);
   margin: var(--persona-md-h6-margin);
@@ -2040,12 +2040,12 @@
    Visibility (Tailwind parity — prefix persona-)
    Shipped widget.css is hand-maintained; these utilities are used in TS but not generated by Tailwind at build time.
    ============================================ */
-#persona-root .persona-hidden {
+[data-persona-root] .persona-hidden {
   display: none !important;
 }
 
 @media (min-width: 768px) {
-  #persona-root .md\:persona-hidden {
+  [data-persona-root] .md\:persona-hidden {
     display: none !important;
   }
 }
@@ -2055,12 +2055,12 @@
    Vars set from TS: --persona-artifact-split-gap, --persona-artifact-pane-width,
    --persona-artifact-pane-max-width, --persona-artifact-pane-min-width
    ============================================ */
-#persona-root .persona-artifact-split-root {
+[data-persona-root] .persona-artifact-split-root {
   gap: var(--persona-artifact-split-gap, 0.5rem);
 }
 
 /* Document toolbar preset — optional layout vars: --persona-artifact-doc-toolbar-icon-color, etc. */
-#persona-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2073,17 +2073,17 @@
   line-height: 1;
 }
 
-#persona-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover {
   color: var(--persona-artifact-toolbar-icon-hover-color, inherit);
   background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-container, #f3f4f6));
 }
 
-#persona-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-pressed="true"] {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-pressed="true"] {
   background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-container, #f3f4f6));
   border-color: var(--persona-artifact-doc-toggle-active-border, var(--persona-border, #e5e7eb));
 }
 
-#persona-root .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -2097,63 +2097,63 @@
   line-height: 1.25;
 }
 
-#persona-root .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover {
   background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-container, #f3f4f6));
 }
 
-#persona-root .persona-artifact-toolbar-document .persona-artifact-doc-copy-label {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-label {
   font-weight: 500;
 }
 
 /* Artifact tab theming */
-#persona-root .persona-artifact-tab {
+[data-persona-root] .persona-artifact-tab {
   background: var(--persona-artifact-tab-bg, transparent);
   border-radius: var(--persona-artifact-tab-radius, 0.5rem);
   color: var(--persona-artifact-tab-color, inherit);
 }
 
-#persona-root .persona-artifact-tab.persona-bg-persona-container {
+[data-persona-root] .persona-artifact-tab.persona-bg-persona-container {
   background: var(--persona-artifact-tab-active-bg, var(--persona-container, #f3f4f6));
   border-color: var(--persona-artifact-tab-active-border, var(--persona-border, #e5e7eb));
 }
 
 /* Artifact toolbar background theming */
-#persona-root .persona-artifact-toolbar {
+[data-persona-root] .persona-artifact-toolbar {
   background: var(--persona-artifact-toolbar-bg, var(--persona-surface, #fff));
 }
 
 /* Toggle group gap */
-#persona-root .persona-artifact-toggle-group {
+[data-persona-root] .persona-artifact-toggle-group {
   gap: var(--persona-artifact-toolbar-toggle-group-gap, 0.25rem);
 }
 
 /* Toggle button border-radius (view/code buttons) */
-#persona-root .persona-artifact-toolbar-document .persona-artifact-view-btn,
-#persona-root .persona-artifact-toolbar-document .persona-artifact-code-btn {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-view-btn,
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-code-btn {
   border-radius: var(--persona-artifact-toolbar-toggle-radius, var(--persona-artifact-toolbar-icon-radius, var(--persona-radius-md, 0.375rem)));
 }
 
 /* Tab hover */
-#persona-root .persona-artifact-tab:hover {
+[data-persona-root] .persona-artifact-tab:hover {
   background: var(--persona-artifact-tab-hover-bg, var(--persona-container, #f3f4f6));
 }
 
 /* Tab list container */
-#persona-root .persona-artifact-list {
+[data-persona-root] .persona-artifact-list {
   background: var(--persona-artifact-tab-list-bg, transparent);
   border-bottom-color: var(--persona-artifact-tab-list-border-color, var(--persona-border, #e5e7eb));
   padding: var(--persona-artifact-tab-list-padding, 0.5rem);
 }
 
 /* Toolbar border override */
-#persona-root .persona-artifact-toolbar-document {
+[data-persona-root] .persona-artifact-toolbar-document {
   border-bottom: var(--persona-artifact-toolbar-border, 1px solid var(--persona-border, #e5e7eb));
 }
 
 /* ── Composable button utilities ── */
 
 /* Icon button — base for all icon-only buttons created by createIconButton() */
-#persona-root .persona-icon-btn {
+[data-persona-root] .persona-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2167,23 +2167,23 @@
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-#persona-root .persona-icon-btn:hover {
+[data-persona-root] .persona-icon-btn:hover {
   background: var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6));
   color: var(--persona-icon-btn-hover-color, inherit);
 }
 
-#persona-root .persona-icon-btn:focus-visible {
+[data-persona-root] .persona-icon-btn:focus-visible {
   outline: 2px solid var(--persona-accent, #3b82f6);
   outline-offset: 2px;
 }
 
-#persona-root .persona-icon-btn[aria-pressed="true"] {
+[data-persona-root] .persona-icon-btn[aria-pressed="true"] {
   background: var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6));
   border-color: var(--persona-icon-btn-active-border, var(--persona-border, #e5e7eb));
 }
 
 /* Label button — icon + text button created by createLabelButton() */
-#persona-root .persona-label-btn {
+[data-persona-root] .persona-label-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--persona-label-btn-gap, 0.35rem);
@@ -2200,84 +2200,84 @@
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-#persona-root .persona-label-btn:hover {
+[data-persona-root] .persona-label-btn:hover {
   background: var(--persona-label-btn-hover-bg, var(--persona-container, #f3f4f6));
 }
 
-#persona-root .persona-label-btn:focus-visible {
+[data-persona-root] .persona-label-btn:focus-visible {
   outline: 2px solid var(--persona-accent, #3b82f6);
   outline-offset: 2px;
 }
 
-#persona-root .persona-label-btn--sm {
+[data-persona-root] .persona-label-btn--sm {
   padding: var(--persona-label-btn-padding, 0.25rem 0.5rem);
   font-size: var(--persona-label-btn-font-size, 0.75rem);
 }
 
-#persona-root .persona-label-btn--md {
+[data-persona-root] .persona-label-btn--md {
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
 }
 
-#persona-root .persona-label-btn--primary {
+[data-persona-root] .persona-label-btn--primary {
   background: var(--persona-primary, #3b82f6);
   color: var(--persona-text-inverse, #ffffff);
   border-color: transparent;
 }
 
-#persona-root .persona-label-btn--primary:hover {
+[data-persona-root] .persona-label-btn--primary:hover {
   opacity: 0.9;
 }
 
-#persona-root .persona-label-btn--destructive {
+[data-persona-root] .persona-label-btn--destructive {
   color: var(--persona-label-btn-destructive-color, #ef4444);
 }
 
-#persona-root .persona-label-btn--ghost {
+[data-persona-root] .persona-label-btn--ghost {
   border: none;
   background: transparent;
 }
 
-#persona-root .persona-label-btn--ghost:hover {
+[data-persona-root] .persona-label-btn--ghost:hover {
   background: var(--persona-label-btn-hover-bg, var(--persona-container, #f3f4f6));
 }
 
 /* Toggle group — mutually exclusive button set created by createToggleGroup() */
-#persona-root .persona-toggle-group {
+[data-persona-root] .persona-toggle-group {
   display: inline-flex;
   gap: var(--persona-toggle-group-gap, 0);
 }
 
-#persona-root .persona-toggle-group > .persona-icon-btn {
+[data-persona-root] .persona-toggle-group > .persona-icon-btn {
   border-radius: 0;
 }
 
-#persona-root .persona-toggle-group > .persona-icon-btn:first-child {
+[data-persona-root] .persona-toggle-group > .persona-icon-btn:first-child {
   border-top-left-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
   border-bottom-left-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
 }
 
-#persona-root .persona-toggle-group > .persona-icon-btn:last-child {
+[data-persona-root] .persona-toggle-group > .persona-icon-btn:last-child {
   border-top-right-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
   border-bottom-right-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
 }
 
 /* Combo button — label + chevron with dropdown */
-#persona-root .persona-combo-btn {
+[data-persona-root] .persona-combo-btn {
   font-size: var(--persona-combo-btn-font-size, 0.8125rem);
   font-weight: var(--persona-combo-btn-font-weight, 600);
   color: var(--persona-combo-btn-color, var(--persona-text, #111827));
   user-select: none;
 }
 
-#persona-root .persona-combo-btn-label {
+[data-persona-root] .persona-combo-btn-label {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 /* Dropdown menu utility */
-#persona-root .persona-dropdown-menu {
+[data-persona-root] .persona-dropdown-menu {
   z-index: 100;
   min-width: 160px;
   background: var(--persona-dropdown-bg, var(--persona-surface, #fff));
@@ -2287,7 +2287,7 @@
   box-shadow: var(--persona-dropdown-shadow, 0 4px 16px rgba(0,0,0,0.12));
 }
 
-#persona-root .persona-dropdown-menu button {
+[data-persona-root] .persona-dropdown-menu button {
   display: flex;
   align-items: center;
   gap: 0.625rem;
@@ -2302,22 +2302,22 @@
   white-space: nowrap;
 }
 
-#persona-root .persona-dropdown-menu button:hover {
+[data-persona-root] .persona-dropdown-menu button:hover {
   background: var(--persona-dropdown-item-hover-bg, var(--persona-container, #f3f4f6));
 }
 
-#persona-root .persona-dropdown-menu button[data-destructive] {
+[data-persona-root] .persona-dropdown-menu button[data-destructive] {
   color: var(--persona-dropdown-destructive-color, #ef4444);
 }
 
-#persona-root .persona-dropdown-menu hr {
+[data-persona-root] .persona-dropdown-menu hr {
   border: none;
   border-top: 1px solid var(--persona-dropdown-hr, var(--persona-border, #e5e7eb));
   margin: 0.25rem 0;
 }
 
 /* Draggable split handle (desktop split only; hidden in drawer / narrow host / small viewport) */
-#persona-root .persona-artifact-split-handle {
+[data-persona-root] .persona-artifact-split-handle {
   width: 6px;
   flex-shrink: 0;
   cursor: col-resize;
@@ -2330,24 +2330,24 @@
   box-sizing: border-box;
 }
 
-#persona-root .persona-artifact-split-handle:hover,
-#persona-root .persona-artifact-split-handle:focus-visible {
+[data-persona-root] .persona-artifact-split-handle:hover,
+[data-persona-root] .persona-artifact-split-handle:focus-visible {
   background: color-mix(in srgb, var(--persona-border, #e5e7eb) 55%, transparent);
   outline: none;
 }
 
-#persona-root.persona-artifact-narrow-host .persona-artifact-split-handle {
+[data-persona-root].persona-artifact-narrow-host .persona-artifact-split-handle {
   display: none !important;
 }
 
 @media (max-width: 640px) {
-  #persona-root .persona-artifact-split-handle {
+  [data-persona-root] .persona-artifact-split-handle {
     display: none !important;
   }
 }
 
 @media (min-width: 641px) {
-  #persona-root .persona-artifact-pane {
+  [data-persona-root] .persona-artifact-pane {
     width: var(--persona-artifact-pane-width, 40%);
     max-width: var(--persona-artifact-pane-max-width, 28rem);
     min-width: var(--persona-artifact-pane-min-width, 0);
@@ -2357,7 +2357,7 @@
 }
 
 /* paneBorderRadius — works on any paneAppearance; overflow clips content to rounded shape */
-#persona-root .persona-artifact-pane {
+[data-persona-root] .persona-artifact-pane {
   border-radius: var(--persona-artifact-pane-radius, 0);
   overflow: hidden;
   /* Layout paneBackground → theme components.artifact.pane.background → semantic surface */
@@ -2369,12 +2369,12 @@
 
 /* paneAppearance: 'seamless' — flush with chat, no border/shadow/gap */
 /* `position: relative` for resizer overlay; gap 0; positioning is applied in ui.ts */
-#persona-root.persona-artifact-appearance-seamless .persona-artifact-split-root {
+[data-persona-root].persona-artifact-appearance-seamless .persona-artifact-split-root {
   position: relative;
   gap: 0 !important;
 }
 
-#persona-root.persona-artifact-appearance-seamless .persona-artifact-pane {
+[data-persona-root].persona-artifact-appearance-seamless .persona-artifact-pane {
   border-left-width: 0 !important;
   border-left-color: transparent !important;
   box-shadow: none !important;
@@ -2386,22 +2386,22 @@
 }
 
 /* layout.paneBorder / paneBorderLeft — theme overrides (after appearance defaults) */
-#persona-root.persona-artifact-border-full .persona-artifact-pane {
+[data-persona-root].persona-artifact-border-full .persona-artifact-pane {
   border: var(--persona-artifact-pane-border) !important;
 }
 
-#persona-root.persona-artifact-border-left .persona-artifact-pane {
+[data-persona-root].persona-artifact-border-left .persona-artifact-pane {
   border-top: none !important;
   border-right: none !important;
   border-bottom: none !important;
   border-left: var(--persona-artifact-pane-border-left) !important;
 }
 
-#persona-root.persona-artifact-appearance-seamless.persona-artifact-border-left .persona-artifact-pane {
+[data-persona-root].persona-artifact-appearance-seamless.persona-artifact-border-left .persona-artifact-pane {
   border-left: var(--persona-artifact-pane-border-left) !important;
 }
 
-#persona-root.persona-artifact-appearance-seamless.persona-artifact-border-full .persona-artifact-pane {
+[data-persona-root].persona-artifact-appearance-seamless.persona-artifact-border-full .persona-artifact-pane {
   border: var(--persona-artifact-pane-border) !important;
 }
 
@@ -2410,12 +2410,12 @@
  * Main chat card (.persona-widget-container) loses inner-right rounding; artifact gains matching outer-right.
  */
 @media (min-width: 641px) {
-  #persona-root:not(.persona-artifact-narrow-host).persona-artifact-unified-split .persona-widget-container {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-unified-split .persona-widget-container {
     border-top-right-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
   }
 
-  #persona-root:not(.persona-artifact-narrow-host).persona-artifact-unified-split .persona-artifact-pane {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-unified-split .persona-artifact-pane {
     border-top-left-radius: 0 !important;
     border-bottom-left-radius: 0 !important;
     border-top-right-radius: var(--persona-artifact-unified-outer-radius, var(--persona-radius-lg, 1rem)) !important;
@@ -2425,14 +2425,14 @@
 }
 
 /* Narrow floating panel: drawer inside panel (class toggled by JS from panel width) */
-#persona-root.persona-artifact-narrow-host .persona-artifact-backdrop {
+[data-persona-root].persona-artifact-narrow-host .persona-artifact-backdrop {
   position: absolute !important;
   inset: 0 !important;
   z-index: 55 !important;
 }
 
 @media (min-width: 641px) {
-  #persona-root.persona-artifact-narrow-host .persona-artifact-pane {
+  [data-persona-root].persona-artifact-narrow-host .persona-artifact-pane {
     position: absolute;
     top: 0;
     right: 0;
@@ -2444,13 +2444,13 @@
     transition: transform 0.2s ease;
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
   }
-  #persona-root.persona-artifact-narrow-host .persona-artifact-pane.persona-artifact-drawer-open {
+  [data-persona-root].persona-artifact-narrow-host .persona-artifact-pane.persona-artifact-drawer-open {
     transform: translateX(0);
   }
 }
 
 @media (max-width: 640px) {
-  #persona-root .persona-artifact-pane {
+  [data-persona-root] .persona-artifact-pane {
     position: fixed;
     top: 0;
     right: 0;
@@ -2461,7 +2461,7 @@
     transition: transform 0.2s ease;
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
   }
-  #persona-root .persona-artifact-pane.persona-artifact-drawer-open {
+  [data-persona-root] .persona-artifact-pane.persona-artifact-drawer-open {
     transform: translateX(0);
   }
 }

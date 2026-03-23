@@ -3,7 +3,7 @@ import type { Config } from "tailwindcss";
 const config: Config = {
   content: ["./src/**/*.ts"],
   prefix: "persona-",
-  important: "#persona-root",
+  important: "[data-persona-root]",
   theme: {
     extend: {
       colors: {

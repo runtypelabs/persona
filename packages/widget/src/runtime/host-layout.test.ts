@@ -193,4 +193,141 @@ describe("createWidgetHostLayout docked", () => {
 
     layout.destroy();
   });
+
+  const withInnerWidth = (width: number, fn: () => void): void => {
+    const prev = window.innerWidth;
+    try {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: width,
+      });
+      fn();
+    } finally {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: prev,
+      });
+    }
+  };
+
+  it("uses fixed fullscreen dock slot on mobile viewport when open", () => {
+    withInnerWidth(500, () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: false,
+          dock: { width: "320px" },
+        },
+      });
+
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      layout.syncWidgetState({ open: true, launcherEnabled: true });
+      expect(dockSlot?.style.position).toBe("fixed");
+      expect(dockSlot?.style.zIndex).toBe("9999");
+      expect(layout.shell?.dataset.personaDockMobileFullscreen).toBe("true");
+
+      layout.destroy();
+    });
+  });
+
+  it("does not use fixed fullscreen above mobile breakpoint", () => {
+    withInnerWidth(800, () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: false,
+          dock: { width: "320px", reveal: "overlay" },
+        },
+      });
+
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      layout.syncWidgetState({ open: true, launcherEnabled: true });
+      expect(dockSlot?.style.position).toBe("absolute");
+      expect(layout.shell?.dataset.personaDockMobileFullscreen).toBeUndefined();
+
+      layout.destroy();
+    });
+  });
+
+  it("respects mobileFullscreen: false on narrow viewport", () => {
+    withInnerWidth(500, () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: false,
+          mobileFullscreen: false,
+          dock: { width: "320px" },
+        },
+      });
+
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      layout.syncWidgetState({ open: true, launcherEnabled: true });
+      expect(dockSlot?.style.position).toBe("relative");
+      expect(layout.shell?.dataset.personaDockMobileFullscreen).toBeUndefined();
+
+      layout.destroy();
+    });
+  });
+
+  it("respects custom mobileBreakpoint", () => {
+    withInnerWidth(900, () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: false,
+          mobileBreakpoint: 1024,
+          dock: { width: "320px" },
+        },
+      });
+
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      layout.syncWidgetState({ open: true, launcherEnabled: true });
+      expect(dockSlot?.style.position).toBe("fixed");
+
+      layout.destroy();
+    });
+  });
+
+  it("does not use fixed fullscreen when panel is closed on mobile", () => {
+    withInnerWidth(500, () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: false,
+          dock: { width: "320px" },
+        },
+      });
+
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      layout.syncWidgetState({ open: false, launcherEnabled: true });
+      expect(dockSlot?.style.position).toBe("relative");
+
+      layout.destroy();
+    });
+  });
 });

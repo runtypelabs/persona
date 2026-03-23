@@ -203,8 +203,8 @@ export function createArtifactPane(
   });
 
   if (copyMenuChevronBtn && copyMenuItems?.length) {
-    // Resolve the portal target — #persona-root for CSS var inheritance, escaping overflow: hidden
-    const resolvePortal = (): HTMLElement => shell.closest("#persona-root") as HTMLElement ?? document.body;
+    // Resolve the portal target — widget root for CSS var inheritance, escaping overflow: hidden
+    const resolvePortal = (): HTMLElement => shell.closest("[data-persona-root]") as HTMLElement ?? document.body;
 
     const initDropdown = () => {
       copyMenuDropdown = createDropdownMenu({
@@ -402,7 +402,7 @@ export function createArtifactPane(
     shell.classList.toggle("persona-hidden", !has);
     if (backdrop) {
       const root =
-        typeof shell.closest === "function" ? shell.closest("#persona-root") : null;
+        typeof shell.closest === "function" ? shell.closest("[data-persona-root]") : null;
       const narrowHost = root?.classList.contains("persona-artifact-narrow-host") ?? false;
       const isMobile =
         narrowHost ||

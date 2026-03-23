@@ -46,6 +46,16 @@ const clearOverlayDockSlotStyles = (dockSlot: HTMLElement): void => {
   dockSlot.style.pointerEvents = "";
 };
 
+/** Clears viewport-escape fullscreen styles so reveal modes can re-apply dock layout. */
+const clearMobileFullscreenDockSlotStyles = (dockSlot: HTMLElement): void => {
+  dockSlot.style.inset = "";
+  dockSlot.style.width = "";
+  dockSlot.style.height = "";
+  dockSlot.style.maxWidth = "";
+  dockSlot.style.minWidth = "";
+  clearOverlayDockSlotStyles(dockSlot);
+};
+
 const clearResizeDockSlotTransition = (dockSlot: HTMLElement): void => {
   dockSlot.style.transition = "";
 };
@@ -152,6 +162,70 @@ const applyDockStyles = (
   host.style.display = "flex";
   host.style.flexDirection = "column";
   host.style.flex = "1 1 auto";
+
+  const ownerWindow = shell.ownerDocument.defaultView;
+  const mobileFullscreenEnabled = config?.launcher?.mobileFullscreen ?? true;
+  const mobileBreakpoint = config?.launcher?.mobileBreakpoint ?? 640;
+  const isMobileViewport =
+    ownerWindow != null ? ownerWindow.innerWidth <= mobileBreakpoint : false;
+  const useMobileFullscreen = mobileFullscreenEnabled && isMobileViewport && expanded;
+
+  if (useMobileFullscreen) {
+    shell.dataset.personaDockMobileFullscreen = "true";
+    shell.removeAttribute("data-persona-dock-reveal");
+    clearPushTrackStyles(pushTrack);
+    clearResizeDockSlotTransition(dockSlot);
+    clearMobileFullscreenDockSlotStyles(dockSlot);
+    resetContentSlotFlexSizing(contentSlot);
+    clearEmergeDockStyles(host, dockSlot);
+
+    shell.style.display = "flex";
+    shell.style.flexDirection = "column";
+    shell.style.alignItems = "stretch";
+    shell.style.overflow = "hidden";
+
+    contentSlot.style.flex = "1 1 auto";
+    contentSlot.style.width = "100%";
+    contentSlot.style.minWidth = "0";
+
+    dockSlot.style.display = "flex";
+    dockSlot.style.flexDirection = "column";
+    dockSlot.style.position = "fixed";
+    dockSlot.style.inset = "0";
+    dockSlot.style.width = "100%";
+    dockSlot.style.height = "100%";
+    dockSlot.style.maxWidth = "100%";
+    dockSlot.style.minWidth = "0";
+    dockSlot.style.minHeight = "0";
+    dockSlot.style.overflow = "hidden";
+    dockSlot.style.zIndex = "9999";
+    dockSlot.style.transform = "none";
+    dockSlot.style.transition = "none";
+    dockSlot.style.pointerEvents = "auto";
+    dockSlot.style.flex = "none";
+
+    if (usePush) {
+      pushTrack.style.display = "flex";
+      pushTrack.style.flexDirection = "column";
+      pushTrack.style.width = "100%";
+      pushTrack.style.height = "100%";
+      pushTrack.style.minHeight = "0";
+      pushTrack.style.minWidth = "0";
+      pushTrack.style.flex = "1 1 auto";
+      pushTrack.style.alignItems = "stretch";
+      pushTrack.style.transform = "none";
+      pushTrack.style.transition = "none";
+      contentSlot.style.flex = "1 1 auto";
+      contentSlot.style.width = "100%";
+      contentSlot.style.maxWidth = "100%";
+      contentSlot.style.minWidth = "0";
+    }
+
+    return;
+  }
+
+  shell.removeAttribute("data-persona-dock-mobile-fullscreen");
+  clearMobileFullscreenDockSlotStyles(dockSlot);
 
   if (dock.reveal === "overlay") {
     shell.style.display = "flex";
@@ -359,6 +433,12 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
     syncPushResizeObserver();
   };
 
+  const ownerWindow = shell.ownerDocument.defaultView;
+  const onViewportResize = (): void => {
+    layout();
+  };
+  ownerWindow?.addEventListener("resize", onViewportResize);
+
   if (resolveDockConfig(config).reveal === "push") {
     pushTrack.appendChild(contentSlot);
     pushTrack.appendChild(dockSlot);
@@ -388,6 +468,7 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
       layout();
     },
     destroy() {
+      ownerWindow?.removeEventListener("resize", onViewportResize);
       disconnectResizeObserver();
       if (originalParent.isConnected) {
         if (originalNextSibling && originalNextSibling.parentNode === originalParent) {

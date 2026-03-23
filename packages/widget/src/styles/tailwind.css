@@ -4,7 +4,7 @@
 
 @layer base {
   /* Widget CSS Variables - scoped to widget root to avoid polluting global namespace */
-  #persona-root {
+  [data-persona-root] {
     --runtype-primary: #111827;
     --runtype-secondary: #4338ca;
     --runtype-surface: #ffffff;

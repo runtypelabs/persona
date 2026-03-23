@@ -32,7 +32,7 @@ export function applyArtifactPaneBorderTheme(mount: HTMLElement, config: AgentWi
   }
 }
 
-/** Set CSS variables on #persona-root for artifact split/pane sizing. Clears when artifacts disabled. */
+/** Set CSS variables on the widget root for artifact split/pane sizing. Clears when artifacts disabled. */
 function clearDocumentToolbarLayoutVars(mount: HTMLElement): void {
   mount.style.removeProperty("--persona-artifact-doc-toolbar-icon-color");
   mount.style.removeProperty("--persona-artifact-doc-toggle-active-bg");
