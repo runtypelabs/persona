@@ -624,13 +624,15 @@ initAgentWidget({
 
 The `onStateLoaded` hook is called after state is loaded from the storage adapter, but before the widget initializes. Use this to transform or inject messages based on external state (e.g., navigation flags, checkout returns).
 
+Returning `{ state, open: true }` also tells the widget to open the panel after initialization — useful when injecting a post-navigation message that the user should immediately see.
+
 ```ts
+// Plain state transform
 initAgentWidget({
   target: 'body',
   config: {
     storageAdapter: createLocalStorageAdapter('my-chat'),
     onStateLoaded: (state) => {
-      // Check for pending navigation message
       const navMessage = consumeNavigationFlag();
       if (navMessage) {
         return {
@@ -647,10 +649,36 @@ initAgentWidget({
     }
   }
 });
+
+// Return { state, open: true } to also open the panel
+initAgentWidget({
+  target: 'body',
+  config: {
+    storageAdapter: createLocalStorageAdapter('my-chat'),
+    onStateLoaded: (state) => {
+      const navMessage = consumeNavigationFlag();
+      if (navMessage) {
+        return {
+          state: {
+            ...state,
+            messages: [...(state.messages || []), {
+              id: `nav-${Date.now()}`,
+              role: 'assistant',
+              content: navMessage,
+              createdAt: new Date().toISOString()
+            }]
+          },
+          open: true
+        };
+      }
+      return state;
+    }
+  }
+});
 ```
 
 **Use cases:**
-- Inject messages after page navigation (e.g., "Here are our products!")
+- Inject messages after page navigation (e.g., "Here are our products!") and open the panel
 - Add confirmation messages after checkout/payment returns
 - Transform or filter loaded messages
 - Inject system messages based on external state
@@ -2019,7 +2047,7 @@ config: {
 | `initialMessages` | `AgentWidgetMessage[]` | Seed the conversation transcript with initial messages. |
 | `persistState` | `boolean \| AgentWidgetPersistStateConfig` | Persist widget state across page navigations. `true` uses defaults (sessionStorage). |
 | `storageAdapter` | `AgentWidgetStorageAdapter` | Custom storage adapter with `load()`, `save(state)`, and `clear()` methods. |
-| `onStateLoaded` | `(state: AgentWidgetStoredState) => AgentWidgetStoredState` | Transform state after loading from storage but before widget initialization. |
+| `onStateLoaded` | `(state: AgentWidgetStoredState) => AgentWidgetStoredState \| { state: AgentWidgetStoredState; open?: boolean }` | Transform state after loading from storage but before widget initialization. Return `{ state, open: true }` to also open the panel. |
 | `clearChatHistoryStorageKey` | `string` | Additional localStorage key to clear on chat reset. The widget clears `"persona-chat-history"` by default. |
 
 **`persistState`** — `AgentWidgetPersistStateConfig`

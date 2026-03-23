@@ -412,11 +412,20 @@ export const createAgentExperience = (
   let persistentMetadata: Record<string, unknown> = {};
   let pendingStoredState: Promise<AgentWidgetStoredState | null> | null = null;
 
-  // Helper to apply onStateLoaded hook and extract state
+  let shouldOpenAfterStateLoaded = false;
+
+  // Helper to apply onStateLoaded hook and extract state.
+  // Supports both the legacy plain-state return and the new { state, open? } return.
   const applyStateLoadedHook = (state: AgentWidgetStoredState): AgentWidgetStoredState => {
     if (config.onStateLoaded) {
       try {
-        return config.onStateLoaded(state);
+        const result = config.onStateLoaded(state);
+        if (result && typeof result === 'object' && 'state' in result) {
+          const { state: processedState, open } = result as { state: AgentWidgetStoredState; open?: boolean };
+          if (open) shouldOpenAfterStateLoaded = true;
+          return processedState;
+        }
+        return result as AgentWidgetStoredState;
       } catch (error) {
         if (typeof console !== "undefined") {
           // eslint-disable-next-line no-console
@@ -5377,6 +5386,13 @@ export const createAgentExperience = (
         });
       }
     }
+  }
+
+  // If onStateLoaded signalled open: true, open the panel after init.
+  // Mirrors the same setTimeout(0) pattern used by persistState restore so both
+  // can fire independently without interfering with each other.
+  if (shouldOpenAfterStateLoaded && launcherEnabled) {
+    setTimeout(() => { controller.open(); }, 0);
   }
 
   return controller;
