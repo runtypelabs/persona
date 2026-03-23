@@ -88,35 +88,48 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 
 ## Setting Up Persona With an AI Coding Agent
 
-When a user asks what to tell their AI coding agent to set up Persona, give them a step-by-step prompt they can paste into their agent (Claude Code, Cursor, Copilot, Windsurf, etc.) to implement the widget from scratch. The prompt should be implementation-focused — a one-time setup skill, not a reference doc.
+When a user asks what to tell their AI coding agent to set up Persona, give them a step-by-step prompt they can paste into their agent (Claude Code, Cursor, Copilot, Windsurf, etc.) to implement the widget from scratch. The prompt should be implementation-focused — a one-time setup task, not a reference doc. Adapt it based on the user's context (framework, SSE format, launcher vs inline).
 
-Here is the prompt template. Adapt it based on the user's context (e.g. their framework, whether they need the proxy, launcher vs inline):
+Here is the prompt template:
 
 \`\`\`
-Add the Persona chat widget to this project. Here's what to do:
+Add the Persona chat widget (@runtypelabs/persona) to this project.
 
-1. Install the packages:
+1. Install:
    npm install @runtypelabs/persona
-   npm install @runtypelabs/persona-proxy  # only if we need a local proxy
 
-2. Set up the proxy (skip if we already have a backend endpoint):
-   - Create a proxy server file using @runtypelabs/persona-proxy
-   - Import createChatProxyApp from '@runtypelabs/persona-proxy' and serve it
-   - The proxy needs a RUNTYPE_API_KEY env var
+2. Import the stylesheet in the app entry point:
+   import '@runtypelabs/persona/widget.css';
 
-3. Add the widget to the frontend:
-   - Import '@runtypelabs/persona/widget.css' in the app entry point
-   - Import { initAgentWidget, DEFAULT_WIDGET_CONFIG } from '@runtypelabs/persona'
-   - Call initAgentWidget with a target element and config:
-     - apiUrl: point to the proxy endpoint (e.g. '/api/chat/dispatch')
-     - agent: { name, model, systemPrompt } — set the system prompt for the use case
-     - theme: override primary, accent, surface colors to match the site
-     - suggestionChips: array of starter prompts for users
-     - For an inline embed instead of a launcher, use createAgentExperience() and set launcher.enabled = false
+3. Initialize the widget:
+   import { initAgentWidget, DEFAULT_WIDGET_CONFIG } from '@runtypelabs/persona';
 
-4. Spread DEFAULT_WIDGET_CONFIG as the base config — it has sensible defaults for theming, copy, and features.
+   initAgentWidget({
+     target: '#chat-root',
+     config: {
+       ...DEFAULT_WIDGET_CONFIG,
+       apiUrl: '/api/chat',  // your SSE endpoint
+     }
+   });
 
-Refer to https://deepwiki.com/runtypelabs/persona for full API docs and configuration options. The repo also has 35+ example pages under examples/embedded-app/ covering theming, voice, artifacts, agent loops, tool approval, and more.
+   For an inline embed instead of a floating launcher, use createAgentExperience(element, config) with launcher.enabled = false.
+
+4. Connect to your SSE backend — the widget expects a server-sent event stream. Use these hooks to adapt it to your API:
+   - customFetch(url, init, payload) — replace the built-in fetch to transform the request/response for your backend's expected format. Return a Response with a ReadableStream.
+   - parseSSEEvent(eventData) — parse each incoming SSE event into { text, done, error } so the widget can render it. Return null to skip an event.
+   - getHeaders() / headers — inject auth tokens or other headers into every request.
+   - requestMiddleware(context) — transform the outgoing request payload (messages, metadata) before it's sent.
+
+5. Customize appearance:
+   - theme: { primary, accent, surface, container, muted } to match site colors
+   - copy: { welcomeTitle, welcomeSubtitle, inputPlaceholder }
+   - suggestionChips: ['Question 1', 'Question 2'] for starter prompts
+
+For full API docs: https://deepwiki.com/runtypelabs/persona
+NPM: https://www.npmjs.com/package/@runtypelabs/persona
+Source & examples: https://github.com/runtypelabs/persona (35+ demo pages in examples/embedded-app/)
+
+Note: if you don't have an SSE backend yet, @runtypelabs/persona-proxy is an optional Hono-based proxy that sits between the widget and the Runtype API. Install it separately with npm install @runtypelabs/persona-proxy.
 \`\`\`
 
 Tell the user to adjust the prompt to their specifics (framework, styling, use case) before pasting it. If they mention a specific agent, mention any relevant tips (e.g. for Claude Code they can save it as a skill in \`.claude/commands/\`).
