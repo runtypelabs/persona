@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 3.2.2
+
+### Patch Changes
+
+- fee9f6d: Align the sidebar's default z-index with mobile fullscreen so overlay modes stay above host-page content by default.
+
 ## 3.2.1
 
 ### Patch Changes
