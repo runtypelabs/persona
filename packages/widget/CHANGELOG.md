@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 3.2.1
+
+### Patch Changes
+
+- a723d8e: Harden the proxy for edge runtimes, reduce sensitive development logging, update Hono dependencies for security fixes, and clean up widget build tooling.
+
 ## 3.2.0
 
 ### Minor Changes

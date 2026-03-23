@@ -1,5 +1,12 @@
 # @runtypelabs/persona-proxy
 
+## 3.2.1
+
+### Patch Changes
+
+- a723d8e: Harden the proxy for edge runtimes, reduce sensitive development logging, update Hono dependencies for security fixes, and clean up widget build tooling.
+- a723d8e: Read `NODE_ENV` and `RUNTYPE_API_KEY` through a runtime-safe env helper (works when `process` is absent), and keep verbose dispatch logs—API key prefix and full JSON payload—strictly in development.
+
 ## 2.3.0
 
 ### Patch Changes
