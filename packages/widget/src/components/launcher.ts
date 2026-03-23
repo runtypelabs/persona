@@ -19,9 +19,9 @@ export const createLauncherButton = (
   button.innerHTML = `
     <span class="persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-bg-persona-primary persona-text-white" data-role="launcher-icon">💬</span>
     <img data-role="launcher-image" class="persona-rounded-full persona-object-cover" alt="" style="display:none" />
-    <span class="persona-flex persona-flex-col persona-items-start persona-text-left">
-      <span class="persona-text-sm persona-font-semibold persona-text-persona-primary" data-role="launcher-title"></span>
-      <span class="persona-text-xs persona-text-persona-muted" data-role="launcher-subtitle"></span>
+    <span class="persona-flex persona-min-w-0 persona-flex-1 persona-flex-col persona-items-start persona-text-left">
+      <span class="persona-block persona-w-full persona-truncate persona-text-sm persona-font-semibold persona-text-persona-primary" data-role="launcher-title"></span>
+      <span class="persona-block persona-w-full persona-truncate persona-text-xs persona-text-persona-muted" data-role="launcher-subtitle"></span>
     </span>
     <span class="persona-ml-2 persona-grid persona-place-items-center persona-rounded-full persona-bg-persona-primary persona-text-persona-call-to-action" data-role="launcher-call-to-action-icon">↗</span>
   `;
@@ -33,12 +33,16 @@ export const createLauncherButton = (
 
     const titleEl = button.querySelector("[data-role='launcher-title']");
     if (titleEl) {
-      titleEl.textContent = launcher.title ?? "Chat Assistant";
+      const t = launcher.title ?? "Chat Assistant";
+      titleEl.textContent = t;
+      titleEl.setAttribute("title", t);
     }
 
     const subtitleEl = button.querySelector("[data-role='launcher-subtitle']");
     if (subtitleEl) {
-      subtitleEl.textContent = launcher.subtitle ?? "Get answers fast";
+      const s = launcher.subtitle ?? "Get answers fast";
+      subtitleEl.textContent = s;
+      subtitleEl.setAttribute("title", s);
     }
 
     // Hide/show text container
@@ -186,7 +190,7 @@ export const createLauncherButton = (
     } else {
       button.style.width = "";
       button.style.minWidth = "";
-      button.style.maxWidth = "";
+      button.style.maxWidth = launcher.collapsedMaxWidth ?? "";
       button.style.justifyContent = "";
       button.style.padding = "";
       button.style.overflow = "";

@@ -101,8 +101,9 @@ const getWelcomeConfig = () => {
   }
 
   return {
-    title: "Hi, what can I help you with?",
-    subtitle: "Try asking for products or adding items to your cart"
+    title: "Persona reads this page on every message",
+    subtitle:
+      "Most assistants only see the chat—they have no idea which page you're on, what's on screen, or what you're doing. Here, each request includes live storefront context (URL, visible products, actionable controls), and action middleware lets the assistant click, navigate, and checkout—not just describe. Ask what's on this page or to add something to your cart."
   };
 };
 
@@ -443,8 +444,10 @@ clearChatHistoryStorageKey: "persona-action-middleware",  // Automatically clear
     enabled: true,
     autoExpand: shouldAutoOpen,
     width: "min(920px, 95vw)",
+    collapsedMaxWidth: "min(380px, calc(100vw - 48px))",
     title: "Shopping Assistant",
-    subtitle: "I can help you find products and add them to your cart",
+    subtitle:
+      "I see this storefront with every message—URL, what's on screen, what you can click—then I can shop it with you",
     agentIconText: "🛍️"
   },
   theme: {

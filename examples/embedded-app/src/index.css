@@ -146,8 +146,15 @@ code {
   margin-top: 16px;
 }
 
-/* Buttons */
-button, select, .btn {
+/*
+ * Demo chrome only — do not style Persona controls.
+ * The widget mounts in the light DOM by default (`useShadowDom` is opt-in), so a bare
+ * `button { padding: 10px 18px }` applies to the header close control. With `width`/`height`
+ * 32px and `box-sizing: border-box`, horizontal padding 18+18px leaves no room for the SVG.
+ */
+button:not([data-persona-root] *),
+select:not([data-persona-root] *),
+.btn:not([data-persona-root] *) {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
