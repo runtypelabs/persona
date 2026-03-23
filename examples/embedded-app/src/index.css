@@ -147,14 +147,15 @@ code {
 }
 
 /*
- * Demo chrome only — do not style Persona controls.
- * The widget mounts in the light DOM by default (`useShadowDom` is opt-in), so a bare
- * `button { padding: 10px 18px }` applies to the header close control. With `width`/`height`
- * 32px and `box-sizing: border-box`, horizontal padding 18+18px leaves no room for the SVG.
+ * Demo chrome only — scoped to `.page` (index.html) so other pages that import this file
+ * (theme.html, bakery, json, etc.) are not affected. The widget mounts in the light DOM by
+ * default (`useShadowDom` is opt-in), so a bare `button { padding: 10px 18px }` applies to
+ * the header close control. With `width`/`height` 32px and `box-sizing: border-box`,
+ * horizontal padding 18+18px leaves no room for the SVG.
  */
-button:not([data-persona-root] *),
-select:not([data-persona-root] *),
-.btn:not([data-persona-root] *) {
+.page button:not([data-persona-root] *),
+.page select:not([data-persona-root] *),
+.page .btn:not([data-persona-root] *) {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
@@ -181,7 +182,8 @@ select:not([data-persona-root] *),
   box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.25);
 }
 
-.secondaryButton, select {
+.secondaryButton,
+.page select:not([data-persona-root] *) {
   background: #ffffff;
   color: var(--foreground);
   border: 1px solid var(--border);
@@ -193,7 +195,7 @@ select:not([data-persona-root] *),
   transform: translateY(-1px);
 }
 
-select {
+.page select:not([data-persona-root] *) {
   padding-right: 32px;
   appearance: auto;
 }
