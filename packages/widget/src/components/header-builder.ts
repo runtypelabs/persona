@@ -145,7 +145,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
       clearChatIconName,
       "20px",
       clearChatIconColor || "",
-      1
+      2
     );
     if (iconSvg) {
       clearChatButton.appendChild(iconSvg);
@@ -303,7 +303,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     closeButtonIconName,
     "20px",
     launcher.closeButtonColor || "",
-    1
+    2
   );
   if (closeIconSvg) {
     closeButton.appendChild(closeIconSvg);

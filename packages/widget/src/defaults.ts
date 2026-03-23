@@ -114,10 +114,10 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
     callToActionIconPadding: "5px",
     callToActionIconColor: "#000000",
     callToActionIconBackgroundColor: "#ffffff",
-    closeButtonColor: "#6b7280",
+    closeButtonColor: "#4b5563",
     closeButtonBackgroundColor: "transparent",
     clearChat: {
-      iconColor: "#6b7280",
+      iconColor: "#4b5563",
       backgroundColor: "transparent",
       borderColor: "transparent",
       enabled: true,

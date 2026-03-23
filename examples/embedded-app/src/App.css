@@ -85,6 +85,7 @@
 .code-example code {
   font-family: inherit;
   font-size: inherit;
+  color: inherit;
 }
 
 .demo-container code {
