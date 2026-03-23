@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 2.3.1
+
+### Patch Changes
+
+- d35cbda: Fix DOMPurify hook to fully remove dangerous data: URI attributes instead of leaving empty `src`/`href`, and add a dev-mode warning when a custom `postprocessMessage` is used with the default sanitizer.
+
 ## 2.3.0
 
 ### Minor Changes
