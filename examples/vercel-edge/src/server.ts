@@ -13,6 +13,7 @@ import {
 // Sample environment variables (.env file):
 // PORT=43111
 // UPSTREAM_URL=https://api.runtype.com/v1/dispatch
+// ALLOWED_ORIGINS=https://example.com,https://staging.example.com
 // FLOW_ID_FORM_DIRECTIVE=flow_01abc123...
 // FLOW_ID_SHOPPING_ASSISTANT=flow_02def456...
 // STRIPE_SECRET_KEY=sk_test_...
@@ -20,11 +21,14 @@ import {
 
 const preferredPort = Number(process.env.PORT ?? 43111);
 const upstreamUrl = process.env.UPSTREAM_URL || undefined;
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : ["http://localhost:5173", "http://localhost:4173"];
 
 // Default chat proxy - basic conversational assistant
 const app = createChatProxyApp({
   path: "/api/chat/dispatch",
-  allowedOrigins: ["http://localhost:5173", "http://localhost:4173"],
+  allowedOrigins,
   upstreamUrl
 });
 
@@ -32,7 +36,7 @@ const app = createChatProxyApp({
 // This flow includes instructions to output form directives
 const directiveApp = createChatProxyApp({
   path: "/api/chat/dispatch-directive",
-  allowedOrigins: ["http://localhost:5173", "http://localhost:4173"],
+  allowedOrigins,
   flowId: process.env.FLOW_ID_FORM_DIRECTIVE || undefined,
   flowConfig: process.env.FLOW_ID_FORM_DIRECTIVE ? undefined : FORM_DIRECTIVE_FLOW,
   upstreamUrl
@@ -42,7 +46,7 @@ const directiveApp = createChatProxyApp({
 // Uses the shared shopping assistant flow from @runtypelabs/persona-proxy
 const actionApp = createChatProxyApp({
   path: "/api/chat/dispatch-action",
-  allowedOrigins: ["http://localhost:5173", "http://localhost:4173"],
+  allowedOrigins,
   flowId: process.env.FLOW_ID_SHOPPING_ASSISTANT || undefined,
   flowConfig: process.env.FLOW_ID_SHOPPING_ASSISTANT ? undefined : SHOPPING_ASSISTANT_FLOW,
   upstreamUrl
@@ -51,7 +55,7 @@ const actionApp = createChatProxyApp({
 // Component proxy - returns component directives for custom component rendering
 const componentApp = createChatProxyApp({
   path: "/api/chat/dispatch-component",
-  allowedOrigins: ["http://localhost:5173", "http://localhost:4173"],
+  allowedOrigins,
   flowId: process.env.FLOW_ID_COMPONENT || undefined,
   flowConfig: process.env.FLOW_ID_COMPONENT ? undefined : COMPONENT_FLOW,
   upstreamUrl
@@ -60,7 +64,7 @@ const componentApp = createChatProxyApp({
 // Bakery assistant proxy - for Flour & Stone bakery demo
 const bakeryApp = createChatProxyApp({
   path: "/api/chat/dispatch-bakery",
-  allowedOrigins: ["http://localhost:5173", "http://localhost:4173"],
+  allowedOrigins,
   flowId: process.env.FLOW_ID_BAKERY || undefined,
   flowConfig: process.env.FLOW_ID_BAKERY ? undefined : BAKERY_ASSISTANT_FLOW,
   upstreamUrl
@@ -78,8 +82,7 @@ app.post("/api/checkout", async (c) => {
   // Handle CORS
   if (c.req.method === "OPTIONS") {
     const origin = c.req.header("origin");
-    const allowedOrigins = ["http://localhost:5173", "http://localhost:4173"];
-    const corsOrigin = allowedOrigins.includes(origin || "") ? origin : allowedOrigins[0];
+    const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : allowedOrigins[0];
     return c.json({}, 200, {
       "Access-Control-Allow-Origin": corsOrigin,
       "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -93,8 +96,7 @@ app.post("/api/checkout", async (c) => {
 
     // Get origin for CORS
     const origin = c.req.header("origin");
-    const allowedOrigins = ["http://localhost:5173", "http://localhost:4173"];
-    const corsOrigin = allowedOrigins.includes(origin || "") ? origin : allowedOrigins[0];
+    const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : allowedOrigins[0];
 
     // Check if Stripe is configured
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -122,8 +124,7 @@ app.post("/api/checkout", async (c) => {
   } catch (error) {
     console.error("Stripe checkout error:", error);
     const origin = c.req.header("origin");
-    const allowedOrigins = ["http://localhost:5173", "http://localhost:4173"];
-    const corsOrigin = allowedOrigins.includes(origin || "") ? origin : allowedOrigins[0];
+    const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : allowedOrigins[0];
     return c.json(
       { success: false, error: error instanceof Error ? error.message : "Failed to create checkout session" },
       500,
@@ -140,8 +141,7 @@ app.post("/api/checkout/bakery", async (c) => {
   // Handle CORS
   if (c.req.method === "OPTIONS") {
     const origin = c.req.header("origin");
-    const allowedOrigins = ["http://localhost:5173", "http://localhost:4173"];
-    const corsOrigin = allowedOrigins.includes(origin || "") ? origin : allowedOrigins[0];
+    const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : allowedOrigins[0];
     return c.json({}, 200, {
       "Access-Control-Allow-Origin": corsOrigin,
       "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -155,8 +155,7 @@ app.post("/api/checkout/bakery", async (c) => {
 
     // Get origin for CORS
     const origin = c.req.header("origin");
-    const allowedOrigins = ["http://localhost:5173", "http://localhost:4173"];
-    const corsOrigin = allowedOrigins.includes(origin || "") ? origin : allowedOrigins[0];
+    const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : allowedOrigins[0];
 
     // Check if Stripe is configured
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -184,8 +183,7 @@ app.post("/api/checkout/bakery", async (c) => {
   } catch (error) {
     console.error("Bakery checkout error:", error);
     const origin = c.req.header("origin");
-    const allowedOrigins = ["http://localhost:5173", "http://localhost:4173"];
-    const corsOrigin = allowedOrigins.includes(origin || "") ? origin : allowedOrigins[0];
+    const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : allowedOrigins[0];
     return c.json(
       { success: false, error: error instanceof Error ? error.message : "Failed to create checkout session" },
       500,
