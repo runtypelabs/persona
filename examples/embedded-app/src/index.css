@@ -40,8 +40,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 32px;
-  position: relative;
-  z-index: 1;
 }
 
 /* Headers */
