@@ -290,6 +290,7 @@ export default defineConfig({
         'focus-input-demo': path.resolve(__dirname, 'focus-input-demo.html'),
         'artifact-demo': path.resolve(__dirname, 'artifact-demo.html'),
         'fullscreen-assistant-demo': path.resolve(__dirname, 'fullscreen-assistant-demo.html'),
+        'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
       }).filter(([, entryPath]) => fs.existsSync(entryPath))
       )
     }
