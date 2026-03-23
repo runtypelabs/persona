@@ -36,7 +36,38 @@ Persona is a themeable, pluggable streaming chat widget for websites. It ships a
 - **Multiple install methods** — ESM/bundler, CommonJS, or CDN script tag (IIFE)
 
 ## Installation
-The widget can be installed via npm (\`npm install @runtypelabs/persona\`) and initialized with \`initAgentWidget()\` or \`createAgentExperience()\`. For CDN usage, include the IIFE build via a script tag.
+
+**npm / bundler:**
+\`\`\`
+npm install @runtypelabs/persona
+\`\`\`
+Then import and initialize:
+\`\`\`js
+import { initAgentWidget, DEFAULT_WIDGET_CONFIG } from '@runtypelabs/persona';
+import '@runtypelabs/persona/widget.css';
+
+const controller = initAgentWidget({
+  target: '#persona-root',
+  config: {
+    ...DEFAULT_WIDGET_CONFIG,
+    apiUrl: '/api/chat/dispatch',
+  }
+});
+\`\`\`
+
+**CDN / script tag (no bundler):**
+\`\`\`html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/widget.css" />
+<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/index.global.js"></script>
+<script>
+  window.AgentWidget.initAgentWidget({
+    target: '#persona-root',
+    config: { apiUrl: '/api/chat/dispatch' }
+  });
+</script>
+\`\`\`
+
+CDN URLs follow the pattern \`https://cdn.jsdelivr.net/npm/@runtypelabs/persona@VERSION/dist/\`. Replace \`VERSION\` with \`latest\` or a pinned version. Available files: \`widget.css\`, \`index.global.js\` (IIFE), \`index.js\` (ESM). Do NOT invent other file names.
 
 ## Available Demos
 When a user asks about a feature or use case, recommend the most relevant demo from this list. Format links as markdown, e.g. [Demo Name](/path.html).
