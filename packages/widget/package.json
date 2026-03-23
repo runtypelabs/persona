@@ -23,7 +23,7 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && npm run build:styles && npm run build:client && npm run build:installer",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer",
     "build:styles": "node -e \"const fs=require('fs');fs.mkdirSync('dist',{recursive:true});fs.copyFileSync('src/styles/widget.css','dist/widget.css');\"",
     "build:client": "tsup src/index.ts --format esm,cjs,iife --global-name AgentWidget --minify --sourcemap --splitting false --dts --loader \".css=text\"",
     "build:installer": "tsup src/install.ts --format iife --global-name SiteAgentInstaller --out-dir dist --minify --sourcemap --no-splitting",
