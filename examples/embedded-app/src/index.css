@@ -236,6 +236,13 @@ select {
   padding: 0;
 }
 
+/* Featured Grid */
+.featured-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
 /* Inline Embed Target */
 .embedded-target {
   min-height: 500px;

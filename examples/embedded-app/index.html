@@ -4,57 +4,53 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="/favicon.ico" />
-  <title>Persona Widget Demo</title>
+  <title>Persona — AI Chat Widget</title>
 </head>
 <body>
   <div class="page">
     <main class="shell">
       <section class="hero cardFull">
-        <h1>Persona Widget Demo</h1>
-        <p>This page renders the widget two ways: once through the vanilla initializer and once as a floating launcher wired up to user actions.</p>
-        <p><small>The frontend proxy below lives at <code>/api/chat/dispatch</code> and is powered by a Hono server.</small></p>
-        
-        <div class="cta-row">
-          <button id="open-chat" class="primaryButton" type="button">Open Launcher</button>
-          <button id="toggle-chat" class="secondaryButton" type="button">Toggle Launcher</button>
-          <select id="target-widget">
-            <option value="inline">Inline Widget</option>
-            <option value="launcher">Launcher Widget</option>
-          </select>
-          <button id="load-messages" class="secondaryButton" type="button">Load 1000 Messages</button>
-        </div>
+        <h1>Persona</h1>
+        <p>A drop-in streaming chat widget for your AI assistant. Themeable, pluggable, zero framework dependencies.</p>
       </section>
 
       <section class="card cardFull">
-        <h2 class="card-title">Ask Persona</h2>
-        <p>Chat with our documentation assistant to learn about Persona or find the right demo.</p>
+        <h2 class="card-title">Try it</h2>
+        <p>This is Persona. Ask it anything — or pick a suggestion below to explore.</p>
         <div class="embedded-target" id="inline-widget"></div>
+      </section>
+
+      <section class="card cardFull">
+        <h2 class="card-title">Featured</h2>
+        <p>See what Persona can do across different use cases.</p>
+        <div class="featured-grid">
+          <a class="example-item" href="/theme.html">Theme Editor <small>Customize colors, fonts, and layout in real time</small></a>
+          <a class="example-item" href="/bakery.html">Bakery Assistant <small>Full business site with context-aware chat</small></a>
+          <a class="example-item" href="/agent-demo.html">Agent Loop <small>Multi-turn reasoning with tool calls</small></a>
+          <a class="example-item" href="/fullscreen-assistant-demo.html">Fullscreen Assistant <small>Full-viewport dark layout with artifacts</small></a>
+        </div>
       </section>
 
       <div class="section-grid">
         <section class="card">
-          <h2 class="card-title">More Examples</h2>
-          <p>Explore different use-cases and widget configurations below.</p>
+          <h2 class="card-title">Examples</h2>
+          <p>Explore different use cases and widget configurations.</p>
           <ul class="examples-list">
-            <li><a class="example-item" href="/theme.html">Agent Editor <small>Style it visually</small></a></li>
-            <li><a class="example-item" href="/action-middleware.html">Action Middleware <small>E-commerce example</small></a></li>
-            <li><a class="example-item" href="/bakery.html">Bakery Assistant Demo <small>Industry specific persona</small></a></li>
-            <li><a class="example-item" href="/docked-panel-demo.html">Docked Panel Demo <small>Alternative layout</small></a></li>
-            <li><a class="example-item" href="/feedback-demo.html">Message Feedback Demo <small>Copy, Upvote, Downvote</small></a></li>
-            <li><a class="example-item" href="/feedback-integration-demo.html">Feedback Integration Demo <small>With external API</small></a></li>
-            <li><a class="example-item" href="/custom-loading-indicator.html">Custom Loading Indicator <small>Unique UX</small></a></li>
-            <li><a class="example-item" href="/agent-demo.html">Agent Loop Execution Demo <small>Internal thought processes</small></a></li>
-            <li><a class="example-item" href="/approval-demo.html">Tool Approval Demo <small>Action confirmation</small></a></li>
-            <li><a class="example-item" href="/focus-input-demo.html">Focus Input Demo <small>Input state handling</small></a></li>
-            <li><a class="example-item" href="/artifact-demo.html">Artifact Sidebar Demo <small>Multi-pane interface</small></a></li>
-            <li><a class="example-item" href="/fullscreen-assistant-demo.html">Fullscreen Assistant <small>Split chat + artifact</small></a></li>
-            <li><a class="example-item" href="/voice-integration-demo.html">🎤 Voice Integration Demo <small>Powered by ElevenLabs</small></a></li>
+            <li><a class="example-item" href="/action-middleware.html">Action Middleware <small>AI-driven page interactions and cart management</small></a></li>
+            <li><a class="example-item" href="/docked-panel-demo.html">Docked Panel <small>Side-docked assistant layout</small></a></li>
+            <li><a class="example-item" href="/feedback-demo.html">Message Feedback <small>Copy, Upvote, Downvote</small></a></li>
+            <li><a class="example-item" href="/feedback-integration-demo.html">Feedback Integration <small>Wire feedback events to your backend</small></a></li>
+            <li><a class="example-item" href="/custom-loading-indicator.html">Custom Loading Indicator <small>Replace the default loading animation</small></a></li>
+            <li><a class="example-item" href="/approval-demo.html">Tool Approval <small>Human-in-the-loop confirmation before tool execution</small></a></li>
+            <li><a class="example-item" href="/focus-input-demo.html">Focus Input <small>Programmatic input focus and state control</small></a></li>
+            <li><a class="example-item" href="/artifact-demo.html">Artifact Sidebar <small>Resizable split view for rich content</small></a></li>
+            <li><a class="example-item" href="/voice-integration-demo.html">Voice Integration <small>Speech-to-text and text-to-speech input</small></a></li>
           </ul>
         </section>
 
         <section class="card">
           <h2 class="card-title">Standalone Scripts</h2>
-          <p>These load the widget via IIFE build (local on localhost, CDN in production). Run <code>pnpm build:widget</code> first.</p>
+          <p>Script tag integration — no bundler required. Uses the CDN build in production.</p>
           <ul class="examples-list">
             <li><a class="example-item" href="/standalone/example-shop.html">Example Shop (Manual)</a></li>
             <li><a class="example-item" href="/standalone/example-shop-metadata.html">Example Shop (Metadata)</a></li>
@@ -68,8 +64,17 @@
 
       <div class="section-grid">
         <section class="card">
-          <h2 class="card-title">Programmatic Control</h2>
-          <p>The widget controller returned by <code>initAgentWidget</code> provides methods to programmatically control the widget:</p>
+          <h2 class="card-title">Developer Tools</h2>
+          <p>Test the launcher, load synthetic messages, and explore the programmatic API.</p>
+          <div class="cta-row" style="justify-content: flex-start;">
+            <button id="open-chat" class="primaryButton" type="button">Open Launcher</button>
+            <button id="toggle-chat" class="secondaryButton" type="button">Toggle Launcher</button>
+            <select id="target-widget">
+              <option value="inline">Inline Widget</option>
+              <option value="launcher">Launcher Widget</option>
+            </select>
+            <button id="load-messages" class="secondaryButton" type="button">Load 1000 Messages</button>
+          </div>
           <div class="code-example">
             <pre><code>const launcherController = initAgentWidget({
   target: "#launcher-root",
@@ -90,7 +95,7 @@ launcherController.toggle();</code></pre>
         <section class="card">
           <h2 class="card-title">Event Stream Testing</h2>
           <p>Test the event stream SDK methods, window events, and instance scoping.</p>
-          
+
           <h3>Controller Methods</h3>
           <div class="cta-row" style="justify-content: flex-start;">
             <select id="event-stream-target">
@@ -101,7 +106,7 @@ launcherController.toggle();</code></pre>
             <button id="es-hide" class="secondaryButton" type="button">Hide Event Stream</button>
             <button id="es-check" class="secondaryButton" type="button">Check Visibility</button>
           </div>
-          
+
           <h3 style="margin-top: 16px;">Window Events</h3>
           <div class="cta-row" style="justify-content: flex-start;">
             <button id="es-win-show-all" class="secondaryButton" type="button">Show All (window)</button>
@@ -110,22 +115,20 @@ launcherController.toggle();</code></pre>
             <button id="es-win-show-launcher" class="secondaryButton" type="button">Show Launcher Only</button>
             <button id="es-win-show-wrong" class="secondaryButton" type="button">Show Wrong ID</button>
           </div>
-          
+
           <h3 style="margin-top: 16px;">Event Listeners</h3>
           <div class="cta-row" style="justify-content: flex-start;">
             <button id="es-listen" class="secondaryButton" type="button">Register Listeners</button>
           </div>
-          
+
           <div id="es-log" class="code-example" style="margin-top: 16px; max-height:150px; overflow-y:auto; display:none;">
             <pre id="es-log-pre"></pre>
           </div>
         </section>
       </div>
-
-      <!-- inline-widget mount moved above -->
     </main>
   </div>
-  
+
   <div id="launcher-root"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
