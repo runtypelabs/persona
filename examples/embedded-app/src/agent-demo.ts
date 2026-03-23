@@ -26,9 +26,7 @@ const controller = createAgentExperience(mount, {
   // Agent execution config (replaces flowId)
   agent: {
     name: "Travel Planner Assistant",
-    // Primary: qwen/qwen3-8b (fast, cheap, supports tool calling)
-    // Alternative if tool calling is unreliable: "openai:gpt-4o-mini"
-    model: "qwen/qwen3-8b",
+    model: "mercury-2",
     systemPrompt:
       "You are a travel planning assistant with access to the Exa web search tool. " +
       "For itinerary requests, complete work in exactly 3 iterations: " +

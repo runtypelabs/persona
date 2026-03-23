@@ -73,8 +73,7 @@ const DEFAULT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "gemini-2.5-flash",
-        // model: "gpt-4o",
+        model: "mercury-2",
         responseFormat: "markdown",
         outputVariable: "prompt_result",
         userPrompt: "{{user_message}}",

@@ -20,7 +20,7 @@ export const BAKERY_ASSISTANT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "qwen/qwen3-8b",
+        model: "mercury-2",
         reasoning: false,
         responseFormat: "JSON",
         outputVariable: "prompt_result",

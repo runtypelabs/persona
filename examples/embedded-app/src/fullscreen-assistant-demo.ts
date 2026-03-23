@@ -710,7 +710,7 @@ const config = mergeWithDefaults({
   apiUrl,
   agent: {
     name: "Chat Assistant",
-    model: "claude-sonnet-4-5",
+    model: "mercury-2",
     systemPrompt: "You are a helpful assistant. Be friendly, concise, and helpful. If you don't know something, say so.",
     artifacts: { enabled: true, types: ["markdown", "component"] },
   },
