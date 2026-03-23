@@ -134,7 +134,7 @@ const inlineController = createAgentExperience(inlineMount, {
   },
   suggestionChips: [
     "What is Persona and how does it work?",
-    "Which demo shows theming and customization?",
+    "How does streaming work?",
     "How do I add a chat widget to my website?"
   ],
   postprocessMessage: ({ text }) => markdownPostprocessor(text)
