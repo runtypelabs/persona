@@ -98,7 +98,7 @@ const inlineController = createAgentExperience(inlineMount, {
   apiUrl: proxyUrl,
   agent: {
     name: "Persona Documentation Assistant",
-    model: "mercury-2",
+    model: "claude-haiku-4-5-20251001",
     systemPrompt: PERSONA_SYSTEM_PROMPT,
     temperature: 0.5,
   },
