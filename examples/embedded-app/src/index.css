@@ -118,7 +118,6 @@ code {
   margin-bottom: 0;
   font-size: 16px;
   color: var(--muted);
-  text-align: left;
 }
 
 .cta-row {
@@ -129,9 +128,8 @@ code {
   margin-top: 16px;
 }
 
-/* Buttons — scoped to .shell so they don't leak into the widget
-   when useShadowDom is false (e.g. the launcher on this page). */
-.shell button, .shell select, .btn {
+/* Buttons */
+button, select, .btn {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
