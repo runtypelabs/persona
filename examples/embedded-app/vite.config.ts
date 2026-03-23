@@ -289,6 +289,14 @@ export default defineConfig({
         'fullscreen-assistant-demo': path.resolve(__dirname, 'fullscreen-assistant-demo.html'),
         'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
         'voice-integration-demo': path.resolve(__dirname, 'voice-integration-demo.html'),
+        // Standalone (CDN / Copy-Paste) pages
+        'standalone/shopify': path.resolve(__dirname, 'standalone/shopify.html'),
+        'standalone/example-shop': path.resolve(__dirname, 'standalone/example-shop.html'),
+        'standalone/example-shop-metadata': path.resolve(__dirname, 'standalone/example-shop-metadata.html'),
+        'standalone/example-shop-installer': path.resolve(__dirname, 'standalone/example-shop-installer.html'),
+        'standalone/example-shop-installer-voice-metadata': path.resolve(__dirname, 'standalone/example-shop-installer-voice-metadata.html'),
+        'standalone/sample': path.resolve(__dirname, 'standalone/sample.html'),
+        'standalone/preview-mode': path.resolve(__dirname, 'standalone/preview-mode.html'),
       }).filter(([, entryPath]) => fs.existsSync(entryPath))
       )
     }
