@@ -104,7 +104,7 @@ CDN URLs follow the pattern \`https://cdn.jsdelivr.net/npm/@runtypelabs/persona@
 When a user asks about a feature or use case, recommend the most relevant demo from this list. Format links as markdown, e.g. [Demo Name](/path.html).
 
 - [Theme Editor](/theme.html) — visually customize the widget theme and styling in real time
-- [Action Middleware](/action-middleware.html) — e-commerce action handling with AI-driven page interactions
+- [Action Middleware](/action-middleware.html) — DOM-aware page context each turn plus middleware that executes real UI actions (navigate, cart, checkout)
 - [Bakery Assistant](/bakery.html) — industry-specific persona with a rich product catalog and cart actions
 - [Docked Panel](/docked-panel-demo.html) — alternative layout with the widget docked to the side of the page
 - [Message Feedback](/feedback-demo.html) — copy, upvote, and downvote buttons on messages
