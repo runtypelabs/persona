@@ -120,6 +120,22 @@ code {
   color: var(--muted);
 }
 
+.hero-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hero-badges a {
+  display: inline-flex;
+}
+
+.hero-badges img {
+  height: 20px;
+}
+
 .cta-row {
   display: flex;
   flex-wrap: wrap;
