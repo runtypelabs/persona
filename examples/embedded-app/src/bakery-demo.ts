@@ -1106,12 +1106,10 @@ const config: AgentWidgetConfig = {
   persistState: true,
   clearChatHistoryStorageKey: BAKERY_STORAGE_KEY,
   streamParser: createBakeryParser,
-  // Use onStateLoaded to inject navigation messages after page load
   onStateLoaded: (state) => {
-    // Check for pending navigation message
     const navMessage = consumeNavigationFlag();
     if (navMessage) {
-      state = injectMessage(state, navMessage, "nav");
+      return { state: injectMessage(state, navMessage, "nav"), open: true };
     }
     return state;
   },

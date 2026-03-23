@@ -2346,11 +2346,15 @@ export type AgentWidgetConfig = {
    *
    * This hook runs synchronously and must return the (potentially modified) state.
    *
+   * Returning `{ state, open: true }` also signals that the widget panel should
+   * open after initialization — useful when injecting a post-navigation message
+   * that the user should immediately see.
+   *
    * @example
    * ```typescript
+   * // Plain state transform (existing form, still supported)
    * config: {
    *   onStateLoaded: (state) => {
-   *     // Check for pending navigation message
    *     const navMessage = consumeNavigationFlag();
    *     if (navMessage) {
    *       return {
@@ -2367,8 +2371,34 @@ export type AgentWidgetConfig = {
    *   }
    * }
    * ```
+   *
+   * @example
+   * ```typescript
+   * // Return { state, open: true } to also open the panel
+   * config: {
+   *   onStateLoaded: (state) => {
+   *     const navMessage = consumeNavigationFlag();
+   *     if (navMessage) {
+   *       return {
+   *         state: {
+   *           ...state,
+   *           messages: [...(state.messages || []), {
+   *             id: `nav-${Date.now()}`,
+   *             role: 'assistant',
+   *             content: navMessage,
+   *             createdAt: new Date().toISOString()
+   *           }]
+   *         },
+   *         open: true
+   *       };
+   *     }
+   *     return state;
+   *   }
+   * }
+   * ```
    */
-  onStateLoaded?: (state: AgentWidgetStoredState) => AgentWidgetStoredState;
+  onStateLoaded?: (state: AgentWidgetStoredState) =>
+    AgentWidgetStoredState | { state: AgentWidgetStoredState; open?: boolean };
   /**
    * Registry of custom components that can be rendered from JSON directives.
    * Components are registered by name and can be invoked via JSON responses
