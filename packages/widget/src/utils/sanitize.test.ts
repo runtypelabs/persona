@@ -70,6 +70,13 @@ describe("createDefaultSanitizer", () => {
     expect(result).not.toContain("data:image/svg+xml");
   });
 
+  it("blocks mixed-case data: URI scheme bypass", () => {
+    const result = sanitize('<img src="Data:image/svg+xml,<svg onload=alert(1)>">');
+    expect(result).not.toContain("Data:image/svg+xml");
+    const result2 = sanitize('<img src="DATA:image/svg+xml,<svg onload=alert(1)>">');
+    expect(result2).not.toContain("DATA:image/svg+xml");
+  });
+
   it("preserves widget-specific data attributes", () => {
     const html = '<div class="persona-form-directive" data-tv-form="init"></div>';
     expect(sanitize(html)).toBe(html);

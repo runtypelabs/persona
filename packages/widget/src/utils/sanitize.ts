@@ -57,7 +57,7 @@ export const createDefaultSanitizer = (): SanitizeFunction => {
   purify.addHook("uponSanitizeAttribute", (_node, data) => {
     if (data.attrName === "src" || data.attrName === "href") {
       const val = data.attrValue;
-      if (val.startsWith("data:") && !SAFE_DATA_URI.test(val)) {
+      if (val.toLowerCase().startsWith("data:") && !SAFE_DATA_URI.test(val)) {
         data.attrValue = "";
         data.forceKeepAttr = false;
       }

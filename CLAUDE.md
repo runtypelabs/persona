@@ -112,6 +112,8 @@ The widget uses a layered architecture:
 
 **Theme System:** CSS custom properties (variables) + Tailwind with the `tvw-` prefix. The `tokens.ts` and `theme.ts` utilities manage runtime theme application. See `packages/widget/THEME-CONFIG.md` for the full theming reference.
 
+**HTML Sanitization:** All rendered markdown is sanitized via DOMPurify by default (`utils/sanitize.ts`). Configurable per-widget via the `sanitize` option: `true` (default), `false`, or a custom `(html: string) => string` function. When writing sanitization hooks, always compare URI schemes case-insensitively (e.g. `val.toLowerCase().startsWith("data:")`) per RFC 3986.
+
 ### Proxy Package (`packages/proxy/src/`)
 
 Hono-based server that proxies requests to the Runtype API:
@@ -121,6 +123,8 @@ Hono-based server that proxies requests to the Runtype API:
   - `shopping-assistant.ts` - E-commerce flow
   - `scheduling.ts` - Calendar/scheduling flow
   - `bakery-assistant.ts` - Example specialized flow
+
+**CORS / `NODE_ENV`:** The proxy only enables permissive CORS when `NODE_ENV` is **exactly** `"development"`. An unset `NODE_ENV` is treated as production (origins must match the `allowedOrigins` list). The root `pnpm dev` script sets `NODE_ENV=development` automatically. If you start the proxy directly (e.g. `pnpm dev:vercel`), set it yourself or configure it in your `.env` file.
 
 ## Testing
 
