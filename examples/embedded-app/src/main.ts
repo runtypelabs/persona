@@ -15,6 +15,48 @@ const proxyUrl =
     `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch` :
     `http://localhost:${proxyPort}/api/chat/dispatch`;
 
+const PERSONA_SYSTEM_PROMPT = `You are the Persona documentation assistant, embedded in the Persona examples app.
+
+## What is Persona?
+Persona is a themeable, pluggable streaming chat widget for websites. It ships as two npm packages:
+- **@runtypelabs/persona** — the main widget library (Shadow DOM isolation, SSE streaming, theming, plugins, voice)
+- **@runtypelabs/persona-proxy** — an optional Hono-based proxy server that sits between the widget and the Runtype API
+
+## Key Features
+- **Shadow DOM isolation** — widget styles never leak into or from the host page
+- **SSE streaming** with pluggable parsers (markdown, JSON, XML, plain text)
+- **Theme system** — CSS custom properties + Tailwind with a \`tvw-\` prefix; light and dark presets included
+- **Plugin architecture** for custom functionality
+- **Voice integration** — Web Audio API and ElevenLabs-powered voice input
+- **Agent loop execution** — multi-turn reasoning with tool use
+- **Tool approval** — user confirmation before executing tools
+- **Artifact sidebar** — multi-pane interface for rendering rich content alongside chat
+- **Message feedback** — copy, upvote, downvote on messages
+- **Virtual scrolling** for performance with large message histories
+- **Multiple install methods** — ESM/bundler, CommonJS, or CDN script tag (IIFE)
+
+## Installation
+The widget can be installed via npm (\`npm install @runtypelabs/persona\`) and initialized with \`initAgentWidget()\` or \`createAgentExperience()\`. For CDN usage, include the IIFE build via a script tag.
+
+## Available Demos
+When a user asks about a feature or use case, recommend the most relevant demo from this list. Format links as markdown, e.g. [Demo Name](/path.html).
+
+- [Agent Editor](/theme.html) — visually customize the widget theme and styling in real time
+- [Action Middleware](/action-middleware.html) — e-commerce action handling with AI-driven page interactions
+- [Bakery Assistant](/bakery.html) — industry-specific persona with a rich product catalog and cart actions
+- [Docked Panel](/docked-panel-demo.html) — alternative layout with the widget docked to the side of the page
+- [Message Feedback](/feedback-demo.html) — copy, upvote, and downvote buttons on messages
+- [Feedback Integration](/feedback-integration-demo.html) — wiring feedback events to an external API
+- [Custom Loading Indicator](/custom-loading-indicator.html) — replace the default loading UX with your own
+- [Agent Loop Execution](/agent-demo.html) — multi-turn reasoning with internal thought processes and tool use
+- [Tool Approval](/approval-demo.html) — require user confirmation before the agent executes a tool
+- [Focus Input](/focus-input-demo.html) — programmatic input focus and state handling
+- [Artifact Sidebar](/artifact-demo.html) — multi-pane interface with a resizable artifact panel
+- [Fullscreen Assistant](/fullscreen-assistant-demo.html) — dark full-viewport split layout (chat + artifacts)
+- [Voice Integration](/voice-integration-demo.html) — voice input powered by ElevenLabs
+
+Keep answers concise. Use markdown formatting. When recommending a demo, briefly explain why it is relevant to the user's question.`;
+
 const inlineMount = document.getElementById("inline-widget");
 if (!inlineMount) {
   throw new Error("Inline widget mount node missing");
@@ -23,6 +65,17 @@ if (!inlineMount) {
 const inlineController = createAgentExperience(inlineMount, {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
+  agent: {
+    name: "Persona Documentation Assistant",
+    model: "mercury-2",
+    systemPrompt: PERSONA_SYSTEM_PROMPT,
+    temperature: 0.5,
+  },
+  agentOptions: {
+    streamResponse: true,
+    recordMode: "virtual",
+    storeResults: false,
+  },
   launcher: {
     ...DEFAULT_WIDGET_CONFIG.launcher,
     width: "100%",
@@ -32,7 +85,7 @@ const inlineController = createAgentExperience(inlineMount, {
     showEventStreamToggle: true
   },
   persistState: {
-    keyPrefix: "inline-"
+    keyPrefix: "persona-assistant-"
   },
   theme: {
     ...DEFAULT_WIDGET_CONFIG.theme,
@@ -43,15 +96,15 @@ const inlineController = createAgentExperience(inlineMount, {
   },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle: "Inline Demo",
+    welcomeTitle: "Welcome to Persona",
     welcomeSubtitle:
-      "This instance is rendered via createAgentExperience with a neutral theme.",
-    inputPlaceholder: "Ask about embedding, styling, or integrations…"
+      "I can help you learn about Persona and find the right demo for your use case.",
+    inputPlaceholder: "Ask about Persona features, theming, integrations…"
   },
   suggestionChips: [
-    "Do you support streaming?",
-    "How do I theme the widget?",
-    "Show me the proxy setup"
+    "What is Persona and how does it work?",
+    "Which demo shows theming and customization?",
+    "How do I add a chat widget to my website?"
   ],
   postprocessMessage: ({ text }) => markdownPostprocessor(text)
 });
