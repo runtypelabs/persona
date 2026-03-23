@@ -385,12 +385,14 @@ export const createAgentExperience = (
   initialConfig?: AgentWidgetConfig,
   runtimeOptions?: { debugTools?: boolean }
 ): Controller => {
-  // Preserve original mount id as data attribute for window event instance scoping,
-  // then set mount.id to "persona-root" (required by Tailwind important: "#persona-root")
-  if (mount.id && mount.id !== "persona-root" && !mount.getAttribute("data-persona-instance")) {
+  // Preserve original mount id as data attribute for window event instance scoping
+  if (mount.id && !mount.getAttribute("data-persona-instance")) {
     mount.setAttribute("data-persona-instance", mount.id);
   }
-  mount.id = "persona-root";
+  // Ensure root marker is present for Tailwind scoping and DOM traversal
+  if (!mount.hasAttribute("data-persona-root")) {
+    mount.setAttribute("data-persona-root", "true");
+  }
 
   let config = mergeWithDefaults(initialConfig) as AgentWidgetConfig;
   // Note: applyThemeVariables is called after applyFullHeightStyles() below

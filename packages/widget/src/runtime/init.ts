@@ -103,7 +103,7 @@ export const initAgentWidget = (
     const launcherEnabled = nextConfig?.launcher?.enabled ?? true;
     const shouldFillHost = !launcherEnabled || isDockedMountMode(nextConfig);
     const mount = ownerDocument.createElement("div");
-    mount.id = "persona-root";
+    mount.setAttribute("data-persona-root", "true");
 
     if (shouldFillHost) {
       mount.style.height = "100%";

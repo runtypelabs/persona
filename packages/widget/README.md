@@ -935,7 +935,7 @@ const dropdown = createDropdownMenu({
   onSelect: (id) => { /* handle */ },
   anchor: myButton,
   position: 'bottom-right',
-  portal: document.querySelector('#persona-root')!,
+  portal: document.querySelector('[data-persona-root]')!,
 });
 // No need to append — portal mode appends automatically
 ```
@@ -2322,6 +2322,6 @@ Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payl
 ### Development notes
 
 - The widget streams results using SSE and mirrors the backend `flow_complete`/`step_chunk` events.
-- Tailwind-esc classes are prefixed with `tvw-` and scoped to `#persona-root`, so they won't collide with the host page.
+- Tailwind-esc classes are prefixed with `tvw-` and scoped to `[data-persona-root]`, so they won't collide with the host page.
 - Run `pnpm dev` from the repository root to boot the example proxy (`examples/proxy`) and the vanilla demo (`examples/embedded-app`).
 - The proxy prefers port `43111` but automatically selects the next free port if needed.
