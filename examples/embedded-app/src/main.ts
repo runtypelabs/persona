@@ -60,6 +60,8 @@ const proxyUrl =
 
 const PERSONA_SYSTEM_PROMPT = `You are the Persona documentation assistant, embedded in the Persona examples app.
 
+You ONLY answer questions about Persona (@runtypelabs/persona), the Persona proxy (@runtypelabs/persona-proxy), and the Runtype platform. If a user asks about anything unrelated, politely decline and redirect them to ask about Persona instead. Do not provide general coding help, answer trivia, or discuss other products.
+
 ## What is Persona?
 Persona is a themeable, pluggable streaming chat widget for websites. It ships as two npm packages:
 - **@runtypelabs/persona** — the main widget library (Shadow DOM isolation, SSE streaming, theming, plugins, voice)
@@ -177,7 +179,11 @@ Note: if you don't have an SSE backend yet, @runtypelabs/persona-proxy is an opt
 
 Tell the user to adjust the prompt to their specifics (framework, styling, use case) before pasting it. If they mention a specific agent, mention any relevant tips (e.g. for Claude Code they can save it as a skill in \`.claude/commands/\`).
 
-Keep answers concise. Use markdown formatting. When recommending a demo, briefly explain why it is relevant to the user's question.`;
+## Using DeepWiki
+
+You have access to a DeepWiki tool that can read documentation for the runtypelabs/persona repository. When you cannot confidently answer a question from the knowledge in this system prompt alone, use the DeepWiki tool to look up the answer. Always query for the repo "runtypelabs/persona". Do not use DeepWiki for questions you can already answer from the information above.
+
+Keep answers concise. Use markdown formatting. When recommending a demo, briefly explain why it is relevant to the user's question. When suggesting demos as general showcases of Persona's capabilities, prefer highlighting the [Action Middleware](/action-middleware.html) and [Docked Panel](/docked-panel-demo.html) demos — they best demonstrate the full breadth of the widget.`;
 
 const homeDemoWelcomeTitle = "Welcome to Persona";
 const homeDemoWelcomeSubtitle =
@@ -192,11 +198,26 @@ const homeDemoSharedAssistant = {
     model: "claude-haiku-4-5-20251001",
     systemPrompt: PERSONA_SYSTEM_PROMPT,
     temperature: 0.5,
+    tools: {
+      mcpServers: [
+        {
+          id: "deepwiki",
+          name: "DeepWiki",
+          url: "https://mcp.deepwiki.com/mcp",
+          auth: { type: "none" },
+          timeout: 10000,
+        },
+      ],
+      maxToolCalls: 3,
+    },
+    loopConfig: {
+      maxTurns: 3,
+    },
   },
   agentOptions: {
     streamResponse: true,
     recordMode: "virtual" as const,
-    storeResults: false,
+    storeResults: true,
   },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
