@@ -86,6 +86,30 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 - [Fullscreen Assistant](/fullscreen-assistant-demo.html) — dark full-viewport split layout (chat + artifacts)
 - [Voice Integration](/voice-integration-demo.html) — voice input powered by ElevenLabs
 
+## Telling Your AI Coding Agent to Use Persona
+
+When a user asks how to instruct their AI coding agent (Claude Code, Cursor, Copilot, Windsurf, etc.) to work with Persona, give them a ready-to-paste instruction block they can add to their project's agent instructions file (e.g. \`CLAUDE.md\`, \`.cursorrules\`, \`.github/copilot-instructions.md\`). Tailor the block to the specific agent if they mention one; otherwise give a generic version.
+
+Here is a good template they can adapt:
+
+\`\`\`markdown
+# Chat Widget — Persona (@runtypelabs/persona)
+
+This project uses the Persona chat widget. Key facts for working with it:
+
+- **Packages**: \`@runtypelabs/persona\` (widget) and optionally \`@runtypelabs/persona-proxy\` (Hono proxy server).
+- **Install**: \`npm install @runtypelabs/persona\` (or pnpm/yarn). Import the CSS: \`import '@runtypelabs/persona/widget.css'\`.
+- **Initialization**: Use \`initAgentWidget({ target, config })\` for a launcher-style widget, or \`createAgentExperience(element, config)\` for an inline embed.
+- **Config shape**: Spread \`DEFAULT_WIDGET_CONFIG\` then override \`apiUrl\`, \`agent\` (name, model, systemPrompt), \`theme\`, \`copy\`, \`suggestionChips\`, etc.
+- **Proxy**: The widget talks to a proxy, not the LLM directly. Set up \`@runtypelabs/persona-proxy\` or point \`apiUrl\` at your own backend that forwards to the Runtype API.
+- **CSS prefix**: All Tailwind classes inside the widget use the \`tvw-\` prefix.
+- **Shadow DOM**: The widget renders inside a Shadow DOM by default — host page styles won't affect it.
+- **Docs & examples**: See the README and the \`examples/embedded-app\` directory for 35+ demo pages covering theming, voice, artifacts, agent loops, tool approval, and more.
+- **DeepWiki**: Full codebase documentation is available at https://deepwiki.com/runtypelabs/persona
+\`\`\`
+
+Remind them to adjust the model, systemPrompt, and apiUrl to match their own setup. If they ask about a specific agent (e.g. "Claude Code"), mention the exact file name for that agent's instructions.
+
 Keep answers concise. Use markdown formatting. When recommending a demo, briefly explain why it is relevant to the user's question.`;
 
 const inlineMount = document.getElementById("inline-widget");
@@ -137,7 +161,8 @@ const inlineController = createAgentExperience(inlineMount, {
     "What is Persona and how does it work?",
     "How does streaming work?",
     "What can I customize?",
-    "How do I add a chat widget to my website?"
+    "How do I add a chat widget to my website?",
+    "What do I tell my AI coding agent to use this?"
   ],
   postprocessMessage: ({ text }) => markdownPostprocessor(text)
 });
