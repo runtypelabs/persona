@@ -86,6 +86,54 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 - [Fullscreen Assistant](/fullscreen-assistant-demo.html) — dark full-viewport split layout (chat + artifacts)
 - [Voice Integration](/voice-integration-demo.html) — voice input powered by ElevenLabs
 
+## Setting Up Persona With an AI Coding Agent
+
+When a user asks what to tell their AI coding agent to set up Persona, give them a step-by-step prompt they can paste into their agent (Claude Code, Cursor, Copilot, Windsurf, etc.) to implement the widget from scratch. The prompt should be implementation-focused — a one-time setup task, not a reference doc. Adapt it based on the user's context (framework, SSE format, launcher vs inline).
+
+Here is the prompt template:
+
+\`\`\`
+Add the Persona chat widget (@runtypelabs/persona) to this project.
+
+1. Install:
+   npm install @runtypelabs/persona
+
+2. Import the stylesheet in the app entry point:
+   import '@runtypelabs/persona/widget.css';
+
+3. Initialize the widget:
+   import { initAgentWidget, DEFAULT_WIDGET_CONFIG } from '@runtypelabs/persona';
+
+   initAgentWidget({
+     target: '#chat-root',
+     config: {
+       ...DEFAULT_WIDGET_CONFIG,
+       apiUrl: '/api/chat',  // your SSE endpoint
+     }
+   });
+
+   For an inline embed instead of a floating launcher, use createAgentExperience(element, config) with launcher.enabled = false.
+
+4. Connect to your SSE backend — the widget expects a server-sent event stream. Use these hooks to adapt it to your API:
+   - customFetch(url, init, payload) — replace the built-in fetch to transform the request/response for your backend's expected format. Return a Response with a ReadableStream.
+   - parseSSEEvent(eventData) — parse each incoming SSE event into { text, done, error } so the widget can render it. Return null to skip an event.
+   - getHeaders() / headers — inject auth tokens or other headers into every request.
+   - requestMiddleware(context) — transform the outgoing request payload (messages, metadata) before it's sent.
+
+5. Customize appearance:
+   - theme: { primary, accent, surface, container, muted } to match site colors
+   - copy: { welcomeTitle, welcomeSubtitle, inputPlaceholder }
+   - suggestionChips: ['Question 1', 'Question 2'] for starter prompts
+
+For full API docs: https://deepwiki.com/runtypelabs/persona
+NPM: https://www.npmjs.com/package/@runtypelabs/persona
+Source & examples: https://github.com/runtypelabs/persona (35+ demo pages in examples/embedded-app/)
+
+Note: if you don't have an SSE backend yet, @runtypelabs/persona-proxy is an optional Hono-based proxy that sits between the widget and the Runtype API. Install it separately with npm install @runtypelabs/persona-proxy.
+\`\`\`
+
+Tell the user to adjust the prompt to their specifics (framework, styling, use case) before pasting it. If they mention a specific agent, mention any relevant tips (e.g. for Claude Code they can save it as a skill in \`.claude/commands/\`).
+
 Keep answers concise. Use markdown formatting. When recommending a demo, briefly explain why it is relevant to the user's question.`;
 
 const inlineMount = document.getElementById("inline-widget");
@@ -137,7 +185,8 @@ const inlineController = createAgentExperience(inlineMount, {
     "What is Persona and how does it work?",
     "How does streaming work?",
     "What can I customize?",
-    "How do I add a chat widget to my website?"
+    "How do I add a chat widget to my website?",
+    "What do I tell my AI coding agent to use this?"
   ],
   postprocessMessage: ({ text }) => markdownPostprocessor(text)
 });
