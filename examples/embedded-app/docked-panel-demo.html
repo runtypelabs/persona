@@ -118,13 +118,17 @@
       min-height: 680px;
       height: calc(100vh - 196px);
       border-radius: 16px;
-      overflow: hidden;
+      overflow: visible;
       border: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.84);
       box-shadow: var(--shadow-lg);
       display: grid;
       grid-template-columns: 240px 1fr;
       min-width: 0;
+    }
+    #workspace-main > .workspace-nav,
+    #workspace-main > .workspace-canvas {
+      overflow: hidden;
     }
     .workspace-nav {
       padding: 22px 18px;
