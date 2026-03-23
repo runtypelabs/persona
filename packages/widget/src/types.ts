@@ -827,6 +827,13 @@ export type AgentWidgetLauncherConfig = {
    * @default "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)"
    */
   shadow?: string;
+  /**
+   * CSS `max-width` for the floating launcher button when the panel is closed.
+   * Title and subtitle each truncate with an ellipsis when space is tight; full strings are available via the native `title` tooltip. Does not affect the open chat panel (`width` / `launcherWidth`).
+   *
+   * @example "min(380px, calc(100vw - 48px))"
+   */
+  collapsedMaxWidth?: string;
 };
 
 export type AgentWidgetSendButtonConfig = {

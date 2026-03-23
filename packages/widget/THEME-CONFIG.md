@@ -520,6 +520,7 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 |----------|---------|-------------|
 | `border` | `"1px solid #e5e7eb"` | Border style for the launcher button |
 | `shadow` | `"0 10px 15px -3px rgba(0,0,0,0.1), ..."` | Box shadow for the launcher button |
+| `collapsedMaxWidth` | *(unset)* | CSS `max-width` for the floating launcher pill when the panel is closed; title/subtitle truncate with ellipsis (full text in `title` tooltip). Does not change the open panel width (`width`). |
 
 ### Header Icon
 | Property | Description |

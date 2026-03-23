@@ -1745,6 +1745,7 @@ Controls the floating launcher button and panel.
 | `clearChat` | `AgentWidgetClearChatConfig?` | Clear chat button configuration (enabled, placement, icon, styling). |
 | `border` | `string?` | Border style for the launcher button. Default: `'1px solid #e5e7eb'`. |
 | `shadow` | `string?` | Box shadow for the launcher button. |
+| `collapsedMaxWidth` | `string?` | CSS `max-width` for the floating launcher pill when the panel is closed (title/subtitle truncate with ellipsis; full text in `title` tooltip). Does not affect the open panel (`width`). |
 
 In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because the widget fills the dock slot created around the target container.
 
