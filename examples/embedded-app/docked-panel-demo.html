@@ -114,20 +114,23 @@
       min-height: 0;
       padding: 0 28px 28px;
     }
-    #workspace-main {
+    /* The widget wraps #workspace-main in a docked shell (flex row).
+       Move the chrome (border, radius, shadow) to that shell so the
+       collapsed rail + FAB sit inside the rounded container. */
+    [data-persona-host-layout="docked"] {
       min-height: 680px;
       height: calc(100vh - 196px);
       border-radius: 16px;
-      overflow: visible;
+      overflow: hidden;
       border: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.84);
       box-shadow: var(--shadow-lg);
+    }
+    #workspace-main {
       display: grid;
       grid-template-columns: 240px 1fr;
       min-width: 0;
-    }
-    #workspace-main > .workspace-nav,
-    #workspace-main > .workspace-canvas {
+      min-height: 0;
       overflow: hidden;
     }
     .workspace-nav {
