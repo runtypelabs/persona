@@ -1,5 +1,7 @@
 # Persona
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/runtypelabs/persona)
+
 A themeable, pluggable streaming AI chat widget for websites — built in plain JS with zero framework dependencies.
 
 Persona gives you a drop-in UI for your AI assistant that works on any site. It ships with support for streaming responses, voice I/O, multi-modal content, tool call visualization, artifact rendering, and a plugin system so you can customize every layer of the UI.
