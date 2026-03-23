@@ -6,9 +6,21 @@ import type { DeepPartial, PersonaTheme } from "@runtypelabs/persona";
 import {
   initAgentWidget,
   createAgentExperience,
+  createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
+
+/** Same key as the widget default — shared with other embedded-app pages that use persisted chat. */
+const sharedWidgetStorage = createLocalStorageAdapter("persona-state");
+
+const homeDemoSuggestionChips = [
+  "What is Persona and how does it work?",
+  "How does streaming work?",
+  "What can I customize?",
+  "How do I add a chat widget to my website?",
+  "What do I tell my AI coding agent to use this?"
+] as const;
 
 const inlineDemoTheme: DeepPartial<PersonaTheme> = {
   palette: {
@@ -197,6 +209,7 @@ const inlineController = createAgentExperience(inlineMount, {
   persistState: {
     keyPrefix: "persona-assistant-"
   },
+  storageAdapter: sharedWidgetStorage,
   theme: inlineDemoTheme,
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
@@ -205,13 +218,7 @@ const inlineController = createAgentExperience(inlineMount, {
       "I can help you learn about Persona and find the right demo for your use case.",
     inputPlaceholder: "Ask about Persona features, theming, integrations…"
   },
-  suggestionChips: [
-    "What is Persona and how does it work?",
-    "How does streaming work?",
-    "What can I customize?",
-    "How do I add a chat widget to my website?",
-    "What do I tell my AI coding agent to use this?"
-  ],
+  suggestionChips: [...homeDemoSuggestionChips],
   postprocessMessage: ({ text }) => markdownPostprocessor(text)
 });
 
@@ -226,6 +233,7 @@ const launcherController = initAgentWidget({
     persistState: {
       keyPrefix: "launcher-"
     },
+    storageAdapter: sharedWidgetStorage,
     theme: {
       components: {
         launcher: {
@@ -238,11 +246,7 @@ const launcherController = initAgentWidget({
       iconUrl: "https://dummyimage.com/96x96/111827/ffffff&text=AI",
       closeButtonColor: "#6b7280",
     },
-    suggestionChips: [
-      "How do I embed the widget?",
-      "Show me the API docs",
-      "Schedule a demo"
-    ],
+    suggestionChips: [...homeDemoSuggestionChips],
     postprocessMessage: ({ text }) => markdownPostprocessor(text)
   }
 });
