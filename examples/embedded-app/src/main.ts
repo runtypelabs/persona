@@ -153,6 +153,10 @@ const launcherController = initAgentWidget({
       keyPrefix: "launcher-"
     },
     theme: {
+      ...DEFAULT_WIDGET_CONFIG.theme,
+      primary: "#0f172a",
+      surface: "#ffffff",
+      muted: "#64748b",
       launcherRadius: ".5rem"
     },
     launcher: {
