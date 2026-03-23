@@ -1,5 +1,6 @@
 {
   "buildCommand": "pnpm --filter @runtypelabs/persona-proxy build",
   "installCommand": "pnpm install",
-  "framework": null
+  "framework": null,
+  "outputDirectory": "."
 }
