@@ -14,8 +14,18 @@ const fullConfig = {
   apiUrl: "https://api.example.com/chat",
   flowId: "test-flow-123",
   theme: {
-    primaryColor: "#007bff",
-    fontFamily: "Inter, sans-serif",
+    palette: {
+      colors: {
+        primary: {
+          500: "#007bff",
+        },
+      },
+      typography: {
+        fontFamily: {
+          sans: "Inter, sans-serif",
+        },
+      },
+    },
   },
   messageActions: {
     enableCopy: true,
@@ -31,7 +41,6 @@ const dockedConfig = {
     dock: {
       side: "left",
       width: "480px",
-      collapsedWidth: "84px",
     },
   },
 };
@@ -121,6 +130,33 @@ describe("Hook Serialization", () => {
 // =============================================================================
 
 describe("ESM Format Hooks", () => {
+  it("serializes nested PersonaTheme (semantic + components)", () => {
+    const code = generateCodeSnippet(
+      {
+        apiUrl: "https://api.example.com/chat",
+        theme: {
+          semantic: {
+            colors: {
+              primary: "palette.colors.primary.500",
+            },
+          },
+          components: {
+            panel: {
+              shadow: "none",
+              borderRadius: "0",
+            },
+          },
+        },
+      },
+      "esm"
+    );
+    expect(code).toContain("semantic:");
+    expect(code).toContain("palette.colors.primary.500");
+    expect(code).toContain("components:");
+    expect(code).toContain("panel:");
+    expect(code).toContain('"none"');
+  });
+
   it("should serialize docked launcher config", () => {
     const code = generateCodeSnippet(dockedConfig, "esm");
 
@@ -128,7 +164,7 @@ describe("ESM Format Hooks", () => {
     expect(code).toContain('dock: {');
     expect(code).toContain('side: "left"');
     expect(code).toContain('width: "480px"');
-    expect(code).toContain('collapsedWidth: "84px"');
+    expect(code).not.toContain("collapsedWidth");
   });
 
   it("should inject getHeaders hook", () => {
@@ -194,7 +230,7 @@ describe("React Component Format Hooks", () => {
     expect(code).toContain('dock: {');
     expect(code).toContain('side: "left"');
     expect(code).toContain('width: "480px"');
-    expect(code).toContain('collapsedWidth: "84px"');
+    expect(code).not.toContain("collapsedWidth");
   });
 
   it("should inject hooks in React component format", () => {
@@ -230,7 +266,7 @@ describe("React Advanced Format Hooks", () => {
     expect(code).toContain('dock: {');
     expect(code).toContain('side: "left"');
     expect(code).toContain('width: "480px"');
-    expect(code).toContain('collapsedWidth: "84px"');
+    expect(code).not.toContain("collapsedWidth");
   });
 
   it("should inject custom action handlers alongside defaults", () => {
@@ -291,7 +327,7 @@ describe("Script Manual Format Hooks", () => {
     expect(code).toContain('dock: {');
     expect(code).toContain('side: "left"');
     expect(code).toContain('width: "480px"');
-    expect(code).toContain('collapsedWidth: "84px"');
+    expect(code).not.toContain("collapsedWidth");
   });
 
   it("should inject hooks in script-manual format", () => {

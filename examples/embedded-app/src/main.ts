@@ -2,12 +2,34 @@ import "@runtypelabs/persona/widget.css";
 import "./index.css";
 import "./App.css";
 
+import type { DeepPartial, PersonaTheme } from "@runtypelabs/persona";
 import {
   initAgentWidget,
   createAgentExperience,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
+
+const inlineDemoTheme: DeepPartial<PersonaTheme> = {
+  palette: {
+    colors: {
+      primary: { 500: "#0f172a" },
+      accent: { 600: "#ea580c" },
+      gray: {
+        50: "#f8fafc",
+        500: "#64748b"
+      }
+    }
+  },
+  semantic: {
+    colors: {
+      primary: "palette.colors.primary.500",
+      accent: "palette.colors.accent.600",
+      surface: "palette.colors.gray.50",
+      textMuted: "palette.colors.gray.500"
+    }
+  }
+};
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
@@ -166,14 +188,7 @@ const inlineController = createAgentExperience(inlineMount, {
   persistState: {
     keyPrefix: "persona-assistant-"
   },
-  theme: {
-    ...DEFAULT_WIDGET_CONFIG.theme,
-    primary: "#0f172a",
-    accent: "#ea580c",
-    surface: "#ffffff",
-    container: "#ffffff",
-    muted: "#64748b"
-  },
+  theme: inlineDemoTheme,
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
     welcomeTitle: "Welcome to Persona",
@@ -203,11 +218,11 @@ const launcherController = initAgentWidget({
       keyPrefix: "launcher-"
     },
     theme: {
-      ...DEFAULT_WIDGET_CONFIG.theme,
-      primary: "#0f172a",
-      surface: "#ffffff",
-      muted: "#64748b",
-      launcherRadius: ".5rem"
+      components: {
+        launcher: {
+          borderRadius: ".5rem"
+        }
+      }
     },
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,

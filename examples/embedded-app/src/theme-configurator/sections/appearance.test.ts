@@ -29,7 +29,6 @@ vi.mock('@runtypelabs/persona', () => ({
   },
   createTheme: vi.fn((config?: Record<string, unknown>) => config ?? {}),
   applyThemeVariables: vi.fn(),
-  migrateV1Theme: vi.fn((x: unknown) => x),
 }));
 
 vi.mock('../../middleware', () => ({

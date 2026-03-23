@@ -199,6 +199,16 @@ export interface HeaderTokens extends ComponentTokenSet {
   background: TokenReference<'color'>;
   border: TokenReference<'color'>;
   borderRadius: TokenReference<'radius'>;
+  /** Background of the rounded avatar tile next to the title (Lucide / emoji / image). */
+  iconBackground: TokenReference<'color'>;
+  /** Foreground (glyph stroke or emoji text) on the header avatar tile. */
+  iconForeground: TokenReference<'color'>;
+  /** Header title line (next to the icon, or minimal layout title). */
+  titleForeground: TokenReference<'color'>;
+  /** Header subtitle line under the title. */
+  subtitleForeground: TokenReference<'color'>;
+  /** Default color for clear / close icon buttons when launcher overrides are unset. */
+  actionIconForeground: TokenReference<'color'>;
   /** Box-shadow on the header (e.g., a fade shadow to replace the default border). */
   shadow?: string;
   /** Override the header bottom border (e.g., `none`). */
@@ -346,6 +356,12 @@ export interface ArtifactTabTokens {
 
 /** Artifact pane chrome. */
 export interface ArtifactPaneTokens {
+  /**
+   * Background for the artifact column (toolbar + content), resolved from the theme.
+   * Defaults to `semantic.colors.container` so the pane matches assistant message surfaces.
+   * `features.artifacts.layout.paneBackground` still wins when set (layout escape hatch).
+   */
+  background?: string;
   toolbarBackground?: string;
 }
 
@@ -440,6 +456,9 @@ export interface PersonaThemeComponents {
 export type PersonaTheme = PersonaThemeBase & 
   PersonaThemeSemantic & 
   PersonaThemeComponents;
+
+/** Recursive partial for `config.theme` / `config.darkTheme` overrides. */
+export type DeepPartial<T> = T extends object ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
 
 export interface ResolvedToken {
   path: string;

@@ -1384,12 +1384,7 @@ function getPreviewLayoutSignature(config: AgentWidgetConfig): string {
   }
 
   const dock = config.launcher?.dock ?? {};
-  return [
-    'docked',
-    dock.side ?? 'right',
-    dock.width ?? '420px',
-    dock.collapsedWidth ?? '72px',
-  ].join(':');
+  return ['docked', dock.side ?? 'right', dock.width ?? '420px'].join(':');
 }
 
 function escapeHtml(str: string): string {

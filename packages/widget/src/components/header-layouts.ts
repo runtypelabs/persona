@@ -7,7 +7,12 @@ import {
   AgentWidgetHeaderLayoutConfig,
   AgentWidgetHeaderTrailingAction
 } from "../types";
-import { buildHeader, HeaderElements, attachHeaderToContainer as _attachHeaderToContainer } from "./header-builder";
+import {
+  buildHeader,
+  HEADER_THEME_CSS,
+  HeaderElements,
+  attachHeaderToContainer as _attachHeaderToContainer,
+} from "./header-builder";
 
 export interface HeaderLayoutContext {
   config: AgentWidgetConfig;
@@ -107,10 +112,14 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 
   const header = createElement(
     "div",
-    "persona-flex persona-items-center persona-justify-between persona-bg-persona-surface persona-px-6 persona-py-4 persona-border-b-persona-divider"
+    "persona-flex persona-items-center persona-justify-between persona-px-6 persona-py-4"
   );
   header.setAttribute("data-persona-theme-zone", "header");
+  header.style.backgroundColor = 'var(--persona-header-bg, var(--persona-surface, #ffffff))';
+  header.style.borderBottomColor = 'var(--persona-header-border, var(--persona-divider, #f1f5f9))';
   header.style.boxShadow = 'var(--persona-header-shadow, none)';
+  header.style.borderBottom =
+    'var(--persona-header-border-bottom, 1px solid var(--persona-header-border, var(--persona-divider, #f1f5f9)))';
 
   // Build the title area — either a combo button (titleMenu) or standard title row
   const titleMenuConfig = layoutHeaderConfig?.titleMenu;
@@ -127,6 +136,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
       className: "",
     });
     titleRow = combo.element;
+    titleRow.style.color = HEADER_THEME_CSS.titleColor;
     // The combo button's label span acts as headerTitle for update()
     headerTitle = titleRow.querySelector(".persona-combo-btn-label") ?? titleRow;
   } else {
@@ -137,6 +147,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 
     // Title only (no icon, no subtitle)
     headerTitle = createElement("span", "persona-text-base persona-font-semibold persona-truncate");
+    headerTitle.style.color = HEADER_THEME_CSS.titleColor;
     headerTitle.textContent = launcher.title ?? "Chat Assistant";
 
     titleRow.appendChild(headerTitle);
@@ -193,21 +204,18 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 
   const closeButton = createElement(
     "button",
-    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
+    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
   ) as HTMLButtonElement;
   closeButton.style.height = closeButtonSize;
   closeButton.style.width = closeButtonSize;
   closeButton.type = "button";
   closeButton.setAttribute("aria-label", "Close chat");
   closeButton.style.display = showClose ? "" : "none";
+  closeButton.style.color =
+    launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
 
   const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-  const closeIconSvg = renderLucideIcon(
-    closeButtonIconName,
-    "20px",
-    launcher.closeButtonColor || "",
-    2
-  );
+  const closeIconSvg = renderLucideIcon(closeButtonIconName, "20px", "currentColor", 2);
   if (closeIconSvg) {
     closeButton.appendChild(closeIconSvg);
   } else {

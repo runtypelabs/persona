@@ -2,6 +2,16 @@ import { createElement, createElementInDocument } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
 
+/** CSS `color` values; variables are set on `#persona-root` from `theme.components.header`. */
+export const HEADER_THEME_CSS = {
+  titleColor:
+    "var(--persona-header-title-fg, var(--persona-primary, #2563eb))",
+  subtitleColor:
+    "var(--persona-header-subtitle-fg, var(--persona-text-muted, var(--persona-muted, #9ca3af)))",
+  actionIconColor:
+    "var(--persona-header-action-icon-fg, var(--persona-muted, #9ca3af))",
+} as const;
+
 export interface HeaderElements {
   header: HTMLElement;
   iconHolder: HTMLElement;
@@ -46,17 +56,21 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
   const iconHolder = createElement(
     "div",
-    "persona-flex persona-items-center persona-justify-center persona-rounded-xl persona-bg-persona-primary persona-text-white persona-text-xl"
+    "persona-flex persona-items-center persona-justify-center persona-rounded-xl persona-text-xl"
   );
   iconHolder.style.height = headerIconSize;
   iconHolder.style.width = headerIconSize;
+  iconHolder.style.backgroundColor =
+    "var(--persona-header-icon-bg, var(--persona-primary, #2563eb))";
+  iconHolder.style.color =
+    "var(--persona-header-icon-fg, var(--persona-text-inverse, #ffffff))";
 
   // Render icon based on priority: Lucide icon > iconUrl > agentIconText
   if (!headerIconHidden) {
     if (headerIconName) {
       // Use Lucide icon
       const iconSize = parseFloat(headerIconSize) || 24;
-      const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "var(--persona-text-inverse, #ffffff)", 1);
+      const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "currentColor", 1);
       if (iconSvg) {
         iconHolder.replaceChildren(iconSvg);
       } else {
@@ -80,8 +94,10 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
   const headerCopy = createElement("div", "persona-flex persona-flex-col");
   const title = createElement("span", "persona-text-base persona-font-semibold");
+  title.style.color = HEADER_THEME_CSS.titleColor;
   title.textContent = config?.launcher?.title ?? "Chat Assistant";
-  const subtitle = createElement("span", "persona-text-xs persona-text-persona-muted");
+  const subtitle = createElement("span", "persona-text-xs");
+  subtitle.style.color = HEADER_THEME_CSS.subtitleColor;
   subtitle.textContent =
     config?.launcher?.subtitle ?? "Here to help you get answers fast";
 
@@ -132,29 +148,20 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
     clearChatButton = createElement(
       "button",
-      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
+      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
     ) as HTMLButtonElement;
 
     clearChatButton.style.height = clearChatSize;
     clearChatButton.style.width = clearChatSize;
     clearChatButton.type = "button";
     clearChatButton.setAttribute("aria-label", clearChatTooltipText);
+    clearChatButton.style.color =
+      clearChatIconColor || HEADER_THEME_CSS.actionIconColor;
 
     // Add icon
-    const iconSvg = renderLucideIcon(
-      clearChatIconName,
-      "20px",
-      clearChatIconColor || "",
-      1
-    );
+    const iconSvg = renderLucideIcon(clearChatIconName, "20px", "currentColor", 1);
     if (iconSvg) {
       clearChatButton.appendChild(iconSvg);
-    }
-
-    // Apply styling from config
-    if (clearChatIconColor) {
-      clearChatButton.style.color = clearChatIconColor;
-      clearChatButton.classList.remove("persona-text-persona-muted");
     }
 
     if (clearChatBgColor) {
@@ -281,7 +288,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   // Create close button with base classes
   const closeButton = createElement(
     "button",
-    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
+    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
   ) as HTMLButtonElement;
   closeButton.style.height = closeButtonSize;
   closeButton.style.width = closeButtonSize;
@@ -297,27 +304,15 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   // Add icon or fallback text
   const closeButtonIconName = launcher.closeButtonIconName ?? "x";
   const closeButtonIconText = launcher.closeButtonIconText ?? "×";
+  closeButton.style.color =
+    launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
 
   // Try to render Lucide icon, fallback to text if not provided or fails
-  const closeIconSvg = renderLucideIcon(
-    closeButtonIconName,
-    "20px",
-    launcher.closeButtonColor || "",
-    1
-  );
+  const closeIconSvg = renderLucideIcon(closeButtonIconName, "20px", "currentColor", 1);
   if (closeIconSvg) {
     closeButton.appendChild(closeIconSvg);
   } else {
     closeButton.textContent = closeButtonIconText;
-  }
-
-  // Apply close button styling from config
-  if (launcher.closeButtonColor) {
-    closeButton.style.color = launcher.closeButtonColor;
-    closeButton.classList.remove("persona-text-persona-muted");
-  } else {
-    closeButton.style.color = "";
-    closeButton.classList.add("persona-text-persona-muted");
   }
 
   if (launcher.closeButtonBackgroundColor) {

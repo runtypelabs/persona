@@ -41,23 +41,6 @@ export interface ComposerBuildContext {
 }
 
 /**
- * Helper to get font family CSS value from config preset
- */
-const getFontFamilyValue = (
-  family: "sans-serif" | "serif" | "mono"
-): string => {
-  switch (family) {
-    case "serif":
-      return 'Georgia, "Times New Roman", Times, serif';
-    case "mono":
-      return '"Courier New", Courier, "Lucida Console", Monaco, monospace';
-    case "sans-serif":
-    default:
-      return '-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
-  }
-};
-
-/**
  * Build the composer/footer section of the panel.
  * Extracted for reuse and plugin override support.
  */
@@ -91,12 +74,9 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     "persona-w-full persona-min-h-[24px] persona-resize-none persona-border-none persona-bg-transparent persona-text-sm persona-text-persona-primary focus:persona-outline-none focus:persona-border-none persona-composer-textarea";
   textarea.rows = 1;
 
-  // Apply font family and weight from config
-  const fontFamily = config?.theme?.inputFontFamily ?? "sans-serif";
-  const fontWeight = config?.theme?.inputFontWeight ?? "400";
-
-  textarea.style.fontFamily = getFontFamilyValue(fontFamily);
-  textarea.style.fontWeight = fontWeight;
+  textarea.style.fontFamily =
+    'var(--persona-input-font-family, var(--persona-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif))';
+  textarea.style.fontWeight = "var(--persona-input-font-weight, var(--persona-font-weight, 400))";
 
   // Set up auto-resize: expand up to 3 lines, then scroll
   // Line height is ~20px for text-sm (14px * 1.25 line-height), so 3 lines ≈ 60px

@@ -48,7 +48,7 @@ vi.mock('@runtypelabs/persona', () => ({
       enabled: true,
       clearChat: {},
       mountMode: 'floating',
-      dock: { side: 'right', width: '420px', collapsedWidth: '72px' },
+      dock: { side: 'right', width: '420px' },
     },
     copy: {},
     voiceRecognition: {},
@@ -73,7 +73,6 @@ vi.mock('@runtypelabs/persona', () => ({
   },
   createTheme: vi.fn((config?: Record<string, unknown>) => config ?? {}),
   applyThemeVariables: vi.fn(),
-  migrateV1Theme: vi.fn((x: unknown) => x),
   getActiveTheme: vi.fn((config: Record<string, unknown>) => config.theme ?? {}),
   themeToCssVariables: vi.fn(() => ({
     '--persona-background': '#f8fafc',
@@ -576,7 +575,6 @@ describe('theme configurator shell', () => {
     state.setImmediate('launcher.mountMode', 'docked');
     state.setImmediate('launcher.dock.side', 'left');
     state.setImmediate('launcher.dock.width', '480px');
-    state.setImmediate('launcher.dock.collapsedWidth', '84px');
 
     const wrapper = document.querySelector<HTMLElement>(
       '.preview-iframe-wrapper[data-mount-id="preview-current"]'
@@ -584,7 +582,7 @@ describe('theme configurator shell', () => {
     const iframe = document.querySelector<HTMLIFrameElement>('iframe[data-mount-id="preview-current"]');
 
     expect(wrapper).not.toBeNull();
-    expect(wrapper?.dataset.layoutSignature).toBe('docked:left:480px:84px');
+    expect(wrapper?.dataset.layoutSignature).toBe('docked:left:480px');
     expect(iframe).not.toBeNull();
     expect(iframe!.srcdoc).toContain('preview-workspace-shell');
     expect(iframe!.srcdoc).toMatch(/\.preview-workspace-shell \{[^}]*height: 100%/);

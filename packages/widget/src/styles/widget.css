@@ -2360,7 +2360,11 @@
 #persona-root .persona-artifact-pane {
   border-radius: var(--persona-artifact-pane-radius, 0);
   overflow: hidden;
-  background-color: var(--persona-artifact-pane-bg, var(--persona-surface, #ffffff));
+  /* Layout paneBackground → theme components.artifact.pane.background → semantic surface */
+  background-color: var(
+    --persona-artifact-pane-bg,
+    var(--persona-components-artifact-pane-background, var(--persona-surface, #ffffff))
+  );
 }
 
 /* paneAppearance: 'seamless' — flush with chat, no border/shadow/gap */
@@ -2374,7 +2378,11 @@
   border-left-width: 0 !important;
   border-left-color: transparent !important;
   box-shadow: none !important;
-  background-color: var(--persona-artifact-pane-bg, var(--persona-container, #f8fafc));
+  /* Same token chain; final fallback stays container for flush split chrome */
+  background-color: var(
+    --persona-artifact-pane-bg,
+    var(--persona-components-artifact-pane-background, var(--persona-container, #f8fafc))
+  );
 }
 
 /* layout.paneBorder / paneBorderLeft — theme overrides (after appearance defaults) */

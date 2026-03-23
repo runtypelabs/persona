@@ -115,6 +115,11 @@ const headerColorsSectionDef: SectionDef = {
   collapsed: true,
   fields: [
     { id: 'header-bg', label: 'Background', type: 'token-ref', path: 'theme.components.header.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'header-icon-bg', label: 'Icon background', type: 'token-ref', path: 'theme.components.header.iconBackground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
+    { id: 'header-icon-fg', label: 'Icon color', type: 'token-ref', path: 'theme.components.header.iconForeground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
+    { id: 'header-title-fg', label: 'Title color', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
+    { id: 'header-subtitle-fg', label: 'Subtitle color', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
+    { id: 'header-action-icons-fg', label: 'Clear / close icons', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
     { id: 'header-border', label: 'Border', type: 'token-ref', path: 'theme.components.header.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
   ],
 };

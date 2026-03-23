@@ -8,14 +8,12 @@ import {
   DEFAULT_WIDGET_CONFIG,
   createTheme,
   applyThemeVariables,
-  migrateV1Theme,
 } from '@runtypelabs/persona';
 import type { AgentWidgetController } from '@runtypelabs/persona';
 import { parseActionResponse } from '../middleware';
 
 // ─── Constants ──────────────────────────────────────────────────────
 const STORAGE_KEY = 'persona-widget-config-v2';
-const STORAGE_KEY_V1 = 'persona-widget-config';
 const EDITOR_UI_STORAGE_KEY = 'persona-theme-editor-ui';
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
@@ -230,6 +228,8 @@ export function initStore(previewMount?: HTMLElement): AgentWidgetController | n
     currentConfig = saved.config;
     currentTheme = saved.theme;
   }
+  // Strip legacy launcher header icon hex (old defaults) so theme tokens control preview.
+  currentConfig = normalizeConfig(currentConfig);
   syncThemeIntoConfig();
 
   const savedUi = loadEditorUiFromStorage();
@@ -350,7 +350,7 @@ export function buildPreviewConfig(
     {
       ...base,
       suggestionChips: sanitizedSuggestionChips,
-      theme: snapshot.theme as AgentWidgetConfig['theme'],
+      theme: snapshot.theme,
       colorScheme,
     },
     scene
@@ -671,7 +671,7 @@ function applyThemeToWidget(): void {
 function syncThemeIntoConfig(): void {
   currentConfig = {
     ...currentConfig,
-    theme: currentTheme as AgentWidgetConfig['theme'],
+    theme: currentTheme,
   };
 }
 
@@ -730,12 +730,43 @@ function serializeConfig(config: AgentWidgetConfig): any {
   };
 }
 
+/** Former default launcher icon gray; drop so `theme.components.header.actionIconForeground` can apply. */
+const LEGACY_LAUNCHER_HEADER_ICON_HEX = /^#6b7280$/i;
+
 function normalizeConfig(configLike: any, defaults: AgentWidgetConfig = getDefaultConfig()): AgentWidgetConfig {
   const config = configLike ?? {};
   const rawStatus = config.statusIndicator ?? {};
   const rawLauncher = config.launcher ?? {};
   const rawLayout = config.layout ?? {};
   const rawAttachments = config.attachments ?? defaults.attachments;
+
+  const mergedClearChat = {
+    ...defaults.launcher?.clearChat,
+    ...rawLauncher.clearChat,
+  };
+  if (
+    typeof mergedClearChat.iconColor === 'string' &&
+    LEGACY_LAUNCHER_HEADER_ICON_HEX.test(mergedClearChat.iconColor.trim())
+  ) {
+    delete (mergedClearChat as { iconColor?: string }).iconColor;
+  }
+
+  const mergedLauncher: Record<string, unknown> = {
+    ...defaults.launcher,
+    ...rawLauncher,
+    dock: {
+      ...defaults.launcher?.dock,
+      ...rawLauncher.dock,
+    },
+    clearChat: mergedClearChat,
+  };
+
+  if (
+    typeof mergedLauncher.closeButtonColor === 'string' &&
+    LEGACY_LAUNCHER_HEADER_ICON_HEX.test(mergedLauncher.closeButtonColor.trim())
+  ) {
+    delete mergedLauncher.closeButtonColor;
+  }
 
   return {
     ...defaults,
@@ -751,18 +782,7 @@ function normalizeConfig(configLike: any, defaults: AgentWidgetConfig = getDefau
       connectedText: rawStatus.connectedText ?? defaults.statusIndicator?.connectedText,
       errorText: rawStatus.errorText ?? rawStatus.offlineText ?? defaults.statusIndicator?.errorText,
     },
-    launcher: {
-      ...defaults.launcher,
-      ...rawLauncher,
-      dock: {
-        ...defaults.launcher?.dock,
-        ...rawLauncher.dock,
-      },
-      clearChat: {
-        ...defaults.launcher?.clearChat,
-        ...rawLauncher.clearChat,
-      },
-    },
+    launcher: mergedLauncher as AgentWidgetConfig['launcher'],
     copy: { ...defaults.copy, ...config.copy },
     voiceRecognition: { ...defaults.voiceRecognition, ...config.voiceRecognition },
     features: { ...defaults.features, ...config.features },
@@ -880,7 +900,6 @@ function saveToStorage(): void {
 function clearStorage(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(STORAGE_KEY_V1);
     localStorage.removeItem(EDITOR_UI_STORAGE_KEY);
   } catch {
     // Ignore
@@ -953,24 +972,6 @@ function loadFromStorage(): StorageResult | null {
         const theme = createTheme(parsed.theme, { validate: false });
         return { config, theme };
       }
-    }
-
-    // Try v1 format and migrate
-    const v1Saved = localStorage.getItem(STORAGE_KEY_V1);
-    if (v1Saved) {
-      const parsed = JSON.parse(v1Saved);
-      const config = normalizeConfig({
-        ...parsed,
-        parserType: parsed.parserType ?? (parsed as any)._parserType ?? 'plain',
-      });
-
-      // Migrate v1 theme to v2
-      const v2ThemePartial = migrateV1Theme(parsed.theme, { warn: false });
-      const theme = createTheme(v2ThemePartial, { validate: false });
-
-      // Save in v2 format going forward
-      localStorage.removeItem(STORAGE_KEY_V1);
-      return { config, theme };
     }
   } catch (error) {
     console.error('Failed to load config:', error);

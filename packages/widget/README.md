@@ -77,7 +77,6 @@ const docked = initAgentWidget({
       dock: {
         side: 'right',
         width: '420px',
-        collapsedWidth: '72px'
       }
     }
   }
@@ -97,6 +96,12 @@ const docked = initAgentWidget({
 | `windowKey` | `string` | If provided, stores the controller on `window[windowKey]` for global access. Automatically cleaned up on `destroy()`. |
 
 When `config.launcher.mountMode` is `'docked'`, `target` is treated as the page container that Persona should wrap. Use a concrete element such as `#workspace-main`; `body` and `html` are rejected.
+
+With **`dock.reveal: 'resize'`** (default), a **closed** dock uses a **`0px`** column. **`'emerge'`** uses the same **column width** animation (content reflows) but the chat panel stays **`dock.width`** wide and is **clipped** by the growing slot—like a normal-width widget emerging from the edge. **`'overlay'`** overlays with `transform`. **`'push'`** uses a sliding track (Shopify-style). The built-in launcher stays hidden in docked mode—open with **`controller.open()`** (or your own chrome).
+
+**Rounded / card layout:** `initAgentWidget` inserts a flex **shell** as the **direct child** of your target’s **parent**, with your `target` in the content column and the dock beside it. Put border-radius, border, and `overflow: hidden` on that **parent** (or an ancestor that wraps only the shell) so the dock column sits inside the same visual card as your content.
+
+**Inner push/overlay:** With `reveal: 'push'` or `'overlay'`, only the wrapped node moves. Use a **narrow `target`** (e.g. a main canvas div). For **`dock.side: 'left'`**, place a persistent rail **in flow** next to the stage (e.g. flex `[nav | stage]`) so the dock doesn’t open **under** the sidebar. For a **right** dock, you can instead use a **full-width** stage with an **absolute** left rail if you want the canvas to translate **behind** that rail.
 
 > **Security note:** When you return HTML from `postprocessMessage`, make sure you sanitise it before injecting into the page. The provided postprocessors (`markdownPostprocessor`, `directivePostprocessor`) do not perform sanitisation.
 
@@ -1677,8 +1682,8 @@ config: {
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `theme` | `AgentWidgetTheme` | CSS variable overrides for colors, border radii, and visual styles. See [THEME-CONFIG.md](./THEME-CONFIG.md) for the full property list. |
-| `darkTheme` | `AgentWidgetTheme` | Theme overrides for dark mode. Falls back to `theme` when not provided. |
+| `theme` | `DeepPartial<PersonaTheme>` | Semantic tokens (`palette`, `semantic`, `components`). See [THEME-CONFIG.md](./THEME-CONFIG.md). Flat v1-style objects are still accepted at runtime (with a console warning) and migrated internally. |
+| `darkTheme` | `DeepPartial<PersonaTheme>` | Dark-mode token overrides, merged over `theme` when the active scheme is dark. |
 | `colorScheme` | `'light' \| 'dark' \| 'auto'` | Color scheme mode. `'auto'` detects from `<html class="dark">` or `prefers-color-scheme`. Default: `'light'`. |
 | `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel? }` | Customize user-facing text strings. |
 | `autoFocusInput` | `boolean` | Focus the chat input after the panel opens. Skips when voice is active. Default: `false`. |
@@ -1703,7 +1708,7 @@ Controls the floating launcher button and panel.
 | `iconUrl` | `string?` | URL for the launcher icon image. |
 | `position` | `'bottom-right' \| 'bottom-left' \| 'top-right' \| 'top-left'?` | Screen corner position. |
 | `mountMode` | `'floating' \| 'docked'?` | Mount as the existing floating launcher or wrap the target with a docked side panel. Default: `'floating'`. |
-| `dock` | `{ side?: 'left' \| 'right'; width?: string; collapsedWidth?: string }?` | Docked panel sizing and side. Defaults: right / `420px` / `72px`. |
+| `dock` | `{ side?, width?, animate?, reveal? }?` | Dock layout. Defaults: right / `420px` / `animate: true` / `reveal: 'resize'`. `reveal: 'emerge'` = content column animates like resize but the panel stays fixed `dock.width` (clip-in). `reveal: 'overlay'` = transform overlay; `reveal: 'push'` = sliding track. `animate: false` snaps without transition. |
 | `width` | `string?` | Width of the launcher button. |
 | `fullHeight` | `boolean?` | Fill the full height of the container. Default: `false`. |
 | `sidebarMode` | `boolean?` | Flush sidebar layout with no border-radius or margins. Default: `false`. |

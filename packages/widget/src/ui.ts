@@ -27,15 +27,17 @@ import {
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
-import { applyThemeVariables, createThemeObserver } from "./utils/theme";
+import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
+import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
 import { createElement, createElementInDocument } from "./utils/dom";
 import { morphMessages } from "./utils/morph";
 import { computeMessageFingerprint, createMessageCache, getCachedWrapper, setCachedWrapper, pruneCache } from "./utils/message-fingerprint";
 import { statusCopy } from "./utils/constants";
-import { isDockedMountMode } from "./utils/dock";
+import { isDockedMountMode, resolveDockConfig } from "./utils/dock";
 import { createLauncherButton } from "./components/launcher";
 import { createWrapper, buildPanel, buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
+import { HEADER_THEME_CSS } from "./components/header-builder";
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
@@ -1402,6 +1404,7 @@ export const createAgentExperience = (
       if (!launcherEnabled || !artifactPaneApi) return;
       const sidebarMode = config.launcher?.sidebarMode ?? false;
       if (sidebarMode) return;
+      if (isDockedMountMode(config) && resolveDockConfig(config).reveal === "emerge") return;
       const ownerWindow = mount.ownerDocument.defaultView ?? window;
       const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
       const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
@@ -1442,7 +1445,12 @@ export const createAgentExperience = (
     const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
     /** Script-tag / div embed: launcher off, host supplies a sized mount. */
     const isInlineEmbed = config.launcher?.enabled === false;
-    const theme = config.theme ?? {};
+    const panelPartial = config.theme?.components?.panel;
+    const activeTheme = getActiveTheme(config);
+    const resolvePanelChrome = (raw: string | undefined, fallback: string): string => {
+      if (raw == null || raw === "") return fallback;
+      return resolveTokenValue(activeTheme, raw) ?? raw;
+    };
 
     // Mobile fullscreen detection
     // Use mount's ownerDocument window to get correct viewport width when widget is inside an iframe
@@ -1457,20 +1465,25 @@ export const createAgentExperience = (
     const isLeftSidebar = position === 'bottom-left' || position === 'top-left';
 
     // Default values based on mode
-    const defaultPanelBorder = (sidebarMode || shouldGoFullscreen) ? 'none' : '1px solid var(--persona-persona-border)';
-    const defaultPanelShadow = shouldGoFullscreen
+    let defaultPanelBorder = (sidebarMode || shouldGoFullscreen) ? 'none' : '1px solid var(--persona-border)';
+    let defaultPanelShadow = shouldGoFullscreen
       ? 'none'
       : sidebarMode
         ? (isLeftSidebar ? 'var(--persona-palette-shadows-sidebar-left, 2px 0 12px rgba(0, 0, 0, 0.08))' : 'var(--persona-palette-shadows-sidebar-right, -2px 0 12px rgba(0, 0, 0, 0.08))')
         : 'var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25))';
+
+    if (dockedMode && !shouldGoFullscreen) {
+      defaultPanelShadow = 'none';
+      defaultPanelBorder = 'none';
+    }
     const defaultPanelBorderRadius = (sidebarMode || shouldGoFullscreen)
       ? '0'
       : 'var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))';
 
-    // Apply theme overrides or defaults
-    const panelBorder = theme.panelBorder ?? defaultPanelBorder;
-    const panelShadow = theme.panelShadow ?? defaultPanelShadow;
-    const panelBorderRadius = theme.panelBorderRadius ?? defaultPanelBorderRadius;
+    // Apply theme overrides or defaults (components.panel.*)
+    const panelBorder = resolvePanelChrome(panelPartial?.border, defaultPanelBorder);
+    const panelShadow = resolvePanelChrome(panelPartial?.shadow, defaultPanelShadow);
+    const panelBorderRadius = resolvePanelChrome(panelPartial?.borderRadius, defaultPanelBorderRadius);
 
     // Reset all inline styles first to handle mode toggling
     // This ensures styles don't persist when switching between modes
@@ -1557,8 +1570,15 @@ export const createAgentExperience = (
         panel.style.maxWidth = width;
       }
     } else if (dockedMode) {
-      panel.style.width = "100%";
-      panel.style.maxWidth = "100%";
+      const dockReveal = resolveDockConfig(config).reveal;
+      if (dockReveal === "emerge") {
+        const dw = resolveDockConfig(config).width;
+        panel.style.width = dw;
+        panel.style.maxWidth = dw;
+      } else {
+        panel.style.width = "100%";
+        panel.style.maxWidth = "100%";
+      }
     }
     applyLauncherArtifactPanelWidth();
 
@@ -1570,6 +1590,16 @@ export const createAgentExperience = (
     panel.style.borderRadius = panelBorderRadius;
     container.style.border = panelBorder;
     container.style.borderRadius = panelBorderRadius;
+
+    if (dockedMode && !shouldGoFullscreen && panelPartial?.border === undefined) {
+      container.style.border = 'none';
+      const dockSide = resolveDockConfig(config).side;
+      if (dockSide === 'right') {
+        container.style.borderLeft = '1px solid var(--persona-border)';
+      } else {
+        container.style.borderRight = '1px solid var(--persona-border)';
+      }
+    }
 
     if (fullHeight) {
       // Mount container
@@ -2432,7 +2462,19 @@ export const createAgentExperience = (
   const updateOpenState = () => {
     if (!launcherEnabled) return;
     const dockedMode = isDockedMountMode(config);
+    const ownerWindow = mount.ownerDocument.defaultView ?? window;
+    const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
+    const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
+    const isMobileViewport = ownerWindow.innerWidth <= mobileBreakpoint;
+    const shouldGoFullscreen = mobileFullscreen && isMobileViewport && launcherEnabled;
+    const dockReveal = resolveDockConfig(config).reveal;
+    const dockRevealUsesTransform =
+      dockedMode && (dockReveal === "overlay" || dockReveal === "push") && !shouldGoFullscreen;
+
     if (open) {
+      // Clear any display:none !important from a closed docked state so mobile fullscreen
+      // (display:flex !important) and dock layout can apply in recalcPanelHeight.
+      wrapper.style.removeProperty("display");
       wrapper.style.display = dockedMode ? "flex" : "";
       wrapper.classList.remove("persona-pointer-events-none", "persona-opacity-0");
       panel.classList.remove("persona-scale-95", "persona-opacity-0");
@@ -2445,20 +2487,29 @@ export const createAgentExperience = (
       }
     } else {
       if (dockedMode) {
-        wrapper.style.display = "none";
-        wrapper.classList.remove("persona-pointer-events-none", "persona-opacity-0");
-        panel.classList.remove("persona-scale-100", "persona-opacity-100", "persona-scale-95", "persona-opacity-0");
+        if (dockRevealUsesTransform) {
+          // Slide/push reveal: keep the panel painted so host-layout `transform` can animate.
+          wrapper.style.removeProperty("display");
+          wrapper.style.display = "flex";
+          wrapper.classList.remove("persona-pointer-events-none", "persona-opacity-0");
+          panel.classList.remove("persona-scale-100", "persona-opacity-100", "persona-scale-95", "persona-opacity-0");
+        } else {
+          // Must beat applyFullHeightStyles() mobile shell: display:flex !important on wrapper
+          wrapper.style.setProperty("display", "none", "important");
+          wrapper.classList.remove("persona-pointer-events-none", "persona-opacity-0");
+          panel.classList.remove("persona-scale-100", "persona-opacity-100", "persona-scale-95", "persona-opacity-0");
+        }
       } else {
         wrapper.style.display = "";
         wrapper.classList.add("persona-pointer-events-none", "persona-opacity-0");
         panel.classList.remove("persona-scale-100", "persona-opacity-100");
         panel.classList.add("persona-scale-95", "persona-opacity-0");
       }
-      // Show launcher button when widget is closed
+      // Show launcher when closed, except docked mode (0px column — use controller.open()).
       if (launcherButtonInstance) {
-        launcherButtonInstance.element.style.display = "";
+        launcherButtonInstance.element.style.display = dockedMode ? "none" : "";
       } else if (customLauncherElement) {
-        customLauncherElement.style.display = "";
+        customLauncherElement.style.display = dockedMode ? "none" : "";
       }
     }
   };
@@ -2544,24 +2595,9 @@ export const createAgentExperience = (
       sendButton.textContent = config.copy?.sendButtonLabel ?? "Send";
     }
 
-    // Update textarea font family and weight
-    const fontFamily = config.theme?.inputFontFamily ?? "sans-serif";
-    const fontWeight = config.theme?.inputFontWeight ?? "400";
-    
-    const getFontFamilyValue = (family: "sans-serif" | "serif" | "mono"): string => {
-      switch (family) {
-        case "serif":
-          return 'Georgia, "Times New Roman", Times, serif';
-        case "mono":
-          return '"Courier New", Courier, "Lucida Console", Monaco, monospace';
-        case "sans-serif":
-        default:
-          return '-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
-      }
-    };
-    
-    textarea.style.fontFamily = getFontFamilyValue(fontFamily);
-    textarea.style.fontWeight = fontWeight;
+    textarea.style.fontFamily =
+      'var(--persona-input-font-family, var(--persona-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif))';
+    textarea.style.fontWeight = "var(--persona-input-font-weight, var(--persona-font-weight, 400))";
   };
 
   // Add session ID persistence callbacks for client token mode
@@ -3383,43 +3419,49 @@ export const createAgentExperience = (
     const isMobileViewport = ownerWindow.innerWidth <= mobileBreakpoint;
     const shouldGoFullscreen = mobileFullscreen && isMobileViewport && launcherEnabled;
 
-    if (shouldGoFullscreen) {
-      applyFullHeightStyles();
-      applyThemeVariables(mount, config);
-      return;
-    }
+    try {
+      if (shouldGoFullscreen) {
+        applyFullHeightStyles();
+        applyThemeVariables(mount, config);
+        return;
+      }
 
-    // Exiting mobile fullscreen (e.g., orientation change to landscape) — reset all styles
-    if (wasMobileFullscreen) {
-      wasMobileFullscreen = false;
-      applyFullHeightStyles();
-      applyThemeVariables(mount, config);
-    }
+      // Exiting mobile fullscreen (e.g., orientation change to landscape) — reset all styles
+      if (wasMobileFullscreen) {
+        wasMobileFullscreen = false;
+        applyFullHeightStyles();
+        applyThemeVariables(mount, config);
+      }
 
-    if (!launcherEnabled && !dockedMode) {
-      panel.style.height = "";
-      panel.style.width = "";
-      return;
-    }
+      if (!launcherEnabled && !dockedMode) {
+        panel.style.height = "";
+        panel.style.width = "";
+        return;
+      }
 
-    // In sidebar/fullHeight mode, don't override the width - it's handled by applyFullHeightStyles
-    if (!sidebarMode && !dockedMode) {
-      const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
-      const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
-      panel.style.width = width;
-      panel.style.maxWidth = width;
-    }
-    applyLauncherArtifactPanelWidth();
+      // In sidebar/fullHeight mode, don't override the width - it's handled by applyFullHeightStyles
+      if (!sidebarMode && !dockedMode) {
+        const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
+        const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
+        panel.style.width = width;
+        panel.style.maxWidth = width;
+      }
+      applyLauncherArtifactPanelWidth();
 
-    // In fullHeight mode, don't set a fixed height
-    if (!fullHeight) {
-      const viewportHeight = ownerWindow.innerHeight;
-      const verticalMargin = 64; // leave space for launcher's offset
-      const heightOffset = config.launcher?.heightOffset ?? 0;
-      const available = Math.max(200, viewportHeight - verticalMargin);
-      const clamped = Math.min(640, available);
-      const finalHeight = Math.max(200, clamped - heightOffset);
-      panel.style.height = `${finalHeight}px`;
+      // In fullHeight mode, don't set a fixed height
+      if (!fullHeight) {
+        const viewportHeight = ownerWindow.innerHeight;
+        const verticalMargin = 64; // leave space for launcher's offset
+        const heightOffset = config.launcher?.heightOffset ?? 0;
+        const available = Math.max(200, viewportHeight - verticalMargin);
+        const clamped = Math.min(640, available);
+        const finalHeight = Math.max(200, clamped - heightOffset);
+        panel.style.height = `${finalHeight}px`;
+      }
+    } finally {
+      // applyFullHeightStyles() assigns wrapper.style.cssText (e.g. display:flex !important), which
+      // overwrites updateOpenState()'s display:none when docked+closed. Re-sync after every recalc.
+      updateOpenState();
     }
   };
 
@@ -3959,14 +4001,9 @@ export const createAgentExperience = (
           }
         }
         
-        // Apply close button styling from config
-        if (launcher.closeButtonColor) {
-          closeButton.style.color = launcher.closeButtonColor;
-          closeButton.classList.remove("persona-text-persona-muted");
-        } else {
-          closeButton.style.color = "";
-          closeButton.classList.add("persona-text-persona-muted");
-        }
+        // Close icon: launcher color wins; else theme.components.header.actionIconForeground
+        closeButton.style.color =
+          launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
         
         if (launcher.closeButtonBackgroundColor) {
           closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
@@ -4017,7 +4054,7 @@ export const createAgentExperience = (
 
         // Clear existing content and render new icon
         closeButton.innerHTML = "";
-        const iconSvg = renderLucideIcon(closeButtonIconName, "20px", launcher.closeButtonColor || "", 2);
+        const iconSvg = renderLucideIcon(closeButtonIconName, "20px", "currentColor", 2);
         if (iconSvg) {
           closeButton.appendChild(iconSvg);
         } else {
@@ -4184,20 +4221,14 @@ export const createAgentExperience = (
           const clearChatIconName = clearChatConfig.iconName ?? "refresh-cw";
           const clearChatIconColor = clearChatConfig.iconColor ?? "";
 
+          clearChatButton.style.color =
+            clearChatIconColor || HEADER_THEME_CSS.actionIconColor;
+
           // Clear existing icon and render new one
           clearChatButton.innerHTML = "";
-          const iconSvg = renderLucideIcon(clearChatIconName, "20px", clearChatIconColor || "", 2);
+          const iconSvg = renderLucideIcon(clearChatIconName, "20px", "currentColor", 2);
           if (iconSvg) {
             clearChatButton.appendChild(iconSvg);
-          }
-
-          // Update icon color
-          if (clearChatIconColor) {
-            clearChatButton.style.color = clearChatIconColor;
-            clearChatButton.classList.remove("persona-text-persona-muted");
-          } else {
-            clearChatButton.style.color = "";
-            clearChatButton.classList.add("persona-text-persona-muted");
           }
 
           // Update background color

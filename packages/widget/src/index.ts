@@ -5,7 +5,6 @@ import {
 
 export type {
   AgentWidgetConfig,
-  AgentWidgetTheme,
   AgentWidgetFeatureFlags,
   AgentWidgetArtifactsFeature,
   AgentWidgetArtifactsLayoutConfig,
@@ -222,11 +221,8 @@ export {
   highContrastPlugin,
   createPlugin
 } from "./utils/plugins";
-export {
-  migrateV1Theme,
-  validateV1Theme
-} from "./utils/migration";
 export type {
+  DeepPartial,
   PersonaTheme,
   PersonaThemePlugin,
   CreateThemeOptions,
@@ -270,8 +266,6 @@ export {
 // Default configuration exports
 export {
   DEFAULT_WIDGET_CONFIG,
-  DEFAULT_LIGHT_THEME,
-  DEFAULT_DARK_THEME,
   mergeWithDefaults
 } from "./defaults";
 export {

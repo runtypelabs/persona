@@ -1,4 +1,5 @@
 import type {
+  DeepPartial,
   PersonaTheme,
   ResolvedToken,
   ThemeValidationResult,
@@ -265,6 +266,11 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     border: 'semantic.colors.border',
     borderRadius: 'palette.radius.xl palette.radius.xl 0 0',
     padding: 'semantic.spacing.md',
+    iconBackground: 'semantic.colors.primary',
+    iconForeground: 'semantic.colors.textInverse',
+    titleForeground: 'semantic.colors.primary',
+    subtitleForeground: 'semantic.colors.textMuted',
+    actionIconForeground: 'semantic.colors.textMuted',
   },
   message: {
     user: {
@@ -341,9 +347,15 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       border: 'palette.colors.gray.200',
     },
   },
+  artifact: {
+    pane: {
+      background: 'semantic.colors.container',
+      toolbarBackground: 'semantic.colors.container',
+    },
+  },
 };
 
-function resolveTokenValue(theme: PersonaTheme, path: string): string | undefined {
+export function resolveTokenValue(theme: PersonaTheme, path: string): string | undefined {
   if (
     !path.startsWith('palette.') &&
     !path.startsWith('semantic.') &&
@@ -481,7 +493,7 @@ function deepMergeComponents(
 }
 
 export function createTheme(
-  userConfig?: Partial<PersonaTheme>,
+  userConfig?: DeepPartial<PersonaTheme>,
   options: CreateThemeOptions = {}
 ): PersonaTheme {
   const baseTheme: PersonaTheme = {
@@ -543,8 +555,11 @@ export function createTheme(
         ...userConfig?.semantic?.typography,
       },
     },
-    components: deepMergeComponents(baseTheme.components, userConfig?.components),
-  };
+    components: deepMergeComponents(
+      baseTheme.components,
+      userConfig?.components as Partial<ComponentTokens> | undefined
+    ),
+  } as PersonaTheme;
 
   if (options.validate !== false) {
     const validation = validateTheme(theme);
@@ -606,6 +621,9 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-font-weight'] = cssVars['--persona-semantic-typography-fontWeight'] ?? cssVars['--persona-palette-typography-fontWeight-normal'];
   cssVars['--persona-line-height'] = cssVars['--persona-semantic-typography-lineHeight'] ?? cssVars['--persona-palette-typography-lineHeight-normal'];
 
+  cssVars['--persona-input-font-family'] = cssVars['--persona-font-family'];
+  cssVars['--persona-input-font-weight'] = cssVars['--persona-font-weight'];
+
   // Radius aliases used throughout the existing widget CSS.
   cssVars['--persona-radius-sm'] = cssVars['--persona-palette-radius-sm'] ?? '0.125rem';
   cssVars['--persona-radius-md'] = cssVars['--persona-palette-radius-md'] ?? '0.375rem';
@@ -623,6 +641,12 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-panel-borderRadius'] ??
     cssVars['--persona-radius-xl'] ??
     '0.75rem';
+  cssVars['--persona-panel-border'] =
+    cssVars['--persona-components-panel-border'] ?? `1px solid ${cssVars['--persona-border']}`;
+  cssVars['--persona-panel-shadow'] =
+    cssVars['--persona-components-panel-shadow'] ??
+    cssVars['--persona-palette-shadows-xl'] ??
+    '0 25px 50px -12px rgba(0, 0, 0, 0.25)';
   cssVars['--persona-input-radius'] =
     cssVars['--persona-components-input-borderRadius'] ??
     cssVars['--persona-radius-lg'] ??
@@ -642,6 +666,16 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-header-background'] ?? cssVars['--persona-surface'];
   cssVars['--persona-header-border'] =
     cssVars['--persona-components-header-border'] ?? cssVars['--persona-divider'];
+  cssVars['--persona-header-icon-bg'] =
+    cssVars['--persona-components-header-iconBackground'] ?? cssVars['--persona-primary'];
+  cssVars['--persona-header-icon-fg'] =
+    cssVars['--persona-components-header-iconForeground'] ?? cssVars['--persona-text-inverse'];
+  cssVars['--persona-header-title-fg'] =
+    cssVars['--persona-components-header-titleForeground'] ?? cssVars['--persona-primary'];
+  cssVars['--persona-header-subtitle-fg'] =
+    cssVars['--persona-components-header-subtitleForeground'] ?? cssVars['--persona-text-muted'];
+  cssVars['--persona-header-action-icon-fg'] =
+    cssVars['--persona-components-header-actionIconForeground'] ?? cssVars['--persona-muted'];
 
   const headerTokens = theme.components?.header;
   if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;
@@ -781,7 +815,11 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   }
   if (artifact?.pane) {
     const t = artifact.pane;
-    if (t.toolbarBackground) cssVars['--persona-artifact-toolbar-bg'] = t.toolbarBackground;
+    if (t.toolbarBackground) {
+      const toolbarBg =
+        resolveTokenValue(theme, t.toolbarBackground) ?? t.toolbarBackground;
+      cssVars['--persona-artifact-toolbar-bg'] = toolbarBg;
+    }
   }
 
   return cssVars;

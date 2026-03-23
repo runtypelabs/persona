@@ -15,6 +15,16 @@ export type WidgetHostLayout = {
   destroy: () => void;
 };
 
+/** Parse `dock.width` for push layout math (px or % of shell). Fallback: 420. */
+const parseDockWidthToPx = (width: string, shellClientWidth: number): number => {
+  const w = width.trim();
+  const px = /^(\d+(?:\.\d+)?)px$/i.exec(w);
+  if (px) return Math.max(0, parseFloat(px[1]));
+  const pct = /^(\d+(?:\.\d+)?)%$/i.exec(w);
+  if (pct) return Math.max(0, (shellClientWidth * parseFloat(pct[1])) / 100);
+  return 420;
+};
+
 const setDirectHostStyles = (host: HTMLElement, config?: AgentWidgetConfig): void => {
   const launcherEnabled = config?.launcher?.enabled ?? true;
   host.className = "persona-host";
@@ -25,8 +35,90 @@ const setDirectHostStyles = (host: HTMLElement, config?: AgentWidgetConfig): voi
   host.style.minHeight = launcherEnabled ? "" : "0";
 };
 
+const clearOverlayDockSlotStyles = (dockSlot: HTMLElement): void => {
+  dockSlot.style.position = "";
+  dockSlot.style.top = "";
+  dockSlot.style.bottom = "";
+  dockSlot.style.left = "";
+  dockSlot.style.right = "";
+  dockSlot.style.zIndex = "";
+  dockSlot.style.transform = "";
+  dockSlot.style.pointerEvents = "";
+};
+
+const clearResizeDockSlotTransition = (dockSlot: HTMLElement): void => {
+  dockSlot.style.transition = "";
+};
+
+const clearPushTrackStyles = (pushTrack: HTMLElement): void => {
+  pushTrack.style.display = "";
+  pushTrack.style.flexDirection = "";
+  pushTrack.style.flex = "";
+  pushTrack.style.minHeight = "";
+  pushTrack.style.minWidth = "";
+  pushTrack.style.width = "";
+  pushTrack.style.height = "";
+  pushTrack.style.alignItems = "";
+  pushTrack.style.transition = "";
+  pushTrack.style.transform = "";
+};
+
+const resetContentSlotFlexSizing = (contentSlot: HTMLElement): void => {
+  contentSlot.style.width = "";
+  contentSlot.style.maxWidth = "";
+  contentSlot.style.minWidth = "";
+  contentSlot.style.flex = "1 1 auto";
+};
+
+const clearEmergeDockStyles = (host: HTMLElement, dockSlot: HTMLElement): void => {
+  host.style.width = "";
+  host.style.minWidth = "";
+  host.style.maxWidth = "";
+  host.style.boxSizing = "";
+  dockSlot.style.alignItems = "";
+};
+
+const migrateDockChildren = (
+  shell: HTMLElement,
+  pushTrack: HTMLElement,
+  contentSlot: HTMLElement,
+  dockSlot: HTMLElement,
+  usePush: boolean
+): void => {
+  if (usePush) {
+    if (contentSlot.parentElement !== pushTrack) {
+      shell.replaceChildren();
+      pushTrack.replaceChildren(contentSlot, dockSlot);
+      shell.appendChild(pushTrack);
+    }
+  } else if (contentSlot.parentElement === pushTrack) {
+    pushTrack.replaceChildren();
+    shell.appendChild(contentSlot);
+    shell.appendChild(dockSlot);
+  }
+};
+
+const orderDockChildren = (
+  shell: HTMLElement,
+  pushTrack: HTMLElement,
+  contentSlot: HTMLElement,
+  dockSlot: HTMLElement,
+  side: "left" | "right",
+  usePush: boolean
+): void => {
+  const parent = usePush ? pushTrack : shell;
+  if (side === "left") {
+    if (parent.firstElementChild !== dockSlot) {
+      parent.replaceChildren(dockSlot, contentSlot);
+    }
+  } else if (parent.lastElementChild !== dockSlot) {
+    parent.replaceChildren(contentSlot, dockSlot);
+  }
+};
+
 const applyDockStyles = (
   shell: HTMLElement,
+  pushTrack: HTMLElement,
   contentSlot: HTMLElement,
   dockSlot: HTMLElement,
   host: HTMLElement,
@@ -34,14 +126,14 @@ const applyDockStyles = (
   expanded: boolean
 ): void => {
   const dock = resolveDockConfig(config);
-  const width = expanded ? dock.width : dock.collapsedWidth;
+  const usePush = dock.reveal === "push";
+
+  migrateDockChildren(shell, pushTrack, contentSlot, dockSlot, usePush);
+  orderDockChildren(shell, pushTrack, contentSlot, dockSlot, dock.side, usePush);
 
   shell.dataset.personaHostLayout = "docked";
   shell.dataset.personaDockSide = dock.side;
   shell.dataset.personaDockOpen = expanded ? "true" : "false";
-  shell.style.display = "flex";
-  shell.style.flexDirection = "row";
-  shell.style.alignItems = "stretch";
   shell.style.width = "100%";
   shell.style.maxWidth = "100%";
   shell.style.minWidth = "0";
@@ -51,21 +143,8 @@ const applyDockStyles = (
 
   contentSlot.style.display = "flex";
   contentSlot.style.flexDirection = "column";
-  contentSlot.style.flex = "1 1 auto";
-  contentSlot.style.minWidth = "0";
   contentSlot.style.minHeight = "0";
   contentSlot.style.position = "relative";
-
-  dockSlot.style.display = "flex";
-  dockSlot.style.flexDirection = "column";
-  dockSlot.style.flex = `0 0 ${width}`;
-  dockSlot.style.width = width;
-  dockSlot.style.maxWidth = width;
-  dockSlot.style.minWidth = width;
-  dockSlot.style.minHeight = "0";
-  dockSlot.style.position = "relative";
-  dockSlot.style.overflow = "visible";
-  dockSlot.style.transition = "width 180ms ease, min-width 180ms ease, max-width 180ms ease, flex-basis 180ms ease";
 
   host.className = "persona-host";
   host.style.height = "100%";
@@ -74,12 +153,138 @@ const applyDockStyles = (
   host.style.flexDirection = "column";
   host.style.flex = "1 1 auto";
 
-  if (dock.side === "left") {
-    if (shell.firstElementChild !== dockSlot) {
-      shell.replaceChildren(dockSlot, contentSlot);
+  if (dock.reveal === "overlay") {
+    shell.style.display = "flex";
+    shell.style.flexDirection = "row";
+    shell.style.alignItems = "stretch";
+    shell.style.overflow = "hidden";
+    shell.dataset.personaDockReveal = "overlay";
+    clearPushTrackStyles(pushTrack);
+    clearResizeDockSlotTransition(dockSlot);
+    resetContentSlotFlexSizing(contentSlot);
+    clearEmergeDockStyles(host, dockSlot);
+
+    const dockTransition = dock.animate ? "transform 180ms ease" : "none";
+    const translateClosed = dock.side === "right" ? "translateX(100%)" : "translateX(-100%)";
+    const translate = expanded ? "translateX(0)" : translateClosed;
+
+    dockSlot.style.display = "flex";
+    dockSlot.style.flexDirection = "column";
+    dockSlot.style.flex = "none";
+    dockSlot.style.position = "absolute";
+    dockSlot.style.top = "0";
+    dockSlot.style.bottom = "0";
+    dockSlot.style.width = dock.width;
+    dockSlot.style.maxWidth = dock.width;
+    dockSlot.style.minWidth = dock.width;
+    dockSlot.style.minHeight = "0";
+    dockSlot.style.overflow = "hidden";
+    dockSlot.style.transition = dockTransition;
+    dockSlot.style.transform = translate;
+    dockSlot.style.pointerEvents = expanded ? "auto" : "none";
+    dockSlot.style.zIndex = "2";
+    if (dock.side === "right") {
+      dockSlot.style.right = "0";
+      dockSlot.style.left = "";
+    } else {
+      dockSlot.style.left = "0";
+      dockSlot.style.right = "";
     }
-  } else if (shell.lastElementChild !== dockSlot) {
-    shell.replaceChildren(contentSlot, dockSlot);
+  } else if (dock.reveal === "push") {
+    // Row flex so the wide push track is laid out on the horizontal axis; column was stretching
+    // the track to the shell width and fighting explicit width, which could confuse overflow.
+    shell.style.display = "flex";
+    shell.style.flexDirection = "row";
+    shell.style.alignItems = "stretch";
+    shell.style.overflow = "hidden";
+    shell.dataset.personaDockReveal = "push";
+    clearResizeDockSlotTransition(dockSlot);
+    clearOverlayDockSlotStyles(dockSlot);
+    clearEmergeDockStyles(host, dockSlot);
+
+    const panelPx = parseDockWidthToPx(dock.width, shell.clientWidth);
+    const contentPx = Math.max(0, shell.clientWidth);
+    const dockTransition = dock.animate ? "transform 180ms ease" : "none";
+    const translate =
+      dock.side === "right"
+        ? expanded
+          ? `translateX(-${panelPx}px)`
+          : "translateX(0)"
+        : expanded
+          ? "translateX(0)"
+          : `translateX(-${panelPx}px)`;
+
+    pushTrack.style.display = "flex";
+    pushTrack.style.flexDirection = "row";
+    pushTrack.style.flex = "0 0 auto";
+    pushTrack.style.minHeight = "0";
+    pushTrack.style.minWidth = "0";
+    pushTrack.style.alignItems = "stretch";
+    pushTrack.style.height = "100%";
+    pushTrack.style.width = `${contentPx + panelPx}px`;
+    pushTrack.style.transition = dockTransition;
+    pushTrack.style.transform = translate;
+
+    contentSlot.style.flex = "0 0 auto";
+    contentSlot.style.flexGrow = "0";
+    contentSlot.style.flexShrink = "0";
+    contentSlot.style.width = `${contentPx}px`;
+    contentSlot.style.maxWidth = `${contentPx}px`;
+    contentSlot.style.minWidth = `${contentPx}px`;
+
+    dockSlot.style.display = "flex";
+    dockSlot.style.flexDirection = "column";
+    dockSlot.style.flex = "0 0 auto";
+    dockSlot.style.flexShrink = "0";
+    dockSlot.style.width = dock.width;
+    dockSlot.style.minWidth = dock.width;
+    dockSlot.style.maxWidth = dock.width;
+    dockSlot.style.position = "relative";
+    dockSlot.style.overflow = "hidden";
+    dockSlot.style.transition = "none";
+    dockSlot.style.pointerEvents = expanded ? "auto" : "none";
+  } else {
+    shell.style.display = "flex";
+    shell.style.flexDirection = "row";
+    shell.style.alignItems = "stretch";
+    shell.style.overflow = "";
+    clearPushTrackStyles(pushTrack);
+    clearOverlayDockSlotStyles(dockSlot);
+    resetContentSlotFlexSizing(contentSlot);
+    clearEmergeDockStyles(host, dockSlot);
+
+    const isEmerge = dock.reveal === "emerge";
+    if (isEmerge) {
+      shell.dataset.personaDockReveal = "emerge";
+    } else {
+      shell.removeAttribute("data-persona-dock-reveal");
+    }
+
+    const width = expanded ? dock.width : "0px";
+    const dockTransition = dock.animate
+      ? "width 180ms ease, min-width 180ms ease, max-width 180ms ease, flex-basis 180ms ease"
+      : "none";
+    const collapsedClosed = !expanded;
+
+    dockSlot.style.display = "flex";
+    dockSlot.style.flexDirection = "column";
+    dockSlot.style.flex = `0 0 ${width}`;
+    dockSlot.style.width = width;
+    dockSlot.style.maxWidth = width;
+    dockSlot.style.minWidth = width;
+    dockSlot.style.minHeight = "0";
+    dockSlot.style.position = "relative";
+    dockSlot.style.overflow =
+      isEmerge ? "hidden" : collapsedClosed ? "hidden" : "visible";
+    dockSlot.style.transition = dockTransition;
+
+    if (isEmerge) {
+      dockSlot.style.alignItems = dock.side === "right" ? "flex-start" : "flex-end";
+      host.style.width = dock.width;
+      host.style.minWidth = dock.width;
+      host.style.maxWidth = dock.width;
+      host.style.boxSizing = "border-box";
+    }
   }
 };
 
@@ -117,11 +322,13 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
 
   const originalNextSibling = target.nextSibling;
   const shell = ownerDocument.createElement("div");
+  const pushTrack = ownerDocument.createElement("div");
   const contentSlot = ownerDocument.createElement("div");
   const dockSlot = ownerDocument.createElement("aside");
   const host = ownerDocument.createElement("div");
   let expanded = (config?.launcher?.enabled ?? true) ? (config?.launcher?.autoExpand ?? false) : true;
 
+  pushTrack.dataset.personaDockRole = "push-track";
   contentSlot.dataset.personaDockRole = "content";
   dockSlot.dataset.personaDockRole = "panel";
   host.dataset.personaDockRole = "host";
@@ -129,9 +336,39 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
   dockSlot.appendChild(host);
   originalParent.insertBefore(shell, target);
   contentSlot.appendChild(target);
-  shell.appendChild(contentSlot);
-  shell.appendChild(dockSlot);
-  applyDockStyles(shell, contentSlot, dockSlot, host, config, expanded);
+
+  let resizeObserver: ResizeObserver | null = null;
+
+  const disconnectResizeObserver = (): void => {
+    resizeObserver?.disconnect();
+    resizeObserver = null;
+  };
+
+  const syncPushResizeObserver = (): void => {
+    disconnectResizeObserver();
+    if (resolveDockConfig(config).reveal !== "push") return;
+    if (typeof ResizeObserver === "undefined") return;
+    resizeObserver = new ResizeObserver(() => {
+      applyDockStyles(shell, pushTrack, contentSlot, dockSlot, host, config, expanded);
+    });
+    resizeObserver.observe(shell);
+  };
+
+  const layout = (): void => {
+    applyDockStyles(shell, pushTrack, contentSlot, dockSlot, host, config, expanded);
+    syncPushResizeObserver();
+  };
+
+  if (resolveDockConfig(config).reveal === "push") {
+    pushTrack.appendChild(contentSlot);
+    pushTrack.appendChild(dockSlot);
+    shell.appendChild(pushTrack);
+  } else {
+    shell.appendChild(contentSlot);
+    shell.appendChild(dockSlot);
+  }
+
+  layout();
 
   return {
     mode: "docked",
@@ -141,16 +378,17 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
       const nextExpanded = state.launcherEnabled ? state.open : true;
       if (expanded === nextExpanded) return;
       expanded = nextExpanded;
-      applyDockStyles(shell, contentSlot, dockSlot, host, config, expanded);
+      layout();
     },
     updateConfig(nextConfig?: AgentWidgetConfig) {
       config = nextConfig;
       if ((config?.launcher?.enabled ?? true) === false) {
         expanded = true;
       }
-      applyDockStyles(shell, contentSlot, dockSlot, host, config, expanded);
+      layout();
     },
     destroy() {
+      disconnectResizeObserver();
       if (originalParent.isConnected) {
         if (originalNextSibling && originalNextSibling.parentNode === originalParent) {
           originalParent.insertBefore(target, originalNextSibling);
