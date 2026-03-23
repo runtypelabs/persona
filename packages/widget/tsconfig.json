@@ -17,8 +17,7 @@
     "outDir": "dist"
   },
   "include": [
-    "src/**/*",
-    "tailwind.config.ts"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
