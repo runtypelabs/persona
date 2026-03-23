@@ -9,6 +9,7 @@ import {
   createDropdownMenu,
   createIconButton,
   createLabelButton,
+  createLocalStorageAdapter,
   mergeWithDefaults,
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetConfig,
@@ -23,6 +24,12 @@ import {
 
 /** Must match `initAgentWidget` mount element `id` (used for persona:* window events). */
 const FULLSCREEN_ASSISTANT_DEMO_INSTANCE_ID = "fullscreen-assistant-demo-root";
+
+/** Isolated from the main embedded-app `persona-state` bucket (home + shared demos). */
+const FULLSCREEN_ASSISTANT_DEMO_STORAGE_KEY = "persona-fullscreen-assistant-demo";
+const fullscreenAssistantWidgetStorage = createLocalStorageAdapter(
+  FULLSCREEN_ASSISTANT_DEMO_STORAGE_KEY
+);
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const apiUrl =
@@ -433,6 +440,10 @@ const newFullscreenAssistantScriptStream = () => createFullscreenAssistantScript
 
 const config = mergeWithDefaults({
   apiUrl,
+  storageAdapter: fullscreenAssistantWidgetStorage,
+  persistState: {
+    keyPrefix: `${FULLSCREEN_ASSISTANT_DEMO_STORAGE_KEY}-`
+  },
   agent: {
     name: "Chat Assistant",
     model: "mercury-2",
