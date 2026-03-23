@@ -3,7 +3,7 @@
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 
 const mockController = { update: vi.fn() };
-const originalMatchMedia = window.matchMedia;
+let originalMatchMedia = window.matchMedia;
 
 function mockMatchMedia(matches: boolean): void {
   Object.defineProperty(window, 'matchMedia', {
@@ -32,12 +32,11 @@ vi.mock('@runtypelabs/persona', () => ({
       enabled: true,
       clearChat: {},
       mountMode: 'floating',
-      dock: { side: 'right', width: '420px', collapsedWidth: '72px' },
+      dock: { side: 'right', width: '420px' },
     },
   },
   createTheme: vi.fn((config?: Record<string, unknown>) => config ?? {}),
   applyThemeVariables: vi.fn(),
-  migrateV1Theme: vi.fn((x: unknown) => x),
 }));
 
 vi.mock('../middleware', () => ({
@@ -235,7 +234,6 @@ describe('theme configurator state - editor ui, preview fixtures, and history', 
     expect(previewConfig.launcher?.mountMode).toBe('docked');
     expect(previewConfig.launcher?.dock?.side).toBe('left');
     expect(previewConfig.launcher?.dock?.width).toBe('480px');
-    expect(previewConfig.launcher?.dock?.collapsedWidth).toBe('72px');
   });
 
   test('undo and redo restore snapshot history', () => {
@@ -299,5 +297,55 @@ describe('theme configurator state - editor ui, preview fixtures, and history', 
 
     const saved = state.getSavedSnapshot();
     expect(saved?.theme?.palette?.colors?.primary?.['500']).toBe('#654321');
+  });
+});
+
+describe('legacy launcher header icon hex from storage', () => {
+  const originalMatchMedia = window.matchMedia;
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    document.documentElement.className = '';
+    localStorage.clear();
+    mockMatchMedia(false);
+    mockController.update.mockReset();
+    localStorage.setItem(
+      'persona-widget-config-v2',
+      JSON.stringify({
+        version: 2,
+        config: {
+          launcher: {
+            enabled: true,
+            mountMode: 'floating',
+            dock: { side: 'right', width: '420px' },
+            clearChat: { enabled: true, iconColor: '#6b7280' },
+            closeButtonColor: '#6b7280',
+          },
+        },
+        theme: {},
+      })
+    );
+    const mount = document.createElement('div');
+    mount.id = 'widget-preview-legacy';
+    document.body.appendChild(mount);
+    state.initStore(mount);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    document.documentElement.className = '';
+    localStorage.clear();
+    if (originalMatchMedia) {
+      Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+  });
+
+  test('strips former default #6b7280 so header actionIconForeground token applies', () => {
+    expect(state.getConfig().launcher?.closeButtonColor).toBeUndefined();
+    expect(state.getConfig().launcher?.clearChat?.iconColor).toBeUndefined();
   });
 });

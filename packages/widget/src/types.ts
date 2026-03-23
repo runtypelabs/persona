@@ -1,4 +1,5 @@
 import type { AgentWidgetPlugin } from "./plugins/types";
+import type { DeepPartial, PersonaTheme } from "./types/theme";
 
 // ============================================================================
 // Multi-Modal Content Types
@@ -469,7 +470,9 @@ export type AgentWidgetArtifactsLayoutConfig = {
    */
   unifiedSplitOuterRadius?: string;
   /**
-   * Background color for the artifact column (CSS color). Sets `--persona-artifact-pane-bg` on the widget root.
+   * Strongest override: solid background for the artifact column (CSS color). Sets `--persona-artifact-pane-bg`
+   * on the widget root. Leave unset to use theme `components.artifact.pane.background` (defaults to semantic
+   * container) so light/dark stays consistent.
    */
   paneBackground?: string;
   /**
@@ -533,6 +536,20 @@ export type AgentWidgetArtifactsFeature = {
     type: 'open' | 'download';
     artifactId: string;
   }) => boolean | void;
+  /**
+   * Custom renderer for artifact reference cards shown in the message thread.
+   * Return an HTMLElement to replace the default card, or `null` to use the default.
+   */
+  renderCard?: (context: {
+    artifact: {
+      artifactId: string;
+      title: string;
+      artifactType: string;
+      status: string;
+    };
+    config: AgentWidgetConfig;
+    defaultRenderer: () => HTMLElement;
+  }) => HTMLElement | null;
 };
 
 export type AgentWidgetFeatureFlags = {
@@ -667,85 +684,6 @@ export type EventStreamPayloadRenderContext = {
   parsedPayload: unknown;
 };
 
-export type AgentWidgetTheme = {
-  primary?: string;
-  secondary?: string;
-  surface?: string;
-  muted?: string;
-  accent?: string;
-  container?: string;
-  border?: string;
-  divider?: string;
-  messageBorder?: string;
-  inputBackground?: string;
-  callToAction?: string;
-  callToActionBackground?: string;
-  sendButtonBackgroundColor?: string;
-  sendButtonTextColor?: string;
-  sendButtonBorderColor?: string;
-  closeButtonColor?: string;
-  closeButtonBackgroundColor?: string;
-  closeButtonBorderColor?: string;
-  clearChatIconColor?: string;
-  clearChatBackgroundColor?: string;
-  clearChatBorderColor?: string;
-  tooltipBackground?: string;
-  tooltipForeground?: string;
-  micIconColor?: string;
-  micBackgroundColor?: string;
-  micBorderColor?: string;
-  recordingIconColor?: string;
-  recordingBackgroundColor?: string;
-  recordingBorderColor?: string;
-  inputFontFamily?: "sans-serif" | "serif" | "mono";
-  inputFontWeight?: string;
-  radiusSm?: string;
-  radiusMd?: string;
-  radiusLg?: string;
-  launcherRadius?: string;
-  buttonRadius?: string;
-  /**
-   * Border style for the chat panel container.
-   * @example "1px solid #e5e7eb" | "none"
-   * @default "1px solid var(--persona-border)"
-   */
-  panelBorder?: string;
-  /**
-   * Box shadow for the chat panel container.
-   * @example "0 25px 50px -12px rgba(0,0,0,0.25)" | "none"
-   * @default "0 25px 50px -12px rgba(0,0,0,0.25)"
-   */
-  panelShadow?: string;
-  /**
-   * Border radius for the chat panel container.
-   * @example "16px" | "0"
-   * @default "16px"
-   */
-  panelBorderRadius?: string;
-  /**
-   * Box-shadow for user message bubbles (bubble message layout).
-   * @example "none" | "0 1px 2px rgba(0,0,0,0.05)"
-   */
-  messageUserShadow?: string;
-  /**
-   * Box-shadow for assistant message bubbles (bubble message layout).
-   * Overrides the default subtle assistant shadow when set.
-   */
-  messageAssistantShadow?: string;
-  /**
-   * Box-shadow for tool-call / function-call rows.
-   */
-  toolBubbleShadow?: string;
-  /**
-   * Box-shadow for reasoning (“thinking”) rows.
-   */
-  reasoningBubbleShadow?: string;
-  /**
-   * Box-shadow on the composer (input) container.
-   */
-  composerShadow?: string;
-};
-
 export type AgentWidgetDockConfig = {
   /**
    * Side of the wrapped container where the docked panel should render.
@@ -758,10 +696,22 @@ export type AgentWidgetDockConfig = {
    */
   width?: string;
   /**
-   * Width of the collapsed launcher rail when the docked panel is closed.
-   * @default "72px"
+   * When false, the dock column snaps between `0` and `width` with no CSS transition so main
+   * content does not reflow during the open/close animation.
+   * @default true
    */
-  collapsedWidth?: string;
+  animate?: boolean;
+  /**
+   * How the dock panel is shown.
+   * - `"resize"` (default): a flex column grows/shrinks between `0` and `width` (main content reflows).
+   * - `"overlay"`: panel is absolutely positioned and translates in/out **over** full-width content.
+   * - `"push"`: a wide inner track `[content at shell width][panel]` translates horizontally so the panel
+   *   appears to push the workspace aside **without** animating the content column width (Shopify-style).
+   * - `"emerge"`: like `"resize"`, the flex column animates so **page content reflows**; the chat
+   *   panel keeps a **fixed** `dock.width` (not squeezed while the column grows), clipped by the slot so
+   *   it appears to emerge at full width like a floating widget.
+   */
+  reveal?: "resize" | "overlay" | "push" | "emerge";
 };
 
 export type AgentWidgetLauncherConfig = {
@@ -1396,6 +1346,17 @@ export type AgentWidgetHeaderTrailingAction = {
   icon?: string;
   label?: string;
   ariaLabel?: string;
+  /**
+   * When set, clicking this action opens a dropdown menu.
+   * Menu item selections fire `onAction(menuItemId)`.
+   */
+  menuItems?: Array<{
+    id: string;
+    label: string;
+    icon?: string;
+    destructive?: boolean;
+    dividerBefore?: boolean;
+  }>;
 };
 
 /**
@@ -1466,6 +1427,41 @@ export type AgentWidgetHeaderLayoutConfig = {
    * When set, the title row becomes visually interactive (cursor: pointer).
    */
   onTitleClick?: () => void;
+  /** Style config for the title row hover effect (minimal layout). */
+  titleRowHover?: {
+    /** Hover background color. */
+    background?: string;
+    /** Hover border color. */
+    border?: string;
+    /** Border radius for the pill shape. */
+    borderRadius?: string;
+    /** Padding inside the pill. */
+    padding?: string;
+  };
+  /**
+   * Replaces the title with a combo button (label + chevron + dropdown menu).
+   * When set, `trailingActions`, `onTitleClick`, and `titleRowHover` are ignored
+   * since the combo button handles all of these internally.
+   */
+  titleMenu?: {
+    /** Dropdown menu items. */
+    menuItems: Array<{
+      id: string;
+      label: string;
+      icon?: string;
+      destructive?: boolean;
+      dividerBefore?: boolean;
+    }>;
+    /** Called when a menu item is selected. */
+    onSelect: (id: string) => void;
+    /** Hover pill style. */
+    hover?: {
+      background?: string;
+      border?: string;
+      borderRadius?: string;
+      padding?: string;
+    };
+  };
 };
 
 /**
@@ -2256,22 +2252,15 @@ export type AgentWidgetConfig = {
      */
     showWelcomeCard?: boolean;
   };
-  theme?: AgentWidgetTheme;
   /**
-   * Theme colors for dark mode. Applied when dark mode is detected
-   * (when colorScheme is 'dark' or 'auto' with dark mode active).
-   * If not provided, falls back to `theme` colors.
-   * 
-   * @example
-   * ```typescript
-   * config: {
-   *   theme: { primary: '#111827', surface: '#ffffff' },
-   *   darkTheme: { primary: '#f9fafb', surface: '#1f2937' },
-   *   colorScheme: 'auto'
-   * }
-   * ```
+   * Semantic design tokens (`palette`, `semantic`, `components`).
+   * Omit for library defaults.
    */
-  darkTheme?: AgentWidgetTheme;
+  theme?: DeepPartial<PersonaTheme>;
+  /**
+   * Dark-mode token overrides. Merged over `theme` when the active scheme is dark.
+   */
+  darkTheme?: DeepPartial<PersonaTheme>;
   /**
    * Color scheme mode for the widget.
    * - 'light': Always use light theme (default)

@@ -12,14 +12,22 @@ describe('theme utils', () => {
     const lightAndDarkThemeConfig = {
       colorScheme: 'dark' as const,
       theme: {
-        primary: '#111111',
+        palette: {
+          colors: {
+            primary: { 500: '#111111' },
+          },
+        },
       },
       darkTheme: {
-        primary: '#22c55e',
+        palette: {
+          colors: {
+            primary: { 500: '#22c55e' },
+          },
+        },
       },
     };
 
-    const activeTheme = getActiveTheme(lightAndDarkThemeConfig as any);
+    const activeTheme = getActiveTheme(lightAndDarkThemeConfig);
     const cssVars = themeToCssVariables(activeTheme);
 
     expect(cssVars['--persona-palette-colors-primary-500']).toBe('#22c55e');
@@ -31,14 +39,22 @@ describe('theme utils', () => {
     const lightAndDarkThemeConfig = {
       colorScheme: 'auto' as const,
       theme: {
-        primary: '#111111',
+        palette: {
+          colors: {
+            primary: { 500: '#111111' },
+          },
+        },
       },
       darkTheme: {
-        primary: '#22c55e',
+        palette: {
+          colors: {
+            primary: { 500: '#22c55e' },
+          },
+        },
       },
     };
 
-    const activeTheme = getActiveTheme(lightAndDarkThemeConfig as any);
+    const activeTheme = getActiveTheme(lightAndDarkThemeConfig);
     const cssVars = themeToCssVariables(activeTheme);
 
     expect(cssVars['--persona-palette-colors-primary-500']).toBe('#22c55e');
@@ -123,19 +139,74 @@ describe('theme utils', () => {
     expect(cssVars['--persona-md-prose-font-family']).toBe('Georgia, serif');
   });
 
-  it('maps flat AgentWidgetTheme bubble shadow keys to consumer CSS variables', () => {
+  it('maps header chrome tokens to dedicated CSS variables with semantic fallbacks', () => {
+    const theme = createTheme();
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-header-icon-bg']).toBe(cssVars['--persona-primary']);
+    expect(cssVars['--persona-header-icon-fg']).toBe(cssVars['--persona-text-inverse']);
+    expect(cssVars['--persona-header-title-fg']).toBe(cssVars['--persona-primary']);
+    expect(cssVars['--persona-header-subtitle-fg']).toBe(cssVars['--persona-text-muted']);
+    expect(cssVars['--persona-header-action-icon-fg']).toBe(cssVars['--persona-muted']);
+
+    const custom = createTheme({
+      components: {
+        header: {
+          iconBackground: 'palette.colors.accent.500',
+          iconForeground: 'palette.colors.gray.900',
+          titleForeground: 'palette.colors.secondary.500',
+          subtitleForeground: 'palette.colors.gray.500',
+          actionIconForeground: 'palette.colors.gray.400',
+        },
+      },
+    } as any);
+    const customVars = themeToCssVariables(custom);
+    expect(customVars['--persona-header-icon-bg']).toBe('#06b6d4');
+    expect(customVars['--persona-header-icon-fg']).toBe('#111827');
+    expect(customVars['--persona-header-title-fg']).toBe('#8b5cf6');
+    expect(customVars['--persona-header-subtitle-fg']).toBe('#6b7280');
+    expect(customVars['--persona-header-action-icon-fg']).toBe('#9ca3af');
+  });
+
+  it('defaults artifact pane fill from semantic container and resolves toolbar background token refs', () => {
+    const theme = createTheme();
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-components-artifact-pane-background']).toBe('#f3f4f6');
+    expect(cssVars['--persona-artifact-toolbar-bg']).toBe('#f3f4f6');
+
+    const surfacePane = createTheme({
+      components: {
+        artifact: {
+          pane: {
+            background: 'semantic.colors.surface',
+            toolbarBackground: 'semantic.colors.surface',
+          },
+        },
+      },
+    } as any);
+    const surfaceVars = themeToCssVariables(surfacePane);
+    expect(surfaceVars['--persona-components-artifact-pane-background']).toBe('#f9fafb');
+    expect(surfaceVars['--persona-artifact-toolbar-bg']).toBe('#f9fafb');
+  });
+
+  it('maps component bubble shadow tokens to consumer CSS variables', () => {
     const cfg = {
       colorScheme: 'light' as const,
       theme: {
-        toolBubbleShadow: 'none',
-        reasoningBubbleShadow: 'none',
-        messageUserShadow: 'none',
-        messageAssistantShadow: 'none',
-        composerShadow: 'none',
+        components: {
+          toolBubble: { shadow: 'none' },
+          reasoningBubble: { shadow: 'none' },
+          composer: { shadow: 'none' },
+          message: {
+            user: { shadow: 'none' },
+            assistant: { shadow: 'none' },
+          },
+        },
       },
     };
 
-    const active = getActiveTheme(cfg as any);
+    const active = getActiveTheme(cfg);
     const cssVars = themeToCssVariables(active);
 
     expect(cssVars['--persona-tool-bubble-shadow']).toBe('none');
@@ -149,9 +220,13 @@ describe('theme utils', () => {
     const el = document.createElement('div');
     applyThemeVariables(el, {
       colorScheme: 'light',
-      theme: { toolBubbleShadow: '0 1px 2px rgba(255,0,0,0.5)' },
+      theme: {
+        components: {
+          toolBubble: { shadow: '0 1px 2px rgba(255,0,0,0.5)' },
+        },
+      },
       toolCall: { shadow: 'none' },
-    } as any);
+    });
     expect(el.style.getPropertyValue('--persona-tool-bubble-shadow').trim()).toBe('none');
   });
 });

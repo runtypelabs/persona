@@ -61,6 +61,11 @@ const chatColorsSectionDef: SectionDef = {
   collapsed: true,
   fields: [
     { id: 'chat-header-bg', label: 'Header Background', type: 'token-ref', path: 'theme.components.header.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-icon-bg', label: 'Header Icon Background', type: 'token-ref', path: 'theme.components.header.iconBackground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-icon-fg', label: 'Header Icon Color', type: 'token-ref', path: 'theme.components.header.iconForeground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-title-fg', label: 'Header Title Color', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-subtitle-fg', label: 'Header Subtitle Color', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-action-icons-fg', label: 'Header Button Icons', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
     { id: 'chat-msg-user-bg', label: 'User Message Background', type: 'token-ref', path: 'theme.components.message.user.background', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
     { id: 'chat-msg-user-text', label: 'User Message Text', type: 'token-ref', path: 'theme.components.message.user.text', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
     { id: 'chat-msg-assistant-bg', label: 'Assistant Message Background', type: 'token-ref', path: 'theme.components.message.assistant.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },

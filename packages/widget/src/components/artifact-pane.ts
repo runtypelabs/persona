@@ -4,6 +4,8 @@ import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors
 import { resolveSanitizer } from "../utils/sanitize";
 import { componentRegistry, type ComponentContext } from "./registry";
 import { renderLucideIcon } from "../utils/icons";
+import { createDropdownMenu, type DropdownMenuHandle } from "../utils/dropdown";
+import { createIconButton, createLabelButton } from "../utils/buttons";
 
 export type ArtifactPaneApi = {
   element: HTMLElement;
@@ -25,65 +27,6 @@ function fallbackComponentCard(sel: PersonaArtifactRecord): HTMLElement {
   card.appendChild(title);
   card.appendChild(pre);
   return card;
-}
-
-function iconButton(iconName: string, label: string, extraClass = ""): HTMLButtonElement {
-  const btn = createElement(
-    "button",
-    `persona-inline-flex persona-items-center persona-justify-center persona-rounded-md persona-border persona-border-persona-border persona-bg-persona-surface persona-p-1 persona-text-persona-primary hover:persona-bg-persona-container ${extraClass}`
-  ) as HTMLButtonElement;
-  btn.type = "button";
-  btn.setAttribute("aria-label", label);
-  btn.title = label;
-  const icon = renderLucideIcon(iconName, 16, "currentColor", 2);
-  if (icon) btn.appendChild(icon);
-  return btn;
-}
-
-function documentToolbarIconButton(
-  iconName: string,
-  label: string,
-  extraClass: string
-): HTMLButtonElement {
-  const btn = createElement(
-    "button",
-    `persona-artifact-doc-icon-btn ${extraClass}`.trim()
-  ) as HTMLButtonElement;
-  btn.type = "button";
-  btn.setAttribute("aria-label", label);
-  btn.title = label;
-  const icon = renderLucideIcon(iconName, 16, "currentColor", 2);
-  if (icon) btn.appendChild(icon);
-  return btn;
-}
-
-function documentToolbarCopyMainButton(showLabel: boolean): HTMLButtonElement {
-  const btn = createElement("button", "persona-artifact-doc-copy-btn") as HTMLButtonElement;
-  btn.type = "button";
-  btn.setAttribute("aria-label", "Copy");
-  btn.title = "Copy";
-  const icon = renderLucideIcon("copy", showLabel ? 14 : 16, "currentColor", 2);
-  if (icon) btn.appendChild(icon);
-  if (showLabel) {
-    const span = createElement("span", "persona-artifact-doc-copy-label");
-    span.textContent = "Copy";
-    btn.appendChild(span);
-  }
-  return btn;
-}
-
-function documentToolbarChevronMenuButton(): HTMLButtonElement {
-  const btn = createElement(
-    "button",
-    "persona-artifact-doc-copy-menu-chevron persona-artifact-doc-icon-btn"
-  ) as HTMLButtonElement;
-  btn.type = "button";
-  btn.setAttribute("aria-label", "More copy options");
-  btn.setAttribute("aria-haspopup", "true");
-  btn.setAttribute("aria-expanded", "false");
-  const chev = renderLucideIcon("chevron-down", 14, "currentColor", 2);
-  if (chev) btn.appendChild(chev);
-  return btn;
 }
 
 /**
@@ -119,6 +62,8 @@ export function createArtifactPane(
   const dismissLocalUi = () => {
     backdrop?.classList.add("persona-hidden");
     shell.classList.remove("persona-artifact-drawer-open");
+    // Hide portaled copy menu
+    copyMenuDropdown?.hide();
   };
 
   if (backdrop) {
@@ -162,13 +107,13 @@ export function createArtifactPane(
 
   /** Document preset: view vs raw source */
   let viewMode: "rendered" | "source" = "rendered";
-  const leftTools = createElement("div", "persona-flex persona-items-center persona-gap-1 persona-shrink-0");
+  const leftTools = createElement("div", "persona-flex persona-items-center persona-gap-1 persona-shrink-0 persona-artifact-toggle-group");
   const viewBtn = documentChrome
-    ? documentToolbarIconButton("eye", "Rendered view", "persona-artifact-view-btn")
-    : iconButton("eye", "Rendered view", "");
+    ? createIconButton({ icon: "eye", label: "Rendered view", className: "persona-artifact-doc-icon-btn persona-artifact-view-btn" })
+    : createIconButton({ icon: "eye", label: "Rendered view" });
   const codeBtn = documentChrome
-    ? documentToolbarIconButton("code-2", "Source", "persona-artifact-code-btn")
-    : iconButton("code-2", "Source", "");
+    ? createIconButton({ icon: "code-2", label: "Source", className: "persona-artifact-doc-icon-btn persona-artifact-code-btn" })
+    : createIconButton({ icon: "code-2", label: "Source" });
   const actionsRight = createElement("div", "persona-flex persona-items-center persona-gap-1 persona-shrink-0");
   const showCopyLabel = layout?.documentToolbarShowCopyLabel === true;
   const showCopyChevron = layout?.documentToolbarShowCopyChevron === true;
@@ -178,10 +123,12 @@ export function createArtifactPane(
   let copyWrap: HTMLElement | null = null;
   let copyBtn: HTMLButtonElement;
   let copyMenuChevronBtn: HTMLButtonElement | null = null;
-  let copyMenuEl: HTMLElement | null = null;
+  let copyMenuDropdown: DropdownMenuHandle | null = null;
 
   if (documentChrome && (showCopyLabel || showCopyChevron) && !showCopyMenu) {
-    copyBtn = documentToolbarCopyMainButton(showCopyLabel);
+    copyBtn = showCopyLabel
+      ? createLabelButton({ icon: "copy", label: "Copy", iconSize: 14, className: "persona-artifact-doc-copy-btn" })
+      : createIconButton({ icon: "copy", label: "Copy", className: "persona-artifact-doc-copy-btn" });
     if (showCopyChevron) {
       const chev = renderLucideIcon("chevron-down", 14, "currentColor", 2);
       if (chev) copyBtn.appendChild(chev);
@@ -191,36 +138,29 @@ export function createArtifactPane(
       "div",
       "persona-relative persona-inline-flex persona-items-center persona-gap-0 persona-rounded-md"
     );
-    copyBtn = documentToolbarCopyMainButton(showCopyLabel);
-    copyMenuChevronBtn = documentToolbarChevronMenuButton();
+    copyBtn = showCopyLabel
+      ? createLabelButton({ icon: "copy", label: "Copy", iconSize: 14, className: "persona-artifact-doc-copy-btn" })
+      : createIconButton({ icon: "copy", label: "Copy", className: "persona-artifact-doc-copy-btn" });
+    copyMenuChevronBtn = createIconButton({
+      icon: "chevron-down",
+      label: "More copy options",
+      size: 14,
+      className: "persona-artifact-doc-copy-menu-chevron persona-artifact-doc-icon-btn",
+      aria: { "aria-haspopup": "true", "aria-expanded": "false" }
+    });
     copyWrap.append(copyBtn, copyMenuChevronBtn);
-    copyMenuEl = createElement(
-      "div",
-      "persona-artifact-doc-copy-menu persona-absolute persona-right-0 persona-top-full persona-z-20 persona-mt-1 persona-min-w-[10rem] persona-rounded-md persona-border persona-border-persona-border persona-bg-persona-surface persona-py-1 persona-shadow-md persona-hidden"
-    );
-    copyWrap.appendChild(copyMenuEl);
-    for (const item of copyMenuItems!) {
-      const opt = createElement(
-        "button",
-        "persona-block persona-w-full persona-text-left persona-px-3 persona-py-2 persona-text-xs persona-text-persona-primary hover:persona-bg-persona-container"
-      ) as HTMLButtonElement;
-      opt.type = "button";
-      opt.textContent = item.label;
-      opt.dataset.copyMenuId = item.id;
-      copyMenuEl.appendChild(opt);
-    }
   } else if (documentChrome) {
-    copyBtn = documentToolbarIconButton("copy", "Copy", "");
+    copyBtn = createIconButton({ icon: "copy", label: "Copy", className: "persona-artifact-doc-icon-btn" });
   } else {
-    copyBtn = iconButton("copy", "Copy", "");
+    copyBtn = createIconButton({ icon: "copy", label: "Copy" });
   }
 
   const refreshBtn = documentChrome
-    ? documentToolbarIconButton("refresh-cw", "Refresh", "")
-    : iconButton("refresh-cw", "Refresh", "");
+    ? createIconButton({ icon: "refresh-cw", label: "Refresh", className: "persona-artifact-doc-icon-btn" })
+    : createIconButton({ icon: "refresh-cw", label: "Refresh" });
   const closeIconBtn = documentChrome
-    ? documentToolbarIconButton("x", "Close", "")
-    : iconButton("x", "Close", "");
+    ? createIconButton({ icon: "x", label: "Close", className: "persona-artifact-doc-icon-btn" })
+    : createIconButton({ icon: "x", label: "Close" });
 
   const getSelectedArtifactText = (): { markdown: string; jsonPayload: string; id: string | null } => {
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
@@ -262,45 +202,46 @@ export function createArtifactPane(
     await defaultCopy();
   });
 
-  if (copyMenuChevronBtn && copyMenuEl) {
-    const closeMenu = () => {
-      copyMenuEl!.classList.add("persona-hidden");
-      copyMenuChevronBtn!.setAttribute("aria-expanded", "false");
+  if (copyMenuChevronBtn && copyMenuItems?.length) {
+    // Resolve the portal target — #persona-root for CSS var inheritance, escaping overflow: hidden
+    const resolvePortal = (): HTMLElement => shell.closest("#persona-root") as HTMLElement ?? document.body;
+
+    const initDropdown = () => {
+      copyMenuDropdown = createDropdownMenu({
+        items: copyMenuItems.map((item) => ({ id: item.id, label: item.label })),
+        onSelect: async (actionId) => {
+          const { markdown, jsonPayload, id } = getSelectedArtifactText();
+          const handler = layout?.onDocumentToolbarCopyMenuSelect;
+          try {
+            if (handler) {
+              await handler({ actionId, artifactId: id, markdown, jsonPayload });
+            } else if (actionId === "markdown" || actionId === "md") {
+              await navigator.clipboard.writeText(markdown);
+            } else if (actionId === "json" || actionId === "source") {
+              await navigator.clipboard.writeText(jsonPayload);
+            } else {
+              await navigator.clipboard.writeText(markdown || jsonPayload);
+            }
+          } catch {
+            /* ignore */
+          }
+        },
+        anchor: copyWrap ?? copyMenuChevronBtn!,
+        position: 'bottom-right',
+        portal: resolvePortal(),
+      });
     };
+
+    // Defer init until shell is in the DOM (may not be attached yet)
+    if (shell.isConnected) {
+      initDropdown();
+    } else {
+      requestAnimationFrame(initDropdown);
+    }
+
     copyMenuChevronBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const open = copyMenuEl!.classList.contains("persona-hidden");
-      if (open) {
-        copyMenuEl!.classList.remove("persona-hidden");
-        copyMenuChevronBtn!.setAttribute("aria-expanded", "true");
-      } else {
-        closeMenu();
-      }
-    });
-    if (typeof document !== "undefined") {
-      document.addEventListener("click", closeMenu);
-    }
-    copyMenuEl.addEventListener("click", async (e) => {
-      const t = (e.target as HTMLElement).closest("button[data-copy-menu-id]") as HTMLButtonElement | null;
-      if (!t?.dataset.copyMenuId) return;
-      e.stopPropagation();
-      const actionId = t.dataset.copyMenuId;
-      const { markdown, jsonPayload, id } = getSelectedArtifactText();
-      const handler = layout?.onDocumentToolbarCopyMenuSelect;
-      try {
-        if (handler) {
-          await handler({ actionId, artifactId: id, markdown, jsonPayload });
-        } else if (actionId === "markdown" || actionId === "md") {
-          await navigator.clipboard.writeText(markdown);
-        } else if (actionId === "json" || actionId === "source") {
-          await navigator.clipboard.writeText(jsonPayload);
-        } else {
-          await navigator.clipboard.writeText(markdown || jsonPayload);
-        }
-      } catch {
-        /* ignore */
-      }
-      closeMenu();
+      copyMenuDropdown?.toggle();
     });
   }
 
@@ -388,7 +329,7 @@ export function createArtifactPane(
     for (const r of records) {
       const tab = createElement(
         "button",
-        "persona-artifact-tab persona-shrink-0 persona-rounded-lg persona-px-2 persona-py-1 persona-text-xs persona-border persona-border-transparent persona-text-persona-primary hover:persona-bg-persona-container"
+        "persona-artifact-tab persona-shrink-0 persona-rounded-lg persona-px-2 persona-py-1 persona-text-xs persona-border persona-border-transparent persona-text-persona-primary"
       );
       tab.type = "button";
       tab.textContent = r.title || r.id.slice(0, 8);

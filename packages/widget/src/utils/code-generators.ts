@@ -582,12 +582,8 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
   if (config.flowId) lines.push(`    flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`    parserType: "${parserType}",`);
 
-  if (config.theme) {
-    lines.push("    theme: {");
-    Object.entries(config.theme).forEach(([key, value]) => {
-      lines.push(`      ${key}: "${value}",`);
-    });
-    lines.push("    },");
+  if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
+    appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "    ");
   }
 
   if (config.launcher) {
@@ -732,12 +728,8 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
   if (config.flowId) lines.push(`        flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`        parserType: "${parserType}",`);
 
-  if (config.theme) {
-    lines.push("        theme: {");
-    Object.entries(config.theme).forEach(([key, value]) => {
-      lines.push(`          ${key}: "${value}",`);
-    });
-    lines.push("        },");
+  if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
+    appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "        ");
   }
 
   if (config.launcher) {
@@ -998,13 +990,9 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
   if (config.apiUrl) lines.push(`        apiUrl: "${config.apiUrl}",`);
   if (config.clientToken) lines.push(`        clientToken: "${config.clientToken}",`);
   if (config.flowId) lines.push(`        flowId: "${config.flowId}",`);
-  
-  if (config.theme) {
-    lines.push("        theme: {");
-    Object.entries(config.theme).forEach(([key, value]) => {
-      lines.push(`          ${key}: "${value}",`);
-    });
-    lines.push("        },");
+
+  if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
+    appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "        ");
   }
 
   if (config.launcher) {
@@ -1391,12 +1379,8 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
   if (config.flowId) lines.push(`      flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`      parserType: "${parserType}",`);
 
-  if (config.theme) {
-    lines.push("      theme: {");
-    Object.entries(config.theme).forEach(([key, value]) => {
-      lines.push(`        ${key}: "${value}",`);
-    });
-    lines.push("      },");
+  if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
+    appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "      ");
   }
 
   if (config.launcher) {

@@ -1,4 +1,5 @@
-import type { AgentWidgetConfig } from './types';
+import type { AgentWidgetConfig } from "./types";
+import type { DeepPartial, PersonaTheme } from "./types/theme";
 
 /**
  * A named preset containing partial widget configuration.
@@ -11,51 +12,71 @@ export interface WidgetPreset {
   config: Partial<AgentWidgetConfig>;
 }
 
+/** Shopping palette + semantic roles (matches prior shop preset visuals). */
+const SHOP_THEME: DeepPartial<PersonaTheme> = {
+  palette: {
+    colors: {
+      primary: { 500: "#111827" },
+      accent: { 600: "#1d4ed8" },
+      gray: {
+        50: "#ffffff",
+        100: "#f8fafc",
+        200: "#f1f5f9",
+        500: "#6b7280",
+        900: "#000000",
+      },
+    },
+    radius: {
+      sm: "0.75rem",
+      md: "1rem",
+      lg: "1.5rem",
+      launcher: "9999px",
+      button: "9999px",
+    },
+  },
+  semantic: {
+    colors: {
+      primary: "palette.colors.primary.500",
+      textInverse: "palette.colors.gray.50",
+    },
+  },
+};
+
+const PANEL_EDGELESS_THEME: DeepPartial<PersonaTheme> = {
+  components: {
+    panel: {
+      borderRadius: "0",
+      shadow: "none",
+    },
+  },
+};
+
 /**
  * Shopping / e-commerce preset.
  * Dark header, rounded launchers, shopping-oriented copy.
  */
 export const PRESET_SHOP: WidgetPreset = {
-  id: 'shop',
-  label: 'Shopping Assistant',
+  id: "shop",
+  label: "Shopping Assistant",
   config: {
-    theme: {
-      primary: '#111827',
-      accent: '#1d4ed8',
-      surface: '#ffffff',
-      muted: '#6b7280',
-      container: '#f8fafc',
-      border: '#f1f5f9',
-      divider: '#f1f5f9',
-      messageBorder: '#f1f5f9',
-      inputBackground: '#ffffff',
-      callToAction: '#000000',
-      callToActionBackground: '#ffffff',
-      sendButtonBackgroundColor: '#111827',
-      sendButtonTextColor: '#ffffff',
-      radiusSm: '0.75rem',
-      radiusMd: '1rem',
-      radiusLg: '1.5rem',
-      launcherRadius: '9999px',
-      buttonRadius: '9999px',
-    },
+    theme: SHOP_THEME,
     launcher: {
-      title: 'Shopping Assistant',
-      subtitle: 'Here to help you find what you need',
-      agentIconText: '🛍️',
-      position: 'bottom-right',
-      width: 'min(400px, calc(100vw - 24px))',
+      title: "Shopping Assistant",
+      subtitle: "Here to help you find what you need",
+      agentIconText: "🛍️",
+      position: "bottom-right",
+      width: "min(400px, calc(100vw - 24px))",
     },
     copy: {
-      welcomeTitle: 'Welcome to our shop!',
-      welcomeSubtitle: 'I can help you find products and answer questions',
-      inputPlaceholder: 'Ask me anything...',
-      sendButtonLabel: 'Send',
+      welcomeTitle: "Welcome to our shop!",
+      welcomeSubtitle: "I can help you find products and answer questions",
+      inputPlaceholder: "Ask me anything...",
+      sendButtonLabel: "Send",
     },
     suggestionChips: [
-      'What can you help me with?',
-      'Tell me about your features',
-      'How does this work?',
+      "What can you help me with?",
+      "Tell me about your features",
+      "How does this work?",
     ],
   },
 };
@@ -65,8 +86,8 @@ export const PRESET_SHOP: WidgetPreset = {
  * Stripped-down header, no launcher button, suitable for inline embeds.
  */
 export const PRESET_MINIMAL: WidgetPreset = {
-  id: 'minimal',
-  label: 'Minimal',
+  id: "minimal",
+  label: "Minimal",
   config: {
     launcher: {
       enabled: false,
@@ -74,17 +95,14 @@ export const PRESET_MINIMAL: WidgetPreset = {
     },
     layout: {
       header: {
-        layout: 'minimal',
+        layout: "minimal",
         showCloseButton: false,
       },
       messages: {
-        layout: 'minimal',
+        layout: "minimal",
       },
     },
-    theme: {
-      panelBorderRadius: '0',
-      panelShadow: 'none',
-    },
+    theme: PANEL_EDGELESS_THEME,
   },
 };
 
@@ -93,8 +111,8 @@ export const PRESET_MINIMAL: WidgetPreset = {
  * No launcher, content-max-width constrained, minimal header.
  */
 export const PRESET_FULLSCREEN: WidgetPreset = {
-  id: 'fullscreen',
-  label: 'Fullscreen Assistant',
+  id: "fullscreen",
+  label: "Fullscreen Assistant",
   config: {
     launcher: {
       enabled: false,
@@ -102,15 +120,12 @@ export const PRESET_FULLSCREEN: WidgetPreset = {
     },
     layout: {
       header: {
-        layout: 'minimal',
+        layout: "minimal",
         showCloseButton: false,
       },
-      contentMaxWidth: '72ch',
+      contentMaxWidth: "72ch",
     },
-    theme: {
-      panelBorderRadius: '0',
-      panelShadow: 'none',
-    },
+    theme: PANEL_EDGELESS_THEME,
   },
 };
 

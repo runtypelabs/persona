@@ -23,7 +23,18 @@ export const BUILT_IN_PRESETS: ThemePreset[] = [
     label: 'Default Light',
     description: 'Clean light theme with blue primary',
     builtIn: true,
-    theme: {}, // Uses all defaults
+    // Explicit artifact pane tokens (same as package defaults) so exports/presets read clearly;
+    // pane fill still follows light/dark semantics unless layout.paneBackground overrides.
+    theme: {
+      components: {
+        artifact: {
+          pane: {
+            background: 'semantic.colors.container',
+            toolbarBackground: 'semantic.colors.container',
+          },
+        },
+      },
+    },
   },
   {
     id: 'default-dark',
@@ -217,6 +228,41 @@ export function deleteCustomPreset(id: string): boolean {
   }
 }
 
+/**
+ * Layout `paneBackground` pins a fixed CSS color on the widget root and overrides theme tokens.
+ * Theme-only presets should not inherit a stale value from localStorage / earlier edits.
+ */
+function withoutLayoutArtifactPaneBackground(config: AgentWidgetConfig): AgentWidgetConfig {
+  const art = config.features?.artifacts;
+  const pb = art?.layout?.paneBackground?.trim();
+  if (!pb) return config;
+  return {
+    ...config,
+    features: {
+      ...config.features,
+      artifacts: {
+        ...art,
+        layout: {
+          ...art?.layout,
+          paneBackground: undefined,
+        },
+      },
+    },
+  };
+}
+
+/**
+ * In dark mode the widget uses `createDarkTheme(deepMerge(theme, darkTheme))` — `darkTheme` wins.
+ * Theme-only presets update `theme` (light slot) via `currentTheme`; a stale `config.darkTheme` from
+ * localStorage or the Style editor would override the preset and can force light surfaces.
+ */
+function cleanedConfigForThemeOnlyPreset(config: AgentWidgetConfig): AgentWidgetConfig {
+  return {
+    ...withoutLayoutArtifactPaneBackground(config),
+    darkTheme: undefined,
+  };
+}
+
 export function applyPreset(preset: ThemePreset): void {
   const theme = createTheme(preset.theme, { validate: false });
   if (preset.config) {
@@ -229,7 +275,7 @@ export function applyPreset(preset: ThemePreset): void {
     );
     return;
   }
-  state.setTheme(theme);
+  state.setFullConfig(cleanedConfigForThemeOnlyPreset(state.getConfig()), theme);
 }
 
 export function getAllPresets(): ThemePreset[] {

@@ -3363,6 +3363,30 @@ body {
   min-width: 240px;
   max-width: 280px;
   animation: popover-in 0.18s ease;
+  box-sizing: border-box;
+}
+
+/* Compound popover: cap height, clip to rounded rect, scroll the body so footers stay visible */
+.inline-edit-popover:has(.inline-popover-body--compound) {
+  display: flex;
+  flex-direction: column;
+  max-height: min(calc(100vh - 16px), 620px);
+  overflow: hidden;
+  padding-bottom: 10px;
+}
+
+.inline-edit-popover:has(.inline-popover-body--compound) .inline-popover-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.inline-edit-popover:has(.inline-popover-body--compound) .inline-popover-header--compound {
+  flex-shrink: 0;
+}
+
+.inline-edit-popover:has(.inline-popover-body--compound) .inline-popover-compound-footer {
+  flex-shrink: 0;
 }
 
 .inline-edit-popover.hidden {
@@ -3393,15 +3417,21 @@ body {
 }
 
 .inline-popover-body--compound {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px 0 14px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .inline-popover-compound-footer {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0 -4px -4px;
+  margin: 0;
   padding-top: 12px;
+  padding-bottom: 10px;
   border-top: 1px solid #e2e8f0;
 }
 
@@ -3600,6 +3630,41 @@ body {
   gap: 8px;
   padding-top: 6px;
   border-top: 1px solid #f1f5f9;
+}
+
+.inline-color-reset-row {
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.inline-color-reset-default-btn {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.inline-color-reset-default-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.inline-color-reset-default-btn:focus-visible {
+  outline: 2px solid #4f6ef7;
+  outline-offset: 2px;
+}
+
+.inline-color-reset-default-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .inline-color-native {
@@ -3885,7 +3950,8 @@ body {
 }
 
 .preview-pill-scene-grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
 }
 

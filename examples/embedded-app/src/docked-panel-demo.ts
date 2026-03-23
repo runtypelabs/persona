@@ -15,40 +15,82 @@ const apiUrl =
 
 const dockSideSelect = document.getElementById("dock-side") as HTMLSelectElement | null;
 const dockWidthInput = document.getElementById("dock-width") as HTMLInputElement | null;
-const dockCollapsedWidthInput = document.getElementById("dock-collapsed-width") as HTMLInputElement | null;
-const widthMetric = document.getElementById("metric-width");
-const collapsedMetric = document.getElementById("metric-collapsed");
-const statusRow = document.getElementById("status-row");
+const dockRevealSelect = document.getElementById("dock-reveal") as HTMLSelectElement | null;
+const dockAnimateCheck = document.getElementById("dock-animate") as HTMLInputElement | null;
+const applyDockBtn = document.getElementById("apply-dock-settings") as HTMLButtonElement | null;
+const toggleBtn = document.getElementById("assistant-toggle") as HTMLButtonElement | null;
+const dockStatus = document.getElementById("dock-status");
+const workspaceMainEl = document.getElementById("workspace-main");
 
-if (!dockSideSelect || !dockWidthInput || !dockCollapsedWidthInput) {
+if (!dockSideSelect || !dockWidthInput || !dockRevealSelect || !dockAnimateCheck || !applyDockBtn || !toggleBtn) {
   throw new Error("Docked demo controls are missing");
 }
+
+const sideSelect = dockSideSelect;
+const widthInput = dockWidthInput;
+const revealSelect = dockRevealSelect;
+const animateCheck = dockAnimateCheck;
+const assistantToggle = toggleBtn;
+
+type DockRevealOption = "resize" | "emerge" | "overlay" | "push";
+
+function parseDockReveal(raw: string): DockRevealOption {
+  if (raw === "resize" || raw === "emerge" || raw === "overlay" || raw === "push") return raw;
+  return "emerge";
+}
+
+/** Clear in dev tools to replay the first-visit intro: localStorage.removeItem(INTRO_STORAGE_KEY) */
+const INTRO_STORAGE_KEY = "persona-dock-demo:assistant-intro-shown";
+const INTRO_DELAY_MS = 1500;
+const COACHMARK_ANIM_MS = 2250;
 
 let controller: AgentWidgetInitHandle;
 
 function getDockConfig() {
   return {
-    side: dockSideSelect.value as "left" | "right",
-    width: dockWidthInput.value.trim() || "420px",
-    collapsedWidth: dockCollapsedWidthInput.value.trim() || "72px",
+    side: sideSelect.value as "left" | "right",
+    width: widthInput.value.trim() || "420px",
+    reveal: parseDockReveal(revealSelect.value),
+    animate: animateCheck.checked,
   };
 }
 
-function syncMetrics(): void {
-  const dock = getDockConfig();
-  if (widthMetric) widthMetric.textContent = dock.width;
-  if (collapsedMetric) collapsedMetric.textContent = dock.collapsedWidth;
+/** Match workspace chrome layout to dock side (see docked-panel-demo.html). */
+function syncWorkspaceMainDockSide(): void {
+  workspaceMainEl?.setAttribute("data-dock-side", getDockConfig().side);
+}
+
+function formatDockOptionsLine(dock: ReturnType<typeof getDockConfig>): string {
+  const revealHint =
+    dock.reveal === "resize"
+      ? "flex 0↔width, panel stretches"
+      : dock.reveal === "emerge"
+        ? "flex 0↔width, panel fixed (emerges)"
+        : dock.reveal === "overlay"
+          ? "overlay transform"
+          : "push track transform";
+  const animHint = dock.animate ? "transition on" : "transition off (snap)";
+  return `reveal: ${dock.reveal} (${revealHint}) · animate: ${animHint}`;
+}
+
+function syncToggleUi(): void {
+  const open = controller.getState().open;
+  assistantToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  assistantToggle.setAttribute("aria-label", open ? "Hide assistant" : "Open assistant");
+  assistantToggle.classList.toggle("is-active", open);
+  assistantToggle.title = open ? "Hide assistant" : "Open assistant";
 }
 
 function updateStatus(label: string): void {
-  if (!statusRow) return;
+  if (!dockStatus) return;
   const state = controller.getState();
-  statusRow.textContent = `${label} Dock is ${state.open ? "open" : "closed"} on the ${getDockConfig().side}.`;
+  const dock = getDockConfig();
+  dockStatus.textContent = `${label} Dock ${state.open ? "open" : "closed"} · side ${dock.side} · ${dock.width} · ${formatDockOptionsLine(dock)}.`;
 }
 
 function createController(): AgentWidgetInitHandle {
   return initAgentWidget({
-    target: "#workspace-main",
+    target: "#workspace-dock-target",
     config: {
       ...DEFAULT_WIDGET_CONFIG,
       apiUrl,
@@ -56,23 +98,61 @@ function createController(): AgentWidgetInitHandle {
         ...DEFAULT_WIDGET_CONFIG.launcher,
         mountMode: "docked",
         dock: getDockConfig(),
+        autoExpand: false,
+        fullHeight: true,
         title: "Launch Copilot",
-        subtitle: "Plan, review, and ship from the side rail",
+        subtitle: "Plan, review, and ship from the assistant",
         agentIconText: "✦",
         textHidden: false,
       },
       theme: {
-        ...DEFAULT_WIDGET_CONFIG.theme,
-        primary: "#0f172a",
-        accent: "#0ea5e9",
-        surface: "#ffffff",
-        muted: "#64748b",
-        launcherRadius: "18px",
+        semantic: {
+          colors: {
+            primary: "#0f172a",
+            accent: "#0f172a",
+            surface: "#ffffff",
+            background: "#ffffff",
+            textMuted: "#64748b",
+            interactive: {
+              default: "#0f172a",
+              hover: "#1e293b",
+              focus: "#334155",
+              active: "#020617",
+            },
+            feedback: {
+              info: "#0f172a",
+            },
+          },
+        },
+        palette: {
+          radius: {
+            full: "0",
+          },
+        },
+        components: {
+          panel: {
+            borderRadius: "0",
+          },
+          header: {
+            borderRadius: "0",
+          },
+          input: {
+            borderRadius: "0",
+          },
+          message: {
+            user: {
+              borderRadius: "0",
+            },
+            assistant: {
+              borderRadius: "0",
+            },
+          },
+        },
       },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
         welcomeTitle: "Workspace Assistant",
-        welcomeSubtitle: "This docked panel wraps the workspace container instead of covering it.",
+        welcomeSubtitle: "This docked panel sits beside the workspace instead of covering it.",
         inputPlaceholder: "Ask for a launch checklist, QA review, or summary…",
       },
       suggestionChips: [
@@ -86,12 +166,18 @@ function createController(): AgentWidgetInitHandle {
 }
 
 function bindControllerEvents(): void {
-  controller.on("widget:opened", () => updateStatus("Panel opened."));
-  controller.on("widget:closed", () => updateStatus("Panel closed."));
+  controller.on("widget:opened", () => {
+    syncToggleUi();
+    updateStatus("Panel opened.");
+  });
+  controller.on("widget:closed", () => {
+    syncToggleUi();
+    updateStatus("Panel closed.");
+  });
 }
 
 function applyDockSettings(): void {
-  syncMetrics();
+  syncWorkspaceMainDockSide();
   controller.update({
     launcher: {
       mountMode: "docked",
@@ -101,21 +187,65 @@ function applyDockSettings(): void {
   updateStatus("Layout updated.");
 }
 
+syncWorkspaceMainDockSide();
 controller = createController();
 bindControllerEvents();
-syncMetrics();
+syncToggleUi();
 updateStatus("Demo ready.");
 
-document.getElementById("apply-settings")?.addEventListener("click", applyDockSettings);
-document.getElementById("open-dock")?.addEventListener("click", () => {
-  controller.open();
-  updateStatus("Open requested.");
+applyDockBtn.addEventListener("click", applyDockSettings);
+
+/** Keep chrome layout in sync with the Side control (widget updates still require Apply). */
+sideSelect.addEventListener("change", () => {
+  syncWorkspaceMainDockSide();
 });
-document.getElementById("close-dock")?.addEventListener("click", () => {
-  controller.close();
-  updateStatus("Close requested.");
+
+/** Keeps the button from taking focus on mouse click (avoids OS / UA focus ring flash); keyboard still tabs in. */
+assistantToggle.addEventListener("mousedown", (e) => {
+  if (e.button === 0) {
+    e.preventDefault();
+  }
 });
-document.getElementById("toggle-dock")?.addEventListener("click", () => {
+
+assistantToggle.addEventListener("click", () => {
   controller.toggle();
-  updateStatus("Toggle requested.");
 });
+
+function hasSeenIntro(): boolean {
+  try {
+    return localStorage.getItem(INTRO_STORAGE_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
+function markIntroShown(): void {
+  try {
+    localStorage.setItem(INTRO_STORAGE_KEY, "1");
+  } catch {
+    /* private / quota */
+  }
+}
+
+function runFirstVisitAssistantIntro(): void {
+  if (hasSeenIntro()) return;
+
+  window.setTimeout(() => {
+    markIntroShown();
+
+    controller.open();
+    syncToggleUi();
+
+    const coach = document.getElementById("assistant-coachmark");
+    if (coach) {
+      coach.hidden = false;
+      coach.classList.add("assistant-coachmark--play");
+      window.setTimeout(() => {
+        coach.classList.remove("assistant-coachmark--play");
+        coach.hidden = true;
+      }, COACHMARK_ANIM_MS);
+    }
+  }, INTRO_DELAY_MS);
+}
+
+runFirstVisitAssistantIntro();

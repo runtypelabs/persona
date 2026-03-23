@@ -77,21 +77,9 @@ initAgentWidget({
 });
 ```
 
-### v1 Flat Theme (Still Supported)
+### Flat v1 themes (removed)
 
-The v1 flat theme format is automatically migrated to v2 tokens:
-
-```typescript
-// These flat properties still work
-config: {
-  theme: {
-    primary: '#111827',
-    accent: '#3b82f6',
-    surface: '#ffffff',
-    muted: '#6b7280'
-  }
-}
-```
+`config.theme` / `config.darkTheme` must be **`DeepPartial<PersonaTheme>`** (`palette` / `semantic` / `components`). The old flat v1 object shape is **not** supported: there is no runtime migration and no `migrateV1Theme` helper. Port themes to the token tree (see **Breaking Changes from v1** below).
 
 ---
 
@@ -101,7 +89,7 @@ config: {
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `theme` | `Partial<PersonaTheme>` | (light defaults) | Theme tokens for light mode |
+| `theme` | `DeepPartial<PersonaTheme>` | (light defaults) | Theme tokens for light mode |
 | `colorScheme` | `'light' \| 'dark' \| 'auto'` | `'light'` | Color scheme mode |
 
 ### Color Scheme Modes
@@ -498,10 +486,15 @@ Common tokens have short aliases for easier use in custom CSS:
 | Property | Default | Description |
 |----------|---------|-------------|
 | `dock.side` | `"right"` | Which side of the wrapped target container the panel should appear on |
-| `dock.width` | `"420px"` | Expanded dock width |
-| `dock.collapsedWidth` | `"72px"` | Collapsed launcher rail width |
+| `dock.width` | `"420px"` | Expanded dock width when open |
+| `dock.animate` | `true` | When `false`, open/close snaps with no CSS transition (`resize`: width; `overlay` / `push`: transform on panel or track) |
+| `dock.reveal` | `"resize"` | `"resize"`: flex column `0` ↔ `width` (panel fills the slot, so it stretches during the animation). `"emerge"`: same column animation and **content reflow**, but the chat UI stays **`dock.width`** wide and is **clipped** by the slot (full-width floating-style entrance). `"overlay"`: overlay + `transform`. `"push"`: sliding track (Shopify-style) |
 
-When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target container and renders Persona in a sibling dock slot. `body` and `html` are not valid targets. `position`, `fullHeight`, and `sidebarMode` are ignored in docked mode.
+When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target container and renders Persona in a sibling dock slot. `body` and `html` are not valid targets. `position`, `fullHeight`, and `sidebarMode` are ignored in docked mode. With `dock.reveal: "resize"`, a closed dock uses a **`0px`** column; with `"overlay"` or `"push"`, layout uses transforms instead of shrinking the main column during the animation. The floating launcher stays hidden in docked mode—use `controller.open()` or your own trigger.
+
+**Scoping push/overlay:** Only the subtree under `target` is wrapped. Put **headers, sidebars, or settings chrome** *outside* that element (siblings in your layout) when you want them fixed; point `target` at the inner column or canvas that should move with the dock (see `examples/embedded-app` docked demo: `#workspace-dock-target`). For **`dock.side: "left"`**, keep the rail **in normal flow beside the dock stage** (e.g. flex row `[nav | stage]`) so the panel does not paint **under** a floating rail. For a **right** dock, an optional **full-width stage** with an **absolutely positioned** left rail can let push translate the canvas **behind** a persistent sidebar (Shopify-style). The embedded dock demo toggles between those two chrome layouts using `data-dock-side` on `#workspace-main`.
+
+**Breaking change:** `dock.collapsedWidth` was removed; a collapsed rail is no longer configurable.
 
 ### Agent Icon
 | Property | Description |
@@ -890,10 +883,6 @@ import {
   reducedMotionPlugin,
   highContrastPlugin,
   createPlugin,
-
-  // Migration (v1 → v2)
-  migrateV1Theme,
-  validateV1Theme,
 } from '@runtypelabs/persona';
 ```
 

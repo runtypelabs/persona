@@ -73,4 +73,76 @@ describe('custom presets', () => {
     );
     expect(stateMocks.setTheme).not.toHaveBeenCalled();
   });
+
+  test('theme-only presets clear layout paneBackground so semantic artifact fill applies', () => {
+    stateMocks.getConfig.mockReturnValueOnce({
+      apiUrl: 'https://api.example.com',
+      features: {
+        artifacts: {
+          enabled: true,
+          layout: {
+            paneBackground: '#0a0a0a',
+            toolbarPreset: 'document',
+          },
+        },
+      },
+    } as any);
+
+    applyPreset({
+      id: 'default-light',
+      label: 'Default Light',
+      description: 'Test',
+      builtIn: true,
+      theme: {},
+    } as any);
+
+    expect(stateMocks.setFullConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        darkTheme: undefined,
+        features: expect.objectContaining({
+          artifacts: expect.objectContaining({
+            layout: expect.objectContaining({
+              paneBackground: undefined,
+              toolbarPreset: 'document',
+            }),
+          }),
+        }),
+      }),
+      expect.anything()
+    );
+    expect(stateMocks.setTheme).not.toHaveBeenCalled();
+  });
+
+  test('theme-only presets clear darkTheme so dark preview uses preset light slot + createDarkTheme', () => {
+    stateMocks.getConfig.mockReturnValueOnce({
+      apiUrl: 'https://api.example.com',
+      darkTheme: {
+        semantic: {
+          colors: {
+            surface: 'palette.colors.gray.50',
+            background: 'palette.colors.gray.50',
+          },
+        },
+      },
+    } as any);
+
+    applyPreset({
+      id: 'default-dark',
+      label: 'Default Dark',
+      description: 'Test',
+      builtIn: true,
+      theme: { semantic: { colors: { surface: 'palette.colors.gray.800' } } },
+    } as any);
+
+    expect(stateMocks.setFullConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiUrl: 'https://api.example.com',
+        darkTheme: undefined,
+      }),
+      expect.objectContaining({
+        semantic: { colors: { surface: 'palette.colors.gray.800' } },
+      })
+    );
+    expect(stateMocks.setTheme).not.toHaveBeenCalled();
+  });
 });

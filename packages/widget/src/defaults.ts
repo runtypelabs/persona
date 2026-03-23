@@ -1,82 +1,6 @@
-import type { AgentWidgetConfig, AgentWidgetTheme } from "./types";
-
-/**
- * Default light theme colors
- */
-export const DEFAULT_LIGHT_THEME: AgentWidgetTheme = {
-  primary: "#111827",
-  accent: "#1d4ed8",
-  surface: "#ffffff",
-  muted: "#6b7280",
-  container: "#f8fafc",
-  border: "#f1f5f9",
-  divider: "#f1f5f9",
-  messageBorder: "#f1f5f9",
-  inputBackground: "#ffffff",
-  callToAction: "#000000",
-  callToActionBackground: "#ffffff",
-  sendButtonBackgroundColor: "#111827",
-  sendButtonTextColor: "#ffffff",
-  sendButtonBorderColor: "#60a5fa",
-  closeButtonColor: "#6b7280",
-  closeButtonBackgroundColor: "transparent",
-  closeButtonBorderColor: "",
-  clearChatIconColor: "#6b7280",
-  clearChatBackgroundColor: "transparent",
-  clearChatBorderColor: "transparent",
-  micIconColor: "#111827",
-  micBackgroundColor: "transparent",
-  micBorderColor: "transparent",
-  recordingIconColor: "#ffffff",
-  recordingBackgroundColor: "#ef4444",
-  recordingBorderColor: "transparent",
-  inputFontFamily: "sans-serif",
-  inputFontWeight: "400",
-  radiusSm: "0.75rem",
-  radiusMd: "1rem",
-  radiusLg: "1.5rem",
-  launcherRadius: "9999px",
-  buttonRadius: "9999px",
-};
-
-/**
- * Default dark theme colors
- */
-export const DEFAULT_DARK_THEME: AgentWidgetTheme = {
-  primary: "#f9fafb",
-  accent: "#3b82f6",
-  surface: "#1f2937",
-  muted: "#9ca3af",
-  container: "#111827",
-  border: "#374151",
-  divider: "#374151",
-  messageBorder: "#374151",
-  inputBackground: "#111827",
-  callToAction: "#ffffff",
-  callToActionBackground: "#374151",
-  sendButtonBackgroundColor: "#3b82f6",
-  sendButtonTextColor: "#ffffff",
-  sendButtonBorderColor: "#60a5fa",
-  closeButtonColor: "#9ca3af",
-  closeButtonBackgroundColor: "transparent",
-  closeButtonBorderColor: "",
-  clearChatIconColor: "#9ca3af",
-  clearChatBackgroundColor: "transparent",
-  clearChatBorderColor: "transparent",
-  micIconColor: "#f9fafb",
-  micBackgroundColor: "transparent",
-  micBorderColor: "transparent",
-  recordingIconColor: "#ffffff",
-  recordingBackgroundColor: "#ef4444",
-  recordingBorderColor: "transparent",
-  inputFontFamily: "sans-serif",
-  inputFontWeight: "400",
-  radiusSm: "0.75rem",
-  radiusMd: "1rem",
-  radiusLg: "1.5rem",
-  launcherRadius: "9999px",
-  buttonRadius: "9999px",
-};
+import type { AgentWidgetConfig } from "./types";
+import type { DeepPartial, PersonaTheme } from "./types/theme";
+import { deepMerge } from "./utils/deep-merge";
 
 /**
  * Default widget configuration
@@ -86,8 +10,8 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   apiUrl: "http://localhost:43111/api/chat/dispatch",
   // Client token mode defaults (optional, only used when clientToken is set)
   clientToken: undefined,
-  theme: DEFAULT_LIGHT_THEME,
-  darkTheme: DEFAULT_DARK_THEME,
+  theme: undefined,
+  darkTheme: undefined,
   colorScheme: "light",
   launcher: {
     enabled: true,
@@ -95,7 +19,6 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
     dock: {
       side: "right",
       width: "420px",
-      collapsedWidth: "72px",
     },
     title: "Chat Assistant",
     subtitle: "Here to help you get answers fast",
@@ -114,10 +37,9 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
     callToActionIconPadding: "5px",
     callToActionIconColor: "#000000",
     callToActionIconBackgroundColor: "#ffffff",
-    closeButtonColor: "#6b7280",
+    // closeButtonColor / clearChat.iconColor omitted so theme.components.header.actionIconForeground applies.
     closeButtonBackgroundColor: "transparent",
     clearChat: {
-      iconColor: "#6b7280",
       backgroundColor: "transparent",
       borderColor: "transparent",
       enabled: true,
@@ -225,7 +147,7 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   messageActions: {
     enabled: true,
     showCopy: true,
-    showUpvote: false,  // Requires backend - disabled by default
+    showUpvote: false, // Requires backend - disabled by default
     showDownvote: false, // Requires backend - disabled by default
     visibility: "hover",
     align: "right",
@@ -233,6 +155,19 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   },
   debug: false,
 };
+
+function mergeThemePartials(
+  base: DeepPartial<PersonaTheme> | undefined,
+  override: DeepPartial<PersonaTheme> | undefined
+): DeepPartial<PersonaTheme> | undefined {
+  if (!base && !override) return undefined;
+  if (!base) return override;
+  if (!override) return base;
+  return deepMerge(
+    base as Record<string, unknown>,
+    override as Record<string, unknown>
+  ) as DeepPartial<PersonaTheme>;
+}
 
 /**
  * Helper to deep merge user config with defaults
@@ -246,14 +181,8 @@ export function mergeWithDefaults(
   return {
     ...DEFAULT_WIDGET_CONFIG,
     ...config,
-    theme: {
-      ...DEFAULT_WIDGET_CONFIG.theme,
-      ...config.theme,
-    },
-    darkTheme: {
-      ...DEFAULT_WIDGET_CONFIG.darkTheme,
-      ...config.darkTheme,
-    },
+    theme: mergeThemePartials(DEFAULT_WIDGET_CONFIG.theme, config.theme),
+    darkTheme: mergeThemePartials(DEFAULT_WIDGET_CONFIG.darkTheme, config.darkTheme),
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
       ...config.launcher,

@@ -56,6 +56,7 @@ let pillDropdownWasOpen = false;
 let previewResizeObserver: ResizeObserver | null = null;
 let zoomOverride: number | null = null;
 let lastAutoScale = 1;
+let lastMountedScene: state.PreviewScene | null = null;
 
 const ZOOM_STEP = 0.1;
 const ZOOM_MIN = 0.15;
@@ -1383,12 +1384,7 @@ function getPreviewLayoutSignature(config: AgentWidgetConfig): string {
   }
 
   const dock = config.launcher?.dock ?? {};
-  return [
-    'docked',
-    dock.side ?? 'right',
-    dock.width ?? '420px',
-    dock.collapsedWidth ?? '72px',
-  ].join(':');
+  return ['docked', dock.side ?? 'right', dock.width ?? '420px'].join(':');
 }
 
 function escapeHtml(str: string): string {
@@ -1757,6 +1753,7 @@ function mountPreviewWidgets(preserveBackgroundStates = false): void {
   if (!previewStage) return;
 
   destroyPreviewControllers();
+  lastMountedScene = state.getPreviewScene();
 
   const specs = getPreviewSpecs(preserveBackgroundStates);
   const renderToken = ++previewRenderToken;
@@ -2034,7 +2031,7 @@ function setupPreviewResizeObserver(): void {
 
 function injectPreviewArtifacts(force = false): void {
   if (!force) {
-    const artifactsEnabled = state.get('features.artifacts.enabled');
+    const artifactsEnabled = state.get('features.artifacts.enabled') || state.getPreviewScene() === 'artifact';
     if (!artifactsEnabled) return;
   }
   for (const controller of previewControllers) {
@@ -2064,7 +2061,8 @@ function updatePreviewWidgets(): void {
     );
   });
 
-  if (previewControllers.length !== specs.length || hasShellMismatch) {
+  const sceneChanged = state.getPreviewScene() !== lastMountedScene;
+  if (previewControllers.length !== specs.length || hasShellMismatch || sceneChanged) {
     mountPreviewWidgets();
     return;
   }
@@ -2081,7 +2079,7 @@ function updatePreviewWidgets(): void {
   updatePreviewStatusLabel();
   refreshInlineZones();
 
-  if (state.get('features.artifacts.enabled')) {
+  if (state.get('features.artifacts.enabled') || state.getPreviewScene() === 'artifact') {
     injectPreviewArtifacts();
   } else {
     for (const controller of previewControllers) {
@@ -2335,6 +2333,7 @@ const SCENE_LABELS: Record<string, string> = {
   conversation: 'Conversation',
   home: 'Home',
   minimized: 'Minimized',
+  artifact: 'Artifact',
 };
 
 const THEME_ICONS: Record<string, string> = {

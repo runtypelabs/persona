@@ -104,7 +104,7 @@ describe("initAgentWidget docked mode", () => {
       config: {
         launcher: {
           mountMode: "docked",
-          dock: { width: "420px", collapsedWidth: "72px" },
+          dock: { width: "420px" },
         },
       },
     });
@@ -146,7 +146,7 @@ describe("initAgentWidget docked mode", () => {
         launcher: {
           mountMode: "docked",
           autoExpand: true,
-          dock: { width: "400px", collapsedWidth: "80px" },
+          dock: { width: "400px" },
         },
       },
     });
@@ -155,10 +155,80 @@ describe("initAgentWidget docked mode", () => {
     expect(panelSlot.style.width).toBe("400px");
 
     handle.close();
-    expect(panelSlot.style.width).toBe("80px");
+    expect(panelSlot.style.width).toBe("0px");
 
     handle.open();
     expect(panelSlot.style.width).toBe("400px");
+  });
+
+  it("overlay dock reveal keeps width and uses transform when closing", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="content">Workspace</div>`;
+
+    const handle = initAgentWidget({
+      target: "#content",
+      config: {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: true,
+          dock: { width: "400px", reveal: "overlay" },
+        },
+      },
+    });
+
+    const panelSlot = document.querySelector<HTMLElement>('[data-persona-dock-role="panel"]')!;
+    expect(panelSlot.style.width).toBe("400px");
+
+    handle.close();
+    expect(panelSlot.style.width).toBe("400px");
+    expect(panelSlot.style.transform).toBe("translateX(100%)");
+
+    handle.open();
+    expect(panelSlot.style.transform).toBe("translateX(0)");
+
+    handle.destroy();
+  });
+
+  it("push dock reveal translates the push-track; panel keeps width when closing", async () => {
+    const { initAgentWidget } = await import("./init");
+    const wrapper = document.createElement("div");
+    wrapper.style.width = "900px";
+    document.body.appendChild(wrapper);
+    wrapper.innerHTML = `<div id="content">Workspace</div>`;
+
+    const handle = initAgentWidget({
+      target: "#content",
+      config: {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: true,
+          dock: { width: "400px", reveal: "push" },
+        },
+      },
+    });
+
+    const shell = document.querySelector<HTMLElement>('[data-persona-host-layout="docked"]')!;
+    Object.defineProperty(shell, "clientWidth", { get: () => 900, configurable: true });
+    handle.update({
+      launcher: {
+        mountMode: "docked",
+        autoExpand: true,
+        dock: { width: "400px", reveal: "push" },
+      },
+    });
+
+    const pushTrack = shell.querySelector<HTMLElement>('[data-persona-dock-role="push-track"]');
+    const panelSlot = shell.querySelector<HTMLElement>('[data-persona-dock-role="panel"]')!;
+    expect(pushTrack).not.toBeNull();
+    expect(panelSlot.style.width).toBe("400px");
+    expect(pushTrack?.style.transform).toBe("translateX(-400px)");
+
+    handle.close();
+    expect(panelSlot.style.width).toBe("400px");
+    expect(pushTrack?.style.transform).toBe("translateX(0)");
+
+    handle.destroy();
+    wrapper.remove();
   });
 
   it("rebuilds when mount mode changes from floating to docked", async () => {
@@ -178,7 +248,7 @@ describe("initAgentWidget docked mode", () => {
     handle.update({
       launcher: {
         mountMode: "docked",
-        dock: { side: "left", width: "460px", collapsedWidth: "88px" },
+        dock: { side: "left", width: "460px" },
       },
     });
 
@@ -197,7 +267,7 @@ describe("initAgentWidget docked mode", () => {
       config: {
         launcher: {
           mountMode: "docked",
-          dock: { side: "right", width: "420px", collapsedWidth: "72px" },
+          dock: { side: "right", width: "420px" },
         },
       },
     });
@@ -205,7 +275,7 @@ describe("initAgentWidget docked mode", () => {
     expect(createAgentExperienceMock).toHaveBeenCalledTimes(1);
     handle.update({
       launcher: {
-        dock: { side: "left", width: "500px", collapsedWidth: "96px" },
+        dock: { side: "left", width: "500px" },
       },
     });
 
@@ -213,7 +283,7 @@ describe("initAgentWidget docked mode", () => {
     const shell = document.querySelector<HTMLElement>('[data-persona-host-layout="docked"]');
     const panelSlot = document.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
     expect(shell?.firstElementChild?.getAttribute("data-persona-dock-role")).toBe("panel");
-    expect(panelSlot?.style.width).toBe("96px");
+    expect(panelSlot?.style.width).toBe("0px");
   });
 
   it("supports shadow DOM hosts in docked mode", async () => {

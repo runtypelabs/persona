@@ -2067,7 +2067,7 @@
   padding: var(--persona-artifact-toolbar-icon-padding, 0.25rem);
   border-radius: var(--persona-artifact-toolbar-icon-radius, var(--persona-radius-md, 0.375rem));
   border: var(--persona-artifact-toolbar-icon-border, 1px solid var(--persona-border, #e5e7eb));
-  background: var(--persona-surface, #ffffff);
+  background: var(--persona-artifact-toolbar-icon-bg, var(--persona-surface, #ffffff));
   color: var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827));
   cursor: pointer;
   line-height: 1;
@@ -2105,18 +2105,6 @@
   font-weight: 500;
 }
 
-/* Copy menu dropdown theming */
-#persona-root .persona-artifact-doc-copy-menu {
-  background: var(--persona-artifact-toolbar-copy-menu-bg, var(--persona-surface, #fff));
-  border: var(--persona-artifact-toolbar-copy-menu-border, 1px solid var(--persona-border, #e5e7eb));
-  box-shadow: var(--persona-artifact-toolbar-copy-menu-shadow, 0 4px 6px -1px rgba(0,0,0,.1));
-  border-radius: var(--persona-artifact-toolbar-copy-menu-radius, 0.375rem);
-}
-
-#persona-root .persona-artifact-doc-copy-menu button:hover {
-  background: var(--persona-artifact-toolbar-copy-menu-item-hover-bg, var(--persona-container, #f3f4f6));
-}
-
 /* Artifact tab theming */
 #persona-root .persona-artifact-tab {
   background: var(--persona-artifact-tab-bg, transparent);
@@ -2132,6 +2120,200 @@
 /* Artifact toolbar background theming */
 #persona-root .persona-artifact-toolbar {
   background: var(--persona-artifact-toolbar-bg, var(--persona-surface, #fff));
+}
+
+/* Toggle group gap */
+#persona-root .persona-artifact-toggle-group {
+  gap: var(--persona-artifact-toolbar-toggle-group-gap, 0.25rem);
+}
+
+/* Toggle button border-radius (view/code buttons) */
+#persona-root .persona-artifact-toolbar-document .persona-artifact-view-btn,
+#persona-root .persona-artifact-toolbar-document .persona-artifact-code-btn {
+  border-radius: var(--persona-artifact-toolbar-toggle-radius, var(--persona-artifact-toolbar-icon-radius, var(--persona-radius-md, 0.375rem)));
+}
+
+/* Tab hover */
+#persona-root .persona-artifact-tab:hover {
+  background: var(--persona-artifact-tab-hover-bg, var(--persona-container, #f3f4f6));
+}
+
+/* Tab list container */
+#persona-root .persona-artifact-list {
+  background: var(--persona-artifact-tab-list-bg, transparent);
+  border-bottom-color: var(--persona-artifact-tab-list-border-color, var(--persona-border, #e5e7eb));
+  padding: var(--persona-artifact-tab-list-padding, 0.5rem);
+}
+
+/* Toolbar border override */
+#persona-root .persona-artifact-toolbar-document {
+  border-bottom: var(--persona-artifact-toolbar-border, 1px solid var(--persona-border, #e5e7eb));
+}
+
+/* ── Composable button utilities ── */
+
+/* Icon button — base for all icon-only buttons created by createIconButton() */
+#persona-root .persona-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--persona-icon-btn-padding, 0.25rem);
+  border-radius: var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem));
+  border: var(--persona-icon-btn-border, 1px solid var(--persona-border, #e5e7eb));
+  background: var(--persona-icon-btn-bg, var(--persona-surface, #ffffff));
+  color: var(--persona-icon-btn-color, var(--persona-text, #111827));
+  cursor: pointer;
+  line-height: 1;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+#persona-root .persona-icon-btn:hover {
+  background: var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6));
+  color: var(--persona-icon-btn-hover-color, inherit);
+}
+
+#persona-root .persona-icon-btn:focus-visible {
+  outline: 2px solid var(--persona-accent, #3b82f6);
+  outline-offset: 2px;
+}
+
+#persona-root .persona-icon-btn[aria-pressed="true"] {
+  background: var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6));
+  border-color: var(--persona-icon-btn-active-border, var(--persona-border, #e5e7eb));
+}
+
+/* Label button — icon + text button created by createLabelButton() */
+#persona-root .persona-label-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--persona-label-btn-gap, 0.35rem);
+  padding: var(--persona-label-btn-padding, 0.25rem 0.5rem);
+  border-radius: var(--persona-label-btn-radius, var(--persona-radius-md, 0.375rem));
+  border: var(--persona-label-btn-border, 1px solid var(--persona-border, #e5e7eb));
+  background: var(--persona-label-btn-bg, var(--persona-surface, #ffffff));
+  color: var(--persona-label-btn-color, var(--persona-text, #111827));
+  cursor: pointer;
+  font-size: var(--persona-label-btn-font-size, 0.75rem);
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+#persona-root .persona-label-btn:hover {
+  background: var(--persona-label-btn-hover-bg, var(--persona-container, #f3f4f6));
+}
+
+#persona-root .persona-label-btn:focus-visible {
+  outline: 2px solid var(--persona-accent, #3b82f6);
+  outline-offset: 2px;
+}
+
+#persona-root .persona-label-btn--sm {
+  padding: var(--persona-label-btn-padding, 0.25rem 0.5rem);
+  font-size: var(--persona-label-btn-font-size, 0.75rem);
+}
+
+#persona-root .persona-label-btn--md {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+}
+
+#persona-root .persona-label-btn--primary {
+  background: var(--persona-primary, #3b82f6);
+  color: var(--persona-text-inverse, #ffffff);
+  border-color: transparent;
+}
+
+#persona-root .persona-label-btn--primary:hover {
+  opacity: 0.9;
+}
+
+#persona-root .persona-label-btn--destructive {
+  color: var(--persona-label-btn-destructive-color, #ef4444);
+}
+
+#persona-root .persona-label-btn--ghost {
+  border: none;
+  background: transparent;
+}
+
+#persona-root .persona-label-btn--ghost:hover {
+  background: var(--persona-label-btn-hover-bg, var(--persona-container, #f3f4f6));
+}
+
+/* Toggle group — mutually exclusive button set created by createToggleGroup() */
+#persona-root .persona-toggle-group {
+  display: inline-flex;
+  gap: var(--persona-toggle-group-gap, 0);
+}
+
+#persona-root .persona-toggle-group > .persona-icon-btn {
+  border-radius: 0;
+}
+
+#persona-root .persona-toggle-group > .persona-icon-btn:first-child {
+  border-top-left-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
+  border-bottom-left-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
+}
+
+#persona-root .persona-toggle-group > .persona-icon-btn:last-child {
+  border-top-right-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
+  border-bottom-right-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
+}
+
+/* Combo button — label + chevron with dropdown */
+#persona-root .persona-combo-btn {
+  font-size: var(--persona-combo-btn-font-size, 0.8125rem);
+  font-weight: var(--persona-combo-btn-font-weight, 600);
+  color: var(--persona-combo-btn-color, var(--persona-text, #111827));
+  user-select: none;
+}
+
+#persona-root .persona-combo-btn-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dropdown menu utility */
+#persona-root .persona-dropdown-menu {
+  z-index: 100;
+  min-width: 160px;
+  background: var(--persona-dropdown-bg, var(--persona-surface, #fff));
+  border: var(--persona-dropdown-border, 1px solid var(--persona-border, #e5e7eb));
+  border-radius: var(--persona-dropdown-radius, 0.625rem);
+  padding: 0.25rem 0;
+  box-shadow: var(--persona-dropdown-shadow, 0 4px 16px rgba(0,0,0,0.12));
+}
+
+#persona-root .persona-dropdown-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.5rem 0.875rem;
+  border: none;
+  background: transparent;
+  color: var(--persona-dropdown-item-color, var(--persona-text, #1f2937));
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+#persona-root .persona-dropdown-menu button:hover {
+  background: var(--persona-dropdown-item-hover-bg, var(--persona-container, #f3f4f6));
+}
+
+#persona-root .persona-dropdown-menu button[data-destructive] {
+  color: var(--persona-dropdown-destructive-color, #ef4444);
+}
+
+#persona-root .persona-dropdown-menu hr {
+  border: none;
+  border-top: 1px solid var(--persona-dropdown-hr, var(--persona-border, #e5e7eb));
+  margin: 0.25rem 0;
 }
 
 /* Draggable split handle (desktop split only; hidden in drawer / narrow host / small viewport) */
@@ -2178,7 +2360,11 @@
 #persona-root .persona-artifact-pane {
   border-radius: var(--persona-artifact-pane-radius, 0);
   overflow: hidden;
-  background-color: var(--persona-artifact-pane-bg, var(--persona-surface, #ffffff));
+  /* Layout paneBackground → theme components.artifact.pane.background → semantic surface */
+  background-color: var(
+    --persona-artifact-pane-bg,
+    var(--persona-components-artifact-pane-background, var(--persona-surface, #ffffff))
+  );
 }
 
 /* paneAppearance: 'seamless' — flush with chat, no border/shadow/gap */
@@ -2192,7 +2378,11 @@
   border-left-width: 0 !important;
   border-left-color: transparent !important;
   box-shadow: none !important;
-  background-color: var(--persona-artifact-pane-bg, var(--persona-container, #f8fafc));
+  /* Same token chain; final fallback stays container for flush split chrome */
+  background-color: var(
+    --persona-artifact-pane-bg,
+    var(--persona-components-artifact-pane-background, var(--persona-container, #f8fafc))
+  );
 }
 
 /* layout.paneBorder / paneBorderLeft — theme overrides (after appearance defaults) */

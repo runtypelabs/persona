@@ -1,13 +1,13 @@
-import type { PersonaTheme } from '../types/theme';
-import type { AgentWidgetConfig, AgentWidgetTheme } from '../types';
+import type { DeepPartial, PersonaTheme } from '../types/theme';
+import type { AgentWidgetConfig } from '../types';
 import { createTheme, resolveTokens, themeToCssVariables } from './tokens';
-import { migrateV1Theme } from './migration';
+import { deepMerge } from './deep-merge';
 
 export type ColorScheme = 'light' | 'dark' | 'auto';
 
 export interface PersonaWidgetConfig {
-  theme?: Partial<PersonaTheme>;
-  darkTheme?: Partial<PersonaTheme>;
+  theme?: DeepPartial<PersonaTheme>;
+  darkTheme?: DeepPartial<PersonaTheme>;
   colorScheme?: ColorScheme;
 }
 
@@ -106,43 +106,14 @@ const DARK_PALETTE = {
   },
 };
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const deepMerge = <T extends Record<string, unknown>>(
-  base: T | undefined,
-  override: Record<string, unknown> | undefined
-): T | Record<string, unknown> | undefined => {
-  if (!base) return override;
-  if (!override) return base;
-
-  const merged: Record<string, unknown> = { ...base };
-
-  for (const [key, value] of Object.entries(override)) {
-    const existing = merged[key];
-    if (isObject(existing) && isObject(value)) {
-      merged[key] = deepMerge(existing, value);
-    } else {
-      merged[key] = value;
-    }
-  }
-
-  return merged;
-};
-
-const isTokenTheme = (theme: unknown): theme is Partial<PersonaTheme> => {
-  return isObject(theme) && ('palette' in theme || 'semantic' in theme || 'components' in theme);
-};
-
+/**
+ * Normalize theme config for merging; rejects non-objects.
+ */
 const normalizeThemeConfig = (
-  theme: Partial<PersonaTheme> | AgentWidgetTheme | undefined
-): Partial<PersonaTheme> | undefined => {
-  if (!theme) return undefined;
-  const migratedTheme = migrateV1Theme(theme as AgentWidgetTheme, { warn: false });
-  if (isTokenTheme(theme)) {
-    return deepMerge(migratedTheme, theme) as Partial<PersonaTheme>;
-  }
-  return migratedTheme;
+  theme: DeepPartial<PersonaTheme> | Record<string, unknown> | undefined
+): DeepPartial<PersonaTheme> | undefined => {
+  if (!theme || typeof theme !== 'object' || Array.isArray(theme)) return undefined;
+  return theme as DeepPartial<PersonaTheme>;
 };
 
 export const detectColorScheme = (): 'light' | 'dark' => {
@@ -170,11 +141,11 @@ export const getColorScheme = (config?: WidgetConfig): 'light' | 'dark' => {
   return getColorSchemeFromConfig(config);
 };
 
-export const createLightTheme = (userConfig?: Partial<PersonaTheme>): PersonaTheme => {
+export const createLightTheme = (userConfig?: DeepPartial<PersonaTheme>): PersonaTheme => {
   return createTheme(userConfig);
 };
 
-export const createDarkTheme = (userConfig?: Partial<PersonaTheme>): PersonaTheme => {
+export const createDarkTheme = (userConfig?: DeepPartial<PersonaTheme>): PersonaTheme => {
   const baseTheme = createTheme(undefined, { validate: false });
   
   return createTheme(
@@ -194,12 +165,15 @@ export const createDarkTheme = (userConfig?: Partial<PersonaTheme>): PersonaThem
 
 export const getActiveTheme = (config?: WidgetConfig): PersonaTheme => {
   const scheme = getColorScheme(config);
-  const lightThemeConfig = normalizeThemeConfig(config?.theme as Partial<PersonaTheme> | AgentWidgetTheme | undefined);
-  const darkThemeConfig = normalizeThemeConfig(config?.darkTheme as Partial<PersonaTheme> | AgentWidgetTheme | undefined);
+  const lightThemeConfig = normalizeThemeConfig(config?.theme);
+  const darkThemeConfig = normalizeThemeConfig(config?.darkTheme);
 
   if (scheme === 'dark') {
     return createDarkTheme(
-      deepMerge(lightThemeConfig, darkThemeConfig) as Partial<PersonaTheme> | undefined
+      deepMerge(
+        (lightThemeConfig ?? {}) as Record<string, unknown>,
+        (darkThemeConfig ?? {}) as Record<string, unknown>
+      ) as DeepPartial<PersonaTheme>
     );
   }
 

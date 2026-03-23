@@ -222,7 +222,6 @@ const launcherConfigSectionDef: SectionDef = {
       { value: 'left', label: 'Left' },
     ] },
     { id: 'launch-dock-width', label: 'Dock Width', type: 'text', path: 'launcher.dock.width', defaultValue: '420px' },
-    { id: 'launch-dock-collapsed-width', label: 'Collapsed Width', type: 'text', path: 'launcher.dock.collapsedWidth', defaultValue: '72px' },
     { id: 'launch-title', label: 'Title', type: 'text', path: 'launcher.title', defaultValue: 'Chat Assistant' },
     { id: 'launch-subtitle', label: 'Subtitle', type: 'text', path: 'launcher.subtitle', defaultValue: 'Here to help you get answers fast' },
     { id: 'launch-text-hidden', label: 'Hide Text', type: 'toggle', path: 'launcher.textHidden', defaultValue: false },

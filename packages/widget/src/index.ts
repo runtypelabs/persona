@@ -5,7 +5,6 @@ import {
 
 export type {
   AgentWidgetConfig,
-  AgentWidgetTheme,
   AgentWidgetFeatureFlags,
   AgentWidgetArtifactsFeature,
   AgentWidgetArtifactsLayoutConfig,
@@ -179,6 +178,22 @@ export type { AgentWidgetInitHandle };
 export type { AgentWidgetPlugin } from "./plugins/types";
 export { pluginRegistry } from "./plugins/registry";
 
+// Dropdown utility exports
+export { createDropdownMenu } from "./utils/dropdown";
+export type { DropdownMenuItem, CreateDropdownOptions, DropdownMenuHandle } from "./utils/dropdown";
+
+// Button utility exports
+export { createIconButton, createLabelButton, createToggleGroup, createComboButton } from "./utils/buttons";
+export type {
+  CreateIconButtonOptions,
+  CreateLabelButtonOptions,
+  CreateToggleGroupOptions,
+  ToggleGroupItem,
+  ToggleGroupHandle,
+  CreateComboButtonOptions,
+  ComboButtonHandle
+} from "./utils/buttons";
+
 // Theme system exports
 export {
   createTheme,
@@ -206,11 +221,8 @@ export {
   highContrastPlugin,
   createPlugin
 } from "./utils/plugins";
-export {
-  migrateV1Theme,
-  validateV1Theme
-} from "./utils/migration";
 export type {
+  DeepPartial,
   PersonaTheme,
   PersonaThemePlugin,
   CreateThemeOptions,
@@ -229,6 +241,9 @@ export type {
   ArtifactToolbarTokens,
   ArtifactTabTokens,
   ArtifactPaneTokens,
+  IconButtonTokens,
+  LabelButtonTokens,
+  ToggleGroupTokens,
   ThemeValidationResult,
   ThemeValidationError
 } from "./types/theme";
@@ -251,8 +266,6 @@ export {
 // Default configuration exports
 export {
   DEFAULT_WIDGET_CONFIG,
-  DEFAULT_LIGHT_THEME,
-  DEFAULT_DARK_THEME,
   mergeWithDefaults
 } from "./defaults";
 export {

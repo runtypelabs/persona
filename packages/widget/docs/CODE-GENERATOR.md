@@ -11,8 +11,12 @@ import type { CodeFormat, CodeGeneratorOptions } from '@runtypelabs/persona';
 const config = {
   apiUrl: '/api/chat/dispatch',
   theme: {
-    primary: '#111827',
-    accent: '#1d4ed8',
+    semantic: {
+      colors: {
+        primary: 'palette.colors.primary.500',
+        accent: 'palette.colors.accent.600',
+      },
+    },
   },
   launcher: {
     enabled: true,
@@ -170,12 +174,22 @@ type CodeGeneratorOptions = {
 ```typescript
 import { generateCodeSnippet, type CodeFormat } from '@runtypelabs/persona';
 
-// User configures widget in a UI
+// User configures widget in a UI (palette swatches → semantic roles)
 const userConfig = {
   apiUrl: form.apiUrl.value,
   theme: {
-    primary: colorPicker.primary.value,
-    accent: colorPicker.accent.value,
+    palette: {
+      colors: {
+        primary: { 500: colorPicker.primary.value },
+        accent: { 600: colorPicker.accent.value },
+      },
+    },
+    semantic: {
+      colors: {
+        primary: 'palette.colors.primary.500',
+        accent: 'palette.colors.accent.600',
+      },
+    },
   },
   launcher: {
     enabled: launcherToggle.checked,

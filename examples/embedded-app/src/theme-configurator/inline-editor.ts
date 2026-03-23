@@ -16,6 +16,11 @@ import {
   convertToPx,
 } from './color-utils';
 import {
+  colorFieldNeedsReset,
+  getPackageDefaultForComponentsPath,
+  pairedThemeColorPaths,
+} from './theme-defaults';
+import {
   getPopoverPosition,
   getRectRelativeToParent,
 } from './inline-editor-geometry';
@@ -80,12 +85,48 @@ interface PopoverAnchor {
 
 const ZONE_DEFS: ZoneDef[] = [
   {
-    id: 'primaryColor',
+    id: 'headerCompound',
     selector: '[data-persona-theme-zone="header"]',
-    editor: 'color',
-    statePath: 'theme.palette.colors.primary.500',
-    isBrandColor: true,
-    label: 'Primary Color',
+    editor: 'compound',
+    label: 'Header',
+    compound: [
+      {
+        kind: 'color',
+        label: 'Header background',
+        statePath: 'theme.components.header.background',
+        colorApplyMode: 'token-ref',
+      },
+      {
+        kind: 'color',
+        label: 'Icon background',
+        statePath: 'theme.components.header.iconBackground',
+        colorApplyMode: 'token-ref',
+      },
+      {
+        kind: 'color',
+        label: 'Icon color',
+        statePath: 'theme.components.header.iconForeground',
+        colorApplyMode: 'token-ref',
+      },
+      {
+        kind: 'color',
+        label: 'Title color',
+        statePath: 'theme.components.header.titleForeground',
+        colorApplyMode: 'token-ref',
+      },
+      {
+        kind: 'color',
+        label: 'Subtitle color',
+        statePath: 'theme.components.header.subtitleForeground',
+        colorApplyMode: 'token-ref',
+      },
+      {
+        kind: 'color',
+        label: 'Header buttons',
+        statePath: 'theme.components.header.actionIconForeground',
+        colorApplyMode: 'token-ref',
+      },
+    ],
   },
   {
     id: 'userMessageCompound',
@@ -182,6 +223,32 @@ const ZONE_DEFS: ZoneDef[] = [
     statePath: 'theme.components.button.secondary.borderRadius',
     slider: { min: 0, max: 24, step: 1 },
     label: 'Suggestion chip radius',
+  },
+  {
+    id: 'iconButtonCompound',
+    selector: '[data-persona-theme-zone="artifact-toolbar"] .persona-icon-btn',
+    editor: 'compound',
+    label: 'Icon buttons',
+    compound: [
+      {
+        kind: 'color',
+        label: 'Background',
+        statePath: 'theme.components.artifact.toolbar.iconBackground',
+        colorApplyMode: 'token-ref',
+      },
+      {
+        kind: 'color',
+        label: 'Hover',
+        statePath: 'theme.components.artifact.toolbar.iconHoverBackground',
+        colorApplyMode: 'token-ref',
+      },
+      {
+        kind: 'slider',
+        label: 'Corner radius',
+        statePath: 'theme.components.artifact.toolbar.iconBorderRadius',
+        slider: { min: 0, max: 16, step: 1 },
+      },
+    ],
   },
 ];
 
@@ -472,10 +539,17 @@ function resolveInlineColorDisplay(field: InlineColorField): string {
   return String(state.get(field.statePath) ?? '#000000');
 }
 
+type AppendColorFieldOpts = {
+  onAfterChange?: () => void;
+  /** Shown in aria-label for the reset control */
+  resetAriaLabel?: string;
+};
+
 function appendColorFieldToContainer(
   container: HTMLElement,
   sectionLabel: string | undefined,
-  field: InlineColorField
+  field: InlineColorField,
+  opts?: AppendColorFieldOpts
 ): void {
   const gridHost =
     sectionLabel !== undefined
@@ -560,6 +634,40 @@ function appendColorFieldToContainer(
   customRow.appendChild(nativePicker);
   customRow.appendChild(hexInput);
   gridHost.appendChild(customRow);
+
+  if (field.colorApplyMode === 'token-ref') {
+    const defaultRef = getPackageDefaultForComponentsPath(field.statePath);
+    const pair = pairedThemeColorPaths(field.statePath);
+    if (defaultRef && pair) {
+      const resetRow = document.createElement('div');
+      resetRow.className = 'inline-color-reset-row';
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.className = 'inline-color-reset-default-btn';
+      resetBtn.textContent = 'Use theme default';
+      const aria = opts?.resetAriaLabel
+        ? `Reset ${opts.resetAriaLabel} to package default`
+        : 'Reset this color to package default';
+      resetBtn.setAttribute('aria-label', aria);
+
+      const syncResetVisibility = () => {
+        const show = colorFieldNeedsReset((p) => state.get(p), field.statePath, defaultRef);
+        resetBtn.hidden = !show;
+        resetRow.style.display = show ? '' : 'none';
+      };
+      syncResetVisibility();
+
+      resetBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        state.setBatch({ [pair.light]: defaultRef, [pair.dark]: defaultRef });
+        opts?.onAfterChange?.();
+      });
+
+      resetRow.appendChild(resetBtn);
+      gridHost.appendChild(resetRow);
+    }
+  }
 }
 
 function showColorEditor(
@@ -718,7 +826,10 @@ function showCompoundEditor(
     body.replaceChildren();
     if (part.kind === 'color') {
       const { kind: _k, label: _lbl, ...field } = part;
-      appendColorFieldToContainer(body, undefined, field);
+      appendColorFieldToContainer(body, undefined, field, {
+        onAfterChange: () => renderStep(),
+        resetAriaLabel: part.label,
+      });
     } else {
       appendSliderFieldToContainer(body, part);
     }
@@ -752,17 +863,30 @@ function showCompoundEditor(
   popover.classList.remove('hidden');
   renderStep();
   positionPopoverElement(popover, pos, placeAbove, { variant: 'compound' });
+  // Compound content height settles after fonts/layout; re-measure so viewport clamp uses final height
+  requestAnimationFrame(() => {
+    positionPopoverElement(popover, pos, placeAbove, { variant: 'compound' });
+  });
 }
 
 function applyColorValueForField(field: InlineColorField, hex: string): void {
   if (field.colorApplyMode === 'token-ref') {
     const normalized = normalizeColorValue(hex);
+    const pair = pairedThemeColorPaths(field.statePath);
     if (isValidHex(normalized)) {
-      state.set(field.statePath, normalized);
+      if (pair) {
+        state.setBatch({ [pair.light]: normalized, [pair.dark]: normalized });
+      } else {
+        state.set(field.statePath, normalized);
+      }
       return;
     }
     if (normalized.startsWith('rgb')) {
-      state.set(field.statePath, normalized);
+      if (pair) {
+        state.setBatch({ [pair.light]: normalized, [pair.dark]: normalized });
+      } else {
+        state.set(field.statePath, normalized);
+      }
       return;
     }
     return;

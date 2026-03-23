@@ -133,10 +133,10 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
   body.id = "persona-scroll-container";
   body.setAttribute("data-persona-theme-zone", "messages");
   
-  const introCard = createElement(
-    "div",
-    "persona-rounded-2xl persona-bg-persona-surface persona-p-6 persona-shadow-sm"
-  );
+  const introCardClasses = isDockedMountMode(config)
+    ? "persona-rounded-2xl persona-bg-persona-surface persona-p-6"
+    : "persona-rounded-2xl persona-bg-persona-surface persona-p-6 persona-shadow-sm";
+  const introCard = createElement("div", introCardClasses);
   const introTitle = createElement(
     "h2",
     "persona-text-lg persona-font-semibold persona-text-persona-primary"

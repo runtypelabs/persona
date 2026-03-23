@@ -1,7 +1,7 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetConfig } from "../types";
 import { positionMap } from "../utils/positioning";
-import { isDockedMountMode, resolveDockConfig } from "../utils/dock";
+import { isDockedMountMode } from "../utils/dock";
 import { renderLucideIcon } from "../utils/icons";
 
 export interface LauncherButton {
@@ -175,18 +175,21 @@ export const createLauncherButton = (
     button.style.boxShadow = launcher.shadow ?? defaultShadow;
 
     if (dockedMode) {
-      const dock = resolveDockConfig(newConfig);
-      button.style.width = `calc(${dock.collapsedWidth} - 16px)`;
-      button.style.minWidth = "40px";
-      button.style.maxWidth = `calc(${dock.collapsedWidth} - 16px)`;
-      button.style.justifyContent = "center";
-      button.style.padding = "12px 0";
+      // Docked mode uses a 0px column when closed and hides this button; keep no hit target.
+      button.style.width = "0";
+      button.style.minWidth = "0";
+      button.style.maxWidth = "0";
+      button.style.padding = "0";
+      button.style.overflow = "hidden";
+      button.style.border = "none";
+      button.style.boxShadow = "none";
     } else {
       button.style.width = "";
       button.style.minWidth = "";
       button.style.maxWidth = "";
       button.style.justifyContent = "";
       button.style.padding = "";
+      button.style.overflow = "";
     }
   };
 
