@@ -1,5 +1,15 @@
 # @runtypelabs/persona
 
+## 2.3.0
+
+### Minor Changes
+
+- a4b0d1e: Add built-in HTML sanitization via DOMPurify, enabled by default. Configure with the new `sanitize` option: `true` (default), `false` (disable), or a custom `(html: string) => string` function. Also fixes proxy dev-mode CORS defaults, adds prototype pollution protection in config parsing, and validates image URL schemes to block SVG data URIs and javascript: sources.
+
+### Patch Changes
+
+- a4b0d1e: Prevent blocked image attachments from being appended as empty broken-image placeholders when a message also contains valid image previews.
+
 ## 2.2.0
 
 ### Minor Changes
