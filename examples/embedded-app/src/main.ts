@@ -162,6 +162,7 @@ const launcherController = initAgentWidget({
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
       iconUrl: "https://dummyimage.com/96x96/111827/ffffff&text=AI",
+      closeButtonColor: "#6b7280",
     },
     suggestionChips: [
       "How do I embed the widget?",
