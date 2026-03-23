@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 2.3.0
+
+### Patch Changes
+
+- a4b0d1e: Add built-in HTML sanitization via DOMPurify, enabled by default. Configure with the new `sanitize` option: `true` (default), `false` (disable), or a custom `(html: string) => string` function. Also fixes proxy dev-mode CORS defaults, adds prototype pollution protection in config parsing, and validates image URL schemes to block SVG data URIs and javascript: sources.
+
 ## 2.0.0
 
 ### Major Changes
