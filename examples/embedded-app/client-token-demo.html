@@ -4,24 +4,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Client Token Demo - Persona</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #3056D3;
-      --primary-dark: #1e40af;
-      --secondary: #13C296;
-      --dark: #090E34;
-      --dark-2: #1D2144;
-      --body-color: #637381;
-      --body-bg: #f3f4f6;
+      --primary: #404040;
+      --primary-dark: #262626;
+      --dark: #262626;
+      --dark-2: #404040;
+      --body-color: #737373;
+      --body-bg: #fcfcfa;
       --white: #ffffff;
-      --border: #e7e7e7;
-      --shadow: 0 5px 20px 0 rgba(9, 14, 52, 0.08);
-      --shadow-lg: 0 10px 40px 0 rgba(9, 14, 52, 0.12);
+      --border: #e0e0e0;
+      --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
+      --shadow-lg: 0 4px 12px 0 rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
 
     * {
@@ -31,7 +28,6 @@
     }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--body-bg);
       color: var(--body-color);
       line-height: 1.7;
@@ -40,7 +36,7 @@
 
     /* Hero Section */
     .hero {
-      background: linear-gradient(180deg, rgba(48, 86, 211, 0.06) 0%, rgba(48, 86, 211, 0) 100%);
+      background: rgba(0, 0, 0, 0.02);
       padding: 40px 40px 0 60px;
       position: relative;
       overflow: hidden;
@@ -53,37 +49,11 @@
       left: 0;
       right: 0;
       height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(48, 86, 211, 0.3), transparent);
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
     }
 
     .hero-shapes {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      pointer-events: none;
-    }
-
-    .hero-shape-1 {
-      position: absolute;
-      top: -200px;
-      right: -100px;
-      width: 500px;
-      height: 500px;
-      background: linear-gradient(135deg, rgba(48, 86, 211, 0.1) 0%, transparent 70%);
-      border-radius: 50%;
-    }
-
-    .hero-shape-2 {
-      position: absolute;
-      bottom: -150px;
-      left: -100px;
-      width: 400px;
-      height: 400px;
-      background: linear-gradient(135deg, rgba(19, 194, 150, 0.08) 0%, transparent 70%);
-      border-radius: 50%;
+      display: none;
     }
 
     .container {
@@ -118,7 +88,7 @@
     .badge-dot {
       width: 8px;
       height: 8px;
-      background: var(--secondary);
+      background: #22c55e;
       border-radius: 50%;
     }
 
@@ -131,10 +101,7 @@
     }
 
     h1 span {
-      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--dark);
     }
 
     .hero-description {
@@ -170,13 +137,13 @@
     .btn-primary {
       background: var(--primary);
       color: var(--white);
-      box-shadow: 0 4px 14px 0 rgba(48, 86, 211, 0.4);
+      box-shadow: var(--shadow-md, 0 2px 8px 0 rgba(0, 0, 0, 0.12));
     }
 
     .btn-primary:hover {
       background: var(--primary-dark);
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px 0 rgba(48, 86, 211, 0.5);
+      box-shadow: var(--shadow-lg);
     }
 
     .btn-primary:disabled {
@@ -239,7 +206,7 @@
     .card-icon {
       width: 48px;
       height: 48px;
-      background: linear-gradient(135deg, rgba(48, 86, 211, 0.1) 0%, rgba(19, 194, 150, 0.1) 100%);
+      background: var(--accent, #f5f5f5);
       border-radius: 4px;
       display: flex;
       align-items: center;
@@ -274,7 +241,6 @@
       width: 100%;
       padding: 14px 18px;
       font-size: 15px;
-      font-family: 'Inter', monospace;
       background: var(--body-bg);
       border: 1px solid var(--border);
       border-radius: 4px;
@@ -286,7 +252,7 @@
       outline: none;
       border-color: var(--primary);
       background: var(--white);
-      box-shadow: 0 0 0 4px rgba(48, 86, 211, 0.1);
+      box-shadow: 0 0 0 4px rgba(64, 64, 64, 0.1);
     }
 
     input[type="text"]::placeholder {
@@ -321,7 +287,7 @@
     }
 
     .status-indicator.connected {
-      background: rgba(19, 194, 150, 0.15);
+      background: rgba(34, 197, 94, 0.15);
       color: #059669;
     }
 
@@ -373,7 +339,7 @@
     .session-value {
       font-weight: 500;
       color: var(--dark);
-      font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+      font-family: var(--font-mono);
       font-size: 13px;
     }
 
@@ -441,34 +407,34 @@
     }
 
     .code-block {
-      background: var(--dark);
+      background: #141414;
       border-radius: 4px;
       padding: 24px;
       overflow-x: auto;
-      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-family: var(--font-mono);
       font-size: 14px;
       line-height: 1.8;
       color: #e5e7eb;
     }
 
     .code-block .comment {
-      color: #6b7280;
+      color: #737373;
     }
 
     .code-block .keyword {
-      color: #c084fc;
+      color: #c9a0dc;
     }
 
     .code-block .string {
-      color: #34d399;
+      color: #a8c9a0;
     }
 
     .code-block .property {
-      color: #60a5fa;
+      color: #9bb8d4;
     }
 
     .code-block .tag {
-      color: #f472b6;
+      color: #d4a0b0;
     }
 
     /* Back Link */
@@ -498,8 +464,8 @@
 
     /* Info Box */
     .info-box {
-      background: linear-gradient(135deg, rgba(48, 86, 211, 0.05) 0%, rgba(19, 194, 150, 0.05) 100%);
-      border: 1px solid rgba(48, 86, 211, 0.1);
+      background: var(--accent, #f5f5f5);
+      border: 1px solid var(--border);
       border-radius: 4px;
       padding: 20px;
       margin-bottom: 24px;
@@ -516,12 +482,12 @@
     }
 
     .info-box code {
-      background: rgba(48, 86, 211, 0.1);
+      background: var(--accent, #f5f5f5);
       color: var(--primary);
       padding: 2px 8px;
       border-radius: 4px;
       font-size: 13px;
-      font-family: 'SF Mono', monospace;
+      font-family: var(--font-mono);
     }
 
     /* Section Title */

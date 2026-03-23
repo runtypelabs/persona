@@ -3,57 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/src/demo-shared.css">
+    <link rel="icon" href="/favicon.ico" />
     <title>Custom Components Demo – Persona</title>
     <style>
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        margin: 0;
         padding: 2rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
       }
       .demo-container {
         max-width: 1200px;
         margin: 0 auto;
-        background: white;
-        border-radius: 12px;
+        background: var(--card);
+        border-radius: var(--radius-lg);
         padding: 2rem;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      }
-      h1 {
-        margin-top: 0;
-        color: #333;
+        box-shadow: var(--shadow-lg);
       }
       .description {
-        color: #666;
+        color: var(--muted);
         line-height: 1.6;
         margin-bottom: 2rem;
       }
       .info-box {
-        background: #e3f2fd;
-        border-left: 4px solid #2196f3;
+        background: var(--accent);
+        border-left: 3px solid var(--border);
         padding: 1rem;
         margin-bottom: 2rem;
-        border-radius: 4px;
+        border-radius: var(--radius-sm);
       }
       .info-box h3 {
         margin-top: 0;
-        color: #1976d2;
-      }
-      code {
-        background: #f5f5f5;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-family: 'Courier New', monospace;
-        font-size: 0.9em;
+        color: var(--foreground);
       }
       .embedded-target {
         min-height: 600px;
-        border: 2px dashed #ddd;
-        border-radius: 8px;
+        border: 2px dashed var(--border);
+        border-radius: var(--radius-lg);
         padding: 1rem;
-        background: #f9f9f9;
+        background: var(--accent);
       }
     </style>
   </head>
@@ -63,11 +49,11 @@
         <h1>🎨 Custom Components Demo</h1>
         <div class="description">
           <p>
-            This page demonstrates custom components with the Persona SDK. 
+            This page demonstrates custom components with the Persona SDK.
             Components can be streamed in as JSON with props that update incrementally.
           </p>
         </div>
-        
+
         <div class="info-box">
           <h3>How it works</h3>
           <p>When the AI responds with a JSON object containing a <code>component</code> field, the SDK will:</p>

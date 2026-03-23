@@ -3,46 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Focus Input Demo</title>
   <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      min-height: 100vh;
-      background: #f8fafc;
-      color: #0f172a;
-    }
-    .layout {
-      display: grid;
-      grid-template-columns: 1fr 420px;
-      gap: 1.5rem;
-      padding: 1.5rem;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    @media (max-width: 900px) {
-      .layout { grid-template-columns: 1fr; }
-    }
-    .panel {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      overflow: hidden;
-    }
-    .info-panel {
-      padding: 1.5rem;
-    }
-    .info-panel h1 { margin: 0 0 0.5rem 0; font-size: 1.5rem; }
-    .info-panel p { margin: 0 0 1rem 0; color: #475569; line-height: 1.6; }
     .section {
       margin-bottom: 1.5rem;
     }
     .section h3 {
       margin: 0 0 0.5rem 0;
       font-size: 0.9rem;
-      color: #64748b;
+      color: var(--muted);
     }
     .btn-row {
       display: flex;
@@ -50,18 +21,6 @@
       gap: 0.5rem;
       margin-bottom: 0.5rem;
     }
-    .btn {
-      padding: 0.4rem 0.8rem;
-      border-radius: 6px;
-      border: 1px solid #e2e8f0;
-      background: #fff;
-      color: #0f172a;
-      font-size: 0.85rem;
-      cursor: pointer;
-    }
-    .btn:hover { background: #f1f5f9; }
-    .btn-primary { background: #3b82f6; color: white; border-color: #3b82f6; }
-    .btn-primary:hover { background: #2563eb; }
     .checkbox-row {
       display: flex;
       align-items: center;
@@ -70,25 +29,15 @@
     }
     .checkbox-row input { width: 18px; height: 18px; }
     .log {
-      background: #f1f5f9;
-      border-radius: 6px;
+      background: var(--accent);
+      border-radius: var(--radius);
       padding: 0.75rem;
       max-height: 120px;
       overflow-y: auto;
-      font-family: monospace;
+      font-family: var(--font-mono);
       font-size: 0.75rem;
-      color: #475569;
+      color: var(--muted);
     }
-    .back-link {
-      display: inline-block;
-      padding: 0.5rem 1rem;
-      margin: 1rem 1.5rem;
-      border-radius: 6px;
-      text-decoration: none;
-      color: #64748b;
-      font-size: 0.9rem;
-    }
-    .back-link:hover { color: #0f172a; }
     .widget-container { height: 500px; }
     #inline-widget { height: 100%; }
     #launcher-root { height: 100%; }
@@ -139,7 +88,7 @@
     </div>
 
     <div class="panel widget-container">
-      <p style="padding: 1rem; margin: 0; font-size: 0.9rem; color: #64748b;">Inline widget (always visible). Launcher floats bottom-right.</p>
+      <p style="padding: 1rem; margin: 0; font-size: 0.9rem; color: var(--muted);">Inline widget (always visible). Launcher floats bottom-right.</p>
       <div id="inline-widget" style="height: 400px;"></div>
     </div>
   </div>

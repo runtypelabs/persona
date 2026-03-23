@@ -3,17 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Docked Panel Demo</title>
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; min-height: 100%; }
     body {
-      font-family: "SF Pro Text", "Inter", system-ui, sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(125, 211, 252, 0.25), transparent 32%),
-        linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
-      color: #0f172a;
+      background: var(--background);
+      color: var(--foreground);
     }
     .page {
       min-height: 100vh;
@@ -26,8 +24,8 @@
       justify-content: space-between;
       gap: 16px;
       padding: 18px 28px;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.28);
-      background: rgba(255, 255, 255, 0.88);
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.9);
       backdrop-filter: blur(14px);
     }
     .brand {
@@ -39,7 +37,7 @@
       width: 36px;
       height: 36px;
       border-radius: 12px;
-      background: linear-gradient(135deg, #0f172a, #2563eb);
+      background: var(--foreground);
       color: white;
       display: grid;
       place-items: center;
@@ -51,7 +49,7 @@
     }
     .brand-copy p {
       margin: 2px 0 0;
-      color: #64748b;
+      color: var(--muted);
       font-size: 13px;
     }
     .metrics {
@@ -64,21 +62,22 @@
       min-width: 110px;
       padding: 12px 14px;
       border-radius: 16px;
-      background: rgba(255, 255, 255, 0.82);
-      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+      background: var(--card);
+      box-shadow: var(--shadow-sm);
     }
     .metric-label {
       display: block;
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: #64748b;
+      color: var(--muted);
     }
     .metric-value {
       display: block;
       margin-top: 6px;
       font-size: 20px;
       font-weight: 700;
+      color: var(--foreground);
     }
     .controls {
       display: flex;
@@ -95,15 +94,15 @@
     .control label {
       font-size: 12px;
       font-weight: 600;
-      color: #475569;
+      color: var(--muted);
     }
     .control input,
     .control select,
     .control button {
-      border: 1px solid rgba(148, 163, 184, 0.32);
+      border: 1px solid var(--border);
       border-radius: 12px;
       background: rgba(255, 255, 255, 0.9);
-      color: #0f172a;
+      color: var(--foreground);
       font: inherit;
       padding: 10px 12px;
     }
@@ -115,29 +114,46 @@
       min-height: 0;
       padding: 0 28px 28px;
     }
-    #workspace-main {
+    /* The widget wraps #workspace-main in a docked shell (flex row).
+       Move the chrome (border, radius, shadow) to that shell so the
+       collapsed rail + FAB sit inside the rounded container. */
+    [data-persona-host-layout="docked"] {
       min-height: 680px;
       height: calc(100vh - 196px);
-      border-radius: 28px;
-      overflow: hidden;
-      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 16px;
+      border: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.84);
-      box-shadow: 0 20px 70px rgba(15, 23, 42, 0.12);
+      box-shadow: var(--shadow-lg);
+    }
+    /* Clip the content slot so workspace doesn't overflow the rounded
+       shell, but leave the dock rail (panel slot) unclipped so the FAB
+       and its shadow ring render fully inside the rail. */
+    [data-persona-dock-role="content"] {
+      overflow: hidden;
+      border-radius: 16px 0 0 16px;
+    }
+    /* Push the FAB inward so it clears the rounded corner */
+    [data-persona-dock-role="panel"] {
+      padding: 16px 8px 0 0;
+    }
+    #workspace-main {
       display: grid;
       grid-template-columns: 240px 1fr;
       min-width: 0;
+      min-height: 0;
+      overflow: hidden;
     }
     .workspace-nav {
       padding: 22px 18px;
-      background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
-      color: #cbd5e1;
+      background: linear-gradient(180deg, var(--foreground) 0%, #1a1a1a 100%);
+      color: #d4d4d4;
     }
     .workspace-nav h2 {
       margin: 0 0 20px;
       font-size: 14px;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: #94a3b8;
+      color: var(--muted);
     }
     .workspace-nav ul {
       list-style: none;
@@ -158,15 +174,13 @@
       grid-template-rows: auto auto 1fr;
       gap: 18px;
       padding: 24px;
-      background:
-        radial-gradient(circle at top right, rgba(59, 130, 246, 0.09), transparent 28%),
-        linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      background: var(--card);
     }
     .workspace-banner {
       padding: 20px 24px;
       border-radius: 20px;
-      background: linear-gradient(135deg, #eff6ff, #f8fafc);
-      border: 1px solid rgba(191, 219, 254, 0.85);
+      background: var(--accent);
+      border: 1px solid var(--border);
     }
     .workspace-banner h3 {
       margin: 0 0 8px;
@@ -174,7 +188,7 @@
     }
     .workspace-banner p {
       margin: 0;
-      color: #475569;
+      color: var(--muted);
       max-width: 70ch;
       line-height: 1.5;
     }
@@ -185,39 +199,38 @@
     }
     .workspace-card {
       padding: 18px;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.92);
-      border: 1px solid rgba(226, 232, 240, 0.95);
-      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
     }
     .workspace-card h4 {
       margin: 0 0 10px;
     }
     .workspace-card p {
       margin: 0;
-      color: #64748b;
+      color: var(--muted);
       line-height: 1.5;
     }
     .workspace-feed {
       min-height: 0;
       padding: 20px;
       border-radius: 22px;
-      background: rgba(255, 255, 255, 0.96);
-      border: 1px solid rgba(226, 232, 240, 0.95);
-      box-shadow: inset 0 0 0 1px rgba(248, 250, 252, 0.8);
+      background: var(--card);
+      border: 1px solid var(--border);
     }
     .feed-item {
       display: grid;
       gap: 6px;
       padding: 14px 0;
-      border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+      border-bottom: 1px solid var(--border);
     }
     .feed-item:last-child {
       border-bottom: none;
     }
     .feed-meta {
       font-size: 12px;
-      color: #64748b;
+      color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
@@ -226,7 +239,7 @@
     }
     .status-row {
       padding: 0 28px 18px;
-      color: #475569;
+      color: var(--muted);
       font-size: 13px;
     }
     @media (max-width: 1120px) {
