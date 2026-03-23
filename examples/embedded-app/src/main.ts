@@ -143,7 +143,6 @@ const inlineController = createAgentExperience(inlineMount, {
 
 const launcherController = initAgentWidget({
   target: "#launcher-root",
-  useShadowDom: false,
   config: {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
@@ -154,11 +153,16 @@ const launcherController = initAgentWidget({
       keyPrefix: "launcher-"
     },
     theme: {
+      ...DEFAULT_WIDGET_CONFIG.theme,
+      primary: "#0f172a",
+      surface: "#ffffff",
+      muted: "#64748b",
       launcherRadius: ".5rem"
     },
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
       iconUrl: "https://dummyimage.com/96x96/111827/ffffff&text=AI",
+      closeButtonColor: "#6b7280",
     },
     suggestionChips: [
       "How do I embed the widget?",

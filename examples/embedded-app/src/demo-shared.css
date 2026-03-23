@@ -150,6 +150,13 @@ a {
   color: inherit;
 }
 
+.panel-header p {
+  color: inherit;
+  opacity: 0.8;
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
 .panel-content {
   padding: 1.5rem;
 }
