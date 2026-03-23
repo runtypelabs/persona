@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "hono": "^4.4.9"
+    "hono": "^4.12.7"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
