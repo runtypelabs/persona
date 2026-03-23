@@ -179,14 +179,14 @@ Tell the user to adjust the prompt to their specifics (framework, styling, use c
 
 Keep answers concise. Use markdown formatting. When recommending a demo, briefly explain why it is relevant to the user's question.`;
 
-const inlineMount = document.getElementById("inline-widget");
-if (!inlineMount) {
-  throw new Error("Inline widget mount node missing");
-}
+const homeDemoWelcomeTitle = "Welcome to Persona";
+const homeDemoWelcomeSubtitle =
+  "I can help you learn about Persona and find the right demo for your use case.";
+const homeDemoInputPlaceholder =
+  "Ask about Persona features, theming, integrations…";
 
-const inlineController = createAgentExperience(inlineMount, {
-  ...DEFAULT_WIDGET_CONFIG,
-  apiUrl: proxyUrl,
+/** Same Runtype agent, request options, and welcome copy for inline embed and corner launcher. */
+const homeDemoSharedAssistant = {
   agent: {
     name: "Persona Documentation Assistant",
     model: "claude-haiku-4-5-20251001",
@@ -195,9 +195,29 @@ const inlineController = createAgentExperience(inlineMount, {
   },
   agentOptions: {
     streamResponse: true,
-    recordMode: "virtual",
+    recordMode: "virtual" as const,
     storeResults: false,
   },
+  copy: {
+    ...DEFAULT_WIDGET_CONFIG.copy,
+    welcomeTitle: homeDemoWelcomeTitle,
+    welcomeSubtitle: homeDemoWelcomeSubtitle,
+    inputPlaceholder: homeDemoInputPlaceholder,
+  },
+};
+
+/** One prefix for both widgets so sessionStorage open/voice prefs are not split. */
+const homeDemoPersistKeyPrefix = "persona-home-demo-";
+
+const inlineMount = document.getElementById("inline-widget");
+if (!inlineMount) {
+  throw new Error("Inline widget mount node missing");
+}
+
+const inlineController = createAgentExperience(inlineMount, {
+  ...DEFAULT_WIDGET_CONFIG,
+  apiUrl: proxyUrl,
+  ...homeDemoSharedAssistant,
   launcher: {
     ...DEFAULT_WIDGET_CONFIG.launcher,
     width: "100%",
@@ -207,17 +227,10 @@ const inlineController = createAgentExperience(inlineMount, {
     showEventStreamToggle: true
   },
   persistState: {
-    keyPrefix: "persona-assistant-"
+    keyPrefix: homeDemoPersistKeyPrefix
   },
   storageAdapter: sharedWidgetStorage,
   theme: inlineDemoTheme,
-  copy: {
-    ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle: "Welcome to Persona",
-    welcomeSubtitle:
-      "I can help you learn about Persona and find the right demo for your use case.",
-    inputPlaceholder: "Ask about Persona features, theming, integrations…"
-  },
   suggestionChips: [...homeDemoSuggestionChips],
   postprocessMessage: ({ text }) => markdownPostprocessor(text)
 });
@@ -227,11 +240,12 @@ const launcherController = initAgentWidget({
   config: {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
+    ...homeDemoSharedAssistant,
     features: {
       showEventStreamToggle: true
     },
     persistState: {
-      keyPrefix: "launcher-"
+      keyPrefix: homeDemoPersistKeyPrefix
     },
     storageAdapter: sharedWidgetStorage,
     theme: {
@@ -243,6 +257,8 @@ const launcherController = initAgentWidget({
     },
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
+      title: homeDemoWelcomeTitle,
+      subtitle: homeDemoWelcomeSubtitle,
       iconUrl: "https://dummyimage.com/96x96/111827/ffffff&text=AI",
       closeButtonColor: "#6b7280",
     },
