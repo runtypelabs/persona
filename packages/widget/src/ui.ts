@@ -325,6 +325,16 @@ const buildPostprocessor = (
   // Resolve sanitizer: enabled by default, can be disabled or replaced
   const sanitize = resolveSanitizer(cfg?.sanitize);
 
+  // Warn developers when a custom postprocessor is used with the default sanitizer,
+  // since DOMPurify will strip any tags/attributes not in the allowlist.
+  if (cfg?.postprocessMessage && sanitize && cfg?.sanitize === undefined) {
+    console.warn(
+      "[Persona] A custom postprocessMessage is active with the default HTML sanitizer. " +
+      "Tags or attributes not in the built-in allowlist will be stripped. " +
+      "To keep custom HTML, set `sanitize: false` or provide a custom sanitize function."
+    );
+  }
+
   return (context) => {
     let nextText = context.text ?? "";
     const rawPayload = context.message.rawContent ?? null;
