@@ -39,11 +39,6 @@ function parseDockReveal(raw: string): DockRevealOption {
   return "emerge";
 }
 
-/** Clear in dev tools to replay the first-visit intro: localStorage.removeItem(INTRO_STORAGE_KEY) */
-const INTRO_STORAGE_KEY = "persona-dock-demo:assistant-intro-shown";
-const INTRO_DELAY_MS = 1500;
-const COACHMARK_ANIM_MS = 2250;
-
 let controller: AgentWidgetInitHandle;
 
 function getDockConfig() {
@@ -95,6 +90,16 @@ function syncToggleUi(): void {
   assistantToggle.setAttribute("aria-label", open ? "Hide assistant" : "Open assistant");
   assistantToggle.classList.toggle("is-active", open);
   assistantToggle.title = open ? "Hide assistant" : "Open assistant";
+
+  const coachEl = document.getElementById("assistant-coachmark");
+  if (coachEl) {
+    coachEl.toggleAttribute("hidden", open);
+  }
+  if (open) {
+    assistantToggle.removeAttribute("aria-describedby");
+  } else {
+    assistantToggle.setAttribute("aria-describedby", "assistant-coachmark");
+  }
 }
 
 function updateStatus(label: string): void {
@@ -211,42 +216,3 @@ assistantToggle.addEventListener("mousedown", (e) => {
 assistantToggle.addEventListener("click", () => {
   controller.toggle();
 });
-
-function hasSeenIntro(): boolean {
-  try {
-    return localStorage.getItem(INTRO_STORAGE_KEY) === "1";
-  } catch {
-    return true;
-  }
-}
-
-function markIntroShown(): void {
-  try {
-    localStorage.setItem(INTRO_STORAGE_KEY, "1");
-  } catch {
-    /* private / quota */
-  }
-}
-
-function runFirstVisitAssistantIntro(): void {
-  if (hasSeenIntro()) return;
-
-  window.setTimeout(() => {
-    markIntroShown();
-
-    controller.open();
-    syncToggleUi();
-
-    const coach = document.getElementById("assistant-coachmark");
-    if (coach) {
-      coach.hidden = false;
-      coach.classList.add("assistant-coachmark--play");
-      window.setTimeout(() => {
-        coach.classList.remove("assistant-coachmark--play");
-        coach.hidden = true;
-      }, COACHMARK_ANIM_MS);
-    }
-  }, INTRO_DELAY_MS);
-}
-
-runFirstVisitAssistantIntro();

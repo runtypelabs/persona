@@ -39,6 +39,22 @@ Use the \`/research\` tool against **acme.com** to pull positioning signals.
 - Technical integration path
 
 [Get Started with Runtype](https://runtype.com)
+
+---
+
+### What this pane is showing
+
+> **TL;DR** — You’re looking at **rendered Markdown** beside the thread, in a **near-fullscreen split**—the same “chat + canvas” rhythm as today’s flagship AI assistants, embedded on *your* domain.
+
+**Rendered document, not source**
+
+- Headings, lists, \`inline code\`, **bold**, *italic*, and [links](https://runtype.com) are typeset for **reading**, not pasted as plain text.
+- Long-form answers, specs, and checklists stay **scannable** in the right-hand pane.
+
+**Layout**
+
+1. **Thread** — the conversation column on the left.
+2. **Canvas** — the artifact column on the right (this document).
 `;
 
 /** Default artifact id for the scripted stream and file card (keep in sync). */
