@@ -1474,6 +1474,7 @@ export const createAgentExperience = (
     // Determine panel styling based on mode, with theme overrides
     const position = config.launcher?.position ?? 'bottom-left';
     const isLeftSidebar = position === 'bottom-left' || position === 'top-left';
+    const overlayZIndex = config.launcher?.zIndex ?? 9999;
 
     // Default values based on mode
     let defaultPanelBorder = (sidebarMode || shouldGoFullscreen) ? 'none' : '1px solid var(--persona-border)';
@@ -1514,7 +1515,6 @@ export const createAgentExperience = (
       );
 
       // Wrapper — fill entire viewport
-      const mobileFullscreenZIndex = config.launcher?.zIndex ?? 9999;
       wrapper.style.cssText = `
         position: fixed !important;
         inset: 0 !important;
@@ -1525,7 +1525,7 @@ export const createAgentExperience = (
         padding: 0 !important;
         display: flex !important;
         flex-direction: column !important;
-        z-index: ${mobileFullscreenZIndex} !important;
+        z-index: ${overlayZIndex} !important;
         background-color: var(--persona-surface, #ffffff) !important;
       `;
 
@@ -1681,7 +1681,6 @@ export const createAgentExperience = (
       const sidebarWidth = config.launcher?.sidebarWidth ?? '420px';
       
       // Wrapper - fixed position, flush with edges
-      const sidebarZIndex = config.launcher?.zIndex ?? 50;
       wrapper.style.cssText = `
         position: fixed !important;
         top: 0 !important;
@@ -1693,7 +1692,7 @@ export const createAgentExperience = (
         padding: 0 !important;
         display: flex !important;
         flex-direction: column !important;
-        z-index: ${sidebarZIndex} !important;
+        z-index: ${overlayZIndex} !important;
         ${isLeftSidebar ? 'left: 0 !important; right: auto !important;' : 'left: auto !important; right: 0 !important;'}
       `;
       
