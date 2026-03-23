@@ -239,10 +239,49 @@ select {
   transition: all 0.2s ease;
   font-size: 14px;
   line-height: 1.4;
+  position: relative;
+  overflow: hidden;
 }
 
+.example-item::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  right: -10%;
+  width: 45%;
+  height: 140%;
+  border-radius: 50%;
+  filter: blur(20px);
+  opacity: 0.35;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.example-item:hover::after {
+  opacity: 0.5;
+}
+
+/* Rotating color accents for each pill */
+.examples-list li:nth-child(9n+1) .example-item::after,
+.featured-grid .example-item:nth-child(9n+1)::after { background: radial-gradient(circle at 70% 50%, #8b5cf6, transparent 70%); }
+.examples-list li:nth-child(9n+2) .example-item::after,
+.featured-grid .example-item:nth-child(9n+2)::after { background: radial-gradient(circle at 70% 50%, #06b6d4, transparent 70%); }
+.examples-list li:nth-child(9n+3) .example-item::after,
+.featured-grid .example-item:nth-child(9n+3)::after { background: radial-gradient(circle at 70% 50%, #f97316, transparent 70%); }
+.examples-list li:nth-child(9n+4) .example-item::after,
+.featured-grid .example-item:nth-child(9n+4)::after { background: radial-gradient(circle at 70% 50%, #10b981, transparent 70%); }
+.examples-list li:nth-child(9n+5) .example-item::after,
+.featured-grid .example-item:nth-child(9n+5)::after { background: radial-gradient(circle at 70% 50%, #ec4899, transparent 70%); }
+.examples-list li:nth-child(9n+6) .example-item::after,
+.featured-grid .example-item:nth-child(9n+6)::after { background: radial-gradient(circle at 70% 50%, #3b82f6, transparent 70%); }
+.examples-list li:nth-child(9n+7) .example-item::after,
+.featured-grid .example-item:nth-child(9n+7)::after { background: radial-gradient(circle at 70% 50%, #f59e0b, transparent 70%); }
+.examples-list li:nth-child(9n+8) .example-item::after,
+.featured-grid .example-item:nth-child(9n+8)::after { background: radial-gradient(circle at 70% 50%, #ef4444, transparent 70%); }
+.examples-list li:nth-child(9n+9) .example-item::after,
+.featured-grid .example-item:nth-child(9n+9)::after { background: radial-gradient(circle at 70% 50%, #14b8a6, transparent 70%); }
+
 .example-item:hover {
-  background: var(--border);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px -8px rgba(0, 0, 0, 0.15);
 }
