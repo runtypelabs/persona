@@ -59,7 +59,7 @@ export const createDefaultSanitizer = (): SanitizeFunction => {
       const val = data.attrValue;
       if (val.toLowerCase().startsWith("data:") && !SAFE_DATA_URI.test(val)) {
         data.attrValue = "";
-        data.forceKeepAttr = false;
+        data.keepAttr = false;
       }
     }
   });
