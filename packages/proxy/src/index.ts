@@ -64,51 +64,15 @@ const DEFAULT_ENDPOINT = "https://api.runtype.com/v1/dispatch";
 const DEFAULT_PATH = "/api/chat/dispatch";
 
 const getRuntimeEnv = (): RuntimeEnv | undefined => {
-  const maybeProcess = (globalThis as typeof globalThis & {
-    process?: { env?: RuntimeEnv };
-  }).process;
+  const maybeProcess = (
+    globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } }
+  ).process;
   return maybeProcess?.env;
 };
 
+/** True only when `NODE_ENV` is exactly `"development"` (unset = production). Safe when `process` is missing (e.g. some Workers runtimes). */
 const isDevelopmentRuntime = (): boolean =>
   getRuntimeEnv()?.NODE_ENV === "development";
-
-const summarizeRequestPayload = (
-  payload: Record<string, unknown>,
-  isAgentMode: boolean
-): Record<string, unknown> => {
-  if (isAgentMode) {
-    return {
-      topLevelKeys: Object.keys(payload).sort()
-    };
-  }
-
-  const messages = Array.isArray(payload.messages) ? payload.messages : [];
-  const inputs =
-    payload.inputs && typeof payload.inputs === "object" && !Array.isArray(payload.inputs)
-      ? Object.keys(payload.inputs as Record<string, unknown>).sort()
-      : [];
-  const flow =
-    payload.flow && typeof payload.flow === "object" && !Array.isArray(payload.flow)
-      ? (payload.flow as Record<string, unknown>)
-      : undefined;
-  const record =
-    payload.record && typeof payload.record === "object" && !Array.isArray(payload.record)
-      ? (payload.record as Record<string, unknown>)
-      : undefined;
-  const metadata =
-    record?.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
-      ? (record.metadata as Record<string, unknown>)
-      : undefined;
-
-  return {
-    messageCount: messages.length,
-    inputKeys: inputs,
-    flowId: typeof flow?.id === "string" ? flow.id : undefined,
-    hasInlineFlow: typeof flow?.id !== "string" && !!flow,
-    metadataKeys: metadata ? Object.keys(metadata).sort() : []
-  };
-};
 
 const DEFAULT_FLOW: RuntypeFlowConfig = {
   name: "Streaming Prompt Flow",
@@ -318,14 +282,13 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       }
     }
 
+    // Development only: do not log key material or full bodies in production.
     if (isDevelopment) {
       console.log(`\n=== Runtype Proxy Request (${isAgentMode ? "agent" : "flow"}) ===`);
       console.log("URL:", upstream);
       console.log("API Key Used:", apiKey ? "Yes" : "No");
-      console.log(
-        "Request Summary:",
-        JSON.stringify(summarizeRequestPayload(runtypePayload, isAgentMode), null, 2)
-      );
+      console.log("API Key (first 12 chars):", apiKey ? apiKey.substring(0, 12) : "N/A");
+      console.log("Request Payload:", JSON.stringify(runtypePayload, null, 2));
     }
 
     const response = await fetch(upstream, {
