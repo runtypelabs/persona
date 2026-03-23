@@ -17,6 +17,8 @@ const inlineDemoTheme: DeepPartial<PersonaTheme> = {
       accent: { 600: "#ea580c" },
       gray: {
         50: "#f8fafc",
+        // 100: "#eaedf1",
+        200: "#e4e8ee",
         500: "#64748b"
       }
     }
@@ -27,6 +29,13 @@ const inlineDemoTheme: DeepPartial<PersonaTheme> = {
       accent: "palette.colors.accent.600",
       surface: "palette.colors.gray.50",
       textMuted: "palette.colors.gray.500"
+    }
+  },
+  components: {
+    message: {
+      assistant: {
+        border: "palette.colors.gray.200"
+      }
     }
   }
 };
