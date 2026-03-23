@@ -122,7 +122,8 @@ const inlineController = createAgentExperience(inlineMount, {
     ...DEFAULT_WIDGET_CONFIG.theme,
     primary: "#0f172a",
     accent: "#ea580c",
-    surface: "#f8fafc",
+    surface: "#ffffff",
+    container: "#ffffff",
     muted: "#64748b"
   },
   copy: {
