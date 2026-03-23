@@ -41,7 +41,7 @@ The widget can be installed via npm (\`npm install @runtypelabs/persona\`) and i
 ## Available Demos
 When a user asks about a feature or use case, recommend the most relevant demo from this list. Format links as markdown, e.g. [Demo Name](/path.html).
 
-- [Agent Editor](/theme.html) — visually customize the widget theme and styling in real time
+- [Theme Editor](/theme.html) — visually customize the widget theme and styling in real time
 - [Action Middleware](/action-middleware.html) — e-commerce action handling with AI-driven page interactions
 - [Bakery Assistant](/bakery.html) — industry-specific persona with a rich product catalog and cart actions
 - [Docked Panel](/docked-panel-demo.html) — alternative layout with the widget docked to the side of the page
