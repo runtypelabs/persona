@@ -168,3 +168,21 @@ All five checks must pass before a PR can be merged.
 - **Linting:** ESLint + Prettier — run `pnpm lint` before committing; CI enforces this
 - **Type safety:** Avoid `any`; prefer explicit types from `types.ts`
 - **Exports:** Named exports preferred; only use default exports where a clear single-export module pattern applies
+
+## Cursor Cloud specific instructions
+
+### Environment
+
+- **Node.js v20.19.0** is required (matches `.nvmrc`). Use `nvm use` after the update script runs.
+- **pnpm 9.x** must be used (not pnpm 10). The lockfile is v9.0 format. If corepack tries to install pnpm 10 (because `packageManager` is not in `package.json`), disable corepack and install pnpm 9 via `npm install -g pnpm@9`.
+- No Docker, databases, or external infrastructure is needed.
+
+### Running services
+
+- `pnpm dev` starts both the Vite demo (port 5173) and the vercel-edge proxy (port 43111) concurrently. The proxy returns a fallback sample message when no upstream API key is configured — this is expected behavior and the widget still works interactively.
+- For commands reference, see the "Common Commands" section above or `package.json` scripts.
+
+### Testing and quality
+
+- All commands documented in the "Common Commands" section above. Run from the repo root.
+- CI checks: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm --filter @runtypelabs/persona test:run` — all five must pass.
