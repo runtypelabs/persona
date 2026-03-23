@@ -10,10 +10,10 @@
   },
   "dependencies": {
     "@runtypelabs/persona-proxy": "workspace:^",
-    "hono": "^4.4.9"
+    "hono": "^4.12.7"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250107.0",
+    "@cloudflare/workers-types": "^4.20260305.0",
     "typescript": "^5.4.5",
     "wrangler": "^4.46.0"
   }
