@@ -55,6 +55,22 @@ function getDockConfig() {
   };
 }
 
+/** Full launcher object — use on init and on Apply so shallow inner `controller.update` keeps titles, breakpoint, etc. */
+function getDemoLauncher() {
+  return {
+    ...DEFAULT_WIDGET_CONFIG.launcher,
+    mountMode: "docked" as const,
+    dock: getDockConfig(),
+    autoExpand: false,
+    fullHeight: true,
+    mobileBreakpoint: 1120,
+    title: "Copilot",
+    subtitle: "Answers and drafts without leaving this screen",
+    agentIconText: "✦",
+    textHidden: false,
+  };
+}
+
 /** Match workspace chrome layout to dock side (see docked-panel-demo.html). */
 function syncWorkspaceMainDockSide(): void {
   workspaceMainEl?.setAttribute("data-dock-side", getDockConfig().side);
@@ -94,17 +110,7 @@ function createController(): AgentWidgetInitHandle {
     config: {
       ...DEFAULT_WIDGET_CONFIG,
       apiUrl,
-      launcher: {
-        ...DEFAULT_WIDGET_CONFIG.launcher,
-        mountMode: "docked",
-        dock: getDockConfig(),
-        autoExpand: false,
-        fullHeight: true,
-        title: "Launch Copilot",
-        subtitle: "Plan, review, and ship from the assistant",
-        agentIconText: "✦",
-        textHidden: false,
-      },
+      launcher: getDemoLauncher(),
       theme: {
         semantic: {
           colors: {
@@ -151,14 +157,14 @@ function createController(): AgentWidgetInitHandle {
       },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: "Workspace Assistant",
-        welcomeSubtitle: "This docked panel sits beside the workspace instead of covering it.",
-        inputPlaceholder: "Ask for a launch checklist, QA review, or summary…",
+        welcomeTitle: "Ask Copilot",
+        welcomeSubtitle: "Search docs, get answers, or draft content next to your work.",
+        inputPlaceholder: "Ask a question or describe what you need…",
       },
       suggestionChips: [
-        "Summarize what changed in this workspace.",
-        "Give me a launch checklist for this release.",
         "What should I review before publishing today?",
+        "Draft a short update for stakeholders on this week’s changes.",
+        "Summarize performance and catalog updates from the last 7 days.",
       ],
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     },
@@ -178,12 +184,7 @@ function bindControllerEvents(): void {
 
 function applyDockSettings(): void {
   syncWorkspaceMainDockSide();
-  controller.update({
-    launcher: {
-      mountMode: "docked",
-      dock: getDockConfig(),
-    },
-  });
+  controller.update({ launcher: getDemoLauncher() });
   updateStatus("Layout updated.");
 }
 
@@ -191,7 +192,7 @@ syncWorkspaceMainDockSide();
 controller = createController();
 bindControllerEvents();
 syncToggleUi();
-updateStatus("Demo ready.");
+updateStatus("Ready.");
 
 applyDockBtn.addEventListener("click", applyDockSettings);
 

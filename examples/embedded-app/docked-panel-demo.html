@@ -16,6 +16,17 @@
       background: var(--background);
       color: var(--foreground);
     }
+    /* Page-scoped tokens (align with demo-shared + admin chrome) */
+    :root {
+      --docked-canvas-bg: #f8fafc;
+      --docked-slate-900: #0f172a;
+      --docked-slate-800: #1e293b;
+      --docked-slate-700: #334155;
+      --docked-slate-600: #475569;
+      --docked-slate-200: #e2e8f0;
+      --docked-slate-100: #f1f5f9;
+      --docked-nav-active: #38bdf8;
+    }
     .app-root {
       height: 100%;
       display: flex;
@@ -28,15 +39,38 @@
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 18px 28px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.9);
-      backdrop-filter: blur(14px);
+      padding: 12px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      background: var(--docked-slate-900);
+      color: #f8fafc;
+      font-family: var(--font-sans);
     }
     .admin-topbar__left {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
+    }
+    .admin-topbar__brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+      user-select: none;
+    }
+    .admin-topbar__logo {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, #38bdf8 0%, #0ea5e9 100%);
+      color: var(--docked-slate-900);
+      display: grid;
+      place-items: center;
+    }
+    .admin-topbar__logo svg {
+      width: 16px;
+      height: 16px;
     }
     .brand-mark {
       width: 36px;
@@ -119,40 +153,31 @@
       min-height: 0;
       padding: 0 28px 28px;
     }
-    /* The widget wraps #workspace-main in a docked shell (flex row).
-       Move the chrome (border, radius, shadow) to that shell so the
-       collapsed rail + FAB sit inside the rounded container. */
+    /* Flush admin shell: no floating card chrome */
     [data-persona-host-layout="docked"] {
-      min-height: 680px;
-      height: calc(100vh - 196px);
-      border-radius: 16px;
-      border: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.84);
-      box-shadow: var(--shadow-lg);
+      flex: 1 1 auto;
+      min-height: 0;
+      height: 100%;
+      width: 100%;
+      border: none;
+      border-radius: 0;
+      background: #fff;
+      box-shadow: none;
     }
-    /* Clip the content slot so workspace doesn't overflow the rounded
-       shell, but leave the dock rail (panel slot) unclipped so the FAB
-       and its shadow ring render fully inside the rail. */
     [data-persona-dock-role="content"] {
       overflow: hidden;
-      border-radius: 16px 0 0 16px;
+      border-radius: 0;
     }
-    /* Push the FAB inward so it clears the rounded corner */
-    [data-persona-dock-role="panel"] {
-      padding: 16px 8px 0 0;
-    }
-    #workspace-main {
-      display: grid;
-      grid-template-columns: 240px 1fr;
+    .workspace-main {
       min-width: 0;
       min-height: 0;
-      overflow: hidden;
     }
-    .admin-topbar__mark {
-      font-size: 14px;
+    .admin-topbar__wordmark {
+      font-size: 15px;
       font-weight: 600;
       letter-spacing: -0.02em;
-      color: rgba(255, 255, 255, 0.92);
+      color: rgba(255, 255, 255, 0.94);
+      font-family: var(--font-sans);
     }
     .admin-topbar__right {
       display: flex;
@@ -348,7 +373,7 @@
       min-width: 0;
       display: flex;
       flex-direction: column;
-      background: #e2e8f0;
+      background: var(--docked-canvas-bg);
     }
     .workspace-panel {
       flex: 1 1 auto;
@@ -357,11 +382,6 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-    }
-    .workspace-panel [data-persona-host-layout="docked"] {
-      flex: 1 1 auto;
-      min-height: 0;
-      width: 100%;
     }
     .workspace-main {
       --workspace-nav-w: 240px;
@@ -383,7 +403,6 @@
     }
     .workspace-main[data-dock-side="right"] .workspace-stage {
       position: relative;
-      z-index: 0;
       width: 100%;
       height: 100%;
       min-width: 0;
@@ -400,9 +419,10 @@
       z-index: 3;
       width: var(--workspace-nav-w);
       box-sizing: border-box;
-      padding: 22px 18px;
-      background: linear-gradient(180deg, var(--foreground) 0%, #1a1a1a 100%);
-      color: #d4d4d4;
+      padding: 20px 14px;
+      background: linear-gradient(180deg, var(--docked-slate-900) 0%, var(--docked-slate-800) 100%);
+      color: #cbd5e1;
+      border-right: 1px solid rgba(255, 255, 255, 0.06);
     }
     .workspace-main[data-dock-side="left"] {
       display: flex;
@@ -415,9 +435,10 @@
     .workspace-main[data-dock-side="left"] .workspace-nav {
       flex: 0 0 var(--workspace-nav-w);
       box-sizing: border-box;
-      padding: 22px 18px;
-      background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+      padding: 20px 14px;
+      background: linear-gradient(180deg, var(--docked-slate-900) 0%, var(--docked-slate-800) 100%);
       color: #cbd5e1;
+      border-right: 1px solid rgba(255, 255, 255, 0.06);
     }
     .workspace-main[data-dock-side="left"] .workspace-stage {
       flex: 1 1 auto;
@@ -427,23 +448,43 @@
       flex-direction: column;
     }
     .workspace-nav h2 {
-      margin: 0 0 20px;
-      font-size: 14px;
+      margin: 0 0 16px;
+      font-size: 11px;
+      font-family: var(--font-sans);
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
+      letter-spacing: 0.1em;
+      color: rgba(148, 163, 184, 0.9);
     }
     .workspace-nav ul {
       list-style: none;
       padding: 0;
       margin: 0;
-      display: grid;
-      gap: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
-    .workspace-nav li {
-      padding: 12px 14px;
-      border-radius: 0;
-      background: rgba(255, 255, 255, 0.04);
+    .workspace-nav .nav-item {
+      display: block;
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 500;
+      color: rgba(226, 232, 240, 0.88);
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: default;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .workspace-nav .nav-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #f8fafc;
+    }
+    .workspace-nav .nav-item.is-active {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.35);
+      color: #f0f9ff;
     }
     [data-persona-dock-role="host"] .persona-rounded-button {
       border-radius: 0 !important;
@@ -453,10 +494,10 @@
       min-height: 0;
       overflow: auto;
       display: grid;
-      grid-template-rows: auto auto 1fr;
-      gap: 18px;
+      grid-template-rows: auto auto auto 1fr;
+      gap: 20px;
       padding: 24px;
-      background: var(--card);
+      background: var(--docked-canvas-bg);
     }
     .workspace-main[data-dock-side="right"] .workspace-canvas {
       padding-left: calc(var(--workspace-nav-w) + 24px);
@@ -475,12 +516,13 @@
     .dock-settings__field label {
       font-size: 12px;
       font-weight: 600;
-      color: #475569;
+      color: var(--docked-slate-600);
+      font-family: var(--font-sans);
     }
     .dock-settings__field input,
     .dock-settings__field select {
       border: 1px solid rgba(148, 163, 184, 0.45);
-      border-radius: 10px;
+      border-radius: var(--radius-lg);
       background: #fff;
       color: #0f172a;
       font: inherit;
@@ -494,16 +536,19 @@
     .dock-settings__field-label {
       font-size: 12px;
       font-weight: 600;
-      color: #475569;
+      color: var(--docked-slate-600);
+      font-family: var(--font-sans);
     }
     .dock-settings__check {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       margin: 0;
-      font-size: 14px;
+      margin-top: -30px;
+      font-size: 13px;
       font-weight: 500;
-      color: #334155;
+      color: var(--docked-slate-700);
+      font-family: var(--font-sans);
       cursor: pointer;
       user-select: none;
     }
@@ -513,58 +558,80 @@
       min-width: unset;
       margin: 0;
       padding: 0;
-      accent-color: #0f172a;
+      accent-color: var(--docked-slate-900);
     }
     #dock-reveal {
       min-width: 11rem;
     }
     #apply-dock-settings {
       border: none;
-      border-radius: 10px;
-      background: #0f172a;
+      border-radius: var(--radius);
+      background: var(--docked-slate-900);
       color: #fff;
-      font: inherit;
+      font-family: var(--font-sans);
       font-weight: 600;
-      padding: 10px 18px;
+      font-size: 13px;
+      padding: 9px 16px;
       cursor: pointer;
+      transition: background 0.15s ease;
     }
     #apply-dock-settings:hover {
-      background: #1e293b;
+      background: var(--docked-slate-800);
+    }
+    .dock-settings-card {
+      padding: 0;
+      border-radius: var(--radius-lg);
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    /* Inner padding matches .workspace-banner (22px 24px) so the form aligns with other cards */
+    .dock-settings-card__inner {
+      padding: 22px 24px 20px;
+    }
+    .dock-settings-card__title {
+      margin: 0 0 16px;
+      font-size: 11px;
+      font-family: var(--font-sans);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--docked-slate-600);
     }
     .dock-settings__status {
-      margin: 14px 0 0;
-      font-size: 13px;
-      line-height: 1.45;
-      color: #475569;
+      margin: 0;
+      padding: 12px 24px 14px;
+      box-sizing: border-box;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--docked-slate-600);
+      background: var(--docked-slate-100);
+      border-top: 1px solid var(--border);
     }
     .workspace-banner {
-      padding: 20px 24px;
-      border-radius: 20px;
-      background: var(--accent);
+      padding: 22px 24px;
+      border-radius: var(--radius-lg);
+      background: var(--card);
       border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
     }
     .workspace-banner h3 {
-      margin: 0 0 8px;
-      font-size: 24px;
+      margin: 0 0 10px;
+      font-size: 1.25rem;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--foreground);
     }
     .workspace-banner > p {
       margin: 0;
       color: var(--muted);
-      max-width: 70ch;
-      line-height: 1.5;
-    }
-    .workspace-banner__dock {
-      margin-top: 20px;
-      padding-top: 18px;
-      border-top: 1px solid rgba(147, 197, 253, 0.55);
-    }
-    .workspace-banner__dock h4 {
-      margin: 0 0 12px;
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: #64748b;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      max-width: 72ch;
+      line-height: 1.55;
     }
     .workspace-grid {
       display: grid;
@@ -572,44 +639,76 @@
       gap: 16px;
     }
     .workspace-card {
-      padding: 18px;
-      border-radius: 12px;
+      padding: 18px 24px;
+      border-radius: var(--radius-lg);
       background: var(--card);
       border: 1px solid var(--border);
       box-shadow: var(--shadow-sm);
     }
     .workspace-card h4 {
       margin: 0 0 10px;
+      font-family: var(--font-sans);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--foreground);
     }
     .workspace-card p {
       margin: 0;
       color: var(--muted);
+      font-family: var(--font-sans);
+      font-size: 14px;
       line-height: 1.5;
     }
     .workspace-feed {
       min-height: 0;
-      padding: 20px;
-      border-radius: 22px;
+      padding: 18px 24px;
+      border-radius: var(--radius-lg);
       background: var(--card);
       border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+    .workspace-feed__heading {
+      margin: 0 0 12px;
+      font-size: 11px;
+      font-family: var(--font-sans);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--docked-slate-600);
     }
     .feed-item {
       display: grid;
-      gap: 6px;
-      padding: 14px 0;
+      gap: 4px;
+      padding: 12px 0 12px 14px;
       border-bottom: 1px solid var(--border);
+      border-left: 3px solid transparent;
+      margin-left: 0;
     }
     .feed-item:last-child {
       border-bottom: none;
     }
+    .feed-item:hover {
+      border-left-color: var(--docked-nav-active);
+    }
     .feed-meta {
-      font-size: 12px;
-      color: var(--muted);
+      font-size: 11px;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      color: var(--docked-slate-600);
       text-transform: uppercase;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.06em;
     }
     .feed-title {
-      font-weight: 700;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--foreground);
+    }
+    .feed-item > span:last-child {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
     }
     .status-row {
       padding: 0 28px 18px;
@@ -618,11 +717,54 @@
     }
     @media (max-width: 1120px) {
       .workspace-main {
-        --workspace-nav-w: 72px;
+        --workspace-nav-w: 0px;
       }
-      .workspace-nav li {
-        font-size: 0;
-        min-height: 44px;
+
+      .workspace-main[data-dock-side="right"],
+      .workspace-main[data-dock-side="left"] {
+        display: flex !important;
+        flex-direction: column !important;
+      }
+
+      .workspace-main[data-dock-side="right"] .workspace-nav,
+      .workspace-main[data-dock-side="left"] .workspace-nav {
+        position: relative;
+        inset: auto;
+        z-index: auto;
+        width: 100%;
+        flex: 0 0 auto;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 12px 16px 14px;
+      }
+
+      .workspace-nav h2 {
+        margin: 0 0 10px;
+      }
+
+      .workspace-nav ul {
+        flex-direction: row !important;
+        flex-wrap: wrap;
+        gap: 6px !important;
+      }
+
+      .workspace-nav .nav-item {
+        font-size: 12px;
+        min-height: unset;
+        padding: 8px 12px;
+        white-space: nowrap;
+      }
+
+      .workspace-main[data-dock-side="right"] .workspace-stage,
+      .workspace-main[data-dock-side="left"] .workspace-stage {
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+      }
+
+      .workspace-main[data-dock-side="right"] .workspace-canvas {
+        padding-left: 24px;
       }
     }
     @media (max-width: 860px) {
@@ -643,7 +785,18 @@
   <div class="app-root">
     <header class="admin-topbar">
       <div class="admin-topbar__left">
-        <span class="admin-topbar__mark">Persona</span>
+        <span class="admin-topbar__brand">
+          <span class="admin-topbar__logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+              <path d="M5 3v4" />
+              <path d="M19 17v4" />
+              <path d="M3 5h4" />
+              <path d="M17 19h4" />
+            </svg>
+          </span>
+          <span class="admin-topbar__wordmark">Persona <em>Docked</em></span>
+        </span>
       </div>
       <div class="admin-topbar__right">
         <div
@@ -709,23 +862,25 @@
           <aside class="workspace-nav">
             <h2>Workspace</h2>
             <ul>
-              <li>Overview</li>
-              <li>Automation</li>
-              <li>Audience</li>
-              <li>Catalog</li>
-              <li>Publishing</li>
+              <li><span class="nav-item is-active" aria-current="page">Overview</span></li>
+              <li><span class="nav-item">Automation</span></li>
+              <li><span class="nav-item">Audience</span></li>
+              <li><span class="nav-item">Catalog</span></li>
+              <li><span class="nav-item">Publishing</span></li>
             </ul>
           </aside>
           <div class="workspace-stage">
             <div id="workspace-dock-target">
               <div class="workspace-canvas">
             <div class="workspace-banner">
-              <h3>Control panel style layout</h3>
+              <h3>Operations overview</h3>
               <p>
-                The widget <code>target</code> is <code>#workspace-dock-target</code> (canvas only). <strong>Right</strong> dock: full-width stage with the nav overlaid (push can slide the canvas behind the rail). <strong>Left</strong> dock: nav and stage are a flex row so the panel opens beside the rail.
+                Track launches, team activity, and performance in one place. Open Copilot from the header when you need answers or drafting help—it stays docked beside this view instead of covering your work.
               </p>
-              <div class="workspace-banner__dock">
-                <h4>Assistant dock</h4>
+            </div>
+            <section class="dock-settings-card" aria-labelledby="dock-settings-heading">
+              <div class="dock-settings-card__inner">
+                <h4 class="dock-settings-card__title" id="dock-settings-heading">Assistant dock</h4>
                 <div class="dock-settings__row">
                   <div class="dock-settings__field">
                     <label for="dock-side">Side</label>
@@ -748,19 +903,16 @@
                     </select>
                   </div>
                   <div class="dock-settings__field">
-                    <span class="dock-settings__field-label">Animate</span>
                     <label class="dock-settings__check">
                       <input id="dock-animate" type="checkbox" checked autocomplete="off" />
-                      <span>CSS transition</span>
+                      <span>Animate</span>
                     </label>
                   </div>
                   <button id="apply-dock-settings" type="button">Apply</button>
                 </div>
-                <p class="dock-settings__status" id="dock-status">
-                  Choose side, width, reveal, and animation; click Apply. Open the panel from the header or <code>controller.open()</code>.
-                </p>
               </div>
-            </div>
+              <p class="dock-settings__status" id="dock-status"></p>
+            </section>
             <div class="workspace-grid">
               <article class="workspace-card">
                 <h4>Launch checklist</h4>
@@ -776,6 +928,7 @@
               </article>
             </div>
             <div class="workspace-feed">
+              <h4 class="workspace-feed__heading">Recent activity</h4>
               <div class="feed-item">
                 <span class="feed-meta">Today</span>
                 <span class="feed-title">Campaign brief approved</span>
