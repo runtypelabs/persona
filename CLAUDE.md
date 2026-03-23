@@ -179,7 +179,9 @@ All five checks must pass before a PR can be merged.
 
 ### Running services
 
-- `pnpm dev` starts both the Vite demo (port 5173) and the vercel-edge proxy (port 43111) concurrently. The proxy returns a fallback sample message when no upstream API key is configured — this is expected behavior and the widget still works interactively.
+- `pnpm dev` starts both the Vite demo (port 5173) and the vercel-edge proxy (port 43111) concurrently.
+- The proxy requires `RUNTYPE_API_KEY` (env var) to forward requests to the upstream Runtype API. Without it, the proxy returns 401 and the widget shows a fallback message.
+- **Critical gotcha:** If `VITE_PROXY_URL` is set in the environment (e.g. via injected secrets), the widget will POST to that remote URL instead of the local proxy. This causes CORS errors since the remote proxy doesn't allow `localhost` origins. To use the local proxy, unset `VITE_PROXY_URL` before starting the dev server: `unset VITE_PROXY_URL && pnpm dev`. Similarly, `VITE_CLIENT_TOKEN` switches to client-token mode — unset it for proxy-mode demos.
 - For commands reference, see the "Common Commands" section above or `package.json` scripts.
 
 ### Testing and quality
