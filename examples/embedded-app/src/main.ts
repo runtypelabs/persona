@@ -261,6 +261,7 @@ const launcherController = initAgentWidget({
       subtitle: homeDemoWelcomeSubtitle,
       iconUrl: "https://dummyimage.com/96x96/111827/ffffff&text=AI",
       closeButtonColor: "#6b7280",
+      collapsedMaxWidth: "min(380px, calc(100vw - 48px))",
     },
     suggestionChips: [...homeDemoSuggestionChips],
     postprocessMessage: ({ text }) => markdownPostprocessor(text)
