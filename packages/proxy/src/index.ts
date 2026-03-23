@@ -93,7 +93,7 @@ const withCors =
   (allowedOrigins: string[] | undefined) =>
     async (c: Context, next: () => Promise<void>) => {
       const origin = c.req.header("origin");
-      const isDevelopment = process.env.NODE_ENV === "development" || !process.env.NODE_ENV;
+      const isDevelopment = process.env.NODE_ENV === "development";
       
       // Determine the CORS origin to allow
       let corsOrigin: string;
@@ -120,9 +120,7 @@ const withCors =
 
       const headers: Record<string, string> = {
         "Access-Control-Allow-Origin": corsOrigin,
-        "Access-Control-Allow-Headers":
-          c.req.header("access-control-request-headers") ??
-          "Content-Type, Authorization",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
         Vary: "Origin"
       };
@@ -169,7 +167,7 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
     payload.timestamp = payload.timestamp ?? new Date().toISOString();
 
     const isDevelopment =
-      process.env.NODE_ENV === "development" || !process.env.NODE_ENV;
+      process.env.NODE_ENV === "development";
 
     if (isDevelopment) {
       console.log("\n=== Feedback Received ===");
@@ -224,7 +222,7 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       );
     }
 
-    const isDevelopment = process.env.NODE_ENV === "development" || !process.env.NODE_ENV;
+    const isDevelopment = process.env.NODE_ENV === "development";
 
     // Detect agent mode: if the payload contains an `agent` field, forward it directly
     const isAgentMode = !!clientPayload.agent;

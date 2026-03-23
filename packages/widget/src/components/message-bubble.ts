@@ -12,6 +12,17 @@ import {
 import { renderLucideIcon } from "../utils/icons";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "../utils/content";
 
+/** Validate that an image src URL uses a safe scheme (blocks javascript: and SVG data URIs). */
+export const isSafeImageSrc = (src: string): boolean => {
+  const lower = src.toLowerCase();
+  if (lower.startsWith("data:image/svg+xml")) return false;
+  if (/^(?:https?|blob):/i.test(src)) return true;
+  if (lower.startsWith("data:image/")) return true;
+  // Relative URLs are safe
+  if (!src.includes(":")) return true;
+  return false;
+};
+
 export type LoadingIndicatorRenderer = (context: LoadingIndicatorRenderContext) => HTMLElement | null;
 
 export type MessageTransform = (context: {
@@ -100,8 +111,15 @@ const createMessageImagePreviews = (
         settled = true;
       });
 
-      imageElement.src = imagePart.image;
-      container.appendChild(imageElement);
+      if (isSafeImageSrc(imagePart.image)) {
+        imageElement.src = imagePart.image;
+        container.appendChild(imageElement);
+      } else {
+        // Treat blocked images like load errors so fallback triggers correctly
+        settled = true;
+        visiblePreviewCount = Math.max(0, visiblePreviewCount - 1);
+        imageElement.remove();
+      }
     });
 
     if (visiblePreviewCount === 0) {

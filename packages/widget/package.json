@@ -34,6 +34,7 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "dompurify": "^3.3.3",
     "idiomorph": "^0.7.4",
     "lucide": "^0.552.0",
     "marked": "^12.0.2",

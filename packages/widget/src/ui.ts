@@ -1,4 +1,5 @@
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
+import { resolveSanitizer } from "./utils/sanitize";
 import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
 import {
   AgentWidgetConfig,
@@ -321,6 +322,9 @@ const buildPostprocessor = (
     ? createMarkdownProcessorFromConfig(cfg.markdown)
     : null;
 
+  // Resolve sanitizer: enabled by default, can be disabled or replaced
+  const sanitize = resolveSanitizer(cfg?.sanitize);
+
   return (context) => {
     let nextText = context.text ?? "";
     const rawPayload = context.message.rawContent ?? null;
@@ -347,20 +351,20 @@ const buildPostprocessor = (
     }
 
     // Priority: postprocessMessage > markdown config > escapeHtml
+    let html: string;
     if (cfg?.postprocessMessage) {
-      return cfg.postprocessMessage({
+      html = cfg.postprocessMessage({
         ...context,
         text: nextText,
         raw: rawPayload ?? context.text ?? ""
       });
+    } else if (markdownProcessor) {
+      html = markdownProcessor(nextText);
+    } else {
+      html = escapeHtml(nextText);
     }
 
-    // Use markdown processor if markdown config is provided
-    if (markdownProcessor) {
-      return markdownProcessor(nextText);
-    }
-
-    return escapeHtml(nextText);
+    return sanitize ? sanitize(html) : html;
   };
 };
 

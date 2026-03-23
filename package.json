@@ -10,7 +10,7 @@
     "dev:widget": "pnpm --filter embedded-app dev",
     "dev:vercel": "pnpm --filter vercel-edge dev",
     "dev:cloudflare": "pnpm --filter cloudflare-workers dev",
-    "dev": "pnpm --filter @runtypelabs/persona build:styles && concurrently \"pnpm dev:vercel\" \"pnpm dev:widget\"",
+    "dev": "pnpm --filter @runtypelabs/persona build:styles && NODE_ENV=development concurrently \"pnpm dev:vercel\" \"pnpm dev:widget\"",
     "changeset": "changeset",
     "release": "changeset publish"
   },

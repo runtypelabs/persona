@@ -58,7 +58,9 @@ declare global {
         const parsedConfig = JSON.parse(configJson);
         // If it has nested 'config' property, use it; otherwise treat as widget config
         if (parsedConfig.config) {
-          Object.assign(scriptConfig, parsedConfig);
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { __proto__: _a, constructor: _b, prototype: _c, ...safeConfig } = parsedConfig;
+          Object.assign(scriptConfig, safeConfig);
         } else {
           // Treat the entire object as widget config
           scriptConfig.config = parsedConfig;

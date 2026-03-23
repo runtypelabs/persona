@@ -2571,7 +2571,21 @@ export type AgentWidgetConfig = {
    * ```
    */
   markdown?: AgentWidgetMarkdownConfig;
-  
+
+  /**
+   * HTML sanitization for rendered message content.
+   *
+   * The widget renders AI-generated markdown as HTML. By default, all HTML
+   * output is sanitized using DOMPurify to prevent XSS attacks.
+   *
+   * - `true` (default): sanitize using built-in DOMPurify
+   * - `false`: disable sanitization (only use with fully trusted content sources)
+   * - `(html: string) => string`: custom sanitizer function
+   *
+   * @default true
+   */
+  sanitize?: boolean | ((html: string) => string);
+
   /**
    * Configuration for message action buttons (copy, upvote, downvote).
    * Shows action buttons on assistant messages for user feedback.
