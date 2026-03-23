@@ -143,7 +143,6 @@ const inlineController = createAgentExperience(inlineMount, {
 
 const launcherController = initAgentWidget({
   target: "#launcher-root",
-  useShadowDom: false,
   config: {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
