@@ -1,5 +1,6 @@
 # Persona
 
+[![npm](https://img.shields.io/npm/v/@runtypelabs/persona?style=flat&color=262626&label=npm)](https://www.npmjs.com/package/@runtypelabs/persona)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/runtypelabs/persona)
 
 A themeable, pluggable streaming AI chat widget for websites — built in plain JS with zero framework dependencies.
