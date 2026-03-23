@@ -1514,6 +1514,7 @@ export const createAgentExperience = (
       );
 
       // Wrapper — fill entire viewport
+      const mobileFullscreenZIndex = config.launcher?.zIndex ?? 9999;
       wrapper.style.cssText = `
         position: fixed !important;
         inset: 0 !important;
@@ -1524,7 +1525,8 @@ export const createAgentExperience = (
         padding: 0 !important;
         display: flex !important;
         flex-direction: column !important;
-        z-index: inherit !important;
+        z-index: ${mobileFullscreenZIndex} !important;
+        background-color: var(--persona-surface, #ffffff) !important;
       `;
 
       // Panel — fill wrapper, no radius/shadow
@@ -1679,6 +1681,7 @@ export const createAgentExperience = (
       const sidebarWidth = config.launcher?.sidebarWidth ?? '420px';
       
       // Wrapper - fixed position, flush with edges
+      const sidebarZIndex = config.launcher?.zIndex ?? 50;
       wrapper.style.cssText = `
         position: fixed !important;
         top: 0 !important;
@@ -1690,6 +1693,7 @@ export const createAgentExperience = (
         padding: 0 !important;
         display: flex !important;
         flex-direction: column !important;
+        z-index: ${sidebarZIndex} !important;
         ${isLeftSidebar ? 'left: 0 !important; right: auto !important;' : 'left: auto !important; right: 0 !important;'}
       `;
       
@@ -1744,7 +1748,11 @@ export const createAgentExperience = (
     if (!isInlineEmbed && !dockedMode) {
       const maxHeightStyles = 'max-height: -moz-available !important; max-height: stretch !important;';
       const paddingStyles = sidebarMode ? '' : 'padding-top: 1.25em !important;';
-      wrapper.style.cssText += maxHeightStyles + paddingStyles;
+      // Override z-index only when explicitly configured; otherwise the persona-z-50 class applies
+      const zIndexStyles = !sidebarMode && config.launcher?.zIndex != null
+        ? `z-index: ${config.launcher.zIndex} !important;`
+        : '';
+      wrapper.style.cssText += maxHeightStyles + paddingStyles + zIndexStyles;
     }
   };
   applyFullHeightStyles();
