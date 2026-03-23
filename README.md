@@ -1,6 +1,7 @@
 # Persona
 
 [![npm](https://img.shields.io/npm/v/@runtypelabs/persona?style=flat&color=262626&label=npm)](https://www.npmjs.com/package/@runtypelabs/persona)
+[![Live demo](https://img.shields.io/badge/live_demo-persona--chat.dev-0d9488?style=flat)](https://persona-chat.dev)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/runtypelabs/persona)
 
 A themeable, pluggable streaming AI chat widget for websites — built in plain JS with zero framework dependencies.
@@ -8,6 +9,10 @@ A themeable, pluggable streaming AI chat widget for websites — built in plain 
 Persona gives you a drop-in UI for your AI assistant that works on any site. It ships with support for streaming responses, voice I/O, multi-modal content, tool call visualization, artifact rendering, and a plugin system so you can customize every layer of the UI.
 
 Persona works with any SSE-capable backend. It's pre-integrated with [Runtype](https://runtype.com) out of the box, so you can go from install to live assistant with zero configuration.
+
+## Live demo
+
+**[persona-chat.dev](https://persona-chat.dev)** hosts the interactive gallery (35+ pages): streaming chat, voice, docked and fullscreen layouts, themes, tool calls, artifacts, and more. It mirrors [`examples/embedded-app`](./examples/embedded-app). To run the same pages on your machine with hot reload while you edit code, run `pnpm dev` from the repository root: the Vite dev server reloads the demo, and the app resolves `@runtypelabs/persona` from the workspace (`packages/widget`), so widget changes apply without publishing to npm.
 
 ## Packages
 
@@ -20,7 +25,7 @@ Persona works with any SSE-capable backend. It's pre-integrated with [Runtype](h
 
 | Example | Platform | Description |
 |---------|----------|-------------|
-| [`examples/embedded-app`](./examples/embedded-app) | Vite | Vanilla JS demo with runtime configuration |
+| [`examples/embedded-app`](./examples/embedded-app) | Vite | Vanilla JS demo with runtime configuration ([live](https://persona-chat.dev)) |
 | [`examples/vercel-edge`](./examples/vercel-edge) | Vercel / Railway / Fly.io | Node.js proxy server |
 | [`examples/cloudflare-workers`](./examples/cloudflare-workers) | Cloudflare Workers | Edge proxy server |
 
