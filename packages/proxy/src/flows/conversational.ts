@@ -14,7 +14,7 @@ export const CONVERSATIONAL_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "meta/llama3.1-8b-instruct-free",
+        model: "mercury-2",
         responseFormat: "markdown",
         outputVariable: "prompt_result",
         userPrompt: "{{user_message}}",
