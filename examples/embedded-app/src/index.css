@@ -40,8 +40,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 32px;
-  position: relative;
-  z-index: 1;
 }
 
 /* Headers */
@@ -292,4 +290,59 @@ select {
   background: #ffffff;
   overflow: hidden;
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+/* Mobile Responsive */
+@media (max-width: 640px) {
+  .shell {
+    padding: 24px 16px 48px;
+    gap: 20px;
+  }
+
+  .hero {
+    padding: 24px 20px;
+  }
+
+  .hero h1 {
+    font-size: 28px;
+    margin-bottom: -18px;
+  }
+
+  .hero p {
+    font-size: 14px;
+  }
+
+  .card {
+    padding: 20px 16px;
+  }
+
+  .section-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .featured-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .embedded-target {
+    min-height: 400px;
+  }
+
+  .cta-row {
+    flex-direction: column;
+  }
+
+  .cta-row button,
+  .cta-row select {
+    width: 100%;
+  }
+
+  .code-example {
+    padding: 12px;
+  }
+
+  .code-example code {
+    font-size: 12px;
+  }
 }
