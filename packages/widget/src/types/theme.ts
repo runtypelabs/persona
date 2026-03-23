@@ -199,6 +199,10 @@ export interface HeaderTokens extends ComponentTokenSet {
   background: TokenReference<'color'>;
   border: TokenReference<'color'>;
   borderRadius: TokenReference<'radius'>;
+  /** Box-shadow on the header (e.g., a fade shadow to replace the default border). */
+  shadow?: string;
+  /** Override the header bottom border (e.g., `none`). */
+  borderBottom?: string;
 }
 
 export interface MessageTokens {
@@ -317,6 +321,10 @@ export interface ArtifactToolbarTokens {
   copyMenuShadow?: string;
   copyMenuBorderRadius?: string;
   copyMenuItemHoverBackground?: string;
+  /** Base background of icon buttons (defaults to --persona-surface). */
+  iconBackground?: string;
+  /** Border on the toolbar (e.g., `none` to remove the bottom border). */
+  toolbarBorder?: string;
 }
 
 /** Artifact tab strip chrome. */
@@ -326,11 +334,54 @@ export interface ArtifactTabTokens {
   activeBorder?: string;
   borderRadius?: string;
   textColor?: string;
+  /** Hover background for inactive tabs. */
+  hoverBackground?: string;
+  /** Tab list container background. */
+  listBackground?: string;
+  /** Tab list container border color. */
+  listBorderColor?: string;
+  /** Tab list container padding (CSS shorthand). */
+  listPadding?: string;
 }
 
 /** Artifact pane chrome. */
 export interface ArtifactPaneTokens {
   toolbarBackground?: string;
+}
+
+/** Icon button chrome (used by createIconButton). */
+export interface IconButtonTokens {
+  background?: string;
+  border?: string;
+  color?: string;
+  padding?: string;
+  borderRadius?: string;
+  hoverBackground?: string;
+  hoverColor?: string;
+  /** Background when aria-pressed="true". */
+  activeBackground?: string;
+  /** Border color when aria-pressed="true". */
+  activeBorder?: string;
+}
+
+/** Label button chrome (used by createLabelButton). */
+export interface LabelButtonTokens {
+  background?: string;
+  border?: string;
+  color?: string;
+  padding?: string;
+  borderRadius?: string;
+  hoverBackground?: string;
+  fontSize?: string;
+  gap?: string;
+}
+
+/** Toggle group chrome (used by createToggleGroup). */
+export interface ToggleGroupTokens {
+  /** Gap between toggle buttons. Default: 0 (connected). */
+  gap?: string;
+  /** Border radius for first/last buttons. */
+  borderRadius?: string;
 }
 
 export interface ComponentTokens {
@@ -348,6 +399,12 @@ export interface ComponentTokens {
   toolBubble: ToolBubbleTokens;
   reasoningBubble: ReasoningBubbleTokens;
   composer: ComposerChromeTokens;
+  /** Icon button styling tokens. */
+  iconButton?: IconButtonTokens;
+  /** Label button styling tokens. */
+  labelButton?: LabelButtonTokens;
+  /** Toggle group styling tokens. */
+  toggleGroup?: ToggleGroupTokens;
   /** Artifact toolbar, tab strip, and pane chrome. */
   artifact?: {
     toolbar?: ArtifactToolbarTokens;

@@ -6,13 +6,14 @@ import "@runtypelabs/persona/widget.css";
 
 import {
   initAgentWidget,
-  componentRegistry,
+  createDropdownMenu,
+  createIconButton,
+  createLabelButton,
   mergeWithDefaults,
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetConfig,
   type AgentWidgetInitHandle,
-  type AgentWidgetPlugin,
-  type ComponentRenderer
+  type AgentWidgetPlugin
 } from "@runtypelabs/persona";
 import {
   createFullscreenAssistantScriptedStream,
@@ -42,8 +43,8 @@ const COLORS = {
   link: "#60a5fa"
 } as const;
 
-// Inject hover styles once — inline styles can't express :hover, and idiomorph preserves
-// HTML attributes (including class/style) but strips addEventListener bindings.
+// Inject hover styles that can't be expressed via inline styles or SDK tokens.
+// After SDK token additions, only file card hover, attachment preview, and audio bars remain.
 const fileCardStyleId = "fullscreen-assistant-file-card-styles";
 if (!document.getElementById(fileCardStyleId)) {
   const style = document.createElement("style");
@@ -88,263 +89,11 @@ if (!document.getElementById(fileCardStyleId)) {
     [data-persona-audio-bars-btn] svg line {
       transform-origin: center;
     }
-    [data-persona-model-menu] {
-      position: absolute;
-      bottom: 100%;
-      right: 0;
-      margin-bottom: 4px;
-      min-width: 160px;
-      border: 1px solid ${COLORS.border};
-      background: ${COLORS.chat};
-      border-radius: 8px;
-      padding: 4px 0;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      z-index: 100;
-    }
-    [data-persona-model-menu] button {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      padding: 6px 12px;
-      border: none;
-      background: transparent;
-      color: ${COLORS.text};
-      font-size: 12px;
-      cursor: pointer;
-      text-align: left;
-    }
-    [data-persona-model-menu] button:hover {
-      background: ${COLORS.userBubble};
-    }
-    [data-persona-model-menu] button[data-selected]::after {
-      content: "\\2713";
-      color: ${COLORS.link};
-      margin-left: 8px;
-    }
-
-    /* ── Artifact document toolbar overrides ── */
-
-    /* All toolbar icon buttons: transparent bg, no border, muted color */
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn {
-      border: none !important;
-      background: transparent !important;
-      color: ${COLORS.muted} !important;
-      padding: 6px !important;
-      border-radius: 8px !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover {
-      background: ${COLORS.userBubble} !important;
-      color: ${COLORS.text} !important;
-    }
-
-    /* View/Source toggle: zero gap on parent container */
-    #fullscreen-assistant-demo-root :has(> .persona-artifact-view-btn) {
-      gap: 0 !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-view-btn,
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-code-btn {
-      border: 1px solid ${COLORS.border} !important;
-      background: transparent !important;
-      border-radius: 0 !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-view-btn {
-      border-radius: 8px 0 0 8px !important;
-      border-right: none !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-code-btn {
-      border-radius: 0 8px 8px 0 !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-view-btn[aria-pressed="true"],
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-code-btn[aria-pressed="true"] {
-      background: ${COLORS.userBubble} !important;
-      color: ${COLORS.text} !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-view-btn:hover,
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-code-btn:hover {
-      background: ${COLORS.userBubble} !important;
-    }
-
-    /* Copy button: pill with border */
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn {
-      border: 1px solid ${COLORS.border} !important;
-      background: transparent !important;
-      color: ${COLORS.text} !important;
-      padding: 4px 10px !important;
-      border-radius: 8px !important;
-      font-size: 12px !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover {
-      background: ${COLORS.userBubble} !important;
-    }
-
-    /* Copy + chevron connected group */
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-relative {
-      display: inline-flex;
-      border: 1px solid ${COLORS.border};
-      border-radius: 8px;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-relative .persona-artifact-doc-copy-btn {
-      border: none !important;
-      border-radius: 8px 0 0 8px !important;
-      border-right: 1px solid ${COLORS.border} !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-relative .persona-artifact-doc-copy-menu-chevron {
-      border: none !important;
-      border-radius: 0 8px 8px 0 !important;
-      padding: 4px 6px !important;
-    }
-
-    /* Copy dropdown menu — high specificity to beat #persona-root selectors */
-    #fullscreen-assistant-demo-root .persona-artifact-doc-copy-menu {
-      background: ${COLORS.chat} !important;
-      border: 1px solid ${COLORS.border} !important;
-      border-radius: 10px !important;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
-      padding: 4px 0 !important;
-      min-width: 180px !important;
-      position: absolute !important;
-      right: 0 !important;
-      top: 100% !important;
-      margin-top: 4px !important;
-      z-index: 50 !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-doc-copy-menu button {
-      color: ${COLORS.text} !important;
-      background: transparent !important;
-      font-size: 13px !important;
-      padding: 8px 14px !important;
-      white-space: nowrap !important;
-      display: block !important;
-      width: 100% !important;
-      text-align: left !important;
-      border: none !important;
-      cursor: pointer !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-doc-copy-menu button:hover {
-      background: ${COLORS.userBubble} !important;
-    }
-
-    /* Close button: same as other icon buttons, highlight only on hover */
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-label="Close"]:hover {
-      background: ${COLORS.userBubble} !important;
-    }
-
-    /* Header title+chevron: pill hover effect */
-    #fullscreen-assistant-demo-root .persona-border-b-persona-divider > .persona-flex:first-child {
-      border-radius: 10px;
-      padding: 6px 4px 6px 12px;
-      margin: -6px 0 -6px -12px;
-      transition: background-color 0.15s ease, border-color 0.15s ease;
-      border: 1px solid transparent;
-      cursor: pointer;
-      flex: none !important;
-      width: fit-content;
-    }
-    #fullscreen-assistant-demo-root .persona-border-b-persona-divider > .persona-flex:first-child:hover {
-      background: ${COLORS.userBubble};
-      border-color: ${COLORS.border};
-    }
-    #fullscreen-assistant-demo-root .persona-border-b-persona-divider > .persona-flex:first-child button {
-      border-left: 1px solid transparent;
-      padding-left: 8px;
-      margin-left: 4px;
-      transition: border-color 0.15s ease;
-    }
-    #fullscreen-assistant-demo-root .persona-border-b-persona-divider > .persona-flex:first-child:hover button {
-      border-left-color: ${COLORS.border};
-    }
-
-    /* Chat header: no border, fade shadow */
-    #fullscreen-assistant-demo-root .persona-border-b-persona-divider {
-      border-bottom: none !important;
-      box-shadow: 0 8px 16px 4px ${COLORS.chat} !important;
-      position: relative;
-      z-index: 2;
-    }
-
-    /* Header assistant menu dropdown */
-    [data-persona-header-menu] {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      margin-top: 4px;
-      min-width: 200px;
-      background: ${COLORS.chat};
-      border: 1px solid ${COLORS.border};
-      border-radius: 12px;
-      padding: 6px 0;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-      z-index: 100;
-    }
-    [data-persona-header-menu] button {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      padding: 8px 14px;
-      border: none;
-      background: transparent;
-      color: ${COLORS.text};
-      font-size: 13px;
-      cursor: pointer;
-      text-align: left;
-      white-space: nowrap;
-    }
-    [data-persona-header-menu] button:hover {
-      background: ${COLORS.userBubble};
-    }
-    [data-persona-header-menu] button[data-destructive] {
-      color: #ef4444;
-    }
-    [data-persona-header-menu] hr {
-      border: none;
-      border-top: 1px solid ${COLORS.border};
-      margin: 4px 0;
-    }
-
-    /* Toolbar background matches artifact pane */
-    #fullscreen-assistant-demo-root .persona-artifact-toolbar-document {
-      background: ${COLORS.artifact} !important;
-      border-bottom: none !important;
-    }
-
-    /* Artifact tab list: more padding, match pane background */
-    #fullscreen-assistant-demo-root .persona-artifact-list {
-      background: ${COLORS.artifact} !important;
-      border-bottom-color: ${COLORS.border} !important;
-      padding: 8px 12px 8px 12px !important;
-    }
-
-    /* Artifact tabs: dark theme styling */
-    #fullscreen-assistant-demo-root .persona-artifact-tab {
-      color: ${COLORS.muted} !important;
-      background: transparent !important;
-      border-color: transparent !important;
-      padding: 6px 12px !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-tab:hover {
-      color: ${COLORS.text} !important;
-      background: ${COLORS.userBubble} !important;
-    }
-    #fullscreen-assistant-demo-root .persona-artifact-tab.persona-bg-persona-container {
-      color: ${COLORS.text} !important;
-      background: ${COLORS.userBubble} !important;
-      border-color: ${COLORS.border} !important;
-    }
   `;
   document.head.appendChild(style);
 }
 
-const FullscreenAssistantFileCard: ComponentRenderer = (props) => {
-  const title = typeof props.title === "string" ? props.title : "Runtype assistant spotlight";
-  const subtitle = typeof props.subtitle === "string" ? props.subtitle : "Document · MD";
-  const artifactId =
-    typeof props.artifactId === "string" ? props.artifactId : FULLSCREEN_ASSISTANT_DEMO_ARTIFACT_ID;
-
-  // NOTE: Direct addEventListener on component elements is lost when idiomorph morphs
-  // the message list (it serialises to innerHTML). All interaction is handled via event
-  // delegation on the mount element — see listeners below.
+function renderCustomFileCard(artifactId: string, title: string, subtitle: string): HTMLElement {
   const root = document.createElement("div");
   root.className =
     "persona-flex persona-w-full persona-max-w-full persona-items-center persona-gap-3 persona-rounded-xl persona-px-4 persona-py-3";
@@ -378,24 +127,20 @@ const FullscreenAssistantFileCard: ComponentRenderer = (props) => {
 
   meta.append(t, s);
 
-  const dl = document.createElement("button");
-  dl.type = "button";
-  dl.textContent = "Download";
-  dl.title = "Download spotlight as Markdown";
-  dl.className =
-    "persona-flex-shrink-0 persona-rounded-md persona-px-3 persona-py-1.5 persona-text-xs persona-font-medium";
+  const dl = createLabelButton({
+    icon: "download",
+    label: "Download",
+    variant: "ghost",
+    size: "sm",
+    className: "persona-flex-shrink-0",
+  });
   dl.style.border = `1px solid ${COLORS.border}`;
   dl.style.color = COLORS.text;
-  dl.style.backgroundColor = "transparent";
   dl.setAttribute("data-download-artifact", "true");
 
   root.append(iconBox, meta, dl);
   return root;
-};
-
-componentRegistry.register("FullscreenAssistantFileCard", FullscreenAssistantFileCard);
-// Override the built-in artifact card with the demo's custom card (adds Download button, custom styling)
-componentRegistry.register("PersonaArtifactCard", FullscreenAssistantFileCard);
+}
 
 const audioBarsSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="8" x2="4" y2="16"/><line x1="8" y1="4" x2="8" y2="20"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="16" y1="6" x2="16" y2="18"/><line x1="20" y1="10" x2="20" y2="14"/></svg>';
@@ -450,22 +195,22 @@ const fullscreenAssistantComposerPlugin: AgentWidgetPlugin = {
     actionsRow.style.paddingTop = "4px";
 
     // Left: attach button
-    const plus = document.createElement("button");
-    plus.type = "button";
-    plus.setAttribute("aria-label", "Attach");
+    const plus = createIconButton({
+      icon: "plus",
+      label: "Attach",
+      size: 18,
+      strokeWidth: 1.5,
+      className: "persona-border-none persona-bg-transparent",
+      onClick: () => openAttachmentPicker(),
+    });
     plus.setAttribute("data-persona-composer-disable-when-streaming", "");
-    plus.className =
-      "persona-flex persona-items-center persona-justify-center persona-text-lg persona-leading-none persona-bg-transparent persona-border-none persona-cursor-pointer";
-    plus.style.padding = "4px";
     plus.style.color = COLORS.muted;
-    plus.textContent = "+";
-    plus.addEventListener("click", () => openAttachmentPicker());
 
     // Right: model selector + send
     const rightGroup = document.createElement("div");
     rightGroup.className = "persona-flex persona-items-center persona-gap-3";
 
-    // Model selector with dropdown
+    // Model selector with dropdown (using SDK dropdown utility)
     const modelContainer = document.createElement("div");
     modelContainer.style.position = "relative";
 
@@ -477,7 +222,6 @@ const fullscreenAssistantComposerPlugin: AgentWidgetPlugin = {
     modelWrap.style.color = COLORS.muted;
     const modelLabel = document.createElement("span");
     let selectedId = selectedModelId ?? models?.[0]?.id ?? "opus";
-    let menuOpen = false;
 
     const syncModelLabel = () => {
       const m = models?.find((x) => x.id === selectedId);
@@ -487,44 +231,31 @@ const fullscreenAssistantComposerPlugin: AgentWidgetPlugin = {
     modelWrap.append(modelLabel);
     modelWrap.insertAdjacentHTML("beforeend", chevronSvg);
 
-    const buildMenu = () => {
-      const existing = modelContainer.querySelector("[data-persona-model-menu]");
-      if (existing) { existing.remove(); menuOpen = false; return; }
-      if (!models?.length) return;
+    const modelDropdown = models?.length
+      ? createDropdownMenu({
+          items: models.map((m) => ({ id: m.id, label: m.label })),
+          onSelect: (id) => {
+            selectedId = id;
+            onModelChange?.(selectedId);
+            syncModelLabel();
+          },
+          anchor: modelContainer,
+          position: "bottom-right",
+        })
+      : null;
 
-      const menu = document.createElement("div");
-      menu.setAttribute("data-persona-model-menu", "");
-      for (const m of models) {
-        const opt = document.createElement("button");
-        opt.type = "button";
-        opt.textContent = m.label;
-        if (m.id === selectedId) opt.setAttribute("data-selected", "");
-        opt.addEventListener("click", (e) => {
-          e.stopPropagation();
-          selectedId = m.id;
-          onModelChange?.(selectedId);
-          syncModelLabel();
-          menu.remove();
-          menuOpen = false;
-        });
-        menu.appendChild(opt);
-      }
-      modelContainer.appendChild(menu);
-      menuOpen = true;
-
-      const closeMenu = (e: MouseEvent) => {
-        if (!modelContainer.contains(e.target as Node)) {
-          menu.remove();
-          menuOpen = false;
-          document.removeEventListener("click", closeMenu);
-        }
-      };
-      requestAnimationFrame(() => document.addEventListener("click", closeMenu));
-    };
+    if (modelDropdown) {
+      // Position above the button instead of below
+      modelDropdown.element.style.bottom = "100%";
+      modelDropdown.element.style.top = "auto";
+      modelDropdown.element.style.marginBottom = "4px";
+      modelDropdown.element.style.marginTop = "0";
+      modelContainer.appendChild(modelDropdown.element);
+    }
 
     modelWrap.addEventListener("click", (e) => {
       e.stopPropagation();
-      buildMenu();
+      modelDropdown?.toggle();
     });
 
     modelContainer.appendChild(modelWrap);
@@ -615,7 +346,9 @@ const fullscreenAssistantDarkTokens = {
       background: COLORS.chat,
       border: COLORS.border,
       borderRadius: "0",
-      foreground: COLORS.text
+      foreground: COLORS.text,
+      shadow: `0 8px 16px 4px ${COLORS.chat}`,
+      borderBottom: "none",
     },
     input: {
       background: COLORS.chat,
@@ -654,55 +387,47 @@ const fullscreenAssistantDarkTokens = {
         h1: { fontSize: "1.375rem", fontWeight: "650" },
         h2: { fontSize: "1.125rem", fontWeight: "600" }
       }
-    }
+    },
+    artifact: {
+      toolbar: {
+        iconBackground: "transparent",
+        iconBorder: "none",
+        iconPadding: "6px",
+        iconBorderRadius: "8px",
+        iconHoverBackground: COLORS.userBubble,
+        iconHoverColor: COLORS.text,
+        toggleGroupGap: "0",
+        toggleBorderRadius: "0",
+        copyBackground: "transparent",
+        copyBorder: `1px solid ${COLORS.border}`,
+        copyColor: COLORS.text,
+        copyBorderRadius: "8px",
+        copyPadding: "4px 10px",
+        copyMenuBackground: COLORS.chat,
+        copyMenuBorder: `1px solid ${COLORS.border}`,
+        copyMenuShadow: "0 4px 16px rgba(0,0,0,0.5)",
+        copyMenuBorderRadius: "10px",
+        copyMenuItemHoverBackground: COLORS.userBubble,
+        toolbarBorder: "none",
+      },
+      tab: {
+        textColor: COLORS.muted,
+        background: "transparent",
+        activeBackground: COLORS.userBubble,
+        activeBorder: COLORS.border,
+        hoverBackground: COLORS.userBubble,
+        listBackground: COLORS.artifact,
+        listBorderColor: COLORS.border,
+        listPadding: "8px 12px",
+      },
+      pane: {
+        toolbarBackground: COLORS.artifact,
+      },
+    },
   }
 } as unknown as NonNullable<AgentWidgetConfig["darkTheme"]>;
 
 const demoCtl: { handle: AgentWidgetInitHandle | null } = { handle: null };
-
-function toggleAssistantMenu() {
-  const existing = document.querySelector("[data-persona-header-menu]");
-  if (existing) { existing.remove(); return; }
-
-  const chevronBtn = document.querySelector('[aria-label="Assistant options"]');
-  if (!chevronBtn) return;
-  const anchor = chevronBtn.closest(".persona-flex") as HTMLElement | null;
-  if (!anchor) return;
-  anchor.style.position = "relative";
-
-  const menu = document.createElement("div");
-  menu.setAttribute("data-persona-header-menu", "");
-
-  const items: { icon: string; label: string; id: string; destructive?: boolean }[] = [
-    { icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', label: "Star", id: "star" },
-    { icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>', label: "Rename", id: "rename" },
-    { icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>', label: "Add to project", id: "add-to-project" },
-    { icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>', label: "Delete", id: "delete", destructive: true }
-  ];
-
-  for (let i = 0; i < items.length; i++) {
-    if (i === items.length - 1) menu.appendChild(document.createElement("hr"));
-    const item = items[i];
-    const opt = document.createElement("button");
-    opt.type = "button";
-    opt.innerHTML = item.icon;
-    const span = document.createElement("span");
-    span.textContent = item.label;
-    opt.appendChild(span);
-    if (item.destructive) opt.setAttribute("data-destructive", "");
-    opt.addEventListener("click", () => { menu.remove(); });
-    menu.appendChild(opt);
-  }
-
-  anchor.appendChild(menu);
-  const closeMenu = (e: MouseEvent) => {
-    if (!menu.contains(e.target as Node) && !anchor.contains(e.target as Node)) {
-      menu.remove();
-      document.removeEventListener("click", closeMenu);
-    }
-  };
-  requestAnimationFrame(() => document.addEventListener("click", closeMenu));
-}
 
 const newFullscreenAssistantScriptStream = () => createFullscreenAssistantScriptedStream();
 
@@ -762,13 +487,21 @@ const config = mergeWithDefaults({
     header: {
       layout: "minimal",
       showCloseButton: false,
-      trailingActions: [
-        { id: "assistant-menu", icon: "chevron-down", ariaLabel: "Assistant options" }
-      ],
-      onAction: (actionId) => {
-        if (actionId === "assistant-menu") toggleAssistantMenu();
-      },
-      onTitleClick: () => toggleAssistantMenu()
+      titleMenu: {
+        menuItems: [
+          { id: "star", label: "Star", icon: "star" },
+          { id: "rename", label: "Rename", icon: "pencil" },
+          { id: "add-to-project", label: "Add to project", icon: "folder" },
+          { id: "delete", label: "Delete", icon: "trash-2", destructive: true, dividerBefore: true },
+        ],
+        onSelect: (_id) => {
+          // Handle menu item selections (star, rename, add-to-project, delete)
+        },
+        hover: {
+          background: COLORS.userBubble,
+          border: COLORS.border,
+        },
+      }
     },
     messages: {
       layout: "bubble",
@@ -824,6 +557,13 @@ const config = mergeWithDefaults({
           h.clearChat();
           await h.connectStream(newFullscreenAssistantScriptStream());
         }
+      },
+      renderCard: ({ artifact }) => {
+        return renderCustomFileCard(
+          artifact.artifactId,
+          artifact.title || "Runtype assistant spotlight",
+          `${artifact.artifactType === "component" ? "Component" : "Document"} · ${artifact.artifactType.toUpperCase()}`
+        );
       },
       onArtifactAction: (action) => {
         if (action.type === "download") {

@@ -890,6 +890,218 @@ Indicators are resolved in this order:
 2. **Config function** (`loadingIndicator.render` / `loadingIndicator.renderIdle`)
 3. **Default** (3-dot bouncing animation for loading, `null` for idle)
 
+### Dropdown Menu
+
+A reusable dropdown menu utility for building custom menus in plugins, custom components, or host-page UI that matches the widget's theme.
+
+#### Basic usage
+
+```ts
+import { createDropdownMenu } from '@runtypelabs/persona';
+
+const button = document.querySelector('#my-button')!;
+const wrapper = document.createElement('div');
+wrapper.style.position = 'relative';
+button.parentElement!.insertBefore(wrapper, button);
+wrapper.appendChild(button);
+
+const dropdown = createDropdownMenu({
+  items: [
+    { id: 'edit', label: 'Edit', icon: 'pencil' },
+    { id: 'duplicate', label: 'Duplicate', icon: 'copy' },
+    { id: 'delete', label: 'Delete', icon: 'trash-2', destructive: true, dividerBefore: true },
+  ],
+  onSelect: (id) => console.log('Selected:', id),
+  anchor: wrapper,
+  position: 'bottom-left', // or 'bottom-right'
+});
+
+wrapper.appendChild(dropdown.element);
+button.addEventListener('click', () => dropdown.toggle());
+```
+
+#### Escaping overflow containers
+
+When the anchor is inside a container with `overflow: hidden`, use the `portal` option to render the menu at a higher DOM level while keeping CSS variable inheritance:
+
+```ts
+const dropdown = createDropdownMenu({
+  items: [...],
+  onSelect: (id) => { /* handle */ },
+  anchor: myButton,
+  position: 'bottom-right',
+  portal: document.querySelector('#persona-root')!,
+});
+// No need to append — portal mode appends automatically
+```
+
+#### Header dropdown menus
+
+Trailing header actions support built-in dropdown menus via the `menuItems` property:
+
+```ts
+createAgentExperience(mount, {
+  layout: {
+    header: {
+      layout: 'minimal',
+      trailingActions: [
+        {
+          id: 'options',
+          icon: 'chevron-down',
+          ariaLabel: 'Options',
+          menuItems: [
+            { id: 'settings', label: 'Settings', icon: 'settings' },
+            { id: 'help', label: 'Help', icon: 'help-circle' },
+            { id: 'logout', label: 'Log out', icon: 'log-out', destructive: true, dividerBefore: true },
+          ]
+        }
+      ],
+      onAction: (actionId) => {
+        // Receives the menu item id when selected
+        console.log('Action:', actionId);
+      }
+    }
+  }
+});
+```
+
+#### Theming
+
+Dropdown menus are styled via CSS custom properties with semantic fallbacks:
+
+| Variable | Description | Fallback |
+|----------|-------------|----------|
+| `--persona-dropdown-bg` | Menu background | `--persona-surface` |
+| `--persona-dropdown-border` | Menu border | `--persona-border` |
+| `--persona-dropdown-radius` | Border radius | `0.625rem` |
+| `--persona-dropdown-shadow` | Box shadow | `0 4px 16px rgba(0,0,0,0.12)` |
+| `--persona-dropdown-item-color` | Item text color | `--persona-text` |
+| `--persona-dropdown-item-hover-bg` | Item hover background | `--persona-container` |
+| `--persona-dropdown-destructive-color` | Destructive item color | `#ef4444` |
+
+Artifact toolbar copy menu tokens (`copyMenuBackground`, `copyMenuBorder`, etc.) also set the dropdown variables as defaults, so dropdown theming works with the existing artifact token config.
+
+#### Type definitions
+
+```ts
+interface DropdownMenuItem {
+  id: string;
+  label: string;
+  icon?: string;        // Lucide icon name
+  destructive?: boolean;
+  dividerBefore?: boolean;
+}
+
+interface CreateDropdownOptions {
+  items: DropdownMenuItem[];
+  onSelect: (id: string) => void;
+  anchor: HTMLElement;
+  position?: 'bottom-left' | 'bottom-right';
+  portal?: HTMLElement;
+}
+
+interface DropdownMenuHandle {
+  element: HTMLElement;
+  show: () => void;
+  hide: () => void;
+  toggle: () => void;
+  destroy: () => void;
+}
+```
+
+### Button Utilities
+
+Composable button factories for building custom toolbars, actions, and toggle controls that match the widget's theme.
+
+#### Icon button
+
+```ts
+import { createIconButton } from '@runtypelabs/persona';
+
+const refreshBtn = createIconButton({
+  icon: 'refresh-cw',
+  label: 'Refresh',
+  onClick: () => handleRefresh(),
+});
+toolbar.appendChild(refreshBtn);
+```
+
+#### Label button
+
+```ts
+import { createLabelButton } from '@runtypelabs/persona';
+
+const copyBtn = createLabelButton({
+  icon: 'copy',
+  label: 'Copy',
+  variant: 'default',   // 'default' | 'primary' | 'destructive' | 'ghost'
+  onClick: () => copyToClipboard(),
+});
+```
+
+#### Toggle group
+
+```ts
+import { createToggleGroup } from '@runtypelabs/persona';
+
+const toggle = createToggleGroup({
+  items: [
+    { id: 'preview', icon: 'eye', label: 'Preview' },
+    { id: 'source', icon: 'code-2', label: 'Source' },
+  ],
+  selectedId: 'preview',
+  onSelect: (id) => setViewMode(id),
+});
+toolbar.appendChild(toggle.element);
+
+// Programmatic update (does not fire onSelect)
+toggle.setSelected('source');
+```
+
+#### Theming
+
+All button utilities are styled via CSS custom properties:
+
+| Variable | Component | Description | Fallback |
+|----------|-----------|-------------|----------|
+| `--persona-icon-btn-bg` | Icon button | Background | `--persona-surface` |
+| `--persona-icon-btn-border` | Icon button | Border | `--persona-border` |
+| `--persona-icon-btn-color` | Icon button | Icon color | `--persona-text` |
+| `--persona-icon-btn-hover-bg` | Icon button | Hover background | `--persona-container` |
+| `--persona-icon-btn-hover-color` | Icon button | Hover color | `inherit` |
+| `--persona-icon-btn-active-bg` | Icon button | Pressed/active bg | `--persona-container` |
+| `--persona-icon-btn-active-border` | Icon button | Pressed/active border | `--persona-border` |
+| `--persona-icon-btn-padding` | Icon button | Padding | `0.25rem` |
+| `--persona-icon-btn-radius` | Icon button | Border radius | `--persona-radius-md` |
+| `--persona-label-btn-bg` | Label button | Background | `--persona-surface` |
+| `--persona-label-btn-border` | Label button | Border | `--persona-border` |
+| `--persona-label-btn-color` | Label button | Text color | `--persona-text` |
+| `--persona-label-btn-hover-bg` | Label button | Hover background | `--persona-container` |
+| `--persona-label-btn-font-size` | Label button | Font size | `0.75rem` |
+| `--persona-toggle-group-gap` | Toggle group | Gap between items | `0` |
+| `--persona-toggle-group-radius` | Toggle group | First/last radius | `--persona-icon-btn-radius` |
+
+These can also be set via the widget config's theme token system:
+
+```ts
+createAgentExperience(mount, {
+  darkTheme: {
+    components: {
+      iconButton: {
+        background: 'transparent',
+        border: 'none',
+        hoverBackground: '#2B2B2B',
+        hoverColor: '#E5E5E5',
+      },
+      toggleGroup: {
+        gap: '0',
+        borderRadius: '8px',
+      },
+    }
+  }
+});
+```
+
 ### Runtype adapter
 
 This package ships with a Runtype adapter by default. The proxy handles all flow configuration, keeping the client lightweight and flexible.

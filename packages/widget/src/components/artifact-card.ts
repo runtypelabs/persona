@@ -1,11 +1,13 @@
-import type { ComponentRenderer } from "./registry";
+import type { ComponentContext, ComponentRenderer } from "./registry";
 
 /**
- * Built-in artifact reference card component.
- * Renders a compact clickable card in the chat thread that links to an artifact.
- * Uses `data-open-artifact` attribute for click delegation (handled in ui.ts).
+ * Default artifact card renderer.
+ * Builds the compact clickable card shown in the chat thread.
  */
-export const PersonaArtifactCard: ComponentRenderer = (props) => {
+function renderDefaultArtifactCard(
+  props: Record<string, unknown>,
+  _context: ComponentContext
+): HTMLElement {
   const title =
     typeof props.title === "string" && props.title
       ? props.title
@@ -88,4 +90,36 @@ export const PersonaArtifactCard: ComponentRenderer = (props) => {
   }
 
   return root;
+}
+
+/**
+ * Built-in artifact reference card component.
+ * Renders a compact clickable card in the chat thread that links to an artifact.
+ * Uses `data-open-artifact` attribute for click delegation (handled in ui.ts).
+ *
+ * Supports a custom `renderCard` callback via `config.features.artifacts.renderCard`
+ * that can override the default card rendering.
+ */
+export const PersonaArtifactCard: ComponentRenderer = (props, context) => {
+  const customRenderer = context?.config?.features?.artifacts?.renderCard;
+  if (customRenderer) {
+    const title =
+      typeof props.title === "string" && props.title
+        ? props.title
+        : "Untitled artifact";
+    const artifactId =
+      typeof props.artifactId === "string" ? props.artifactId : "";
+    const status = props.status === "streaming" ? "streaming" : "complete";
+    const artifactType =
+      typeof props.artifactType === "string" ? props.artifactType : "markdown";
+
+    const result = customRenderer({
+      artifact: { artifactId, title, artifactType, status },
+      config: context.config,
+      defaultRenderer: () => renderDefaultArtifactCard(props, context),
+    });
+    if (result) return result;
+  }
+
+  return renderDefaultArtifactCard(props, context);
 };

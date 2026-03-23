@@ -533,6 +533,20 @@ export type AgentWidgetArtifactsFeature = {
     type: 'open' | 'download';
     artifactId: string;
   }) => boolean | void;
+  /**
+   * Custom renderer for artifact reference cards shown in the message thread.
+   * Return an HTMLElement to replace the default card, or `null` to use the default.
+   */
+  renderCard?: (context: {
+    artifact: {
+      artifactId: string;
+      title: string;
+      artifactType: string;
+      status: string;
+    };
+    config: AgentWidgetConfig;
+    defaultRenderer: () => HTMLElement;
+  }) => HTMLElement | null;
 };
 
 export type AgentWidgetFeatureFlags = {
@@ -1396,6 +1410,17 @@ export type AgentWidgetHeaderTrailingAction = {
   icon?: string;
   label?: string;
   ariaLabel?: string;
+  /**
+   * When set, clicking this action opens a dropdown menu.
+   * Menu item selections fire `onAction(menuItemId)`.
+   */
+  menuItems?: Array<{
+    id: string;
+    label: string;
+    icon?: string;
+    destructive?: boolean;
+    dividerBefore?: boolean;
+  }>;
 };
 
 /**
@@ -1466,6 +1491,41 @@ export type AgentWidgetHeaderLayoutConfig = {
    * When set, the title row becomes visually interactive (cursor: pointer).
    */
   onTitleClick?: () => void;
+  /** Style config for the title row hover effect (minimal layout). */
+  titleRowHover?: {
+    /** Hover background color. */
+    background?: string;
+    /** Hover border color. */
+    border?: string;
+    /** Border radius for the pill shape. */
+    borderRadius?: string;
+    /** Padding inside the pill. */
+    padding?: string;
+  };
+  /**
+   * Replaces the title with a combo button (label + chevron + dropdown menu).
+   * When set, `trailingActions`, `onTitleClick`, and `titleRowHover` are ignored
+   * since the combo button handles all of these internally.
+   */
+  titleMenu?: {
+    /** Dropdown menu items. */
+    menuItems: Array<{
+      id: string;
+      label: string;
+      icon?: string;
+      destructive?: boolean;
+      dividerBefore?: boolean;
+    }>;
+    /** Called when a menu item is selected. */
+    onSelect: (id: string) => void;
+    /** Hover pill style. */
+    hover?: {
+      background?: string;
+      border?: string;
+      borderRadius?: string;
+      padding?: string;
+    };
+  };
 };
 
 /**

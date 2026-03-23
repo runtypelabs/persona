@@ -643,6 +643,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-header-border'] =
     cssVars['--persona-components-header-border'] ?? cssVars['--persona-divider'];
 
+  const headerTokens = theme.components?.header;
+  if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;
+  if (headerTokens?.borderBottom) cssVars['--persona-header-border-bottom'] = headerTokens.borderBottom;
+
   cssVars['--persona-message-user-bg'] =
     cssVars['--persona-components-message-user-background'] ?? cssVars['--persona-accent'];
   cssVars['--persona-message-user-text'] =
@@ -689,8 +693,42 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-md-prose-font-family'] = mdProseFont;
   }
 
-  // Artifact tokens
+  // Icon button tokens
   const components = theme.components;
+  const iconBtn = components?.iconButton;
+  if (iconBtn) {
+    if (iconBtn.background) cssVars['--persona-icon-btn-bg'] = iconBtn.background;
+    if (iconBtn.border) cssVars['--persona-icon-btn-border'] = iconBtn.border;
+    if (iconBtn.color) cssVars['--persona-icon-btn-color'] = iconBtn.color;
+    if (iconBtn.padding) cssVars['--persona-icon-btn-padding'] = iconBtn.padding;
+    if (iconBtn.borderRadius) cssVars['--persona-icon-btn-radius'] = iconBtn.borderRadius;
+    if (iconBtn.hoverBackground) cssVars['--persona-icon-btn-hover-bg'] = iconBtn.hoverBackground;
+    if (iconBtn.hoverColor) cssVars['--persona-icon-btn-hover-color'] = iconBtn.hoverColor;
+    if (iconBtn.activeBackground) cssVars['--persona-icon-btn-active-bg'] = iconBtn.activeBackground;
+    if (iconBtn.activeBorder) cssVars['--persona-icon-btn-active-border'] = iconBtn.activeBorder;
+  }
+
+  // Label button tokens
+  const labelBtn = components?.labelButton;
+  if (labelBtn) {
+    if (labelBtn.background) cssVars['--persona-label-btn-bg'] = labelBtn.background;
+    if (labelBtn.border) cssVars['--persona-label-btn-border'] = labelBtn.border;
+    if (labelBtn.color) cssVars['--persona-label-btn-color'] = labelBtn.color;
+    if (labelBtn.padding) cssVars['--persona-label-btn-padding'] = labelBtn.padding;
+    if (labelBtn.borderRadius) cssVars['--persona-label-btn-radius'] = labelBtn.borderRadius;
+    if (labelBtn.hoverBackground) cssVars['--persona-label-btn-hover-bg'] = labelBtn.hoverBackground;
+    if (labelBtn.fontSize) cssVars['--persona-label-btn-font-size'] = labelBtn.fontSize;
+    if (labelBtn.gap) cssVars['--persona-label-btn-gap'] = labelBtn.gap;
+  }
+
+  // Toggle group tokens
+  const toggleGrp = components?.toggleGroup;
+  if (toggleGrp) {
+    if (toggleGrp.gap) cssVars['--persona-toggle-group-gap'] = toggleGrp.gap;
+    if (toggleGrp.borderRadius) cssVars['--persona-toggle-group-radius'] = toggleGrp.borderRadius;
+  }
+
+  // Artifact tokens
   const artifact = components?.artifact;
   if (artifact?.toolbar) {
     const t = artifact.toolbar;
@@ -706,11 +744,28 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (t.copyColor) cssVars['--persona-artifact-toolbar-copy-color'] = t.copyColor;
     if (t.copyBorderRadius) cssVars['--persona-artifact-toolbar-copy-radius'] = t.copyBorderRadius;
     if (t.copyPadding) cssVars['--persona-artifact-toolbar-copy-padding'] = t.copyPadding;
-    if (t.copyMenuBackground) cssVars['--persona-artifact-toolbar-copy-menu-bg'] = t.copyMenuBackground;
-    if (t.copyMenuBorder) cssVars['--persona-artifact-toolbar-copy-menu-border'] = t.copyMenuBorder;
-    if (t.copyMenuShadow) cssVars['--persona-artifact-toolbar-copy-menu-shadow'] = t.copyMenuShadow;
-    if (t.copyMenuBorderRadius) cssVars['--persona-artifact-toolbar-copy-menu-radius'] = t.copyMenuBorderRadius;
-    if (t.copyMenuItemHoverBackground) cssVars['--persona-artifact-toolbar-copy-menu-item-hover-bg'] = t.copyMenuItemHoverBackground;
+    if (t.copyMenuBackground) {
+      cssVars['--persona-artifact-toolbar-copy-menu-bg'] = t.copyMenuBackground;
+      cssVars['--persona-dropdown-bg'] = cssVars['--persona-dropdown-bg'] ?? t.copyMenuBackground;
+    }
+    if (t.copyMenuBorder) {
+      cssVars['--persona-artifact-toolbar-copy-menu-border'] = t.copyMenuBorder;
+      cssVars['--persona-dropdown-border'] = cssVars['--persona-dropdown-border'] ?? t.copyMenuBorder;
+    }
+    if (t.copyMenuShadow) {
+      cssVars['--persona-artifact-toolbar-copy-menu-shadow'] = t.copyMenuShadow;
+      cssVars['--persona-dropdown-shadow'] = cssVars['--persona-dropdown-shadow'] ?? t.copyMenuShadow;
+    }
+    if (t.copyMenuBorderRadius) {
+      cssVars['--persona-artifact-toolbar-copy-menu-radius'] = t.copyMenuBorderRadius;
+      cssVars['--persona-dropdown-radius'] = cssVars['--persona-dropdown-radius'] ?? t.copyMenuBorderRadius;
+    }
+    if (t.copyMenuItemHoverBackground) {
+      cssVars['--persona-artifact-toolbar-copy-menu-item-hover-bg'] = t.copyMenuItemHoverBackground;
+      cssVars['--persona-dropdown-item-hover-bg'] = cssVars['--persona-dropdown-item-hover-bg'] ?? t.copyMenuItemHoverBackground;
+    }
+    if (t.iconBackground) cssVars['--persona-artifact-toolbar-icon-bg'] = t.iconBackground;
+    if (t.toolbarBorder) cssVars['--persona-artifact-toolbar-border'] = t.toolbarBorder;
   }
   if (artifact?.tab) {
     const t = artifact.tab;
@@ -719,6 +774,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (t.activeBorder) cssVars['--persona-artifact-tab-active-border'] = t.activeBorder;
     if (t.borderRadius) cssVars['--persona-artifact-tab-radius'] = t.borderRadius;
     if (t.textColor) cssVars['--persona-artifact-tab-color'] = t.textColor;
+    if (t.hoverBackground) cssVars['--persona-artifact-tab-hover-bg'] = t.hoverBackground;
+    if (t.listBackground) cssVars['--persona-artifact-tab-list-bg'] = t.listBackground;
+    if (t.listBorderColor) cssVars['--persona-artifact-tab-list-border-color'] = t.listBorderColor;
+    if (t.listPadding) cssVars['--persona-artifact-tab-list-padding'] = t.listPadding;
   }
   if (artifact?.pane) {
     const t = artifact.pane;

@@ -179,6 +179,22 @@ export type { AgentWidgetInitHandle };
 export type { AgentWidgetPlugin } from "./plugins/types";
 export { pluginRegistry } from "./plugins/registry";
 
+// Dropdown utility exports
+export { createDropdownMenu } from "./utils/dropdown";
+export type { DropdownMenuItem, CreateDropdownOptions, DropdownMenuHandle } from "./utils/dropdown";
+
+// Button utility exports
+export { createIconButton, createLabelButton, createToggleGroup, createComboButton } from "./utils/buttons";
+export type {
+  CreateIconButtonOptions,
+  CreateLabelButtonOptions,
+  CreateToggleGroupOptions,
+  ToggleGroupItem,
+  ToggleGroupHandle,
+  CreateComboButtonOptions,
+  ComboButtonHandle
+} from "./utils/buttons";
+
 // Theme system exports
 export {
   createTheme,
@@ -229,6 +245,9 @@ export type {
   ArtifactToolbarTokens,
   ArtifactTabTokens,
   ArtifactPaneTokens,
+  IconButtonTokens,
+  LabelButtonTokens,
+  ToggleGroupTokens,
   ThemeValidationResult,
   ThemeValidationError
 } from "./types/theme";

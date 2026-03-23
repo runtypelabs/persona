@@ -33,9 +33,9 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   );
   header.setAttribute("data-persona-theme-zone", "header");
   header.style.backgroundColor = 'var(--persona-header-bg, var(--persona-surface, #ffffff))';
-  header.style.borderBottomWidth = '1px';
-  header.style.borderBottomStyle = 'solid';
   header.style.borderBottomColor = 'var(--persona-header-border, var(--persona-divider, #f1f5f9))';
+  header.style.boxShadow = 'var(--persona-header-shadow, none)';
+  header.style.borderBottom = 'var(--persona-header-border-bottom, 1px solid var(--persona-header-border, var(--persona-divider, #f1f5f9)))';
 
   const launcher = config?.launcher ?? {};
   const headerIconSize = launcher.headerIconSize ?? "48px";

@@ -183,6 +183,32 @@ const ZONE_DEFS: ZoneDef[] = [
     slider: { min: 0, max: 24, step: 1 },
     label: 'Suggestion chip radius',
   },
+  {
+    id: 'iconButtonCompound',
+    selector: '[data-persona-theme-zone="artifact-toolbar"] .persona-icon-btn',
+    editor: 'compound',
+    label: 'Icon buttons',
+    compound: [
+      {
+        kind: 'color',
+        label: 'Background',
+        statePath: 'theme.components.artifact.toolbar.iconBackground',
+        colorApplyMode: 'token-ref',
+      },
+      {
+        kind: 'color',
+        label: 'Hover',
+        statePath: 'theme.components.artifact.toolbar.iconHoverBackground',
+        colorApplyMode: 'token-ref',
+      },
+      {
+        kind: 'slider',
+        label: 'Corner radius',
+        statePath: 'theme.components.artifact.toolbar.iconBorderRadius',
+        slider: { min: 0, max: 16, step: 1 },
+      },
+    ],
+  },
 ];
 
 // ─── Module State ───────────────────────────────────────────────

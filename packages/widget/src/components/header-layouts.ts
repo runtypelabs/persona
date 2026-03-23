@@ -1,5 +1,7 @@
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
+import { createDropdownMenu } from "../utils/dropdown";
+import { createComboButton } from "../utils/buttons";
 import {
   AgentWidgetConfig,
   AgentWidgetHeaderLayoutConfig,
@@ -75,8 +77,27 @@ function appendTrailingHeaderActions(
     } else if (a.label) {
       btn.textContent = a.label;
     }
-    btn.addEventListener("click", () => onAction?.(a.id));
-    container.appendChild(btn);
+
+    if (a.menuItems?.length) {
+      // Wrap in a relative container for dropdown positioning
+      const wrapper = createElement("div", "persona-relative");
+      wrapper.appendChild(btn);
+      const dropdown = createDropdownMenu({
+        items: a.menuItems,
+        onSelect: (itemId) => onAction?.(itemId),
+        anchor: wrapper,
+        position: 'bottom-left',
+      });
+      wrapper.appendChild(dropdown.element);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        dropdown.toggle();
+      });
+      container.appendChild(wrapper);
+    } else {
+      btn.addEventListener("click", () => onAction?.(a.id));
+      container.appendChild(btn);
+    }
   }
 }
 
@@ -89,40 +110,79 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     "persona-flex persona-items-center persona-justify-between persona-bg-persona-surface persona-px-6 persona-py-4 persona-border-b-persona-divider"
   );
   header.setAttribute("data-persona-theme-zone", "header");
+  header.style.boxShadow = 'var(--persona-header-shadow, none)';
 
-  const titleRow = createElement(
-    "div",
-    "persona-flex persona-min-w-0 persona-flex-1 persona-items-center persona-gap-1"
-  );
+  // Build the title area — either a combo button (titleMenu) or standard title row
+  const titleMenuConfig = layoutHeaderConfig?.titleMenu;
+  let titleRow: HTMLElement;
+  let headerTitle: HTMLElement;
 
-  // Title only (no icon, no subtitle)
-  const title = createElement("span", "persona-text-base persona-font-semibold persona-truncate");
-  title.textContent = launcher.title ?? "Chat Assistant";
-
-  titleRow.appendChild(title);
-  appendTrailingHeaderActions(
-    titleRow,
-    layoutHeaderConfig?.trailingActions,
-    layoutHeaderConfig?.onAction ?? onHeaderAction
-  );
-
-  // Make title row clickable when onTitleClick is provided
-  if (layoutHeaderConfig?.onTitleClick) {
-    titleRow.style.cursor = "pointer";
-    titleRow.setAttribute("role", "button");
-    titleRow.setAttribute("tabindex", "0");
-    const handleTitleClick = layoutHeaderConfig.onTitleClick;
-    titleRow.addEventListener("click", (e) => {
-      // Skip if the click was on a trailing action button
-      if ((e.target as HTMLElement).closest("button")) return;
-      handleTitleClick();
+  if (titleMenuConfig) {
+    // Combo button replaces title + trailing actions + hover
+    const combo = createComboButton({
+      label: launcher.title ?? "Chat Assistant",
+      menuItems: titleMenuConfig.menuItems,
+      onSelect: titleMenuConfig.onSelect,
+      hover: titleMenuConfig.hover,
+      className: "",
     });
-    titleRow.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
+    titleRow = combo.element;
+    // The combo button's label span acts as headerTitle for update()
+    headerTitle = titleRow.querySelector(".persona-combo-btn-label") ?? titleRow;
+  } else {
+    titleRow = createElement(
+      "div",
+      "persona-flex persona-min-w-0 persona-flex-1 persona-items-center persona-gap-1"
+    );
+
+    // Title only (no icon, no subtitle)
+    headerTitle = createElement("span", "persona-text-base persona-font-semibold persona-truncate");
+    headerTitle.textContent = launcher.title ?? "Chat Assistant";
+
+    titleRow.appendChild(headerTitle);
+    appendTrailingHeaderActions(
+      titleRow,
+      layoutHeaderConfig?.trailingActions,
+      layoutHeaderConfig?.onAction ?? onHeaderAction
+    );
+
+    // Make title row clickable when onTitleClick is provided
+    if (layoutHeaderConfig?.onTitleClick) {
+      titleRow.style.cursor = "pointer";
+      titleRow.setAttribute("role", "button");
+      titleRow.setAttribute("tabindex", "0");
+      const handleTitleClick = layoutHeaderConfig.onTitleClick;
+      titleRow.addEventListener("click", (e) => {
+        if ((e.target as HTMLElement).closest("button")) return;
         handleTitleClick();
-      }
-    });
+      });
+      titleRow.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleTitleClick();
+        }
+      });
+    }
+
+    // Title row hover pill effect
+    const hoverCfg = layoutHeaderConfig?.titleRowHover;
+    if (hoverCfg) {
+      titleRow.style.borderRadius = hoverCfg.borderRadius ?? '10px';
+      titleRow.style.padding = hoverCfg.padding ?? '6px 4px 6px 12px';
+      titleRow.style.margin = '-6px 0 -6px -12px';
+      titleRow.style.border = '1px solid transparent';
+      titleRow.style.transition = 'background-color 0.15s ease, border-color 0.15s ease';
+      titleRow.style.width = 'fit-content';
+      titleRow.style.flex = 'none';
+      titleRow.addEventListener('mouseenter', () => {
+        titleRow.style.backgroundColor = hoverCfg.background ?? '';
+        titleRow.style.borderColor = hoverCfg.border ?? '';
+      });
+      titleRow.addEventListener('mouseleave', () => {
+        titleRow.style.backgroundColor = '';
+        titleRow.style.borderColor = 'transparent';
+      });
+    }
   }
 
   header.appendChild(titleRow);
@@ -172,7 +232,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
   return {
     header,
     iconHolder,
-    headerTitle: title,
+    headerTitle,
     headerSubtitle,
     closeButton,
     closeButtonWrapper,

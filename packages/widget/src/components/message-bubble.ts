@@ -9,7 +9,7 @@ import {
   LoadingIndicatorRenderContext,
   ImageContentPart
 } from "../types";
-import { renderLucideIcon } from "../utils/icons";
+import { createIconButton } from "../utils/buttons";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "../utils/content";
 
 /** Validate that an image src URL uses a safe scheme (blocks javascript: and SVG data URIs). */
@@ -414,17 +414,13 @@ export const createMessageActions = (
     label: string,
     dataAction: string
   ): HTMLButtonElement => {
-    const button = document.createElement("button");
-    button.className = "persona-message-action-btn";
-    button.setAttribute("aria-label", label);
-    button.setAttribute("title", label);
+    const button = createIconButton({
+      icon: iconName,
+      label,
+      size: 14,
+      className: "persona-message-action-btn",
+    });
     button.setAttribute("data-action", dataAction);
-
-    const icon = renderLucideIcon(iconName, 14, "currentColor", 2);
-    if (icon) {
-      button.appendChild(icon);
-    }
-
     return button;
   };
 

@@ -69,7 +69,7 @@ export type EditingTheme = 'light' | 'dark';
 export type PreviewMode = 'light' | 'dark' | 'system';
 export type PreviewShellMode = 'light' | 'dark';
 export type PreviewDevice = 'desktop' | 'mobile';
-export type PreviewScene = 'home' | 'conversation' | 'minimized';
+export type PreviewScene = 'home' | 'conversation' | 'minimized' | 'artifact';
 export type EditorMode = 'basic' | 'advanced';
 
 let editingTheme: EditingTheme = 'light';
@@ -134,6 +134,23 @@ function createPreviewMessages(scene: PreviewScene): AgentWidgetMessage[] {
     ];
   }
 
+  if (scene === 'artifact') {
+    return [
+      {
+        id: 'preview-artifact-1',
+        role: 'user',
+        content: 'Can you draft a quick overview of the project?',
+        createdAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+      },
+      {
+        id: 'preview-artifact-2',
+        role: 'assistant',
+        content: 'Here\u2019s a project overview document for you.',
+        createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
+      },
+    ];
+  }
+
   return [
     {
       id: 'preview-conversation-1',
@@ -166,7 +183,7 @@ function applyPreviewSceneConfig(
     autoExpand: scene !== 'minimized',
   };
 
-  return {
+  const config = {
     ...base,
     launcher,
     suggestionChips:
@@ -176,6 +193,18 @@ function applyPreviewSceneConfig(
     initialMessages: createPreviewMessages(scene),
     storageAdapter: PREVIEW_STORAGE_ADAPTER,
   } as AgentWidgetConfig;
+
+  if (scene === 'artifact') {
+    config.features = {
+      ...config.features,
+      artifacts: {
+        ...config.features?.artifacts,
+        enabled: true,
+      },
+    };
+  }
+
+  return config;
 }
 
 // ─── Initialize ─────────────────────────────────────────────────────
