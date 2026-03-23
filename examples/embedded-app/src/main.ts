@@ -205,7 +205,7 @@ const homeDemoSharedAssistant = {
           name: "DeepWiki",
           url: "https://mcp.deepwiki.com/mcp",
           auth: { type: "none" },
-          timeout: 10000,
+          timeout: 30000,
         },
       ],
       maxToolCalls: 3,
