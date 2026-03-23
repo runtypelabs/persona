@@ -4,7 +4,7 @@ Thanks for your interest in contributing!
 
 ## Setup
 
-**Requirements:** Node.js ≥18.17.0, pnpm
+**Requirements:** Node.js 20+, pnpm
 
 ```bash
 pnpm install

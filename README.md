@@ -31,7 +31,7 @@ pnpm dev
 
 This starts the proxy on `http://localhost:43111` and the demo app at `http://localhost:5173`. Both depend on the local widget package via workspace linking, so changes hot-reload without publishing.
 
-> **Note:** Requires Node.js ≥18.17 (`nvm use` reads `.nvmrc`). Corepack manages pnpm for you.
+> **Note:** Requires Node.js 20+ (`nvm use` reads `.nvmrc`). Corepack manages pnpm for you.
 
 ### Install from npm
 

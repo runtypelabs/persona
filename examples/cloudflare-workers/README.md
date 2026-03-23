@@ -36,7 +36,7 @@ A production-ready chat proxy service deployed on Cloudflare Workers, powered by
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+ and pnpm installed
+- [Node.js](https://nodejs.org/) 20+ and pnpm installed
 - [Cloudflare account](https://dash.cloudflare.com/sign-up) (free tier works)
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) installed globally or use via pnpm
 - Runtype API key ([get one here](https://runtype.com))

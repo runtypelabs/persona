@@ -37,7 +37,7 @@
     "vitest": "^4.1.0"
   },
   "engines": {
-    "node": ">=18.17.0"
+    "node": ">=20.0.0"
   },
   "author": "Runtype",
   "license": "MIT",
