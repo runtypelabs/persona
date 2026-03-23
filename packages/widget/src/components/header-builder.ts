@@ -1,6 +1,10 @@
 import { createElement, createElementInDocument } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
-import { AgentWidgetConfig } from "../types";
+import {
+  AgentWidgetClearChatConfig,
+  AgentWidgetConfig,
+  AgentWidgetLauncherConfig
+} from "../types";
 
 export interface HeaderElements {
   header: HTMLElement;
@@ -19,6 +23,162 @@ export interface HeaderBuildContext {
   onClose?: () => void;
   onClearChat?: () => void;
 }
+
+const HEADER_ACTION_DEFAULT_TEXT_CLASS = "persona-text-persona-muted";
+const HEADER_ACTION_HOVER_TEXT_CLASS = "hover:persona-text-persona-primary";
+const HEADER_ACTION_HOVER_BG_CLASS = "hover:persona-bg-gray-100";
+const HEADER_ACTION_BORDERLESS_CLASS = "persona-border-none";
+const HEADER_ACTION_ROUNDED_CLASS = "persona-rounded-full";
+
+const normalizeHeaderActionValue = (value?: string | null): string => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : "";
+};
+
+export const renderCloseButtonIcon = (
+  closeButton: HTMLButtonElement,
+  launcher: Partial<AgentWidgetLauncherConfig> = {}
+): void => {
+  const closeButtonIconName = launcher.closeButtonIconName ?? "x";
+  const closeButtonIconText = launcher.closeButtonIconText ?? "×";
+
+  closeButton.innerHTML = "";
+  const closeIconSvg = renderLucideIcon(closeButtonIconName, "20px", "currentColor", 2);
+  if (closeIconSvg) {
+    closeButton.appendChild(closeIconSvg);
+  } else {
+    closeButton.textContent = closeButtonIconText;
+  }
+};
+
+export const renderClearChatButtonIcon = (
+  clearChatButton: HTMLButtonElement,
+  clearChatConfig: Partial<AgentWidgetClearChatConfig> = {}
+): void => {
+  const clearChatIconName = clearChatConfig.iconName ?? "refresh-cw";
+
+  clearChatButton.innerHTML = "";
+  const iconSvg = renderLucideIcon(clearChatIconName, "20px", "currentColor", 2);
+  if (iconSvg) {
+    clearChatButton.appendChild(iconSvg);
+  }
+};
+
+export const applyHeaderActionColor = (
+  button: HTMLButtonElement,
+  color?: string | null
+): void => {
+  const resolvedColor = normalizeHeaderActionValue(color);
+  if (resolvedColor) {
+    button.style.color = resolvedColor;
+    button.classList.remove(HEADER_ACTION_DEFAULT_TEXT_CLASS);
+    button.classList.remove(HEADER_ACTION_HOVER_TEXT_CLASS);
+    return;
+  }
+
+  button.style.color = "";
+  button.classList.add(HEADER_ACTION_DEFAULT_TEXT_CLASS);
+  button.classList.add(HEADER_ACTION_HOVER_TEXT_CLASS);
+};
+
+export const applyHeaderActionBackground = (
+  button: HTMLButtonElement,
+  backgroundColor?: string | null
+): void => {
+  const resolvedBackground = normalizeHeaderActionValue(backgroundColor);
+  if (resolvedBackground) {
+    button.style.backgroundColor = resolvedBackground;
+    button.classList.remove(HEADER_ACTION_HOVER_BG_CLASS);
+    return;
+  }
+
+  button.style.backgroundColor = "";
+  button.classList.add(HEADER_ACTION_HOVER_BG_CLASS);
+};
+
+export const applyCloseButtonStyles = (
+  closeButton: HTMLButtonElement,
+  launcher: Partial<AgentWidgetLauncherConfig> = {}
+): void => {
+  applyHeaderActionColor(closeButton, launcher.closeButtonColor);
+  applyHeaderActionBackground(closeButton, launcher.closeButtonBackgroundColor);
+
+  if (launcher.closeButtonBorderWidth || launcher.closeButtonBorderColor) {
+    const borderWidth = launcher.closeButtonBorderWidth || "0px";
+    const borderColor = launcher.closeButtonBorderColor || "transparent";
+    closeButton.style.border = `${borderWidth} solid ${borderColor}`;
+    closeButton.classList.remove(HEADER_ACTION_BORDERLESS_CLASS);
+  } else {
+    closeButton.style.border = "";
+    closeButton.classList.add(HEADER_ACTION_BORDERLESS_CLASS);
+  }
+
+  if (launcher.closeButtonBorderRadius) {
+    closeButton.style.borderRadius = launcher.closeButtonBorderRadius;
+    closeButton.classList.remove(HEADER_ACTION_ROUNDED_CLASS);
+  } else {
+    closeButton.style.borderRadius = "";
+    closeButton.classList.add(HEADER_ACTION_ROUNDED_CLASS);
+  }
+
+  if (launcher.closeButtonPaddingX) {
+    closeButton.style.paddingLeft = launcher.closeButtonPaddingX;
+    closeButton.style.paddingRight = launcher.closeButtonPaddingX;
+  } else {
+    closeButton.style.paddingLeft = "";
+    closeButton.style.paddingRight = "";
+  }
+
+  if (launcher.closeButtonPaddingY) {
+    closeButton.style.paddingTop = launcher.closeButtonPaddingY;
+    closeButton.style.paddingBottom = launcher.closeButtonPaddingY;
+  } else {
+    closeButton.style.paddingTop = "";
+    closeButton.style.paddingBottom = "";
+  }
+};
+
+export const applyClearChatButtonStyles = (
+  clearChatButton: HTMLButtonElement,
+  clearChatConfig: Partial<AgentWidgetClearChatConfig> = {}
+): void => {
+  applyHeaderActionColor(clearChatButton, clearChatConfig.iconColor);
+  applyHeaderActionBackground(clearChatButton, clearChatConfig.backgroundColor);
+
+  if (clearChatConfig.borderWidth || clearChatConfig.borderColor) {
+    const borderWidth = clearChatConfig.borderWidth || "0px";
+    const borderColor = clearChatConfig.borderColor || "transparent";
+    clearChatButton.style.border = `${borderWidth} solid ${borderColor}`;
+    clearChatButton.classList.remove(HEADER_ACTION_BORDERLESS_CLASS);
+  } else {
+    clearChatButton.style.border = "";
+    clearChatButton.classList.add(HEADER_ACTION_BORDERLESS_CLASS);
+  }
+
+  if (clearChatConfig.borderRadius) {
+    clearChatButton.style.borderRadius = clearChatConfig.borderRadius;
+    clearChatButton.classList.remove(HEADER_ACTION_ROUNDED_CLASS);
+  } else {
+    clearChatButton.style.borderRadius = "";
+    clearChatButton.classList.add(HEADER_ACTION_ROUNDED_CLASS);
+  }
+
+  if (clearChatConfig.paddingX) {
+    clearChatButton.style.paddingLeft = clearChatConfig.paddingX;
+    clearChatButton.style.paddingRight = clearChatConfig.paddingX;
+  } else {
+    clearChatButton.style.paddingLeft = "";
+    clearChatButton.style.paddingRight = "";
+  }
+
+  if (clearChatConfig.paddingY) {
+    clearChatButton.style.paddingTop = clearChatConfig.paddingY;
+    clearChatButton.style.paddingBottom = clearChatConfig.paddingY;
+  } else {
+    clearChatButton.style.paddingTop = "";
+    clearChatButton.style.paddingBottom = "";
+  }
+};
 
 /**
  * Build the header section of the panel.
@@ -103,14 +263,6 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
   if (clearChatEnabled) {
     const clearChatSize = clearChatConfig.size ?? "32px";
-    const clearChatIconName = clearChatConfig.iconName ?? "refresh-cw";
-    const clearChatIconColor = clearChatConfig.iconColor ?? "";
-    const clearChatBgColor = clearChatConfig.backgroundColor ?? "";
-    const clearChatBorderWidth = clearChatConfig.borderWidth ?? "";
-    const clearChatBorderColor = clearChatConfig.borderColor ?? "";
-    const clearChatBorderRadius = clearChatConfig.borderRadius ?? "";
-    const clearChatPaddingX = clearChatConfig.paddingX ?? "";
-    const clearChatPaddingY = clearChatConfig.paddingY ?? "";
     const clearChatTooltipText = clearChatConfig.tooltipText ?? "Clear chat";
     const clearChatShowTooltip = clearChatConfig.showTooltip ?? true;
 
@@ -132,7 +284,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
     clearChatButton = createElement(
       "button",
-      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
+      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-text-persona-primary hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
     ) as HTMLButtonElement;
 
     clearChatButton.style.height = clearChatSize;
@@ -141,54 +293,8 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     clearChatButton.setAttribute("aria-label", clearChatTooltipText);
 
     // Add icon
-    const iconSvg = renderLucideIcon(
-      clearChatIconName,
-      "20px",
-      clearChatIconColor || "",
-      2
-    );
-    if (iconSvg) {
-      clearChatButton.appendChild(iconSvg);
-    }
-
-    // Apply styling from config
-    if (clearChatIconColor) {
-      clearChatButton.style.color = clearChatIconColor;
-      clearChatButton.classList.remove("persona-text-persona-muted");
-    }
-
-    if (clearChatBgColor) {
-      clearChatButton.style.backgroundColor = clearChatBgColor;
-      clearChatButton.classList.remove("hover:persona-bg-gray-100");
-    }
-
-    if (clearChatBorderWidth || clearChatBorderColor) {
-      const borderWidth = clearChatBorderWidth || "0px";
-      const borderColor = clearChatBorderColor || "transparent";
-      clearChatButton.style.border = `${borderWidth} solid ${borderColor}`;
-      clearChatButton.classList.remove("persona-border-none");
-    }
-
-    if (clearChatBorderRadius) {
-      clearChatButton.style.borderRadius = clearChatBorderRadius;
-      clearChatButton.classList.remove("persona-rounded-full");
-    }
-
-    // Apply padding styling
-    if (clearChatPaddingX) {
-      clearChatButton.style.paddingLeft = clearChatPaddingX;
-      clearChatButton.style.paddingRight = clearChatPaddingX;
-    } else {
-      clearChatButton.style.paddingLeft = "";
-      clearChatButton.style.paddingRight = "";
-    }
-    if (clearChatPaddingY) {
-      clearChatButton.style.paddingTop = clearChatPaddingY;
-      clearChatButton.style.paddingBottom = clearChatPaddingY;
-    } else {
-      clearChatButton.style.paddingTop = "";
-      clearChatButton.style.paddingBottom = "";
-    }
+    renderClearChatButtonIcon(clearChatButton, clearChatConfig);
+    applyClearChatButtonStyles(clearChatButton, clearChatConfig);
 
     clearChatButtonWrapper.appendChild(clearChatButton);
 
@@ -281,7 +387,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   // Create close button with base classes
   const closeButton = createElement(
     "button",
-    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
+    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-text-persona-primary hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
   ) as HTMLButtonElement;
   closeButton.style.height = closeButtonSize;
   closeButton.style.width = closeButtonSize;
@@ -294,74 +400,8 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   closeButton.setAttribute("aria-label", closeButtonTooltipText);
   closeButton.style.display = showClose ? "" : "none";
 
-  // Add icon or fallback text
-  const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-  const closeButtonIconText = launcher.closeButtonIconText ?? "×";
-
-  // Try to render Lucide icon, fallback to text if not provided or fails
-  const closeIconSvg = renderLucideIcon(
-    closeButtonIconName,
-    "20px",
-    launcher.closeButtonColor || "",
-    2
-  );
-  if (closeIconSvg) {
-    closeButton.appendChild(closeIconSvg);
-  } else {
-    closeButton.textContent = closeButtonIconText;
-  }
-
-  // Apply close button styling from config
-  if (launcher.closeButtonColor) {
-    closeButton.style.color = launcher.closeButtonColor;
-    closeButton.classList.remove("persona-text-persona-muted");
-  } else {
-    closeButton.style.color = "";
-    closeButton.classList.add("persona-text-persona-muted");
-  }
-
-  if (launcher.closeButtonBackgroundColor) {
-    closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
-    closeButton.classList.remove("hover:persona-bg-gray-100");
-  } else {
-    closeButton.style.backgroundColor = "";
-    closeButton.classList.add("hover:persona-bg-gray-100");
-  }
-
-  // Apply border if width and/or color are provided
-  if (launcher.closeButtonBorderWidth || launcher.closeButtonBorderColor) {
-    const borderWidth = launcher.closeButtonBorderWidth || "0px";
-    const borderColor = launcher.closeButtonBorderColor || "transparent";
-    closeButton.style.border = `${borderWidth} solid ${borderColor}`;
-    closeButton.classList.remove("persona-border-none");
-  } else {
-    closeButton.style.border = "";
-    closeButton.classList.add("persona-border-none");
-  }
-
-  if (launcher.closeButtonBorderRadius) {
-    closeButton.style.borderRadius = launcher.closeButtonBorderRadius;
-    closeButton.classList.remove("persona-rounded-full");
-  } else {
-    closeButton.style.borderRadius = "";
-    closeButton.classList.add("persona-rounded-full");
-  }
-
-  // Apply padding styling
-  if (launcher.closeButtonPaddingX) {
-    closeButton.style.paddingLeft = launcher.closeButtonPaddingX;
-    closeButton.style.paddingRight = launcher.closeButtonPaddingX;
-  } else {
-    closeButton.style.paddingLeft = "";
-    closeButton.style.paddingRight = "";
-  }
-  if (launcher.closeButtonPaddingY) {
-    closeButton.style.paddingTop = launcher.closeButtonPaddingY;
-    closeButton.style.paddingBottom = launcher.closeButtonPaddingY;
-  } else {
-    closeButton.style.paddingTop = "";
-    closeButton.style.paddingBottom = "";
-  }
+  renderCloseButtonIcon(closeButton, launcher);
+  applyCloseButtonStyles(closeButton, launcher);
 
   closeButtonWrapper.appendChild(closeButton);
 

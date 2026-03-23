@@ -35,7 +35,17 @@ import { computeMessageFingerprint, createMessageCache, getCachedWrapper, setCac
 import { statusCopy } from "./utils/constants";
 import { isDockedMountMode } from "./utils/dock";
 import { createLauncherButton } from "./components/launcher";
-import { createWrapper, buildPanel, buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
+import {
+  applyClearChatButtonStyles,
+  applyCloseButtonStyles,
+  attachHeaderToContainer,
+  buildComposer,
+  buildHeader,
+  buildPanel,
+  createWrapper,
+  renderClearChatButtonIcon,
+  renderCloseButtonIcon
+} from "./components/panel";
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
@@ -3959,70 +3969,9 @@ export const createAgentExperience = (
           }
         }
         
-        // Apply close button styling from config
-        if (launcher.closeButtonColor) {
-          closeButton.style.color = launcher.closeButtonColor;
-          closeButton.classList.remove("persona-text-persona-muted");
-        } else {
-          closeButton.style.color = "";
-          closeButton.classList.add("persona-text-persona-muted");
-        }
-        
-        if (launcher.closeButtonBackgroundColor) {
-          closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
-          closeButton.classList.remove("hover:persona-bg-gray-100");
-        } else {
-          closeButton.style.backgroundColor = "";
-          closeButton.classList.add("hover:persona-bg-gray-100");
-        }
-        
-        // Apply border if width and/or color are provided
-        if (launcher.closeButtonBorderWidth || launcher.closeButtonBorderColor) {
-          const borderWidth = launcher.closeButtonBorderWidth || "0px";
-          const borderColor = launcher.closeButtonBorderColor || "transparent";
-          closeButton.style.border = `${borderWidth} solid ${borderColor}`;
-          closeButton.classList.remove("persona-border-none");
-        } else {
-          closeButton.style.border = "";
-          closeButton.classList.add("persona-border-none");
-        }
-        
-        if (launcher.closeButtonBorderRadius) {
-          closeButton.style.borderRadius = launcher.closeButtonBorderRadius;
-          closeButton.classList.remove("persona-rounded-full");
-        } else {
-          closeButton.style.borderRadius = "";
-          closeButton.classList.add("persona-rounded-full");
-        }
+        applyCloseButtonStyles(closeButton, launcher);
 
-        // Update padding
-        if (launcher.closeButtonPaddingX) {
-          closeButton.style.paddingLeft = launcher.closeButtonPaddingX;
-          closeButton.style.paddingRight = launcher.closeButtonPaddingX;
-        } else {
-          closeButton.style.paddingLeft = "";
-          closeButton.style.paddingRight = "";
-        }
-        if (launcher.closeButtonPaddingY) {
-          closeButton.style.paddingTop = launcher.closeButtonPaddingY;
-          closeButton.style.paddingBottom = launcher.closeButtonPaddingY;
-        } else {
-          closeButton.style.paddingTop = "";
-          closeButton.style.paddingBottom = "";
-        }
-
-        // Update icon
-        const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-        const closeButtonIconText = launcher.closeButtonIconText ?? "×";
-
-        // Clear existing content and render new icon
-        closeButton.innerHTML = "";
-        const iconSvg = renderLucideIcon(closeButtonIconName, "20px", launcher.closeButtonColor || "", 2);
-        if (iconSvg) {
-          closeButton.appendChild(iconSvg);
-        } else {
-          closeButton.textContent = closeButtonIconText;
-        }
+        renderCloseButtonIcon(closeButton, launcher);
 
         // Update tooltip
         const closeButtonTooltipText = launcher.closeButtonTooltipText ?? "Close chat";
@@ -4180,70 +4129,8 @@ export const createAgentExperience = (
           clearChatButton.style.height = clearChatSize;
           clearChatButton.style.width = clearChatSize;
 
-          // Update icon
-          const clearChatIconName = clearChatConfig.iconName ?? "refresh-cw";
-          const clearChatIconColor = clearChatConfig.iconColor ?? "";
-
-          // Clear existing icon and render new one
-          clearChatButton.innerHTML = "";
-          const iconSvg = renderLucideIcon(clearChatIconName, "20px", clearChatIconColor || "", 2);
-          if (iconSvg) {
-            clearChatButton.appendChild(iconSvg);
-          }
-
-          // Update icon color
-          if (clearChatIconColor) {
-            clearChatButton.style.color = clearChatIconColor;
-            clearChatButton.classList.remove("persona-text-persona-muted");
-          } else {
-            clearChatButton.style.color = "";
-            clearChatButton.classList.add("persona-text-persona-muted");
-          }
-
-          // Update background color
-          if (clearChatConfig.backgroundColor) {
-            clearChatButton.style.backgroundColor = clearChatConfig.backgroundColor;
-            clearChatButton.classList.remove("hover:persona-bg-gray-100");
-          } else {
-            clearChatButton.style.backgroundColor = "";
-            clearChatButton.classList.add("hover:persona-bg-gray-100");
-          }
-
-          // Update border
-          if (clearChatConfig.borderWidth || clearChatConfig.borderColor) {
-            const borderWidth = clearChatConfig.borderWidth || "0px";
-            const borderColor = clearChatConfig.borderColor || "transparent";
-            clearChatButton.style.border = `${borderWidth} solid ${borderColor}`;
-            clearChatButton.classList.remove("persona-border-none");
-          } else {
-            clearChatButton.style.border = "";
-            clearChatButton.classList.add("persona-border-none");
-          }
-
-          // Update border radius
-          if (clearChatConfig.borderRadius) {
-            clearChatButton.style.borderRadius = clearChatConfig.borderRadius;
-            clearChatButton.classList.remove("persona-rounded-full");
-          } else {
-            clearChatButton.style.borderRadius = "";
-            clearChatButton.classList.add("persona-rounded-full");
-          }
-
-          // Update padding
-          if (clearChatConfig.paddingX) {
-            clearChatButton.style.paddingLeft = clearChatConfig.paddingX;
-            clearChatButton.style.paddingRight = clearChatConfig.paddingX;
-          } else {
-            clearChatButton.style.paddingLeft = "";
-            clearChatButton.style.paddingRight = "";
-          }
-          if (clearChatConfig.paddingY) {
-            clearChatButton.style.paddingTop = clearChatConfig.paddingY;
-            clearChatButton.style.paddingBottom = clearChatConfig.paddingY;
-          } else {
-            clearChatButton.style.paddingTop = "";
-            clearChatButton.style.paddingBottom = "";
-          }
+          renderClearChatButtonIcon(clearChatButton, clearChatConfig);
+          applyClearChatButtonStyles(clearChatButton, clearChatConfig);
 
           const clearChatTooltipText = clearChatConfig.tooltipText ?? "Clear chat";
           const clearChatShowTooltip = clearChatConfig.showTooltip ?? true;

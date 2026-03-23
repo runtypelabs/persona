@@ -5,7 +5,13 @@ import {
   AgentWidgetHeaderLayoutConfig,
   AgentWidgetHeaderTrailingAction
 } from "../types";
-import { buildHeader, HeaderElements, attachHeaderToContainer as _attachHeaderToContainer } from "./header-builder";
+import {
+  applyCloseButtonStyles,
+  attachHeaderToContainer as _attachHeaderToContainer,
+  buildHeader,
+  HeaderElements,
+  renderCloseButtonIcon
+} from "./header-builder";
 
 export interface HeaderLayoutContext {
   config: AgentWidgetConfig;
@@ -133,7 +139,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 
   const closeButton = createElement(
     "button",
-    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
+    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-text-persona-primary hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
   ) as HTMLButtonElement;
   closeButton.style.height = closeButtonSize;
   closeButton.style.width = closeButtonSize;
@@ -141,18 +147,8 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
   closeButton.setAttribute("aria-label", "Close chat");
   closeButton.style.display = showClose ? "" : "none";
 
-  const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-  const closeIconSvg = renderLucideIcon(
-    closeButtonIconName,
-    "20px",
-    launcher.closeButtonColor || "",
-    2
-  );
-  if (closeIconSvg) {
-    closeButton.appendChild(closeIconSvg);
-  } else {
-    closeButton.textContent = "×";
-  }
+  renderCloseButtonIcon(closeButton, launcher);
+  applyCloseButtonStyles(closeButton, launcher);
 
   if (onClose) {
     closeButton.addEventListener("click", onClose);

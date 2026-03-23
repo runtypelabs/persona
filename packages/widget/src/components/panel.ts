@@ -2,7 +2,15 @@ import { createElement } from "../utils/dom";
 import { AgentWidgetConfig } from "../types";
 import { positionMap } from "../utils/positioning";
 import { isDockedMountMode } from "../utils/dock";
-import { buildHeader, attachHeaderToContainer, HeaderElements } from "./header-builder";
+import {
+  applyClearChatButtonStyles,
+  applyCloseButtonStyles,
+  attachHeaderToContainer,
+  buildHeader,
+  HeaderElements,
+  renderClearChatButtonIcon,
+  renderCloseButtonIcon
+} from "./header-builder";
 import { buildHeaderWithLayout } from "./header-layouts";
 import { buildComposer, ComposerElements } from "./composer-builder";
 
@@ -232,6 +240,14 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
 };
 
 // Re-export builder types and functions for plugin use
-export { buildHeader, buildComposer, attachHeaderToContainer };
+export {
+  applyClearChatButtonStyles,
+  applyCloseButtonStyles,
+  attachHeaderToContainer,
+  buildHeader,
+  buildComposer,
+  renderClearChatButtonIcon,
+  renderCloseButtonIcon
+};
 export type { HeaderElements, HeaderBuildContext } from "./header-builder";
 export type { ComposerElements, ComposerBuildContext } from "./composer-builder";
