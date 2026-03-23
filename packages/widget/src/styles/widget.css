@@ -1299,6 +1299,7 @@
 /* Ensure user message paragraphs and lists have proper styling too */
 .vanilla-message-user-bubble p {
   margin: 0;
+  color: inherit;
 }
 
 .vanilla-message-user-bubble p + p {
@@ -1322,6 +1323,12 @@
 .vanilla-message-user-bubble li {
   margin: 0.25rem 0;
   padding-left: 0.25rem;
+  color: inherit;
+}
+
+.vanilla-message-assistant-bubble p,
+.vanilla-message-assistant-bubble li {
+  color: inherit;
 }
 
 /* ============================================
