@@ -121,10 +121,20 @@
       min-height: 680px;
       height: calc(100vh - 196px);
       border-radius: 16px;
-      overflow: hidden;
       border: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.84);
       box-shadow: var(--shadow-lg);
+    }
+    /* Clip the content slot so workspace doesn't overflow the rounded
+       shell, but leave the dock rail (panel slot) unclipped so the FAB
+       and its shadow ring render fully inside the rail. */
+    [data-persona-dock-role="content"] {
+      overflow: hidden;
+      border-radius: 16px 0 0 16px;
+    }
+    /* Push the FAB inward so it clears the rounded corner */
+    [data-persona-dock-role="panel"] {
+      padding: 16px 8px 0 0;
     }
     #workspace-main {
       display: grid;
