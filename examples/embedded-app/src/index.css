@@ -239,10 +239,49 @@ select {
   transition: all 0.2s ease;
   font-size: 14px;
   line-height: 1.4;
+  position: relative;
+  overflow: hidden;
 }
 
+.example-item::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  right: -10%;
+  width: 45%;
+  height: 140%;
+  border-radius: 50%;
+  filter: blur(20px);
+  opacity: 0.35;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.example-item:hover::after {
+  opacity: 0.5;
+}
+
+/* Rotating color accents for each pill */
+.examples-list li:nth-child(9n+1) .example-item::after,
+.featured-grid .example-item:nth-child(9n+1)::after { background: radial-gradient(circle at 70% 50%, #8b5cf6, transparent 70%); }
+.examples-list li:nth-child(9n+2) .example-item::after,
+.featured-grid .example-item:nth-child(9n+2)::after { background: radial-gradient(circle at 70% 50%, #06b6d4, transparent 70%); }
+.examples-list li:nth-child(9n+3) .example-item::after,
+.featured-grid .example-item:nth-child(9n+3)::after { background: radial-gradient(circle at 70% 50%, #f97316, transparent 70%); }
+.examples-list li:nth-child(9n+4) .example-item::after,
+.featured-grid .example-item:nth-child(9n+4)::after { background: radial-gradient(circle at 70% 50%, #10b981, transparent 70%); }
+.examples-list li:nth-child(9n+5) .example-item::after,
+.featured-grid .example-item:nth-child(9n+5)::after { background: radial-gradient(circle at 70% 50%, #ec4899, transparent 70%); }
+.examples-list li:nth-child(9n+6) .example-item::after,
+.featured-grid .example-item:nth-child(9n+6)::after { background: radial-gradient(circle at 70% 50%, #3b82f6, transparent 70%); }
+.examples-list li:nth-child(9n+7) .example-item::after,
+.featured-grid .example-item:nth-child(9n+7)::after { background: radial-gradient(circle at 70% 50%, #f59e0b, transparent 70%); }
+.examples-list li:nth-child(9n+8) .example-item::after,
+.featured-grid .example-item:nth-child(9n+8)::after { background: radial-gradient(circle at 70% 50%, #ef4444, transparent 70%); }
+.examples-list li:nth-child(9n+9) .example-item::after,
+.featured-grid .example-item:nth-child(9n+9)::after { background: radial-gradient(circle at 70% 50%, #14b8a6, transparent 70%); }
+
 .example-item:hover {
-  background: var(--border);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px -8px rgba(0, 0, 0, 0.15);
 }
@@ -282,14 +321,87 @@ select {
   gap: 12px;
 }
 
+/* Try-it Smoke Background */
+.tryit-backdrop {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 32px;
+}
+
+.tryit-smoke {
+  position: absolute;
+  inset: -50%;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 80%, rgba(30, 58, 95, 0.9) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 50% at 75% 15%, rgba(139, 92, 246, 0.7) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 70% at 85% 75%, rgba(6, 182, 212, 0.65) 0%, transparent 50%),
+    radial-gradient(ellipse 90% 50% at 25% 20%, rgba(249, 115, 22, 0.6) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 80% at 50% 50%, rgba(16, 185, 129, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 70% 60% at 60% 90%, rgba(236, 72, 153, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 70% at 40% 60%, rgba(245, 158, 11, 0.4) 0%, transparent 55%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, rgba(15, 23, 42, 0.8) 0%, transparent 70%);
+  filter: blur(60px) saturate(1.5);
+  animation: smoke-drift 20s ease-in-out infinite alternate;
+  z-index: 0;
+}
+
+@keyframes smoke-drift {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(3%, -2%) scale(1.05) rotate(1deg);
+  }
+  66% {
+    transform: translate(-2%, 3%) scale(0.97) rotate(-1deg);
+  }
+  100% {
+    transform: translate(1%, -1%) scale(1.02) rotate(0.5deg);
+  }
+}
+
+.tryit-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.35;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  pointer-events: none;
+}
+
+.tryit-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.35) 0%,
+    rgba(0, 0, 0, 0.31) 15%,
+    rgba(0, 0, 0, 0.23) 30%,
+    rgba(0, 0, 0, 0.12) 50%,
+    rgba(0, 0, 0, 0.04) 75%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  pointer-events: none;
+}
+
+/* Solid frame to block smoke from bleeding through widget */
+.tryit-widget-frame {
+  position: relative;
+  z-index: 3;
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
 /* Inline Embed Target */
 .embedded-target {
   min-height: 500px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #ffffff;
   overflow: hidden;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
 }
 
 /* Mobile Responsive */
@@ -327,6 +439,11 @@ select {
 
   .embedded-target {
     min-height: 400px;
+  }
+
+  .tryit-backdrop {
+    padding: 20px;
+    border-radius: 12px;
   }
 
   .cta-row {
