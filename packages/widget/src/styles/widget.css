@@ -1274,6 +1274,16 @@
   color: #16a34a;
 }
 
+.persona-code-copy-btn.persona-code-copy-generating {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.persona-code-copy-btn.persona-code-copy-generating:hover {
+  color: var(--persona-text-muted, #6b7280);
+  border-color: transparent;
+}
+
 /* Ensure all links in chat bubbles have underlines */
 .vanilla-message-bubble a {
   text-decoration: underline;

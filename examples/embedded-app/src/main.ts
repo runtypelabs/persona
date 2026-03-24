@@ -19,19 +19,22 @@ const sharedWidgetStorage = createLocalStorageAdapter("persona-state");
 // ---------------------------------------------------------------------------
 /**
  * Wraps fenced code blocks (<pre>) with a header containing a copy button.
- * Uses text labels instead of SVG icons to survive DOMPurify sanitization.
+ * While streaming, shows a disabled "Generating…" label instead of "Copy".
  */
-const codeBlockCopyPostprocessor = (text: string): string => {
+const codeBlockCopyPostprocessor = (text: string, streaming: boolean): string => {
   let html = markdownPostprocessor(text);
   // Wrap each <pre>…</pre> with a container + header
   html = html.replace(/<pre><code(?:\s+class="language-(\w+)")?>/g, (_match, lang?: string) => {
     const label = lang ?? "";
+    const btnLabel = streaming ? "Generating\u2026" : "Copy";
+    const disabledAttr = streaming ? " disabled" : "";
+    const extraClass = streaming ? " persona-code-copy-generating" : "";
     return (
       `<div class="persona-code-block-wrapper">` +
       `<div class="persona-code-block-header">` +
       `<span>${label}</span>` +
-      `<button type="button" class="persona-code-copy-btn" title="Copy code">` +
-      `<span class="persona-code-copy-label">Copy</span>` +
+      `<button type="button" class="persona-code-copy-btn${extraClass}" title="Copy code"${disabledAttr}>` +
+      `<span class="persona-code-copy-label">${btnLabel}</span>` +
       `</button>` +
       `</div>` +
       `<pre><code${lang ? ` class="language-${lang}"` : ""}>`
@@ -312,7 +315,7 @@ const inlineController = createAgentExperience(inlineMount, {
   storageAdapter: sharedWidgetStorage,
   theme: inlineDemoTheme,
   suggestionChips: [...homeDemoSuggestionChips],
-  postprocessMessage: ({ text }) => codeBlockCopyPostprocessor(text)
+  postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
 });
 setupCodeCopyHandler(inlineMount);
 
@@ -345,7 +348,7 @@ const launcherController = initAgentWidget({
       collapsedMaxWidth: "min(380px, calc(100vw - 48px))",
     },
     suggestionChips: [...homeDemoSuggestionChips],
-    postprocessMessage: ({ text }) => codeBlockCopyPostprocessor(text)
+    postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
   }
 });
 setupCodeCopyHandler(document.getElementById("launcher-root")!);
