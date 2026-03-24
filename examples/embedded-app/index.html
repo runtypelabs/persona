@@ -59,52 +59,56 @@
         </div>
       </section>
 
-      <div class="section-grid">
-        <section class="card">
-          <h2 class="card-title">Examples</h2>
-          <p>Explore different use cases and widget configurations.</p>
-          <ul class="examples-list">
-            <li><a class="example-item" href="/action-middleware.html">Action Middleware <small>Live DOM context on every message; structured actions for navigation, cart, and checkout</small></a></li>
-            <li><a class="example-item" href="/agent-demo.html">Agent Loop <small>Multi-turn reasoning with tool calls</small></a></li>
-            <li><a class="example-item" href="/feedback-demo.html">Message Feedback <small>Copy, Upvote, Downvote</small></a></li>
-            <li><a class="example-item" href="/feedback-integration-demo.html">Feedback Integration <small>Wire feedback events to your backend</small></a></li>
-            <li><a class="example-item" href="/custom-loading-indicator.html">Custom Loading Indicator <small>Replace the default loading animation</small></a></li>
-            <li><a class="example-item" href="/approval-demo.html">Tool Approval <small>Human-in-the-loop confirmation before tool execution</small></a></li>
-            <li><a class="example-item" href="/focus-input-demo.html">Focus Input <small>Programmatic input focus and state control</small></a></li>
-            <li><a class="example-item" href="/artifact-demo.html">Artifact Sidebar <small>Resizable split view for rich content</small></a></li>
-            <li><a class="example-item" href="/voice-integration-demo.html">Voice Integration <small>Speech-to-text and text-to-speech input</small></a></li>
-          </ul>
-        </section>
+      <details class="advanced-section">
+        <summary class="advanced-toggle">Advanced</summary>
 
-        <section class="card">
-          <h2 class="card-title">Standalone Scripts</h2>
-          <p>Script tag integration — no bundler required. Uses the CDN build in production.</p>
-          <ul class="examples-list">
-            <li><a class="example-item" href="/standalone/example-shop.html">Example Shop (Manual)</a></li>
-            <li><a class="example-item" href="/standalone/example-shop-metadata.html">Example Shop (Metadata)</a></li>
-            <li><a class="example-item" href="/standalone/example-shop-installer.html">Example Shop (Installer)</a></li>
-            <li><a class="example-item" href="/standalone/example-shop-installer-voice-metadata.html">Example Shop (Installer + Voice + Metadata)</a></li>
-            <li><a class="example-item" href="/standalone/sample.html">Sample Widget</a></li>
-            <li><a class="example-item" href="/standalone/preview-mode.html">Preview Mode</a></li>
-          </ul>
-        </section>
-      </div>
+        <div class="advanced-content">
+          <div class="section-grid">
+            <section class="card">
+              <h2 class="card-title">Examples</h2>
+              <p>Explore different use cases and widget configurations.</p>
+              <ul class="examples-list">
+                <li><a class="example-item" href="/action-middleware.html">Action Middleware <small>Live DOM context on every message; structured actions for navigation, cart, and checkout</small></a></li>
+                <li><a class="example-item" href="/agent-demo.html">Agent Loop <small>Multi-turn reasoning with tool calls</small></a></li>
+                <li><a class="example-item" href="/feedback-demo.html">Message Feedback <small>Copy, Upvote, Downvote</small></a></li>
+                <li><a class="example-item" href="/feedback-integration-demo.html">Feedback Integration <small>Wire feedback events to your backend</small></a></li>
+                <li><a class="example-item" href="/custom-loading-indicator.html">Custom Loading Indicator <small>Replace the default loading animation</small></a></li>
+                <li><a class="example-item" href="/approval-demo.html">Tool Approval <small>Human-in-the-loop confirmation before tool execution</small></a></li>
+                <li><a class="example-item" href="/focus-input-demo.html">Focus Input <small>Programmatic input focus and state control</small></a></li>
+                <li><a class="example-item" href="/artifact-demo.html">Artifact Sidebar <small>Resizable split view for rich content</small></a></li>
+                <li><a class="example-item" href="/voice-integration-demo.html">Voice Integration <small>Speech-to-text and text-to-speech input</small></a></li>
+              </ul>
+            </section>
 
-      <div class="section-grid">
-        <section class="card">
-          <h2 class="card-title">Developer Tools</h2>
-          <p>Test the launcher, load synthetic messages, and explore the programmatic API.</p>
-          <div class="cta-row" style="justify-content: flex-start;">
-            <button id="open-chat" class="primaryButton" type="button">Open Launcher</button>
-            <button id="toggle-chat" class="secondaryButton" type="button">Toggle Launcher</button>
-            <select id="target-widget">
-              <option value="inline">Inline Widget</option>
-              <option value="launcher">Launcher Widget</option>
-            </select>
-            <button id="load-messages" class="secondaryButton" type="button">Load 1000 Messages</button>
+            <section class="card">
+              <h2 class="card-title">Standalone Scripts</h2>
+              <p>Script tag integration — no bundler required. Uses the CDN build in production.</p>
+              <ul class="examples-list">
+                <li><a class="example-item" href="/standalone/example-shop.html">Example Shop (Manual)</a></li>
+                <li><a class="example-item" href="/standalone/example-shop-metadata.html">Example Shop (Metadata)</a></li>
+                <li><a class="example-item" href="/standalone/example-shop-installer.html">Example Shop (Installer)</a></li>
+                <li><a class="example-item" href="/standalone/example-shop-installer-voice-metadata.html">Example Shop (Installer + Voice + Metadata)</a></li>
+                <li><a class="example-item" href="/standalone/sample.html">Sample Widget</a></li>
+                <li><a class="example-item" href="/standalone/preview-mode.html">Preview Mode</a></li>
+              </ul>
+            </section>
           </div>
-          <div class="code-example">
-            <pre><code>const launcherController = initAgentWidget({
+
+          <div class="section-grid">
+            <section class="card">
+              <h2 class="card-title">Developer Tools</h2>
+              <p>Test the launcher, load synthetic messages, and explore the programmatic API.</p>
+              <div class="cta-row" style="justify-content: flex-start;">
+                <button id="open-chat" class="primaryButton" type="button">Open Launcher</button>
+                <button id="toggle-chat" class="secondaryButton" type="button">Toggle Launcher</button>
+                <select id="target-widget">
+                  <option value="inline">Inline Widget</option>
+                  <option value="launcher">Launcher Widget</option>
+                </select>
+                <button id="load-messages" class="secondaryButton" type="button">Load 1000 Messages</button>
+              </div>
+              <div class="code-example">
+                <pre><code>const launcherController = initAgentWidget({
   target: "#launcher-root",
   config: { /* ... */ }
 });
@@ -117,43 +121,45 @@ launcherController.close();
 
 // Toggle the widget
 launcherController.toggle();</code></pre>
-          </div>
-        </section>
+              </div>
+            </section>
 
-        <section class="card">
-          <h2 class="card-title">Event Stream Testing</h2>
-          <p>Test the event stream SDK methods, window events, and instance scoping.</p>
+            <section class="card">
+              <h2 class="card-title">Event Stream Testing</h2>
+              <p>Test the event stream SDK methods, window events, and instance scoping.</p>
 
-          <h3>Controller Methods</h3>
-          <div class="cta-row" style="justify-content: flex-start;">
-            <select id="event-stream-target">
-              <option value="inline">Inline Widget</option>
-              <option value="launcher">Launcher Widget</option>
-            </select>
-            <button id="es-show" class="secondaryButton" type="button">Show Event Stream</button>
-            <button id="es-hide" class="secondaryButton" type="button">Hide Event Stream</button>
-            <button id="es-check" class="secondaryButton" type="button">Check Visibility</button>
-          </div>
+              <h3>Controller Methods</h3>
+              <div class="cta-row" style="justify-content: flex-start;">
+                <select id="event-stream-target">
+                  <option value="inline">Inline Widget</option>
+                  <option value="launcher">Launcher Widget</option>
+                </select>
+                <button id="es-show" class="secondaryButton" type="button">Show Event Stream</button>
+                <button id="es-hide" class="secondaryButton" type="button">Hide Event Stream</button>
+                <button id="es-check" class="secondaryButton" type="button">Check Visibility</button>
+              </div>
 
-          <h3 style="margin-top: 16px;">Window Events</h3>
-          <div class="cta-row" style="justify-content: flex-start;">
-            <button id="es-win-show-all" class="secondaryButton" type="button">Show All (window)</button>
-            <button id="es-win-hide-all" class="secondaryButton" type="button">Hide All (window)</button>
-            <button id="es-win-show-inline" class="secondaryButton" type="button">Show Inline Only</button>
-            <button id="es-win-show-launcher" class="secondaryButton" type="button">Show Launcher Only</button>
-            <button id="es-win-show-wrong" class="secondaryButton" type="button">Show Wrong ID</button>
-          </div>
+              <h3 style="margin-top: 16px;">Window Events</h3>
+              <div class="cta-row" style="justify-content: flex-start;">
+                <button id="es-win-show-all" class="secondaryButton" type="button">Show All (window)</button>
+                <button id="es-win-hide-all" class="secondaryButton" type="button">Hide All (window)</button>
+                <button id="es-win-show-inline" class="secondaryButton" type="button">Show Inline Only</button>
+                <button id="es-win-show-launcher" class="secondaryButton" type="button">Show Launcher Only</button>
+                <button id="es-win-show-wrong" class="secondaryButton" type="button">Show Wrong ID</button>
+              </div>
 
-          <h3 style="margin-top: 16px;">Event Listeners</h3>
-          <div class="cta-row" style="justify-content: flex-start;">
-            <button id="es-listen" class="secondaryButton" type="button">Register Listeners</button>
-          </div>
+              <h3 style="margin-top: 16px;">Event Listeners</h3>
+              <div class="cta-row" style="justify-content: flex-start;">
+                <button id="es-listen" class="secondaryButton" type="button">Register Listeners</button>
+              </div>
 
-          <div id="es-log" class="code-example" style="margin-top: 16px; max-height:150px; overflow-y:auto; display:none;">
-            <pre id="es-log-pre"></pre>
+              <div id="es-log" class="code-example" style="margin-top: 16px; max-height:150px; overflow-y:auto; display:none;">
+                <pre id="es-log-pre"></pre>
+              </div>
+            </section>
           </div>
-        </section>
-      </div>
+        </div>
+      </details>
     </main>
   </div>
 
