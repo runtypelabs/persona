@@ -14,6 +14,68 @@ import {
 /** Same key as the widget default — shared with other embedded-app pages that use persisted chat. */
 const sharedWidgetStorage = createLocalStorageAdapter("persona-state");
 
+// ---------------------------------------------------------------------------
+// Code block copy button postprocessor
+// ---------------------------------------------------------------------------
+/**
+ * Wraps fenced code blocks (<pre>) with a header containing a copy button.
+ * While streaming, shows a disabled "Generating…" label instead of "Copy".
+ */
+const codeBlockCopyPostprocessor = (text: string, streaming: boolean): string => {
+  let html = markdownPostprocessor(text);
+  // Wrap each <pre>…</pre> with a container + header
+  html = html.replace(/<pre><code(?:\s+class="language-(\w+)")?>/g, (_match, lang?: string) => {
+    const label = lang ?? "";
+    const btnLabel = streaming ? "Generating\u2026" : "Copy";
+    const disabledAttr = streaming ? " disabled" : "";
+    const extraClass = streaming ? " persona-code-copy-generating" : "";
+    return (
+      `<div class="persona-code-block-wrapper">` +
+      `<div class="persona-code-block-header">` +
+      `<span>${label}</span>` +
+      `<button type="button" class="persona-code-copy-btn${extraClass}" title="Copy code"${disabledAttr}>` +
+      `<span class="persona-code-copy-label">${btnLabel}</span>` +
+      `</button>` +
+      `</div>` +
+      `<pre><code${lang ? ` class="language-${lang}"` : ""}>`
+    );
+  });
+  html = html.replace(/<\/code><\/pre>/g, `</code></pre></div>`);
+  return html;
+};
+
+/**
+ * Delegated click handler for code copy buttons inside shadow DOM.
+ * Native click events cross shadow boundaries via composedPath().
+ */
+const setupCodeCopyHandler = (root: HTMLElement) => {
+  root.addEventListener("click", (e) => {
+    const path = e.composedPath();
+    // Find the copy button in the composed path (works across shadow DOM)
+    const btn = path.find(
+      (el) => el instanceof HTMLElement && el.classList.contains("persona-code-copy-btn")
+    ) as HTMLElement | undefined;
+    if (!btn) return;
+
+    // Walk up the composed path to find the wrapper div
+    const wrapper = path.find(
+      (el) => el instanceof HTMLElement && el.classList.contains("persona-code-block-wrapper")
+    ) as HTMLElement | undefined;
+    const codeEl = wrapper?.querySelector("pre code");
+    if (!codeEl) return;
+
+    navigator.clipboard.writeText(codeEl.textContent ?? "").then(() => {
+      const label = btn.querySelector(".persona-code-copy-label");
+      if (label) label.textContent = "Copied!";
+      btn.classList.add("persona-code-copied");
+      setTimeout(() => {
+        if (label) label.textContent = "Copy";
+        btn.classList.remove("persona-code-copied");
+      }, 2000);
+    });
+  });
+};
+
 const homeDemoSuggestionChips = [
   "What is Persona and how does it work?",
   "How does streaming work?",
@@ -253,8 +315,9 @@ const inlineController = createAgentExperience(inlineMount, {
   storageAdapter: sharedWidgetStorage,
   theme: inlineDemoTheme,
   suggestionChips: [...homeDemoSuggestionChips],
-  postprocessMessage: ({ text }) => markdownPostprocessor(text)
+  postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
 });
+setupCodeCopyHandler(inlineMount);
 
 const launcherController = initAgentWidget({
   target: "#launcher-root",
@@ -285,9 +348,10 @@ const launcherController = initAgentWidget({
       collapsedMaxWidth: "min(380px, calc(100vw - 48px))",
     },
     suggestionChips: [...homeDemoSuggestionChips],
-    postprocessMessage: ({ text }) => markdownPostprocessor(text)
+    postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
   }
 });
+setupCodeCopyHandler(document.getElementById("launcher-root")!);
 
 // ---------------------------------------------------------------------------
 // Event Stream Testing
