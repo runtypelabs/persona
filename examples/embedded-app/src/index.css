@@ -511,6 +511,107 @@ code {
 .code-showcase .code-string { color: #8FD400; }
 .code-showcase .code-function { color: #00B8D9; }
 
+.quick-start-section {
+  gap: 18px;
+}
+
+.quick-start-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.quick-start-step {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(246, 247, 251, 0.86), rgba(255, 255, 255, 0.96));
+}
+
+.quick-start-step-meta {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.quick-start-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(91, 46, 255, 0.18);
+  background: rgba(91, 46, 255, 0.08);
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.quick-start-step-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quick-start-step-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.quick-start-step-copy p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.quick-start-install {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  max-width: none;
+  padding: 12px 16px;
+  background: #050507;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #c9c9c9;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  box-shadow: none;
+}
+
+.quick-start-install:hover {
+  transform: none;
+  background: #050507;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.quick-start-install:active {
+  transform: none;
+  box-shadow: none;
+}
+
+.quick-start-install:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px rgba(91, 46, 255, 0.35),
+    0 0 0 4px rgba(91, 46, 255, 0.12);
+}
+
+.quick-start-step .code-showcase {
+  padding: 18px 20px;
+}
+
 /* Feature Grid */
 .feature-grid {
   display: grid;
@@ -904,6 +1005,25 @@ code {
   .install-command {
     font-size: 12px;
     padding: 10px 12px;
+  }
+
+  .quick-start-step {
+    padding: 14px;
+  }
+
+  .quick-start-step-meta {
+    gap: 10px;
+  }
+
+  .quick-start-step-index {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+    font-size: 11px;
+  }
+
+  .quick-start-step .code-showcase {
+    padding: 14px;
   }
 
   .card {

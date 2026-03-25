@@ -12,7 +12,7 @@
 
       <!-- Hero -->
       <section class="hero cardFull reveal-el">
-        <span class="label">Open Source Chat Widget</span>
+        <span class="label">Open Source AI Chat Widget</span>
         <h1 class="kern-tight" style="font-size: 40px; line-height: 1.05;">
           Add a streaming AI chat<br>to any website, in minutes.
         </h1>
@@ -25,12 +25,6 @@
           <span class="hero-feature-pill">Theming</span>
           <span class="hero-feature-pill">Voice Input</span>
           <span class="hero-feature-pill">Zero Dependencies</span>
-        </div>
-
-        <div class="install-command" id="install-cmd" title="Click to copy">
-          <span class="install-prefix">$</span>
-          <span>npm install @runtypelabs/persona</span>
-          <span class="install-copy">Copy</span>
         </div>
 
         <div class="hero-badges">
@@ -62,22 +56,51 @@
 
 
       <!-- Quick Start -->
-      <section class="card cardFull reveal-el">
+      <section class="card cardFull quick-start-section reveal-el">
         <span class="label">Quick Start</span>
-        <h2 class="card-title kern-tight" style="font-size: 24px;">Three lines to a working chat</h2>
-        <p>Install, configure, and ship. That's it.</p>
-        <div class="code-showcase">
-          <pre><code><span class="code-keyword">import</span> { <span class="code-function">initAgentWidget</span> } <span class="code-keyword">from</span> <span class="code-string">"@runtypelabs/persona"</span>;
+        <h2 class="card-title kern-tight" style="font-size: 24px;">Two steps to a working chat</h2>
+        <p>Install the package, import the styles, and mount the widget on any element.</p>
+        <div class="quick-start-steps">
+          <div class="quick-start-step">
+            <div class="quick-start-step-meta">
+              <span class="quick-start-step-index">01</span>
+              <div class="quick-start-step-copy">
+                <h3 class="quick-start-step-title">Install Persona</h3>
+                <p>Add the widget package to your app.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="install-command quick-start-install"
+              data-copy-text="npm install @runtypelabs/persona"
+              data-copy-default="Copy"
+              data-copy-success="Copied!"
+              aria-label="Copy npm install command"
+            >
+              <span class="install-prefix">$</span>
+              <span>npm install @runtypelabs/persona</span>
+              <span class="install-copy" data-copy-label>Copy</span>
+            </button>
+          </div>
 
-<span class="code-comment">// Mount an AI chat widget on any element</span>
+          <div class="quick-start-step">
+            <div class="quick-start-step-meta">
+              <span class="quick-start-step-index">02</span>
+              <div class="quick-start-step-copy">
+                <h3 class="quick-start-step-title">Mount the widget</h3>
+                <p>Import the stylesheet, initialize Persona, and point it at your SSE endpoint.</p>
+              </div>
+            </div>
+            <div class="code-showcase">
+              <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
+<span class="code-keyword">import</span> { <span class="code-function">initAgentWidget</span> } <span class="code-keyword">from</span> <span class="code-string">"@runtypelabs/persona"</span>;
+
 <span class="code-function">initAgentWidget</span>({
-  <span class="code-keyword">target</span>: document.<span class="code-function">getElementById</span>(<span class="code-string">"chat"</span>),
-  <span class="code-keyword">config</span>: {
-    apiUrl: <span class="code-string">"https://your-api.com/chat"</span>,
-    features: { streaming: <span class="code-keyword">true</span> },
-    theme: { primary: <span class="code-string">"#5B2EFF"</span> },
-  },
+  <span class="code-keyword">target</span>: <span class="code-string">"#chat"</span>,
+  <span class="code-keyword">config</span>: { apiUrl: <span class="code-string">"https://your-api.com/chat"</span> },
 });</code></pre>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -152,7 +175,7 @@
           <a href="https://runtype.com" target="_blank" rel="noopener">
             <img src="/runtype-logo.svg" alt="Runtype" style="height: 16px; width: auto; opacity: 0.55;">
           </a>
-          <span class="footer-tagline">Open source AI chat widget</span>
+          <span class="footer-tagline">Where AI products are built</span>
         </div>
         <div class="footer-links">
           <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener">GitHub</a>
@@ -165,7 +188,7 @@
     </main>
   </div>
 
-  <!-- Scroll reveal & install-command copy -->
+  <!-- Scroll reveal & copy buttons -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       // Scroll reveal
@@ -188,19 +211,23 @@
         });
       }
 
-      // Install command copy
-      var cmd = document.getElementById('install-cmd');
-      if (cmd) {
-        cmd.addEventListener('click', function() {
-          navigator.clipboard.writeText('npm install @runtypelabs/persona').then(function() {
-            var label = cmd.querySelector('.install-copy');
+      // Copy helper
+      document.querySelectorAll('[data-copy-text]').forEach(function(trigger) {
+        trigger.addEventListener('click', function() {
+          var copyText = trigger.getAttribute('data-copy-text');
+          if (!copyText) return;
+
+          navigator.clipboard.writeText(copyText).then(function() {
+            var label = trigger.querySelector('[data-copy-label]');
+            var defaultText = trigger.getAttribute('data-copy-default') || 'Copy';
+            var successText = trigger.getAttribute('data-copy-success') || 'Copied!';
             if (label) {
-              label.textContent = 'Copied!';
-              setTimeout(function() { label.textContent = 'Copy'; }, 2000);
+              label.textContent = successText;
+              setTimeout(function() { label.textContent = defaultText; }, 2000);
             }
           });
         });
-      }
+      });
     });
   </script>
   <script type="module" src="/src/main.ts"></script>
