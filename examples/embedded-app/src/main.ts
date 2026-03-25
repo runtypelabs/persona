@@ -333,10 +333,10 @@ const carouselMount = document.getElementById("demo-carousel-mount");
 if (carouselMount) {
   createDemoCarousel(carouselMount, {
     items: [
-      { url: "/fullscreen-assistant-demo.html", title: "Fullscreen Assistant", description: "Full-viewport dark layout with artifacts" },
-      { url: "/bakery.html", title: "Bakery Assistant", description: "Full business site with context-aware chat" },
-      { url: "/docked-panel-demo.html", title: "Docked Panel", description: "Side-docked assistant layout" },
-      { url: "/artifact-demo.html", title: "Artifact Sidebar", description: "Resizable split view for rich content" },
+      { url: "/launcher-demo.html", title: "Default Launcher", description: "Out-of-the-box chat widget experience" },
+      { url: "/bakery.html", title: "Site Nav, Checkout", description: "Full business site with context-aware chat" },
+      { url: "/fullscreen-assistant-demo.html", title: "Fullscreen", description: "Full-viewport dark layout with artifacts" },
+      { url: "/docked-panel-demo.html", title: "Docked Assistant", description: "Side-docked assistant layout" },
     ],
   });
 }

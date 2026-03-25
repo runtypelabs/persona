@@ -288,6 +288,7 @@ export default defineConfig({
         'event-stream-testing': path.resolve(__dirname, 'event-stream-testing.html'),
         'artifact-demo': path.resolve(__dirname, 'artifact-demo.html'),
         'fullscreen-assistant-demo': path.resolve(__dirname, 'fullscreen-assistant-demo.html'),
+        'launcher-demo': path.resolve(__dirname, 'launcher-demo.html'),
         'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
         'voice-integration-demo': path.resolve(__dirname, 'voice-integration-demo.html'),
         // Standalone (CDN / Copy-Paste) pages
