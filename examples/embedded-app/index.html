@@ -4,25 +4,46 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="/favicon.ico" />
-  <title>Persona — AI Chat Widget</title>
+  <title>Persona — AI Chat Widget by Runtype</title>
 </head>
 <body>
   <div class="page">
     <main class="shell">
-      <section class="hero cardFull">
-        <h1>Persona</h1>
-        <div class="hero-byline">by <a href="https://runtype.com" target="_blank" rel="noopener"><img src="/runtype-logo.svg" alt="Runtype" class="runtype-logo"></a></div>
-        <p>A drop-in streaming chat widget for your AI assistant. Themeable, pluggable, zero framework dependencies.</p>
+
+      <!-- Hero -->
+      <section class="hero cardFull reveal-el">
+        <span class="label">Open Source AI Chat Widget</span>
+        <h1 class="kern-tight" style="font-size: 40px; line-height: 1.05;">
+          Add a streaming AI chat<br>to any website, in minutes.
+        </h1>
+        <p>Themeable, pluggable, zero framework dependencies. Style isolation, SSE streaming, agent loops, and tool use — all in one drop-in widget.</p>
+
+        <div class="hero-features">
+          <span class="hero-feature-pill">Style Isolation</span>
+          <span class="hero-feature-pill">SSE Streaming</span>
+          <span class="hero-feature-pill">Agent Loops</span>
+          <span class="hero-feature-pill">Theming</span>
+          <span class="hero-feature-pill">Voice Input</span>
+          <span class="hero-feature-pill">Zero Dependencies</span>
+        </div>
+
         <div class="hero-badges">
-          <a href="https://www.npmjs.com/package/@runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/npm/v/@runtypelabs/persona?style=flat&color=262626&label=npm" alt="npm"></a>
-          <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/github/stars/runtypelabs/persona?style=flat&color=262626&label=GitHub" alt="GitHub"></a>
+          <a href="https://www.npmjs.com/package/@runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/npm/v/@runtypelabs/persona?style=flat&color=5B2EFF&label=npm" alt="npm"></a>
+          <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/github/stars/runtypelabs/persona?style=flat&color=5B2EFF&label=GitHub" alt="GitHub"></a>
           <a href="https://deepwiki.com/runtypelabs/persona" target="_blank" rel="noopener"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+        </div>
+
+        <div class="hero-byline">
+          <span>Built by</span>
+          <a href="https://runtype.com" target="_blank" rel="noopener"><img src="/runtype-logo.svg" alt="Runtype" class="runtype-logo"></a>
         </div>
       </section>
 
-      <section class="card cardFull tryit-section">
-        <h2 class="card-title">Try it</h2>
-        <p>This is Persona. Ask it anything — or pick a suggestion below to explore.</p>
+      <!-- Live Demo -->
+      <section class="card cardFull tryit-section reveal-el">
+        <span class="label">Live Demo</span>
+        <h2 class="card-title kern-tight" style="font-size: 24px;">Try it live</h2>
+        <p>Ask Persona anything — or pick a suggestion below to explore.</p>
         <div class="tryit-backdrop">
           <div class="tryit-smoke"></div>
           <div class="tryit-grain"></div>
@@ -33,8 +54,217 @@
         </div>
       </section>
 
-      <section class="card cardFull theme-editor-section">
-        <h2 class="card-title">Theme Editor</h2>
+
+      <!-- Quick Start -->
+      <section class="card cardFull quick-start-section reveal-el">
+        <span class="label">Quick Start</span>
+        <h2 class="card-title kern-tight" style="font-size: 24px;">Choose your integration path</h2>
+        <p>Start with Runtype in minutes, or wire Persona into your own SSE backend.</p>
+
+        <div class="quick-start-tabs" role="tablist" aria-label="Quick start paths">
+          <button
+            type="button"
+            class="quick-start-tab"
+            id="quick-start-tab-runtype"
+            role="tab"
+            aria-selected="true"
+            aria-controls="quick-start-panel-runtype"
+            data-quick-start-tab="runtype"
+          >
+            Using Runtype
+          </button>
+          <button
+            type="button"
+            class="quick-start-tab"
+            id="quick-start-tab-sse"
+            role="tab"
+            aria-selected="false"
+            aria-controls="quick-start-panel-sse"
+            data-quick-start-tab="sse"
+            tabindex="-1"
+          >
+            Any SSE Backend
+          </button>
+        </div>
+
+        <div
+          class="quick-start-panel"
+          id="quick-start-panel-runtype"
+          role="tabpanel"
+          aria-labelledby="quick-start-tab-runtype"
+          data-quick-start-panel="runtype"
+        >
+          <div class="quick-start-steps">
+            <div class="quick-start-step">
+              <div class="quick-start-step-meta">
+                <span class="quick-start-step-index">01</span>
+                <div class="quick-start-step-copy">
+                  <h3 class="quick-start-step-title">Install Persona</h3>
+                  <p>Add the widget package to your app.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="install-command quick-start-install"
+                data-copy-text="npm install @runtypelabs/persona"
+                data-copy-default="Copy"
+                data-copy-success="Copied!"
+                aria-label="Copy npm install command"
+              >
+                <span class="install-prefix">$</span>
+                <span>npm install @runtypelabs/persona</span>
+                <span class="install-copy" data-copy-label>Copy</span>
+              </button>
+            </div>
+
+            <div class="quick-start-step">
+              <div class="quick-start-step-meta">
+                <span class="quick-start-step-index">02</span>
+                <div class="quick-start-step-copy">
+                  <h3 class="quick-start-step-title">Sign up &amp; create an agent</h3>
+                  <p>Run the guided setup to create your account and product, then create an agent.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="install-command quick-start-install"
+                data-copy-text="npx @runtypelabs/cli@latest init"
+                data-copy-default="Copy"
+                data-copy-success="Copied!"
+                aria-label="Copy Runtype init command"
+              >
+                <span class="install-prefix">$</span>
+                <span>npx @runtypelabs/cli@latest init</span>
+                <span class="install-copy" data-copy-label>Copy</span>
+              </button>
+              <p class="quick-start-step-note">Then create an agent and note the returned ID:</p>
+              <button
+                type="button"
+                class="install-command quick-start-install"
+                data-copy-text="npx @runtypelabs/cli@latest agents create -n &quot;my-agent&quot;"
+                data-copy-default="Copy"
+                data-copy-success="Copied!"
+                aria-label="Copy agent create command"
+              >
+                <span class="install-prefix">$</span>
+                <span>npx @runtypelabs/cli@latest agents create -n "my-agent"</span>
+                <span class="install-copy" data-copy-label>Copy</span>
+              </button>
+            </div>
+
+            <div class="quick-start-step">
+              <div class="quick-start-step-meta">
+                <span class="quick-start-step-index">03</span>
+                <div class="quick-start-step-copy">
+                  <h3 class="quick-start-step-title">Create a client token</h3>
+                  <p>Generate a browser-safe token for the agent you just created.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="install-command quick-start-install"
+                data-copy-text="npx @runtypelabs/cli@latest client-tokens create -n &quot;my-widget&quot; --agent-ids &lt;agent-id&gt; --environment test"
+                data-copy-default="Copy"
+                data-copy-success="Copied!"
+                aria-label="Copy Runtype client token command"
+              >
+                <span class="install-prefix">$</span>
+                <span>npx @runtypelabs/cli@latest client-tokens create -n "my-widget" --agent-ids &lt;agent-id&gt; --environment test</span>
+                <span class="install-copy" data-copy-label>Copy</span>
+              </button>
+              <p class="quick-start-step-note">Replace <code>&lt;agent-id&gt;</code> with the ID from step 02, then paste the returned token into the config below.</p>
+            </div>
+
+            <div class="quick-start-step">
+              <div class="quick-start-step-meta">
+                <span class="quick-start-step-index">04</span>
+                <div class="quick-start-step-copy">
+                  <h3 class="quick-start-step-title">Mount the widget</h3>
+                  <p>Import the stylesheet and initialize Persona with the client token.</p>
+                </div>
+              </div>
+              <div class="code-showcase">
+                <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
+<span class="code-keyword">import</span> { <span class="code-function">DEFAULT_WIDGET_CONFIG</span>, <span class="code-function">initAgentWidget</span> } <span class="code-keyword">from</span> <span class="code-string">"@runtypelabs/persona"</span>;
+
+<span class="code-function">initAgentWidget</span>({
+  <span class="code-keyword">target</span>: <span class="code-string">"#chat"</span>,
+  <span class="code-keyword">config</span>: {
+    ...<span class="code-function">DEFAULT_WIDGET_CONFIG</span>,
+    clientToken: <span class="code-string">"ct_test_..."</span>,
+    launcher: {
+      ...<span class="code-function">DEFAULT_WIDGET_CONFIG</span>.launcher,
+      enabled: <span class="code-keyword">false</span>,
+    },
+  },
+});</code></pre>
+              </div>
+            </div>
+          </div>
+          <p class="quick-start-footnote">Need server-side flow control instead? Use <code>@runtypelabs/persona-proxy</code> and switch to a proxy-based Runtype setup later.</p>
+        </div>
+
+        <div
+          class="quick-start-panel"
+          id="quick-start-panel-sse"
+          role="tabpanel"
+          aria-labelledby="quick-start-tab-sse"
+          data-quick-start-panel="sse"
+          hidden
+        >
+          <div class="quick-start-intro">
+            <strong>Bring your own backend:</strong> point Persona at any SSE endpoint and adapt the request or event format if needed.
+          </div>
+          <div class="quick-start-steps">
+            <div class="quick-start-step">
+              <div class="quick-start-step-meta">
+                <span class="quick-start-step-index">01</span>
+                <div class="quick-start-step-copy">
+                  <h3 class="quick-start-step-title">Install Persona</h3>
+                  <p>Add the widget package to your app.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="install-command quick-start-install"
+                data-copy-text="npm install @runtypelabs/persona"
+                data-copy-default="Copy"
+                data-copy-success="Copied!"
+                aria-label="Copy npm install command"
+              >
+                <span class="install-prefix">$</span>
+                <span>npm install @runtypelabs/persona</span>
+                <span class="install-copy" data-copy-label>Copy</span>
+              </button>
+            </div>
+
+            <div class="quick-start-step">
+              <div class="quick-start-step-meta">
+                <span class="quick-start-step-index">02</span>
+                <div class="quick-start-step-copy">
+                  <h3 class="quick-start-step-title">Mount the widget</h3>
+                  <p>Import the stylesheet, initialize Persona, and point it at your SSE endpoint.</p>
+                </div>
+              </div>
+              <div class="code-showcase">
+                <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
+<span class="code-keyword">import</span> { <span class="code-function">initAgentWidget</span> } <span class="code-keyword">from</span> <span class="code-string">"@runtypelabs/persona"</span>;
+
+<span class="code-function">initAgentWidget</span>({
+  <span class="code-keyword">target</span>: <span class="code-string">"#chat"</span>,
+  <span class="code-keyword">config</span>: { apiUrl: <span class="code-string">"https://your-api.com/chat"</span> },
+});</code></pre>
+              </div>
+            </div>
+          </div>
+          <p class="quick-start-footnote">If your backend uses a different request or event shape, customize <code>customFetch</code> or <code>parseSSEEvent</code> in the widget config.</p>
+        </div>
+      </section>
+
+      <!-- Theme Editor -->
+      <section class="card cardFull theme-editor-section reveal-el">
+        <span class="label">Customization</span>
+        <h2 class="card-title kern-tight">Theme Editor</h2>
         <p>Customize every color, font, and layout token — then copy the config straight into your project.</p>
         <a class="theme-editor-link" href="/theme.html">
           <div class="theme-backdrop">
@@ -49,17 +279,16 @@
         </a>
       </section>
 
-      <section class="card cardFull">
-        <h2 class="card-title">Featured</h2>
-        <p>See what Persona can do across different use cases.</p>
-        <div class="featured-grid">
-          <a class="example-item" href="/fullscreen-assistant-demo.html">Fullscreen Assistant <small>Full-viewport dark layout with artifacts</small></a>
-          <a class="example-item" href="/bakery.html">Bakery Assistant <small>Full business site with context-aware chat</small></a>
-          <a class="example-item" href="/docked-panel-demo.html">Docked Panel <small>Side-docked assistant layout</small></a>
-        </div>
+      <!-- Demos -->
+      <section class="card cardFull reveal-el">
+        <span class="label">Demos</span>
+        <h2 class="card-title kern-tight">See what Persona can do</h2>
+        <p>Explore different use cases across full-page layouts, embedded contexts, and business scenarios.</p>
+        <div id="demo-carousel-mount"></div>
       </section>
 
-      <details class="advanced-section">
+      <!-- Advanced -->
+      <details class="advanced-section reveal-el">
         <summary class="advanced-toggle">Advanced</summary>
 
         <div class="advanced-content">
@@ -77,6 +306,7 @@
                 <li><a class="example-item" href="/focus-input-demo.html">Focus Input <small>Programmatic input focus and state control</small></a></li>
                 <li><a class="example-item" href="/artifact-demo.html">Artifact Sidebar <small>Resizable split view for rich content</small></a></li>
                 <li><a class="example-item" href="/voice-integration-demo.html">Voice Integration <small>Speech-to-text and text-to-speech input</small></a></li>
+                <li><a class="example-item" href="/event-stream-testing.html">Event Stream Testing <small>Inspector API, window events, inline + launcher</small></a></li>
               </ul>
             </section>
 
@@ -93,77 +323,106 @@
               </ul>
             </section>
           </div>
-
-          <div class="section-grid">
-            <section class="card">
-              <h2 class="card-title">Developer Tools</h2>
-              <p>Test the launcher, load synthetic messages, and explore the programmatic API.</p>
-              <div class="cta-row" style="justify-content: flex-start;">
-                <button id="open-chat" class="primaryButton" type="button">Open Launcher</button>
-                <button id="toggle-chat" class="secondaryButton" type="button">Toggle Launcher</button>
-                <select id="target-widget">
-                  <option value="inline">Inline Widget</option>
-                  <option value="launcher">Launcher Widget</option>
-                </select>
-                <button id="load-messages" class="secondaryButton" type="button">Load 1000 Messages</button>
-              </div>
-              <div class="code-example">
-                <pre><code>const launcherController = initAgentWidget({
-  target: "#launcher-root",
-  config: { /* ... */ }
-});
-
-// Open the widget
-launcherController.open();
-
-// Close the widget
-launcherController.close();
-
-// Toggle the widget
-launcherController.toggle();</code></pre>
-              </div>
-            </section>
-
-            <section class="card">
-              <h2 class="card-title">Event Stream Testing</h2>
-              <p>Test the event stream SDK methods, window events, and instance scoping.</p>
-
-              <h3>Controller Methods</h3>
-              <div class="cta-row" style="justify-content: flex-start;">
-                <select id="event-stream-target">
-                  <option value="inline">Inline Widget</option>
-                  <option value="launcher">Launcher Widget</option>
-                </select>
-                <button id="es-show" class="secondaryButton" type="button">Show Event Stream</button>
-                <button id="es-hide" class="secondaryButton" type="button">Hide Event Stream</button>
-                <button id="es-check" class="secondaryButton" type="button">Check Visibility</button>
-              </div>
-
-              <h3 style="margin-top: 16px;">Window Events</h3>
-              <div class="cta-row" style="justify-content: flex-start;">
-                <button id="es-win-show-all" class="secondaryButton" type="button">Show All (window)</button>
-                <button id="es-win-hide-all" class="secondaryButton" type="button">Hide All (window)</button>
-                <button id="es-win-show-inline" class="secondaryButton" type="button">Show Inline Only</button>
-                <button id="es-win-show-launcher" class="secondaryButton" type="button">Show Launcher Only</button>
-                <button id="es-win-show-wrong" class="secondaryButton" type="button">Show Wrong ID</button>
-              </div>
-
-              <h3 style="margin-top: 16px;">Event Listeners</h3>
-              <div class="cta-row" style="justify-content: flex-start;">
-                <button id="es-listen" class="secondaryButton" type="button">Register Listeners</button>
-              </div>
-
-              <div id="es-log" class="code-example" style="margin-top: 16px; max-height:150px; overflow-y:auto; display:none;">
-                <pre id="es-log-pre"></pre>
-              </div>
-            </section>
-          </div>
         </div>
       </details>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <div class="footer-brand">
+          <a href="https://runtype.com" target="_blank" rel="noopener">
+            <img src="/runtype-logo.svg" alt="Runtype" style="height: 16px; width: auto; opacity: 0.55;">
+          </a>
+          <span class="footer-tagline">Where AI products are built</span>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://www.npmjs.com/package/@runtypelabs/persona" target="_blank" rel="noopener">npm</a>
+          <a href="https://runtype.com" target="_blank" rel="noopener">Runtype</a>
+        </div>
+        <p class="footer-copy">&copy; 2025 Travrse, Inc.</p>
+      </footer>
+
     </main>
   </div>
 
-  <div id="launcher-root"></div>
+  <!-- Scroll reveal & copy buttons -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Scroll reveal
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.querySelectorAll('.reveal-el').forEach(function(el) {
+          el.style.opacity = '1';
+          el.style.transform = 'none';
+        });
+      } else {
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('revealed');
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+        document.querySelectorAll('.reveal-el').forEach(function(el) {
+          observer.observe(el);
+        });
+      }
+
+      // Quick start tabs
+      var quickStartTabs = Array.prototype.slice.call(document.querySelectorAll('[data-quick-start-tab]'));
+      var quickStartPanels = Array.prototype.slice.call(document.querySelectorAll('[data-quick-start-panel]'));
+
+      function activateQuickStartTab(name) {
+        quickStartTabs.forEach(function(tab) {
+          var isActive = tab.getAttribute('data-quick-start-tab') === name;
+          tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          tab.tabIndex = isActive ? 0 : -1;
+        });
+
+        quickStartPanels.forEach(function(panel) {
+          panel.hidden = panel.getAttribute('data-quick-start-panel') !== name;
+        });
+      }
+
+      quickStartTabs.forEach(function(tab, index) {
+        tab.addEventListener('click', function() {
+          activateQuickStartTab(tab.getAttribute('data-quick-start-tab'));
+        });
+
+        tab.addEventListener('keydown', function(event) {
+          if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+          event.preventDefault();
+          var direction = event.key === 'ArrowRight' ? 1 : -1;
+          var nextIndex = (index + direction + quickStartTabs.length) % quickStartTabs.length;
+          var nextTab = quickStartTabs[nextIndex];
+          activateQuickStartTab(nextTab.getAttribute('data-quick-start-tab'));
+          nextTab.focus();
+        });
+      });
+
+      if (quickStartTabs.length && quickStartPanels.length) {
+        activateQuickStartTab('runtype');
+      }
+
+      // Copy helper
+      document.querySelectorAll('[data-copy-text]').forEach(function(trigger) {
+        trigger.addEventListener('click', function() {
+          var copyText = trigger.getAttribute('data-copy-text');
+          if (!copyText) return;
+
+          navigator.clipboard.writeText(copyText).then(function() {
+            var label = trigger.querySelector('[data-copy-label]');
+            var defaultText = trigger.getAttribute('data-copy-default') || 'Copy';
+            var successText = trigger.getAttribute('data-copy-success') || 'Copied!';
+            if (label) {
+              label.textContent = successText;
+              setTimeout(function() { label.textContent = defaultText; }, 2000);
+            }
+          });
+        });
+      });
+    });
+  </script>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

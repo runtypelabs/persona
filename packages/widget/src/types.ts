@@ -884,7 +884,11 @@ export type AgentWidgetClearChatConfig = {
 
 export type AgentWidgetStatusIndicatorConfig = {
   visible?: boolean;
+  /** Text alignment. Default: 'right'. */
+  align?: 'left' | 'center' | 'right';
   idleText?: string;
+  /** URL to open in a new tab when the idle text is clicked. */
+  idleLink?: string;
   connectingText?: string;
   connectedText?: string;
   errorText?: string;

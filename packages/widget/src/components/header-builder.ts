@@ -92,7 +92,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     }
   }
 
-  const headerCopy = createElement("div", "persona-flex persona-flex-col");
+  const headerCopy = createElement("div", "persona-flex persona-flex-col persona-flex-1 persona-min-w-0");
   const title = createElement("span", "persona-text-base persona-font-semibold");
   title.style.color = HEADER_THEME_CSS.titleColor;
   title.textContent = config?.launcher?.title ?? "Chat Assistant";

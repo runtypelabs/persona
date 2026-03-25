@@ -604,6 +604,23 @@ export const createAgentExperience = (
     return statusCopy[status];
   };
 
+  /** Update statusText element, rendering a link for idle status when idleLink is configured. */
+  function applyStatusToElement(el: HTMLElement, text: string, statusCfg: typeof statusConfig, status: string): void {
+    if (status === "idle" && statusCfg.idleLink) {
+      el.textContent = "";
+      const link = document.createElement("a");
+      link.href = statusCfg.idleLink;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = text;
+      link.style.color = "inherit";
+      link.style.textDecoration = "none";
+      el.appendChild(link);
+    } else {
+      el.textContent = text;
+    }
+  }
+
   const { wrapper, panel } = createWrapper(config);
   const panelElements = buildPanel(config, launcherEnabled);
   let {
@@ -2670,14 +2687,14 @@ export const createAgentExperience = (
     },
     onStatusChanged(status) {
       const currentStatusConfig = config.statusIndicator ?? {};
-      const getCurrentStatusText = (status: AgentWidgetSessionStatus): string => {
-        if (status === "idle") return currentStatusConfig.idleText ?? statusCopy.idle;
-        if (status === "connecting") return currentStatusConfig.connectingText ?? statusCopy.connecting;
-        if (status === "connected") return currentStatusConfig.connectedText ?? statusCopy.connected;
-        if (status === "error") return currentStatusConfig.errorText ?? statusCopy.error;
-        return statusCopy[status];
+      const getCurrentStatusText = (s: AgentWidgetSessionStatus): string => {
+        if (s === "idle") return currentStatusConfig.idleText ?? statusCopy.idle;
+        if (s === "connecting") return currentStatusConfig.connectingText ?? statusCopy.connecting;
+        if (s === "connected") return currentStatusConfig.connectedText ?? statusCopy.connected;
+        if (s === "error") return currentStatusConfig.errorText ?? statusCopy.error;
+        return statusCopy[s];
       };
-      statusText.textContent = getCurrentStatusText(status);
+      applyStatusToElement(statusText, getCurrentStatusText(status), currentStatusConfig, status);
     },
     onStreamingChanged(streaming) {
       isStreaming = streaming;
@@ -4815,14 +4832,14 @@ export const createAgentExperience = (
       // Update status text if status is currently set
       if (session) {
         const currentStatus = session.getStatus();
-        const getCurrentStatusText = (status: AgentWidgetSessionStatus): string => {
-          if (status === "idle") return statusIndicatorConfig.idleText ?? statusCopy.idle;
-          if (status === "connecting") return statusIndicatorConfig.connectingText ?? statusCopy.connecting;
-          if (status === "connected") return statusIndicatorConfig.connectedText ?? statusCopy.connected;
-          if (status === "error") return statusIndicatorConfig.errorText ?? statusCopy.error;
-          return statusCopy[status];
+        const getCurrentStatusText = (s: AgentWidgetSessionStatus): string => {
+          if (s === "idle") return statusIndicatorConfig.idleText ?? statusCopy.idle;
+          if (s === "connecting") return statusIndicatorConfig.connectingText ?? statusCopy.connecting;
+          if (s === "connected") return statusIndicatorConfig.connectedText ?? statusCopy.connected;
+          if (s === "error") return statusIndicatorConfig.errorText ?? statusCopy.error;
+          return statusCopy[s];
         };
-        statusText.textContent = getCurrentStatusText(currentStatus);
+        applyStatusToElement(statusText, getCurrentStatusText(currentStatus), statusIndicatorConfig, currentStatus);
       }
     },
     open() {

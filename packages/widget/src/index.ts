@@ -194,6 +194,14 @@ export type {
   ComboButtonHandle
 } from "./utils/buttons";
 
+// Demo carousel exports
+export { createDemoCarousel } from "./components/demo-carousel";
+export type {
+  DemoCarouselItem,
+  DemoCarouselOptions,
+  DemoCarouselHandle
+} from "./components/demo-carousel";
+
 // Theme system exports
 export {
   createTheme,

@@ -480,17 +480,33 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   actionsRow.append(leftActions, rightActions);
   composerForm.append(actionsRow);
 
+  // Apply status indicator config
+  const statusConfig = config?.statusIndicator ?? {};
+  const alignClass =
+    statusConfig.align === "left" ? "persona-text-left"
+    : statusConfig.align === "center" ? "persona-text-center"
+    : "persona-text-right";
   const statusText = createElement(
     "div",
-    "persona-mt-2 persona-text-right persona-text-xs persona-text-persona-muted"
+    `persona-mt-2 ${alignClass} persona-text-xs persona-text-persona-muted`
   );
   statusText.setAttribute("data-persona-composer-status", "");
 
-  // Apply status indicator config
-  const statusConfig = config?.statusIndicator ?? {};
   const isVisible = statusConfig.visible ?? true;
   statusText.style.display = isVisible ? "" : "none";
-  statusText.textContent = statusConfig.idleText ?? "Online";
+  const idleLabel = statusConfig.idleText ?? "Online";
+  if (statusConfig.idleLink) {
+    const link = createElement("a");
+    link.href = statusConfig.idleLink;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = idleLabel;
+    link.style.color = "inherit";
+    link.style.textDecoration = "none";
+    statusText.appendChild(link);
+  } else {
+    statusText.textContent = idleLabel;
+  }
 
   footer.append(suggestions, composerForm, statusText);
 
