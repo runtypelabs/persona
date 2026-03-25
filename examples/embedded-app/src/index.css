@@ -301,7 +301,7 @@ code {
  * the header close control. With `width`/`height` 32px and `box-sizing: border-box`,
  * horizontal padding 18+18px leaves no room for the SVG.
  */
-.page button:not([data-persona-root] *),
+.page button:not([data-persona-root] *):not(.quick-start-tab),
 .page select:not([data-persona-root] *),
 .page .btn:not([data-persona-root] *) {
   font-family: var(--font-sans);
@@ -515,6 +515,71 @@ code {
   gap: 18px;
 }
 
+.quick-start-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(246, 247, 251, 0.9);
+}
+
+.quick-start-tab {
+  position: relative;
+  min-height: 34px;
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+
+.quick-start-tab:hover {
+  color: var(--foreground);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.quick-start-tab[aria-selected='true'] {
+  background: #ffffff;
+  color: var(--foreground);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.quick-start-tab:focus-visible {
+  box-shadow:
+    0 0 0 2px rgba(91, 46, 255, 0.4),
+    0 0 0 4px rgba(91, 46, 255, 0.12);
+}
+
+.quick-start-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.quick-start-panel[hidden] {
+  display: none;
+}
+
+.quick-start-intro {
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(91, 46, 255, 0.12);
+  background: rgba(91, 46, 255, 0.05);
+  color: var(--secondary-text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .quick-start-steps {
   display: flex;
   flex-direction: column;
@@ -570,6 +635,14 @@ code {
 .quick-start-step-copy p {
   margin: 0;
   font-size: 14px;
+}
+
+.quick-start-step-note,
+.quick-start-footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .quick-start-install {
@@ -1009,6 +1082,15 @@ code {
 
   .quick-start-step {
     padding: 14px;
+  }
+
+  .quick-start-tabs {
+    width: 100%;
+    border-radius: 10px;
+  }
+
+  .quick-start-tab {
+    flex: 1;
   }
 
   .quick-start-step-meta {
