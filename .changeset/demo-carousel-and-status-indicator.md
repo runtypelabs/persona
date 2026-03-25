@@ -7,3 +7,5 @@ Add `createDemoCarousel()` — a reusable, exportable component that renders dem
 Add `statusIndicator.align` option (`'left' | 'center' | 'right'`) to control status text alignment without custom CSS.
 
 Add `statusIndicator.idleLink` option to make the idle status text a clickable link that opens in a new tab.
+
+Fix header layout so trailing action buttons (event stream toggle, clear chat, close) are pushed to the right edge instead of clustering after the title.
