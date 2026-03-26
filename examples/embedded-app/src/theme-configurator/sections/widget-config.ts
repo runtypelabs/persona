@@ -112,6 +112,7 @@ const copySectionDef: SectionDef = {
   title: 'Welcome & Copy',
   collapsed: false,
   fields: [
+    { id: 'copy-show-welcome-card', label: 'Show Welcome Card', type: 'toggle', path: 'copy.showWelcomeCard', defaultValue: true },
     { id: 'copy-welcome-title', label: 'Welcome Title', type: 'text', path: 'copy.welcomeTitle', defaultValue: 'Hello 👋' },
     { id: 'copy-welcome-subtitle', label: 'Welcome Subtitle', type: 'text', path: 'copy.welcomeSubtitle', defaultValue: 'Ask anything about your account or products.' },
     { id: 'copy-placeholder', label: 'Input Placeholder', type: 'text', path: 'copy.inputPlaceholder', defaultValue: 'Type your message…' },
@@ -137,6 +138,17 @@ const suggestionsSectionDef: SectionDef = {
 };
 
 // ─── Sub-group: Layout ───────────────────────────────────────────
+
+const generalLayoutSectionDef: SectionDef = {
+  id: 'general-layout',
+  title: 'General',
+  collapsed: true,
+  fields: [
+    { id: 'layout-show-header', label: 'Show Header', type: 'toggle', path: 'layout.showHeader', defaultValue: true },
+    { id: 'layout-show-footer', label: 'Show Footer', type: 'toggle', path: 'layout.showFooter', defaultValue: true },
+    { id: 'layout-content-max-width', label: 'Content Max Width', description: 'Max width for messages + composer (e.g. "720px", "90ch")', type: 'text', path: 'layout.contentMaxWidth', defaultValue: '' },
+  ],
+};
 
 const headerLayoutSectionDef: SectionDef = {
   id: 'header-layout',
@@ -186,7 +198,7 @@ const messageActionsSectionDef: SectionDef = {
   title: 'Message Actions',
   collapsed: true,
   fields: [
-    { id: 'msg-actions-enabled', label: 'Enabled', type: 'toggle', path: 'messageActions.enabled', defaultValue: false },
+    { id: 'msg-actions-enabled', label: 'Enabled', type: 'toggle', path: 'messageActions.enabled', defaultValue: true },
     { id: 'msg-actions-copy', label: 'Show Copy', type: 'toggle', path: 'messageActions.showCopy', defaultValue: true },
     { id: 'msg-actions-upvote', label: 'Show Upvote', type: 'toggle', path: 'messageActions.showUpvote', defaultValue: true },
     { id: 'msg-actions-downvote', label: 'Show Downvote', type: 'toggle', path: 'messageActions.showDownvote', defaultValue: true },
@@ -194,7 +206,7 @@ const messageActionsSectionDef: SectionDef = {
       { value: 'hover', label: 'On Hover' },
       { value: 'always', label: 'Always Visible' },
     ] },
-    { id: 'msg-actions-align', label: 'Alignment', type: 'select', path: 'messageActions.align', defaultValue: 'left', options: [
+    { id: 'msg-actions-align', label: 'Alignment', type: 'select', path: 'messageActions.align', defaultValue: 'right', options: [
       { value: 'left', label: 'Left' },
       { value: 'right', label: 'Right' },
     ] },
@@ -222,6 +234,13 @@ const launcherConfigSectionDef: SectionDef = {
       { value: 'left', label: 'Left' },
     ] },
     { id: 'launch-dock-width', label: 'Dock Width', type: 'text', path: 'launcher.dock.width', defaultValue: '420px' },
+    { id: 'launch-dock-animate', label: 'Dock Animate', type: 'toggle', path: 'launcher.dock.animate', defaultValue: true },
+    { id: 'launch-dock-reveal', label: 'Dock Reveal', type: 'select', path: 'launcher.dock.reveal', defaultValue: 'resize', options: [
+      { value: 'resize', label: 'Resize' },
+      { value: 'overlay', label: 'Overlay' },
+      { value: 'push', label: 'Push' },
+      { value: 'emerge', label: 'Emerge' },
+    ] },
     { id: 'launch-title', label: 'Title', type: 'text', path: 'launcher.title', defaultValue: 'Chat Assistant' },
     { id: 'launch-subtitle', label: 'Subtitle', type: 'text', path: 'launcher.subtitle', defaultValue: 'Here to help you get answers fast' },
     { id: 'launch-text-hidden', label: 'Hide Text', type: 'toggle', path: 'launcher.textHidden', defaultValue: false },
@@ -229,6 +248,10 @@ const launcherConfigSectionDef: SectionDef = {
     { id: 'launch-icon-name', label: 'Agent Icon Name (Lucide)', type: 'text', path: 'launcher.agentIconName', defaultValue: '' },
     { id: 'launch-icon-hidden', label: 'Hide Agent Icon', type: 'toggle', path: 'launcher.agentIconHidden', defaultValue: false },
     { id: 'launch-icon-size', label: 'Agent Icon Size', type: 'slider', path: 'launcher.agentIconSize', defaultValue: '40px', slider: { min: 16, max: 72, step: 2 } },
+    { id: 'launch-icon-url', label: 'Icon Image URL', description: 'Custom image URL (overrides emoji/lucide)', type: 'text', path: 'launcher.iconUrl', defaultValue: '' },
+    { id: 'launch-header-icon-name', label: 'Header Icon Name (Lucide)', type: 'text', path: 'launcher.headerIconName', defaultValue: '' },
+    { id: 'launch-header-icon-size', label: 'Header Icon Size', type: 'slider', path: 'launcher.headerIconSize', defaultValue: '48px', slider: { min: 24, max: 80, step: 2 } },
+    { id: 'launch-header-icon-hidden', label: 'Hide Header Icon', type: 'toggle', path: 'launcher.headerIconHidden', defaultValue: false },
     { id: 'launch-position', label: 'Position', type: 'select', path: 'launcher.position', defaultValue: 'bottom-right', options: [
       { value: 'bottom-right', label: 'Bottom Right' },
       { value: 'bottom-left', label: 'Bottom Left' },
@@ -240,6 +263,16 @@ const launcherConfigSectionDef: SectionDef = {
     { id: 'launch-full-height', label: 'Full Height', type: 'toggle', path: 'launcher.fullHeight', defaultValue: false },
     { id: 'launch-sidebar', label: 'Sidebar Mode', type: 'toggle', path: 'launcher.sidebarMode', defaultValue: false },
     { id: 'launch-sidebar-width', label: 'Sidebar Width', type: 'text', path: 'launcher.sidebarWidth', defaultValue: '420px' },
+    { id: 'launch-mobile-fullscreen', label: 'Mobile Fullscreen', description: 'Fullscreen on mobile devices', type: 'toggle', path: 'launcher.mobileFullscreen', defaultValue: true },
+    { id: 'launch-mobile-breakpoint', label: 'Mobile Breakpoint (px)', type: 'text', path: 'launcher.mobileBreakpoint', defaultValue: 640,
+      formatValue: (v: unknown) => String(v ?? 640),
+      parseValue: (v: string) => Number(v),
+    },
+    { id: 'launch-height-offset', label: 'Height Offset (px)', type: 'text', path: 'launcher.heightOffset', defaultValue: 0,
+      formatValue: (v: unknown) => String(v ?? 0),
+      parseValue: (v: string) => Number(v),
+    },
+    { id: 'launch-collapsed-max-width', label: 'Collapsed Max Width', description: 'Max width of launcher pill when closed', type: 'text', path: 'launcher.collapsedMaxWidth', defaultValue: '' },
     { id: 'launch-cta-text', label: 'CTA Icon Text', type: 'text', path: 'launcher.callToActionIconText', defaultValue: '↗' },
     { id: 'launch-cta-name', label: 'CTA Icon Name', type: 'text', path: 'launcher.callToActionIconName', defaultValue: '' },
     { id: 'launch-cta-hidden', label: 'Hide CTA Icon', type: 'toggle', path: 'launcher.callToActionIconHidden', defaultValue: false },
@@ -309,8 +342,14 @@ const statusIndicatorSectionDef: SectionDef = {
   title: 'Status Indicator',
   collapsed: true,
   fields: [
-    { id: 'status-visible', label: 'Visible', type: 'toggle', path: 'statusIndicator.visible', defaultValue: false },
+    { id: 'status-visible', label: 'Visible', type: 'toggle', path: 'statusIndicator.visible', defaultValue: true },
+    { id: 'status-align', label: 'Alignment', type: 'select', path: 'statusIndicator.align', defaultValue: 'right', options: [
+      { value: 'left', label: 'Left' },
+      { value: 'center', label: 'Center' },
+      { value: 'right', label: 'Right' },
+    ] },
     { id: 'status-idle-text', label: 'Idle Text', type: 'text', path: 'statusIndicator.idleText', defaultValue: 'Online' },
+    { id: 'status-idle-link', label: 'Idle Link', type: 'text', path: 'statusIndicator.idleLink', defaultValue: '' },
     { id: 'status-connecting-text', label: 'Connecting Text', type: 'text', path: 'statusIndicator.connectingText', defaultValue: 'Connecting…' },
     { id: 'status-connected-text', label: 'Connected Text', type: 'text', path: 'statusIndicator.connectedText', defaultValue: 'Streaming…' },
     { id: 'status-error-text', label: 'Error Text', type: 'text', path: 'statusIndicator.errorText', defaultValue: 'Offline' },
@@ -325,7 +364,7 @@ const featuresSectionDef: SectionDef = {
   collapsed: true,
   fields: [
     { id: 'feat-voice', label: 'Voice Recognition', description: 'Enable voice input', type: 'toggle', path: 'voiceRecognition.enabled', defaultValue: false },
-    { id: 'feat-voice-auto-send', label: 'Voice Auto Send', description: 'Auto-send after speech', type: 'toggle', path: 'voiceRecognition.autoSend', defaultValue: true },
+    { id: 'feat-auto-focus', label: 'Auto Focus Input', description: 'Focus input after panel opens', type: 'toggle', path: 'autoFocusInput', defaultValue: false },
   ],
 };
 
@@ -335,14 +374,18 @@ const attachmentsSectionDef: SectionDef = {
   collapsed: true,
   fields: [
     { id: 'attach-enabled', label: 'Enabled', type: 'toggle', path: 'attachments.enabled', defaultValue: false },
-    { id: 'attach-max-files', label: 'Max Files', type: 'select', path: 'attachments.maxFiles', defaultValue: '4', options: [
-      { value: '1', label: '1' },
-      { value: '2', label: '2' },
-      { value: '4', label: '4' },
-      { value: '6', label: '6' },
-      { value: '8', label: '8' },
-      { value: '10', label: '10' },
-    ] },
+    { id: 'attach-max-files', label: 'Max Files', type: 'select', path: 'attachments.maxFiles', defaultValue: 4,
+      options: [
+        { value: '1', label: '1' },
+        { value: '2', label: '2' },
+        { value: '4', label: '4' },
+        { value: '6', label: '6' },
+        { value: '8', label: '8' },
+        { value: '10', label: '10' },
+      ],
+      formatValue: (v: unknown) => String(v ?? 4),
+      parseValue: (v: string) => Number(v),
+    },
     {
       id: 'attach-max-size',
       label: 'Max File Size (MB)',
@@ -460,7 +503,7 @@ interface SubGroup {
 
 const SUB_GROUPS: SubGroup[] = [
   { label: 'Content', sections: [copySectionDef, suggestionsSectionDef] },
-  { label: 'Layout', sections: [headerLayoutSectionDef, messagesLayoutSectionDef, messageActionsSectionDef] },
+  { label: 'Layout', sections: [generalLayoutSectionDef, headerLayoutSectionDef, messagesLayoutSectionDef, messageActionsSectionDef] },
   { label: 'Widget', sections: [launcherConfigSectionDef, sendButtonSectionDef, closeButtonSectionDef, clearChatSectionDef, statusIndicatorSectionDef] },
   { label: 'Features', sections: [featuresSectionDef, attachmentsSectionDef, artifactsSectionDef] },
   { label: 'Developer', sections: [apiIntegrationSectionDef, debugSectionDef, markdownSectionDef] },

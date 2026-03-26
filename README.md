@@ -4,9 +4,9 @@
 [![Live demo](https://img.shields.io/badge/live_demo-persona--chat.dev-0d9488?style=flat)](https://persona-chat.dev)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/runtypelabs/persona)
 
-A themeable, pluggable streaming AI chat widget for websites — built in plain JS with zero framework dependencies.
+A themeable, pluggable AI chat widget for websites — built in Typescript with zero framework dependencies. It renders using Vanilla JS.
 
-Persona gives you a drop-in UI for your AI assistant that works on any site. It ships with support for streaming responses, voice I/O, multi-modal content, tool call visualization, artifact rendering, and a plugin system so you can customize every layer of the UI.
+Persona gives you a drop-in UI for your AI assistant that works on basically any site or product on the web. It ships with support for streaming responses, voice I/O, multi-modal content, tool call visualization, artifact rendering, and a plugin system so you can customize every layer of the UI.
 
 Persona works with any SSE-capable backend. It's pre-integrated with [Runtype](https://runtype.com) out of the box, so you can go from install to live assistant with zero configuration.
 

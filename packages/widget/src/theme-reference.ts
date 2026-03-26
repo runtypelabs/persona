@@ -204,24 +204,67 @@ export const THEME_TOKEN_DOCS = {
     toolCall: {
       description: 'Tool call display styling.',
       properties:
-        'backgroundColor, borderColor, borderWidth, borderRadius, headerBackgroundColor, headerTextColor, contentBackgroundColor, contentTextColor, codeBlockBackgroundColor, codeBlockBorderColor, codeBlockTextColor, toggleTextColor, labelTextColor.',
+        'shadow, backgroundColor, borderColor, borderWidth, borderRadius, headerBackgroundColor, headerTextColor, headerPaddingX, headerPaddingY, contentBackgroundColor, contentTextColor, contentPaddingX, contentPaddingY, codeBlockBackgroundColor, codeBlockBorderColor, codeBlockTextColor, toggleTextColor, labelTextColor.',
+    },
+    approval: {
+      description:
+        'Tool approval bubble styling and behavior. Set to false to disable.',
+      properties:
+        'backgroundColor, borderColor, titleColor, descriptionColor, approveButtonColor, approveButtonTextColor, denyButtonColor, denyButtonTextColor, parameterBackgroundColor, parameterTextColor, title, approveLabel, denyLabel.',
     },
     copy: {
       description: 'Widget text content.',
       properties:
-        'welcomeTitle, welcomeSubtitle, inputPlaceholder, sendButtonLabel.',
+        'showWelcomeCard (boolean), welcomeTitle, welcomeSubtitle, inputPlaceholder, sendButtonLabel.',
     },
     voiceRecognition: {
       description: 'Voice input configuration.',
       properties: 'enabled, pauseDuration, iconColor, backgroundColor.',
     },
+    textToSpeech: {
+      description: 'Text-to-speech for assistant messages.',
+      properties:
+        'enabled, provider ("browser" | "runtype"), browserFallback, voice, rate, pitch.',
+    },
     suggestionChips:
       'string[] — Suggested prompts shown to the user.',
+    messageActions: {
+      description: 'Message action buttons (copy, upvote, downvote).',
+      properties:
+        'enabled, showCopy, showUpvote, showDownvote, visibility ("hover" | "always"), align ("left" | "center" | "right"), layout ("pill-inside" | "row-inside").',
+    },
+    attachments: {
+      description: 'File attachment configuration.',
+      properties:
+        'enabled, allowedTypes (string[]), maxFileSize (bytes), maxFiles, buttonIconName, buttonTooltipText.',
+    },
+    markdown: {
+      description: 'Markdown rendering configuration.',
+      properties:
+        'options (gfm, breaks, headerIds, headerPrefix, pedantic, mangle, silent), disableDefaultStyles.',
+    },
     layout: {
       description: 'Layout configuration.',
-      header: '"default" | "minimal". Options: showIcon, showTitle, showSubtitle, showCloseButton.',
+      showHeader: 'boolean — show/hide the header section entirely.',
+      showFooter: 'boolean — show/hide the footer/composer section entirely.',
+      contentMaxWidth:
+        'CSS width value for centering content (e.g. "720px", "90ch").',
+      header:
+        '"default" | "minimal". Options: showIcon, showTitle, showSubtitle, showCloseButton, showClearChat.',
       messages:
-        '"bubble" | "flat" | "minimal". Avatar and timestamp options available.',
+        '"bubble" | "flat" | "minimal". Options: groupConsecutive, avatar (show, position, userAvatar, assistantAvatar), timestamp (show, position).',
+    },
+    statusIndicator: {
+      description: 'Status text shown below the composer.',
+      properties: {
+        visible: 'Show/hide the status indicator.',
+        align: '"left" | "center" | "right" — text alignment (default: "right").',
+        idleText: 'Text shown when idle (default: "Online").',
+        idleLink: 'URL to open when idle text is clicked (wraps text in a link).',
+        connectingText: 'Text shown while connecting (default: "Connecting…").',
+        connectedText: 'Text shown while streaming (default: "Streaming…").',
+        errorText: 'Text shown on error (default: "Offline").',
+      },
     },
     features: {
       description: 'Feature flags.',
