@@ -310,7 +310,13 @@ const statusIndicatorSectionDef: SectionDef = {
   collapsed: true,
   fields: [
     { id: 'status-visible', label: 'Visible', type: 'toggle', path: 'statusIndicator.visible', defaultValue: false },
+    { id: 'status-align', label: 'Alignment', type: 'select', path: 'statusIndicator.align', defaultValue: 'right', options: [
+      { value: 'left', label: 'Left' },
+      { value: 'center', label: 'Center' },
+      { value: 'right', label: 'Right' },
+    ] },
     { id: 'status-idle-text', label: 'Idle Text', type: 'text', path: 'statusIndicator.idleText', defaultValue: 'Online' },
+    { id: 'status-idle-link', label: 'Idle Link', type: 'text', path: 'statusIndicator.idleLink', defaultValue: '' },
     { id: 'status-connecting-text', label: 'Connecting Text', type: 'text', path: 'statusIndicator.connectingText', defaultValue: 'Connecting…' },
     { id: 'status-connected-text', label: 'Connected Text', type: 'text', path: 'statusIndicator.connectedText', defaultValue: 'Streaming…' },
     { id: 'status-error-text', label: 'Error Text', type: 'text', path: 'statusIndicator.errorText', defaultValue: 'Offline' },
