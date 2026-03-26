@@ -2624,6 +2624,20 @@ export const createAgentExperience = (
       "Ask anything about your account or products.";
     textarea.placeholder = config.copy?.inputPlaceholder ?? "How can I help...";
 
+    // Toggle welcome card visibility
+    const introCard = body.querySelector("[data-persona-intro-card]") as HTMLElement | null;
+    if (introCard) {
+      const showCard = config.copy?.showWelcomeCard !== false;
+      introCard.style.display = showCard ? "" : "none";
+      if (showCard) {
+        body.classList.remove("persona-gap-3");
+        body.classList.add("persona-gap-6");
+      } else {
+        body.classList.remove("persona-gap-6");
+        body.classList.add("persona-gap-3");
+      }
+    }
+
     // Only update send button text if NOT using icon mode
     const useIcon = config.sendButton?.useIcon ?? false;
     if (!useIcon) {
@@ -4824,6 +4838,30 @@ export const createAgentExperience = (
         tooltip.style.display = "none";
       }
       
+      // Update contentMaxWidth on messages wrapper and composer
+      const updatedContentMaxWidth = config.layout?.contentMaxWidth;
+      if (updatedContentMaxWidth) {
+        messagesWrapper.style.maxWidth = updatedContentMaxWidth;
+        messagesWrapper.style.marginLeft = "auto";
+        messagesWrapper.style.marginRight = "auto";
+        messagesWrapper.style.width = "100%";
+        if (composerForm) {
+          composerForm.style.maxWidth = updatedContentMaxWidth;
+          composerForm.style.marginLeft = "auto";
+          composerForm.style.marginRight = "auto";
+        }
+      } else {
+        messagesWrapper.style.maxWidth = "";
+        messagesWrapper.style.marginLeft = "";
+        messagesWrapper.style.marginRight = "";
+        messagesWrapper.style.width = "";
+        if (composerForm) {
+          composerForm.style.maxWidth = "";
+          composerForm.style.marginLeft = "";
+          composerForm.style.marginRight = "";
+        }
+      }
+
       // Update status indicator visibility and text
       const statusIndicatorConfig = config.statusIndicator ?? {};
       const isVisible = statusIndicatorConfig.visible ?? true;

@@ -164,14 +164,14 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     messagesWrapper.style.width = "100%";
   }
 
+  introCard.setAttribute("data-persona-intro-card", "");
   const showWelcomeCard = config?.copy?.showWelcomeCard !== false;
   if (!showWelcomeCard) {
+    introCard.style.display = "none";
     body.classList.remove("persona-gap-6");
     body.classList.add("persona-gap-3");
-    body.append(messagesWrapper);
-  } else {
-    body.append(introCard, messagesWrapper);
   }
+  body.append(introCard, messagesWrapper);
 
   // Build composer/footer using extracted builder
   const composerElements: ComposerElements = buildComposer({ config });
