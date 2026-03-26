@@ -223,6 +223,18 @@ export const THEME_TOKEN_DOCS = {
       messages:
         '"bubble" | "flat" | "minimal". Avatar and timestamp options available.',
     },
+    statusIndicator: {
+      description: 'Status text shown below the composer.',
+      properties: {
+        visible: 'Show/hide the status indicator.',
+        align: '"left" | "center" | "right" — text alignment (default: "right").',
+        idleText: 'Text shown when idle (default: "Online").',
+        idleLink: 'URL to open when idle text is clicked (wraps text in a link).',
+        connectingText: 'Text shown while connecting (default: "Connecting…").',
+        connectedText: 'Text shown while streaming (default: "Streaming…").',
+        errorText: 'Text shown on error (default: "Offline").',
+      },
+    },
     features: {
       description: 'Feature flags.',
       properties:
