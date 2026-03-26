@@ -1,5 +1,13 @@
 # @runtypelabs/persona
 
+## 3.5.0
+
+### Minor Changes
+
+- 5dc0c0a: Add runtime update support for `statusIndicator.align`, `layout.contentMaxWidth`, and `copy.showWelcomeCard` so these properties update the widget preview dynamically without requiring a rebuild.
+
+  Expand theme reference documentation with `approval`, `textToSpeech`, `messageActions`, `attachments`, `markdown`, and expanded `toolCall` and `layout` entries.
+
 ## 3.4.0
 
 ### Minor Changes
