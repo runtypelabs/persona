@@ -12,6 +12,11 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./theme-reference": {
+      "types": "./dist/theme-reference.d.ts",
+      "import": "./dist/theme-reference.js",
+      "require": "./dist/theme-reference.cjs"
+    },
     "./widget.css": {
       "import": "./widget.css",
       "default": "./dist/widget.css"
@@ -23,7 +28,8 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer && pnpm run build:theme-ref",
+    "build:theme-ref": "tsup src/theme-reference.ts --format esm,cjs --minify --dts",
     "build:styles": "node -e \"const fs=require('fs');fs.mkdirSync('dist',{recursive:true});fs.copyFileSync('src/styles/widget.css','dist/widget.css');\"",
     "build:client": "tsup src/index.ts --format esm,cjs,iife --global-name AgentWidget --minify --sourcemap --splitting false --dts --loader \".css=text\"",
     "build:installer": "tsup src/install.ts --format iife --global-name SiteAgentInstaller --out-dir dist --minify --sourcemap --no-splitting",
