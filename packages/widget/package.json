@@ -17,6 +17,11 @@
       "import": "./dist/theme-reference.js",
       "require": "./dist/theme-reference.cjs"
     },
+    "./theme-editor": {
+      "types": "./dist/theme-editor.d.ts",
+      "import": "./dist/theme-editor.js",
+      "require": "./dist/theme-editor.cjs"
+    },
     "./widget.css": {
       "import": "./widget.css",
       "default": "./dist/widget.css"
@@ -28,7 +33,8 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer && pnpm run build:theme-ref",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer && pnpm run build:theme-ref && pnpm run build:theme-editor",
+    "build:theme-editor": "tsup src/theme-editor.ts --format esm,cjs --dts --out-dir dist --no-splitting",
     "build:theme-ref": "tsup src/theme-reference.ts --format esm,cjs --minify --dts",
     "build:styles": "node -e \"const fs=require('fs');fs.mkdirSync('dist',{recursive:true});fs.copyFileSync('src/styles/widget.css','dist/widget.css');\"",
     "build:client": "tsup src/index.ts --format esm,cjs,iife --global-name AgentWidget --minify --sourcemap --splitting false --dts --loader \".css=text\"",

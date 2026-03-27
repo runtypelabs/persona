@@ -533,6 +533,10 @@
   border-color: #f1f5f9;
 }
 
+.persona-border-persona-secondary {
+  border-color: var(--persona-secondary, #7c3aed);
+}
+
 .persona-border-persona-border {
   border-color: var(--persona-border, #f1f5f9);
 }
@@ -1209,7 +1213,7 @@
 }
 
 [data-persona-root] .persona-markdown-bubble a {
-  color: var(--persona-md-link-color, var(--persona-accent, #3b82f6));
+  color: var(--persona-md-link-color, var(--persona-secondary, #7c3aed));
   text-decoration: underline;
 }
 
@@ -1311,7 +1315,7 @@
 }
 
 [data-persona-root] .vanilla-message-assistant-bubble a {
-  color: var(--persona-md-link-color, var(--persona-accent, #3b82f6));
+  color: var(--persona-md-link-color, var(--persona-secondary, #7c3aed));
 }
 
 /* Markdown paragraph styles */

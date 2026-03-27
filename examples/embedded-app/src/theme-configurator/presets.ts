@@ -3,6 +3,7 @@
 import type { PersonaTheme } from '@runtypelabs/persona';
 import { createTheme } from '@runtypelabs/persona';
 import type { AgentWidgetConfig } from '@runtypelabs/persona';
+import { BUILT_IN_PRESETS as HEADLESS_PRESETS } from '@runtypelabs/persona/theme-editor';
 import * as state from './state';
 
 // ─── Built-in Presets ──────────────────────────────────────────────
@@ -17,7 +18,22 @@ export interface ThemePreset {
   builtIn: boolean;
 }
 
+/** Map headless presets to the local ThemePreset shape */
 export const BUILT_IN_PRESETS: ThemePreset[] = [
+  // Presets from headless core
+  ...HEADLESS_PRESETS.map(p => ({
+    id: p.id,
+    label: p.name,
+    description: p.description,
+    theme: p.theme as Partial<PersonaTheme>,
+    builtIn: true as const,
+  })),
+  // Legacy inline presets preserved below for backward compatibility
+  // (can be removed once all presets are migrated to headless core)
+] as ThemePreset[];
+
+/** @deprecated — these were the old inline preset definitions, now sourced from headless core */
+const _LEGACY_BUILT_IN_PRESETS: ThemePreset[] = [
   {
     id: 'default-light',
     label: 'Default Light',

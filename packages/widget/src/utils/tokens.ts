@@ -176,7 +176,7 @@ export const DEFAULT_PALETTE = {
 export const DEFAULT_SEMANTIC: SemanticTokens = {
   colors: {
     primary: 'palette.colors.primary.500',
-    secondary: 'palette.colors.gray.500',
+    secondary: 'palette.colors.secondary.500',
     accent: 'palette.colors.primary.600',
     surface: 'palette.colors.gray.50',
     background: 'palette.colors.gray.50',
@@ -226,7 +226,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     },
     secondary: {
       background: 'semantic.colors.surface',
-      foreground: 'semantic.colors.text',
+      foreground: 'semantic.colors.secondary',
       borderRadius: 'palette.radius.lg',
       padding: 'semantic.spacing.md',
     },

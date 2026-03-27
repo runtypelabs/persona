@@ -248,6 +248,10 @@ export default defineConfig({
   plugins: [serveWidgetDist(), previewEmbedCheck()],
   resolve: {
     alias: {
+      "@runtypelabs/persona/theme-editor": path.resolve(
+        __dirname,
+        "../../packages/widget/src/theme-editor"
+      ),
       "@runtypelabs/persona/widget.css": path.resolve(
         __dirname,
         "../../packages/widget/src/styles/widget.css"

@@ -264,6 +264,11 @@ function createBrandColorOnChange(baseOnChange: OnChangeCallback): OnChangeCallb
       updates['darkTheme.semantic.colors.interactive.hover'] = 'palette.colors.primary.300';
     }
 
+    if (family === 'secondary') {
+      updates['theme.semantic.colors.secondary'] = 'palette.colors.secondary.500';
+      updates['darkTheme.semantic.colors.secondary'] = 'palette.colors.secondary.400';
+    }
+
     if (family === 'accent') {
       updates['theme.semantic.colors.accent'] = 'palette.colors.accent.500';
       updates['darkTheme.semantic.colors.accent'] = 'palette.colors.accent.400';

@@ -1,91 +1,26 @@
-/** Field definition types for the declarative configurator system */
+/** Field definition types for the declarative configurator system.
+ *  Core types re-exported from @runtypelabs/persona/theme-editor;
+ *  DOM-specific types (ControlResult, SearchEntry) defined here.
+ */
 
-export type FieldType =
-  | 'color'
-  | 'slider'
-  | 'toggle'
-  | 'select'
-  | 'text'
-  | 'chip-list'
-  | 'color-scale'
-  | 'token-ref';
+// Re-export headless types that don't need `any` adjustment
+export type {
+  FieldType,
+  SectionPreset,
+  SliderOptions,
+  SelectOption,
+  ColorScaleOptions,
+  TokenRefOptions,
+} from '@runtypelabs/persona/theme-editor';
 
-export interface SliderOptions {
-  min: number;
-  max: number;
-  step: number;
-  unit?: 'px' | 'rem' | 'none';
-  /** Treat max value as 9999px (border-radius: full) */
-  isRadiusFull?: boolean;
-}
-
-export interface SelectOption {
-  value: string;
-  label: string;
-}
-
-export interface ColorScaleOptions {
-  /** Which palette color family (e.g., 'primary', 'gray') */
-  colorFamily: string;
-}
-
-export interface TokenRefOptions {
-  /** Token type to filter available references */
-  tokenType: 'color' | 'spacing' | 'radius' | 'shadow' | 'typography';
-  /** Available palette families to reference */
-  families?: string[];
-}
-
-export interface FieldDef {
-  id: string;
-  label: string;
-  description?: string;
-  type: FieldType;
-  /** Dot-path into the config/theme object */
-  path: string;
-  defaultValue?: any;
-  /** Slider-specific options */
-  slider?: SliderOptions;
-  /** Select-specific options */
-  options?: SelectOption[];
-  /** Color-scale-specific options */
-  colorScale?: ColorScaleOptions;
-  /** Token-ref-specific options */
-  tokenRef?: TokenRefOptions;
-  /** CSS property hint for value formatting */
-  cssProperty?: string;
-  /** Whether this is a theme path (vs config path) */
-  isThemePath?: boolean;
-  /** Convert stored value into a control-friendly value */
-  formatValue?: (value: any) => any;
-  /** Convert control input back into the stored value shape */
-  parseValue?: (value: any) => any;
-}
-
+// SectionDef and TabDef reference the local FieldDef (with `any`)
 export interface SectionDef {
   id: string;
   title: string;
   description?: string;
   fields: FieldDef[];
-  /** Whether the section starts collapsed */
   collapsed?: boolean;
-  /** Preset buttons for this section */
-  presets?: SectionPreset[];
-}
-
-export interface SectionPreset {
-  id: string;
-  label: string;
-  values: Record<string, any>;
-}
-
-export interface ControlResult {
-  element: HTMLElement;
-  getValue: () => any;
-  setValue: (value: any) => void;
-  destroy: () => void;
-  /** Field definition for search indexing */
-  fieldDef: FieldDef;
+  presets?: import('@runtypelabs/persona/theme-editor').SectionPreset[];
 }
 
 export interface TabDef {
@@ -95,10 +30,39 @@ export interface TabDef {
   sections: SectionDef[];
 }
 
+// FieldDef uses `any` here for backward compat with existing section files
+// (headless core uses `unknown` but the vanilla configurator uses `any`)
+export interface FieldDef {
+  id: string;
+  label: string;
+  description?: string;
+  type: import('@runtypelabs/persona/theme-editor').FieldType;
+  path: string;
+  defaultValue?: any;
+  slider?: import('@runtypelabs/persona/theme-editor').SliderOptions;
+  options?: import('@runtypelabs/persona/theme-editor').SelectOption[];
+  colorScale?: import('@runtypelabs/persona/theme-editor').ColorScaleOptions;
+  tokenRef?: import('@runtypelabs/persona/theme-editor').TokenRefOptions;
+  cssProperty?: string;
+  isThemePath?: boolean;
+  formatValue?: (value: any) => any;
+  parseValue?: (value: any) => any;
+}
+
 /** Callback for when a control value changes */
 export type OnChangeCallback = (path: string, value: any) => void;
 
-/** Search index entry */
+/** DOM-specific: result of rendering a control */
+export interface ControlResult {
+  element: HTMLElement;
+  getValue: () => any;
+  setValue: (value: any) => void;
+  destroy: () => void;
+  /** Field definition for search indexing */
+  fieldDef: import('@runtypelabs/persona/theme-editor').FieldDef;
+}
+
+/** DOM-specific: search index entry */
 export interface SearchEntry {
   fieldId: string;
   label: string;
