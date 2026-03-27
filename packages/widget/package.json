@@ -22,14 +22,10 @@
       "import": "./dist/theme-editor.js",
       "require": "./dist/theme-editor.cjs"
     },
-    "./widget.css": {
-      "import": "./widget.css",
-      "default": "./dist/widget.css"
-    }
+    "./widget.css": "./dist/widget.css"
   },
   "files": [
     "dist",
-    "widget.css",
     "src"
   ],
   "scripts": {

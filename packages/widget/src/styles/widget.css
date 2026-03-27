@@ -254,7 +254,7 @@
 }
 
 .persona-text-persona-call-to-action {
-  color: var(--persona-call-to-action, #ffffff);
+  color: var(--persona-call-to-action, var(--persona-text-inverse, #ffffff));
 }
 
 .persona-text-persona-muted {

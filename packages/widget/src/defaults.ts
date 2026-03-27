@@ -35,8 +35,8 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
     callToActionIconText: "",
     callToActionIconSize: "32px",
     callToActionIconPadding: "5px",
-    callToActionIconColor: "#000000",
-    callToActionIconBackgroundColor: "#ffffff",
+    callToActionIconColor: undefined,
+    callToActionIconBackgroundColor: undefined,
     // closeButtonColor / clearChat.iconColor omitted so theme.components.header.actionIconForeground applies.
     closeButtonBackgroundColor: "transparent",
     clearChat: {
