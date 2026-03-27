@@ -1247,6 +1247,8 @@ export type AgentWidgetSSEEventResult = {
   done?: boolean;
   /** Error message if an error occurred */
   error?: string;
+  /** Text segment identity — when this changes, a new assistant message bubble is created */
+  partId?: string;
 } | null;
 
 /**
@@ -2843,6 +2845,12 @@ export type AgentWidgetMessage = {
    * }
    */
   llmContent?: string;
+  /**
+   * Text segment identity for chronological ordering.
+   * When present, identifies which text segment this message represents
+   * (e.g., "text_0", "text_1") for messages split at tool boundaries.
+   */
+  partId?: string;
   /**
    * Metadata for messages created during agent loop execution.
    * Contains execution context like iteration number and turn ID.
