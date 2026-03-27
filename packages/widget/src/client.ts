@@ -881,7 +881,8 @@ export class AgentWidgetClient {
     onEvent: SSEHandler,
     assistantMessageRef: { current: AgentWidgetMessage | null },
     emitMessage: (msg: AgentWidgetMessage) => void,
-    nextSequence: () => number
+    nextSequence: () => number,
+    partIdState: { current: string | null }
   ): Promise<boolean> {
     if (!this.parseSSEEvent) return false;
 
@@ -889,8 +890,7 @@ export class AgentWidgetClient {
       const result = await this.parseSSEEvent(payload);
       if (result === null) return false; // Event should be ignored
 
-      const ensureAssistant = () => {
-        if (assistantMessageRef.current) return assistantMessageRef.current;
+      const createNewAssistant = (partId?: string): AgentWidgetMessage => {
         const msg: AgentWidgetMessage = {
           id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
           role: "assistant",
@@ -898,15 +898,42 @@ export class AgentWidgetClient {
           createdAt: new Date().toISOString(),
           streaming: true,
           variant: "assistant",
-          sequence: nextSequence()
+          sequence: nextSequence(),
+          ...(partId !== undefined && { partId })
         };
         assistantMessageRef.current = msg;
         emitMessage(msg);
         return msg;
       };
 
+      const ensureAssistant = (partId?: string) => {
+        if (assistantMessageRef.current) return assistantMessageRef.current;
+        return createNewAssistant(partId);
+      };
+
       if (result.text !== undefined) {
-        const assistant = ensureAssistant();
+        // partId-based message segmentation: when partId changes, seal current
+        // message and start a new one for chronological tool/text interleaving
+        if (result.partId !== undefined && partIdState.current !== null && result.partId !== partIdState.current) {
+          // Seal the current assistant message
+          if (assistantMessageRef.current) {
+            assistantMessageRef.current.streaming = false;
+            emitMessage(assistantMessageRef.current);
+          }
+          // Create a new assistant message for the new text segment
+          createNewAssistant(result.partId);
+        }
+
+        // Update partId tracking (only when partId is provided — backward compatible)
+        if (result.partId !== undefined) {
+          partIdState.current = result.partId;
+        }
+
+        const assistant = ensureAssistant(result.partId);
+        // Tag the message with partId if present and not already set
+        if (result.partId !== undefined && !assistant.partId) {
+          assistant.partId = result.partId;
+        }
         assistant.content += result.text;
         emitMessage(assistant);
       }
@@ -916,10 +943,12 @@ export class AgentWidgetClient {
           assistantMessageRef.current.streaming = false;
           emitMessage(assistantMessageRef.current);
         }
+        partIdState.current = null;
         onEvent({ type: "status", status: "idle" });
       }
 
       if (result.error) {
+        partIdState.current = null;
         onEvent({
           type: "error",
           error: new Error(result.error)
@@ -987,6 +1016,8 @@ export class AgentWidgetClient {
     let assistantMessage: AgentWidgetMessage | null = null;
     // Reference to track assistant message for custom event handler
     const assistantMessageRef = { current: null as AgentWidgetMessage | null };
+    // Track current partId for message segmentation at tool boundaries
+    const partIdState = { current: null as string | null };
     const reasoningMessages = new Map<string, AgentWidgetMessage>();
     const toolMessages = new Map<string, AgentWidgetMessage>();
     const reasoningContext = {
@@ -1276,10 +1307,11 @@ export class AgentWidgetClient {
             onEvent,
             assistantMessageRef,
             emitMessage,
-            nextSequence
+            nextSequence,
+            partIdState
           );
-          // Update assistantMessage from ref (in case it was created)
-          if (assistantMessageRef.current && !assistantMessage) {
+          // Update assistantMessage from ref (in case it was created or replaced by partId segmentation)
+          if (assistantMessageRef.current && assistantMessageRef.current !== assistantMessage) {
             assistantMessage = assistantMessageRef.current;
           }
           if (handled) continue; // Skip default handling if custom handler processed it
