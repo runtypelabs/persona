@@ -50,10 +50,34 @@ export type {
   ThemePreviewOptions,
   ThemePreviewHandle,
   PreviewDevice,
-  PreviewScene,
   PreviewShellMode,
   CompareMode,
 } from './preview';
+
+// Preview building blocks (for advanced/custom preview renderers)
+export {
+  DEVICE_DIMENSIONS,
+  ZOOM_MIN,
+  ZOOM_MAX,
+  SHELL_STYLE_ID,
+  PREVIEW_STORAGE_ADAPTER,
+  HOME_SUGGESTION_CHIPS,
+  MOCK_BROWSER_CONTENT,
+  MOCK_WORKSPACE_CONTENT,
+  escapeHtml,
+  getShellPalette,
+  buildShellCss,
+  applyShellTheme,
+  buildSrcdoc,
+  createPreviewMessages,
+  applySceneConfig,
+  buildPreviewConfig,
+} from './preview-utils';
+export type {
+  PreviewScene,
+  PreviewShellPalette,
+  PreviewConfigOptions,
+} from './preview-utils';
 
 // Color utilities
 export {

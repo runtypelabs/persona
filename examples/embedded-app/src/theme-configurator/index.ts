@@ -36,6 +36,18 @@ import {
   hslToHex,
 } from './color-utils';
 import { setupInlineZones, destroyInlineZones, refreshInlineZones } from './inline-editor';
+import {
+  DEVICE_DIMENSIONS,
+  ZOOM_MIN,
+  ZOOM_MAX,
+  SHELL_STYLE_ID,
+  MOCK_BROWSER_CONTENT,
+  MOCK_WORKSPACE_CONTENT,
+  escapeHtml as escapeHtmlUtil,
+  getShellPalette,
+  buildShellCss,
+  applyShellTheme,
+} from '@runtypelabs/persona/theme-editor';
 
 // ─── Register custom components ──────────────────────────────────
 componentRegistry.register('dynamic-form', (props, ctx) => {
@@ -59,17 +71,10 @@ let lastAutoScale = 1;
 let lastMountedScene: state.PreviewScene | null = null;
 
 const ZOOM_STEP = 0.1;
-const ZOOM_MIN = 0.15;
-const ZOOM_MAX = 1.5;
 const PREVIEW_BG_LOAD_TIMEOUT_MS = 4000;
 const PREVIEW_BG_ERROR_OVERLAY_TIMEOUT_MS = 3000;
 const PREVIEW_BG_MESSAGE_TYPE = 'persona-theme-preview-background-state';
 const PREVIEW_BG_EMBED_CHECK_ENDPOINT = '/api/preview/embed-check';
-
-const DEVICE_DIMENSIONS: Record<string, { w: number; h: number }> = {
-  desktop: { w: 1280, h: 800 },
-  mobile: { w: 390, h: 844 },
-};
 
 export function getCurrentScale(): number {
   return zoomOverride ?? lastAutoScale;
@@ -1387,83 +1392,14 @@ function getPreviewLayoutSignature(config: AgentWidgetConfig): string {
   return ['docked', dock.side ?? 'right', dock.width ?? '420px'].join(':');
 }
 
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+const escapeHtml = escapeHtmlUtil;
 
-const PREVIEW_IFRAME_SHELL_STYLE_ID = 'persona-preview-shell-theme';
+const PREVIEW_IFRAME_SHELL_STYLE_ID = SHELL_STYLE_ID;
 
-function getShellThemePalette(shellMode: state.PreviewShellMode): {
-  pageBg: string;
-  chromeBg: string;
-  chromeBorder: string;
-  dot: string;
-  skeleton: string;
-  cardBg: string;
-  cardBorder: string;
-} {
-  return shellMode === 'dark'
-    ? {
-        pageBg: 'linear-gradient(180deg, #0f172a 0%, #020617 100%)',
-        chromeBg: '#111827',
-        chromeBorder: '#1f2937',
-        dot: '#475569',
-        skeleton: '#334155',
-        cardBg: '#1e293b',
-        cardBorder: 'rgba(148, 163, 184, 0.16)',
-      }
-    : {
-        pageBg: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
-        chromeBg: '#ffffff',
-        chromeBorder: '#e5e7eb',
-        dot: '#cbd5e1',
-        skeleton: '#e2e8f0',
-        cardBg: '#e2e8f0',
-        cardBorder: 'rgba(148, 163, 184, 0.18)',
-      };
-}
+const getShellThemePalette = getShellPalette;
 
-/** Inline shell CSS for srcdoc and for live theme updates without reloading srcdoc */
-function buildPreviewIframeShellStyleText(shellMode: state.PreviewShellMode): string {
-  const shellTheme = getShellThemePalette(shellMode);
-  return `* { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-    html { color-scheme: ${shellMode}; }
-    body { font-family: system-ui, sans-serif; background: ${shellTheme.pageBg}; }
-    .preview-iframe-mock { min-height: 100%; }
-    .preview-iframe-chrome { height: 44px; border-bottom: 1px solid ${shellTheme.chromeBorder}; background: ${shellTheme.chromeBg}; display: flex; align-items: center; gap: 8px; padding: 0 14px; }
-    .preview-iframe-dot { width: 10px; height: 10px; border-radius: 50%; background: ${shellTheme.dot}; }
-    .preview-iframe-copy { padding: 32px; }
-    .preview-iframe-line { border-radius: 999px; background: ${shellTheme.skeleton}; margin-bottom: 12px; }
-    .preview-iframe-line.hero { width: 48%; height: 16px; }
-    .preview-iframe-line.body { width: 72%; height: 10px; }
-    .preview-iframe-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }
-    .preview-iframe-card { height: 84px; border-radius: 14px; background: ${shellTheme.cardBg}; box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }
-    .preview-workspace-shell { height: 100%; min-height: 100%; display: flex; flex-direction: column; }
-    .preview-workspace-topbar { height: 52px; flex-shrink: 0; border-bottom: 1px solid ${shellTheme.chromeBorder}; background: ${shellTheme.chromeBg}; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; }
-    .preview-workspace-topbar-left { display: flex; align-items: center; gap: 12px; }
-    .preview-workspace-topbar-badge { width: 18px; height: 18px; border-radius: 6px; background: ${shellTheme.cardBg}; box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }
-    .preview-workspace-topbar-line { width: 180px; height: 10px; border-radius: 999px; background: ${shellTheme.skeleton}; }
-    .preview-workspace-topbar-pill { width: 64px; height: 28px; border-radius: 999px; background: ${shellTheme.cardBg}; box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }
-    .preview-workspace-body { flex: 1; min-height: 0; display: flex; padding: 20px; }
-    .preview-workspace-content { position: relative; display: flex; flex-direction: column; flex: 1; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; border-radius: 24px; background: rgba(255,255,255,0.72); box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }
-    .preview-workspace-content-shell { position: relative; z-index: 1; flex: 1 1 auto; min-height: 100%; padding: 24px; }
-    .preview-workspace-row { display: flex; gap: 16px; margin-top: 20px; }
-    .preview-workspace-card { flex: 1; min-width: 0; height: 168px; border-radius: 18px; background: ${shellTheme.cardBg}; box-shadow: inset 0 0 0 1px ${shellTheme.cardBorder}; }
-    .preview-workspace-card.short { height: 96px; }`;
-}
-
-function applyShellThemeToPreviewIframe(iframe: HTMLIFrameElement, shellMode: state.PreviewShellMode): void {
-  const doc = iframe.contentDocument;
-  if (!doc?.documentElement) return;
-  let style = doc.getElementById(PREVIEW_IFRAME_SHELL_STYLE_ID) as HTMLStyleElement | null;
-  if (!style) {
-    style = doc.createElement('style');
-    style.id = PREVIEW_IFRAME_SHELL_STYLE_ID;
-    doc.head.appendChild(style);
-  }
-  style.textContent = buildPreviewIframeShellStyleText(shellMode);
-}
+const buildPreviewIframeShellStyleText = buildShellCss;
+const applyShellThemeToPreviewIframe = applyShellTheme;
 
 function syncPreviewStageLayoutForScene(): void {
   const previewStage = document.getElementById('preview-stage');
@@ -1507,44 +1443,8 @@ function getIframeSrcdoc(
   const showBackgroundFrame = hasBgUrl && (backgroundState === 'loading' || backgroundState === 'loaded');
 
   const backgroundFrameId = `preview-background-${mountId}`;
-  const mockContent = showMockShell
-    ? `
-    <div class="preview-iframe-mock" aria-hidden="true">
-      <div class="preview-iframe-chrome">
-        <span class="preview-iframe-dot"></span>
-        <span class="preview-iframe-dot"></span>
-        <span class="preview-iframe-dot"></span>
-      </div>
-      <div class="preview-iframe-copy">
-        <div class="preview-iframe-line hero"></div>
-        <div class="preview-iframe-line body"></div>
-        <div class="preview-iframe-line body"></div>
-        <div class="preview-iframe-grid">
-          <div class="preview-iframe-card"></div>
-          <div class="preview-iframe-card"></div>
-          <div class="preview-iframe-card"></div>
-        </div>
-        <div class="preview-iframe-line body"></div>
-        <div class="preview-iframe-line body"></div>
-      </div>
-    </div>`
-    : '';
-  const dockedWorkspaceContent = showMockShell
-    ? `
-    <div class="preview-workspace-content-shell" aria-hidden="true">
-      <div class="preview-iframe-line hero"></div>
-      <div class="preview-iframe-line body"></div>
-      <div class="preview-workspace-row">
-        <div class="preview-workspace-card"></div>
-        <div class="preview-workspace-card"></div>
-      </div>
-      <div class="preview-workspace-row">
-        <div class="preview-workspace-card short"></div>
-        <div class="preview-workspace-card short"></div>
-        <div class="preview-workspace-card short"></div>
-      </div>
-    </div>`
-    : '';
+  const mockContent = showMockShell ? MOCK_BROWSER_CONTENT : '';
+  const dockedWorkspaceContent = showMockShell ? MOCK_WORKSPACE_CONTENT : '';
   const bgIframe = showBackgroundFrame
     ? `<iframe id="${backgroundFrameId}" src="${escapeHtml(bgUrl)}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;z-index:0;" aria-hidden="true"></iframe>`
     : '';
