@@ -8,22 +8,16 @@
  *   - Scene syncing (stage layout, wrapper shell mode)
  *   - Preview spec generation (layout signatures, frame markup, srcdoc)
  *   - Custom srcdoc builder (with background URLs + embedded inspection scripts)
- *   - Integration with the core `createThemePreview()` via lifecycle hooks
+ *   - Direct controller management using `createAgentExperience` from persona
  *   - Integration with inline editor zones (setup/destroy/refresh)
  *
- * The module delegates structural preview management (iframes, controllers, device
- * scaling, compare grid) to `createThemePreview()` from the core, and layers on
- * the configurator-specific background URL, contrast, overlay, and inline editing
- * features via lifecycle hooks and the public PreviewManager API.
+ * The module composes preview rendering from shared primitives (device dimensions,
+ * shell CSS, srcdoc templates) imported from `@runtypelabs/persona/theme-editor`,
+ * and uses `createAgentExperience` from `@runtypelabs/persona` for widget mounting.
+ * This keeps the test mock boundary intact while eliminating code duplication.
  */
 
-import {
-  createThemePreview,
-  type ThemePreviewHandle,
-  type ThemePreviewOptions,
-  type CompareMode,
-  type PreviewShellMode,
-} from '@runtypelabs/persona/theme-editor';
+import type { CompareMode, PreviewShellMode } from '@runtypelabs/persona/theme-editor';
 import {
   DEVICE_DIMENSIONS,
   ZOOM_MIN,
@@ -35,7 +29,11 @@ import {
   buildShellCss,
   applyShellTheme,
 } from '@runtypelabs/persona/theme-editor';
-import { isDockedMountMode } from '@runtypelabs/persona';
+import {
+  createAgentExperience,
+  createWidgetHostLayout,
+  isDockedMountMode,
+} from '@runtypelabs/persona';
 import type { AgentWidgetConfig, AgentWidgetController } from '@runtypelabs/persona';
 import { Idiomorph } from 'idiomorph';
 import type * as StateModule from './state';
@@ -280,8 +278,10 @@ export interface PreviewManager {
   getCurrentScale(): number;
   /** Inject sample artifacts into all preview controllers. */
   injectArtifacts(force?: boolean): void;
-  /** Get the underlying core handle. */
-  getHandle(): ThemePreviewHandle;
+  /** Set explicit zoom (or null for auto-fit). */
+  setZoom(zoom: number | null): void;
+  /** Reset zoom and resize frames for a device change. */
+  resizeFrames(): void;
   /** Clean up all resources. */
   destroy(): void;
 }
@@ -303,7 +303,9 @@ export function createPreviewManager(
   let previewBackgroundStates = new Map<string, PreviewBackgroundState>();
   let previewBackgroundUrlKey = '';
   let previewMountSignature = '';
-  let handle: ThemePreviewHandle | null = null;
+  let previewControllers: AgentWidgetController[] = [];
+  let previewLayoutCleanups: Array<() => void> = [];
+  let previewResizeObserver: ResizeObserver | null = null;
 
   const previewEmbedCheckInFlight = new Map<string, number>();
   const previewBackgroundOverlayTimers = new Map<string, { timeoutId: number; dismissKey: string }>();
@@ -1158,180 +1160,239 @@ export function createPreviewManager(
     }
   }
 
-  // ─── Core mount / update via createThemePreview ─────────────
 
-  /**
-   * Build the `buildSrcdoc` callback for `createThemePreview()`.
-   * This wraps our custom `getIframeSrcdoc()` which handles background URLs.
-   */
-  function makeBuildSrcdoc(specs: PreviewMountSpec[], renderToken: number) {
-    return (mountId: string, shellMode: PreviewShellMode, _docked: boolean, _cssPath: string): string => {
-      const spec = specs.find((s) => s.mountId === mountId);
-      if (!spec) {
-        // Fallback: delegate to our srcdoc builder with a synthetic spec
-        return getIframeSrcdoc(
-          {
-            mountId,
-            label: '',
-            previewConfig: stateModule.buildPreviewConfig(),
-            shellMode,
-            backgroundState: 'none',
-            layoutSignature: 'floating',
-          },
-          renderToken
-        );
+  // ─── Direct controller management ─────────────────────────────
+
+  function createPreviewMount(host: HTMLElement, mountId: string, config: AgentWidgetConfig): HTMLElement {
+    const mount = host.ownerDocument.createElement('div');
+    mount.id = mountId;
+
+    if (config.launcher?.enabled === false || isDockedMountMode(config)) {
+      mount.style.height = '100%';
+      mount.style.display = 'flex';
+      mount.style.flexDirection = 'column';
+      mount.style.flex = '1';
+      mount.style.minHeight = '0';
+    }
+
+    host.appendChild(mount);
+    return mount;
+  }
+
+  function destroyPreviewControllers(): void {
+    destroyInlineZones();
+    for (const controller of previewControllers) {
+      controller.destroy();
+    }
+    for (const cleanup of previewLayoutCleanups) {
+      cleanup();
+    }
+    previewControllers = [];
+    previewLayoutCleanups = [];
+  }
+
+  function isCompareActive(): boolean {
+    return compareMode !== 'off';
+  }
+
+  function computeFitScale(): number {
+    const stageStyle = getComputedStyle(container);
+    const stagePadX = parseFloat(stageStyle.paddingLeft) + parseFloat(stageStyle.paddingRight);
+    const stagePadY = parseFloat(stageStyle.paddingTop) + parseFloat(stageStyle.paddingBottom);
+    const shadowMargin = 40;
+    const availW = (container.clientWidth - stagePadX - shadowMargin) / (isCompareActive() ? 2 : 1);
+    const availH = container.clientHeight - stagePadY - shadowMargin;
+    if (availW <= 0 || availH <= 0) return 1;
+
+    const device = stateModule.getPreviewDevice();
+    const dims = DEVICE_DIMENSIONS[device] ?? DEVICE_DIMENSIONS.desktop;
+    return Math.min(availW / dims.w, availH / dims.h, 1);
+  }
+
+  function applyPreviewScale(): void {
+    const wrappers = Array.from(container.querySelectorAll('.preview-iframe-wrapper')) as HTMLElement[];
+    if (wrappers.length === 0) return;
+
+    lastAutoScale = computeFitScale();
+    const scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomOverride ?? lastAutoScale));
+
+    for (const wrapper of wrappers) {
+      const device = wrapper.dataset.device ?? 'desktop';
+      const dims = DEVICE_DIMENSIONS[device] ?? DEVICE_DIMENSIONS.desktop;
+
+      wrapper.style.width = `${dims.w * scale}px`;
+      wrapper.style.height = `${dims.h * scale}px`;
+
+      if (device === 'mobile') {
+        wrapper.style.borderRadius = `${32 * scale}px`;
       }
-      return getIframeSrcdoc(spec, renderToken);
-    };
+
+      const iframe = wrapper.querySelector('iframe') as HTMLIFrameElement | null;
+      if (iframe) {
+        iframe.style.width = `${dims.w}px`;
+        iframe.style.height = `${dims.h}px`;
+        iframe.style.transformOrigin = 'top left';
+        iframe.style.transition = 'none';
+        iframe.style.transform = `scale(${scale})`;
+      }
+    }
+
+    updateZoomDisplay(scale);
+    scrollToWidgetArea(scale);
+    if (previewControllers.length > 0) {
+      refreshInlineZones();
+    }
   }
 
-  /**
-   * Build the `morphContainer` callback that uses Idiomorph.
-   */
-  function morphContainerCallback(el: HTMLElement, html: string): void {
-    Idiomorph.morph(el, html, { morphStyle: 'innerHTML' });
-  }
+  function doMount(preserveBackgroundStates = false): void {
+    destroyPreviewControllers();
+    lastMountedScene = stateModule.getPreviewScene();
 
-  /**
-   * Build `ThemePreviewOptions` from the current state for the core.
-   */
-  function buildCoreOptions(preserveBackgroundStates = false): ThemePreviewOptions {
     const specs = getPreviewSpecs(preserveBackgroundStates);
     const renderToken = ++previewRenderToken;
-    const currentSnapshot = stateModule.exportSnapshot();
-    const previewScene = stateModule.getPreviewScene();
+    const isMinimized = stateModule.getPreviewScene() === 'minimized';
+    const singleClass = isMinimized ? 'preview-single preview-launcher-canvas' : 'preview-single';
+    const cellClass = isMinimized ? 'preview-compare-cell preview-launcher-canvas' : 'preview-compare-cell';
+    const markup = isCompareActive()
+      ? `<div class="preview-compare-grid">${specs
+          .map((spec) => `<div class="${cellClass}">${getPreviewFrameMarkup(spec, renderToken)}</div>`)
+          .join('')}</div>`
+      : `<div class="${singleClass}">${getPreviewFrameMarkup(specs[0], renderToken)}</div>`;
 
-    const baseOptions: ThemePreviewOptions = {
-      device: stateModule.getPreviewDevice(),
-      scene: previewScene,
-      shellMode: stateModule.resolvePreviewShellMode(currentSnapshot, stateModule.getPreviewMode(), previewScene),
-      compareMode,
-      config: stateModule.buildPreviewConfig(currentSnapshot, stateModule.getPreviewMode(), previewScene),
-      theme: currentSnapshot.theme,
-      zoom: zoomOverride ?? undefined,
-      buildSrcdoc: makeBuildSrcdoc(specs, renderToken),
-      morphContainer: morphContainerCallback,
+    Idiomorph.morph(container, markup, { morphStyle: 'innerHTML' });
+    specs.forEach((spec) => applyPreviewBackgroundStateToWrapper(spec.mountId, spec.backgroundState));
+    updatePreviewStatusLabel();
+    ensurePreviewEmbedCheck();
 
-      onAfterMount: (ctx) => {
-        // Apply background state overlays to wrappers
-        specs.forEach((spec) =>
-          applyPreviewBackgroundStateToWrapper(spec.mountId, spec.backgroundState)
-        );
-        updatePreviewStatusLabel();
-        ensurePreviewEmbedCheck();
-
-        // Apply scene layout classes
-        syncPreviewStageLayoutForScene();
-
-        // Close minimized widgets
-        if (stateModule.getPreviewScene() === 'minimized') {
-          for (const controller of ctx.controllers) {
-            controller.close();
-          }
-        }
-
-        container.scrollTop = 0;
-        updateContrastSummary();
-        injectPreviewArtifacts();
-
-        // Set up inline editing zones
-        setupInlineZones(ctx.iframes, getCurrentScale);
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            refreshInlineZones();
-          });
-        });
-      },
-
-      onAfterUpdate: (ctx) => {
-        // Apply background state to wrappers
-        specs.forEach((spec) =>
-          applyPreviewBackgroundStateToWrapper(spec.mountId, spec.backgroundState)
-        );
-
-        // Close minimized widgets
-        if (stateModule.getPreviewScene() === 'minimized') {
-          for (const controller of ctx.controllers) {
-            controller.close();
-          }
-        }
-
-        syncPreviewStageLayoutForScene();
-        syncPreviewWrapperShellAndShellMode(specs);
-        updatePreviewStatusLabel();
-        refreshInlineZones();
-
-        // Handle artifact toggling
-        if (
-          stateModule.get('features.artifacts.enabled') ||
-          stateModule.getPreviewScene() === 'artifact'
-        ) {
-          injectPreviewArtifacts();
-        } else {
-          for (const controller of ctx.controllers) {
-            controller.clearArtifacts();
-          }
-        }
-      },
-
-      onBeforeDestroy: () => {
-        destroyInlineZones();
-      },
-
-      onScaleChange: (scale) => {
-        lastAutoScale = handle?.getScale() ?? scale;
-        updateZoomDisplay(scale);
-        scrollToWidgetArea(scale);
-        if ((handle?.getControllers().length ?? 0) > 0) {
-          refreshInlineZones();
-        }
-      },
+    const iframes = Array.from(container.querySelectorAll<HTMLIFrameElement>('iframe[data-mount-id]'));
+    let loadedCount = 0;
+    const totalToLoad = iframes.length;
+    let mounted = false;
+    const isCurrentRenderToken = (iframe: HTMLIFrameElement): boolean => {
+      const wrapper = iframe.closest<HTMLElement>('.preview-iframe-wrapper');
+      return (
+        wrapper?.dataset.renderToken === String(renderToken) &&
+        renderToken === previewRenderToken
+      );
     };
 
-    // Baseline compare support
-    if (compareMode === 'baseline' && baselineSnapshot) {
-      baseOptions.baselineConfig = stateModule.buildPreviewConfig(
-        baselineSnapshot,
-        stateModule.getPreviewMode(),
-        previewScene
+    const mountAllWidgets = (): void => {
+      if (mounted || renderToken !== previewRenderToken) return;
+      mounted = true;
+
+      for (const iframe of iframes) {
+        if (!isCurrentRenderToken(iframe)) continue;
+        const mountId = iframe.dataset.mountId;
+        if (!mountId) continue;
+        const spec = specs.find((s) => s.mountId === mountId);
+        if (!spec || !iframe.contentDocument) continue;
+
+        let layoutCleanup = () => {};
+        let syncDockState: (() => void) | null = null;
+        const mount = isDockedMountMode(spec.previewConfig)
+          ? (() => {
+              const contentRoot = iframe.contentDocument?.getElementById(`preview-content-${mountId}`) as HTMLElement | null;
+              if (!contentRoot) return null;
+              const hostLayout = createWidgetHostLayout(contentRoot, spec.previewConfig);
+              syncDockState = () => hostLayout.syncWidgetState(controller.getState());
+              layoutCleanup = () => hostLayout.destroy();
+              return createPreviewMount(hostLayout.host, mountId, spec.previewConfig);
+            })()
+          : iframe.contentDocument.getElementById(mountId);
+        if (!mount) continue;
+
+        const controller = createAgentExperience(mount, spec.previewConfig);
+        previewControllers.push(controller);
+        if (syncDockState) {
+          const openUnsub = controller.on('widget:opened', syncDockState);
+          const closeUnsub = controller.on('widget:closed', syncDockState);
+          const previousCleanup = layoutCleanup;
+          layoutCleanup = () => {
+            openUnsub();
+            closeUnsub();
+            previousCleanup();
+          };
+          syncDockState();
+        }
+
+        // Inline edit overlays use getBoundingClientRect() inside the iframe. Reflow on open/close.
+        {
+          let reflowAfterTransition: ReturnType<typeof setTimeout> | null = null;
+          const scheduleInlineZoneReflow = (): void => {
+            refreshInlineZones();
+            if (reflowAfterTransition !== null) {
+              clearTimeout(reflowAfterTransition);
+            }
+            reflowAfterTransition = setTimeout(() => {
+              reflowAfterTransition = null;
+              refreshInlineZones();
+            }, 200);
+          };
+          const openUnsub = controller.on('widget:opened', scheduleInlineZoneReflow);
+          const closeUnsub = controller.on('widget:closed', scheduleInlineZoneReflow);
+          const previousCleanup = layoutCleanup;
+          layoutCleanup = () => {
+            openUnsub();
+            closeUnsub();
+            if (reflowAfterTransition !== null) {
+              clearTimeout(reflowAfterTransition);
+            }
+            previousCleanup();
+          };
+        }
+
+        previewLayoutCleanups.push(layoutCleanup);
+
+        if (stateModule.getPreviewScene() === 'minimized') {
+          controller.close();
+        }
+      }
+
+      container.scrollTop = 0;
+      updateContrastSummary();
+      injectPreviewArtifacts();
+
+      setupInlineZones(iframes, getCurrentScale);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          refreshInlineZones();
+        });
+      });
+    };
+
+    applyPreviewScale();
+
+    for (const iframe of iframes) {
+      const mountId = iframe.dataset.mountId;
+      if (!mountId) continue;
+
+      const spec = specs.find((entry) => entry.mountId === mountId);
+      iframe.addEventListener(
+        'load',
+        () => {
+          if (!isCurrentRenderToken(iframe)) return;
+          loadedCount += 1;
+          if (loadedCount >= totalToLoad) mountAllWidgets();
+        },
+        { once: true }
       );
-      baseOptions.baselineTheme = baselineSnapshot.theme;
+      iframe.srcdoc = getIframeSrcdoc(spec ?? {
+        mountId,
+        label: '',
+        previewConfig: stateModule.buildPreviewConfig(),
+        shellMode: 'light',
+        backgroundState: 'none',
+        layoutSignature: 'floating',
+      }, renderToken);
     }
 
-    return baseOptions;
-  }
-
-  /**
-   * Full mount / remount via the core handle.
-   * This is the configurator's equivalent of `mountPreviewWidgets()`.
-   */
-  function doMount(preserveBackgroundStates = false): void {
-    lastMountedScene = stateModule.getPreviewScene();
-    const options = buildCoreOptions(preserveBackgroundStates);
-
-    if (handle) {
-      // Destroy and recreate for a full remount — the core's `update()` may
-      // take the fast path, but we need a full rebuild here (new srcdoc, etc.).
-      handle.destroy();
-      handle = null;
+    if (totalToLoad === 0) {
+      updateContrastSummary();
     }
-
-    handle = createThemePreview(container, options);
   }
 
-  /**
-   * Fast-path update via the core handle.
-   * This is the configurator's equivalent of `updatePreviewWidgets()`.
-   */
   function doUpdate(): void {
-    if (!handle) {
-      doMount();
-      return;
-    }
-
-    // Check if structural changes require a full remount
     const specs = getPreviewSpecs(true);
-    const controllers = handle.getControllers();
     const hasShellMismatch = specs.some((spec) => {
       const wrapper = container.querySelector<HTMLElement>(
         `.preview-iframe-wrapper[data-mount-id="${spec.mountId}"]`
@@ -1345,73 +1406,74 @@ export function createPreviewManager(
     });
 
     const sceneChanged = stateModule.getPreviewScene() !== lastMountedScene;
-    if (controllers.length !== specs.length || hasShellMismatch || sceneChanged) {
+    if (previewControllers.length !== specs.length || hasShellMismatch || sceneChanged) {
       doMount();
       return;
     }
 
-    // Fast path: update the core handle in place
-    const currentSnapshot = stateModule.exportSnapshot();
-    const previewScene = stateModule.getPreviewScene();
-    const renderToken = ++previewRenderToken;
+    previewControllers.forEach((controller, index) => {
+      controller.update(specs[index].previewConfig);
+      applyPreviewBackgroundStateToWrapper(specs[index].mountId, specs[index].backgroundState);
+      if (stateModule.getPreviewScene() === 'minimized') {
+        controller.close();
+      }
+    });
+    syncPreviewStageLayoutForScene();
+    syncPreviewWrapperShellAndShellMode(specs);
+    updatePreviewStatusLabel();
+    refreshInlineZones();
 
-    const updateOptions: Partial<ThemePreviewOptions> = {
-      config: stateModule.buildPreviewConfig(currentSnapshot, stateModule.getPreviewMode(), previewScene),
-      theme: currentSnapshot.theme,
-      shellMode: stateModule.resolvePreviewShellMode(currentSnapshot, stateModule.getPreviewMode(), previewScene),
-      zoom: zoomOverride ?? undefined,
-      buildSrcdoc: makeBuildSrcdoc(specs, renderToken),
+    if (stateModule.get('features.artifacts.enabled') || stateModule.getPreviewScene() === 'artifact') {
+      injectPreviewArtifacts();
+    } else {
+      for (const controller of previewControllers) {
+        controller.clearArtifacts();
+      }
+    }
+  }
 
-      onAfterUpdate: (ctx) => {
-        specs.forEach((spec) =>
-          applyPreviewBackgroundStateToWrapper(spec.mountId, spec.backgroundState)
-        );
-        if (stateModule.getPreviewScene() === 'minimized') {
-          for (const controller of ctx.controllers) {
-            controller.close();
-          }
-        }
-        syncPreviewStageLayoutForScene();
-        syncPreviewWrapperShellAndShellMode(specs);
-        updatePreviewStatusLabel();
-        refreshInlineZones();
+  function resizePreviewFrames(): void {
+    const device = stateModule.getPreviewDevice();
+    const wrappers = Array.from(container.querySelectorAll('.preview-iframe-wrapper')) as HTMLElement[];
 
-        if (
-          stateModule.get('features.artifacts.enabled') ||
-          stateModule.getPreviewScene() === 'artifact'
-        ) {
-          injectPreviewArtifacts();
-        } else {
-          for (const controller of ctx.controllers) {
-            controller.clearArtifacts();
-          }
-        }
-      },
-    };
-
-    if (compareMode === 'baseline' && baselineSnapshot) {
-      updateOptions.baselineConfig = stateModule.buildPreviewConfig(
-        baselineSnapshot,
-        stateModule.getPreviewMode(),
-        previewScene
-      );
-      updateOptions.baselineTheme = baselineSnapshot.theme;
+    for (const wrapper of wrappers) {
+      wrapper.dataset.device = device;
+      if (device === 'mobile') {
+        wrapper.classList.add('preview-iframe-wrapper-mobile');
+      } else {
+        wrapper.classList.remove('preview-iframe-wrapper-mobile');
+      }
     }
 
-    handle.update(updateOptions);
+    applyPreviewScale();
+
+    const iframes = Array.from(container.querySelectorAll<HTMLIFrameElement>('iframe[data-mount-id]'));
+    for (const iframe of iframes) {
+      iframe.contentWindow?.dispatchEvent(new Event('resize'));
+    }
   }
 
-  // ─── getCurrentScale ────────────────────────────────────────
+  function setupResizeObserver(): void {
+    if (typeof ResizeObserver === 'undefined') return;
+
+    if (previewResizeObserver) {
+      previewResizeObserver.disconnect();
+    }
+
+    previewResizeObserver = new ResizeObserver(() => applyPreviewScale());
+    previewResizeObserver.observe(container);
+  }
 
   function getCurrentScale(): number {
-    return zoomOverride ?? (handle?.getScale() ?? lastAutoScale);
+    return zoomOverride ?? lastAutoScale;
   }
 
-  // ─── Initialize ─────────────────────────────────────────────
+  // ─── Initialize ───────────────────────────────────────────────
 
   bindPreviewBackgroundMessageListener();
+  setupResizeObserver();
 
-  // ─── Public interface ───────────────────────────────────────
+  // ─── Public interface ─────────────────────────────────────────
 
   return {
     mount(): void {
@@ -1445,24 +1507,27 @@ export function createPreviewManager(
       injectPreviewArtifacts(force);
     },
 
-    getHandle(): ThemePreviewHandle {
-      if (!handle) {
-        throw new Error('Preview not mounted yet. Call mount() first.');
-      }
-      return handle;
+    setZoom(zoom: number | null): void {
+      zoomOverride = zoom;
+      applyPreviewScale();
+    },
+
+    resizeFrames(): void {
+      resizePreviewFrames();
     },
 
     destroy(): void {
       unbindPreviewBackgroundMessageListener();
 
-      // Clear all overlay timers
       for (const [mountId] of previewBackgroundOverlayTimers) {
         clearPreviewBackgroundOverlayTimer(mountId);
       }
 
-      if (handle) {
-        handle.destroy();
-        handle = null;
+      destroyPreviewControllers();
+
+      if (previewResizeObserver) {
+        previewResizeObserver.disconnect();
+        previewResizeObserver = null;
       }
     },
   };
