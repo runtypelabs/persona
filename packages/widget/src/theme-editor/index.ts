@@ -34,6 +34,7 @@ export {
   CONFIGURE_SUB_GROUPS,
   ALL_TABS,
   scopeSection,
+  findSection,
 } from './sections';
 
 // Presets

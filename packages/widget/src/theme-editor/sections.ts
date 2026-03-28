@@ -572,6 +572,12 @@ const launcherConfigSectionDef: SectionDef = {
     { id: 'launch-mobile-breakpoint', label: 'Mobile Breakpoint (px)', type: 'text', path: 'launcher.mobileBreakpoint', defaultValue: 640, formatValue: (v: unknown) => String(v ?? 640), parseValue: (v: unknown) => Number(v) },
     { id: 'launch-height-offset', label: 'Height Offset (px)', type: 'text', path: 'launcher.heightOffset', defaultValue: 0, formatValue: (v: unknown) => String(v ?? 0), parseValue: (v: unknown) => Number(v) },
     { id: 'launch-collapsed-max-width', label: 'Collapsed Max Width', description: 'Max width of launcher pill when closed', type: 'text', path: 'launcher.collapsedMaxWidth', defaultValue: '' },
+    { id: 'launch-cta-text', label: 'CTA Icon Text', type: 'text', path: 'launcher.callToActionIconText', defaultValue: '↗' },
+    { id: 'launch-cta-name', label: 'CTA Icon Name', type: 'text', path: 'launcher.callToActionIconName', defaultValue: '' },
+    { id: 'launch-cta-hidden', label: 'Hide CTA Icon', type: 'toggle', path: 'launcher.callToActionIconHidden', defaultValue: false },
+    { id: 'launch-cta-size', label: 'CTA Icon Size', type: 'slider', path: 'launcher.callToActionIconSize', defaultValue: '32px', slider: { min: 16, max: 64, step: 2 } },
+    { id: 'launch-cta-padding', label: 'CTA Icon Padding', type: 'slider', path: 'launcher.callToActionIconPadding', defaultValue: '5px', slider: { min: 0, max: 24, step: 1 } },
+    { id: 'launch-cta-bg', label: 'CTA Icon Background', type: 'color', path: 'launcher.callToActionIconBackgroundColor', defaultValue: '' },
   ],
 };
 
@@ -729,6 +735,13 @@ function scopeField(field: FieldDef, scope: ThemeScope, variant: ThemeVariant): 
     id: `${variant}-${field.id}`,
     path: scopePath(field.path, scope),
   };
+}
+
+/** Look up a section by ID from an array of sections */
+export function findSection(sections: SectionDef[], id: string): SectionDef {
+  const found = sections.find(s => s.id === id);
+  if (!found) throw new Error(`Section "${id}" not found in definitions`);
+  return found;
 }
 
 /** Create a light/dark scoped copy of a section */

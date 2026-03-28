@@ -1,4 +1,7 @@
-/** Centralized state management for the theme configurator */
+/** Centralized state management for the theme configurator.
+ *  Delegates core state/history to ThemeEditorState from the headless core;
+ *  adds widget controller integration, localStorage persistence, and editor UI state.
+ */
 
 import type { AgentWidgetConfig, AgentWidgetMessage } from '@runtypelabs/persona';
 import type { PersonaTheme } from '@runtypelabs/persona';
@@ -10,7 +13,12 @@ import {
   applyThemeVariables,
 } from '@runtypelabs/persona';
 import type { AgentWidgetController } from '@runtypelabs/persona';
+import { ThemeEditorState } from '@runtypelabs/persona/theme-editor';
+import type { ConfiguratorSnapshot } from '@runtypelabs/persona/theme-editor';
 import { parseActionResponse } from '../middleware';
+
+// Re-export for consumers
+export type { ConfiguratorSnapshot };
 
 // ─── Constants ──────────────────────────────────────────────────────
 const STORAGE_KEY = 'persona-widget-config-v2';
@@ -77,25 +85,17 @@ let previewScene: PreviewScene = 'conversation';
 let editorMode: EditorMode = 'basic';
 let previewBackgroundUrl = '';
 
-// ─── Store singleton ────────────────────────────────────────────────
-let currentConfig: AgentWidgetConfig = getDefaultConfig();
-let currentTheme: PersonaTheme = createTheme();
+// ─── Core state (delegated to ThemeEditorState) ─────────────────────
+let core = new ThemeEditorState(undefined, getDefaultConfig(), { mergeDefaults: false });
+
+// ─── Configurator-specific state ────────────────────────────────────
 let widgetController: AgentWidgetController | null = null;
 let previewElement: HTMLElement | null = null;
 let updateTimeout: number | null = null;
 let savedSnapshot: ConfiguratorSnapshot | null = null;
-let history: ConfiguratorSnapshot[] = [];
-let historyIndex = -1;
-let suppressHistory = false;
 
 type ConfigChangeListener = (config: AgentWidgetConfig, theme: PersonaTheme) => void;
 const listeners: ConfigChangeListener[] = [];
-
-export interface ConfiguratorSnapshot {
-  version: 2;
-  config: Record<string, any>;
-  theme: PersonaTheme;
-}
 
 const PREVIEW_STORAGE_ADAPTER = {
   load: () => null,
@@ -207,31 +207,25 @@ function applyPreviewSceneConfig(
 
 // ─── Initialize ─────────────────────────────────────────────────────
 export function initStore(previewMount?: HTMLElement): AgentWidgetController | null {
-  // Store reference before createAgentExperience changes the element's id
   previewElement = previewMount ?? null;
   widgetController = null;
-  currentConfig = getDefaultConfig();
-  currentTheme = createTheme();
   editingTheme = 'light';
   previewMode = 'system';
   previewDevice = 'desktop';
   previewScene = 'conversation';
   editorMode = 'basic';
   previewBackgroundUrl = '';
-  history = [];
-  historyIndex = -1;
   savedSnapshot = null;
 
-  // Try to load saved config
+  // Try to load saved config, otherwise use defaults
   const saved = loadFromStorage();
   if (saved) {
-    currentConfig = saved.config;
-    currentTheme = saved.theme;
+    core = new ThemeEditorState(saved.theme, normalizeConfig(saved.config), { mergeDefaults: false });
+  } else {
+    core = new ThemeEditorState(undefined, getDefaultConfig(), { mergeDefaults: false });
   }
-  // Strip legacy launcher header icon hex (old defaults) so theme tokens control preview.
-  currentConfig = normalizeConfig(currentConfig);
-  syncThemeIntoConfig();
 
+  // Restore editor UI state
   const savedUi = loadEditorUiFromStorage();
   if (savedUi) {
     editingTheme = savedUi.editingTheme;
@@ -247,9 +241,6 @@ export function initStore(previewMount?: HTMLElement): AgentWidgetController | n
     applyThemeToWidget();
   }
 
-  if (history.length === 0) {
-    pushHistorySnapshot(exportSnapshot(), true);
-  }
   savedSnapshot ??= exportSnapshot();
 
   return widgetController;
@@ -259,13 +250,13 @@ export function getController(): AgentWidgetController | null {
   return widgetController;
 }
 
-// ─── Config access ──────────────────────────────────────────────────
+// ─── Config access (delegated to core) ──────────────────────────────
 export function getConfig(): AgentWidgetConfig {
-  return currentConfig;
+  return core.getConfig();
 }
 
 export function getTheme(): PersonaTheme {
-  return currentTheme;
+  return core.getTheme();
 }
 
 export function getEditingTheme(): EditingTheme {
@@ -369,12 +360,6 @@ function detectSystemPreviewShellMode(): PreviewShellMode {
   return 'light';
 }
 
-/**
- * Light/dark chrome for the preview iframe document (mock page + shell CSS).
- * Intentionally ignores the widget config's `colorScheme` so editing that field
- * does not change shell metadata → avoids full srcdoc remount on every tweak.
- * The widget still receives the real effective `colorScheme` via `buildPreviewConfig` + `controller.update`.
- */
 export function resolvePreviewShellMode(
   _snapshot: ConfiguratorSnapshot = exportSnapshot(),
   mode: PreviewMode = previewMode,
@@ -385,7 +370,6 @@ export function resolvePreviewShellMode(
   return detectSystemPreviewShellMode();
 }
 
-/** Config with colorScheme overridden for preview based on previewMode */
 export function getEffectivePreviewConfig(): AgentWidgetConfig {
   return buildPreviewConfig();
 }
@@ -393,77 +377,47 @@ export function getEffectivePreviewConfig(): AgentWidgetConfig {
 export function exportSnapshot(): ConfiguratorSnapshot {
   return {
     version: 2,
-    config: serializeConfig(currentConfig),
-    theme: currentTheme,
+    config: serializeConfig(core.getConfig()),
+    theme: core.getTheme(),
   };
 }
 
 export function getConfigForOutput(): AgentWidgetConfig {
   return {
-    ...currentConfig,
-    suggestionChips: sanitizeSuggestionChipsForOutput(currentConfig.suggestionChips),
+    ...core.getConfig(),
+    suggestionChips: sanitizeSuggestionChipsForOutput(core.getConfig().suggestionChips),
   } as AgentWidgetConfig;
 }
 
-function pushHistorySnapshot(snapshot: ConfiguratorSnapshot, replaceCurrent = false): void {
-  if (suppressHistory) return;
-
-  const serialized = JSON.stringify(snapshot);
-  const currentSerialized =
-    historyIndex >= 0 && history[historyIndex] ? JSON.stringify(history[historyIndex]) : null;
-
-  if (replaceCurrent && historyIndex >= 0) {
-    history[historyIndex] = snapshot;
-    return;
-  }
-
-  if (serialized === currentSerialized) return;
-
-  history = history.slice(0, historyIndex + 1);
-  history.push(snapshot);
-  historyIndex = history.length - 1;
-}
-
-function recordHistory(): void {
-  pushHistorySnapshot(exportSnapshot());
-}
-
+// ─── History (delegated to core) ────────────────────────────────────
 export function canUndo(): boolean {
-  return historyIndex > 0;
+  return core.canUndo();
 }
 
 export function canRedo(): boolean {
-  return historyIndex >= 0 && historyIndex < history.length - 1;
+  return core.canRedo();
 }
 
 export function getHistoryLength(): number {
-  return history.length;
+  return core.getHistoryLength();
 }
 
 export function getHistoryIndex(): number {
-  return historyIndex;
+  return core.getHistoryIndex();
 }
 
-function restoreSnapshot(snapshot: ConfiguratorSnapshot): void {
-  suppressHistory = true;
-  currentConfig = normalizeConfig(snapshot.config);
-  currentTheme = createTheme(snapshot.theme, { validate: false });
-  syncThemeIntoConfig();
-  suppressHistory = false;
+export function undo(): void {
+  if (!core.canUndo()) return;
+  core.undo();
   applyThemeToWidget();
   immediateWidgetUpdate();
 }
 
-export function undo(): void {
-  if (!canUndo()) return;
-  historyIndex -= 1;
-  restoreSnapshot(history[historyIndex]);
-}
-
 export function redo(): void {
-  if (!canRedo()) return;
-  historyIndex += 1;
-  restoreSnapshot(history[historyIndex]);
+  if (!core.canRedo()) return;
+  core.redo();
+  applyThemeToWidget();
+  immediateWidgetUpdate();
 }
 
 export function getSavedSnapshot(): ConfiguratorSnapshot | null {
@@ -475,6 +429,8 @@ export function markSavedSnapshot(): void {
   notifyListeners();
 }
 
+// ─── State mutations (delegated to core + side effects) ─────────────
+
 /**
  * Get a value from config using a dot-path.
  * Paths starting with 'theme.' go into the light PersonaTheme.
@@ -482,42 +438,22 @@ export function markSavedSnapshot(): void {
  * Other paths go into the AgentWidgetConfig object.
  */
 export function get(path: string): any {
-  if (path.startsWith('theme.')) {
-    return getByPath(currentTheme, path.replace('theme.', ''));
-  }
-  if (path.startsWith('darkTheme.')) {
-    return getByPath(currentConfig.darkTheme ?? {}, path.replace('darkTheme.', ''));
-  }
-  return getByPath(currentConfig, path);
+  return core.get(path);
 }
 
 /**
- * Set a value in config using a dot-path.
- * Paths starting with 'theme.' go into the light PersonaTheme.
- * Paths starting with 'darkTheme.' go into the dark PersonaTheme.
+ * Set a value in config using a dot-path (debounced widget update).
  */
 export function set(path: string, value: any): void {
+  core.set(path, value);
   if (path.startsWith('theme.')) {
-    const themePath = path.replace('theme.', '');
-    currentTheme = setByPath(currentTheme, themePath, value) as PersonaTheme;
-    syncThemeIntoConfig();
-    recordHistory();
     applyThemeToWidget();
     debouncedSave();
     notifyListeners();
   } else if (path.startsWith('darkTheme.')) {
-    const themePath = path.replace('darkTheme.', '');
-    const dark = currentConfig.darkTheme ?? createTheme();
-    currentConfig = {
-      ...currentConfig,
-      darkTheme: setByPath(dark, themePath, value) as AgentWidgetConfig['darkTheme'],
-    };
-    recordHistory();
     applyThemeToWidget();
     debouncedUpdate();
   } else {
-    currentConfig = setByPath(currentConfig, path, value) as AgentWidgetConfig;
-    recordHistory();
     debouncedUpdate();
   }
 }
@@ -526,68 +462,33 @@ export function set(path: string, value: any): void {
  * Set a value and update immediately (for presets, non-debounced changes).
  */
 export function setImmediate(path: string, value: any): void {
+  core.set(path, value);
   if (path.startsWith('theme.')) {
-    const themePath = path.replace('theme.', '');
-    currentTheme = setByPath(currentTheme, themePath, value) as PersonaTheme;
-    syncThemeIntoConfig();
-    recordHistory();
     applyThemeToWidget();
     saveToStorage();
     notifyListeners();
   } else if (path.startsWith('darkTheme.')) {
-    const themePath = path.replace('darkTheme.', '');
-    const dark = currentConfig.darkTheme ?? createTheme();
-    currentConfig = {
-      ...currentConfig,
-      darkTheme: setByPath(dark, themePath, value) as AgentWidgetConfig['darkTheme'],
-    };
-    recordHistory();
     applyThemeToWidget();
     immediateWidgetUpdate();
   } else {
-    currentConfig = setByPath(currentConfig, path, value) as AgentWidgetConfig;
-    recordHistory();
     immediateWidgetUpdate();
   }
 }
 
 /** Batch-set multiple paths at once (immediate update) */
 export function setBatch(updates: Record<string, any>): void {
-  let themeChanged = false;
-  let darkThemeChanged = false;
-  let configChanged = false;
+  core.setBatch(updates);
 
-  for (const [path, value] of Object.entries(updates)) {
-    if (path.startsWith('theme.')) {
-      const themePath = path.replace('theme.', '');
-      currentTheme = setByPath(currentTheme, themePath, value) as PersonaTheme;
-      themeChanged = true;
-    } else if (path.startsWith('darkTheme.')) {
-      const themePath = path.replace('darkTheme.', '');
-      const dark = currentConfig.darkTheme ?? createTheme();
-      currentConfig = {
-        ...currentConfig,
-        darkTheme: setByPath(dark, themePath, value) as AgentWidgetConfig['darkTheme'],
-      };
-      darkThemeChanged = true;
-    } else {
-      currentConfig = setByPath(currentConfig, path, value) as AgentWidgetConfig;
-      configChanged = true;
-    }
-  }
+  const hasTheme = Object.keys(updates).some(p => p.startsWith('theme.'));
+  const hasDarkTheme = Object.keys(updates).some(p => p.startsWith('darkTheme.'));
+  const hasConfig = Object.keys(updates).some(p => !p.startsWith('theme.') && !p.startsWith('darkTheme.'));
 
-  if (themeChanged) {
-    syncThemeIntoConfig();
-  }
-  if (themeChanged || darkThemeChanged || configChanged) {
-    recordHistory();
-  }
-  if (themeChanged || darkThemeChanged || configChanged) {
+  if (hasTheme || hasDarkTheme) {
     applyThemeToWidget();
   }
-  if (configChanged || darkThemeChanged) {
+  if (hasConfig || hasDarkTheme) {
     immediateWidgetUpdate();
-  } else if (themeChanged) {
+  } else if (hasTheme) {
     saveToStorage();
     notifyListeners();
   }
@@ -595,9 +496,7 @@ export function setBatch(updates: Record<string, any>): void {
 
 /** Replace the entire theme */
 export function setTheme(theme: PersonaTheme): void {
-  currentTheme = theme;
-  syncThemeIntoConfig();
-  recordHistory();
+  core.setTheme(theme);
   applyThemeToWidget();
   saveToStorage();
   notifyListeners();
@@ -605,12 +504,7 @@ export function setTheme(theme: PersonaTheme): void {
 
 /** Replace the entire config (for preset loading) */
 export function setFullConfig(config: AgentWidgetConfig, theme?: PersonaTheme): void {
-  currentConfig = normalizeConfig(config);
-  if (theme) {
-    currentTheme = theme;
-  }
-  syncThemeIntoConfig();
-  recordHistory();
+  core.setFullConfig(normalizeConfig(config), theme);
   applyThemeToWidget();
   immediateWidgetUpdate();
 }
@@ -623,8 +517,8 @@ export function importSnapshot(snapshot: unknown): void {
   const parsed = snapshot as Partial<ConfiguratorSnapshot> & { config?: any; theme?: any };
 
   if ('config' in parsed || 'theme' in parsed || parsed.version === 2) {
-    const config = normalizeConfig(parsed.config ?? currentConfig);
-    const theme = createTheme(parsed.theme ?? currentTheme, { validate: false });
+    const config = normalizeConfig(parsed.config ?? core.getConfig());
+    const theme = createTheme(parsed.theme ?? core.getTheme(), { validate: false });
     setFullConfig(config, theme);
     return;
   }
@@ -635,12 +529,7 @@ export function importSnapshot(snapshot: unknown): void {
 
 /** Reset to defaults */
 export function resetToDefaults(): void {
-  currentConfig = getDefaultConfig();
-  currentTheme = createTheme();
-  syncThemeIntoConfig();
-  history = [];
-  historyIndex = -1;
-  pushHistorySnapshot(exportSnapshot());
+  core = new ThemeEditorState(undefined, getDefaultConfig(), { mergeDefaults: false });
   savedSnapshot = exportSnapshot();
   applyThemeToWidget();
   immediateWidgetUpdate();
@@ -658,7 +547,7 @@ export function onChange(listener: ConfigChangeListener): () => void {
 
 function notifyListeners(): void {
   for (const listener of listeners) {
-    listener(currentConfig, currentTheme);
+    listener(core.getConfig(), core.getTheme());
   }
 }
 
@@ -666,13 +555,6 @@ function notifyListeners(): void {
 function applyThemeToWidget(): void {
   if (!previewElement) return;
   applyThemeVariables(previewElement, getEffectivePreviewConfig());
-}
-
-function syncThemeIntoConfig(): void {
-  currentConfig = {
-    ...currentConfig,
-    theme: currentTheme,
-  };
 }
 
 function debouncedUpdate(): void {
@@ -888,8 +770,8 @@ function saveToStorage(): void {
   try {
     const data = {
       version: 2,
-      config: serializeConfig(currentConfig),
-      theme: currentTheme,
+      config: serializeConfig(core.getConfig()),
+      theme: core.getTheme(),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (error) {
@@ -963,7 +845,6 @@ interface StorageResult {
 
 function loadFromStorage(): StorageResult | null {
   try {
-    // Try v2 format first
     const v2Saved = localStorage.getItem(STORAGE_KEY);
     if (v2Saved) {
       const parsed = JSON.parse(v2Saved);
@@ -979,31 +860,7 @@ function loadFromStorage(): StorageResult | null {
   return null;
 }
 
-// ─── Dot-path utilities ─────────────────────────────────────────────
-function getByPath(obj: any, path: string): any {
-  const parts = path.split('.');
-  let current = obj;
-  for (const part of parts) {
-    if (current === undefined || current === null) return undefined;
-    current = current[part];
-  }
-  return current;
-}
-
-function setByPath(obj: any, path: string, value: any): any {
-  const parts = path.split('.');
-  if (parts.length === 1) {
-    return { ...obj, [parts[0]]: value };
-  }
-
-  const [first, ...rest] = parts;
-  return {
-    ...obj,
-    [first]: setByPath(obj?.[first] ?? {}, rest.join('.'), value),
-  };
-}
-
-// ─── Parser type helpers (re-exported from old code) ────────────────
+// ─── Parser type helpers ────────────────────────────────────────────
 export function getParserTypeFromConfig(config: AgentWidgetConfig): ParserType {
   if (config.parserType) return config.parserType as ParserType;
   if (config.streamParser) {

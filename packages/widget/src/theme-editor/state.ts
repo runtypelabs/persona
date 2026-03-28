@@ -44,12 +44,14 @@ export class ThemeEditorState {
 
   constructor(
     initialTheme?: Partial<PersonaTheme>,
-    initialConfig?: Partial<AgentWidgetConfig>
+    initialConfig?: Partial<AgentWidgetConfig>,
+    options?: { mergeDefaults?: boolean }
   ) {
-    this.config = {
-      ...DEFAULT_WIDGET_CONFIG,
-      ...initialConfig,
-    } as AgentWidgetConfig;
+    const mergeDefaults = options?.mergeDefaults ?? true;
+    this.config = (mergeDefaults
+      ? { ...DEFAULT_WIDGET_CONFIG, ...initialConfig }
+      : (initialConfig ?? DEFAULT_WIDGET_CONFIG)
+    ) as AgentWidgetConfig;
     this.theme = createTheme(initialTheme, { validate: false });
     this.syncThemeIntoConfig();
     this.pushHistorySnapshot(this.exportSnapshot(), true);
@@ -203,6 +205,14 @@ export class ThemeEditorState {
 
   canRedo(): boolean {
     return this.historyIndex >= 0 && this.historyIndex < this.history.length - 1;
+  }
+
+  getHistoryLength(): number {
+    return this.history.length;
+  }
+
+  getHistoryIndex(): number {
+    return this.historyIndex;
   }
 
   undo(): void {
