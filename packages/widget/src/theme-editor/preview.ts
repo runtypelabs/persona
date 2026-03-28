@@ -4,7 +4,8 @@
  * No external DOM dependencies — only needs a container element to mount into.
  *
  * For advanced preview needs (background URLs, inline editing, contrast checking),
- * import the shared building blocks from `./preview-utils` directly.
+ * use the lifecycle hooks in `ThemePreviewOptions` and import shared building blocks
+ * from `./preview-utils` directly.
  */
 
 import type { AgentWidgetConfig } from '../types';
@@ -19,9 +20,8 @@ import {
   ZOOM_MIN,
   ZOOM_MAX,
   escapeHtml,
-  buildShellCss,
   applyShellTheme,
-  buildSrcdoc,
+  buildSrcdoc as buildSrcdocDefault,
   buildPreviewConfig as buildPreviewConfigFromOptions,
   type PreviewScene,
 } from './preview-utils';
@@ -32,6 +32,12 @@ export type PreviewDevice = 'desktop' | 'mobile';
 export type { PreviewScene } from './preview-utils';
 export type PreviewShellMode = 'light' | 'dark';
 export type CompareMode = 'off' | 'baseline' | 'themes';
+
+/** Context passed to lifecycle hooks after mounting or updating */
+export interface PreviewLifecycleContext {
+  iframes: HTMLIFrameElement[];
+  controllers: AgentWidgetController[];
+}
 
 export interface ThemePreviewOptions {
   /** Device frame dimensions */
@@ -52,6 +58,30 @@ export interface ThemePreviewOptions {
   zoom?: number;
   /** Path to widget.css (defaults to looking for /widget-dist/widget.css) */
   widgetCssPath?: string;
+
+  // ─── Baseline compare support ──────────────────────────────
+  /** Config for the baseline side of a baseline comparison */
+  baselineConfig?: Partial<AgentWidgetConfig>;
+  /** Theme for the baseline side of a baseline comparison */
+  baselineTheme?: DeepPartial<PersonaTheme>;
+  /** Dark theme for the baseline side of a baseline comparison */
+  baselineDarkTheme?: DeepPartial<PersonaTheme>;
+
+  // ─── Lifecycle hooks (all optional) ────────────────────────
+  /** Called after all iframes load and widgets mount */
+  onAfterMount?: (ctx: PreviewLifecycleContext) => void;
+  /** Called after fast-path controller updates */
+  onAfterUpdate?: (ctx: PreviewLifecycleContext) => void;
+  /** Called before controllers are destroyed */
+  onBeforeDestroy?: () => void;
+  /** Called whenever the preview scale changes */
+  onScaleChange?: (scale: number) => void;
+
+  // ─── Custom rendering overrides ────────────────────────────
+  /** Override iframe srcdoc generation (for background URLs, etc.) */
+  buildSrcdoc?: (mountId: string, shellMode: PreviewShellMode, docked: boolean, cssPath: string) => string;
+  /** Override container HTML injection (for Idiomorph, etc.) */
+  morphContainer?: (container: HTMLElement, html: string) => void;
 }
 
 export interface ThemePreviewHandle {
@@ -63,6 +93,12 @@ export interface ThemePreviewHandle {
   getControllers(): AgentWidgetController[];
   /** Recalculate auto-fit zoom */
   fitToContainer(): void;
+  /** Get all preview iframes */
+  getIframes(): HTMLIFrameElement[];
+  /** Get current computed scale */
+  getScale(): number;
+  /** Set explicit zoom (or undefined to auto-fit) */
+  setZoom(zoom: number | undefined): void;
 }
 
 // ─── Preview Spec ───────────────────────────────────────────────
@@ -85,6 +121,19 @@ function buildSpecs(options: ThemePreviewOptions): PreviewSpec[] {
     ];
   }
 
+  if (compare === 'baseline' && (options.baselineConfig || options.baselineTheme)) {
+    const baselineOptions = {
+      ...options,
+      config: options.baselineConfig ?? options.config,
+      theme: options.baselineTheme ?? options.theme,
+      darkTheme: options.baselineDarkTheme ?? options.darkTheme,
+    };
+    return [
+      { mountId: 'preview-baseline', label: 'Baseline', config: buildPreviewConfigFromOptions(baselineOptions, shellMode), shellMode },
+      { mountId: 'preview-current', label: 'Current', config: buildPreviewConfigFromOptions(options, shellMode), shellMode },
+    ];
+  }
+
   return [
     { mountId: 'preview-current', label: 'Current', config: buildPreviewConfigFromOptions(options, shellMode), shellMode },
   ];
@@ -102,6 +151,8 @@ export function createThemePreview(
   let resizeObserver: ResizeObserver | null = null;
   let destroyed = false;
   let lastAutoScale = 1;
+  let currentScale = 1;
+  let renderToken = 0;
 
   function getDevice(): PreviewDevice {
     return options.device ?? 'desktop';
@@ -128,6 +179,7 @@ export function createThemePreview(
   function applyScale(): void {
     lastAutoScale = computeFitScale();
     const scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, getZoom()));
+    currentScale = scale;
 
     const wrappers = Array.from(container.querySelectorAll<HTMLElement>('.preview-iframe-wrapper'));
     for (const wrapper of wrappers) {
@@ -147,24 +199,33 @@ export function createThemePreview(
         iframe.style.transform = `scale(${scale})`;
       }
     }
+
+    options.onScaleChange?.(scale);
   }
 
   function destroyControllers(): void {
+    options.onBeforeDestroy?.();
     for (const c of controllers) c.destroy();
     for (const fn of layoutCleanups) fn();
     controllers = [];
     layoutCleanups = [];
   }
 
+  function getIframeList(): HTMLIFrameElement[] {
+    return Array.from(container.querySelectorAll<HTMLIFrameElement>('iframe[data-mount-id]'));
+  }
+
   function mountWidgets(): void {
     if (destroyed) return;
     destroyControllers();
 
+    const token = ++renderToken;
     const specs = buildSpecs(options);
     const device = getDevice();
     const compare = (options.compareMode ?? 'off') !== 'off';
     const isMinimized = (options.scene ?? 'conversation') === 'minimized';
     const widgetCssPath = options.widgetCssPath ?? '/widget-dist/widget.css';
+    const srcdocBuilder = options.buildSrcdoc ?? buildSrcdocDefault;
 
     // Build container HTML
     const wrapperClass = device === 'mobile' ? 'preview-iframe-wrapper preview-iframe-wrapper-mobile' : 'preview-iframe-wrapper';
@@ -174,19 +235,25 @@ export function createThemePreview(
         <iframe class="preview-iframe" sandbox="allow-scripts allow-same-origin" data-mount-id="${spec.mountId}"></iframe>
       </div>`;
 
-    container.innerHTML = compare
+    const html = compare
       ? `<div class="preview-compare-grid">${specs.map(s => `<div class="preview-compare-cell">${frameMarkup(s)}</div>`).join('')}</div>`
       : `<div class="preview-single">${frameMarkup(specs[0])}</div>`;
+
+    if (options.morphContainer) {
+      options.morphContainer(container, html);
+    } else {
+      container.innerHTML = html;
+    }
 
     applyScale();
 
     // Mount widgets inside iframes after they load
-    const iframes = Array.from(container.querySelectorAll<HTMLIFrameElement>('iframe[data-mount-id]'));
+    const iframes = getIframeList();
     let loaded = 0;
     const total = iframes.length;
 
     const mountAll = (): void => {
-      if (destroyed) return;
+      if (destroyed || token !== renderToken) return;
 
       for (const iframe of iframes) {
         const mountId = iframe.dataset.mountId;
@@ -213,7 +280,6 @@ export function createThemePreview(
               const syncDock = () => hostLayout.syncWidgetState(controller.getState());
               const prevCleanup = cleanup;
               cleanup = () => { hostLayout.destroy(); prevCleanup(); };
-              // Will be set after controller is created
               (m as any).__syncDock = syncDock;
               (m as any).__hostLayout = hostLayout;
               return m;
@@ -251,6 +317,8 @@ export function createThemePreview(
           });
         }
       }
+
+      options.onAfterMount?.({ iframes, controllers: [...controllers] });
     };
 
     for (const iframe of iframes) {
@@ -263,7 +331,7 @@ export function createThemePreview(
         loaded++;
         if (loaded >= total) mountAll();
       }, { once: true });
-      iframe.srcdoc = buildSrcdoc(mountId, spec.shellMode, isDockedMountMode(spec.config), widgetCssPath);
+      iframe.srcdoc = srcdocBuilder(mountId, spec.shellMode, isDockedMountMode(spec.config), widgetCssPath);
     }
 
     if (total === 0) mountAll();
@@ -304,6 +372,8 @@ export function createThemePreview(
       const iframe = container.querySelector<HTMLIFrameElement>(`iframe[data-mount-id="${spec.mountId}"]`);
       if (iframe) applyShellTheme(iframe, spec.shellMode);
     }
+
+    options.onAfterUpdate?.({ iframes: getIframeList(), controllers: [...controllers] });
   }
 
   // ─── Setup ──────────────────────────────────────────────────
@@ -355,6 +425,20 @@ export function createThemePreview(
     fitToContainer(): void {
       if (destroyed) return;
       options = { ...options, zoom: undefined };
+      applyScale();
+    },
+
+    getIframes(): HTMLIFrameElement[] {
+      return getIframeList();
+    },
+
+    getScale(): number {
+      return currentScale;
+    },
+
+    setZoom(zoom: number | undefined): void {
+      if (destroyed) return;
+      options = { ...options, zoom };
       applyScale();
     },
   };

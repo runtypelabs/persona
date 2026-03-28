@@ -49,6 +49,7 @@ export { createThemePreview } from './preview';
 export type {
   ThemePreviewOptions,
   ThemePreviewHandle,
+  PreviewLifecycleContext,
   PreviewDevice,
   PreviewShellMode,
   CompareMode,
