@@ -1,5 +1,15 @@
 # @runtypelabs/persona
 
+## 3.7.0
+
+### Minor Changes
+
+- 171b086: Add configurable scroll-to-bottom affordances for the chat transcript and event stream, refine the defaults to use an icon-only circular arrow-down control, and expand the shared theme/editor support for size, spacing, and icon sizing.
+
+### Patch Changes
+
+- 7465d86: Fix the transcript scroll-to-bottom affordance so it stays visible above the composer instead of being anchored inside the scrolling message area, including when using custom composer plugins.
+
 ## 3.6.0
 
 ### Minor Changes
