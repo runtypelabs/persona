@@ -1142,7 +1142,7 @@ export function createPreviewManager(
   // ─── Artifact injection ─────────────────────────────────────
 
   function injectPreviewArtifacts(force = false): void {
-    const controllers = handle?.getControllers() ?? [];
+    const controllers = previewControllers;
     if (!force) {
       const artifactsEnabled =
         stateModule.get('features.artifacts.enabled') ||
