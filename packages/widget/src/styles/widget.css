@@ -2320,6 +2320,46 @@
   background: var(--persona-label-btn-hover-bg, var(--persona-container, #f3f4f6));
 }
 
+[data-persona-root] .persona-scroll-to-bottom-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--persona-scroll-to-bottom-gap, 0.5rem);
+  min-height: var(--persona-scroll-to-bottom-size, 40px);
+  border-radius: var(--persona-scroll-to-bottom-radius, var(--persona-radius-full, 9999px));
+  border: 1px solid var(--persona-scroll-to-bottom-border, var(--persona-primary, #111827));
+  background: var(--persona-scroll-to-bottom-bg, var(--persona-button-primary-bg, var(--persona-accent, #0f0f0f)));
+  color: var(--persona-scroll-to-bottom-fg, var(--persona-button-primary-fg, var(--persona-text-inverse, #ffffff)));
+  box-shadow: var(--persona-scroll-to-bottom-shadow, 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1));
+  font-size: var(--persona-scroll-to-bottom-font-size, 0.875rem);
+  line-height: 1;
+}
+
+[data-persona-root] .persona-scroll-to-bottom-indicator[data-persona-scroll-to-bottom-has-label="true"] {
+  padding: var(--persona-scroll-to-bottom-padding, 0.5rem 0.875rem);
+}
+
+[data-persona-root] .persona-scroll-to-bottom-indicator[data-persona-scroll-to-bottom-has-label="false"] {
+  width: var(--persona-scroll-to-bottom-size, 40px);
+  height: var(--persona-scroll-to-bottom-size, 40px);
+  padding: 0;
+  gap: 0;
+}
+
+[data-persona-root] .persona-scroll-to-bottom-indicator svg {
+  width: var(--persona-scroll-to-bottom-icon-size, 14px);
+  height: var(--persona-scroll-to-bottom-icon-size, 14px);
+}
+
+[data-persona-root] .persona-scroll-to-bottom-indicator:hover {
+  opacity: 0.92;
+}
+
+[data-persona-root] .persona-scroll-to-bottom-indicator:focus-visible {
+  outline: 2px solid var(--persona-accent, #171717);
+  outline-offset: 2px;
+}
+
 /* Toggle group — mutually exclusive button set created by createToggleGroup() */
 [data-persona-root] .persona-toggle-group {
   display: inline-flex;

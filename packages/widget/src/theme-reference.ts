@@ -138,6 +138,8 @@ export const THEME_TOKEN_DOCS = {
       approval:
         'requested (background, border, text), approve (background, foreground), deny (background, foreground).',
       attachment: 'image (background, border).',
+      scrollToBottom:
+        'Floating scroll-to-bottom affordance shared by transcript and event stream: background, foreground, border, size, borderRadius, shadow, padding, gap, fontSize, iconSize.',
       toolBubble: 'shadow — tool call row box-shadow.',
       reasoningBubble: 'shadow — reasoning/thinking row box-shadow.',
       composer: 'shadow — message input form box-shadow.',
@@ -200,6 +202,12 @@ export const THEME_TOKEN_DOCS = {
       description: 'Clear chat button (on launcher.clearChat config).',
       properties:
         'enabled, iconColor, backgroundColor, borderWidth, borderColor, borderRadius, size.',
+    },
+    scrollToBottom: {
+      description:
+        'Shared transcript + event-stream jump-to-latest affordance.',
+      properties:
+        'features.scrollToBottom.enabled, features.scrollToBottom.iconName, features.scrollToBottom.label (empty string renders icon-only). Defaults: enabled=true, iconName="arrow-down", label="".',
     },
     toolCall: {
       description: 'Tool call display styling.',

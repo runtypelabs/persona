@@ -218,6 +218,40 @@ describe('theme utils', () => {
     expect(cssVars['--persona-composer-shadow']).toBe('none');
   });
 
+  it('maps scroll-to-bottom component tokens to dedicated CSS variables', () => {
+    const theme = createTheme({
+      components: {
+        scrollToBottom: {
+          background: 'palette.colors.accent.500',
+          foreground: 'palette.colors.gray.50',
+          border: 'palette.colors.gray.900',
+          size: '40px',
+          borderRadius: 'palette.radius.full',
+          shadow: 'palette.shadows.md',
+          padding: '0.5rem 0.875rem',
+          gap: '0.5rem',
+          fontSize: '0.875rem',
+          iconSize: '14px',
+        },
+      },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-scroll-to-bottom-bg']).toBe('#06b6d4');
+    expect(cssVars['--persona-scroll-to-bottom-fg']).toBe('#f9fafb');
+    expect(cssVars['--persona-scroll-to-bottom-border']).toBe('#111827');
+    expect(cssVars['--persona-scroll-to-bottom-size']).toBe('40px');
+    expect(cssVars['--persona-scroll-to-bottom-radius']).toBe('9999px');
+    expect(cssVars['--persona-scroll-to-bottom-shadow']).toBe(
+      '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
+    );
+    expect(cssVars['--persona-scroll-to-bottom-padding']).toBe('0.5rem 0.875rem');
+    expect(cssVars['--persona-scroll-to-bottom-gap']).toBe('0.5rem');
+    expect(cssVars['--persona-scroll-to-bottom-font-size']).toBe('0.875rem');
+    expect(cssVars['--persona-scroll-to-bottom-icon-size']).toBe('14px');
+  });
+
   it('lets config.toolCall.shadow override theme tool bubble shadow on the root element', () => {
     const el = document.createElement('div');
     applyThemeVariables(el, {

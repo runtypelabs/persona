@@ -15,9 +15,12 @@ const createMount = () => {
   return mount;
 };
 
+const getScrollToBottomButton = (mount: HTMLElement) =>
+  mount.querySelector<HTMLElement>("[data-persona-scroll-to-bottom]");
+
 const installRafMock = () => {
   let nextId = 1;
-  let now = 0;
+  let now = performance.now();
   const callbacks = new Map<number, RafCallback>();
 
   vi.stubGlobal("requestAnimationFrame", (callback: RafCallback) => {
@@ -312,4 +315,116 @@ describe("createAgentExperience streaming scroll", () => {
 
     controller.destroy();
   });
+
+  it("uses icon-only arrow-down defaults for the transcript affordance", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    });
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    expect(scrollContainer).not.toBeNull();
+
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    scrollContainer!.dispatchEvent(new WheelEvent("wheel", { deltaY: -18 }));
+    metrics.setScrollTop(560);
+    metrics.setScrollHeight(1060);
+    emitStreamingMessage(controller, "Second chunk");
+    raf.flush();
+
+    const button = getScrollToBottomButton(mount);
+    expect(button).not.toBeNull();
+    expect(button?.textContent?.trim()).toBe("");
+    expect(button?.querySelector("svg")).not.toBeNull();
+
+    controller.destroy();
+  });
+
+  it("hides the transcript affordance when scroll-to-bottom is disabled", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        scrollToBottom: {
+          enabled: false
+        }
+      }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    expect(scrollContainer).not.toBeNull();
+
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    scrollContainer!.dispatchEvent(new WheelEvent("wheel", { deltaY: -18 }));
+    metrics.setScrollTop(560);
+    metrics.setScrollHeight(1060);
+    emitStreamingMessage(controller, "Second chunk");
+    raf.flush();
+
+    expect(getScrollToBottomButton(mount)).toBeNull();
+
+    controller.destroy();
+  });
+
+  it("renders the transcript affordance as icon-only when label is empty", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        scrollToBottom: {
+          enabled: true,
+          iconName: "arrow-down",
+          label: ""
+        }
+      }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    expect(scrollContainer).not.toBeNull();
+
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    scrollContainer!.dispatchEvent(new WheelEvent("wheel", { deltaY: -18 }));
+    metrics.setScrollTop(560);
+    metrics.setScrollHeight(1060);
+    emitStreamingMessage(controller, "Second chunk");
+    raf.flush();
+
+    const button = getScrollToBottomButton(mount);
+    expect(button).not.toBeNull();
+    expect(button?.textContent?.trim()).toBe("");
+    expect(button?.querySelector("svg")).not.toBeNull();
+
+    controller.destroy();
+  });
+
 });

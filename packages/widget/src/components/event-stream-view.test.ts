@@ -263,6 +263,9 @@ function getEventsList(element: any) {
 function getNoResultsMsg(element: any) {
   return getEventsWrapper(element).children[1]; // noResultsMsg
 }
+function getScrollIndicator(element: any) {
+  return getEventsWrapper(element).children[2]; // scrollIndicator
+}
 
 describe("createEventStreamView", () => {
   it("should create a container element with expected children", async () => {
@@ -900,6 +903,145 @@ describe("createEventStreamView", () => {
       expect(eventsList.children[0]).not.toBe(originalRow1);
       // Should only show filtered events (2 step_chunk events)
       expect(eventsList.children.length).toBe(2);
+      vi.useRealTimers();
+    });
+  });
+
+  describe("scroll-to-bottom affordance", () => {
+    it("uses icon-only arrow-down defaults when paused and new events arrive", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({
+        buffer: buffer as any
+      });
+
+      update();
+
+      const eventsList = getEventsList(element);
+      eventsList.scrollTop = 0;
+      eventsList.scrollHeight = 600;
+      eventsList.clientHeight = 300;
+      eventsList.__fireEvent("wheel", { deltaY: -24 });
+
+      vi.advanceTimersByTime(150);
+      buffer.push(makeEvent("step_chunk", 2));
+      update();
+
+      const indicator = getScrollIndicator(element);
+      expect(indicator.style.display).toBe("");
+      expect(indicator.children[1]?.textContent).toBe("");
+      expect(indicator.children[0]?.__iconName).toBe("arrow-down");
+      vi.useRealTimers();
+    });
+
+    it("hides the event stream affordance when disabled", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({
+        buffer: buffer as any,
+        config: {
+          features: {
+            eventStream: {},
+            scrollToBottom: {
+              enabled: false
+            }
+          }
+        } as any
+      });
+
+      update();
+
+      const eventsList = getEventsList(element);
+      eventsList.scrollTop = 0;
+      eventsList.scrollHeight = 600;
+      eventsList.clientHeight = 300;
+      eventsList.__fireEvent("wheel", { deltaY: -24 });
+
+      vi.advanceTimersByTime(150);
+      buffer.push(makeEvent("step_chunk", 2));
+      update();
+
+      expect(getScrollIndicator(element).style.display).toBe("none");
+      vi.useRealTimers();
+    });
+
+    it("renders the event stream affordance as icon-only when label is empty", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({
+        buffer: buffer as any,
+        config: {
+          features: {
+            eventStream: {},
+            scrollToBottom: {
+              enabled: true,
+              iconName: "arrow-down",
+              label: ""
+            }
+          }
+        } as any
+      });
+
+      update();
+
+      const eventsList = getEventsList(element);
+      eventsList.scrollTop = 0;
+      eventsList.scrollHeight = 600;
+      eventsList.clientHeight = 300;
+      eventsList.__fireEvent("wheel", { deltaY: -24 });
+
+      vi.advanceTimersByTime(150);
+      buffer.push(makeEvent("step_chunk", 2));
+      update();
+
+      const indicator = getScrollIndicator(element);
+      expect(indicator.style.display).toBe("");
+      expect(indicator.children[1]?.textContent).toBe("");
+      expect(indicator.children[0]?.__iconName).toBe("arrow-down");
+      vi.useRealTimers();
+    });
+
+    it("supports a configured label and icon override", async () => {
+      vi.useFakeTimers();
+      const { createEventStreamView } = await loadModule();
+      const events = [makeEvent("step_chunk", 1)];
+      const buffer = createMockBuffer(events);
+      const { element, update } = createEventStreamView({
+        buffer: buffer as any,
+        config: {
+          features: {
+            eventStream: {},
+            scrollToBottom: {
+              enabled: true,
+              iconName: "arrow-down",
+              label: "Jump to latest"
+            }
+          }
+        } as any
+      });
+
+      update();
+
+      const eventsList = getEventsList(element);
+      eventsList.scrollTop = 0;
+      eventsList.scrollHeight = 600;
+      eventsList.clientHeight = 300;
+      eventsList.__fireEvent("wheel", { deltaY: -24 });
+
+      vi.advanceTimersByTime(150);
+      buffer.push(makeEvent("step_chunk", 2));
+      update();
+
+      const indicator = getScrollIndicator(element);
+      expect(indicator.style.display).toBe("");
+      expect(indicator.children[1]?.textContent).toContain("Jump to latest");
+      expect(indicator.children[0]?.__iconName).toBe("arrow-down");
       vi.useRealTimers();
     });
   });

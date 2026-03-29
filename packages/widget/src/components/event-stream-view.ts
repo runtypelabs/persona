@@ -397,6 +397,10 @@ export function createEventStreamView(
     config,
     plugins = [],
   } = options;
+  const scrollToBottomConfig = config?.features?.scrollToBottom;
+  const scrollToBottomEnabled = scrollToBottomConfig?.enabled !== false;
+  const scrollToBottomIconName = scrollToBottomConfig?.iconName ?? "arrow-down";
+  const scrollToBottomLabel = scrollToBottomConfig?.label ?? "";
 
   const esConfig: EventStreamConfig = config?.features?.eventStream ?? {};
 
@@ -644,18 +648,23 @@ export function createEventStreamView(
     // Scroll-to-bottom indicator
     const scrollIndicator = createElement(
       "div",
-      "persona-absolute persona-bottom-3 persona-left-1/2 persona-transform persona--translate-x-1/2 persona-bg-persona-accent persona-text-white persona-text-xs persona-px-3 persona-py-1.5 persona-rounded-full persona-cursor-pointer persona-shadow-md persona-z-10 persona-flex persona-items-center persona-gap-1"
+      "persona-scroll-to-bottom-indicator persona-absolute persona-bottom-3 persona-left-1/2 persona-transform persona--translate-x-1/2 persona-cursor-pointer persona-z-10 persona-text-xs"
     );
     applyCustomClasses(scrollIndicator, customClasses?.scrollIndicator);
     scrollIndicator.style.display = "none";
+    scrollIndicator.setAttribute(
+      "data-persona-scroll-to-bottom-has-label",
+      scrollToBottomLabel ? "true" : "false"
+    );
     const arrowIcon = renderLucideIcon(
-      "arrow-down",
-      "12px",
+      scrollToBottomIconName,
+      "14px",
       "currentColor",
       2
     );
     if (arrowIcon) scrollIndicator.appendChild(arrowIcon);
     const indicatorText = createElement("span", "");
+    indicatorText.textContent = scrollToBottomLabel;
     scrollIndicator.appendChild(indicatorText);
 
     // No matching events message
@@ -835,9 +844,11 @@ export function createEventStreamView(
       }
 
       // Track new events since user scrolled up
-      if (!autoFollow.isFollowing() && newCount > lastFilteredCount) {
+      if (scrollToBottomEnabled && !autoFollow.isFollowing() && newCount > lastFilteredCount) {
         newEventsSincePause += newCount - lastFilteredCount;
-        indicatorText.textContent = `${newEventsSincePause} new event${newEventsSincePause === 1 ? "" : "s"}`;
+        indicatorText.textContent = scrollToBottomLabel
+          ? `${scrollToBottomLabel}${newEventsSincePause > 0 ? ` (${newEventsSincePause})` : ""}`
+          : "";
         scrollIndicator.style.display = "";
       }
       lastFilteredCount = newCount;
@@ -1082,6 +1093,10 @@ export function createEventStreamView(
         scrollIndicator.style.display = "none";
       } else if (action === "pause") {
         autoFollow.pause();
+        if (scrollToBottomEnabled) {
+          indicatorText.textContent = scrollToBottomLabel;
+          scrollIndicator.style.display = "";
+        }
       }
     };
 
@@ -1097,6 +1112,10 @@ export function createEventStreamView(
 
       if (action === "pause") {
         autoFollow.pause();
+        if (scrollToBottomEnabled) {
+          indicatorText.textContent = scrollToBottomLabel;
+          scrollIndicator.style.display = "";
+        }
       } else if (action === "resume") {
         autoFollow.resume();
         newEventsSincePause = 0;
@@ -1105,6 +1124,7 @@ export function createEventStreamView(
     };
 
     const handleScrollIndicatorClick = () => {
+      if (!scrollToBottomEnabled) return;
       eventsList.scrollTop = eventsList.scrollHeight;
       autoFollow.resume();
       newEventsSincePause = 0;

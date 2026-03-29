@@ -8,6 +8,7 @@ import {
   ROLE_USER_MESSAGES,
   ROLE_ASSISTANT_MESSAGES,
   ROLE_PRIMARY_ACTIONS,
+  ROLE_SCROLL_TO_BOTTOM,
   ROLE_INPUT,
   ROLE_LINKS_FOCUS,
   ROLE_BORDERS,
@@ -420,6 +421,36 @@ const buttonColorsSectionDef: SectionDef = {
   ],
 };
 
+const scrollToBottomSectionDef: SectionDef = {
+  id: 'scroll-to-bottom-style',
+  title: 'Scroll To Bottom',
+  description: 'Style the floating jump-to-latest affordance.',
+  collapsed: true,
+  fields: [
+    { id: 'scroll-bottom-bg', label: 'Background', type: 'token-ref', path: 'theme.components.scrollToBottom.background', defaultValue: 'components.button.primary.background', tokenRef: { tokenType: 'color' } },
+    { id: 'scroll-bottom-fg', label: 'Foreground', type: 'token-ref', path: 'theme.components.scrollToBottom.foreground', defaultValue: 'components.button.primary.foreground', tokenRef: { tokenType: 'color' } },
+    { id: 'scroll-bottom-border', label: 'Border', type: 'token-ref', path: 'theme.components.scrollToBottom.border', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
+    { id: 'scroll-bottom-size', label: 'Size', type: 'text', path: 'theme.components.scrollToBottom.size', defaultValue: '40px' },
+    { id: 'scroll-bottom-radius', label: 'Border Radius', type: 'select', path: 'theme.components.scrollToBottom.borderRadius', defaultValue: 'palette.radius.full', options: [
+      { value: 'palette.radius.md', label: 'Medium' },
+      { value: 'palette.radius.lg', label: 'Large' },
+      { value: 'palette.radius.xl', label: 'Extra Large' },
+      { value: 'palette.radius.full', label: 'Full' },
+    ] },
+    { id: 'scroll-bottom-shadow', label: 'Shadow', type: 'select', path: 'theme.components.scrollToBottom.shadow', defaultValue: 'palette.shadows.sm', options: [
+      { value: 'palette.shadows.none', label: 'None' },
+      { value: 'palette.shadows.sm', label: 'Small' },
+      { value: 'palette.shadows.md', label: 'Medium' },
+      { value: 'palette.shadows.lg', label: 'Large' },
+      { value: 'palette.shadows.xl', label: 'Extra Large' },
+    ] },
+    { id: 'scroll-bottom-padding', label: 'Padding', type: 'text', path: 'theme.components.scrollToBottom.padding', defaultValue: '0.5rem 0.875rem' },
+    { id: 'scroll-bottom-gap', label: 'Gap', type: 'text', path: 'theme.components.scrollToBottom.gap', defaultValue: '0.5rem' },
+    { id: 'scroll-bottom-font-size', label: 'Font Size', type: 'text', path: 'theme.components.scrollToBottom.fontSize', defaultValue: '0.875rem' },
+    { id: 'scroll-bottom-icon-size', label: 'Icon Size', type: 'text', path: 'theme.components.scrollToBottom.iconSize', defaultValue: '14px' },
+  ],
+};
+
 /** Shared shape sections (not scoped to light/dark) */
 export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   panelLayoutSectionDef,
@@ -435,6 +466,7 @@ export const COMPONENT_COLOR_SECTIONS: SectionDef[] = [
   messageColorsSectionDef,
   inputColorsSectionDef,
   buttonColorsSectionDef,
+  scrollToBottomSectionDef,
 ];
 
 export const COMPONENTS_SECTIONS: SectionDef[] = [
@@ -655,6 +687,9 @@ const featuresSectionDef: SectionDef = {
   fields: [
     { id: 'feat-voice', label: 'Voice Recognition', description: 'Enable voice input', type: 'toggle', path: 'voiceRecognition.enabled', defaultValue: false },
     { id: 'feat-auto-focus', label: 'Auto Focus Input', description: 'Focus input after panel opens', type: 'toggle', path: 'autoFocusInput', defaultValue: false },
+    { id: 'feat-scroll-bottom-enabled', label: 'Scroll To Bottom', description: 'Show a jump-to-latest affordance when the user scrolls away from new content', type: 'toggle', path: 'features.scrollToBottom.enabled', defaultValue: true },
+    { id: 'feat-scroll-bottom-icon', label: 'Scroll To Bottom Icon', type: 'text', path: 'features.scrollToBottom.iconName', defaultValue: 'arrow-down' },
+    { id: 'feat-scroll-bottom-label', label: 'Scroll To Bottom Label', description: 'Leave empty for icon-only mode', type: 'text', path: 'features.scrollToBottom.label', defaultValue: '' },
   ],
 };
 
@@ -825,6 +860,13 @@ export const INTERFACE_ROLES_SECTION: SectionDef = {
       type: 'role-assignment',
       path: 'theme.components.button.primary.background',
       roleAssignment: ROLE_PRIMARY_ACTIONS,
+    },
+    {
+      id: 'role-scroll-to-bottom',
+      label: 'Scroll To Bottom',
+      type: 'role-assignment',
+      path: 'theme.components.scrollToBottom.background',
+      roleAssignment: ROLE_SCROLL_TO_BOTTOM,
     },
     {
       id: 'role-input',

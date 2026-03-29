@@ -362,6 +362,21 @@ Semantic tokens provide intent-based naming that references palette values.
 | `image.background` | `palette.colors.gray.100` |
 | `image.border` | `palette.colors.gray.200` |
 
+### Scroll To Bottom (`components.scrollToBottom.*`)
+
+| Token | Default Reference |
+|-------|-------------------|
+| `background` | `components.button.primary.background` |
+| `foreground` | `components.button.primary.foreground` |
+| `border` | `semantic.colors.primary` |
+| `size` | `"40px"` |
+| `borderRadius` | `palette.radius.full` |
+| `shadow` | `palette.shadows.sm` |
+| `padding` | `"0.5rem 0.875rem"` |
+| `gap` | `"0.5rem"` |
+| `fontSize` | `"0.875rem"` |
+| `iconSize` | `"14px"` |
+
 ---
 
 ## Plugin System
@@ -859,6 +874,7 @@ These merge into `PersonaTheme` and are exposed as CSS variables on the widget r
 |----------|-------------|
 | `showReasoning` | Show AI reasoning/thinking steps |
 | `showToolCalls` | Show tool call invocations |
+| `scrollToBottom` | Shared transcript + event-stream affordance config: `enabled`, `iconName`, `label` (empty string renders icon-only). Defaults: `enabled: true`, `iconName: "arrow-down"`, `label: ""`. |
 | `artifacts` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (split/drawer sizing, launcher widen, resize handle, `paneAppearance`, `toolbarPreset` `default` \| `document`, `documentToolbarShowCopyLabel`, `documentToolbarShowCopyChevron`, `documentToolbarIconColor`, `documentToolbarToggleActiveBackground`, `documentToolbarToggleActiveBorderColor`, borders, `unifiedSplitChrome`, etc.). See README **Features** table for defaults. |
 
 ---

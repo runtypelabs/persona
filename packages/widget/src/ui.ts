@@ -552,6 +552,7 @@ export const createAgentExperience = (
   let showReasoning = config.features?.showReasoning ?? true;
   let showToolCalls = config.features?.showToolCalls ?? true;
   let showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
+  let scrollToBottomFeature = config.features?.scrollToBottom ?? {};
   const persistKeyPrefix = (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
   const eventStreamDbName = `${persistKeyPrefix}event-stream`;
   let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
@@ -662,6 +663,40 @@ export const createAgentExperience = (
   let attachmentButtonWrapper: HTMLElement | null = panelElements.attachmentButtonWrapper;
   let attachmentInput: HTMLInputElement | null = panelElements.attachmentInput;
   let attachmentPreviewsContainer: HTMLElement | null = panelElements.attachmentPreviewsContainer;
+  body.classList.add("persona-relative");
+
+  const getScrollToBottomLabel = () => scrollToBottomFeature.label ?? "";
+  const getScrollToBottomIconName = () => scrollToBottomFeature.iconName ?? "arrow-down";
+  const isScrollToBottomEnabled = () => scrollToBottomFeature.enabled !== false;
+  const scrollToBottomButton = createElement(
+    "button",
+    "persona-scroll-to-bottom-indicator persona-absolute persona-bottom-3 persona-left-1/2 persona-z-10 persona-flex persona-items-center persona-gap-1 persona-text-xs persona-transform persona--translate-x-1/2 persona-cursor-pointer"
+  ) as HTMLButtonElement;
+  scrollToBottomButton.type = "button";
+  scrollToBottomButton.style.display = "none";
+  scrollToBottomButton.setAttribute("data-persona-scroll-to-bottom", "true");
+  const scrollToBottomIcon = createElement("span", "persona-flex persona-items-center");
+  const scrollToBottomLabel = createElement("span", "");
+  scrollToBottomButton.append(scrollToBottomIcon, scrollToBottomLabel);
+  body.appendChild(scrollToBottomButton);
+
+  const renderScrollToBottomButton = () => {
+    const hasLabel = Boolean(getScrollToBottomLabel());
+    scrollToBottomButton.setAttribute("aria-label", getScrollToBottomLabel() || "Jump to latest");
+    scrollToBottomButton.title = getScrollToBottomLabel();
+    scrollToBottomButton.setAttribute("data-persona-scroll-to-bottom-has-label", hasLabel ? "true" : "false");
+    scrollToBottomIcon.innerHTML = "";
+    const icon = renderLucideIcon(getScrollToBottomIconName(), "14px", "currentColor", 2);
+    if (icon) {
+      scrollToBottomIcon.appendChild(icon);
+      scrollToBottomIcon.style.display = "";
+    } else {
+      scrollToBottomIcon.style.display = "none";
+    }
+    scrollToBottomLabel.textContent = getScrollToBottomLabel();
+    scrollToBottomLabel.style.display = hasLabel ? "" : "none";
+  };
+  renderScrollToBottomButton();
 
   // Initialized after composer plugins rebind footer DOM (see `bindComposerRefsFromFooter`)
   let attachmentManager: AttachmentManager | null = null;
@@ -1975,13 +2010,29 @@ export const createAgentExperience = (
     cancelSmoothScroll();
   };
 
+  const syncScrollToBottomButton = () => {
+    if (!isScrollToBottomEnabled()) {
+      if (scrollToBottomButton.parentNode) {
+        scrollToBottomButton.remove();
+      }
+      scrollToBottomButton.style.display = "none";
+      return;
+    }
+    if (scrollToBottomButton.parentNode !== body) {
+      body.appendChild(scrollToBottomButton);
+    }
+    scrollToBottomButton.style.display = autoFollow.isFollowing() ? "none" : "";
+  };
+
   const pauseAutoScroll = () => {
     if (!autoFollow.pause()) return;
     cancelAutoScroll();
+    syncScrollToBottomButton();
   };
 
   const resumeAutoScroll = () => {
     autoFollow.resume();
+    syncScrollToBottomButton();
   };
 
   const scheduleAutoScroll = (force = false) => {
@@ -3560,6 +3611,13 @@ export const createAgentExperience = (
   };
   body.addEventListener("wheel", handleWheel, { passive: true });
   destroyCallbacks.push(() => body.removeEventListener("wheel", handleWheel));
+  scrollToBottomButton.addEventListener("click", () => {
+    body.scrollTop = body.scrollHeight;
+    lastScrollTop = body.scrollTop;
+    resumeAutoScroll();
+    scheduleAutoScroll(true);
+  });
+  destroyCallbacks.push(() => scrollToBottomButton.remove());
   destroyCallbacks.push(() => {
     cancelAutoScroll();
   });
@@ -3708,6 +3766,9 @@ export const createAgentExperience = (
       autoExpand = config.launcher?.autoExpand ?? false;
       showReasoning = config.features?.showReasoning ?? true;
       showToolCalls = config.features?.showToolCalls ?? true;
+      scrollToBottomFeature = config.features?.scrollToBottom ?? {};
+      renderScrollToBottomButton();
+      syncScrollToBottomButton();
       const prevShowEventStreamToggle = showEventStreamToggle;
       showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
 
