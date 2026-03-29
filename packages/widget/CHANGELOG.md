@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 3.6.0
+
+### Minor Changes
+
+- 5194be0: New input token CSS variables, updated default theme values, and various component styling refinements.
+
 ## 3.5.2
 
 ### Patch Changes
