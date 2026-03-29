@@ -552,10 +552,32 @@ export type AgentWidgetArtifactsFeature = {
   }) => HTMLElement | null;
 };
 
+export type AgentWidgetScrollToBottomFeature = {
+  /**
+   * When true, Persona shows a scroll-to-bottom affordance when the user breaks
+   * away from the latest transcript or event stream content.
+   * @default true
+   */
+  enabled?: boolean;
+  /**
+   * Lucide icon name used for the affordance.
+   * @default "arrow-down"
+   */
+  iconName?: string;
+  /**
+   * Optional label text shown next to the icon. Set to an empty string for an
+   * icon-only affordance.
+   * @default ""
+   */
+  label?: string;
+};
+
 export type AgentWidgetFeatureFlags = {
   showReasoning?: boolean;
   showToolCalls?: boolean;
   showEventStreamToggle?: boolean;
+  /** Shared transcript + event stream scroll-to-bottom affordance. */
+  scrollToBottom?: AgentWidgetScrollToBottomFeature;
   /** Configuration for the Event Stream inspector view */
   eventStream?: EventStreamConfig;
   /** Optional artifact sidebar (split pane / mobile drawer) */

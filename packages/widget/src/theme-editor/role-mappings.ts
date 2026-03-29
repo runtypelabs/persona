@@ -95,6 +95,17 @@ export const ROLE_PRIMARY_ACTIONS: RoleAssignmentOptions = {
   ],
 };
 
+export const ROLE_SCROLL_TO_BOTTOM: RoleAssignmentOptions = {
+  roleId: 'role-scroll-to-bottom',
+  helper: 'Scroll-to-bottom affordances in transcript and event stream',
+  intensities: ROLE_INTENSITIES,
+  targets: [
+    { path: 'components.scrollToBottom.background', kind: 'background' },
+    { path: 'components.scrollToBottom.foreground', kind: 'foreground' },
+    { path: 'components.scrollToBottom.border', kind: 'border' },
+  ],
+};
+
 export const ROLE_INPUT: RoleAssignmentOptions = {
   roleId: 'role-input',
   helper: 'Message input field',
@@ -137,6 +148,7 @@ export const ALL_ROLES: RoleAssignmentOptions[] = [
   ROLE_USER_MESSAGES,
   ROLE_ASSISTANT_MESSAGES,
   ROLE_PRIMARY_ACTIONS,
+  ROLE_SCROLL_TO_BOTTOM,
   ROLE_INPUT,
   ROLE_LINKS_FOCUS,
   ROLE_BORDERS,

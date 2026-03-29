@@ -102,6 +102,11 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   features: {
     showReasoning: true,
     showToolCalls: true,
+    scrollToBottom: {
+      enabled: true,
+      iconName: "arrow-down",
+      label: "",
+    },
   },
   suggestionChips: [
     "What can you help me with?",
@@ -214,6 +219,8 @@ export function mergeWithDefaults(
     features: (() => {
       const da = DEFAULT_WIDGET_CONFIG.features?.artifacts;
       const ca = config.features?.artifacts;
+      const dsb = DEFAULT_WIDGET_CONFIG.features?.scrollToBottom;
+      const csb = config.features?.scrollToBottom;
       const mergedArtifacts =
         da === undefined && ca === undefined
           ? undefined
@@ -225,9 +232,17 @@ export function mergeWithDefaults(
                 ...ca?.layout,
               },
             };
+      const mergedScrollToBottom =
+        dsb === undefined && csb === undefined
+          ? undefined
+          : {
+              ...dsb,
+              ...csb,
+            };
       return {
         ...DEFAULT_WIDGET_CONFIG.features,
         ...config.features,
+        ...(mergedScrollToBottom !== undefined ? { scrollToBottom: mergedScrollToBottom } : {}),
         ...(mergedArtifacts !== undefined ? { artifacts: mergedArtifacts } : {}),
       };
     })(),

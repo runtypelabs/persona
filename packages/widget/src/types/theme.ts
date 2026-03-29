@@ -393,6 +393,14 @@ export interface LabelButtonTokens {
   gap?: string;
 }
 
+/** Scroll-to-bottom pill chrome shared by transcript + event stream. */
+export interface ScrollToBottomTokens extends ComponentTokenSet {
+  size?: string;
+  gap?: string;
+  fontSize?: string;
+  iconSize?: string;
+}
+
 /** Toggle group chrome (used by createToggleGroup). */
 export interface ToggleGroupTokens {
   /** Gap between toggle buttons. Default: 0 (connected). */
@@ -420,6 +428,8 @@ export interface ComponentTokens {
   iconButton?: IconButtonTokens;
   /** Label button styling tokens. */
   labelButton?: LabelButtonTokens;
+  /** Scroll-to-bottom indicator styling tokens. */
+  scrollToBottom?: ScrollToBottomTokens;
   /** Toggle group styling tokens. */
   toggleGroup?: ToggleGroupTokens;
   /** Artifact toolbar, tab strip, and pane chrome. */

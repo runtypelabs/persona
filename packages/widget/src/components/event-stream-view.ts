@@ -1,5 +1,11 @@
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
+import {
+  createFollowStateController,
+  isElementNearBottom,
+  resolveFollowStateFromScroll,
+  resolveFollowStateFromWheel
+} from "../utils/auto-follow";
 import type { EventStreamBuffer } from "../utils/event-stream-buffer";
 import type {
   SSEEventRecord,
@@ -391,6 +397,10 @@ export function createEventStreamView(
     config,
     plugins = [],
   } = options;
+  const scrollToBottomConfig = config?.features?.scrollToBottom;
+  const scrollToBottomEnabled = scrollToBottomConfig?.enabled !== false;
+  const scrollToBottomIconName = scrollToBottomConfig?.iconName ?? "arrow-down";
+  const scrollToBottomLabel = scrollToBottomConfig?.label ?? "";
 
   const esConfig: EventStreamConfig = config?.features?.eventStream ?? {};
 
@@ -438,7 +448,7 @@ export function createEventStreamView(
     let lastKnownTypes: string[] = [];
     let lastTypeCounts: Record<string, number> = {};
     let lastFilteredCount = 0;
-    let userScrolledUp = false;
+    const autoFollow = createFollowStateController();
     let newEventsSincePause = 0;
     let lastRenderTime = 0;
     let pendingUpdate = false;
@@ -638,18 +648,23 @@ export function createEventStreamView(
     // Scroll-to-bottom indicator
     const scrollIndicator = createElement(
       "div",
-      "persona-absolute persona-bottom-3 persona-left-1/2 persona-transform persona--translate-x-1/2 persona-bg-persona-accent persona-text-white persona-text-xs persona-px-3 persona-py-1.5 persona-rounded-full persona-cursor-pointer persona-shadow-md persona-z-10 persona-flex persona-items-center persona-gap-1"
+      "persona-scroll-to-bottom-indicator persona-absolute persona-bottom-3 persona-left-1/2 persona-transform persona--translate-x-1/2 persona-cursor-pointer persona-z-10 persona-text-xs"
     );
     applyCustomClasses(scrollIndicator, customClasses?.scrollIndicator);
     scrollIndicator.style.display = "none";
+    scrollIndicator.setAttribute(
+      "data-persona-scroll-to-bottom-has-label",
+      scrollToBottomLabel ? "true" : "false"
+    );
     const arrowIcon = renderLucideIcon(
-      "arrow-down",
-      "12px",
+      scrollToBottomIconName,
+      "14px",
       "currentColor",
       2
     );
     if (arrowIcon) scrollIndicator.appendChild(arrowIcon);
     const indicatorText = createElement("span", "");
+    indicatorText.textContent = scrollToBottomLabel;
     scrollIndicator.appendChild(indicatorText);
 
     // No matching events message
@@ -753,7 +768,7 @@ export function createEventStreamView(
     function resetScrollState() {
       lastFilteredCount = 0;
       newEventsSincePause = 0;
-      userScrolledUp = false;
+      autoFollow.resume();
       scrollIndicator.style.display = "none";
     }
 
@@ -766,12 +781,14 @@ export function createEventStreamView(
       dirtyExpandId = eventId;
       // Save scroll position — user-initiated expand/collapse should not auto-scroll
       const savedScrollTop = eventsList.scrollTop;
-      const wasUserScrolledUp = userScrolledUp;
+      const wasAutoFollowing = autoFollow.isFollowing();
       suppressScrollHandler = true;
-      userScrolledUp = true; // prevent auto-scroll during re-render
+      autoFollow.pause(); // prevent auto-scroll during re-render
       updateNow();
       eventsList.scrollTop = savedScrollTop;
-      userScrolledUp = wasUserScrolledUp;
+      if (wasAutoFollowing) {
+        autoFollow.resume();
+      }
       suppressScrollHandler = false;
     }
 
@@ -780,13 +797,7 @@ export function createEventStreamView(
     // ========================================================================
 
     function isNearBottom(): boolean {
-      const threshold = 50;
-      return (
-        eventsList.scrollHeight -
-          eventsList.scrollTop -
-          eventsList.clientHeight <=
-        threshold
-      );
+      return isElementNearBottom(eventsList, 50);
     }
 
     function updateNow() {
@@ -833,9 +844,11 @@ export function createEventStreamView(
       }
 
       // Track new events since user scrolled up
-      if (userScrolledUp && newCount > lastFilteredCount) {
+      if (scrollToBottomEnabled && !autoFollow.isFollowing() && newCount > lastFilteredCount) {
         newEventsSincePause += newCount - lastFilteredCount;
-        indicatorText.textContent = `${newEventsSincePause} new event${newEventsSincePause === 1 ? "" : "s"}`;
+        indicatorText.textContent = scrollToBottomLabel
+          ? `${scrollToBottomLabel}${newEventsSincePause > 0 ? ` (${newEventsSincePause})` : ""}`
+          : "";
         scrollIndicator.style.display = "";
       }
       lastFilteredCount = newCount;
@@ -939,7 +952,7 @@ export function createEventStreamView(
       }
 
       // Auto-scroll if user hasn't scrolled up
-      if (!userScrolledUp) {
+      if (autoFollow.isFollowing()) {
         eventsList.scrollTop = eventsList.scrollHeight;
       }
     }
@@ -1064,30 +1077,56 @@ export function createEventStreamView(
     const handleListScroll = () => {
       if (suppressScrollHandler) return;
       const currentScrollTop = eventsList.scrollTop;
-      const scrollingDown = currentScrollTop > lastScrollTop;
-      lastScrollTop = currentScrollTop;
+      const { action, nextLastScrollTop } = resolveFollowStateFromScroll({
+        following: autoFollow.isFollowing(),
+        currentScrollTop,
+        lastScrollTop,
+        nearBottom: isNearBottom(),
+        userScrollThreshold: 1,
+        resumeRequiresDownwardScroll: true
+      });
+      lastScrollTop = nextLastScrollTop;
 
-      if (isNearBottom() && scrollingDown) {
-        // User scrolled back down to bottom — re-enable auto-scroll
-        userScrolledUp = false;
+      if (action === "resume") {
+        autoFollow.resume();
         newEventsSincePause = 0;
         scrollIndicator.style.display = "none";
-      } else if (!isNearBottom()) {
-        userScrolledUp = true;
+      } else if (action === "pause") {
+        autoFollow.pause();
+        if (scrollToBottomEnabled) {
+          indicatorText.textContent = scrollToBottomLabel;
+          scrollIndicator.style.display = "";
+        }
       }
     };
 
     // Wheel events fire synchronously before rAF callbacks, so we can
     // detect upward scroll intent before the next updateNow() auto-scrolls.
     const handleWheel = (e: WheelEvent) => {
-      if (e.deltaY < 0) {
-        userScrolledUp = true;
+      const action = resolveFollowStateFromWheel({
+        following: autoFollow.isFollowing(),
+        deltaY: e.deltaY,
+        nearBottom: isNearBottom(),
+        resumeWhenNearBottom: true
+      });
+
+      if (action === "pause") {
+        autoFollow.pause();
+        if (scrollToBottomEnabled) {
+          indicatorText.textContent = scrollToBottomLabel;
+          scrollIndicator.style.display = "";
+        }
+      } else if (action === "resume") {
+        autoFollow.resume();
+        newEventsSincePause = 0;
+        scrollIndicator.style.display = "none";
       }
     };
 
     const handleScrollIndicatorClick = () => {
+      if (!scrollToBottomEnabled) return;
       eventsList.scrollTop = eventsList.scrollHeight;
-      userScrolledUp = false;
+      autoFollow.resume();
       newEventsSincePause = 0;
       scrollIndicator.style.display = "none";
     };

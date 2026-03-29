@@ -374,6 +374,18 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       border: 'palette.colors.gray.200',
     },
   },
+  scrollToBottom: {
+    background: 'components.button.primary.background',
+    foreground: 'components.button.primary.foreground',
+    border: 'semantic.colors.primary',
+    size: '40px',
+    borderRadius: 'palette.radius.full',
+    shadow: 'palette.shadows.sm',
+    padding: '0.5rem 0.875rem',
+    gap: '0.5rem',
+    fontSize: '0.875rem',
+    iconSize: '14px',
+  },
   artifact: {
     pane: {
       background: 'semantic.colors.container',
@@ -656,6 +668,7 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-radius-md'] = cssVars['--persona-palette-radius-md'] ?? '0.375rem';
   cssVars['--persona-radius-lg'] = cssVars['--persona-palette-radius-lg'] ?? '0.5rem';
   cssVars['--persona-radius-xl'] = cssVars['--persona-palette-radius-xl'] ?? '0.75rem';
+  cssVars['--persona-radius-full'] = cssVars['--persona-palette-radius-full'] ?? '9999px';
   cssVars['--persona-launcher-radius'] =
     cssVars['--persona-components-launcher-borderRadius'] ??
     cssVars['--persona-palette-radius-full'] ??
@@ -742,6 +755,42 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-message-assistant-border'] ?? cssVars['--persona-border'];
   cssVars['--persona-message-assistant-shadow'] =
     cssVars['--persona-components-message-assistant-shadow'] ?? '0 1px 2px 0 rgb(0 0 0 / 0.05)';
+  cssVars['--persona-scroll-to-bottom-bg'] =
+    cssVars['--persona-components-scrollToBottom-background'] ??
+    cssVars['--persona-button-primary-bg'] ??
+    cssVars['--persona-accent'];
+  cssVars['--persona-scroll-to-bottom-fg'] =
+    cssVars['--persona-components-scrollToBottom-foreground'] ??
+    cssVars['--persona-button-primary-fg'] ??
+    cssVars['--persona-text-inverse'];
+  cssVars['--persona-scroll-to-bottom-border'] =
+    cssVars['--persona-components-scrollToBottom-border'] ??
+    cssVars['--persona-primary'];
+  cssVars['--persona-scroll-to-bottom-size'] =
+    cssVars['--persona-components-scrollToBottom-size'] ??
+    '40px';
+  cssVars['--persona-scroll-to-bottom-radius'] =
+    cssVars['--persona-components-scrollToBottom-borderRadius'] ??
+    cssVars['--persona-button-radius'] ??
+    cssVars['--persona-radius-full'] ??
+    '9999px';
+  cssVars['--persona-scroll-to-bottom-shadow'] =
+    cssVars['--persona-components-scrollToBottom-shadow'] ??
+    cssVars['--persona-palette-shadows-sm'] ??
+    '0 1px 2px 0 rgb(0 0 0 / 0.05)';
+  cssVars['--persona-scroll-to-bottom-padding'] =
+    cssVars['--persona-components-scrollToBottom-padding'] ??
+    '0.5rem 0.875rem';
+  cssVars['--persona-scroll-to-bottom-gap'] =
+    cssVars['--persona-components-scrollToBottom-gap'] ??
+    '0.5rem';
+  cssVars['--persona-scroll-to-bottom-font-size'] =
+    cssVars['--persona-components-scrollToBottom-fontSize'] ??
+    cssVars['--persona-palette-typography-fontSize-sm'] ??
+    '0.875rem';
+  cssVars['--persona-scroll-to-bottom-icon-size'] =
+    cssVars['--persona-components-scrollToBottom-iconSize'] ??
+    '14px';
 
   cssVars['--persona-tool-bubble-shadow'] =
     cssVars['--persona-components-toolBubble-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';

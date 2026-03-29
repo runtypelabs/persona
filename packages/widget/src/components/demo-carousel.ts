@@ -591,7 +591,7 @@ export function createDemoCarousel(
   wrapper.dataset.colorScheme = currentScheme;
 
   const iframe = createElement("iframe", "persona-dc-iframe");
-  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
   iframe.setAttribute("loading", "lazy");
   iframe.title = items[currentIndex].title;
 
