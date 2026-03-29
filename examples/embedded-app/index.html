@@ -59,7 +59,7 @@
       <section class="card cardFull quick-start-section reveal-el">
         <span class="label">Quick Start</span>
         <h2 class="card-title kern-tight" style="font-size: 24px;">Choose your integration path</h2>
-        <p>Start with Runtype in minutes, or wire Persona into your own SSE backend.</p>
+        <p>Ship to prod with Runtype in minutes, or wire Persona into your own SSE backend.</p>
 
         <div class="quick-start-tabs" role="tablist" aria-label="Quick start paths">
           <button
@@ -99,109 +99,102 @@
               <div class="quick-start-step-meta">
                 <span class="quick-start-step-index">01</span>
                 <div class="quick-start-step-copy">
-                  <h3 class="quick-start-step-title">Install Persona</h3>
-                  <p>Add the widget package to your app.</p>
+                  <h3 class="quick-start-step-title">Run the CLI setup</h3>
+                  <p>Create an agent, mint a client token, and get a paste-ready installer snippet.</p>
                 </div>
               </div>
               <button
                 type="button"
                 class="install-command quick-start-install"
-                data-copy-text="npm install @runtypelabs/persona"
+                data-copy-text="npx @runtypelabs/cli@latest persona init"
                 data-copy-default="Copy"
                 data-copy-success="Copied!"
-                aria-label="Copy npm install command"
+                aria-label="Copy Persona init command"
               >
                 <span class="install-prefix">$</span>
-                <span>npm install @runtypelabs/persona</span>
+                <span>npx @runtypelabs/cli@latest persona init</span>
                 <span class="install-copy" data-copy-label>Copy</span>
               </button>
+              <p class="quick-start-step-note">Sign in when prompted — the CLI reveals your token and lets you copy the snippet.</p>
+              <div class="quick-start-note-actions">
+                <button
+                  type="button"
+                  class="quick-start-note-link"
+                  data-quick-start-flags-open
+                  aria-haspopup="dialog"
+                  aria-controls="quick-start-flags-dialog"
+                >
+                  Show all flags
+                </button>
+              </div>
             </div>
 
             <div class="quick-start-step">
               <div class="quick-start-step-meta">
                 <span class="quick-start-step-index">02</span>
                 <div class="quick-start-step-copy">
-                  <h3 class="quick-start-step-title">Sign up &amp; create an agent</h3>
-                  <p>Run the guided setup to create your account and product, then create an agent.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                class="install-command quick-start-install"
-                data-copy-text="npx @runtypelabs/cli@latest init"
-                data-copy-default="Copy"
-                data-copy-success="Copied!"
-                aria-label="Copy Runtype init command"
-              >
-                <span class="install-prefix">$</span>
-                <span>npx @runtypelabs/cli@latest init</span>
-                <span class="install-copy" data-copy-label>Copy</span>
-              </button>
-              <p class="quick-start-step-note">Then create an agent and note the returned ID:</p>
-              <button
-                type="button"
-                class="install-command quick-start-install"
-                data-copy-text="npx @runtypelabs/cli@latest agents create -n &quot;my-agent&quot;"
-                data-copy-default="Copy"
-                data-copy-success="Copied!"
-                aria-label="Copy agent create command"
-              >
-                <span class="install-prefix">$</span>
-                <span>npx @runtypelabs/cli@latest agents create -n "my-agent"</span>
-                <span class="install-copy" data-copy-label>Copy</span>
-              </button>
-            </div>
-
-            <div class="quick-start-step">
-              <div class="quick-start-step-meta">
-                <span class="quick-start-step-index">03</span>
-                <div class="quick-start-step-copy">
-                  <h3 class="quick-start-step-title">Create a client token</h3>
-                  <p>Generate a browser-safe token for the agent you just created.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                class="install-command quick-start-install"
-                data-copy-text="npx @runtypelabs/cli@latest client-tokens create -n &quot;my-widget&quot; --agent-ids &lt;agent-id&gt; --environment test"
-                data-copy-default="Copy"
-                data-copy-success="Copied!"
-                aria-label="Copy Runtype client token command"
-              >
-                <span class="install-prefix">$</span>
-                <span>npx @runtypelabs/cli@latest client-tokens create -n "my-widget" --agent-ids &lt;agent-id&gt; --environment test</span>
-                <span class="install-copy" data-copy-label>Copy</span>
-              </button>
-              <p class="quick-start-step-note">Replace <code>&lt;agent-id&gt;</code> with the ID from step 02, then paste the returned token into the config below.</p>
-            </div>
-
-            <div class="quick-start-step">
-              <div class="quick-start-step-meta">
-                <span class="quick-start-step-index">04</span>
-                <div class="quick-start-step-copy">
-                  <h3 class="quick-start-step-title">Mount the widget</h3>
-                  <p>Import the stylesheet and initialize Persona with the client token.</p>
+                  <h3 class="quick-start-step-title">Paste the installer snippet</h3>
+                  <p>Use the default script installer when you want the fastest path to a live widget.</p>
                 </div>
               </div>
               <div class="code-showcase">
-                <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
-<span class="code-keyword">import</span> { <span class="code-function">DEFAULT_WIDGET_CONFIG</span>, <span class="code-function">initAgentWidget</span> } <span class="code-keyword">from</span> <span class="code-string">"@runtypelabs/persona"</span>;
-
-<span class="code-function">initAgentWidget</span>({
-  <span class="code-keyword">target</span>: <span class="code-string">"#chat"</span>,
-  <span class="code-keyword">config</span>: {
-    ...<span class="code-function">DEFAULT_WIDGET_CONFIG</span>,
-    clientToken: <span class="code-string">"ct_test_..."</span>,
-    launcher: {
-      ...<span class="code-function">DEFAULT_WIDGET_CONFIG</span>.launcher,
-      enabled: <span class="code-keyword">false</span>,
-    },
-  },
-});</code></pre>
+                <pre><code>&lt;script
+  src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"
+  data-runtype-token="ct_test_..."
+&gt;&lt;/script&gt;</code></pre>
               </div>
+              <p class="quick-start-step-note">The widget mounts on <code>body</code> by default. Need a specific container? Pass <code>--target-selector "#chat"</code> and the CLI will include a mount div and <code>data-config</code> in the snippet.</p>
             </div>
           </div>
-          <p class="quick-start-footnote">Need server-side flow control instead? Use <code>@runtypelabs/persona-proxy</code> and switch to a proxy-based Runtype setup later.</p>
+          <p class="quick-start-footnote">Need server-side flow control? Use <code>@runtypelabs/persona-proxy</code>.</p>
+          <dialog class="quick-start-dialog" id="quick-start-flags-dialog" data-quick-start-flags-dialog aria-labelledby="quick-start-flags-title">
+            <div class="quick-start-dialog-card">
+              <div class="quick-start-dialog-titlebar">
+                <div class="quick-start-dialog-dots">
+                  <span class="quick-start-dialog-dot"></span>
+                  <span class="quick-start-dialog-dot"></span>
+                  <span class="quick-start-dialog-dot"></span>
+                </div>
+                <span class="quick-start-dialog-titlebar-label" id="quick-start-flags-title">persona init --help</span>
+                <button type="button" class="quick-start-dialog-close" data-quick-start-flags-close aria-label="Close">esc</button>
+              </div>
+              <div class="quick-start-dialog-body">
+                <pre>
+<span class="term-heading">Usage</span>
+  $ npx @runtypelabs/cli@latest persona init <span class="term-muted">[options]</span>
+
+<span class="term-heading">Description</span>
+  Create agent + client token and output a Persona embed snippet.
+
+<span class="term-heading">Options</span>
+  <span class="term-flag">--agent-name</span> <span class="term-meta">&lt;name&gt;</span>         Name for the new agent
+  <span class="term-flag">--agent-description</span> <span class="term-meta">&lt;text&gt;</span>  Optional agent description
+  <span class="term-flag">--token-name</span> <span class="term-meta">&lt;name&gt;</span>         Custom name for the client token
+  <span class="term-flag">--environment</span> <span class="term-meta">&lt;env&gt;</span>         test or live <span class="term-muted">(default: test)</span>
+  <span class="term-flag">--origins</span> <span class="term-meta">&lt;origins...&gt;</span>     Allowed origins <span class="term-muted">(default: *)</span>
+  <span class="term-flag">--format</span> <span class="term-meta">&lt;fmt&gt;</span>             script-installer | script-manual | esm | react
+                              <span class="term-muted">(default: script-installer)</span>
+  <span class="term-flag">--print-snippet</span>             Print the snippet to stdout
+  <span class="term-flag">--target-selector</span> <span class="term-meta">&lt;sel&gt;</span>    Widget mount target <span class="term-muted">(default: body)</span>
+  <span class="term-flag">--api-url</span> <span class="term-meta">&lt;url&gt;</span>            Override API base URL
+  <span class="term-flag">--json</span>                      Structured JSON output (includes snippet)
+  <span class="term-flag">--yes</span>                       Accept defaults without prompting
+  <span class="term-flag">--tty</span> / <span class="term-flag">--no-tty</span>            Force interactive or non-interactive mode
+
+<span class="term-heading">Examples</span>
+  <span class="term-muted"># Interactive — just run it</span>
+  $ npx @runtypelabs/cli@latest persona init
+
+  <span class="term-muted"># Non-interactive for CI</span>
+  $ RUNTYPE_API_KEY=sk_... npx @runtypelabs/cli@latest persona init \
+      --agent-name "Support" --no-tty --json
+
+  <span class="term-muted"># ESM snippet for a bundled app</span>
+  $ npx @runtypelabs/cli@latest persona init --format esm
+</pre>
+              </div>
+            </div>
+          </dialog>
         </div>
 
         <div
@@ -402,6 +395,39 @@
 
       if (quickStartTabs.length && quickStartPanels.length) {
         activateQuickStartTab('runtype');
+      }
+
+      var quickStartFlagsDialog = document.querySelector('[data-quick-start-flags-dialog]');
+      if (quickStartFlagsDialog) {
+        document.querySelectorAll('[data-quick-start-flags-open]').forEach(function(trigger) {
+          trigger.addEventListener('click', function() {
+            if (typeof quickStartFlagsDialog.showModal === 'function') {
+              quickStartFlagsDialog.showModal();
+            } else {
+              quickStartFlagsDialog.setAttribute('open', 'open');
+            }
+          });
+        });
+
+        document.querySelectorAll('[data-quick-start-flags-close]').forEach(function(trigger) {
+          trigger.addEventListener('click', function() {
+            if (typeof quickStartFlagsDialog.close === 'function') {
+              quickStartFlagsDialog.close();
+            } else {
+              quickStartFlagsDialog.removeAttribute('open');
+            }
+          });
+        });
+
+        quickStartFlagsDialog.addEventListener('click', function(event) {
+          if (event.target === quickStartFlagsDialog) {
+            if (typeof quickStartFlagsDialog.close === 'function') {
+              quickStartFlagsDialog.close();
+            } else {
+              quickStartFlagsDialog.removeAttribute('open');
+            }
+          }
+        });
       }
 
       // Copy helper
