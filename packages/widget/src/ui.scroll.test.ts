@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 
-type RafCallback = FrameRequestCallback;
+type RafCallback = (time: number) => void;
 
 const STREAM_MESSAGE_ID = "ast-stream";
 const STREAM_CREATED_AT = "2026-03-29T00:00:00.000Z";
