@@ -3,7 +3,6 @@
 import type { SectionDef, TabDef, SubGroupDef, FieldDef } from './types';
 import { COLOR_FAMILIES } from './color-utils';
 import {
-  ALL_ROLES,
   ROLE_SURFACES,
   ROLE_HEADER,
   ROLE_USER_MESSAGES,

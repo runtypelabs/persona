@@ -310,7 +310,6 @@ export function detectRoleAssignment(
   if (!bgMatch) return null;
 
   const detectedFamily = bgMatch[1] as string;
-  const shade = bgMatch[2];
 
   // Normalize gray → gray (it's already the canonical name)
   const family = ROLE_FAMILIES.includes(detectedFamily as RoleFamily)
