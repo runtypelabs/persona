@@ -663,7 +663,9 @@ export const createAgentExperience = (
   let attachmentButtonWrapper: HTMLElement | null = panelElements.attachmentButtonWrapper;
   let attachmentInput: HTMLInputElement | null = panelElements.attachmentInput;
   let attachmentPreviewsContainer: HTMLElement | null = panelElements.attachmentPreviewsContainer;
+  container.classList.add("persona-relative");
   body.classList.add("persona-relative");
+  const SCROLL_TO_BOTTOM_EDGE_OFFSET = 12;
 
   const getScrollToBottomLabel = () => scrollToBottomFeature.label ?? "";
   const getScrollToBottomIconName = () => scrollToBottomFeature.iconName ?? "arrow-down";
@@ -678,7 +680,14 @@ export const createAgentExperience = (
   const scrollToBottomIcon = createElement("span", "persona-flex persona-items-center");
   const scrollToBottomLabel = createElement("span", "");
   scrollToBottomButton.append(scrollToBottomIcon, scrollToBottomLabel);
-  body.appendChild(scrollToBottomButton);
+  container.appendChild(scrollToBottomButton);
+
+  const updateScrollToBottomButtonOffset = () => {
+    const footerHidden = footer.style.display === "none";
+    const footerHeight = footerHidden ? 0 : footer.offsetHeight;
+    scrollToBottomButton.style.bottom = `${footerHeight + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
+  };
+  updateScrollToBottomButtonOffset();
 
   const renderScrollToBottomButton = () => {
     const hasLabel = Boolean(getScrollToBottomLabel());
@@ -761,6 +770,7 @@ export const createAgentExperience = (
     };
     eventStreamLastUpdate = 0;
     eventStreamRAF = requestAnimationFrame(rafLoop);
+    syncScrollToBottomButton();
     eventBus.emit("eventStream:opened", { timestamp: Date.now() });
   };
 
@@ -781,6 +791,7 @@ export const createAgentExperience = (
       cancelAnimationFrame(eventStreamRAF);
       eventStreamRAF = null;
     }
+    syncScrollToBottomButton();
     eventBus.emit("eventStream:closed", { timestamp: Date.now() });
   };
 
@@ -2011,16 +2022,17 @@ export const createAgentExperience = (
   };
 
   const syncScrollToBottomButton = () => {
-    if (!isScrollToBottomEnabled()) {
+    if (!isScrollToBottomEnabled() || eventStreamVisible) {
       if (scrollToBottomButton.parentNode) {
         scrollToBottomButton.remove();
       }
       scrollToBottomButton.style.display = "none";
       return;
     }
-    if (scrollToBottomButton.parentNode !== body) {
-      body.appendChild(scrollToBottomButton);
+    if (scrollToBottomButton.parentNode !== container) {
+      container.appendChild(scrollToBottomButton);
     }
+    updateScrollToBottomButtonOffset();
     scrollToBottomButton.style.display = autoFollow.isFollowing() ? "none" : "";
   };
 
@@ -3558,6 +3570,7 @@ export const createAgentExperience = (
     } finally {
       // applyFullHeightStyles() assigns wrapper.style.cssText (e.g. display:flex !important), which
       // overwrites updateOpenState()'s display:none when docked+closed. Re-sync after every recalc.
+      updateScrollToBottomButtonOffset();
       updateOpenState();
     }
   };
@@ -3566,6 +3579,13 @@ export const createAgentExperience = (
   const ownerWindow = mount.ownerDocument.defaultView ?? window;
   ownerWindow.addEventListener("resize", recalcPanelHeight);
   destroyCallbacks.push(() => ownerWindow.removeEventListener("resize", recalcPanelHeight));
+  if (typeof ResizeObserver !== "undefined") {
+    const footerResizeObserver = new ResizeObserver(() => {
+      updateScrollToBottomButtonOffset();
+    });
+    footerResizeObserver.observe(footer);
+    destroyCallbacks.push(() => footerResizeObserver.disconnect());
+  }
 
   lastScrollTop = body.scrollTop;
 
@@ -3579,7 +3599,8 @@ export const createAgentExperience = (
       userScrollThreshold: USER_SCROLL_THRESHOLD,
       isAutoScrolling,
       pauseOnUpwardScroll: true,
-      pauseWhenAwayFromBottom: false
+      pauseWhenAwayFromBottom: false,
+      resumeRequiresDownwardScroll: true
     });
     lastScrollTop = nextLastScrollTop;
 
@@ -3947,6 +3968,8 @@ export const createAgentExperience = (
       if (footer) {
         footer.style.display = showFooter ? "" : "none";
       }
+      updateScrollToBottomButtonOffset();
+      syncScrollToBottomButton();
 
       // Only update open state if launcher enabled state changed or autoExpand value changed
       const launcherEnabledChanged = launcherEnabled !== prevLauncherEnabled;

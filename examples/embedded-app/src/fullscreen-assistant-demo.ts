@@ -395,6 +395,18 @@ const fullscreenAssistantDarkTokens = {
         h2: { fontSize: "1.125rem", fontWeight: "600" }
       }
     },
+    scrollToBottom: {
+      background: "#171717",
+      foreground: "#FFFFFF",
+      border: "rgba(72, 71  , 69, 1)",
+      size: "44px",
+      borderRadius: "9999px",
+      shadow: "0 4px 16px rgba(0, 0, 0, 0.45)",
+      iconSize: "18px",
+      gap: "0",
+      padding: "0",
+      fontSize: "0.75rem",
+    },
     artifact: {
       toolbar: {
         iconBackground: "transparent",
@@ -524,6 +536,11 @@ const config = mergeWithDefaults({
   features: {
     showReasoning: false,
     showToolCalls: false,
+    scrollToBottom: {
+      enabled: true,
+      iconName: "arrow-down",
+      label: "",
+    },
     artifacts: {
       enabled: true,
       layout: {

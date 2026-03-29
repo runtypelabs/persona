@@ -68,6 +68,28 @@ describe("auto-follow utilities", () => {
     expect(resume.action).toBe("resume");
   });
 
+  it("keeps transcript-style auto-follow paused near the bottom until scrolling down", () => {
+    const stayPaused = resolveFollowStateFromScroll({
+      following: false,
+      currentScrollTop: 597,
+      lastScrollTop: 600,
+      nearBottom: true,
+      userScrollThreshold: 1,
+      resumeRequiresDownwardScroll: true
+    });
+    const resume = resolveFollowStateFromScroll({
+      following: false,
+      currentScrollTop: 599,
+      lastScrollTop: 597,
+      nearBottom: true,
+      userScrollThreshold: 1,
+      resumeRequiresDownwardScroll: true
+    });
+
+    expect(stayPaused.action).toBe("none");
+    expect(resume.action).toBe("resume");
+  });
+
   it("resolves wheel intent for pause and resume", () => {
     expect(
       resolveFollowStateFromWheel({

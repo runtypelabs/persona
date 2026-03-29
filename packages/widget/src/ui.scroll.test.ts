@@ -135,6 +135,24 @@ const emitReasoningMessage = (
   });
 };
 
+const createCustomComposer = () => {
+  const footer = document.createElement("div");
+  footer.className = "persona-widget-footer";
+
+  const form = document.createElement("form");
+  form.setAttribute("data-persona-composer-form", "");
+
+  const textarea = document.createElement("textarea");
+  textarea.setAttribute("data-persona-composer-input", "");
+
+  const status = document.createElement("div");
+  status.setAttribute("data-persona-composer-status", "");
+
+  form.appendChild(textarea);
+  footer.append(form, status);
+  return footer;
+};
+
 describe("createAgentExperience streaming scroll", () => {
   beforeEach(() => {
     installRafMock();
@@ -251,6 +269,40 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
+  it("does not immediately resume after an upward scroll while still near the bottom", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    });
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    expect(scrollContainer).not.toBeNull();
+
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    scrollContainer!.dispatchEvent(new WheelEvent("wheel", { deltaY: -24 }));
+    metrics.setScrollTop(metrics.getBottomScrollTop() - 3);
+    scrollContainer!.dispatchEvent(new Event("scroll"));
+
+    metrics.setScrollHeight(1040);
+    emitStreamingMessage(controller, "Second chunk");
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(597);
+    expect(getScrollToBottomButton(mount)?.style.display).not.toBe("none");
+
+    controller.destroy();
+  });
+
   it("keeps following the stream when the user does not scroll", () => {
     const raf = installRafMock();
     const mount = createMount();
@@ -346,6 +398,78 @@ describe("createAgentExperience streaming scroll", () => {
     expect(button).not.toBeNull();
     expect(button?.textContent?.trim()).toBe("");
     expect(button?.querySelector("svg")).not.toBeNull();
+
+    controller.destroy();
+  });
+
+  it("anchors the transcript affordance outside the scroll container", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    });
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    expect(scrollContainer).not.toBeNull();
+
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    scrollContainer!.dispatchEvent(new WheelEvent("wheel", { deltaY: -18 }));
+    metrics.setScrollTop(560);
+    metrics.setScrollHeight(1060);
+    emitStreamingMessage(controller, "Second chunk");
+    raf.flush();
+
+    const button = getScrollToBottomButton(mount);
+    expect(button).not.toBeNull();
+    expect(button?.parentElement).not.toBe(scrollContainer);
+
+    controller.destroy();
+  });
+
+  it("keeps the transcript affordance outside the scroll container with a custom composer", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      plugins: [
+        {
+          id: "custom-composer",
+          renderComposer: () => createCustomComposer()
+        }
+      ]
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    expect(scrollContainer).not.toBeNull();
+
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    scrollContainer!.dispatchEvent(new WheelEvent("wheel", { deltaY: -18 }));
+    metrics.setScrollTop(560);
+    metrics.setScrollHeight(1060);
+    emitStreamingMessage(controller, "Second chunk");
+    raf.flush();
+
+    const button = getScrollToBottomButton(mount);
+    expect(button).not.toBeNull();
+    expect(button?.parentElement).not.toBe(scrollContainer);
 
     controller.destroy();
   });
