@@ -33,6 +33,13 @@ import { renderLucideIcon } from "./utils/icons";
 import { createElement, createElementInDocument } from "./utils/dom";
 import { morphMessages } from "./utils/morph";
 import { computeMessageFingerprint, createMessageCache, getCachedWrapper, setCachedWrapper, pruneCache } from "./utils/message-fingerprint";
+import {
+  createFollowStateController,
+  getScrollBottomOffset,
+  isElementNearBottom,
+  resolveFollowStateFromScroll,
+  resolveFollowStateFromWheel
+} from "./utils/auto-follow";
 import { statusCopy } from "./utils/constants";
 import { isDockedMountMode, resolveDockConfig } from "./utils/dock";
 import { createLauncherButton } from "./components/launcher";
@@ -1845,18 +1852,13 @@ export const createAgentExperience = (
   let isStreaming = false;
   const messageCache = createMessageCache();
   let configVersion = 0;
-  let shouldAutoScroll = true;
+  const autoFollow = createFollowStateController();
   let lastScrollTop = 0;
-  let lastAutoScrollTime = 0;
   let scrollRAF: number | null = null;
-  let isAutoScrollBlocked = false;
-  let blockUntilTime = 0;
   let isAutoScrolling = false;
 
-  const AUTO_SCROLL_THROTTLE = 125;
-  const AUTO_SCROLL_BLOCK_TIME = 2000;
-  const USER_SCROLL_THRESHOLD = 5;
-  const BOTTOM_THRESHOLD = 50;
+  const USER_SCROLL_THRESHOLD = 1;
+  const BOTTOM_THRESHOLD = 8;
   const messageState = new Map<
     string,
     { streaming?: boolean; role: AgentWidgetMessage["role"] }
@@ -1946,40 +1948,6 @@ export const createAgentExperience = (
     }
   }
 
-  const scheduleAutoScroll = (force = false) => {
-    if (!shouldAutoScroll) return;
-
-    const now = Date.now();
-
-    if (isAutoScrollBlocked && now < blockUntilTime) {
-      if (!force) return;
-    }
-
-    if (isAutoScrollBlocked && now >= blockUntilTime) {
-      isAutoScrollBlocked = false;
-    }
-
-    if (!force && !isStreaming) return;
-
-    if (now - lastAutoScrollTime < AUTO_SCROLL_THROTTLE) return;
-    lastAutoScrollTime = now;
-
-    if (scrollRAF) {
-      cancelAnimationFrame(scrollRAF);
-    }
-
-    scrollRAF = requestAnimationFrame(() => {
-      if (isAutoScrollBlocked || !shouldAutoScroll) return;
-      isAutoScrolling = true;
-      body.scrollTop = body.scrollHeight;
-      lastScrollTop = body.scrollTop;
-      requestAnimationFrame(() => {
-        isAutoScrolling = false;
-      });
-      scrollRAF = null;
-    });
-  };
-
   // Track ongoing smooth scroll animation
   let smoothScrollRAF: number | null = null;
 
@@ -1991,30 +1959,63 @@ export const createAgentExperience = (
     return scrollable || body;
   };
 
-  // Custom smooth scroll animation with easing
-  const smoothScrollToBottom = (element: HTMLElement, duration = 500) => {
-    const start = element.scrollTop;
-    const clientHeight = element.clientHeight;
-    // Recalculate target dynamically to handle layout changes
-    let target = element.scrollHeight;
-    let distance = target - start;
-
-    // Check if already at bottom: scrollTop + clientHeight should be >= scrollHeight
-    // Add a small threshold (2px) to account for rounding/subpixel differences
-    const isAtBottom = start + clientHeight >= target - 2;
-    
-    // If already at bottom or very close, skip animation to prevent glitch
-    if (isAtBottom || Math.abs(distance) < 5) {
-      return;
-    }
-
-    // Cancel any ongoing smooth scroll animation
+  const cancelSmoothScroll = () => {
     if (smoothScrollRAF !== null) {
       cancelAnimationFrame(smoothScrollRAF);
       smoothScrollRAF = null;
     }
+    isAutoScrolling = false;
+  };
+
+  const cancelAutoScroll = () => {
+    if (scrollRAF !== null) {
+      cancelAnimationFrame(scrollRAF);
+      scrollRAF = null;
+    }
+    cancelSmoothScroll();
+  };
+
+  const pauseAutoScroll = () => {
+    if (!autoFollow.pause()) return;
+    cancelAutoScroll();
+  };
+
+  const resumeAutoScroll = () => {
+    autoFollow.resume();
+  };
+
+  const scheduleAutoScroll = (force = false) => {
+    if (!autoFollow.isFollowing()) return;
+
+    if (!force && !isStreaming) return;
+
+    cancelAutoScroll();
+
+    scrollRAF = requestAnimationFrame(() => {
+      scrollRAF = null;
+      if (!autoFollow.isFollowing()) return;
+      smoothScrollToBottom(getScrollableContainer(), force ? 220 : 140);
+    });
+  };
+
+  // Custom smooth scroll animation with easing
+  const smoothScrollToBottom = (element: HTMLElement, duration = 500) => {
+    const start = element.scrollTop;
+    // Recalculate target dynamically to handle layout changes
+    let target = getScrollBottomOffset(element);
+    let distance = target - start;
+
+    // If already at bottom or very close, skip animation to prevent glitch
+    if (Math.abs(distance) < 1) {
+      lastScrollTop = element.scrollTop;
+      return;
+    }
+
+    // Cancel any ongoing smooth scroll animation
+    cancelSmoothScroll();
 
     const startTime = performance.now();
+    isAutoScrolling = true;
 
     // Easing function: ease-out cubic for smooth deceleration
     const easeOutCubic = (t: number): number => {
@@ -2022,8 +2023,13 @@ export const createAgentExperience = (
     };
 
     const animate = (currentTime: number) => {
+      if (!autoFollow.isFollowing()) {
+        cancelSmoothScroll();
+        return;
+      }
+
       // Recalculate target each frame in case scrollHeight changed
-      const currentTarget = element.scrollHeight;
+      const currentTarget = getScrollBottomOffset(element);
       if (currentTarget !== target) {
         target = currentTarget;
         distance = target - start;
@@ -2035,13 +2041,16 @@ export const createAgentExperience = (
       
       const currentScroll = start + distance * eased;
       element.scrollTop = currentScroll;
+      lastScrollTop = element.scrollTop;
 
       if (progress < 1) {
         smoothScrollRAF = requestAnimationFrame(animate);
       } else {
         // Ensure we end exactly at the target
-        element.scrollTop = element.scrollHeight;
+        element.scrollTop = target;
+        lastScrollTop = element.scrollTop;
         smoothScrollRAF = null;
+        isAutoScrolling = false;
       }
     };
 
@@ -2481,20 +2490,6 @@ export const createAgentExperience = (
 
     // Use idiomorph to morph the container contents
     morphMessages(container, tempContainer);
-    // Defer scroll to next frame for smoother animation and to prevent jolt
-    // This allows the browser to update layout (e.g., typing indicator removal) before scrolling
-    // Use double RAF to ensure layout has fully settled before starting scroll animation
-    // Get the scrollable container using its unique ID (#persona-scroll-container)
-    // Only smooth-scroll if auto-scroll hasn't been blocked by the user scrolling up
-    if (shouldAutoScroll && !isAutoScrollBlocked) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (!shouldAutoScroll || isAutoScrollBlocked) return;
-          const scrollableContainer = getScrollableContainer();
-          smoothScrollToBottom(scrollableContainer);
-        });
-      });
-    }
   };
 
   // Alias for clarity - the implementation handles flicker prevention via typing indicator logic
@@ -3525,32 +3520,48 @@ export const createAgentExperience = (
 
   const handleScroll = () => {
     const scrollTop = body.scrollTop;
-    const scrollHeight = body.scrollHeight;
-    const clientHeight = body.clientHeight;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    const delta = Math.abs(scrollTop - lastScrollTop);
-    lastScrollTop = scrollTop;
+    const { action, nextLastScrollTop } = resolveFollowStateFromScroll({
+      following: autoFollow.isFollowing(),
+      currentScrollTop: scrollTop,
+      lastScrollTop,
+      nearBottom: isElementNearBottom(body, BOTTOM_THRESHOLD),
+      userScrollThreshold: USER_SCROLL_THRESHOLD,
+      isAutoScrolling,
+      pauseOnUpwardScroll: true,
+      pauseWhenAwayFromBottom: false
+    });
+    lastScrollTop = nextLastScrollTop;
 
-    if (isAutoScrolling) return;
-    if (delta <= USER_SCROLL_THRESHOLD) return;
-
-    if (!shouldAutoScroll && distanceFromBottom < BOTTOM_THRESHOLD) {
-      isAutoScrollBlocked = false;
-      shouldAutoScroll = true;
+    if (action === "resume") {
+      resumeAutoScroll();
       return;
     }
 
-    if (shouldAutoScroll && distanceFromBottom > BOTTOM_THRESHOLD) {
-      isAutoScrollBlocked = true;
-      blockUntilTime = Date.now() + AUTO_SCROLL_BLOCK_TIME;
-      shouldAutoScroll = false;
+    if (action === "pause") {
+      pauseAutoScroll();
     }
   };
 
   body.addEventListener("scroll", handleScroll, { passive: true });
   destroyCallbacks.push(() => body.removeEventListener("scroll", handleScroll));
+  const handleWheel = (event: WheelEvent) => {
+    const action = resolveFollowStateFromWheel({
+      following: autoFollow.isFollowing(),
+      deltaY: event.deltaY,
+      nearBottom: isElementNearBottom(body, BOTTOM_THRESHOLD),
+      resumeWhenNearBottom: true
+    });
+
+    if (action === "pause") {
+      pauseAutoScroll();
+    } else if (action === "resume") {
+      resumeAutoScroll();
+    }
+  };
+  body.addEventListener("wheel", handleWheel, { passive: true });
+  destroyCallbacks.push(() => body.removeEventListener("wheel", handleWheel));
   destroyCallbacks.push(() => {
-    if (scrollRAF) cancelAnimationFrame(scrollRAF);
+    cancelAutoScroll();
   });
 
   const refreshCloseButton = () => {

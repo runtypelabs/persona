@@ -1,5 +1,11 @@
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
+import {
+  createFollowStateController,
+  isElementNearBottom,
+  resolveFollowStateFromScroll,
+  resolveFollowStateFromWheel
+} from "../utils/auto-follow";
 import type { EventStreamBuffer } from "../utils/event-stream-buffer";
 import type {
   SSEEventRecord,
@@ -438,7 +444,7 @@ export function createEventStreamView(
     let lastKnownTypes: string[] = [];
     let lastTypeCounts: Record<string, number> = {};
     let lastFilteredCount = 0;
-    let userScrolledUp = false;
+    const autoFollow = createFollowStateController();
     let newEventsSincePause = 0;
     let lastRenderTime = 0;
     let pendingUpdate = false;
@@ -753,7 +759,7 @@ export function createEventStreamView(
     function resetScrollState() {
       lastFilteredCount = 0;
       newEventsSincePause = 0;
-      userScrolledUp = false;
+      autoFollow.resume();
       scrollIndicator.style.display = "none";
     }
 
@@ -766,12 +772,14 @@ export function createEventStreamView(
       dirtyExpandId = eventId;
       // Save scroll position — user-initiated expand/collapse should not auto-scroll
       const savedScrollTop = eventsList.scrollTop;
-      const wasUserScrolledUp = userScrolledUp;
+      const wasAutoFollowing = autoFollow.isFollowing();
       suppressScrollHandler = true;
-      userScrolledUp = true; // prevent auto-scroll during re-render
+      autoFollow.pause(); // prevent auto-scroll during re-render
       updateNow();
       eventsList.scrollTop = savedScrollTop;
-      userScrolledUp = wasUserScrolledUp;
+      if (wasAutoFollowing) {
+        autoFollow.resume();
+      }
       suppressScrollHandler = false;
     }
 
@@ -780,13 +788,7 @@ export function createEventStreamView(
     // ========================================================================
 
     function isNearBottom(): boolean {
-      const threshold = 50;
-      return (
-        eventsList.scrollHeight -
-          eventsList.scrollTop -
-          eventsList.clientHeight <=
-        threshold
-      );
+      return isElementNearBottom(eventsList, 50);
     }
 
     function updateNow() {
@@ -833,7 +835,7 @@ export function createEventStreamView(
       }
 
       // Track new events since user scrolled up
-      if (userScrolledUp && newCount > lastFilteredCount) {
+      if (!autoFollow.isFollowing() && newCount > lastFilteredCount) {
         newEventsSincePause += newCount - lastFilteredCount;
         indicatorText.textContent = `${newEventsSincePause} new event${newEventsSincePause === 1 ? "" : "s"}`;
         scrollIndicator.style.display = "";
@@ -939,7 +941,7 @@ export function createEventStreamView(
       }
 
       // Auto-scroll if user hasn't scrolled up
-      if (!userScrolledUp) {
+      if (autoFollow.isFollowing()) {
         eventsList.scrollTop = eventsList.scrollHeight;
       }
     }
@@ -1064,30 +1066,47 @@ export function createEventStreamView(
     const handleListScroll = () => {
       if (suppressScrollHandler) return;
       const currentScrollTop = eventsList.scrollTop;
-      const scrollingDown = currentScrollTop > lastScrollTop;
-      lastScrollTop = currentScrollTop;
+      const { action, nextLastScrollTop } = resolveFollowStateFromScroll({
+        following: autoFollow.isFollowing(),
+        currentScrollTop,
+        lastScrollTop,
+        nearBottom: isNearBottom(),
+        userScrollThreshold: 1,
+        resumeRequiresDownwardScroll: true
+      });
+      lastScrollTop = nextLastScrollTop;
 
-      if (isNearBottom() && scrollingDown) {
-        // User scrolled back down to bottom — re-enable auto-scroll
-        userScrolledUp = false;
+      if (action === "resume") {
+        autoFollow.resume();
         newEventsSincePause = 0;
         scrollIndicator.style.display = "none";
-      } else if (!isNearBottom()) {
-        userScrolledUp = true;
+      } else if (action === "pause") {
+        autoFollow.pause();
       }
     };
 
     // Wheel events fire synchronously before rAF callbacks, so we can
     // detect upward scroll intent before the next updateNow() auto-scrolls.
     const handleWheel = (e: WheelEvent) => {
-      if (e.deltaY < 0) {
-        userScrolledUp = true;
+      const action = resolveFollowStateFromWheel({
+        following: autoFollow.isFollowing(),
+        deltaY: e.deltaY,
+        nearBottom: isNearBottom(),
+        resumeWhenNearBottom: true
+      });
+
+      if (action === "pause") {
+        autoFollow.pause();
+      } else if (action === "resume") {
+        autoFollow.resume();
+        newEventsSincePause = 0;
+        scrollIndicator.style.display = "none";
       }
     };
 
     const handleScrollIndicatorClick = () => {
       eventsList.scrollTop = eventsList.scrollHeight;
-      userScrolledUp = false;
+      autoFollow.resume();
       newEventsSincePause = 0;
       scrollIndicator.style.display = "none";
     };
