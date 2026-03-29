@@ -22,7 +22,7 @@ export function accessibilityPlugin(): PersonaThemePlugin {
     },
     cssVariables: {
       '--persona-accessibility-focus-ring':
-        '0 0 0 2px var(--persona-semantic-colors-surface, #fff), 0 0 0 4px var(--persona-semantic-colors-interactive-focus, #1d4ed8)',
+        '0 0 0 2px var(--persona-semantic-colors-surface, #fff), 0 0 0 4px var(--persona-semantic-colors-interactive-focus, #0f0f0f)',
     },
   };
 }

@@ -12,6 +12,10 @@ export type {
   SelectOption,
   ColorScaleOptions,
   TokenRefOptions,
+  RoleTargetKind,
+  RoleTarget,
+  RoleIntensity,
+  RoleAssignmentOptions,
   ThemeEditorPreset,
   ConfiguratorSnapshot,
   ConfigChangeListener,
@@ -24,6 +28,13 @@ export { ThemeEditorState } from './state';
 // Sections
 export {
   STYLE_SECTIONS,
+  STYLE_SECTIONS_V2,
+  THEME_SECTION,
+  BRAND_PALETTE_SECTION,
+  STATUS_PALETTE_SECTION,
+  INTERFACE_ROLES_SECTION,
+  STATUS_COLORS_SECTION,
+  ADVANCED_TOKENS_SECTION,
   COLORS_SECTIONS,
   PALETTE_SECTION,
   SEMANTIC_COLORS_SECTION,
@@ -80,6 +91,25 @@ export type {
   PreviewConfigOptions,
 } from './preview-utils';
 
+// Role mappings (Interface Roles editor)
+export {
+  ROLE_INTENSITIES,
+  ROLE_FAMILIES,
+  ROLE_FAMILY_LABELS,
+  ROLE_SURFACES,
+  ROLE_HEADER,
+  ROLE_USER_MESSAGES,
+  ROLE_ASSISTANT_MESSAGES,
+  ROLE_PRIMARY_ACTIONS,
+  ROLE_INPUT,
+  ROLE_LINKS_FOCUS,
+  ROLE_BORDERS,
+  ALL_ROLES,
+  resolveRoleAssignment,
+  detectRoleAssignment,
+} from './role-mappings';
+export type { RoleFamily, DetectedRoleAssignment } from './role-mappings';
+
 // Color utilities
 export {
   parseCssValue,
@@ -88,6 +118,7 @@ export {
   convertFromPx,
   normalizeColorValue,
   isValidHex,
+  wcagContrastRatio,
   hexToHsl,
   hslToHex,
   generateColorScale,

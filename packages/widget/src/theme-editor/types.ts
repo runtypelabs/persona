@@ -13,7 +13,8 @@ export type FieldType =
   | 'text'
   | 'chip-list'
   | 'color-scale'
-  | 'token-ref';
+  | 'token-ref'
+  | 'role-assignment';
 
 export interface SliderOptions {
   min: number;
@@ -41,6 +42,39 @@ export interface TokenRefOptions {
   families?: string[];
 }
 
+// ─── Role Assignment System ─────────────────────────────────────
+
+/** Which kind of value a role target expects */
+export type RoleTargetKind = 'background' | 'foreground' | 'border' | 'accent';
+
+/** A single token path that a role assignment writes to */
+export interface RoleTarget {
+  /** Theme token path (e.g., 'components.message.user.background') */
+  path: string;
+  /** What kind of value this target expects */
+  kind: RoleTargetKind;
+}
+
+/** An intensity preset (e.g., Solid uses .500 shades, Soft uses .100 shades) */
+export interface RoleIntensity {
+  id: string;
+  label: string;
+}
+
+/** Options for a role-assignment field */
+export interface RoleAssignmentOptions {
+  /** Unique role identifier */
+  roleId: string;
+  /** Helper text shown below the role name */
+  helper: string;
+  /** Token paths this role writes to */
+  targets: RoleTarget[];
+  /** Available intensity presets */
+  intensities: RoleIntensity[];
+  /** Which data-persona-theme-zone this role corresponds to (for preview highlighting) */
+  previewZone?: string;
+}
+
 export interface FieldDef {
   id: string;
   label: string;
@@ -57,6 +91,8 @@ export interface FieldDef {
   colorScale?: ColorScaleOptions;
   /** Token-ref-specific options */
   tokenRef?: TokenRefOptions;
+  /** Role-assignment-specific options */
+  roleAssignment?: RoleAssignmentOptions;
   /** CSS property hint for value formatting */
   cssProperty?: string;
   /** Whether this is a theme path (vs config path) */
@@ -94,6 +130,8 @@ export interface TabDef {
 export interface SubGroupDef {
   label: string;
   sections: SectionDef[];
+  /** When true, the sub-group starts collapsed and must be explicitly expanded */
+  collapsedByDefault?: boolean;
 }
 
 // ─── Preset System ───────────────────────────────────────────────

@@ -64,6 +64,26 @@ export function isValidHex(value: string): boolean {
   return /^#[0-9A-Fa-f]{6}$/.test(value);
 }
 
+// ─── WCAG Contrast ──────────────────────────────────────────────
+
+/**
+ * Compute WCAG 2.x contrast ratio between two hex colors.
+ * Returns a number ≥ 1 (e.g. 4.5 for AA normal text).
+ */
+export function wcagContrastRatio(hex1: string, hex2: string): number {
+  const luminance = (hex: string): number => {
+    const norm = normalizeColorValue(hex);
+    const channels = [1, 3, 5].map((i) => {
+      const v = parseInt(norm.slice(i, i + 2), 16) / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  };
+  const l1 = luminance(hex1);
+  const l2 = luminance(hex2);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+
 // ─── HSL Conversion ─────────────────────────────────────────────
 
 export function hexToHsl(hex: string): { h: number; s: number; l: number } {
@@ -180,7 +200,7 @@ export function generateColorScale(baseHex: string): ColorShade {
 
 export const SHADE_KEYS = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'] as const;
 
-export const COLOR_FAMILIES = ['primary', 'secondary', 'accent', 'gray', 'success', 'warning', 'error'] as const;
+export const COLOR_FAMILIES = ['primary', 'secondary', 'accent', 'gray', 'success', 'warning', 'error', 'info'] as const;
 
 export function paletteColorPath(family: string, shade: string): string {
   return `palette.colors.${family}.${shade}`;

@@ -703,9 +703,7 @@ export const createAgentExperience = (
       eventStreamView.update();
     }
     if (eventStreamToggleBtn) {
-      eventStreamToggleBtn.classList.remove("persona-text-persona-muted");
-      eventStreamToggleBtn.classList.add("persona-text-persona-accent");
-      eventStreamToggleBtn.style.boxShadow = "inset 0 0 0 1.5px var(--persona-accent, #3b82f6)";
+      eventStreamToggleBtn.style.boxShadow = `inset 0 0 0 1.5px ${HEADER_THEME_CSS.actionIconColor}`;
       const activeClasses = config.features?.eventStream?.classNames?.toggleButtonActive;
       if (activeClasses) activeClasses.split(/\s+/).forEach(c => c && eventStreamToggleBtn!.classList.add(c));
     }
@@ -732,8 +730,6 @@ export const createAgentExperience = (
     }
     body.style.display = "";
     if (eventStreamToggleBtn) {
-      eventStreamToggleBtn.classList.remove("persona-text-persona-accent");
-      eventStreamToggleBtn.classList.add("persona-text-persona-muted");
       eventStreamToggleBtn.style.boxShadow = "";
       const activeClasses = config.features?.eventStream?.classNames?.toggleButtonActive;
       if (activeClasses) activeClasses.split(/\s+/).forEach(c => c && eventStreamToggleBtn!.classList.remove(c));
@@ -750,10 +746,11 @@ export const createAgentExperience = (
   let eventStreamToggleBtn: HTMLButtonElement | null = null;
   if (showEventStreamToggle) {
     const esClassNames = config.features?.eventStream?.classNames;
-    const toggleBtnClasses = "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-1" + (esClassNames?.toggleButton ? " " + esClassNames.toggleButton : "");
+    const toggleBtnClasses = "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-opacity-80 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-1" + (esClassNames?.toggleButton ? " " + esClassNames.toggleButton : "");
     eventStreamToggleBtn = createElement("button", toggleBtnClasses) as HTMLButtonElement;
     eventStreamToggleBtn.style.width = "28px";
     eventStreamToggleBtn.style.height = "28px";
+    eventStreamToggleBtn.style.color = HEADER_THEME_CSS.actionIconColor;
     eventStreamToggleBtn.type = "button";
     eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
     eventStreamToggleBtn.title = "Event Stream";
@@ -877,12 +874,17 @@ export const createAgentExperience = (
   ensureComposerAttachmentSurface(footer);
   bindComposerRefsFromFooter(footer);
 
-  // Apply contentMaxWidth to composer form if configured
+  // Apply contentMaxWidth to composer form and attachment previews if configured
   const contentMaxWidth = config.layout?.contentMaxWidth;
   if (contentMaxWidth && composerForm) {
     composerForm.style.maxWidth = contentMaxWidth;
     composerForm.style.marginLeft = "auto";
     composerForm.style.marginRight = "auto";
+  }
+  if (contentMaxWidth && attachmentPreviewsContainer) {
+    attachmentPreviewsContainer.style.maxWidth = contentMaxWidth;
+    attachmentPreviewsContainer.style.marginLeft = "auto";
+    attachmentPreviewsContainer.style.marginRight = "auto";
   }
 
   if (config.attachments?.enabled && attachmentInput && attachmentPreviewsContainer) {
@@ -2388,7 +2390,6 @@ export const createAgentExperience = (
               "persona-shadow-sm",
               "persona-bg-persona-surface",
               "persona-border",
-              "persona-border-persona-message-border",
               "persona-text-persona-primary",
               "persona-px-5",
               "persona-py-3"
@@ -2400,6 +2401,7 @@ export const createAgentExperience = (
               "persona-text-persona-primary"
             ].join(" ");
         typingBubble.setAttribute("data-typing-indicator", "true");
+        typingBubble.style.borderColor = "var(--persona-message-assistant-border, var(--persona-border, #e5e7eb))";
 
         typingBubble.appendChild(typingIndicator);
 
@@ -2986,17 +2988,16 @@ export const createAgentExperience = (
           iconSize: parseFloat(voiceConfig.iconSize ?? config.sendButton?.size ?? "40") || 24,
         };
 
-        // Apply recording state styles from config
-        const recordingBackgroundColor = voiceConfig.recordingBackgroundColor ?? "#ef4444";
+        // Apply recording state styles from config or theme tokens
+        const recordingBackgroundColor = voiceConfig.recordingBackgroundColor;
         const recordingIconColor = voiceConfig.recordingIconColor;
         const recordingBorderColor = voiceConfig.recordingBorderColor;
-        
+
         micButton.classList.add("persona-voice-recording");
-        micButton.style.backgroundColor = recordingBackgroundColor;
-        
+        micButton.style.backgroundColor = recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)";
+        micButton.style.color = recordingIconColor ?? "var(--persona-voice-recording-indicator, #ffffff)";
+
         if (recordingIconColor) {
-          micButton.style.color = recordingIconColor;
-          // Update SVG stroke color if present
           const svg = micButton.querySelector("svg");
           if (svg) {
             svg.setAttribute("stroke", recordingIconColor);
@@ -3096,30 +3097,27 @@ export const createAgentExperience = (
     micButton.style.fontSize = "18px";
     micButton.style.lineHeight = "1";
     
-    // Use Lucide mic icon with configured color (stroke width 1.5 for minimalist outline style)
+    // Set mic button foreground from config or theme token
+    if (iconColor) {
+      micButton.style.color = iconColor;
+    } else {
+      micButton.style.color = "var(--persona-text, #111827)";
+    }
+
+    // Use Lucide mic icon (stroke width 1.5 for minimalist outline style)
     const iconColorValue = iconColor || "currentColor";
     const micIconSvg = renderLucideIcon(micIconName, micIconSizeNum, iconColorValue, 1.5);
     if (micIconSvg) {
       micButton.appendChild(micIconSvg);
-      micButton.style.color = iconColorValue;
     } else {
-      // Fallback to text if icon fails
       micButton.textContent = "🎤";
-      micButton.style.color = iconColorValue;
     }
-    
+
     // Apply background color
     if (backgroundColor) {
       micButton.style.backgroundColor = backgroundColor;
     } else {
-      micButton.classList.add("persona-bg-persona-primary");
-    }
-    
-    // Apply icon/text color
-    if (iconColor) {
-      micButton.style.color = iconColor;
-    } else if (!iconColor && !sendButtonConfig?.textColor) {
-      micButton.classList.add("persona-text-white");
+      micButton.style.backgroundColor = "";
     }
     
     // Apply border styling
@@ -3191,14 +3189,14 @@ export const createAgentExperience = (
     if (!micButton) return;
     storeOriginalMicStyles();
     const voiceConfig = config.voiceRecognition ?? {};
-    const recordingBackgroundColor = voiceConfig.recordingBackgroundColor ?? "#ef4444";
+    const recordingBackgroundColor = voiceConfig.recordingBackgroundColor;
     const recordingIconColor = voiceConfig.recordingIconColor;
     const recordingBorderColor = voiceConfig.recordingBorderColor;
     removeAllVoiceStateClasses();
     micButton.classList.add("persona-voice-recording");
-    micButton.style.backgroundColor = recordingBackgroundColor;
+    micButton.style.backgroundColor = recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)";
+    micButton.style.color = recordingIconColor ?? "var(--persona-voice-recording-indicator, #ffffff)";
     if (recordingIconColor) {
-      micButton.style.color = recordingIconColor;
       const svg = micButton.querySelector("svg");
       if (svg) svg.setAttribute("stroke", recordingIconColor);
     }
@@ -3244,7 +3242,7 @@ export const createAgentExperience = (
     const iconColor = voiceConfig.speakingIconColor
       ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingIconColor ?? originalMicStyles?.color ?? "") : (originalMicStyles?.color ?? ""));
     const bgColor = voiceConfig.speakingBackgroundColor
-      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBackgroundColor ?? "#ef4444") : (originalMicStyles?.backgroundColor ?? ""));
+      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)") : (originalMicStyles?.backgroundColor ?? ""));
     const borderColor = voiceConfig.speakingBorderColor
       ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBorderColor ?? "") : (originalMicStyles?.borderColor ?? ""));
 
@@ -3722,10 +3720,11 @@ export const createAgentExperience = (
         // Add header toggle button if not present
         if (!eventStreamToggleBtn && header) {
           const dynEsClassNames = config.features?.eventStream?.classNames;
-          const dynToggleBtnClasses = "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-text-persona-muted hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-1" + (dynEsClassNames?.toggleButton ? " " + dynEsClassNames.toggleButton : "");
+          const dynToggleBtnClasses = "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-opacity-80 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-1" + (dynEsClassNames?.toggleButton ? " " + dynEsClassNames.toggleButton : "");
           eventStreamToggleBtn = createElement("button", dynToggleBtnClasses) as HTMLButtonElement;
           eventStreamToggleBtn.style.width = "28px";
           eventStreamToggleBtn.style.height = "28px";
+          eventStreamToggleBtn.style.color = HEADER_THEME_CSS.actionIconColor;
           eventStreamToggleBtn.type = "button";
           eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
           eventStreamToggleBtn.title = "Event Stream";
@@ -4492,22 +4491,18 @@ export const createAgentExperience = (
             micButton.textContent = "🎤";
           }
           
-          // Update colors
+          // Update colors from config or theme tokens
           const backgroundColor = voiceConfig.backgroundColor ?? sendButtonConfig.backgroundColor;
           if (backgroundColor) {
             micButton.style.backgroundColor = backgroundColor;
-            micButton.classList.remove("persona-bg-persona-primary");
           } else {
             micButton.style.backgroundColor = "";
-            micButton.classList.add("persona-bg-persona-primary");
           }
-          
+
           if (iconColor) {
             micButton.style.color = iconColor;
-            micButton.classList.remove("persona-text-white");
-          } else if (!iconColor && !sendButtonConfig.textColor) {
-            micButton.style.color = "";
-            micButton.classList.add("persona-text-white");
+          } else {
+            micButton.style.color = "var(--persona-text, #111827)";
           }
           
           // Update border styling
@@ -4733,30 +4728,25 @@ export const createAgentExperience = (
         // Clear existing content
         sendButton.innerHTML = "";
         
+        // Set foreground color from config or theme token
+        if (textColor) {
+          sendButton.style.color = textColor;
+        } else {
+          sendButton.style.color = "var(--persona-button-primary-fg, #ffffff)";
+        }
+
         // Use Lucide icon if iconName is provided, otherwise fall back to iconText
         if (iconName) {
           const iconSize = parseFloat(buttonSize) || 24;
-          const iconColor = textColor && typeof textColor === 'string' && textColor.trim() ? textColor.trim() : "currentColor";
+          const iconColor = textColor?.trim() || "currentColor";
           const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, 2);
           if (iconSvg) {
             sendButton.appendChild(iconSvg);
-            sendButton.style.color = iconColor;
           } else {
-            // Fallback to text if icon fails to render
             sendButton.textContent = iconText;
-            if (textColor) {
-              sendButton.style.color = textColor;
-            } else {
-              sendButton.classList.add("persona-text-white");
-            }
           }
         } else {
           sendButton.textContent = iconText;
-          if (textColor) {
-            sendButton.style.color = textColor;
-          } else {
-            sendButton.classList.add("persona-text-white");
-          }
         }
         
         // Update classes
@@ -4766,6 +4756,7 @@ export const createAgentExperience = (
           sendButton.style.backgroundColor = backgroundColor;
           sendButton.classList.remove("persona-bg-persona-primary");
         } else {
+          sendButton.style.backgroundColor = "";
           sendButton.classList.add("persona-bg-persona-primary");
         }
       } else {

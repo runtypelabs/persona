@@ -25,6 +25,7 @@ export interface ColorPalette {
   success: ColorShade;
   warning: ColorShade;
   error: ColorShade;
+  info: ColorShade;
   [key: string]: ColorShade;
 }
 

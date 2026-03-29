@@ -15,6 +15,7 @@ export {
   paletteColorPath,
   resolveThemeColorPath,
   tokenRefDisplayName,
+  wcagContrastRatio,
 } from '@runtypelabs/persona/theme-editor';
 
 /** Get a readable label for a color shade number */

@@ -11,6 +11,7 @@ export type {
   SelectOption,
   ColorScaleOptions,
   TokenRefOptions,
+  RoleAssignmentOptions,
 } from '@runtypelabs/persona/theme-editor';
 
 // SectionDef and TabDef reference the local FieldDef (with `any`)
@@ -43,6 +44,7 @@ export interface FieldDef {
   options?: import('@runtypelabs/persona/theme-editor').SelectOption[];
   colorScale?: import('@runtypelabs/persona/theme-editor').ColorScaleOptions;
   tokenRef?: import('@runtypelabs/persona/theme-editor').TokenRefOptions;
+  roleAssignment?: import('@runtypelabs/persona/theme-editor').RoleAssignmentOptions;
   cssProperty?: string;
   isThemePath?: boolean;
   formatValue?: (value: any) => any;

@@ -6,7 +6,7 @@ export const BUILT_IN_PRESETS: ThemeEditorPreset[] = [
   {
     id: 'default-light',
     name: 'Default Light',
-    description: 'Clean light theme with blue primary',
+    description: 'Clean monochrome light theme',
     theme: {
       components: {
         artifact: {
@@ -17,20 +17,20 @@ export const BUILT_IN_PRESETS: ThemeEditorPreset[] = [
         },
       },
     },
-    preview: { primary: '#2563eb', surface: '#ffffff', accent: '#06b6d4' },
+    preview: { primary: '#171717', surface: '#ffffff', accent: '#0f0f0f' },
     tags: ['light'],
   },
   {
     id: 'default-dark',
     name: 'Default Dark',
-    description: 'Dark theme with blue primary',
+    description: 'Monochrome dark theme',
     theme: {
       palette: {
         colors: {
           primary: {
-            50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
-            400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8',
-            800: '#1e40af', 900: '#1e3a8a', 950: '#172554',
+            50: '#ffffff', 100: '#f5f5f5', 200: '#d4d4d4', 300: '#a3a3a3',
+            400: '#737373', 500: '#171717', 600: '#0f0f0f', 700: '#0a0a0a',
+            800: '#050505', 900: '#030303', 950: '#000000',
           },
           gray: {
             50: '#f9fafb', 100: '#f3f4f6', 200: '#e5e7eb', 300: '#d1d5db',
@@ -93,7 +93,7 @@ export const BUILT_IN_PRESETS: ThemeEditorPreset[] = [
         },
       } as any,
     },
-    preview: { primary: '#3b82f6', surface: '#1f2937', accent: '#06b6d4' },
+    preview: { primary: '#171717', surface: '#1f2937', accent: '#0f0f0f' },
     tags: ['dark'],
   },
   {
@@ -130,7 +130,7 @@ export const BUILT_IN_PRESETS: ThemeEditorPreset[] = [
         },
       } as any,
     },
-    preview: { primary: '#1d4ed8', surface: '#f9fafb', accent: '#1e40af' },
+    preview: { primary: '#0a0a0a', surface: '#f9fafb', accent: '#050505' },
     tags: ['light', 'high-contrast', 'accessibility'],
   },
 ];

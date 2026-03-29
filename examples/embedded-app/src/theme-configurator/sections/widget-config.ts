@@ -46,7 +46,7 @@ function renderSections(
 }
 
 function refreshLauncherSectionMetadata(container: HTMLElement): void {
-  const section = container.querySelector<HTMLElement>('[data-section-id="launcher-config"]');
+  const section = container.querySelector<HTMLElement>('[data-section-id="launcher-basics"]');
   const header = section?.querySelector<HTMLElement>('.accordion-header');
   if (!section || !header) return;
 
@@ -95,10 +95,34 @@ export function render(
   for (const group of CONFIGURE_SUB_GROUPS) {
     const divider = document.createElement('div');
     divider.className = 'subgroup-divider';
-    divider.innerHTML = `<span class="subgroup-label">${group.label}</span>`;
-    container.appendChild(divider);
 
-    allControls.push(...renderSections(container, onChange, group.sections as SectionDef[], TAB_ID));
+    if (group.collapsedByDefault) {
+      divider.classList.add('subgroup-collapsed');
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'subgroup-toggle';
+      toggle.innerHTML = `<span class="subgroup-label">${group.label}</span><svg class="subgroup-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+      divider.appendChild(toggle);
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'subgroup-content';
+      wrapper.style.display = 'none';
+
+      toggle.addEventListener('click', () => {
+        const isCollapsed = divider.classList.toggle('subgroup-collapsed');
+        wrapper.style.display = isCollapsed ? 'none' : '';
+      });
+
+      // Toggle starts collapsed — flip the class off so the first toggle opens it
+      divider.classList.add('subgroup-collapsed');
+      container.appendChild(divider);
+      allControls.push(...renderSections(wrapper, onChange, group.sections as SectionDef[], TAB_ID));
+      container.appendChild(wrapper);
+    } else {
+      divider.innerHTML = `<span class="subgroup-label">${group.label}</span>`;
+      container.appendChild(divider);
+      allControls.push(...renderSections(container, onChange, group.sections as SectionDef[], TAB_ID));
+    }
   }
 
   refreshSectionMetadata(container);

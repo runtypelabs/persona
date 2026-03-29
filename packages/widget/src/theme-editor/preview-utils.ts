@@ -213,7 +213,7 @@ export function createPreviewMessages(scene: PreviewScene): AgentWidgetMessage[]
   return [
     { id: 'preview-conv-1', role: 'assistant', content: 'Hello! How can I help you today?', createdAt: new Date(Date.now() - 180000).toISOString() },
     { id: 'preview-conv-2', role: 'user', content: 'I want to customize the theme editor preview.', createdAt: new Date(Date.now() - 120000).toISOString() },
-    { id: 'preview-conv-3', role: 'assistant', content: 'Absolutely. Adjust colors, typography, and component tokens to see changes instantly.', createdAt: new Date(Date.now() - 60000).toISOString() },
+    { id: 'preview-conv-3', role: 'assistant', content: 'Absolutely. Check out the [getting started guide](https://example.com) to see what\u2019s possible, then adjust colors and tokens to match your brand.', createdAt: new Date(Date.now() - 60000).toISOString() },
   ];
 }
 

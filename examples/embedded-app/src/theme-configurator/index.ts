@@ -64,6 +64,22 @@ let pillDropdownWasOpen = false;
 
 const ZOOM_STEP = 0.1;
 
+const DRILLDOWN_TITLES: Record<DrilldownView, string> = {
+  'none': '',
+  'palette': 'Full Palette',
+  'component-colors': 'Component Colors',
+  'component-shapes': 'Component Shapes',
+  'advanced-tokens': 'Advanced Tokens',
+};
+
+const DRILLDOWN_NEEDS_EDITING_TOGGLE: Record<DrilldownView, boolean> = {
+  'none': false,
+  'palette': true,
+  'component-colors': true,
+  'component-shapes': false,
+  'advanced-tokens': false,
+};
+
 export function getCurrentScale(): number {
   return previewManager?.getCurrentScale() ?? 1;
 }
@@ -166,6 +182,13 @@ function init(): void {
   syncEditorUi();
 
   previewManager = createPreviewManager(previewStage, state);
+  state.setHighlightHandler((zone) => {
+    if (zone) {
+      previewManager?.highlightZone(zone);
+    } else {
+      previewManager?.clearHighlight();
+    }
+  });
   previewManager.mount();
 
   window.addEventListener('persona-configurator:inject-artifact', () => {
@@ -314,6 +337,9 @@ function navigateToDrilldown(view: DrilldownView): void {
       break;
     case 'component-shapes':
       newControls.push(...componentsTab.renderShapeSections(drilldownContent, handleChange));
+      break;
+    case 'advanced-tokens':
+      newControls.push(...styleTab.renderAdvancedTokensDrilldown(drilldownContent, handleChange));
       break;
   }
 
@@ -639,9 +665,9 @@ function createPresetCard(preset: ReturnType<typeof getAllPresets>[number]): HTM
         <span class="preset-visual-header" style="background:${colors['--persona-header-bg'] ?? colors['--persona-surface'] ?? '#ffffff'};"></span>
         <span class="preset-visual-body">
           <span class="preset-visual-bubble preset-visual-bubble-assistant" style="background:${colors['--persona-message-assistant-bg'] ?? '#ffffff'}; color:${colors['--persona-message-assistant-text'] ?? '#111827'};"></span>
-          <span class="preset-visual-bubble preset-visual-bubble-user" style="background:${colors['--persona-message-user-bg'] ?? colors['--persona-primary'] ?? '#2563eb'}; color:${colors['--persona-message-user-text'] ?? '#ffffff'};"></span>
+          <span class="preset-visual-bubble preset-visual-bubble-user" style="background:${colors['--persona-message-user-bg'] ?? colors['--persona-primary'] ?? '#171717'}; color:${colors['--persona-message-user-text'] ?? '#ffffff'};"></span>
         </span>
-        <span class="preset-visual-launcher" style="background:${colors['--persona-primary'] ?? '#2563eb'};"></span>
+        <span class="preset-visual-launcher" style="background:${colors['--persona-primary'] ?? '#171717'};"></span>
       </span>
     </span>
     <span class="preset-visual-copy">
@@ -720,6 +746,13 @@ const SECTION_TO_DRILLDOWN: Record<string, DrilldownView> = {
   'comp-message-shape': 'component-shapes',
   'comp-input-shape': 'component-shapes',
   'comp-button-shape': 'component-shapes',
+  // V1 sections now in Advanced Tokens drilldown
+  'chat-colors': 'advanced-tokens',
+  'typography': 'advanced-tokens',
+  'launcher-style': 'advanced-tokens',
+  'shape': 'advanced-tokens',
+  'shadows': 'advanced-tokens',
+  'widget-style': 'advanced-tokens',
 };
 
 function initSearch(): void {
@@ -780,7 +813,7 @@ function initWizard(): void {
   });
 
   applyBtn?.addEventListener('click', () => {
-    const source = colorText?.value ?? colorInput?.value ?? '#2563eb';
+    const source = colorText?.value ?? colorInput?.value ?? '#171717';
     const base = normalizeColorValue(source);
     if (!isValidHex(base)) {
       showToast('Enter a valid 6-digit hex color.');

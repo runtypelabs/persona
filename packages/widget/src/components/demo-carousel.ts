@@ -185,8 +185,8 @@ const CAROUSEL_CSS = /* css */ `
   background: #f3f4f6;
 }
 .persona-dc-root .persona-dc-dropdown button.persona-dc-dropdown-item[aria-current="true"] {
-  background: #eff6ff;
-  color: #2563eb;
+  background: #f5f5f5;
+  color: #0f0f0f;
 }
 .persona-dc-root .persona-dc-dropdown-desc {
   font-weight: 400;
@@ -196,7 +196,7 @@ const CAROUSEL_CSS = /* css */ `
   text-align: left;
 }
 .persona-dc-root .persona-dc-dropdown button.persona-dc-dropdown-item[aria-current="true"] .persona-dc-dropdown-desc {
-  color: #60a5fa;
+  color: #737373;
 }
 .persona-dc-counter {
   font-size: 12px;
@@ -280,7 +280,7 @@ const CAROUSEL_CSS = /* css */ `
   background: #f3f4f6;
 }
 .persona-dc-root .persona-icon-btn:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #171717;
   outline-offset: 2px;
 }
 .persona-dc-root .persona-icon-btn[aria-pressed="true"] {

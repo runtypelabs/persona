@@ -5,7 +5,7 @@ import { AgentWidgetConfig } from "../types";
 /** CSS `color` values; variables are set on `[data-persona-root]` from `theme.components.header`. */
 export const HEADER_THEME_CSS = {
   titleColor:
-    "var(--persona-header-title-fg, var(--persona-primary, #2563eb))",
+    "var(--persona-header-title-fg, var(--persona-primary, #0f0f0f))",
   subtitleColor:
     "var(--persona-header-subtitle-fg, var(--persona-text-muted, var(--persona-muted, #9ca3af)))",
   actionIconColor:
@@ -61,7 +61,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   iconHolder.style.height = headerIconSize;
   iconHolder.style.width = headerIconSize;
   iconHolder.style.backgroundColor =
-    "var(--persona-header-icon-bg, var(--persona-primary, #2563eb))";
+    "var(--persona-header-icon-bg, var(--persona-primary, #0f0f0f))";
   iconHolder.style.color =
     "var(--persona-header-icon-fg, var(--persona-text-inverse, #ffffff))";
 

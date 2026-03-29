@@ -2,6 +2,17 @@
 
 import type { SectionDef, TabDef, SubGroupDef, FieldDef } from './types';
 import { COLOR_FAMILIES } from './color-utils';
+import {
+  ALL_ROLES,
+  ROLE_SURFACES,
+  ROLE_HEADER,
+  ROLE_USER_MESSAGES,
+  ROLE_ASSISTANT_MESSAGES,
+  ROLE_PRIMARY_ACTIONS,
+  ROLE_INPUT,
+  ROLE_LINKS_FOCUS,
+  ROLE_BORDERS,
+} from './role-mappings';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // STYLE TAB — brand colors, chat colors, typography, shape, etc.
@@ -35,7 +46,7 @@ const brandColorsSectionDef: SectionDef = {
   description: 'Pick your brand colors. A full shade scale is generated automatically for both light and dark themes.',
   collapsed: false,
   fields: [
-    { id: 'brand-primary', label: 'Primary', description: 'Main brand color for buttons, links, and accents', type: 'color', path: 'theme.palette.colors.primary.500', defaultValue: '#2563eb' },
+    { id: 'brand-primary', label: 'Primary', description: 'Main brand color for buttons, links, and accents', type: 'color', path: 'theme.palette.colors.primary.500', defaultValue: '#171717' },
     { id: 'brand-secondary', label: 'Secondary', description: 'Supporting brand color', type: 'color', path: 'theme.palette.colors.secondary.500', defaultValue: '#7c3aed' },
     { id: 'brand-accent', label: 'Accent', description: 'Highlight and decorative color', type: 'color', path: 'theme.palette.colors.accent.500', defaultValue: '#06b6d4' },
   ],
@@ -477,7 +488,7 @@ function formatAttachmentAllowedTypes(value: unknown): string {
 }
 
 const copySectionDef: SectionDef = {
-  id: 'copy', title: 'Welcome & Copy', collapsed: false,
+  id: 'copy', title: 'Content & Copy', collapsed: false,
   fields: [
     { id: 'copy-show-welcome-card', label: 'Show Welcome Card', type: 'toggle', path: 'copy.showWelcomeCard', defaultValue: true },
     { id: 'copy-welcome-title', label: 'Welcome Title', type: 'text', path: 'copy.welcomeTitle', defaultValue: 'Hello 👋' },
@@ -495,7 +506,7 @@ const suggestionsSectionDef: SectionDef = {
 };
 
 const generalLayoutSectionDef: SectionDef = {
-  id: 'general-layout', title: 'General', collapsed: true,
+  id: 'general-layout', title: 'Layout Basics', collapsed: true,
   fields: [
     { id: 'layout-show-header', label: 'Show Header', type: 'toggle', path: 'layout.showHeader', defaultValue: true },
     { id: 'layout-show-footer', label: 'Show Footer', type: 'toggle', path: 'layout.showFooter', defaultValue: true },
@@ -542,29 +553,35 @@ const messageActionsSectionDef: SectionDef = {
   ],
 };
 
-const launcherConfigSectionDef: SectionDef = {
-  id: 'launcher-config', title: 'Launcher', collapsed: true,
+const launcherBasicsSectionDef: SectionDef = {
+  id: 'launcher-basics', title: 'Launcher', collapsed: true,
   fields: [
     { id: 'launch-enabled', label: 'Enabled', type: 'toggle', path: 'launcher.enabled', defaultValue: true },
     { id: 'launch-mount-mode', label: 'Mount Mode', type: 'select', path: 'launcher.mountMode', defaultValue: 'floating', options: [{ value: 'floating', label: 'Floating' }, { value: 'docked', label: 'Docked' }] },
+    { id: 'launch-position', label: 'Position', type: 'select', path: 'launcher.position', defaultValue: 'bottom-right', options: [{ value: 'bottom-right', label: 'Bottom Right' }, { value: 'bottom-left', label: 'Bottom Left' }, { value: 'top-right', label: 'Top Right' }, { value: 'top-left', label: 'Top Left' }] },
+    { id: 'launch-width', label: 'Width', type: 'text', path: 'launcher.width', defaultValue: 'min(400px, calc(100vw - 24px))' },
+    { id: 'launch-auto-expand', label: 'Auto Expand', type: 'toggle', path: 'launcher.autoExpand', defaultValue: false },
+    { id: 'launch-title', label: 'Title', type: 'text', path: 'launcher.title', defaultValue: 'Chat Assistant' },
+    { id: 'launch-subtitle', label: 'Subtitle', type: 'text', path: 'launcher.subtitle', defaultValue: 'Here to help you get answers fast' },
+  ],
+};
+
+const launcherAdvancedSectionDef: SectionDef = {
+  id: 'launcher-advanced', title: 'Launcher Advanced', collapsed: true,
+  fields: [
     { id: 'launch-dock-side', label: 'Dock Side', type: 'select', path: 'launcher.dock.side', defaultValue: 'right', options: [{ value: 'right', label: 'Right' }, { value: 'left', label: 'Left' }] },
     { id: 'launch-dock-width', label: 'Dock Width', type: 'text', path: 'launcher.dock.width', defaultValue: '420px' },
     { id: 'launch-dock-animate', label: 'Dock Animate', type: 'toggle', path: 'launcher.dock.animate', defaultValue: true },
     { id: 'launch-dock-reveal', label: 'Dock Reveal', type: 'select', path: 'launcher.dock.reveal', defaultValue: 'resize', options: [{ value: 'resize', label: 'Resize' }, { value: 'overlay', label: 'Overlay' }, { value: 'push', label: 'Push' }, { value: 'emerge', label: 'Emerge' }] },
-    { id: 'launch-title', label: 'Title', type: 'text', path: 'launcher.title', defaultValue: 'Chat Assistant' },
-    { id: 'launch-subtitle', label: 'Subtitle', type: 'text', path: 'launcher.subtitle', defaultValue: 'Here to help you get answers fast' },
     { id: 'launch-text-hidden', label: 'Hide Text', type: 'toggle', path: 'launcher.textHidden', defaultValue: false },
     { id: 'launch-icon-text', label: 'Agent Icon Text', type: 'text', path: 'launcher.agentIconText', defaultValue: '💬' },
-    { id: 'launch-icon-name', label: 'Agent Icon Name (Lucide)', type: 'text', path: 'launcher.agentIconName', defaultValue: '' },
+    { id: 'launch-icon-name', label: 'Agent Icon Name (Lucide)', type: 'text', path: 'launcher.agentIconName', defaultValue: 'bot' },
     { id: 'launch-icon-hidden', label: 'Hide Agent Icon', type: 'toggle', path: 'launcher.agentIconHidden', defaultValue: false },
     { id: 'launch-icon-size', label: 'Agent Icon Size', type: 'slider', path: 'launcher.agentIconSize', defaultValue: '40px', slider: { min: 16, max: 72, step: 2 } },
     { id: 'launch-icon-url', label: 'Icon Image URL', description: 'Custom image URL (overrides emoji/lucide)', type: 'text', path: 'launcher.iconUrl', defaultValue: '' },
-    { id: 'launch-header-icon-name', label: 'Header Icon Name (Lucide)', type: 'text', path: 'launcher.headerIconName', defaultValue: '' },
+    { id: 'launch-header-icon-name', label: 'Header Icon Name (Lucide)', type: 'text', path: 'launcher.headerIconName', defaultValue: 'bot' },
     { id: 'launch-header-icon-size', label: 'Header Icon Size', type: 'slider', path: 'launcher.headerIconSize', defaultValue: '48px', slider: { min: 24, max: 80, step: 2 } },
     { id: 'launch-header-icon-hidden', label: 'Hide Header Icon', type: 'toggle', path: 'launcher.headerIconHidden', defaultValue: false },
-    { id: 'launch-position', label: 'Position', type: 'select', path: 'launcher.position', defaultValue: 'bottom-right', options: [{ value: 'bottom-right', label: 'Bottom Right' }, { value: 'bottom-left', label: 'Bottom Left' }, { value: 'top-right', label: 'Top Right' }, { value: 'top-left', label: 'Top Left' }] },
-    { id: 'launch-width', label: 'Width', type: 'text', path: 'launcher.width', defaultValue: 'min(400px, calc(100vw - 24px))' },
-    { id: 'launch-auto-expand', label: 'Auto Expand', type: 'toggle', path: 'launcher.autoExpand', defaultValue: false },
     { id: 'launch-full-height', label: 'Full Height', type: 'toggle', path: 'launcher.fullHeight', defaultValue: false },
     { id: 'launch-sidebar', label: 'Sidebar Mode', type: 'toggle', path: 'launcher.sidebarMode', defaultValue: false },
     { id: 'launch-sidebar-width', label: 'Sidebar Width', type: 'text', path: 'launcher.sidebarWidth', defaultValue: '420px' },
@@ -657,6 +674,12 @@ const artifactsSectionDef: SectionDef = {
   fields: [
     { id: 'art-enabled', label: 'Enabled', description: 'Show artifact sidebar for documents and components', type: 'toggle', path: 'features.artifacts.enabled', defaultValue: false },
     { id: 'art-appearance', label: 'Pane Appearance', type: 'select', path: 'features.artifacts.layout.paneAppearance', defaultValue: 'panel', options: [{ value: 'panel', label: 'Panel (bordered)' }, { value: 'seamless', label: 'Seamless' }] },
+  ],
+};
+
+const artifactCustomizationSectionDef: SectionDef = {
+  id: 'artifacts-customization', title: 'Artifact Customization', collapsed: true,
+  fields: [
     { id: 'art-toolbar', label: 'Toolbar Preset', type: 'select', path: 'features.artifacts.layout.toolbarPreset', defaultValue: 'default', options: [{ value: 'default', label: 'Default' }, { value: 'document', label: 'Document' }] },
     { id: 'art-pane-width', label: 'Pane Width', description: 'CSS width (e.g. 40%, 28rem)', type: 'text', path: 'features.artifacts.layout.paneWidth', defaultValue: '40%' },
     { id: 'art-pane-max-width', label: 'Pane Max Width', type: 'text', path: 'features.artifacts.layout.paneMaxWidth', defaultValue: '28rem' },
@@ -701,12 +724,165 @@ const markdownSectionDef: SectionDef = {
 export const CONFIGURE_SUB_GROUPS: SubGroupDef[] = [
   { label: 'Content', sections: [copySectionDef, suggestionsSectionDef] },
   { label: 'Layout', sections: [generalLayoutSectionDef, headerLayoutSectionDef, messagesLayoutSectionDef, messageActionsSectionDef] },
-  { label: 'Widget', sections: [launcherConfigSectionDef, sendButtonSectionDef, closeButtonSectionDef, clearChatSectionDef, statusIndicatorSectionDef] },
-  { label: 'Features', sections: [featuresSectionDef, attachmentsSectionDef, artifactsSectionDef] },
-  { label: 'Developer', sections: [apiIntegrationSectionDef, debugSectionDef, markdownSectionDef] },
+  { label: 'Widget', sections: [launcherBasicsSectionDef, launcherAdvancedSectionDef, sendButtonSectionDef, closeButtonSectionDef, clearChatSectionDef, statusIndicatorSectionDef] },
+  { label: 'Features', sections: [featuresSectionDef, attachmentsSectionDef, artifactsSectionDef, artifactCustomizationSectionDef] },
+  { label: 'Developer', collapsedByDefault: true, sections: [apiIntegrationSectionDef, debugSectionDef, markdownSectionDef] },
 ];
 
 export const CONFIGURE_SECTIONS: SectionDef[] = CONFIGURE_SUB_GROUPS.flatMap(g => g.sections);
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// STYLE TAB V2 — outcome-oriented editor structure
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/** Section 1: Theme — color mode selection */
+export const THEME_SECTION: SectionDef = {
+  id: 'theme-mode-v2',
+  title: 'Theme',
+  description: 'Choose how the interface adapts across light and dark mode.',
+  collapsed: false,
+  fields: [
+    {
+      id: 'color-mode',
+      label: 'Color Mode',
+      type: 'select',
+      path: 'colorScheme',
+      defaultValue: 'auto',
+      options: [
+        { value: 'auto', label: 'Auto' },
+        { value: 'light', label: 'Light' },
+        { value: 'dark', label: 'Dark' },
+      ],
+    },
+  ],
+};
+
+/** Section 2: Brand Palette — primary colors + collapsed status colors */
+export const BRAND_PALETTE_SECTION: SectionDef = {
+  id: 'brand-palette-v2',
+  title: 'Brand Palette',
+  description: 'Set your brand, accent, and neutral colors. These are used to generate the interface theme.',
+  collapsed: false,
+  fields: [
+    { id: 'bp-primary', label: 'Primary', description: 'Main brand color', type: 'color', path: 'theme.palette.colors.primary.500', defaultValue: '#171717' },
+    { id: 'bp-secondary', label: 'Secondary', description: 'Supporting brand color', type: 'color', path: 'theme.palette.colors.secondary.500', defaultValue: '#8b5cf6' },
+    { id: 'bp-accent', label: 'Accent', description: 'Highlight and decorative color', type: 'color', path: 'theme.palette.colors.accent.500', defaultValue: '#06b6d4' },
+    { id: 'bp-neutral', label: 'Neutral', description: 'Backgrounds, text, and borders', type: 'color', path: 'theme.palette.colors.gray.500', defaultValue: '#6b7280' },
+  ],
+};
+
+/** Section 2b: Status palette — collapsed under Brand Palette */
+export const STATUS_PALETTE_SECTION: SectionDef = {
+  id: 'status-palette',
+  title: 'Status Palette',
+  description: 'Colors for system feedback states.',
+  collapsed: true,
+  fields: [
+    { id: 'sp-success', label: 'Success', type: 'color', path: 'theme.palette.colors.success.500', defaultValue: '#22c55e' },
+    { id: 'sp-warning', label: 'Warning', type: 'color', path: 'theme.palette.colors.warning.500', defaultValue: '#eab308' },
+    { id: 'sp-error', label: 'Error', type: 'color', path: 'theme.palette.colors.error.500', defaultValue: '#ef4444' },
+    { id: 'sp-notice', label: 'Notice', description: 'Info and notice states', type: 'color', path: 'theme.semantic.colors.feedback.info', defaultValue: 'palette.colors.primary.500' },
+  ],
+};
+
+/** Section 3: Interface Roles — the main theming surface */
+export const INTERFACE_ROLES_SECTION: SectionDef = {
+  id: 'interface-roles',
+  title: 'Interface Roles',
+  description: 'Control where brand and neutral colors appear across the interface.',
+  collapsed: false,
+  fields: [
+    {
+      id: 'role-surfaces',
+      label: 'Background Surfaces',
+      type: 'role-assignment',
+      path: 'theme.semantic.colors.background', // primary target for detection
+      roleAssignment: ROLE_SURFACES,
+    },
+    {
+      id: 'role-header',
+      label: 'Header',
+      type: 'role-assignment',
+      path: 'theme.components.header.background',
+      roleAssignment: ROLE_HEADER,
+    },
+    {
+      id: 'role-user-messages',
+      label: 'User Messages',
+      type: 'role-assignment',
+      path: 'theme.components.message.user.background',
+      roleAssignment: ROLE_USER_MESSAGES,
+    },
+    {
+      id: 'role-assistant-messages',
+      label: 'Assistant Messages',
+      type: 'role-assignment',
+      path: 'theme.components.message.assistant.background',
+      roleAssignment: ROLE_ASSISTANT_MESSAGES,
+    },
+    {
+      id: 'role-primary-actions',
+      label: 'Primary Actions',
+      type: 'role-assignment',
+      path: 'theme.components.button.primary.background',
+      roleAssignment: ROLE_PRIMARY_ACTIONS,
+    },
+    {
+      id: 'role-input',
+      label: 'Input Field',
+      type: 'role-assignment',
+      path: 'theme.components.input.background',
+      roleAssignment: ROLE_INPUT,
+    },
+    {
+      id: 'role-links-focus',
+      label: 'Links & Focus',
+      type: 'role-assignment',
+      path: 'theme.semantic.colors.accent',
+      roleAssignment: ROLE_LINKS_FOCUS,
+    },
+    {
+      id: 'role-borders',
+      label: 'Borders & Dividers',
+      type: 'role-assignment',
+      path: 'theme.semantic.colors.border',
+      roleAssignment: ROLE_BORDERS,
+    },
+  ],
+};
+
+/** Section 4: Status Colors — feedback semantic tokens */
+export const STATUS_COLORS_SECTION: SectionDef = {
+  id: 'status-colors',
+  title: 'Status Colors',
+  description: 'Used for system states like success, warning, notice, and error.',
+  collapsed: true,
+  fields: [
+    { id: 'sc-notice', label: 'Notice', type: 'token-ref', path: 'theme.semantic.colors.feedback.info', defaultValue: 'palette.colors.primary.500', tokenRef: { tokenType: 'color' } },
+    { id: 'sc-success', label: 'Success', type: 'token-ref', path: 'theme.semantic.colors.feedback.success', defaultValue: 'palette.colors.success.500', tokenRef: { tokenType: 'color' } },
+    { id: 'sc-warning', label: 'Warning', type: 'token-ref', path: 'theme.semantic.colors.feedback.warning', defaultValue: 'palette.colors.warning.500', tokenRef: { tokenType: 'color' } },
+    { id: 'sc-error', label: 'Error', type: 'token-ref', path: 'theme.semantic.colors.feedback.error', defaultValue: 'palette.colors.error.500', tokenRef: { tokenType: 'color' } },
+  ],
+};
+
+/** Section 5: Advanced Tokens — entry point for drill-downs (no fields) */
+export const ADVANCED_TOKENS_SECTION: SectionDef = {
+  id: 'advanced-tokens',
+  title: 'Advanced Tokens',
+  description: 'Override individual semantic and component values when you need precise control.',
+  collapsed: true,
+  fields: [],
+};
+
+/** V2 Style tab sections — outcome-oriented editor */
+export const STYLE_SECTIONS_V2: SectionDef[] = [
+  THEME_SECTION,
+  BRAND_PALETTE_SECTION,
+  STATUS_PALETTE_SECTION,
+  INTERFACE_ROLES_SECTION,
+  STATUS_COLORS_SECTION,
+  ADVANCED_TOKENS_SECTION,
+];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // ALL TABS

@@ -7,14 +7,15 @@ import {
 
 describe('theme-defaults', () => {
   test('getPackageDefaultForComponentsPath resolves header tokens for theme and darkTheme paths', () => {
+    // Defaults now use direct palette refs (solid primary role)
     expect(getPackageDefaultForComponentsPath('theme.components.header.actionIconForeground')).toBe(
-      'semantic.colors.textMuted'
+      'palette.colors.primary.200'
     );
     expect(getPackageDefaultForComponentsPath('darkTheme.components.header.actionIconForeground')).toBe(
-      'semantic.colors.textMuted'
+      'palette.colors.primary.200'
     );
     expect(getPackageDefaultForComponentsPath('theme.components.header.titleForeground')).toBe(
-      'semantic.colors.primary'
+      'palette.colors.primary.50'
     );
   });
 
@@ -27,14 +28,15 @@ describe('theme-defaults', () => {
   });
 
   test('colorFieldNeedsReset when light slot is a literal', () => {
+    const def = 'palette.colors.primary.50';
     const get = (p: string) => (p === 'theme.components.header.titleForeground' ? '#ff0000' : undefined);
     expect(
-      colorFieldNeedsReset(get, 'theme.components.header.titleForeground', 'semantic.colors.primary')
+      colorFieldNeedsReset(get, 'theme.components.header.titleForeground', def)
     ).toBe(true);
   });
 
   test('colorFieldNeedsReset when darkTheme slot diverges from default', () => {
-    const def = 'semantic.colors.primary';
+    const def = 'palette.colors.primary.50';
     const get = (p: string) =>
       p === 'theme.components.header.titleForeground'
         ? def
@@ -45,7 +47,7 @@ describe('theme-defaults', () => {
   });
 
   test('colorFieldNeedsReset is false when both slots match default ref', () => {
-    const def = 'semantic.colors.primary';
+    const def = 'palette.colors.primary.50';
     const get = (p: string) =>
       p === 'theme.components.header.titleForeground' || p === 'darkTheme.components.header.titleForeground'
         ? def
@@ -56,7 +58,7 @@ describe('theme-defaults', () => {
   test('colorFieldNeedsReset is false when both slots are undefined', () => {
     const get = () => undefined;
     expect(
-      colorFieldNeedsReset(get, 'theme.components.header.titleForeground', 'semantic.colors.primary')
+      colorFieldNeedsReset(get, 'theme.components.header.titleForeground', 'palette.colors.primary.50')
     ).toBe(false);
   });
 });

@@ -60,9 +60,7 @@ function getDemoLauncher() {
     fullHeight: true,
     mobileBreakpoint: 1120,
     title: "Copilot",
-    subtitle: "Answers and drafts without leaving this screen",
-    agentIconText: "✦",
-    textHidden: false,
+    subtitle: "Dashboard Assistant",
   };
 }
 

@@ -139,15 +139,16 @@ describe('theme utils', () => {
     expect(cssVars['--persona-md-prose-font-family']).toBe('Georgia, serif');
   });
 
-  it('maps header chrome tokens to dedicated CSS variables with semantic fallbacks', () => {
+  it('maps header chrome tokens to dedicated CSS variables with palette refs', () => {
     const theme = createTheme();
     const cssVars = themeToCssVariables(theme);
 
-    expect(cssVars['--persona-header-icon-bg']).toBe(cssVars['--persona-primary']);
-    expect(cssVars['--persona-header-icon-fg']).toBe(cssVars['--persona-text-inverse']);
-    expect(cssVars['--persona-header-title-fg']).toBe(cssVars['--persona-primary']);
-    expect(cssVars['--persona-header-subtitle-fg']).toBe(cssVars['--persona-text-muted']);
-    expect(cssVars['--persona-header-action-icon-fg']).toBe(cssVars['--persona-muted']);
+    // Default header uses solid primary role: icon-bg=primary.600, icon-fg=primary.50, etc.
+    expect(cssVars['--persona-header-icon-bg']).toBe('#0f0f0f'); // primary.600
+    expect(cssVars['--persona-header-icon-fg']).toBe('#ffffff'); // primary.50
+    expect(cssVars['--persona-header-title-fg']).toBe('#ffffff'); // primary.50
+    expect(cssVars['--persona-header-subtitle-fg']).toBe('#d4d4d4'); // primary.200
+    expect(cssVars['--persona-header-action-icon-fg']).toBe('#d4d4d4'); // primary.200
 
     const custom = createTheme({
       components: {
@@ -172,8 +173,9 @@ describe('theme utils', () => {
     const theme = createTheme();
     const cssVars = themeToCssVariables(theme);
 
-    expect(cssVars['--persona-components-artifact-pane-background']).toBe('#f3f4f6');
-    expect(cssVars['--persona-artifact-toolbar-bg']).toBe('#f3f4f6');
+    // container defaults to gray.50 now (soft gray surfaces role)
+    expect(cssVars['--persona-components-artifact-pane-background']).toBe('#f9fafb');
+    expect(cssVars['--persona-artifact-toolbar-bg']).toBe('#f9fafb');
 
     const surfacePane = createTheme({
       components: {

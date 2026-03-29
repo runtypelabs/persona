@@ -59,7 +59,7 @@ function renderDefaultArtifactCard(
     // Pulsing dot for streaming status
     const dot = document.createElement("span");
     dot.className = "persona-inline-block persona-w-1.5 persona-h-1.5 persona-rounded-full";
-    dot.style.backgroundColor = "var(--persona-primary, #3b82f6)";
+    dot.style.backgroundColor = "var(--persona-primary, #171717)";
     dot.style.animation = "persona-pulse 1.5s ease-in-out infinite";
     subtitleEl.appendChild(dot);
 

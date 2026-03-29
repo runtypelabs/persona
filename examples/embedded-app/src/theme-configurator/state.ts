@@ -718,7 +718,8 @@ function loadEditorUiFromStorage(): EditorUiState | null {
         parsed.previewDevice === 'mobile') &&
       (parsed.previewScene === 'home' ||
         parsed.previewScene === 'conversation' ||
-        parsed.previewScene === 'minimized') &&
+        parsed.previewScene === 'minimized' ||
+        parsed.previewScene === 'artifact') &&
       (parsed.editorMode === 'basic' || parsed.editorMode === 'advanced')
     ) {
       return {
@@ -768,4 +769,23 @@ export function getParserTypeFromConfig(config: AgentWidgetConfig): ParserType {
     if (parserStr.includes('createXmlParser')) return 'xml';
   }
   return 'plain';
+}
+
+// ─── Preview zone highlight bridge ──────────────────────────────────
+// Controls call highlightPreviewZone/clearPreviewHighlight;
+// preview-manager registers the actual implementation via setHighlightHandler.
+
+type HighlightHandler = (zone: string | null) => void;
+let highlightHandler: HighlightHandler | null = null;
+
+export function setHighlightHandler(handler: HighlightHandler | null): void {
+  highlightHandler = handler;
+}
+
+export function highlightPreviewZone(zone: string): void {
+  highlightHandler?.(zone);
+}
+
+export function clearPreviewHighlight(): void {
+  highlightHandler?.(null);
 }

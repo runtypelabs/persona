@@ -1,4 +1,4 @@
-/** Style tab — curated visual controls for theme mode, brand colors, typography, shape, and widget style */
+/** Style tab — outcome-oriented controls: Theme, Brand Palette, Interface Roles, Status Colors, Advanced Tokens */
 
 import type { SectionDef, OnChangeCallback, ControlResult } from '../types';
 import { renderSection } from '../controls';
@@ -10,19 +10,27 @@ import {
   isValidHex,
   resolveThemeColorPath,
 } from '../color-utils';
-import { STYLE_SECTIONS, findSection } from '@runtypelabs/persona/theme-editor';
+import {
+  STYLE_SECTIONS,
+  STYLE_SECTIONS_V2,
+  THEME_SECTION,
+  BRAND_PALETTE_SECTION,
+  STATUS_PALETTE_SECTION,
+  INTERFACE_ROLES_SECTION,
+  STATUS_COLORS_SECTION,
+  ADVANCED_TOKENS_SECTION,
+  findSection,
+} from '@runtypelabs/persona/theme-editor';
 
 export const TAB_ID = 'style';
 export const TAB_LABEL = 'Style';
 
 // ─── Drill-down types ────────────────────────────────────────────
 
-export type DrilldownView = 'none' | 'palette' | 'component-colors' | 'component-shapes';
+export type DrilldownView = 'none' | 'palette' | 'component-colors' | 'component-shapes' | 'advanced-tokens';
 
-// ─── Section lookups from core ──────────────────────────────────────
+// ─── V1 section lookups (used in Advanced Tokens drilldown) ─────
 
-const themeModeSectionDef = findSection(STYLE_SECTIONS, 'theme-mode') as SectionDef;
-const brandColorsSectionDef = findSection(STYLE_SECTIONS, 'brand-colors') as SectionDef;
 const chatColorsSectionDef = findSection(STYLE_SECTIONS, 'chat-colors') as SectionDef;
 const typographySectionDef = findSection(STYLE_SECTIONS, 'typography') as SectionDef;
 const launcherStyleSectionDef = findSection(STYLE_SECTIONS, 'launcher-style') as SectionDef;
@@ -30,9 +38,19 @@ const shapeSectionDef = findSection(STYLE_SECTIONS, 'shape') as SectionDef;
 const shadowsSectionDef = findSection(STYLE_SECTIONS, 'shadows') as SectionDef;
 const widgetStyleSectionDef = findSection(STYLE_SECTIONS, 'widget-style') as SectionDef;
 
+/** Sections rendered inside the Advanced Tokens drilldown */
+export const ADVANCED_TOKENS_DRILLDOWN_SECTIONS: SectionDef[] = [
+  chatColorsSectionDef,
+  typographySectionDef,
+  launcherStyleSectionDef,
+  shapeSectionDef,
+  shadowsSectionDef,
+  widgetStyleSectionDef,
+];
+
 // ─── Brand Color Compound Handler ────────────────────────────────
 
-const BRAND_COLOR_PATTERN = /^theme\.palette\.colors\.(primary|secondary|accent)\.500$/;
+const BRAND_COLOR_PATTERN = /^theme\.palette\.colors\.(primary|secondary|accent|gray)\.500$/;
 
 /**
  * Wraps the base onChange to generate full color scales when a brand color
@@ -123,11 +141,6 @@ function createSummaryPill(text: string): HTMLElement {
   return item;
 }
 
-function getTokenTail(path: string): string {
-  const parts = path.split('.');
-  return parts[parts.length - 1] || path;
-}
-
 function resolveThemeColor(path: string): string {
   return resolveThemeColorPath((p) => state.get(p), path);
 }
@@ -158,67 +171,39 @@ function ensureHeaderMeta(
 }
 
 function renderSectionHeaderMetadata(container: HTMLElement): void {
-  const runtimeHeader = ensureHeaderMeta(container, themeModeSectionDef.id);
-  if (runtimeHeader) {
-    const runtimeValue = String(state.get('colorScheme') ?? 'auto');
-    runtimeHeader.summary.replaceChildren(
+  // Theme mode
+  const themeHeader = ensureHeaderMeta(container, THEME_SECTION.id);
+  if (themeHeader) {
+    const value = String(state.get('colorScheme') ?? 'auto');
+    themeHeader.summary.replaceChildren(
       createSummaryPill(
-        runtimeValue === 'auto'
-          ? 'Follow system'
-          : runtimeValue === 'dark'
-            ? 'Always dark'
-            : 'Always light'
+        value === 'auto' ? 'Auto' : value === 'dark' ? 'Dark' : 'Light'
       )
     );
-    runtimeHeader.actions.replaceChildren();
+    themeHeader.actions.replaceChildren();
   }
 
-  const brandHeader = ensureHeaderMeta(container, brandColorsSectionDef.id);
+  // Brand Palette
+  const brandHeader = ensureHeaderMeta(container, BRAND_PALETTE_SECTION.id);
   if (brandHeader) {
     brandHeader.summary.replaceChildren(
-      createSummarySwatch('Primary', String(state.get('theme.palette.colors.primary.500') ?? '#2563eb')),
-      createSummarySwatch('Secondary', String(state.get('theme.palette.colors.secondary.500') ?? '#7c3aed')),
-      createSummarySwatch('Accent', String(state.get('theme.palette.colors.accent.500') ?? '#06b6d4'))
+      createSummarySwatch('Primary', String(state.get('theme.palette.colors.primary.500') ?? '#171717')),
+      createSummarySwatch('Secondary', String(state.get('theme.palette.colors.secondary.500') ?? '#8b5cf6')),
+      createSummarySwatch('Accent', String(state.get('theme.palette.colors.accent.500') ?? '#06b6d4')),
+      createSummarySwatch('Neutral', String(state.get('theme.palette.colors.gray.500') ?? '#6b7280'))
     );
     brandHeader.actions.replaceChildren(createDrilldownLink('Full palette', 'palette'));
   }
 
-  const chatHeader = ensureHeaderMeta(container, chatColorsSectionDef.id);
-  if (chatHeader) {
-    chatHeader.summary.replaceChildren(
-      createSummarySwatch('Header', resolveThemeColor('theme.components.header.background')),
-      createSummarySwatch('User', resolveThemeColor('theme.components.message.user.background')),
-      createSummarySwatch('Assistant', resolveThemeColor('theme.components.message.assistant.background'))
+  // Advanced Tokens
+  const advancedHeader = ensureHeaderMeta(container, ADVANCED_TOKENS_SECTION.id);
+  if (advancedHeader) {
+    advancedHeader.summary.replaceChildren();
+    advancedHeader.actions.replaceChildren(
+      createDrilldownLink('Semantic & component tokens', 'advanced-tokens'),
+      createDrilldownLink('Component shapes', 'component-shapes'),
+      createDrilldownLink('Component colors', 'component-colors')
     );
-    chatHeader.actions.replaceChildren(createDrilldownLink('Component colors', 'component-colors'));
-  }
-
-  const launcherHeader = ensureHeaderMeta(container, launcherStyleSectionDef.id);
-  if (launcherHeader) {
-    launcherHeader.summary.replaceChildren(
-      createSummaryPill(`Shape: ${getTokenTail(String(state.get('theme.components.launcher.borderRadius') ?? 'palette.radius.full'))}`),
-      createSummaryPill(`Size: ${String(state.get('theme.components.launcher.size') ?? '60px')}`),
-      createSummaryPill(`Position: ${String(state.get('launcher.position') ?? 'bottom-right')}`)
-    );
-    launcherHeader.actions.replaceChildren(createCrossLinkAction('Configure behavior', 'configure', 'launcher-config'));
-  }
-
-  const typographyHeader = ensureHeaderMeta(container, typographySectionDef.id);
-  if (typographyHeader) {
-    typographyHeader.summary.replaceChildren(
-      createSummaryPill(`Family: ${getTokenTail(String(state.get('theme.semantic.typography.fontFamily') ?? 'palette.typography.fontFamily.sans'))}`),
-      createSummaryPill(`Base size: ${getTokenTail(String(state.get('theme.semantic.typography.fontSize') ?? 'palette.typography.fontSize.base'))}`)
-    );
-    typographyHeader.actions.replaceChildren();
-  }
-
-  const widgetHeader = ensureHeaderMeta(container, widgetStyleSectionDef.id);
-  if (widgetHeader) {
-    widgetHeader.summary.replaceChildren(
-      createSummaryPill(`Panel: ${getTokenTail(String(state.get('theme.components.panel.borderRadius') ?? 'palette.radius.xl'))}`),
-      createSummaryPill(`Messages: ${getTokenTail(String(state.get('theme.components.message.user.borderRadius') ?? 'palette.radius.lg'))}`)
-    );
-    widgetHeader.actions.replaceChildren(createDrilldownLink('Component shapes', 'component-shapes'));
   }
 }
 
@@ -266,32 +251,43 @@ function renderSections(
   return allControls;
 }
 
-/** Render the Style tab summary view */
+/** Render the Style tab V2 summary view */
 export function render(
   container: HTMLElement,
   onChange: OnChangeCallback
 ): ControlResult[] {
   const allControls: ControlResult[] = [];
 
-  // Brand colors use compound onChange (auto-generates full scale)
+  // Theme mode
+  allControls.push(...renderSections(container, onChange, [THEME_SECTION as SectionDef]));
+
+  // Brand Palette (uses compound onChange for auto-generating scales)
   const brandOnChange = createBrandColorOnChange(onChange);
-  allControls.push(...renderSections(container, brandOnChange, [brandColorsSectionDef]));
-
-  allControls.push(...renderSections(container, onChange, [chatColorsSectionDef]));
-
-  allControls.push(...renderSections(container, onChange, [launcherStyleSectionDef]));
-
-  allControls.push(...renderSections(container, onChange, [
-    typographySectionDef,
-    themeModeSectionDef,
-    shapeSectionDef,
-    shadowsSectionDef,
+  allControls.push(...renderSections(container, brandOnChange, [
+    BRAND_PALETTE_SECTION as SectionDef,
+    STATUS_PALETTE_SECTION as SectionDef,
   ]));
 
-  allControls.push(...renderSections(container, onChange, [widgetStyleSectionDef]));
+  // Interface Roles
+  allControls.push(...renderSections(container, onChange, [INTERFACE_ROLES_SECTION as SectionDef]));
+
+  // Status Colors
+  allControls.push(...renderSections(container, onChange, [STATUS_COLORS_SECTION as SectionDef]));
+
+  // Advanced Tokens (entry point — no fields, just drilldown links)
+  allControls.push(...renderSections(container, onChange, [ADVANCED_TOKENS_SECTION as SectionDef]));
+
   renderSectionHeaderMetadata(container);
 
   return allControls;
+}
+
+/** Render the Advanced Tokens drilldown content */
+export function renderAdvancedTokensDrilldown(
+  container: HTMLElement,
+  onChange: OnChangeCallback
+): ControlResult[] {
+  return renderSections(container, onChange, ADVANCED_TOKENS_DRILLDOWN_SECTIONS);
 }
 
 export function refreshSectionMetadata(container: HTMLElement): void {

@@ -282,6 +282,10 @@ export interface PreviewManager {
   setZoom(zoom: number | null): void;
   /** Reset zoom and resize frames for a device change. */
   resizeFrames(): void;
+  /** Highlight a preview zone (e.g. 'header', 'user-message') in all iframes. */
+  highlightZone(zone: string): void;
+  /** Remove any active zone highlight from all iframes. */
+  clearHighlight(): void;
   /** Clean up all resources. */
   destroy(): void;
 }
@@ -306,6 +310,7 @@ export function createPreviewManager(
   let previewControllers: AgentWidgetController[] = [];
   let previewLayoutCleanups: Array<() => void> = [];
   let previewResizeObserver: ResizeObserver | null = null;
+  let activeHighlightZone: string | null = null;
 
   const previewEmbedCheckInFlight = new Map<string, number>();
   const previewBackgroundOverlayTimers = new Map<string, { timeoutId: number; dismissKey: string }>();
@@ -1468,6 +1473,51 @@ export function createPreviewManager(
     return zoomOverride ?? lastAutoScale;
   }
 
+  // ─── Zone highlighting ──────────────────────────────────────
+
+  const HIGHLIGHT_STYLE_ID = 'persona-zone-highlight';
+  const HIGHLIGHT_CSS = `
+    .persona-zone-active {
+      outline: 2px dashed #4F6EF7 !important;
+      outline-offset: -2px;
+      transition: outline 0.15s ease;
+    }
+  `;
+
+  function ensureHighlightStylesheet(doc: Document): void {
+    if (doc.getElementById(HIGHLIGHT_STYLE_ID)) return;
+    const style = doc.createElement('style');
+    style.id = HIGHLIGHT_STYLE_ID;
+    style.textContent = HIGHLIGHT_CSS;
+    doc.head.appendChild(style);
+  }
+
+  function applyHighlightZone(zone: string | null): void {
+    activeHighlightZone = zone;
+    const iframes = container.querySelectorAll<HTMLIFrameElement>('iframe[data-mount-id]');
+    for (const iframe of iframes) {
+      const doc = iframe.contentDocument;
+      if (!doc?.body) continue;
+      ensureHighlightStylesheet(doc);
+
+      if (!zone) {
+        doc.querySelectorAll('.persona-zone-active').forEach((el) =>
+          el.classList.remove('persona-zone-active')
+        );
+        continue;
+      }
+
+      // Clear previous active markers
+      doc.querySelectorAll('.persona-zone-active').forEach((el) =>
+        el.classList.remove('persona-zone-active')
+      );
+      // Mark matching zones as active
+      doc.querySelectorAll(`[data-persona-theme-zone="${zone}"]`).forEach((el) =>
+        el.classList.add('persona-zone-active')
+      );
+    }
+  }
+
   // ─── Initialize ───────────────────────────────────────────────
 
   bindPreviewBackgroundMessageListener();
@@ -1514,6 +1564,14 @@ export function createPreviewManager(
 
     resizeFrames(): void {
       resizePreviewFrames();
+    },
+
+    highlightZone(zone: string): void {
+      applyHighlightZone(zone);
+    },
+
+    clearHighlight(): void {
+      applyHighlightZone(null);
     },
 
     destroy(): void {
