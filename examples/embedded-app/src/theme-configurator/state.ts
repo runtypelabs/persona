@@ -3,7 +3,7 @@
  *  adds widget controller integration, localStorage persistence, and editor UI state.
  */
 
-import type { AgentWidgetConfig, AgentWidgetMessage } from '@runtypelabs/persona';
+import type { AgentWidgetConfig } from '@runtypelabs/persona';
 import type { PersonaTheme } from '@runtypelabs/persona';
 import {
   createAgentExperience,
@@ -15,6 +15,12 @@ import {
 import type { AgentWidgetController } from '@runtypelabs/persona';
 import { ThemeEditorState } from '@runtypelabs/persona/theme-editor';
 import type { ConfiguratorSnapshot } from '@runtypelabs/persona/theme-editor';
+import {
+  PREVIEW_STORAGE_ADAPTER,
+  HOME_SUGGESTION_CHIPS,
+  createPreviewMessages,
+  applySceneConfig,
+} from '@runtypelabs/persona/theme-editor';
 import { parseActionResponse } from '../middleware';
 
 // Re-export for consumers
@@ -96,114 +102,6 @@ let savedSnapshot: ConfiguratorSnapshot | null = null;
 
 type ConfigChangeListener = (config: AgentWidgetConfig, theme: PersonaTheme) => void;
 const listeners: ConfigChangeListener[] = [];
-
-const PREVIEW_STORAGE_ADAPTER = {
-  load: () => null,
-  save: () => {},
-  clear: () => {},
-};
-
-const HOME_PREVIEW_SUGGESTION_CHIPS = [
-  'How do I get started?',
-  'Pricing & plans',
-  'Talk to support',
-];
-
-function createPreviewMessages(scene: PreviewScene): AgentWidgetMessage[] {
-  if (scene === 'home') {
-    return [
-      {
-        id: 'preview-home-1',
-        role: 'assistant',
-        content: 'Hi there! How can we help today?',
-        createdAt: new Date().toISOString(),
-      },
-    ];
-  }
-
-  if (scene === 'minimized') {
-    return [
-      {
-        id: 'preview-minimized-1',
-        role: 'assistant',
-        content: 'We are here whenever you are ready.',
-        createdAt: new Date().toISOString(),
-      },
-    ];
-  }
-
-  if (scene === 'artifact') {
-    return [
-      {
-        id: 'preview-artifact-1',
-        role: 'user',
-        content: 'Can you draft a quick overview of the project?',
-        createdAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-      },
-      {
-        id: 'preview-artifact-2',
-        role: 'assistant',
-        content: 'Here\u2019s a project overview document for you.',
-        createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
-      },
-    ];
-  }
-
-  return [
-    {
-      id: 'preview-conversation-1',
-      role: 'assistant',
-      content: 'Hello! How can I help you today?',
-      createdAt: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'preview-conversation-2',
-      role: 'user',
-      content: 'I want to customize the theme editor preview.',
-      createdAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'preview-conversation-3',
-      role: 'assistant',
-      content: 'Absolutely. Adjust colors, typography, and component tokens to see changes instantly.',
-      createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
-    },
-  ];
-}
-
-function applyPreviewSceneConfig(
-  base: AgentWidgetConfig,
-  scene: PreviewScene
-): AgentWidgetConfig {
-  const launcher = {
-    ...base.launcher,
-    enabled: true,
-    autoExpand: scene !== 'minimized',
-  };
-
-  const config = {
-    ...base,
-    launcher,
-    suggestionChips:
-      scene === 'home'
-        ? (base.suggestionChips?.length ? base.suggestionChips : HOME_PREVIEW_SUGGESTION_CHIPS)
-        : base.suggestionChips,
-    initialMessages: createPreviewMessages(scene),
-    storageAdapter: PREVIEW_STORAGE_ADAPTER,
-  } as AgentWidgetConfig;
-
-  if (scene === 'artifact') {
-    config.features = {
-      ...config.features,
-      artifacts: {
-        ...config.features?.artifacts,
-        enabled: true,
-      },
-    };
-  }
-
-  return config;
-}
 
 // ─── Initialize ─────────────────────────────────────────────────────
 export function initStore(previewMount?: HTMLElement): AgentWidgetController | null {
@@ -337,7 +235,7 @@ export function buildPreviewConfig(
   const colorScheme =
     mode === 'light' ? 'light' : mode === 'dark' ? 'dark' : (base.colorScheme ?? 'light');
 
-  return applyPreviewSceneConfig(
+  return applySceneConfig(
     {
       ...base,
       suggestionChips: sanitizedSuggestionChips,
