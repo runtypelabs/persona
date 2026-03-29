@@ -4,6 +4,7 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
+      "@runtypelabs/persona/theme-editor": ["../../packages/widget/src/theme-editor"],
       "@runtypelabs/persona": ["../../packages/widget/src"],
       "@runtypelabs/persona-proxy": ["../../packages/proxy/src"]
     }

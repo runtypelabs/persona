@@ -18,7 +18,7 @@ vi.mock('@runtypelabs/persona', () => ({
   },
   DEFAULT_PALETTE: {
     colors: {
-      primary: { '500': '#2563eb' },
+      primary: { '500': '#171717' },
       secondary: { '500': '#7c3aed' },
       accent: { '500': '#06b6d4' },
       gray: { '500': '#6b7280' },
@@ -43,7 +43,7 @@ describe('appearance curated controls', () => {
     state.initStore();
   });
 
-  test('renders curated sections in the new high-signal order with launcher controls surfaced', () => {
+  test('renders V2 sections in outcome-oriented order', () => {
     const container = document.createElement('div');
     const onChange = vi.fn();
     const controls = render(container, onChange);
@@ -53,14 +53,12 @@ describe('appearance curated controls', () => {
     );
 
     expect(sectionIds).toEqual([
-      'brand-colors',
-      'chat-colors',
-      'launcher-style',
-      'typography',
-      'theme-mode',
-      'shape',
-      'shadows',
-      'widget-style',
+      'theme-mode-v2',
+      'brand-palette-v2',
+      'status-palette',
+      'interface-roles',
+      'status-colors',
+      'advanced-tokens',
     ]);
     expect(controls.length).toBeGreaterThan(0);
   });
@@ -70,18 +68,11 @@ describe('appearance curated controls', () => {
     const onChange = vi.fn();
     render(container, onChange);
 
-    // Find the primary brand color control
-    const primaryControl = container.querySelector('[data-section-id="brand-colors"] input[type="color"]') as HTMLInputElement;
+    // Find the primary brand color control in the brand palette section
+    const primaryControl = container.querySelector('[data-section-id="brand-palette-v2"] input[type="color"]') as HTMLInputElement;
     expect(primaryControl).not.toBeNull();
 
-    // Simulate color change via the control's onChange
-    // The brand color control path is theme.palette.colors.primary.500
-    // After a change, both theme and darkTheme palettes should be updated
-    const primaryBefore = state.get('theme.palette.colors.primary.500');
     const newColor = '#ff0000';
-
-    // Trigger the brand color onChange directly through state
-    // The compound handler is wired via the render function
     primaryControl!.value = newColor;
     primaryControl!.dispatchEvent(new Event('input', { bubbles: true }));
 
@@ -90,12 +81,9 @@ describe('appearance curated controls', () => {
     const primary300 = state.get('theme.palette.colors.primary.300');
     const darkPrimary500 = state.get('darkTheme.palette.colors.primary.500');
 
-    // The new 500 shade should match the input color
     expect(primary500).toBe(newColor);
-    // A full scale was generated (300 shade exists and differs from 500)
     expect(primary300).toBeTruthy();
     expect(primary300).not.toBe(primary500);
-    // Dark theme was also updated
     expect(darkPrimary500).toBe(newColor);
 
     // Semantic references were updated
@@ -103,61 +91,42 @@ describe('appearance curated controls', () => {
     expect(state.get('darkTheme.semantic.colors.primary')).toBe('palette.colors.primary.400');
   });
 
-  test('shape section has preset buttons', () => {
-    const container = document.createElement('div');
-    const onChange = vi.fn();
-    render(container, onChange);
-
-    const shapeSection = container.querySelector('[data-section-id="shape"]');
-    expect(shapeSection).not.toBeNull();
-
-    const presetBtns = shapeSection!.querySelectorAll('.preset-btn');
-    const presetLabels = Array.from(presetBtns).map((btn) => btn.textContent);
-    expect(presetLabels).toContain('Default');
-    expect(presetLabels).toContain('Sharp');
-    expect(presetLabels).toContain('Rounded');
-  });
-
-  test('header summaries and promoted actions are rendered in appropriate sections', () => {
+  test('header summaries and drilldown links are rendered in appropriate sections', () => {
     const container = document.createElement('div');
     render(container, vi.fn());
 
+    // Brand Palette shows 4 color swatches (Primary, Secondary, Accent, Neutral)
     const brandSummary = container.querySelectorAll(
-      '[data-section-id="brand-colors"] .accordion-summary-item-color'
+      '[data-section-id="brand-palette-v2"] .accordion-summary-item-color'
     );
     const brandDrilldown = container.querySelector(
-      '[data-section-id="brand-colors"] .section-header-action'
+      '[data-section-id="brand-palette-v2"] .section-header-action'
     );
-    expect(brandSummary).toHaveLength(3);
+    expect(brandSummary).toHaveLength(4);
     expect(brandDrilldown).not.toBeNull();
     expect(brandDrilldown?.textContent).toContain('Full palette');
     expect((brandDrilldown as HTMLElement)?.dataset.drilldownTarget).toBe('palette');
 
-    const chatDrilldown = container.querySelector(
-      '[data-section-id="chat-colors"] .section-header-action'
-    );
-    expect(chatDrilldown).not.toBeNull();
-    expect(chatDrilldown?.textContent).toContain('Component colors');
+    // Theme mode shows current value
+    const themeSummary = container.querySelector('[data-section-id="theme-mode-v2"] .accordion-summary');
+    expect(themeSummary?.textContent).toContain('Auto');
 
-    const launcherSummary = container.querySelector(
-      '[data-section-id="launcher-style"] .accordion-summary'
+    // Advanced Tokens has drilldown links
+    const advancedActions = container.querySelectorAll(
+      '[data-section-id="advanced-tokens"] .section-header-action'
     );
-    const launcherAction = container.querySelector(
-      '[data-section-id="launcher-style"] .section-header-action'
-    );
-    expect(launcherSummary?.textContent).toContain('Shape:');
-    expect(launcherSummary?.textContent).toContain('Size:');
-    expect(launcherSummary?.textContent).toContain('Position:');
-    expect((launcherAction as HTMLElement)?.dataset.crosslinkTab).toBe('configure');
-    expect((launcherAction as HTMLElement)?.dataset.crosslinkSection).toBe('launcher-config');
+    expect(advancedActions.length).toBeGreaterThanOrEqual(1);
+  });
 
-    const runtimeSummary = container.querySelector('[data-section-id="theme-mode"] .accordion-summary');
-    expect(runtimeSummary?.textContent).toContain('Follow system');
+  test('interface roles section renders role-assignment fields', () => {
+    const container = document.createElement('div');
+    render(container, vi.fn());
 
-    const widgetDrilldown = container.querySelector(
-      '[data-section-id="widget-style"] .section-header-action'
-    );
-    expect(widgetDrilldown).not.toBeNull();
-    expect(widgetDrilldown?.textContent).toContain('Component shapes');
+    const rolesSection = container.querySelector('[data-section-id="interface-roles"]');
+    expect(rolesSection).not.toBeNull();
+
+    // Should have role-assignment controls for each role
+    const roleControls = rolesSection!.querySelectorAll('.role-assignment-control');
+    expect(roleControls.length).toBe(8);
   });
 });

@@ -55,11 +55,11 @@ describe('widget config section parity', () => {
     expect(dividers).toEqual(['Content', 'Layout', 'Widget', 'Features', 'Developer']);
   });
 
-  test('launcher configure section surfaces position summary and a cross-link back to style', () => {
+  test('launcher basics section surfaces position summary and a cross-link back to style', () => {
     const container = document.createElement('div');
     render(container, vi.fn());
 
-    const launcherSection = container.querySelector('[data-section-id="launcher-config"]');
+    const launcherSection = container.querySelector('[data-section-id="launcher-basics"]');
     const summary = launcherSection?.querySelector('.accordion-summary');
     const action = launcherSection?.querySelector('.section-header-action') as HTMLElement | null;
 

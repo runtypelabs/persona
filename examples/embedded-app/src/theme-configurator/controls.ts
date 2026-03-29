@@ -15,7 +15,15 @@ import {
   COLOR_FAMILIES,
   paletteColorPath,
   tokenRefDisplayName,
+  wcagContrastRatio,
 } from './color-utils';
+import {
+  ROLE_FAMILIES,
+  ROLE_FAMILY_LABELS,
+  resolveRoleAssignment,
+  detectRoleAssignment,
+} from '@runtypelabs/persona/theme-editor';
+import type { RoleFamily } from '@runtypelabs/persona/theme-editor';
 import * as state from './state';
 import { registerSearchEntry } from './search';
 
@@ -756,6 +764,223 @@ export function createTokenRefControl(
   return result;
 }
 
+// ─── Role Assignment Control ───────────────────────────────────────
+
+function createRoleAssignmentControl(
+  field: FieldDef,
+  onChange: OnChangeCallback
+): ControlResult {
+  const roleOpts = field.roleAssignment;
+  if (!roleOpts) throw new Error(`role-assignment field "${field.id}" missing roleAssignment options`);
+
+  const intensities = roleOpts.intensities;
+
+  // Detect initial state
+  const getValue = (path: string) => state.get(`theme.${path}`);
+  let detected = detectRoleAssignment(getValue, roleOpts);
+  let currentFamily: RoleFamily = detected?.family ?? 'primary';
+  let currentIntensity = detected?.intensity ?? 'solid';
+  let isCustom = !detected;
+
+  // ─── Build DOM ──────────────────────────
+
+  const wrapper = el('div', { className: 'control-row role-assignment-control' });
+
+  // Row 1: label (left) + preview swatch + contrast badge + custom badge (right)
+  const headerRow = el('div', { className: 'role-header-row' });
+
+  const labelEl = el('span', { className: 'role-label' }, [field.label]);
+  headerRow.appendChild(labelEl);
+
+  const headerTrail = el('div', { className: 'role-header-trail' });
+  const previewRow = el('div', { className: 'role-preview' });
+  headerTrail.appendChild(previewRow);
+
+  const customBadge = el('span', { className: 'role-custom-badge' }, ['Custom']);
+  customBadge.style.display = isCustom ? '' : 'none';
+  headerTrail.appendChild(customBadge);
+
+  headerRow.appendChild(headerTrail);
+  wrapper.appendChild(headerRow);
+
+  // Helper text
+  if (roleOpts.helper) {
+    const helper = el('span', { className: 'role-helper' }, [roleOpts.helper]);
+    wrapper.appendChild(helper);
+  }
+
+  // Row 2: family dots + intensity toggle
+  const pickerRow = el('div', { className: 'role-picker-row' });
+
+  // Family picker — circle swatches with tooltips
+  const familyPicker = el('div', { className: 'role-family-picker' });
+  const familyButtons = new Map<RoleFamily, HTMLButtonElement>();
+
+  for (const family of ROLE_FAMILIES) {
+    const btn = el('button', {
+      type: 'button',
+      className: `role-family-dot${family === currentFamily && !isCustom ? ' active' : ''}`,
+    });
+    btn.dataset.family = family;
+    btn.title = ROLE_FAMILY_LABELS[family];
+    btn.setAttribute('aria-label', ROLE_FAMILY_LABELS[family]);
+
+    const paletteKey = family === 'gray' ? 'gray' : family;
+    const swatchColor = String(
+      state.get(`theme.palette.colors.${paletteKey}.500`) ??
+      (DEFAULT_PALETTE.colors as Record<string, Record<string, string>>)[paletteKey]?.['500'] ??
+      '#888'
+    );
+    btn.style.setProperty('--dot-color', swatchColor);
+
+    btn.addEventListener('click', () => {
+      currentFamily = family;
+      isCustom = false;
+      applyAssignment();
+    });
+
+    familyButtons.set(family, btn);
+    familyPicker.appendChild(btn);
+  }
+  pickerRow.appendChild(familyPicker);
+
+  // Intensity toggle — segmented
+  const intensityToggle = el('div', { className: 'role-intensity-toggle' });
+  const intensityButtons = new Map<string, HTMLButtonElement>();
+
+  for (const intensity of intensities) {
+    const btn = el('button', {
+      type: 'button',
+      className: `role-intensity-seg${intensity.id === currentIntensity && !isCustom ? ' active' : ''}`,
+    });
+    btn.dataset.intensity = intensity.id;
+    btn.textContent = intensity.label;
+
+    btn.addEventListener('click', () => {
+      currentIntensity = intensity.id;
+      isCustom = false;
+      applyAssignment();
+    });
+
+    intensityButtons.set(intensity.id, btn);
+    intensityToggle.appendChild(btn);
+  }
+  pickerRow.appendChild(intensityToggle);
+
+  wrapper.appendChild(pickerRow);
+  updatePreview();
+
+  // ─── Logic ──────────────────────────────
+
+  function applyAssignment(): void {
+    const writes = resolveRoleAssignment(currentFamily, currentIntensity, roleOpts!);
+
+    state.setBatch(writes);
+    syncUI();
+  }
+
+
+  function syncUI(): void {
+    // Update family dot states
+    for (const [family, btn] of familyButtons) {
+      btn.classList.toggle('active', family === currentFamily && !isCustom);
+      const paletteKey = family === 'gray' ? 'gray' : family;
+      const color = String(
+        state.get(`theme.palette.colors.${paletteKey}.500`) ??
+        (DEFAULT_PALETTE.colors as Record<string, Record<string, string>>)[paletteKey]?.['500'] ??
+        '#888'
+      );
+      btn.style.setProperty('--dot-color', color);
+    }
+
+    // Update intensity button states
+    for (const [id, btn] of intensityButtons) {
+      btn.classList.toggle('active', id === currentIntensity && !isCustom);
+    }
+
+    // Custom badge
+    customBadge.style.display = isCustom ? '' : 'none';
+
+    updatePreview();
+  }
+
+  function updatePreview(): void {
+    previewRow.innerHTML = '';
+    // Show resolved bg + fg colors
+    const bgTarget = roleOpts!.targets.find(t => t.kind === 'background');
+    const fgTarget = roleOpts!.targets.find(t => t.kind === 'foreground');
+
+    if (bgTarget) {
+      const bgValue = resolveTokenToHex(`theme.${bgTarget.path}`);
+      const swatch = el('span', { className: 'role-preview-swatch' });
+      swatch.style.backgroundColor = bgValue;
+
+      // For contrast: use the actual text color, not placeholder
+      const isPlaceholderFg = fgTarget?.path.includes('placeholder');
+      const contrastFgPath = isPlaceholderFg ? 'theme.semantic.colors.text' : (fgTarget ? `theme.${fgTarget.path}` : null);
+      const fgValue = contrastFgPath ? resolveTokenToHex(contrastFgPath) : null;
+
+      if (fgValue) {
+        swatch.style.color = fgValue;
+        swatch.textContent = 'Aa';
+
+        // Contrast badge
+        if (bgValue.startsWith('#') && fgValue.startsWith('#')) {
+          const ratio = wcagContrastRatio(fgValue, bgValue);
+          const pass = ratio >= 4.5;
+          const badge = el('span', {
+            className: `role-contrast-badge ${pass ? 'role-contrast-pass' : 'role-contrast-fail'}`,
+          }, [`${ratio.toFixed(1)}:1`]);
+          badge.title = pass ? 'WCAG AA pass' : 'WCAG AA fail — contrast too low';
+          previewRow.appendChild(swatch);
+          previewRow.appendChild(badge);
+          return;
+        }
+      }
+      previewRow.appendChild(swatch);
+    }
+  }
+
+  function resolveTokenToHex(path: string): string {
+    let value = String(state.get(path) ?? '');
+    // Resolve token references up to 3 levels deep
+    for (let i = 0; i < 3; i++) {
+      if (!value.startsWith('palette.') && !value.startsWith('semantic.') && !value.startsWith('components.')) break;
+      value = String(state.get(`theme.${value}`) ?? value);
+    }
+    return value.startsWith('#') ? value : '#888888';
+  }
+
+  // Zone highlighting on hover
+  if (roleOpts.previewZone) {
+    const zone = roleOpts.previewZone;
+    wrapper.addEventListener('mouseenter', () => state.highlightPreviewZone(zone));
+    wrapper.addEventListener('mouseleave', () => state.clearPreviewHighlight());
+  }
+
+  const result: ControlResult = {
+    element: wrapper,
+    getValue: () => ({ family: currentFamily, intensity: currentIntensity }),
+    setValue: () => {
+      // Re-detect from current state
+      const det = detectRoleAssignment(getValue, roleOpts!);
+      if (det) {
+        currentFamily = det.family;
+        currentIntensity = det.intensity;
+        isCustom = false;
+      } else {
+        isCustom = true;
+      }
+      syncUI();
+    },
+    destroy: () => {},
+    fieldDef: field as any,
+  };
+
+  registerSearchEntry(field, result);
+  return result;
+}
+
 // ─── Factory dispatcher ────────────────────────────────────────────
 
 export function createControl(field: FieldDef, onChange: OnChangeCallback): ControlResult {
@@ -776,6 +1001,8 @@ export function createControl(field: FieldDef, onChange: OnChangeCallback): Cont
       return createColorScaleControl(field, onChange);
     case 'token-ref':
       return createTokenRefControl(field, onChange);
+    case 'role-assignment':
+      return createRoleAssignmentControl(field, onChange);
     default:
       throw new Error(`Unknown control type: ${field.type}`);
   }

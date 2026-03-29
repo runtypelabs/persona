@@ -26,7 +26,7 @@ function applyCustomClasses(el: HTMLElement, classes?: string): void {
 
 const DEFAULT_BADGE_COLORS: Record<string, EventStreamBadgeColor> = {
   flow_: { bg: "var(--persona-palette-colors-success-100, #dcfce7)", text: "var(--persona-palette-colors-success-700, #166534)" },
-  step_: { bg: "var(--persona-palette-colors-primary-100, #dbeafe)", text: "var(--persona-palette-colors-primary-700, #1e40af)" },
+  step_: { bg: "var(--persona-palette-colors-primary-100, #f5f5f5)", text: "var(--persona-palette-colors-primary-700, #0a0a0a)" },
   reason_: { bg: "var(--persona-palette-colors-warning-100, #ffedd5)", text: "var(--persona-palette-colors-warning-700, #9a3412)" },
   tool_: { bg: "var(--persona-palette-colors-purple-100, #f3e8ff)", text: "var(--persona-palette-colors-purple-700, #6b21a8)" },
   agent_: { bg: "var(--persona-palette-colors-teal-100, #ccfbf1)", text: "var(--persona-palette-colors-teal-700, #115e59)" },

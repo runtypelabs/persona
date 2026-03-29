@@ -153,33 +153,25 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     // Clear any existing content
     sendButton.innerHTML = "";
 
+    // Set button foreground color from config or theme token
+    if (textColor) {
+      sendButton.style.color = textColor;
+    } else {
+      sendButton.style.color = "var(--persona-button-primary-fg, #ffffff)";
+    }
+
     // Use Lucide icon if iconName is provided, otherwise fall back to iconText
     if (iconName) {
       const iconSize = parseFloat(buttonSize) || 24;
-      const iconColor =
-        textColor && typeof textColor === "string" && textColor.trim()
-          ? textColor.trim()
-          : "currentColor";
+      const iconColor = textColor?.trim() || "currentColor";
       const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, 2);
       if (iconSvg) {
         sendButton.appendChild(iconSvg);
-        sendButton.style.color = iconColor;
       } else {
-        // Fallback to text if icon fails to render
         sendButton.textContent = iconText;
-        if (textColor) {
-          sendButton.style.color = textColor;
-        } else {
-          sendButton.classList.add("persona-text-white");
-        }
       }
     } else {
       sendButton.textContent = iconText;
-      if (textColor) {
-        sendButton.style.color = textColor;
-      } else {
-        sendButton.classList.add("persona-text-white");
-      }
     }
 
     if (backgroundColor) {
@@ -273,7 +265,14 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     micButton.style.fontSize = "18px";
     micButton.style.lineHeight = "1";
 
-    // Use Lucide mic icon with configured color (stroke width 1.5 for minimalist outline style)
+    // Set mic button foreground from config or theme token
+    if (micIconColor) {
+      micButton.style.color = micIconColor;
+    } else {
+      micButton.style.color = "var(--persona-text, #111827)";
+    }
+
+    // Use Lucide mic icon (stroke width 1.5 for minimalist outline style)
     const iconColorValue = micIconColor || "currentColor";
     const micIconSvg = renderLucideIcon(
       micIconName,
@@ -283,25 +282,13 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     );
     if (micIconSvg) {
       micButton.appendChild(micIconSvg);
-      micButton.style.color = iconColorValue;
     } else {
-      // Fallback to text if icon fails
       micButton.textContent = "🎤";
-      micButton.style.color = iconColorValue;
     }
 
     // Apply background color
     if (micBackgroundColor) {
       micButton.style.backgroundColor = micBackgroundColor;
-    } else {
-      micButton.classList.add("persona-bg-persona-primary");
-    }
-
-    // Apply icon/text color
-    if (micIconColor) {
-      micButton.style.color = micIconColor;
-    } else if (!micIconColor && !textColor) {
-      micButton.classList.add("persona-text-white");
     }
 
     // Apply border styling

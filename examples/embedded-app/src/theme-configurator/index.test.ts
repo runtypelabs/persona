@@ -62,7 +62,7 @@ vi.mock('@runtypelabs/persona', () => ({
   },
   DEFAULT_PALETTE: {
     colors: {
-      primary: { '500': '#2563eb' },
+      primary: { '500': '#171717' },
       secondary: { '500': '#7c3aed' },
       accent: { '500': '#06b6d4' },
       gray: { '500': '#6b7280' },
@@ -80,9 +80,9 @@ vi.mock('@runtypelabs/persona', () => ({
     '--persona-header-bg': '#ffffff',
     '--persona-message-assistant-bg': '#ffffff',
     '--persona-message-assistant-text': '#111827',
-    '--persona-message-user-bg': '#2563eb',
+    '--persona-message-user-bg': '#171717',
     '--persona-message-user-text': '#ffffff',
-    '--persona-primary': '#2563eb',
+    '--persona-primary': '#171717',
   })),
   componentRegistry: { register: vi.fn() },
   generateCodeSnippet: vi.fn(() => 'initAgentWidget({});'),
@@ -312,8 +312,8 @@ describe('theme configurator shell', () => {
       </main>
       <div id="wizard-overlay" class="wizard-overlay hidden">
         <div class="wizard-dialog">
-          <input type="color" id="wizard-color-input" value="#2563eb" />
-          <input type="text" id="wizard-color-text" value="#2563eb" />
+          <input type="color" id="wizard-color-input" value="#171717" />
+          <input type="text" id="wizard-color-text" value="#171717" />
           <button type="button" id="wizard-cancel-btn">Cancel</button>
           <button type="button" id="wizard-apply-btn">Generate</button>
         </div>
@@ -326,9 +326,9 @@ describe('theme configurator shell', () => {
     await import('./index');
 
     expect(document.querySelectorAll('[data-section-id]').length).toBeGreaterThan(4);
-    // Style tab has brand colors, theme mode, etc.
-    expect(document.querySelector('#style-group [data-section-id="brand-colors"]')).not.toBeNull();
-    expect(document.querySelector('#style-group [data-section-id="theme-mode"]')).not.toBeNull();
+    // Style tab has V2 sections: brand palette, theme mode, interface roles, etc.
+    expect(document.querySelector('#style-group [data-section-id="brand-palette-v2"]')).not.toBeNull();
+    expect(document.querySelector('#style-group [data-section-id="theme-mode-v2"]')).not.toBeNull();
     // Configure tab has content sections with sub-group dividers
     expect(document.querySelector('#configure-group [data-section-id="copy"]')).not.toBeNull();
     expect(document.querySelector('#configure-group .subgroup-divider')).not.toBeNull();
@@ -1065,32 +1065,32 @@ describe('theme configurator shell', () => {
       document.querySelectorAll('#style-group [data-section-id]')
     ).map((section) => (section as HTMLElement).dataset.sectionId);
 
-    expect(styleSections.slice(0, 7)).toEqual([
-      'brand-colors',
-      'chat-colors',
-      'launcher-style',
-      'typography',
-      'theme-mode',
-      'shape',
-      'shadows',
+    // V2 outcome-oriented sections
+    expect(styleSections).toEqual([
+      'theme-mode-v2',
+      'brand-palette-v2',
+      'status-palette',
+      'interface-roles',
+      'status-colors',
+      'advanced-tokens',
     ]);
-    expect(styleSections).toContain('widget-style');
 
     // Configure tab: content, layout, widget, features, developer sub-groups
     expect(document.querySelector('#configure-group [data-section-id="copy"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="suggestions"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="header-layout"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="messages-layout"]')).not.toBeNull();
-    expect(document.querySelector('#configure-group [data-section-id="launcher-config"]')).not.toBeNull();
+    expect(document.querySelector('#configure-group [data-section-id="launcher-basics"]')).not.toBeNull();
+    expect(document.querySelector('#configure-group [data-section-id="launcher-advanced"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="send-button"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="features"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="attachments-config"]')).not.toBeNull();
+    expect(document.querySelector('#configure-group [data-section-id="artifacts-customization"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="api-integration"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="debug-inspection"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="markdown"]')).not.toBeNull();
 
-    expect(document.querySelector('#style-group [data-section-id="launcher-style"] .accordion-summary')).not.toBeNull();
-    expect(document.querySelector('#configure-group [data-section-id="launcher-config"] .section-header-action')).not.toBeNull();
+    expect(document.querySelector('#configure-group [data-section-id="launcher-basics"] .section-header-action')).not.toBeNull();
 
     // Export is in toolbar, not a tab panel
     expect(document.getElementById('export-btn')).not.toBeNull();

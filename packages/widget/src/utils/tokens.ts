@@ -12,17 +12,17 @@ import type {
 export const DEFAULT_PALETTE = {
   colors: {
     primary: {
-      50: '#eff6ff',
-      100: '#dbeafe',
-      200: '#bfdbfe',
-      300: '#93c5fd',
-      400: '#60a5fa',
-      500: '#3b82f6',
-      600: '#2563eb',
-      700: '#1d4ed8',
-      800: '#1e40af',
-      900: '#1e3a8a',
-      950: '#172554',
+      50: '#ffffff',
+      100: '#f5f5f5',
+      200: '#d4d4d4',
+      300: '#a3a3a3',
+      400: '#737373',
+      500: '#171717',
+      600: '#0f0f0f',
+      700: '#0a0a0a',
+      800: '#050505',
+      900: '#030303',
+      950: '#000000',
     },
     secondary: {
       50: '#f5f3ff',
@@ -98,6 +98,19 @@ export const DEFAULT_PALETTE = {
       700: '#b91c1c',
       800: '#991b1b',
       900: '#7f1d1d',
+    },
+    info: {
+      50: '#eff6ff',
+      100: '#dbeafe',
+      200: '#bfdbfe',
+      300: '#93c5fd',
+      400: '#60a5fa',
+      500: '#3b82f6',
+      600: '#2563eb',
+      700: '#1d4ed8',
+      800: '#1e40af',
+      900: '#1e3a8a',
+      950: '#172554',
     },
   },
   spacing: {
@@ -176,28 +189,33 @@ export const DEFAULT_PALETTE = {
 export const DEFAULT_SEMANTIC: SemanticTokens = {
   colors: {
     primary: 'palette.colors.primary.500',
-    secondary: 'palette.colors.gray.500',
+    secondary: 'palette.colors.secondary.500',
+    // Links/Focus role — solid primary
     accent: 'palette.colors.primary.600',
+    // Surfaces role — soft gray
     surface: 'palette.colors.gray.50',
     background: 'palette.colors.gray.50',
-    container: 'palette.colors.gray.100',
+    container: 'palette.colors.gray.50',
     text: 'palette.colors.gray.900',
     textMuted: 'palette.colors.gray.500',
     textInverse: 'palette.colors.gray.50',
+    // Borders role — soft gray
     border: 'palette.colors.gray.200',
     divider: 'palette.colors.gray.200',
     interactive: {
-      default: 'palette.colors.primary.500',
-      hover: 'palette.colors.primary.600',
-      focus: 'palette.colors.primary.700',
-      active: 'palette.colors.primary.800',
+      // Primary Actions role — solid primary
+      default: 'palette.colors.primary.600',
+      hover: 'palette.colors.primary.700',
+      // Links/Focus role — solid primary
+      focus: 'palette.colors.primary.600',
+      active: 'palette.colors.primary.600',
       disabled: 'palette.colors.gray.300',
     },
     feedback: {
       success: 'palette.colors.success.500',
       warning: 'palette.colors.warning.500',
       error: 'palette.colors.error.500',
-      info: 'palette.colors.primary.500',
+      info: 'palette.colors.info.500',
     },
   },
   spacing: {
@@ -219,14 +237,15 @@ export const DEFAULT_SEMANTIC: SemanticTokens = {
 export const DEFAULT_COMPONENTS: ComponentTokens = {
   button: {
     primary: {
-      background: 'semantic.colors.primary',
-      foreground: 'semantic.colors.textInverse',
+      // Primary Actions role — solid primary
+      background: 'palette.colors.primary.500',
+      foreground: 'palette.colors.primary.50',
       borderRadius: 'palette.radius.lg',
       padding: 'semantic.spacing.md',
     },
     secondary: {
       background: 'semantic.colors.surface',
-      foreground: 'semantic.colors.text',
+      foreground: 'semantic.colors.secondary',
       borderRadius: 'palette.radius.lg',
       padding: 'semantic.spacing.md',
     },
@@ -238,16 +257,20 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     },
   },
   input: {
-    background: 'semantic.colors.surface',
-    placeholder: 'semantic.colors.textMuted',
+    // Input role — soft gray
+    background: 'palette.colors.gray.50',
+    placeholder: 'palette.colors.gray.400',
     borderRadius: 'palette.radius.lg',
     padding: 'semantic.spacing.md',
     focus: {
-      border: 'semantic.colors.interactive.focus',
-      ring: 'semantic.colors.interactive.focus',
+      border: 'palette.colors.gray.400',
+      ring: 'palette.colors.gray.400',
     },
   },
   launcher: {
+    background: 'palette.colors.primary.500',
+    foreground: 'palette.colors.primary.50',
+    border: 'palette.colors.gray.200',
     size: '60px',
     iconSize: '28px',
     borderRadius: 'palette.radius.full',
@@ -262,28 +285,31 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     shadow: 'palette.shadows.xl',
   },
   header: {
-    background: 'semantic.colors.surface',
-    border: 'semantic.colors.border',
+    // Header role — solid primary
+    background: 'palette.colors.primary.500',
+    border: 'palette.colors.primary.600',
     borderRadius: 'palette.radius.xl palette.radius.xl 0 0',
     padding: 'semantic.spacing.md',
-    iconBackground: 'semantic.colors.primary',
-    iconForeground: 'semantic.colors.textInverse',
-    titleForeground: 'semantic.colors.primary',
-    subtitleForeground: 'semantic.colors.textMuted',
-    actionIconForeground: 'semantic.colors.textMuted',
+    iconBackground: 'palette.colors.primary.600',
+    iconForeground: 'palette.colors.primary.50',
+    titleForeground: 'palette.colors.primary.50',
+    subtitleForeground: 'palette.colors.primary.200',
+    actionIconForeground: 'palette.colors.primary.200',
   },
   message: {
     user: {
-      background: 'semantic.colors.primary',
-      text: 'semantic.colors.textInverse',
+      // User Messages role — solid primary
+      background: 'palette.colors.primary.500',
+      text: 'palette.colors.primary.50',
       borderRadius: 'palette.radius.lg',
       shadow: 'palette.shadows.sm',
     },
     assistant: {
-      background: 'semantic.colors.container',
-      text: 'semantic.colors.text',
+      // Assistant Messages role — soft gray
+      background: 'palette.colors.gray.50',
+      text: 'palette.colors.gray.900',
       borderRadius: 'palette.radius.lg',
-      border: 'semantic.colors.border',
+      border: 'palette.colors.gray.200',
       shadow: 'palette.shadows.sm',
     },
   },
@@ -298,11 +324,12 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
   },
   markdown: {
     inlineCode: {
-      background: 'semantic.colors.container',
-      foreground: 'semantic.colors.text',
+      background: 'palette.colors.gray.50',
+      foreground: 'palette.colors.gray.900',
     },
     link: {
-      foreground: 'semantic.colors.accent',
+      // Links/Focus role — solid primary
+      foreground: 'palette.colors.primary.600',
     },
     prose: {
       fontFamily: 'inherit',
@@ -633,6 +660,21 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-launcher-borderRadius'] ??
     cssVars['--persona-palette-radius-full'] ??
     '9999px';
+  cssVars['--persona-launcher-bg'] =
+    cssVars['--persona-components-launcher-background'] ??
+    cssVars['--persona-primary'];
+  cssVars['--persona-launcher-fg'] =
+    cssVars['--persona-components-launcher-foreground'] ??
+    cssVars['--persona-text-inverse'];
+  cssVars['--persona-launcher-border'] =
+    cssVars['--persona-components-launcher-border'] ??
+    cssVars['--persona-border'];
+  cssVars['--persona-button-primary-bg'] =
+    cssVars['--persona-components-button-primary-background'] ??
+    cssVars['--persona-primary'];
+  cssVars['--persona-button-primary-fg'] =
+    cssVars['--persona-components-button-primary-foreground'] ??
+    cssVars['--persona-text-inverse'];
   cssVars['--persona-button-radius'] =
     cssVars['--persona-components-button-primary-borderRadius'] ??
     cssVars['--persona-palette-radius-full'] ??
@@ -681,6 +723,11 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;
   if (headerTokens?.borderBottom) cssVars['--persona-header-border-bottom'] = headerTokens.borderBottom;
 
+  cssVars['--persona-input-background'] =
+    cssVars['--persona-components-input-background'] ?? cssVars['--persona-surface'];
+  cssVars['--persona-input-placeholder'] =
+    cssVars['--persona-components-input-placeholder'] ?? cssVars['--persona-text-muted'];
+
   cssVars['--persona-message-user-bg'] =
     cssVars['--persona-components-message-user-background'] ?? cssVars['--persona-accent'];
   cssVars['--persona-message-user-text'] =
@@ -711,7 +758,7 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-md-link-color'] =
     cssVars['--persona-components-markdown-link-foreground'] ??
     cssVars['--persona-accent'] ??
-    '#3b82f6';
+    '#0f0f0f';
 
   const mdH1Size = cssVars['--persona-components-markdown-heading-h1-fontSize'];
   if (mdH1Size) cssVars['--persona-md-h1-size'] = mdH1Size;

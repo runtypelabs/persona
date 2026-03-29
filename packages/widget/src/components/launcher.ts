@@ -119,6 +119,15 @@ export const createLauncherButton = (
         callToActionIconEl.style.backgroundColor = "";
         callToActionIconEl.classList.add("persona-bg-persona-primary");
       }
+
+      // Apply foreground/icon color if configured
+      if (launcher.callToActionIconColor) {
+        callToActionIconEl.style.color = launcher.callToActionIconColor;
+        callToActionIconEl.classList.remove("persona-text-persona-call-to-action");
+      } else {
+        callToActionIconEl.style.color = "";
+        callToActionIconEl.classList.add("persona-text-persona-call-to-action");
+      }
       
       // Calculate padding to adjust icon size
       let paddingTotal = 0;

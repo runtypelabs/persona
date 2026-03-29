@@ -13,7 +13,7 @@
   --persona-md-table-border-color: var(--persona-border, #e5e7eb);
   --persona-md-table-header-bg: var(--persona-container, #f8fafc);
   --persona-md-hr-color: var(--persona-divider, #e5e7eb);
-  --persona-md-blockquote-border-color: var(--persona-accent, #3b82f6);
+  --persona-md-blockquote-border-color: var(--persona-accent, #0f0f0f);
   --persona-md-blockquote-text-color: var(--persona-muted, #6b7280);
 }
 
@@ -133,19 +133,19 @@
   --persona-md-h6-line-height: 1.5;
 
   /* Markdown Table Variables */
-  --persona-md-table-border-color: #e5e7eb;
-  --persona-md-table-header-bg: #f8fafc;
+  --persona-md-table-border-color: var(--persona-border, #e5e7eb);
+  --persona-md-table-header-bg: var(--persona-container, #f8fafc);
   --persona-md-table-header-weight: 600;
   --persona-md-table-cell-padding: 0.5rem 0.75rem;
   --persona-md-table-border-radius: 0.375rem;
 
   /* Markdown Horizontal Rule Variables */
-  --persona-md-hr-color: #e5e7eb;
+  --persona-md-hr-color: var(--persona-divider, #e5e7eb);
   --persona-md-hr-height: 1px;
   --persona-md-hr-margin: 1rem 0;
 
   /* Markdown Blockquote Variables */
-  --persona-md-blockquote-border-color: #3b82f6;
+  --persona-md-blockquote-border-color: #171717;
   --persona-md-blockquote-border-width: 3px;
   --persona-md-blockquote-padding: 0.5rem 1rem;
   --persona-md-blockquote-margin: 0.5rem 0;
@@ -154,8 +154,8 @@
   --persona-md-blockquote-font-style: italic;
 
   /* Markdown Code Block Variables */
-  --persona-md-code-block-bg: #f3f4f6;
-  --persona-md-code-block-border-color: #e5e7eb;
+  --persona-md-code-block-bg: var(--persona-container, #f3f4f6);
+  --persona-md-code-block-border-color: var(--persona-border, #e5e7eb);
   --persona-md-code-block-text-color: inherit;
   --persona-md-code-block-padding: 0.75rem;
   --persona-md-code-block-border-radius: 0.375rem;
@@ -250,11 +250,11 @@
 }
 
 .persona-text-persona-primary {
-  color: var(--persona-primary, #111827);
+  color: var(--persona-primary, #171717);
 }
 
 .persona-text-persona-call-to-action {
-  color: var(--persona-call-to-action, #ffffff);
+  color: var(--persona-call-to-action, var(--persona-text-inverse, #ffffff));
 }
 
 .persona-text-persona-muted {
@@ -266,11 +266,11 @@
 }
 
 .persona-bg-persona-accent {
-  background-color: var(--persona-accent, #2563eb);
+  background-color: var(--persona-accent, #0f0f0f);
 }
 
 .persona-bg-persona-primary {
-  background-color: var(--persona-primary, #111827);
+  background-color: var(--persona-button-primary-bg, var(--persona-primary, #111827));
 }
 
 .persona-italic {
@@ -533,8 +533,12 @@
   border-color: #f1f5f9;
 }
 
+.persona-border-persona-secondary {
+  border-color: var(--persona-secondary, #7c3aed);
+}
+
 .persona-border-persona-border {
-  border-color: var(--persona-border, #f1f5f9);
+  border-color: var(--persona-border, #e5e7eb);
 }
 
 .persona-border-t {
@@ -1209,7 +1213,7 @@
 }
 
 [data-persona-root] .persona-markdown-bubble a {
-  color: var(--persona-md-link-color, var(--persona-accent, #3b82f6));
+  color: var(--persona-md-link-color, var(--persona-accent, #0f0f0f));
   text-decoration: underline;
 }
 
@@ -1311,7 +1315,7 @@
 }
 
 [data-persona-root] .vanilla-message-assistant-bubble a {
-  color: var(--persona-md-link-color, var(--persona-accent, #3b82f6));
+  color: var(--persona-md-link-color, var(--persona-accent, #0f0f0f));
 }
 
 /* Markdown paragraph styles */
@@ -1791,7 +1795,7 @@
 
 .persona-message-action-btn:focus {
   outline: none;
-  box-shadow: 0 0 0 2px var(--persona-accent, #1d4ed8);
+  box-shadow: 0 0 0 2px var(--persona-accent, #0a0a0a);
 }
 
 .persona-message-action-btn:focus:not(:focus-visible) {
@@ -1799,17 +1803,17 @@
 }
 
 .persona-message-action-btn:focus-visible {
-  box-shadow: 0 0 0 2px var(--persona-accent, #1d4ed8);
+  box-shadow: 0 0 0 2px var(--persona-accent, #0a0a0a);
 }
 
 /* Active state (voted) */
 .persona-message-action-btn.persona-message-action-active {
-  background-color: var(--persona-accent, #1d4ed8);
+  background-color: var(--persona-accent, #0a0a0a);
   color: #ffffff;
 }
 
 .persona-message-action-btn.persona-message-action-active:hover {
-  background-color: var(--persona-accent, #1d4ed8);
+  background-color: var(--persona-accent, #0a0a0a);
   color: #ffffff;
   opacity: 0.9;
 }
@@ -1951,7 +1955,7 @@
 }
 
 .persona-feedback-number-btn:hover {
-  border-color: var(--persona-accent, #1d4ed8);
+  border-color: var(--persona-accent, #0a0a0a);
   background: var(--persona-container, #f3f4f6);
 }
 
@@ -1995,7 +1999,7 @@
 
 .persona-feedback-comment:focus {
   outline: none;
-  border-color: var(--persona-accent, #1d4ed8);
+  border-color: var(--persona-accent, #0a0a0a);
   box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.15);
 }
 
@@ -2031,8 +2035,8 @@
 }
 
 .persona-feedback-btn-submit {
-  background: var(--persona-accent, #1d4ed8);
-  border: 1px solid var(--persona-accent, #1d4ed8);
+  background: var(--persona-accent, #0a0a0a);
+  border: 1px solid var(--persona-accent, #0a0a0a);
   color: #ffffff;
 }
 
@@ -2247,7 +2251,7 @@
 }
 
 [data-persona-root] .persona-icon-btn:focus-visible {
-  outline: 2px solid var(--persona-accent, #3b82f6);
+  outline: 2px solid var(--persona-accent, #171717);
   outline-offset: 2px;
 }
 
@@ -2279,7 +2283,7 @@
 }
 
 [data-persona-root] .persona-label-btn:focus-visible {
-  outline: 2px solid var(--persona-accent, #3b82f6);
+  outline: 2px solid var(--persona-accent, #171717);
   outline-offset: 2px;
 }
 
@@ -2294,7 +2298,7 @@
 }
 
 [data-persona-root] .persona-label-btn--primary {
-  background: var(--persona-primary, #3b82f6);
+  background: var(--persona-primary, #171717);
   color: var(--persona-text-inverse, #ffffff);
   border-color: transparent;
 }

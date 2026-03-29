@@ -26,7 +26,7 @@ The v2 theme system uses a **three-layer token architecture**:
 Token references are resolved at runtime:
 
 ```
-semantic.colors.primary → palette.colors.primary.500 → #3b82f6
+semantic.colors.primary → palette.colors.primary.500 → #171717
 ```
 
 ## Quick Start
@@ -165,10 +165,10 @@ Each color has shades from 50 (lightest) to 950 (darkest):
 palette: {
   colors: {
     primary: {
-      50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe',
-      300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6',
-      600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af',
-      900: '#1e3a8a', 950: '#172554'
+      50: '#ffffff', 100: '#f5f5f5', 200: '#d4d4d4',
+      300: '#a3a3a3', 400: '#737373', 500: '#171717',
+      600: '#0f0f0f', 700: '#0a0a0a', 800: '#050505',
+      900: '#030303', 950: '#000000'
     }
   }
 }
@@ -781,7 +781,7 @@ These merge into `PersonaTheme` and are exposed as CSS variables on the widget r
 ```css
 :root {
   /* Links (theme-driven via --persona-md-link-color when set) */
-  --persona-md-link-color: var(--persona-accent, #3b82f6);
+  --persona-md-link-color: var(--persona-accent, #0f0f0f);
 
   /* Headers */
   --persona-md-h1-size: 1.5rem;
@@ -816,7 +816,7 @@ These merge into `PersonaTheme` and are exposed as CSS variables on the widget r
   --persona-md-hr-margin: 1rem 0;
 
   /* Blockquotes */
-  --persona-md-blockquote-border-color: var(--persona-accent, #3b82f6);
+  --persona-md-blockquote-border-color: var(--persona-accent, #0f0f0f);
   --persona-md-blockquote-border-width: 3px;
   --persona-md-blockquote-padding: 0.5rem 1rem;
   --persona-md-blockquote-margin: 0.5rem 0;

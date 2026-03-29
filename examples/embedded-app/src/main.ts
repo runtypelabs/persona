@@ -2,7 +2,6 @@ import "@runtypelabs/persona/widget.css";
 import "./index.css";
 import "./App.css";
 
-import type { DeepPartial, PersonaTheme } from "@runtypelabs/persona";
 import {
   createAgentExperience,
   createLocalStorageAdapter,
@@ -84,35 +83,6 @@ const homeDemoSuggestionChips = [
   "What do I tell my AI coding agent to use this?"
 ] as const;
 
-const inlineDemoTheme: DeepPartial<PersonaTheme> = {
-  palette: {
-    colors: {
-      primary: { 500: "#0f172a" },
-      accent: { 600: "#ea580c" },
-      gray: {
-        50: "#f8fafc",
-        // 100: "#eaedf1",
-        200: "#e4e8ee",
-        500: "#64748b"
-      }
-    }
-  },
-  semantic: {
-    colors: {
-      primary: "palette.colors.primary.500",
-      accent: "palette.colors.accent.600",
-      surface: "palette.colors.gray.50",
-      textMuted: "palette.colors.gray.500"
-    }
-  },
-  components: {
-    message: {
-      assistant: {
-        border: "palette.colors.gray.200"
-      }
-    }
-  }
-};
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
@@ -319,7 +289,6 @@ const inlineController = createAgentExperience(inlineMount, {
     keyPrefix: homeDemoPersistKeyPrefix
   },
   storageAdapter: sharedWidgetStorage,
-  theme: inlineDemoTheme,
   suggestionChips: [...homeDemoSuggestionChips],
   postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
 });

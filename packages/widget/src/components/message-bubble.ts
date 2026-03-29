@@ -140,15 +140,21 @@ export const createTypingIndicator = (): HTMLElement => {
   container.className = "persona-flex persona-items-center persona-space-x-1 persona-h-5 persona-mt-2";
 
   const dot1 = document.createElement("div");
-  dot1.className = "persona-bg-persona-primary persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
+  dot1.className = "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
+  dot1.style.backgroundColor = "currentColor";
+  dot1.style.opacity = "0.4";
   dot1.style.animationDelay = "0ms";
 
   const dot2 = document.createElement("div");
-  dot2.className = "persona-bg-persona-primary persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
+  dot2.className = "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
+  dot2.style.backgroundColor = "currentColor";
+  dot2.style.opacity = "0.4";
   dot2.style.animationDelay = "250ms";
 
   const dot3 = document.createElement("div");
-  dot3.className = "persona-bg-persona-primary persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
+  dot3.className = "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
+  dot3.style.backgroundColor = "currentColor";
+  dot3.style.opacity = "0.4";
   dot3.style.animationDelay = "500ms";
 
   const srOnly = document.createElement("span");

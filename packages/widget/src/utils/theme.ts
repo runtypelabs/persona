@@ -16,17 +16,17 @@ type WidgetConfig = PersonaWidgetConfig | AgentWidgetConfig;
 const DARK_PALETTE = {
   colors: {
     primary: {
-      50: '#eff6ff',
-      100: '#dbeafe',
-      200: '#bfdbfe',
-      300: '#93c5fd',
-      400: '#60a5fa',
-      500: '#3b82f6',
-      600: '#2563eb',
-      700: '#1d4ed8',
-      800: '#1e40af',
-      900: '#1e3a8a',
-      950: '#172554',
+      50: '#ffffff',
+      100: '#f5f5f5',
+      200: '#d4d4d4',
+      300: '#a3a3a3',
+      400: '#737373',
+      500: '#171717',
+      600: '#0f0f0f',
+      700: '#0a0a0a',
+      800: '#050505',
+      900: '#030303',
+      950: '#000000',
     },
     secondary: {
       50: '#f5f3ff',
