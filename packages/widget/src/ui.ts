@@ -2483,12 +2483,16 @@ export const createAgentExperience = (
     // This allows the browser to update layout (e.g., typing indicator removal) before scrolling
     // Use double RAF to ensure layout has fully settled before starting scroll animation
     // Get the scrollable container using its unique ID (#persona-scroll-container)
-    requestAnimationFrame(() => {
+    // Only smooth-scroll if auto-scroll hasn't been blocked by the user scrolling up
+    if (shouldAutoScroll && !isAutoScrollBlocked) {
       requestAnimationFrame(() => {
-        const scrollableContainer = getScrollableContainer();
-        smoothScrollToBottom(scrollableContainer);
+        requestAnimationFrame(() => {
+          if (!shouldAutoScroll || isAutoScrollBlocked) return;
+          const scrollableContainer = getScrollableContainer();
+          smoothScrollToBottom(scrollableContainer);
+        });
       });
-    });
+    }
   };
 
   // Alias for clarity - the implementation handles flicker prevention via typing indicator logic
