@@ -2044,7 +2044,8 @@ export const createAgentExperience = (
       container.appendChild(scrollToBottomButton);
     }
     updateScrollToBottomButtonOffset();
-    scrollToBottomButton.style.display = autoFollow.isFollowing() ? "none" : "";
+    const hasOverflow = getScrollBottomOffset(body) > 0;
+    scrollToBottomButton.style.display = (autoFollow.isFollowing() || !hasOverflow) ? "none" : "";
   };
 
   const pauseAutoScroll = () => {
@@ -3745,6 +3746,7 @@ export const createAgentExperience = (
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
       session.clearMessages();
       messageCache.clear();
+      resumeAutoScroll();
 
       // Always clear the default localStorage key
       try {
@@ -5070,6 +5072,7 @@ export const createAgentExperience = (
       artifactsPaneUserHidden = false;
       session.clearMessages();
       messageCache.clear();
+      resumeAutoScroll();
 
       // Always clear the default localStorage key
       try {
