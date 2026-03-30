@@ -1289,6 +1289,7 @@ export const createAgentExperience = (
     if (openPrevented === true) return;
     event.preventDefault();
     event.stopPropagation();
+    artifactsPaneUserHidden = false;
     session.selectArtifact(artifactId);
     syncArtifactPane();
   });
