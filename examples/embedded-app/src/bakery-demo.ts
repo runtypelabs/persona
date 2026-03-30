@@ -154,7 +154,7 @@ function createCartBadge(): HTMLElement {
     align-items: center;
     justify-content: center;
     gap: 3px;
-    z-index: 10001;
+    z-index: 100002;
     font-family: Inter, system-ui, sans-serif;
     box-shadow: 0 2px 6px rgba(0,0,0,0.25);
     transform: scale(0);
@@ -444,16 +444,22 @@ function positionCartBadge(): void {
 
     // Use widget controller's isOpen() method for accurate state
     const widgetIsOpen = widgetControllerRef?.isOpen() ?? false;
+    const isMobile = window.innerWidth <= 640;
 
     if (widgetIsOpen) {
-      // Position on top-left of the chat panel container (the white card)
-      const container = launcherRoot?.querySelector('.persona-widget-container');
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        badge.style.top = `${rect.top - 10}px`;
-        badge.style.left = `${rect.left - 10}px`;
-        badge.style.bottom = 'auto';
-        badge.style.right = 'auto';
+      if (isMobile) {
+        // On mobile the widget is fullscreen — pin badge to top-left corner
+        badge.style.inset = '5px auto auto 5px';
+      } else {
+        // Position on top-left of the chat panel container (the white card)
+        const container = launcherRoot?.querySelector('.persona-widget-container');
+        if (container) {
+          const rect = container.getBoundingClientRect();
+          badge.style.top = `${rect.top - 10}px`;
+          badge.style.left = `${rect.left - 10}px`;
+          badge.style.bottom = 'auto';
+          badge.style.right = 'auto';
+        }
       }
     } else {
       // Position on top-left of the launcher button icon
