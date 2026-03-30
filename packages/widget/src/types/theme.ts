@@ -233,6 +233,18 @@ export interface MessageTokens {
     /** Assistant bubble box-shadow (token ref or raw CSS, e.g. `none`). */
     shadow?: string;
   };
+  /** Border color between messages in the thread. */
+  border?: TokenReference<'color'>;
+}
+
+/** Collapsible widget chrome (tool bubbles, reasoning bubbles, approval bubbles). */
+export interface CollapsibleWidgetTokens {
+  /** Background for content areas. */
+  container?: TokenReference<'color'>;
+  /** Background for code blocks inside collapsible sections. */
+  surface?: TokenReference<'color'>;
+  /** Border color for collapsible sections. */
+  border?: TokenReference<'color'>;
 }
 
 export interface MarkdownTokens {
@@ -261,6 +273,27 @@ export interface MarkdownTokens {
       fontSize?: string;
       fontWeight?: string;
     };
+  };
+  /** Fenced code block styling. */
+  codeBlock?: {
+    background?: TokenReference<'color'>;
+    borderColor?: TokenReference<'color'>;
+    textColor?: TokenReference<'color'>;
+  };
+  /** Table styling. */
+  table?: {
+    headerBackground?: TokenReference<'color'>;
+    borderColor?: TokenReference<'color'>;
+  };
+  /** Horizontal rule styling. */
+  hr?: {
+    color?: TokenReference<'color'>;
+  };
+  /** Blockquote styling. */
+  blockquote?: {
+    borderColor?: TokenReference<'color'>;
+    background?: TokenReference<'color'>;
+    textColor?: TokenReference<'color'>;
   };
 }
 
@@ -438,6 +471,8 @@ export interface ComponentTokens {
     tab?: ArtifactTabTokens;
     pane?: ArtifactPaneTokens;
   };
+  /** Collapsible widget chrome (tool/reasoning/approval bubbles). */
+  collapsibleWidget?: CollapsibleWidgetTokens;
 }
 
 export interface PaletteExtras {

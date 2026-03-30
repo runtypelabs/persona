@@ -312,6 +312,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       border: 'palette.colors.gray.200',
       shadow: 'palette.shadows.sm',
     },
+    border: 'semantic.colors.border',
   },
   toolBubble: {
     shadow: 'palette.shadows.sm',
@@ -334,6 +335,28 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     prose: {
       fontFamily: 'inherit',
     },
+    codeBlock: {
+      background: 'semantic.colors.container',
+      borderColor: 'semantic.colors.border',
+      textColor: 'inherit',
+    },
+    table: {
+      headerBackground: 'semantic.colors.container',
+      borderColor: 'semantic.colors.border',
+    },
+    hr: {
+      color: 'semantic.colors.divider',
+    },
+    blockquote: {
+      borderColor: 'palette.colors.gray.900',
+      background: 'transparent',
+      textColor: 'palette.colors.gray.500',
+    },
+  },
+  collapsibleWidget: {
+    container: 'palette.colors.gray.50',
+    surface: 'semantic.colors.surface',
+    border: 'semantic.colors.border',
   },
   voice: {
     recording: {
@@ -822,6 +845,46 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   if (mdProseFont && mdProseFont !== 'inherit') {
     cssVars['--persona-md-prose-font-family'] = mdProseFont;
   }
+
+  // Markdown code block
+  cssVars['--persona-md-code-block-bg'] =
+    cssVars['--persona-components-markdown-codeBlock-background'] ?? cssVars['--persona-container'];
+  cssVars['--persona-md-code-block-border-color'] =
+    cssVars['--persona-components-markdown-codeBlock-borderColor'] ?? cssVars['--persona-border'];
+  cssVars['--persona-md-code-block-text-color'] =
+    cssVars['--persona-components-markdown-codeBlock-textColor'] ?? 'inherit';
+
+  // Markdown table
+  cssVars['--persona-md-table-header-bg'] =
+    cssVars['--persona-components-markdown-table-headerBackground'] ?? cssVars['--persona-container'];
+  cssVars['--persona-md-table-border-color'] =
+    cssVars['--persona-components-markdown-table-borderColor'] ?? cssVars['--persona-border'];
+
+  // Markdown HR
+  cssVars['--persona-md-hr-color'] =
+    cssVars['--persona-components-markdown-hr-color'] ?? cssVars['--persona-divider'];
+
+  // Markdown blockquote
+  cssVars['--persona-md-blockquote-border-color'] =
+    cssVars['--persona-components-markdown-blockquote-borderColor'] ??
+    cssVars['--persona-palette-colors-gray-900'];
+  cssVars['--persona-md-blockquote-bg'] =
+    cssVars['--persona-components-markdown-blockquote-background'] ?? 'transparent';
+  cssVars['--persona-md-blockquote-text-color'] =
+    cssVars['--persona-components-markdown-blockquote-textColor'] ??
+    cssVars['--persona-palette-colors-gray-500'];
+
+  // Collapsible widget chrome (tool/reasoning/approval bubbles)
+  cssVars['--cw-container'] =
+    cssVars['--persona-components-collapsibleWidget-container'] ?? cssVars['--persona-surface'];
+  cssVars['--cw-surface'] =
+    cssVars['--persona-components-collapsibleWidget-surface'] ?? cssVars['--persona-surface'];
+  cssVars['--cw-border'] =
+    cssVars['--persona-components-collapsibleWidget-border'] ?? cssVars['--persona-border'];
+
+  // Message border
+  cssVars['--persona-message-border'] =
+    cssVars['--persona-components-message-border'] ?? cssVars['--persona-border'];
 
   // Icon button tokens
   const components = theme.components;
