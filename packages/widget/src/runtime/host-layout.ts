@@ -3,6 +3,7 @@ import type {
   AgentWidgetStateSnapshot,
 } from "../types";
 import { isDockedMountMode, resolveDockConfig } from "../utils/dock";
+import { DEFAULT_OVERLAY_Z_INDEX } from "../utils/constants";
 
 export type WidgetHostLayoutMode = "direct" | "docked";
 
@@ -198,7 +199,7 @@ const applyDockStyles = (
     dockSlot.style.minWidth = "0";
     dockSlot.style.minHeight = "0";
     dockSlot.style.overflow = "hidden";
-    dockSlot.style.zIndex = String(config?.launcher?.zIndex ?? 9999);
+    dockSlot.style.zIndex = String(config?.launcher?.zIndex ?? DEFAULT_OVERLAY_Z_INDEX);
     dockSlot.style.transform = "none";
     dockSlot.style.transition = "none";
     dockSlot.style.pointerEvents = "auto";

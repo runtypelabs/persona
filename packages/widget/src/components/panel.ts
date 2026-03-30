@@ -2,6 +2,7 @@ import { createElement } from "../utils/dom";
 import { AgentWidgetConfig } from "../types";
 import { positionMap } from "../utils/positioning";
 import { isDockedMountMode } from "../utils/dock";
+import { DEFAULT_OVERLAY_Z_INDEX } from "../utils/constants";
 import { buildHeader, attachHeaderToContainer, HeaderElements } from "./header-builder";
 import { buildHeaderWithLayout } from "./header-layouts";
 import { buildComposer, ComposerElements } from "./composer-builder";
@@ -58,8 +59,9 @@ export const createWrapper = (config?: AgentWidgetConfig): PanelWrapper => {
 
   const wrapper = createElement(
     "div",
-    `persona-widget-wrapper persona-fixed ${position} persona-z-50 persona-transition`
+    `persona-widget-wrapper persona-fixed ${position} persona-transition`
   );
+  wrapper.style.zIndex = String(config?.launcher?.zIndex ?? DEFAULT_OVERLAY_Z_INDEX);
 
   const panel = createElement(
     "div",

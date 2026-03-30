@@ -40,7 +40,9 @@ import {
   resolveFollowStateFromScroll,
   resolveFollowStateFromWheel
 } from "./utils/auto-follow";
-import { statusCopy } from "./utils/constants";
+import { statusCopy, DEFAULT_OVERLAY_Z_INDEX, PORTALED_OVERLAY_Z_INDEX } from "./utils/constants";
+import { syncOverlayHostStacking } from "./utils/overlay-host-stacking";
+import { acquireScrollLock } from "./utils/scroll-lock";
 import { isDockedMountMode, resolveDockConfig } from "./utils/dock";
 import { createLauncherButton } from "./components/launcher";
 import { createWrapper, buildPanel, buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
@@ -1546,7 +1548,7 @@ export const createAgentExperience = (
     // Determine panel styling based on mode, with theme overrides
     const position = config.launcher?.position ?? 'bottom-left';
     const isLeftSidebar = position === 'bottom-left' || position === 'top-left';
-    const overlayZIndex = config.launcher?.zIndex ?? 9999;
+    const overlayZIndex = config.launcher?.zIndex ?? DEFAULT_OVERLAY_Z_INDEX;
 
     // Default values based on mode
     let defaultPanelBorder = (sidebarMode || shouldGoFullscreen) ? 'none' : '1px solid var(--persona-border)';
@@ -1819,9 +1821,8 @@ export const createAgentExperience = (
     if (!isInlineEmbed && !dockedMode) {
       const maxHeightStyles = 'max-height: -moz-available !important; max-height: stretch !important;';
       const paddingStyles = sidebarMode ? '' : 'padding-top: 1.25em !important;';
-      // Override z-index only when explicitly configured; otherwise the persona-z-50 class applies
-      const zIndexStyles = !sidebarMode && config.launcher?.zIndex != null
-        ? `z-index: ${config.launcher.zIndex} !important;`
+      const zIndexStyles = !sidebarMode
+        ? `z-index: ${config.launcher?.zIndex ?? DEFAULT_OVERLAY_Z_INDEX} !important;`
         : '';
       wrapper.style.cssText += maxHeightStyles + paddingStyles + zIndexStyles;
     }
@@ -1833,6 +1834,16 @@ export const createAgentExperience = (
   applyArtifactPaneAppearance(mount, config);
 
   const destroyCallbacks: Array<() => void> = [];
+
+  let teardownHostStacking: (() => void) | null = null;
+  let releaseScrollLock: (() => void) | null = null;
+
+  destroyCallbacks.push(() => {
+    teardownHostStacking?.();
+    teardownHostStacking = null;
+    releaseScrollLock?.();
+    releaseScrollLock = null;
+  });
 
   if (artifactPanelResizeObs) {
     destroyCallbacks.push(() => {
@@ -2033,7 +2044,8 @@ export const createAgentExperience = (
       container.appendChild(scrollToBottomButton);
     }
     updateScrollToBottomButtonOffset();
-    scrollToBottomButton.style.display = autoFollow.isFollowing() ? "none" : "";
+    const hasOverflow = getScrollBottomOffset(body) > 0;
+    scrollToBottomButton.style.display = (autoFollow.isFollowing() || !hasOverflow) ? "none" : "";
   };
 
   const pauseAutoScroll = () => {
@@ -2620,12 +2632,46 @@ export const createAgentExperience = (
     const prevOpen = open;
     open = nextOpen;
     updateOpenState();
-    
+
+    // Sync host stacking and scroll lock for viewport-covering modes
+    const isViewportCovering = (() => {
+      const sm = config.launcher?.sidebarMode ?? false;
+      const ow = mount.ownerDocument.defaultView ?? window;
+      const mf = config.launcher?.mobileFullscreen ?? true;
+      const mb = config.launcher?.mobileBreakpoint ?? 640;
+      const isMobile = ow.innerWidth <= mb;
+      const dockedMF = isDockedMountMode(config) && mf && isMobile;
+      return sm || (mf && isMobile && launcherEnabled) || dockedMF;
+    })();
+
+    if (open && isViewportCovering) {
+      if (!teardownHostStacking) {
+        const root = mount.getRootNode();
+        const hostEl = root instanceof ShadowRoot
+          ? (root.host as HTMLElement)
+          : mount.closest<HTMLElement>(".persona-host");
+        if (hostEl) {
+          teardownHostStacking = syncOverlayHostStacking(
+            hostEl,
+            config.launcher?.zIndex ?? DEFAULT_OVERLAY_Z_INDEX
+          );
+        }
+      }
+      if (!releaseScrollLock) {
+        releaseScrollLock = acquireScrollLock(mount.ownerDocument);
+      }
+    } else if (!open) {
+      teardownHostStacking?.();
+      teardownHostStacking = null;
+      releaseScrollLock?.();
+      releaseScrollLock = null;
+    }
+
     if (open) {
       recalcPanelHeight();
       scheduleAutoScroll(true);
     }
-    
+
     // Emit widget state events
     const stateEvent: AgentWidgetStateEvent = {
       open,
@@ -3572,6 +3618,35 @@ export const createAgentExperience = (
       // overwrites updateOpenState()'s display:none when docked+closed. Re-sync after every recalc.
       updateScrollToBottomButtonOffset();
       updateOpenState();
+
+      // Sync scroll lock and host stacking when viewport mode changes (e.g. orientation change)
+      if (open && launcherEnabled) {
+        const ow = mount.ownerDocument.defaultView ?? window;
+        const isMobile = ow.innerWidth <= (config.launcher?.mobileBreakpoint ?? 640);
+        const sm = config.launcher?.sidebarMode ?? false;
+        const mf = config.launcher?.mobileFullscreen ?? true;
+        const dockedMF = isDockedMountMode(config) && mf && isMobile;
+        const isVC = sm || (mf && isMobile && launcherEnabled) || dockedMF;
+
+        if (isVC && !releaseScrollLock) {
+          const root = mount.getRootNode();
+          const hostEl = root instanceof ShadowRoot
+            ? (root.host as HTMLElement)
+            : mount.closest<HTMLElement>(".persona-host");
+          if (hostEl && !teardownHostStacking) {
+            teardownHostStacking = syncOverlayHostStacking(
+              hostEl,
+              config.launcher?.zIndex ?? DEFAULT_OVERLAY_Z_INDEX
+            );
+          }
+          releaseScrollLock = acquireScrollLock(mount.ownerDocument);
+        } else if (!isVC) {
+          teardownHostStacking?.();
+          teardownHostStacking = null;
+          releaseScrollLock?.();
+          releaseScrollLock = null;
+        }
+      }
     }
   };
 
@@ -3671,6 +3746,7 @@ export const createAgentExperience = (
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
       session.clearMessages();
       messageCache.clear();
+      resumeAutoScroll();
 
       // Always clear the default localStorage key
       try {
@@ -4250,6 +4326,7 @@ export const createAgentExperience = (
 
               // Position tooltip above button
               portaledTooltip.style.position = "fixed";
+              portaledTooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
               portaledTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
               portaledTooltip.style.top = `${buttonRect.top - 8}px`;
               portaledTooltip.style.transform = "translate(-50%, -100%)";
@@ -4464,6 +4541,7 @@ export const createAgentExperience = (
 
                 // Position tooltip above button
                 portaledTooltip.style.position = "fixed";
+                portaledTooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
                 portaledTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
                 portaledTooltip.style.top = `${buttonRect.top - 8}px`;
                 portaledTooltip.style.transform = "translate(-50%, -100%)";
@@ -4994,6 +5072,7 @@ export const createAgentExperience = (
       artifactsPaneUserHidden = false;
       session.clearMessages();
       messageCache.clear();
+      resumeAutoScroll();
 
       // Always clear the default localStorage key
       try {

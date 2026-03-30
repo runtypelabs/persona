@@ -39,7 +39,7 @@ describe("createAgentExperience overlay z-index", () => {
     const wrapper = mount.firstElementChild as HTMLElement | null;
 
     expect(wrapper).not.toBeNull();
-    expect(wrapper?.style.zIndex).toBe("9999");
+    expect(wrapper?.style.zIndex).toBe("100000");
 
     controller.destroy();
   });
@@ -55,7 +55,39 @@ describe("createAgentExperience overlay z-index", () => {
     const wrapper = mount.firstElementChild as HTMLElement | null;
 
     expect(wrapper).not.toBeNull();
-    expect(wrapper?.style.zIndex).toBe("9999");
+    expect(wrapper?.style.zIndex).toBe("100000");
+
+    controller.destroy();
+  });
+
+  it("defaults floating panel wrapper to the overlay z-index", () => {
+    setInnerWidth(1024);
+
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+    });
+
+    const wrapper = mount.firstElementChild as HTMLElement | null;
+
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.style.zIndex).toBe("100000");
+
+    controller.destroy();
+  });
+
+  it("respects a custom zIndex", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: {
+        sidebarMode: true,
+        zIndex: 42,
+      },
+    });
+
+    const wrapper = mount.firstElementChild as HTMLElement | null;
+    expect(wrapper?.style.zIndex).toBe("42");
 
     controller.destroy();
   });

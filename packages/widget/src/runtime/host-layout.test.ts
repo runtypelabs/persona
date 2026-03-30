@@ -228,7 +228,7 @@ describe("createWidgetHostLayout docked", () => {
       const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
       layout.syncWidgetState({ open: true, launcherEnabled: true });
       expect(dockSlot?.style.position).toBe("fixed");
-      expect(dockSlot?.style.zIndex).toBe("9999");
+      expect(dockSlot?.style.zIndex).toBe("100000");
       expect(layout.shell?.dataset.personaDockMobileFullscreen).toBe("true");
 
       layout.destroy();
