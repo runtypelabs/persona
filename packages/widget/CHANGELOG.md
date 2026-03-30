@@ -1,5 +1,37 @@
 # @runtypelabs/persona
 
+## 3.8.0
+
+### Minor Changes
+
+- de5d38a: Add theme tokens for markdown elements, collapsible widget chrome, and message borders — enabling full dark mode styling via config without CSS overrides.
+
+  - Fix inline artifact card background in dark mode (`--persona-surface` instead of nonexistent `--persona-bg`)
+  - Add `components.markdown.codeBlock` (background, borderColor, textColor)
+  - Add `components.markdown.table` (headerBackground, borderColor)
+  - Add `components.markdown.hr` (color)
+  - Add `components.markdown.blockquote` (borderColor, background, textColor)
+  - Add `components.collapsibleWidget` (container, surface, border) for tool/reasoning/approval bubble chrome
+  - Add `components.message.border` for message separator color
+
+- 610a4b1: Raise default widget z-index from 50/9999 to 100000 across all modes (floating
+  panel, launcher button, sidebar, mobile fullscreen, docked mobile fullscreen).
+
+  Elevate the host element's stacking context in viewport-covering modes so the
+  overlay escapes parent stacking traps.
+
+  Lock document scroll when the widget is open in viewport-covering modes (iOS-safe,
+  ref-counted, auto-teardown on destroy).
+
+  Add overscroll-behavior: contain on the messages body.
+
+### Patch Changes
+
+- 915261c: Fix scroll-to-bottom indicator appearing when content fits in view and persisting after clearing chat
+
+  - Hide indicator when message body has no overflow (scrollHeight <= clientHeight)
+  - Reset auto-follow state on clear chat so the indicator dismisses immediately
+
 ## 3.7.0
 
 ### Minor Changes
