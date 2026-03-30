@@ -24,7 +24,7 @@ function renderDefaultArtifactCard(
   root.className =
     "persona-flex persona-w-full persona-max-w-full persona-items-center persona-gap-3 persona-rounded-xl persona-px-4 persona-py-3";
   root.style.border = "1px solid var(--persona-border, #e5e7eb)";
-  root.style.backgroundColor = "var(--persona-bg, #ffffff)";
+  root.style.backgroundColor = "var(--persona-surface, #ffffff)";
   root.style.cursor = "pointer";
   root.tabIndex = 0;
   root.setAttribute("role", "button");
