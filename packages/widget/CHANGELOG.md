@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 3.8.1
+
+### Patch Changes
+
+- 29912e2: Fix clicking an artifact card not reopening the artifact pane after the user dismissed it
+
 ## 3.8.0
 
 ### Minor Changes
