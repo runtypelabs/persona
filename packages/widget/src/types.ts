@@ -813,11 +813,16 @@ export type AgentWidgetLauncherConfig = {
    */
   mobileBreakpoint?: number;
   /**
-   * CSS z-index applied to the widget wrapper when it is in a positioned mode
-   * (floating panel, mobile fullscreen, or sidebar). Increase this value if
-   * other elements on the host page appear on top of the widget.
+   * CSS z-index applied to the widget wrapper and launcher button in all
+   * positioned modes (floating panel, mobile fullscreen, sidebar, docked
+   * mobile fullscreen). Increase this value if other elements on the host
+   * page appear on top of the widget.
    *
-   * @default 9999 in overlay modes (mobile fullscreen / sidebar); 50 for the regular floating panel
+   * In viewport-covering modes (sidebar, mobile fullscreen), the widget
+   * also elevates the host element's stacking context and locks
+   * document scroll to prevent background scrolling.
+   *
+   * @default 100000
    */
   zIndex?: number;
   callToActionIconText?: string;

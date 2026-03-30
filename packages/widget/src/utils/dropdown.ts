@@ -1,5 +1,6 @@
 import { createElement } from "./dom";
 import { renderLucideIcon } from "./icons";
+import { PORTALED_OVERLAY_Z_INDEX } from "./constants";
 
 export interface DropdownMenuItem {
   id: string;
@@ -73,7 +74,7 @@ export function createDropdownMenu(options: CreateDropdownOptions): DropdownMenu
   if (portal) {
     // Fixed positioning — menu is portaled outside the anchor's overflow context
     menu.style.position = "fixed";
-    menu.style.zIndex = "10000";
+    menu.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
   } else {
     // Absolute positioning — menu lives inside the anchor
     menu.style.position = "absolute";

@@ -1,6 +1,7 @@
 import { createElement, createElementInDocument } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
+import { PORTALED_OVERLAY_Z_INDEX } from "../utils/constants";
 
 /** CSS `color` values; variables are set on `[data-persona-root]` from `theme.components.header`. */
 export const HEADER_THEME_CSS = {
@@ -233,6 +234,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
         // Position tooltip above button
         portaledTooltip.style.position = "fixed";
+        portaledTooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
         portaledTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
         portaledTooltip.style.top = `${buttonRect.top - 8}px`;
         portaledTooltip.style.transform = "translate(-50%, -100%)";
@@ -389,6 +391,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
       // Position tooltip above button
       portaledTooltip.style.position = "fixed";
+      portaledTooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
       portaledTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
       portaledTooltip.style.top = `${buttonRect.top - 8}px`;
       portaledTooltip.style.transform = "translate(-50%, -100%)";

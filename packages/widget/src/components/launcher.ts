@@ -3,6 +3,7 @@ import { AgentWidgetConfig } from "../types";
 import { positionMap } from "../utils/positioning";
 import { isDockedMountMode } from "../utils/dock";
 import { renderLucideIcon } from "../utils/icons";
+import { DEFAULT_OVERLAY_Z_INDEX } from "../utils/constants";
 
 export interface LauncherButton {
   element: HTMLButtonElement;
@@ -174,12 +175,16 @@ export const createLauncherButton = (
         : positionMap["bottom-right"];
 
     const floatingBase =
-      "persona-fixed persona-flex persona-items-center persona-gap-3 persona-rounded-launcher persona-bg-persona-surface persona-py-2.5 persona-pl-3 persona-pr-3 persona-transition hover:persona-translate-y-[-2px] persona-cursor-pointer persona-z-50";
+      "persona-fixed persona-flex persona-items-center persona-gap-3 persona-rounded-launcher persona-bg-persona-surface persona-py-2.5 persona-pl-3 persona-pr-3 persona-transition hover:persona-translate-y-[-2px] persona-cursor-pointer";
     const dockedBase =
       "persona-relative persona-mt-4 persona-mb-4 persona-mx-auto persona-flex persona-items-center persona-justify-center persona-rounded-launcher persona-bg-persona-surface persona-transition hover:persona-translate-y-[-2px] persona-cursor-pointer";
 
     button.className = dockedMode ? dockedBase : `${floatingBase} ${positionClass}`;
-    
+
+    if (!dockedMode) {
+      button.style.zIndex = String(launcher.zIndex ?? DEFAULT_OVERLAY_Z_INDEX);
+    }
+
     // Apply launcher border and shadow from config (with defaults matching previous Tailwind classes)
     const defaultBorder = "1px solid var(--persona-border, #e5e7eb)";
     const defaultShadow = "var(--persona-shadow, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1))";

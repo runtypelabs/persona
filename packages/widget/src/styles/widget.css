@@ -834,6 +834,10 @@
   overflow-y: auto;
 }
 
+.persona-widget-body {
+  overscroll-behavior: contain;
+}
+
 .persona-overflow-hidden {
   overflow: hidden;
 }
