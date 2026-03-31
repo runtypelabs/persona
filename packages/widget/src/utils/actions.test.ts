@@ -97,18 +97,75 @@ describe("createActionManager.process", () => {
     const msg = makeMessage({ content: '{"action":"message","text":"hi"}' });
     const first = manager.process({ text: msg.content, message: msg, streaming: false });
     expect(first).not.toBeNull();
+    expect(msg.content).toBe("hi");
 
     const second = manager.process({ text: msg.content, message: msg, streaming: false });
     expect(second).toBeNull();
   });
 
+  it("re-hydrates already processed action messages from raw content", () => {
+    let metadata: Record<string, unknown> = {
+      processedActionMessageIds: ["msg-1"],
+    };
+
+    const manager = createActionManager({
+      parsers: [defaultJsonActionParser],
+      handlers: [defaultActionHandlers.message],
+      getSessionMetadata: () => metadata,
+      updateSessionMetadata: (updater) => {
+        metadata = updater(metadata);
+      },
+      emit: vi.fn(),
+      documentRef: null,
+    });
+
+    const msg = makeMessage({
+      content: '{"action":"message","text":"hi"}',
+      rawContent: '{"action":"message","text":"hi"}',
+    });
+
+    const result = manager.process({
+      text: msg.content,
+      raw: msg.rawContent,
+      message: msg,
+      streaming: false,
+    });
+
+    expect(result).toEqual({ text: "hi", persist: true });
+    expect(msg.content).toBe("hi");
+  });
+
   it("processes valid action and returns display text", () => {
     const manager = makeManager();
+    const message = makeMessage();
     const result = manager.process({
       text: '{"action":"message","text":"hello"}',
-      message: makeMessage(),
+      message,
       streaming: false,
     });
     expect(result).toEqual({ text: "hello", persist: true, resubmit: undefined });
+    expect(message.content).toBe("hello");
+  });
+
+  it("uses raw content even when display text is empty", () => {
+    const manager = makeManager();
+    const message = makeMessage({
+      content: "",
+      rawContent: '{"action":"message","text":"hello from raw"}',
+    });
+
+    const result = manager.process({
+      text: "",
+      message,
+      raw: message.rawContent,
+      streaming: false,
+    });
+
+    expect(result).toEqual({
+      text: "hello from raw",
+      persist: true,
+      resubmit: undefined,
+    });
+    expect(message.content).toBe("hello from raw");
   });
 });

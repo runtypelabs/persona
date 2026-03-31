@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f8fc;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-strong: #e2e8f0;
+  --muted: #64748b;
+  --ring: #38bdf8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-ibm-plex-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.12), transparent 30%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4ff 55%, #f6f8fc 100%);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-manrope), sans-serif;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(14, 165, 233, 0.18);
+}
+
+.persona-host {
+  position: relative;
+}
+
+[data-persona-host-layout="docked"] {
+  width: 100%;
+  min-height: 100vh;
+  background: transparent;
+}
+
+[data-persona-dock-role="content"] {
+  min-width: 0;
+  background: transparent;
+}
+
+[data-persona-dock-role="panel"] {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(16px);
+}
+
+[data-persona-host-layout="docked"][data-persona-dock-side="right"]
+  [data-persona-dock-role="panel"] {
+  border-left: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+[data-persona-host-layout="docked"][data-persona-dock-side="left"]
+  [data-persona-dock-role="panel"] {
+  border-right: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+[data-persona-dock-role="host"] {
+  height: 100%;
+  min-height: 0;
+}

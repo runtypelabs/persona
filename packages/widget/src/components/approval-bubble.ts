@@ -79,6 +79,7 @@ export const createApprovalBubble = (
   const bubble = createElement(
     "div",
     [
+      "vanilla-approval-bubble",
       "persona-w-full",
       "persona-max-w-[85%]",
       "persona-rounded-2xl",

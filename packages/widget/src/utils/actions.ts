@@ -140,13 +140,29 @@ export const createActionManager = (options: ActionManagerOptions) => {
     }));
   };
 
+  const getFallbackDisplayText = (
+    action: AgentWidgetParsedAction,
+    fallbackText: string
+  ) => {
+    const payload = action.payload as Record<string, unknown>;
+    const candidates = [
+      payload.text,
+      payload.displayText,
+      payload.message,
+      payload.content,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate;
+      }
+    }
+
+    return fallbackText;
+  };
+
   const process = (context: ActionManagerProcessContext): { text: string; persist: boolean; resubmit?: boolean } | null => {
-    if (
-      context.streaming ||
-      context.message.role !== "assistant" ||
-      !context.text ||
-      processedIds.has(context.message.id)
-    ) {
+    if (context.streaming || context.message.role !== "assistant") {
       return null;
     }
 
@@ -157,16 +173,8 @@ export const createActionManager = (options: ActionManagerOptions) => {
       (typeof context.text === "string" && context.text) ||
       null;
 
-    if (
-      !parseSource &&
-      typeof context.text === "string" &&
-      context.text.trim().startsWith("{") &&
-      typeof console !== "undefined"
-    ) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        "[AgentWidget] Structured response detected but no raw payload was provided. Ensure your stream parser returns { text, raw }."
-      );
+    if (!parseSource) {
+      return null;
     }
 
     const action = parseSource
@@ -179,6 +187,13 @@ export const createActionManager = (options: ActionManagerOptions) => {
 
     if (!action) {
       return null;
+    }
+
+    const alreadyProcessed = processedIds.has(context.message.id);
+    if (alreadyProcessed) {
+      const displayText = getFallbackDisplayText(action, context.text);
+      context.message.content = displayText;
+      return { text: displayText, persist: true };
     }
 
     processedIds.add(context.message.id);
@@ -213,6 +228,7 @@ export const createActionManager = (options: ActionManagerOptions) => {
           // persistMessage defaults to true if not specified
           const persist = handlerResult.persistMessage !== false;
           const displayText = handlerResult.displayText !== undefined ? handlerResult.displayText : "";
+          context.message.content = displayText;
           // Return resubmit flag - the caller (ui.ts) will handle deferred resubmit
           // after injectAssistantMessage is called (to avoid race conditions with async handlers)
           return { text: displayText, persist, resubmit: handlerResult.resubmit };
@@ -233,4 +249,3 @@ export const createActionManager = (options: ActionManagerOptions) => {
     syncFromMetadata
   };
 };
-
