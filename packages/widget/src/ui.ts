@@ -1058,7 +1058,7 @@ export const createAgentExperience = (
     if (!headerButton) return;
     
     // Find the parent bubble element
-    const bubble = headerButton.closest('.vanilla-reasoning-bubble, .vanilla-tool-bubble') as HTMLElement;
+    const bubble = headerButton.closest('.persona-reasoning-bubble, .persona-tool-bubble') as HTMLElement;
     if (!bubble) return;
     
     // Get message ID from bubble
@@ -1083,6 +1083,8 @@ export const createAgentExperience = (
       }
       updateToolBubbleUI(messageId, bubble, config);
     }
+    // Invalidate cached wrapper so next render rebuilds with current expansion state
+    messageCache.delete(messageId);
   };
 
   // Attach event listeners to messagesWrapper for event delegation
@@ -1194,7 +1196,7 @@ export const createAgentExperience = (
     event.preventDefault();
     event.stopPropagation();
 
-    const approvalBubble = approvalButton.closest('.vanilla-approval-bubble') as HTMLElement;
+    const approvalBubble = approvalButton.closest('.persona-approval-bubble') as HTMLElement;
     if (!approvalBubble) return;
 
     const messageId = approvalBubble.getAttribute('data-message-id');
@@ -2302,7 +2304,7 @@ export const createAgentExperience = (
               if (wrapChrome) {
                 const componentWrapper = document.createElement("div");
                 componentWrapper.className = [
-                  "vanilla-message-bubble",
+                  "persona-message-bubble",
                   "persona-max-w-[85%]",
                   "persona-rounded-2xl",
                   "persona-bg-persona-surface",

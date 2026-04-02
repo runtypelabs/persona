@@ -276,21 +276,21 @@ const getBubbleClasses = (
   role: "user" | "assistant" | "system",
   layout: AgentWidgetMessageLayoutConfig["layout"] = "bubble"
 ): string[] => {
-  const baseClasses = ["vanilla-message-bubble", "persona-max-w-[85%]"];
+  const baseClasses = ["persona-message-bubble", "persona-max-w-[85%]"];
 
   switch (layout) {
     case "flat":
       // Flat layout: no bubble styling, just text
       if (role === "user") {
         baseClasses.push(
-          "vanilla-message-user-bubble",
+          "persona-message-user-bubble",
           "persona-ml-auto",
           "persona-text-persona-primary",
           "persona-py-2"
         );
       } else {
         baseClasses.push(
-          "vanilla-message-assistant-bubble",
+          "persona-message-assistant-bubble",
           "persona-text-persona-primary",
           "persona-py-2"
         );
@@ -305,7 +305,7 @@ const getBubbleClasses = (
       );
       if (role === "user") {
         baseClasses.push(
-          "vanilla-message-user-bubble",
+          "persona-message-user-bubble",
           "persona-ml-auto",
           "persona-bg-persona-accent",
           "persona-text-white",
@@ -315,7 +315,7 @@ const getBubbleClasses = (
         );
       } else {
         baseClasses.push(
-          "vanilla-message-assistant-bubble",
+          "persona-message-assistant-bubble",
           "persona-bg-persona-surface",
           "persona-text-persona-primary",
           "persona-px-3",
@@ -336,7 +336,7 @@ const getBubbleClasses = (
       );
       if (role === "user") {
         baseClasses.push(
-          "vanilla-message-user-bubble",
+          "persona-message-user-bubble",
           "persona-ml-auto",
           "persona-bg-persona-accent",
           "persona-text-white",
@@ -345,7 +345,7 @@ const getBubbleClasses = (
         );
       } else {
         baseClasses.push(
-          "vanilla-message-assistant-bubble",
+          "persona-message-assistant-bubble",
           "persona-bg-persona-surface",
           "persona-border",
           "persona-border-persona-message-border",
