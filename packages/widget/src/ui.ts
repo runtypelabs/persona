@@ -1083,6 +1083,8 @@ export const createAgentExperience = (
       }
       updateToolBubbleUI(messageId, bubble, config);
     }
+    // Invalidate cached wrapper so next render rebuilds with current expansion state
+    messageCache.delete(messageId);
   };
 
   // Attach event listeners to messagesWrapper for event delegation
