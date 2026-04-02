@@ -1,5 +1,12 @@
 # @runtypelabs/persona
 
+## 3.8.2
+
+### Patch Changes
+
+- 5286286: Fixed tool call and reasoning accordions collapsing when new streaming tokens arrive
+- 4c89861: Renamed internal `vanilla-*` CSS classes to `persona-*` for consistency
+
 ## 3.8.1
 
 ### Patch Changes
