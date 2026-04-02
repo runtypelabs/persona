@@ -1129,7 +1129,7 @@
 }
 
 /* Markdown content overflow handling */
-.vanilla-message-bubble pre {
+.persona-message-bubble pre {
   overflow-x: auto;
   max-width: 100%;
   word-wrap: break-word;
@@ -1145,7 +1145,7 @@
   border: 1px solid var(--persona-md-code-block-border-color);
 }
 
-.vanilla-message-bubble code {
+.persona-message-bubble code {
   word-break: break-word;
   word-wrap: break-word;
   white-space: pre-wrap;
@@ -1154,14 +1154,14 @@
   font-size: 0.875em;
 }
 
-.vanilla-message-bubble pre code {
+.persona-message-bubble pre code {
   font-size: inherit;
   background-color: transparent;
   padding: 0;
   border-radius: 0;
 }
 
-.vanilla-message-bubble img {
+.persona-message-bubble img {
   max-width: 100%;
   height: auto;
   display: block;
@@ -1169,32 +1169,32 @@
   border-radius: var(--persona-radius-md, 0.375rem);
 }
 
-.vanilla-message-user-bubble {
+.persona-message-user-bubble {
   border-radius: var(--persona-message-user-radius, var(--persona-radius-lg, 0.5rem));
 }
 
-.vanilla-message-assistant-bubble {
+.persona-message-assistant-bubble {
   border-radius: var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem));
   border-color: var(--persona-message-assistant-border, var(--persona-border, #e5e7eb));
 }
 
-[data-persona-root] .vanilla-message-assistant-bubble.persona-shadow-sm {
+[data-persona-root] .persona-message-assistant-bubble.persona-shadow-sm {
   box-shadow: var(--persona-message-assistant-shadow, 0 1px 2px 0 rgb(0 0 0 / 0.05));
 }
 
-[data-persona-root] .vanilla-message-user-bubble.persona-shadow-sm {
+[data-persona-root] .persona-message-user-bubble.persona-shadow-sm {
   box-shadow: var(--persona-message-user-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
 }
 
-[data-persona-root] .vanilla-tool-bubble.persona-shadow-sm {
+[data-persona-root] .persona-tool-bubble.persona-shadow-sm {
   box-shadow: var(--persona-tool-bubble-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
 }
 
-[data-persona-root] .vanilla-reasoning-bubble.persona-shadow-sm {
+[data-persona-root] .persona-reasoning-bubble.persona-shadow-sm {
   box-shadow: var(--persona-reasoning-bubble-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
 }
 
-/* Artifact markdown (no .vanilla-message-bubble wrapper) */
+/* Artifact markdown (no .persona-message-bubble wrapper) */
 [data-persona-root] .persona-markdown-bubble {
   color: var(--persona-text, #111827);
   font-family: var(--persona-md-prose-font-family, inherit);
@@ -1293,123 +1293,123 @@
 }
 
 /* Ensure all links in chat bubbles have underlines */
-.vanilla-message-bubble a {
+.persona-message-bubble a {
   text-decoration: underline;
 }
 
-.vanilla-message-bubble a:visited {
+.persona-message-bubble a:visited {
   text-decoration: underline;
 }
 
-.vanilla-message-bubble a:hover {
+.persona-message-bubble a:hover {
   text-decoration: underline;
 }
 
-.vanilla-message-bubble a:active {
+.persona-message-bubble a:active {
   text-decoration: underline;
 }
 
 /* Ensure links in user messages match the text color */
-.vanilla-message-user-bubble a,
-.vanilla-message-user-bubble a:visited,
-.vanilla-message-user-bubble a:hover,
-.vanilla-message-user-bubble a:active {
+.persona-message-user-bubble a,
+.persona-message-user-bubble a:visited,
+.persona-message-user-bubble a:hover,
+.persona-message-user-bubble a:active {
   color: inherit;
   text-decoration: underline;
 }
 
-[data-persona-root] .vanilla-message-assistant-bubble a {
+[data-persona-root] .persona-message-assistant-bubble a {
   color: var(--persona-md-link-color, var(--persona-accent, #0f0f0f));
 }
 
 /* Markdown paragraph styles */
-.vanilla-message-bubble p {
+.persona-message-bubble p {
   margin: 0;
 }
 
-.vanilla-message-bubble p + p {
+.persona-message-bubble p + p {
   margin-top: 0.75rem;
 }
 
 /* Markdown list styles */
-.vanilla-message-bubble ul,
-.vanilla-message-bubble ol {
+.persona-message-bubble ul,
+.persona-message-bubble ol {
   margin: 0.5rem 0;
   padding-left: 1.5rem;
 }
 
-.vanilla-message-bubble ul {
+.persona-message-bubble ul {
   list-style-type: disc;
 }
 
-.vanilla-message-bubble ol {
+.persona-message-bubble ol {
   list-style-type: decimal;
 }
 
-.vanilla-message-bubble li {
+.persona-message-bubble li {
   margin: 0.25rem 0;
   padding-left: 0.25rem;
 }
 
 /* Nested lists */
-.vanilla-message-bubble ul ul,
-.vanilla-message-bubble ol ul {
+.persona-message-bubble ul ul,
+.persona-message-bubble ol ul {
   list-style-type: circle;
   margin: 0.25rem 0;
 }
 
-.vanilla-message-bubble ul ul ul,
-.vanilla-message-bubble ol ul ul,
-.vanilla-message-bubble ul ol ul,
-.vanilla-message-bubble ol ol ul {
+.persona-message-bubble ul ul ul,
+.persona-message-bubble ol ul ul,
+.persona-message-bubble ul ol ul,
+.persona-message-bubble ol ol ul {
   list-style-type: square;
 }
 
-.vanilla-message-bubble ul ol,
-.vanilla-message-bubble ol ol {
+.persona-message-bubble ul ol,
+.persona-message-bubble ol ol {
   list-style-type: lower-alpha;
   margin: 0.25rem 0;
 }
 
 /* Ensure user message paragraphs and lists have proper styling too */
-.vanilla-message-user-bubble p {
+.persona-message-user-bubble p {
   margin: 0;
   color: inherit;
 }
 
-.vanilla-message-user-bubble p + p {
+.persona-message-user-bubble p + p {
   margin-top: 0.75rem;
 }
 
-.vanilla-message-user-bubble ul,
-.vanilla-message-user-bubble ol {
+.persona-message-user-bubble ul,
+.persona-message-user-bubble ol {
   margin: 0.5rem 0;
   padding-left: 1.5rem;
 }
 
-.vanilla-message-user-bubble ul {
+.persona-message-user-bubble ul {
   list-style-type: disc;
 }
 
-.vanilla-message-user-bubble ol {
+.persona-message-user-bubble ol {
   list-style-type: decimal;
 }
 
-.vanilla-message-user-bubble li {
+.persona-message-user-bubble li {
   margin: 0.25rem 0;
   padding-left: 0.25rem;
   color: inherit;
 }
 
-.vanilla-message-assistant-bubble p,
-.vanilla-message-assistant-bubble li {
+.persona-message-assistant-bubble p,
+.persona-message-assistant-bubble li {
   color: inherit;
 }
 
 /* ============================================
    Markdown Header Styles
    ============================================ */
-.vanilla-message-bubble h1,
+.persona-message-bubble h1,
 [data-persona-root] .persona-markdown-bubble h1 {
   font-size: var(--persona-md-h1-size);
   font-weight: var(--persona-md-h1-weight);
@@ -1418,7 +1418,7 @@
   color: inherit;
 }
 
-.vanilla-message-bubble h2,
+.persona-message-bubble h2,
 [data-persona-root] .persona-markdown-bubble h2 {
   font-size: var(--persona-md-h2-size);
   font-weight: var(--persona-md-h2-weight);
@@ -1427,7 +1427,7 @@
   color: inherit;
 }
 
-.vanilla-message-bubble h3,
+.persona-message-bubble h3,
 [data-persona-root] .persona-markdown-bubble h3 {
   font-size: var(--persona-md-h3-size);
   font-weight: var(--persona-md-h3-weight);
@@ -1436,7 +1436,7 @@
   color: inherit;
 }
 
-.vanilla-message-bubble h4,
+.persona-message-bubble h4,
 [data-persona-root] .persona-markdown-bubble h4 {
   font-size: var(--persona-md-h4-size);
   font-weight: var(--persona-md-h4-weight);
@@ -1445,7 +1445,7 @@
   color: inherit;
 }
 
-.vanilla-message-bubble h5,
+.persona-message-bubble h5,
 [data-persona-root] .persona-markdown-bubble h5 {
   font-size: var(--persona-md-h5-size);
   font-weight: var(--persona-md-h5-weight);
@@ -1454,7 +1454,7 @@
   color: inherit;
 }
 
-.vanilla-message-bubble h6,
+.persona-message-bubble h6,
 [data-persona-root] .persona-markdown-bubble h6 {
   font-size: var(--persona-md-h6-size);
   font-weight: var(--persona-md-h6-weight);
@@ -1464,19 +1464,19 @@
 }
 
 /* Remove top margin on first heading */
-.vanilla-message-bubble h1:first-child,
-.vanilla-message-bubble h2:first-child,
-.vanilla-message-bubble h3:first-child,
-.vanilla-message-bubble h4:first-child,
-.vanilla-message-bubble h5:first-child,
-.vanilla-message-bubble h6:first-child {
+.persona-message-bubble h1:first-child,
+.persona-message-bubble h2:first-child,
+.persona-message-bubble h3:first-child,
+.persona-message-bubble h4:first-child,
+.persona-message-bubble h5:first-child,
+.persona-message-bubble h6:first-child {
   margin-top: 0;
 }
 
 /* ============================================
    Markdown Table Styles
    ============================================ */
-.vanilla-message-bubble table {
+.persona-message-bubble table {
   width: 100%;
   border-collapse: collapse;
   margin: 0.5rem 0;
@@ -1486,35 +1486,35 @@
   border: 1px solid var(--persona-md-table-border-color);
 }
 
-.vanilla-message-bubble thead {
+.persona-message-bubble thead {
   background-color: var(--persona-md-table-header-bg);
 }
 
-.vanilla-message-bubble th {
+.persona-message-bubble th {
   font-weight: var(--persona-md-table-header-weight);
   text-align: left;
   padding: var(--persona-md-table-cell-padding);
   border-bottom: 1px solid var(--persona-md-table-border-color);
 }
 
-.vanilla-message-bubble td {
+.persona-message-bubble td {
   padding: var(--persona-md-table-cell-padding);
   border-bottom: 1px solid var(--persona-md-table-border-color);
   text-align: left;
 }
 
-.vanilla-message-bubble tr:last-child td {
+.persona-message-bubble tr:last-child td {
   border-bottom: none;
 }
 
-.vanilla-message-bubble tbody tr:nth-child(even) {
+.persona-message-bubble tbody tr:nth-child(even) {
   background-color: rgba(0, 0, 0, 0.02);
 }
 
 /* ============================================
    Markdown Horizontal Rule Styles
    ============================================ */
-.vanilla-message-bubble hr {
+.persona-message-bubble hr {
   border: none;
   height: var(--persona-md-hr-height);
   background-color: var(--persona-md-hr-color);
@@ -1524,7 +1524,7 @@
 /* ============================================
    Markdown Blockquote Styles
    ============================================ */
-.vanilla-message-bubble blockquote {
+.persona-message-bubble blockquote {
   border-left: var(--persona-md-blockquote-border-width) solid var(--persona-md-blockquote-border-color);
   padding: var(--persona-md-blockquote-padding);
   margin: var(--persona-md-blockquote-margin);
@@ -1533,23 +1533,23 @@
   font-style: var(--persona-md-blockquote-font-style);
 }
 
-.vanilla-message-bubble blockquote p {
+.persona-message-bubble blockquote p {
   margin: 0;
 }
 
-.vanilla-message-bubble blockquote p + p {
+.persona-message-bubble blockquote p + p {
   margin-top: 0.5rem;
 }
 
 /* Nested blockquotes */
-.vanilla-message-bubble blockquote blockquote {
+.persona-message-bubble blockquote blockquote {
   margin-left: 0.5rem;
 }
 
 /* ============================================
    Markdown Inline Code Styles (not in pre)
    ============================================ */
-.vanilla-message-bubble code:not(pre code) {
+.persona-message-bubble code:not(pre code) {
   background-color: var(--persona-md-inline-code-bg);
   color: var(--persona-md-inline-code-color, inherit);
   padding: var(--persona-md-inline-code-padding);
@@ -1560,13 +1560,13 @@
 /* ============================================
    Markdown Strong/Emphasis Styles
    ============================================ */
-.vanilla-message-bubble strong,
-.vanilla-message-bubble b {
+.persona-message-bubble strong,
+.persona-message-bubble b {
   font-weight: var(--persona-md-strong-weight);
 }
 
-.vanilla-message-bubble em,
-.vanilla-message-bubble i {
+.persona-message-bubble em,
+.persona-message-bubble i {
   font-style: var(--persona-md-em-style);
 }
 
@@ -1574,43 +1574,43 @@
    User Message Markdown Overrides
    Ensure styles work in user bubbles too
    ============================================ */
-.vanilla-message-user-bubble h1,
-.vanilla-message-user-bubble h2,
-.vanilla-message-user-bubble h3,
-.vanilla-message-user-bubble h4,
-.vanilla-message-user-bubble h5,
-.vanilla-message-user-bubble h6 {
+.persona-message-user-bubble h1,
+.persona-message-user-bubble h2,
+.persona-message-user-bubble h3,
+.persona-message-user-bubble h4,
+.persona-message-user-bubble h5,
+.persona-message-user-bubble h6 {
   color: inherit;
 }
 
-.vanilla-message-user-bubble table {
+.persona-message-user-bubble table {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-.vanilla-message-user-bubble th,
-.vanilla-message-user-bubble td {
+.persona-message-user-bubble th,
+.persona-message-user-bubble td {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-.vanilla-message-user-bubble thead {
+.persona-message-user-bubble thead {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-.vanilla-message-user-bubble tbody tr:nth-child(even) {
+.persona-message-user-bubble tbody tr:nth-child(even) {
   background-color: rgba(255, 255, 255, 0.05);
 }
 
-.vanilla-message-user-bubble hr {
+.persona-message-user-bubble hr {
   background-color: rgba(255, 255, 255, 0.3);
 }
 
-.vanilla-message-user-bubble blockquote {
+.persona-message-user-bubble blockquote {
   border-left-color: rgba(255, 255, 255, 0.5);
   color: inherit;
   opacity: 0.9;
 }
 
-.vanilla-message-user-bubble code:not(pre code) {
+.persona-message-user-bubble code:not(pre code) {
   background-color: rgba(255, 255, 255, 0.2);
 }
 
@@ -1619,7 +1619,7 @@
    ============================================ */
 
 /* Make message bubble position relative for overlay positioning */
-.vanilla-message-bubble {
+.persona-message-bubble {
   position: relative;
 }
 
@@ -1756,8 +1756,8 @@
     border-radius: 0 0 var(--persona-radius-lg, 1.5rem) var(--persona-radius-lg, 1.5rem);
   }
 
-  .vanilla-message-bubble:hover .persona-message-actions-hover,
-  .vanilla-message-bubble:focus-within .persona-message-actions-hover {
+  .persona-message-bubble:hover .persona-message-actions-hover,
+  .persona-message-bubble:focus-within .persona-message-actions-hover {
     opacity: 1;
     pointer-events: auto;
   }
@@ -2069,25 +2069,25 @@
    ============================================ */
 
 /* Content areas: themed border and background for tool/reasoning bubbles */
-.vanilla-tool-bubble .persona-border-t,
-.vanilla-reasoning-bubble .persona-border-t {
+.persona-tool-bubble .persona-border-t,
+.persona-reasoning-bubble .persona-border-t {
   border-top-color: var(--cw-border, #e5e7eb);
   background-color: var(--cw-container, #f9fafb);
 }
 
 /* Tool bubble code blocks: themed surface and border */
-.vanilla-tool-bubble pre {
+.persona-tool-bubble pre {
   background-color: var(--cw-surface, #ffffff);
   border-color: var(--cw-border, #f1f5f9);
 }
 
 /* Collapsible header hover (tool + reasoning) */
-.vanilla-tool-bubble button[data-expand-header],
-.vanilla-reasoning-bubble button[data-expand-header] {
+.persona-tool-bubble button[data-expand-header],
+.persona-reasoning-bubble button[data-expand-header] {
   transition: background-color 0.15s ease;
 }
-.vanilla-tool-bubble button[data-expand-header]:hover,
-.vanilla-reasoning-bubble button[data-expand-header]:hover {
+.persona-tool-bubble button[data-expand-header]:hover,
+.persona-reasoning-bubble button[data-expand-header]:hover {
   background-color: var(--cw-container, #f8fafc);
 }
 
@@ -2096,25 +2096,25 @@
    ============================================ */
 
 /* Approval bubble defaults (overridden by inline styles when config exists) */
-.vanilla-approval-bubble {
+.persona-approval-bubble {
   background-color: var(--cw-surface, #ffffff);
   border-color: var(--cw-border, #e5e7eb);
 }
 
 /* Approval button hover/active states */
-.vanilla-approval-bubble [data-approval-action] {
+.persona-approval-bubble [data-approval-action] {
   transition: opacity 0.15s ease, transform 0.1s ease, background-color 0.15s ease;
 }
-.vanilla-approval-bubble [data-approval-action="approve"]:hover {
+.persona-approval-bubble [data-approval-action="approve"]:hover {
   opacity: 0.85;
 }
-.vanilla-approval-bubble [data-approval-action="approve"]:active {
+.persona-approval-bubble [data-approval-action="approve"]:active {
   transform: scale(0.97);
 }
-.vanilla-approval-bubble [data-approval-action="deny"]:hover {
+.persona-approval-bubble [data-approval-action="deny"]:hover {
   background-color: rgba(220, 38, 38, 0.08);
 }
-.vanilla-approval-bubble [data-approval-action="deny"]:active {
+.persona-approval-bubble [data-approval-action="deny"]:active {
   transform: scale(0.97);
 }
 

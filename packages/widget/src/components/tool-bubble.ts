@@ -41,8 +41,8 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   const bubble = createElement(
     "div",
     [
-      "vanilla-message-bubble",
-      "vanilla-tool-bubble",
+      "persona-message-bubble",
+      "persona-tool-bubble",
       "persona-w-full",
       "persona-max-w-[85%]",
       "persona-rounded-2xl",

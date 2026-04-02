@@ -38,8 +38,8 @@ export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement 
   const bubble = createElement(
     "div",
     [
-      "vanilla-message-bubble",
-      "vanilla-reasoning-bubble",
+      "persona-message-bubble",
+      "persona-reasoning-bubble",
       "persona-w-full",
       "persona-max-w-[85%]",
       "persona-rounded-2xl",
