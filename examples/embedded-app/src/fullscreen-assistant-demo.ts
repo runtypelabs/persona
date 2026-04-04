@@ -447,6 +447,7 @@ const fullscreenAssistantDarkTokens = {
 } as unknown as NonNullable<AgentWidgetConfig["darkTheme"]>;
 
 const demoCtl: { handle: AgentWidgetInitHandle | null } = { handle: null };
+let isStarred = false;
 
 const newFullscreenAssistantScriptStream = () => createFullscreenAssistantScriptedStream();
 
@@ -517,8 +518,38 @@ const config = mergeWithDefaults({
           { id: "add-to-project", label: "Add to project", icon: "folder" },
           { id: "delete", label: "Delete", icon: "trash-2", destructive: true, dividerBefore: true },
         ],
-        onSelect: (_id) => {
-          // Handle menu item selections (star, rename, add-to-project, delete)
+        onSelect: (id) => {
+          const h = demoCtl.handle;
+          if (!h) return;
+          switch (id) {
+            case "star": {
+              isStarred = !isStarred;
+              // Update the combo button label directly (no config side effects)
+              const label = document.querySelector(".persona-combo-btn-label");
+              if (label) {
+                label.textContent = isStarred ? "\u2605 Chat Assistant" : "Chat Assistant";
+              }
+              break;
+            }
+            case "rename": {
+              const label = document.querySelector(".persona-combo-btn-label");
+              const current = label?.textContent?.replace(/^\u2605\s*/, "") ?? "Chat Assistant";
+              const newName = window.prompt("Rename chat:", current);
+              if (newName?.trim() && label) {
+                const prefix = isStarred ? "\u2605 " : "";
+                label.textContent = prefix + newName.trim();
+              }
+              break;
+            }
+            case "add-to-project":
+              console.log("[titleMenu] Add to project");
+              break;
+            case "delete":
+              if (window.confirm("Delete this chat? This cannot be undone.")) {
+                h.clearChat();
+              }
+              break;
+          }
         },
         hover: {
           background: COLORS.userBubble,

@@ -883,6 +883,10 @@ export const createAgentExperience = (
       selectedModelId: composerCfg?.selectedModelId,
       onModelChange: (modelId: string) => {
         config.composer = { ...config.composer, selectedModelId: modelId };
+        // Sync to agent config so the next request uses the selected model
+        if (config.agent) {
+          config.agent = { ...config.agent, model: modelId };
+        }
       },
       onVoiceToggle:
         config.voiceRecognition?.enabled === true
@@ -929,12 +933,17 @@ export const createAgentExperience = (
   ensureComposerAttachmentSurface(footer);
   bindComposerRefsFromFooter(footer);
 
-  // Apply contentMaxWidth to composer form and attachment previews if configured
+  // Apply contentMaxWidth to composer form, suggestions, and attachment previews if configured
   const contentMaxWidth = config.layout?.contentMaxWidth;
   if (contentMaxWidth && composerForm) {
     composerForm.style.maxWidth = contentMaxWidth;
     composerForm.style.marginLeft = "auto";
     composerForm.style.marginRight = "auto";
+  }
+  if (contentMaxWidth && suggestions) {
+    suggestions.style.maxWidth = contentMaxWidth;
+    suggestions.style.marginLeft = "auto";
+    suggestions.style.marginRight = "auto";
   }
   if (contentMaxWidth && attachmentPreviewsContainer) {
     attachmentPreviewsContainer.style.maxWidth = contentMaxWidth;
@@ -5021,6 +5030,11 @@ export const createAgentExperience = (
           composerForm.style.marginLeft = "auto";
           composerForm.style.marginRight = "auto";
         }
+        if (suggestions) {
+          suggestions.style.maxWidth = updatedContentMaxWidth;
+          suggestions.style.marginLeft = "auto";
+          suggestions.style.marginRight = "auto";
+        }
       } else {
         messagesWrapper.style.maxWidth = "";
         messagesWrapper.style.marginLeft = "";
@@ -5030,6 +5044,11 @@ export const createAgentExperience = (
           composerForm.style.maxWidth = "";
           composerForm.style.marginLeft = "";
           composerForm.style.marginRight = "";
+        }
+        if (suggestions) {
+          suggestions.style.maxWidth = "";
+          suggestions.style.marginLeft = "";
+          suggestions.style.marginRight = "";
         }
       }
 
