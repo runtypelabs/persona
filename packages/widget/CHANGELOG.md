@@ -1,5 +1,12 @@
 # @runtypelabs/persona
 
+## 3.8.3
+
+### Patch Changes
+
+- 34ab534: Fix model selector not updating agent config — selecting a model in the composer only updated UI state but the next request still used the original model
+- 34ab534: Fix suggestion chips not respecting contentMaxWidth — chips were left-aligned while the composer input was centered
+
 ## 3.8.2
 
 ### Patch Changes
