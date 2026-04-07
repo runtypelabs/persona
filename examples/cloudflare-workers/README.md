@@ -66,6 +66,7 @@ Edit `.dev.vars` and add your Runtype API key and optionally other configuration
 RUNTYPE_API_KEY=rt_test_your_api_key_here
 RUNTYPE_FLOW_ID=flow_your_flow_id_here  # Optional, for directive flow
 STRIPE_SECRET_KEY=sk_test_your_stripe_key_here  # Optional, for checkout functionality
+STRIPE_CONTEXT=acct_xxxxxxxxxxxxx               # Optional; required with sk_org_… organization keys
 ALLOWED_ORIGINS=*  # Optional, defaults to "*". For production, use: https://yourdomain.com
 ```
 
@@ -73,6 +74,7 @@ ALLOWED_ORIGINS=*  # Optional, defaults to "*". For production, use: https://you
 - `RUNTYPE_API_KEY` (required): Your Runtype API key
 - `RUNTYPE_FLOW_ID` (optional): Reference to an existing Runtype flow for the directive endpoint
 - `STRIPE_SECRET_KEY` (optional): Stripe secret key for checkout functionality
+- `STRIPE_CONTEXT` (optional): Target account (`acct_…`) for organization keys (`sk_org_…`)
 - `ALLOWED_ORIGINS` (optional): CORS allowed origins. Defaults to `*` (all origins). For production, set to your frontend domain(s). Supports comma-separated list: `https://app.com,https://www.app.com`
 
 ### 3. Authenticate with Cloudflare

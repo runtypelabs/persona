@@ -20,6 +20,12 @@ export interface CreateCheckoutSessionOptions {
   items: CheckoutItem[];
   successUrl: string;
   cancelUrl: string;
+  /**
+   * Target account for organization API keys (`sk_org_…`), e.g. `acct_1abc…` or
+   * `acct_platform/acct_connected` per Stripe. Required with org keys.
+   * @see https://docs.stripe.com/keys#organization-api-keys
+   */
+  stripeContext?: string;
 }
 
 export interface CheckoutSessionResponse {
@@ -49,9 +55,18 @@ function parseStripeApiErrorBody(body: string): string | undefined {
 export async function createCheckoutSession(
   options: CreateCheckoutSessionOptions
 ): Promise<CheckoutSessionResponse> {
-  const { secretKey, items, successUrl, cancelUrl } = options;
+  const { secretKey, items, successUrl, cancelUrl, stripeContext } = options;
+  const trimmedContext = stripeContext?.trim() || undefined;
 
   try {
+    if (secretKey.startsWith("sk_org") && !trimmedContext) {
+      return {
+        success: false,
+        error:
+          "Organization Stripe keys (sk_org_…) require stripeContext / STRIPE_CONTEXT with the target account (e.g. acct_…). See https://docs.stripe.com/keys#organization-api-keys",
+      };
+    }
+
     // Validate items
     if (!items || !Array.isArray(items) || items.length === 0) {
       return {
@@ -110,14 +125,19 @@ export async function createCheckoutSession(
       params.append(`line_items[${index}][quantity]`, item.quantity.toString());
     });
 
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${secretKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Stripe-Version": STRIPE_API_VERSION,
+    };
+    if (trimmedContext) {
+      headers["Stripe-Context"] = trimmedContext;
+    }
+
     // Create Stripe checkout session using REST API
     const stripeResponse = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${secretKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Stripe-Version": STRIPE_API_VERSION,
-      },
+      headers,
       body: params,
     });
 

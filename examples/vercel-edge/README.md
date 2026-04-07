@@ -34,6 +34,7 @@ pnpm install
 RUNTYPE_API_KEY=rt_test_xxx
 RUNTYPE_FLOW_ID=flow_xxx  # Optional, for directive-enabled flow
 STRIPE_SECRET_KEY=sk_test_xxx  # Optional, for checkout functionality
+STRIPE_CONTEXT=acct_xxx         # Optional; required if STRIPE_SECRET_KEY is an organization key (sk_org_…)
 FRONTEND_URL=http://localhost:5173  # Optional, defaults to http://localhost:5173
 ```
 
@@ -89,6 +90,7 @@ Set these in the Vercel dashboard (Settings → Environment Variables):
 - **RUNTYPE_API_KEY** (required): Your Runtype API key
 - **RUNTYPE_FLOW_ID** (optional): Flow ID for directive-enabled endpoint
 - **STRIPE_SECRET_KEY** (optional): Stripe secret key for checkout functionality
+- **STRIPE_CONTEXT** (optional): Target Stripe account ID (`acct_…`) when using an organization secret key (`sk_org_…`); forwarded as the `Stripe-Context` header ([docs](https://docs.stripe.com/keys#organization-api-keys))
 - **FRONTEND_URL** (optional): Your frontend URL for checkout redirect URLs
 
 ## Deploying to Other Platforms

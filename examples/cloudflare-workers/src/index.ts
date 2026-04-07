@@ -14,6 +14,8 @@ interface Env {
   FLOW_ID_SHOPPING_ASSISTANT?: string;
   FLOW_ID_SHOPPING_ASSISTANT_METADATA?: string;
   STRIPE_SECRET_KEY?: string;
+  /** Target `acct_…` (or path) when using a Stripe organization secret key (`sk_org_…`). */
+  STRIPE_CONTEXT?: string;
   ALLOWED_ORIGINS?: string;
 }
 
@@ -112,6 +114,7 @@ app.post("/api/checkout", async (c) => {
       items,
       successUrl: `${c.req.header("origin") || "http://localhost:5173"}/action-middleware.html?checkout=success`,
       cancelUrl: `${c.req.header("origin") || "http://localhost:5173"}/action-middleware.html?checkout=cancelled`,
+      stripeContext: c.env.STRIPE_CONTEXT?.trim() || undefined,
     });
 
     return c.json(result, result.success ? 200 : 400);
