@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 3.8.5
+
+### Patch Changes
+
+- f9b5002: Add optional `Stripe-Context` for checkout session creation (`stripeContext` / `STRIPE_CONTEXT`) and require it when using organization secret keys (`sk_org_…`), per Stripe’s organization key rules.
+
 ## 3.8.4
 
 ### Patch Changes
