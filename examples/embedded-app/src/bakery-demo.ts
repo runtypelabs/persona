@@ -59,6 +59,11 @@ const proxyUrl =
     `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-bakery` :
     `http://localhost:${proxyPort}/api/chat/dispatch-bakery`;
 
+const bakeryCheckoutApiUrl =
+  import.meta.env.VITE_PROXY_URL ?
+    `${import.meta.env.VITE_PROXY_URL}/api/checkout/bakery` :
+    `http://localhost:${proxyPort}/api/checkout/bakery`;
+
 // ============================================================================
 // Cart Management
 // ============================================================================
@@ -402,10 +407,9 @@ function showCartInWidget(): void {
       overlay.remove();
       isCartOverlayOpen = false;
       // Trigger checkout through the chat
-      const checkoutUrl = `${window.location.origin.replace(/:\d+$/, "")}:43111/api/checkout/bakery`;
       const items = cart.map(item => ({ name: item.name, price: item.price, quantity: item.quantity }));
 
-      fetch(checkoutUrl, {
+      fetch(bakeryCheckoutApiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items }),
@@ -896,10 +900,7 @@ const bakeryCheckoutHandler: AgentWidgetActionHandler = (action, context) => {
   const items = payload.items as Array<{ name: string; price: number; quantity: number }> | undefined;
 
   if (items && Array.isArray(items)) {
-    // Use the bakery checkout endpoint
-    const checkoutUrl = `${window.location.origin.replace(/:\d+$/, "")}:43111/api/checkout/bakery`;
-
-    fetch(checkoutUrl, {
+    fetch(bakeryCheckoutApiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items }),
