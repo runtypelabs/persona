@@ -23,6 +23,18 @@ export interface CheckoutSessionResponse {
   error?: string;
 }
 
+function parseStripeApiErrorBody(body: string): string | undefined {
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { message?: string; type?: string };
+    };
+    const msg = parsed?.error?.message;
+    return typeof msg === "string" && msg.length > 0 ? msg : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Creates a Stripe checkout session using the REST API
  * @param options - Checkout session configuration
@@ -47,6 +59,19 @@ export async function createCheckoutSession(
         return {
           success: false,
           error: "Each item must have name (string), price (number in cents), and quantity (number)"
+        };
+      }
+      if (
+        !Number.isFinite(item.price) ||
+        !Number.isInteger(item.price) ||
+        item.price < 1 ||
+        !Number.isInteger(item.quantity) ||
+        item.quantity < 1
+      ) {
+        return {
+          success: false,
+          error:
+            "Each item needs a positive integer price (cents) and quantity (Stripe rejects decimals or zero)",
         };
       }
     }
@@ -91,10 +116,11 @@ export async function createCheckoutSession(
 
     if (!stripeResponse.ok) {
       const errorData = await stripeResponse.text();
+      const stripeMessage = parseStripeApiErrorBody(errorData);
       console.error("Stripe API error:", errorData);
       return {
         success: false,
-        error: "Failed to create checkout session"
+        error: stripeMessage ?? "Failed to create checkout session",
       };
     }
 
