@@ -86,6 +86,7 @@ app.post("/api/checkout", async (c) => {
       items,
       successUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/action-middleware.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/action-middleware.html?checkout=cancelled`,
+      stripeContext: process.env.STRIPE_CONTEXT?.trim() || undefined,
     });
 
     return c.json(result, result.success ? 200 : 400, {
@@ -129,6 +130,7 @@ app.post("/api/checkout/bakery", async (c) => {
       items,
       successUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/bakery-goods.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/bakery-goods.html?checkout=cancelled`,
+      stripeContext: process.env.STRIPE_CONTEXT?.trim() || undefined,
     });
 
     return c.json(result, result.success ? 200 : 400, {

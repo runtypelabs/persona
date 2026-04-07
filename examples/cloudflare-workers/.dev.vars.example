@@ -13,6 +13,7 @@ RUNTYPE_API_KEY=rt_test_your_api_key_here
 # Optional: Stripe secret key for checkout functionality
 # Required for /api/checkout endpoint and shopping assistant checkout actions
 # STRIPE_SECRET_KEY=sk_test_your_stripe_key_here
+# STRIPE_CONTEXT=acct_xxxxxxxxxxxxx  # Required with sk_org_… organization keys
 
 # Optional: Allowed origins for CORS (comma-separated or "*" for all)
 # ALLOWED_ORIGINS=http://localhost:5173,http://localhost:4173
