@@ -1,5 +1,12 @@
 # @runtypelabs/persona-proxy
 
+## 3.8.4
+
+### Patch Changes
+
+- f6b0b89: Send a pinned `Stripe-Version` header on Stripe Checkout Session requests so organization API keys and raw REST calls work reliably (matches Stripe versioning requirements).
+- f091453: Surface Stripe API error messages when checkout session creation fails, and reject non-integer or non-positive line item prices/quantities before calling Stripe.
+
 ## 3.2.1
 
 ### Patch Changes
