@@ -3,6 +3,12 @@
  * This approach works on all platforms including Cloudflare Workers, Vercel Edge, etc.
  */
 
+/**
+ * Pinned API version for raw HTTP calls (no SDK). Required for organization API keys and
+ * keeps behavior stable across accounts. See https://docs.stripe.com/api/versioning
+ */
+const STRIPE_API_VERSION = "2026-03-25.dahlia";
+
 export interface CheckoutItem {
   name: string;
   price: number; // Price in cents
@@ -108,8 +114,9 @@ export async function createCheckoutSession(
     const stripeResponse = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${secretKey}`,
+        Authorization: `Bearer ${secretKey}`,
         "Content-Type": "application/x-www-form-urlencoded",
+        "Stripe-Version": STRIPE_API_VERSION,
       },
       body: params,
     });
