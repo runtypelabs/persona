@@ -1680,5 +1680,109 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
       expect(seqs[i]).toBeGreaterThan(seqs[i - 1]);
     }
   });
+
+  it('should give split messages unique IDs even when assistantMessageId is provided', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'Before tool.', partId: 'text_0' });
+          e({ type: 'tool_start', toolId: 'tc_1', name: 'lookup', toolType: 'mcp' });
+          e({ type: 'tool_complete', toolId: 'tc_1', name: 'lookup', result: {}, success: true, executionTime: 50 });
+          e({ type: 'step_delta', id: 's1', text: 'After tool.', partId: 'text_1' });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    // Use agent mode so assistantMessageId is forwarded to streamResponse
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    await client.dispatch(
+      {
+        messages: [{ id: 'usr_1', role: 'user', content: 'Go', createdAt: new Date().toISOString() }],
+        assistantMessageId: 'ast_pre_generated_id',
+      },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const assistantTexts = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+
+    // Should have two distinct messages
+    expect(assistantTexts.length).toBe(2);
+    // First message uses the provided ID
+    expect(assistantTexts[0].id).toBe('ast_pre_generated_id');
+    // Second message composes baseId + partId for traceability
+    expect(assistantTexts[1].id).toBe('ast_pre_generated_id_text_1');
+    // Content is correct per segment
+    expect(assistantTexts[0].content).toBe('Before tool.');
+    expect(assistantTexts[1].content).toBe('After tool.');
+  });
+
+  it('should not overwrite last segment content with full response in flow_complete', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'First part.', partId: 'text_0' });
+          e({ type: 'tool_start', toolId: 'tc_1', name: 'action', toolType: 'mcp' });
+          e({ type: 'tool_complete', toolId: 'tc_1', name: 'action', result: {}, success: true, executionTime: 10 });
+          e({ type: 'step_delta', id: 's1', text: 'Second part.', partId: 'text_1' });
+          // flow_complete with full concatenated response
+          e({ type: 'flow_complete', success: true, result: { response: 'First part.Second part.' } });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Go', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const assistantTexts = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+
+    expect(assistantTexts.length).toBe(2);
+    // Last segment should keep its own content, NOT the full response
+    expect(assistantTexts[0].content).toBe('First part.');
+    expect(assistantTexts[1].content).toBe('Second part.');
+    // Both should be finalized
+    expect(assistantTexts[0].streaming).toBe(false);
+    expect(assistantTexts[1].streaming).toBe(false);
+  });
 });
 

@@ -1018,6 +1018,7 @@ export class AgentWidgetClient {
     const assistantMessageRef = { current: null as AgentWidgetMessage | null };
     // Track current partId for message segmentation at tool boundaries
     const partIdState = { current: null as string | null };
+    let didSplitByPartId = false;
     const reasoningMessages = new Map<string, AgentWidgetMessage>();
     const toolMessages = new Map<string, AgentWidgetMessage>();
     const reasoningContext = {
@@ -1060,11 +1061,22 @@ export class AgentWidgetClient {
           payload.step_id
       );
 
+    const baseAssistantId = assistantMessageId;
+    let assistantIdConsumed = false;
+
     const ensureAssistantMessage = () => {
       if (assistantMessage) return assistantMessage;
+      let id: string;
+      if (!assistantIdConsumed && baseAssistantId) {
+        id = baseAssistantId;
+        assistantIdConsumed = true;
+      } else if (baseAssistantId && partIdState.current) {
+        id = `${baseAssistantId}_${partIdState.current}`;
+      } else {
+        id = `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      }
       assistantMessage = {
-        // Use pre-generated ID if provided, otherwise generate one
-        id: assistantMessageId ?? `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        id,
         role: "assistant",
         content: "",
         createdAt: new Date().toISOString(),
@@ -1516,6 +1528,7 @@ export class AgentWidgetClient {
               prev.streaming = false;
               emitMessage(prev);
               assistantMessage = null;
+              didSplitByPartId = true;
             }
           }
           if (incomingPartId !== undefined) {
@@ -1529,6 +1542,7 @@ export class AgentWidgetClient {
             prev.streaming = false;
             emitMessage(prev);
             assistantMessage = null;
+            didSplitByPartId = true;
           }
         } else if (payloadType === "step_chunk" || payloadType === "step_delta") {
           // Only process chunks for prompt steps, not tool/context steps
@@ -1548,6 +1562,7 @@ export class AgentWidgetClient {
               prev.streaming = false;
               emitMessage(prev);
               assistantMessage = null;
+              didSplitByPartId = true;
             }
           }
           if (incomingPartId !== undefined) {
@@ -1864,7 +1879,19 @@ export class AgentWidgetClient {
           }
         } else if (payloadType === "flow_complete") {
           const finalContent = payload.result?.response;
-          if (finalContent !== undefined && finalContent !== null) {
+          if (didSplitByPartId) {
+            // Content was split into multiple assistant messages — the full response
+            // in flow_complete would overwrite the last segment. Just finalize streaming.
+            if (assistantMessage !== null) {
+              const msg: AgentWidgetMessage = assistantMessage;
+              streamParsers.delete(msg.id);
+              rawContentBuffers.delete(msg.id);
+              if (msg.streaming !== false) {
+                msg.streaming = false;
+                emitMessage(msg);
+              }
+            }
+          } else if (finalContent !== undefined && finalContent !== null) {
             const assistant = ensureAssistantMessage();
             // Check if we have raw content buffer that needs final processing
             const rawBuffer = rawContentBuffers.get(assistant.id);
