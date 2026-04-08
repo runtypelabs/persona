@@ -1507,6 +1507,29 @@ export class AgentWidgetClient {
           if (callKey) {
             toolContext.byCall.delete(callKey);
           }
+        } else if (payloadType === "text_start") {
+          // Lifecycle event: a new text segment is beginning (emitted at tool boundaries)
+          const incomingPartId = payload.partId;
+          if (incomingPartId !== undefined && partIdState.current !== null && incomingPartId !== partIdState.current) {
+            const prev = assistantMessage as AgentWidgetMessage | null;
+            if (prev) {
+              prev.streaming = false;
+              emitMessage(prev);
+              assistantMessage = null;
+            }
+          }
+          if (incomingPartId !== undefined) {
+            partIdState.current = incomingPartId;
+          }
+        } else if (payloadType === "text_end") {
+          // Lifecycle event: current text segment ended (tool call about to start)
+          // Seal the current assistant message so the next segment gets a new one
+          const prev = assistantMessage as AgentWidgetMessage | null;
+          if (prev) {
+            prev.streaming = false;
+            emitMessage(prev);
+            assistantMessage = null;
+          }
         } else if (payloadType === "step_chunk" || payloadType === "step_delta") {
           // Only process chunks for prompt steps, not tool/context steps
           const stepType = (payload as any).stepType;
@@ -1515,7 +1538,26 @@ export class AgentWidgetClient {
             // Skip tool-related chunks - they're handled by tool_start/tool_complete
             continue;
           }
+
+          // partId-based segmentation: when partId changes, seal current message
+          // and start a new one so text and tools render in chronological order
+          const incomingPartId = payload.partId;
+          if (incomingPartId !== undefined && partIdState.current !== null && incomingPartId !== partIdState.current) {
+            const prev = assistantMessage as AgentWidgetMessage | null;
+            if (prev) {
+              prev.streaming = false;
+              emitMessage(prev);
+              assistantMessage = null;
+            }
+          }
+          if (incomingPartId !== undefined) {
+            partIdState.current = incomingPartId;
+          }
+
           const assistant = ensureAssistantMessage();
+          if (incomingPartId !== undefined && !assistant.partId) {
+            assistant.partId = incomingPartId;
+          }
           // Support various field names: text, delta, content, chunk (Runtype uses 'chunk')
           const chunk = payload.text ?? payload.delta ?? payload.content ?? payload.chunk ?? "";
           if (chunk) {
