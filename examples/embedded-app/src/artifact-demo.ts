@@ -4,6 +4,7 @@ import {
   initAgentWidget,
   componentRegistry,
   markdownPostprocessor,
+  DEFAULT_FLOATING_LAUNCHER_WIDTH,
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetArtifactsLayoutConfig,
   type AgentWidgetConfig,
@@ -85,7 +86,7 @@ const LAUNCHER_DEMO_LAUNCHER_BASE = {
   subtitle: "Floating trigger — artifacts sidebar inside the panel",
   agentIconText: "✨",
   position: "bottom-right" as const,
-  width: "min(400px, calc(100vw - 24px))",
+  width: DEFAULT_FLOATING_LAUNCHER_WIDTH,
   iconUrl: "https://dummyimage.com/96x96/0ea5e9/0c1222&text=A",
 };
 

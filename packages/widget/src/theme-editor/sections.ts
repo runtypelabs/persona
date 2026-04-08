@@ -1,6 +1,10 @@
 /** Declarative section/field definitions for the theme editor (pure data — no DOM, no render logic) */
 
 import type { SectionDef, TabDef, SubGroupDef, FieldDef } from './types';
+import {
+  DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH,
+  DEFAULT_FLOATING_LAUNCHER_WIDTH,
+} from '../defaults';
 import { COLOR_FAMILIES } from './color-utils';
 import {
   ROLE_SURFACES,
@@ -273,8 +277,8 @@ const panelLayoutSectionDef: SectionDef = {
   title: 'Panel',
   collapsed: false,
   fields: [
-    { id: 'panel-width', label: 'Width', type: 'text', path: 'theme.components.panel.width', defaultValue: 'min(400px, calc(100vw - 24px))' },
-    { id: 'panel-max-width', label: 'Max Width', type: 'text', path: 'theme.components.panel.maxWidth', defaultValue: '400px' },
+    { id: 'panel-width', label: 'Width', type: 'text', path: 'theme.components.panel.width', defaultValue: DEFAULT_FLOATING_LAUNCHER_WIDTH },
+    { id: 'panel-max-width', label: 'Max Width', type: 'text', path: 'theme.components.panel.maxWidth', defaultValue: DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH },
     { id: 'panel-height', label: 'Height', type: 'text', path: 'theme.components.panel.height', defaultValue: '600px' },
     { id: 'panel-max-height', label: 'Max Height', type: 'text', path: 'theme.components.panel.maxHeight', defaultValue: 'calc(100vh - 80px)' },
     { id: 'panel-border-radius', label: 'Border Radius', type: 'select', path: 'theme.components.panel.borderRadius', defaultValue: 'palette.radius.xl', options: [
@@ -590,7 +594,7 @@ const launcherBasicsSectionDef: SectionDef = {
     { id: 'launch-enabled', label: 'Enabled', type: 'toggle', path: 'launcher.enabled', defaultValue: true },
     { id: 'launch-mount-mode', label: 'Mount Mode', type: 'select', path: 'launcher.mountMode', defaultValue: 'floating', options: [{ value: 'floating', label: 'Floating' }, { value: 'docked', label: 'Docked' }] },
     { id: 'launch-position', label: 'Position', type: 'select', path: 'launcher.position', defaultValue: 'bottom-right', options: [{ value: 'bottom-right', label: 'Bottom Right' }, { value: 'bottom-left', label: 'Bottom Left' }, { value: 'top-right', label: 'Top Right' }, { value: 'top-left', label: 'Top Left' }] },
-    { id: 'launch-width', label: 'Width', type: 'text', path: 'launcher.width', defaultValue: 'min(400px, calc(100vw - 24px))' },
+    { id: 'launch-width', label: 'Width', type: 'text', path: 'launcher.width', defaultValue: DEFAULT_FLOATING_LAUNCHER_WIDTH },
     { id: 'launch-auto-expand', label: 'Auto Expand', type: 'toggle', path: 'launcher.autoExpand', defaultValue: false },
     { id: 'launch-title', label: 'Title', type: 'text', path: 'launcher.title', defaultValue: 'Chat Assistant' },
     { id: 'launch-subtitle', label: 'Subtitle', type: 'text', path: 'launcher.subtitle', defaultValue: 'Here to help you get answers fast' },

@@ -1715,7 +1715,7 @@ config: {
 | `colorScheme` | `'light' \| 'dark' \| 'auto'` | Color scheme mode. `'auto'` detects from `<html class="dark">` or `prefers-color-scheme`. Default: `'light'`. |
 | `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel? }` | Customize user-facing text strings. |
 | `autoFocusInput` | `boolean` | Focus the chat input after the panel opens. Skips when voice is active. Default: `false`. |
-| `launcherWidth` | `string` | CSS width for the floating launcher panel (e.g. `'320px'`). Default: `'min(400px, calc(100vw - 24px))'`. |
+| `launcherWidth` | `string` | CSS width for the floating launcher panel (e.g. `'320px'`). Default: `'min(440px, calc(100vw - 24px))'`. |
 
 #### Launcher
 
