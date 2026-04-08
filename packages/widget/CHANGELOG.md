@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 3.9.1
+
+### Patch Changes
+
+- 7b0acc7: Fix duplicate assistant message bubbles when `step_complete` follows `text_end`. The `step_complete` handler now skips recreating a message with the full response when `text_end` has already sealed the streamed content, preventing identical text from rendering twice.
+
 ## 3.9.0
 
 ### Minor Changes
