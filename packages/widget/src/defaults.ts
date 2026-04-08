@@ -17,7 +17,7 @@ export const DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH = "440px";
  * Single source of truth for all default values
  */
 export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
-  apiUrl: "http://localhost:43111/api/chat/dispatch",
+  apiUrl: "https://api.runtype.com/api/chat/dispatch",
   // Client token mode defaults (optional, only used when clientToken is set)
   clientToken: undefined,
   theme: undefined,
