@@ -3,6 +3,16 @@ import type { DeepPartial, PersonaTheme } from "./types/theme";
 import { deepMerge } from "./utils/deep-merge";
 
 /**
+ * Default width for the floating launcher panel (when not overridden).
+ * Benchmarks: many chat products use ~300–400px; 400px is a frequent “standard” default.
+ * We use 440px to better fit code/JSON and structured replies while staying responsive via `min(..., 100vw)`.
+ */
+export const DEFAULT_FLOATING_LAUNCHER_WIDTH = "min(440px, calc(100vw - 24px))";
+
+/** Max width cap paired with {@link DEFAULT_FLOATING_LAUNCHER_WIDTH} for theme defaults. */
+export const DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH = "440px";
+
+/**
  * Default widget configuration
  * Single source of truth for all default values
  */
@@ -26,7 +36,7 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
     agentIconName: "bot",
     headerIconName: "bot",
     position: "bottom-right",
-    width: "min(400px, calc(100vw - 24px))",
+    width: DEFAULT_FLOATING_LAUNCHER_WIDTH,
     heightOffset: 0,
     autoExpand: false,
     callToActionIconHidden: false,

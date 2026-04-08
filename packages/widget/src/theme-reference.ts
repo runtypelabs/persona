@@ -115,7 +115,7 @@ export const THEME_TOKEN_DOCS = {
       panel: {
         description: 'Chat panel container.',
         properties:
-          'width, maxWidth (400px), height (600px), maxHeight, borderRadius, shadow.',
+          'width, maxWidth (440px), height (600px), maxHeight, borderRadius, shadow.',
       },
       header: {
         description: 'Chat panel header.',

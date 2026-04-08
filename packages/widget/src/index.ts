@@ -274,6 +274,8 @@ export {
 // Default configuration exports
 export {
   DEFAULT_WIDGET_CONFIG,
+  DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH,
+  DEFAULT_FLOATING_LAUNCHER_WIDTH,
   mergeWithDefaults
 } from "./defaults";
 export {

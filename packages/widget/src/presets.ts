@@ -1,5 +1,6 @@
 import type { AgentWidgetConfig } from "./types";
 import type { DeepPartial, PersonaTheme } from "./types/theme";
+import { DEFAULT_FLOATING_LAUNCHER_WIDTH } from "./defaults";
 
 /**
  * A named preset containing partial widget configuration.
@@ -65,7 +66,7 @@ export const PRESET_SHOP: WidgetPreset = {
       subtitle: "Here to help you find what you need",
       agentIconText: "🛍️",
       position: "bottom-right",
-      width: "min(400px, calc(100vw - 24px))",
+      width: DEFAULT_FLOATING_LAUNCHER_WIDTH,
     },
     copy: {
       welcomeTitle: "Welcome to our shop!",

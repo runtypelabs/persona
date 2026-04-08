@@ -69,7 +69,7 @@ import {
 import { readFlexGapPx, resolveArtifactPaneWidthPx } from "./utils/artifact-resize";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
-import { mergeWithDefaults } from "./defaults";
+import { mergeWithDefaults, DEFAULT_FLOATING_LAUNCHER_WIDTH } from "./defaults";
 import { createEventBus } from "./utils/events";
 import {
   createActionManager,
@@ -1508,7 +1508,7 @@ export const createAgentExperience = (
       if (mobileFullscreen && ownerWindow.innerWidth <= mobileBreakpoint) return;
       if (!shouldExpandLauncherForArtifacts(config, launcherEnabled)) return;
 
-      const base = config.launcher?.width ?? config.launcherWidth ?? "min(400px, calc(100vw - 24px))";
+      const base = config.launcher?.width ?? config.launcherWidth ?? DEFAULT_FLOATING_LAUNCHER_WIDTH;
       const expanded =
         config.features?.artifacts?.layout?.expandedPanelWidth ??
         "min(720px, calc(100vw - 24px))";
@@ -1659,7 +1659,7 @@ export const createAgentExperience = (
 
     // Re-apply panel width/maxWidth from initial setup
     const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
-    const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
+    const width = launcherWidth ?? DEFAULT_FLOATING_LAUNCHER_WIDTH;
     if (!sidebarMode && !dockedMode) {
       if (isInlineEmbed && fullHeight) {
         panel.style.width = "100%";
@@ -3609,7 +3609,7 @@ export const createAgentExperience = (
       // In sidebar/fullHeight mode, don't override the width - it's handled by applyFullHeightStyles
       if (!sidebarMode && !dockedMode) {
         const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
-        const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
+        const width = launcherWidth ?? DEFAULT_FLOATING_LAUNCHER_WIDTH;
         panel.style.width = width;
         panel.style.maxWidth = width;
       }

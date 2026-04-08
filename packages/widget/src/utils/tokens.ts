@@ -8,6 +8,10 @@ import type {
   ComponentTokens,
   SemanticTokens,
 } from '../types/theme';
+import {
+  DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH,
+  DEFAULT_FLOATING_LAUNCHER_WIDTH,
+} from '../defaults';
 
 export const DEFAULT_PALETTE = {
   colors: {
@@ -277,8 +281,8 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     shadow: 'palette.shadows.lg',
   },
   panel: {
-    width: 'min(400px, calc(100vw - 24px))',
-    maxWidth: '400px',
+    width: DEFAULT_FLOATING_LAUNCHER_WIDTH,
+    maxWidth: DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH,
     height: '600px',
     maxHeight: 'calc(100vh - 80px)',
     borderRadius: 'palette.radius.xl',

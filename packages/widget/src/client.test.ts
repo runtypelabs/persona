@@ -1440,3 +1440,349 @@ describe('AgentWidgetClient - Unified Event Names', () => {
   });
 });
 
+// ============================================================================
+// Text/Tool Interleaving via partId Segmentation
+// ============================================================================
+
+describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
+  it('should split assistant messages at tool boundaries using partId on step_delta', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 0, totalSteps: 1 });
+          // First text segment
+          e({ type: 'step_delta', id: 's1', text: 'Let me search', partId: 'text_0', messageId: 'msg_s1' });
+          e({ type: 'step_delta', id: 's1', text: ' for that!', partId: 'text_0', messageId: 'msg_s1' });
+          // Tool call
+          e({ type: 'tool_start', toolId: 'tc_1', name: 'search', toolType: 'mcp', startedAt: new Date().toISOString() });
+          e({ type: 'tool_complete', toolId: 'tc_1', name: 'search', result: { found: true }, success: true, completedAt: new Date().toISOString(), executionTime: 200 });
+          // Second text segment (different partId)
+          e({ type: 'step_delta', id: 's1', text: 'Found it! Here', partId: 'text_1', messageId: 'msg_s1' });
+          e({ type: 'step_delta', id: 's1', text: ' are the results.', partId: 'text_1', messageId: 'msg_s1' });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Search', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const allMessages = Array.from(messagesById.values());
+    const assistantTexts = allMessages
+      .filter(m => m.role === 'assistant' && !m.variant)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+    const toolMsgs = allMessages.filter(m => m.variant === 'tool');
+
+    // Should have TWO assistant text messages (split at tool boundary)
+    expect(assistantTexts.length).toBe(2);
+    expect(assistantTexts[0].content).toBe('Let me search for that!');
+    expect(assistantTexts[1].content).toBe('Found it! Here are the results.');
+
+    // First should be sealed (not streaming)
+    expect(assistantTexts[0].streaming).toBe(false);
+
+    // Tool message should exist
+    expect(toolMsgs.length).toBe(1);
+    expect(toolMsgs[0].toolCall?.name).toBe('search');
+
+    // Ordering: first text seq < tool seq < second text seq
+    const seq0 = assistantTexts[0].sequence ?? 0;
+    const seqTool = toolMsgs[0].sequence ?? 0;
+    const seq1 = assistantTexts[1].sequence ?? 0;
+    expect(seq0).toBeLessThan(seqTool);
+    expect(seqTool).toBeLessThan(seq1);
+  });
+
+  it('should split assistant messages using text_start/text_end lifecycle events', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (eventType: string, data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`event: ${eventType}\ndata: ${JSON.stringify({ type: eventType, ...data })}\n\n`));
+
+          e('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e('text_start', { partId: 'text_0', messageId: 'msg_s1', seq: 1 });
+          e('step_delta', { id: 's1', text: 'Preamble text.', partId: 'text_0', messageId: 'msg_s1', seq: 2 });
+          e('text_end', { partId: 'text_0', messageId: 'msg_s1', seq: 3 });
+          e('tool_start', { toolId: 'tc_1', name: 'get_weather', toolType: 'builtin', startedAt: new Date().toISOString() });
+          e('tool_complete', { toolId: 'tc_1', name: 'get_weather', result: { temp: 72 }, success: true, completedAt: new Date().toISOString(), executionTime: 100 });
+          e('text_start', { partId: 'text_1', messageId: 'msg_s1', seq: 6 });
+          e('step_delta', { id: 's1', text: 'The weather is 72F.', partId: 'text_1', messageId: 'msg_s1', seq: 7 });
+          e('text_end', { partId: 'text_1', messageId: 'msg_s1', seq: 8 });
+          e('flow_complete', { success: true });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Weather?', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const allMessages = Array.from(messagesById.values());
+    const assistantTexts = allMessages
+      .filter(m => m.role === 'assistant' && !m.variant)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+    const toolMsgs = allMessages.filter(m => m.variant === 'tool');
+
+    expect(assistantTexts.length).toBe(2);
+    expect(assistantTexts[0].content).toBe('Preamble text.');
+    expect(assistantTexts[0].streaming).toBe(false);
+    expect(assistantTexts[1].content).toBe('The weather is 72F.');
+
+    expect(toolMsgs.length).toBe(1);
+
+    const seq0 = assistantTexts[0].sequence ?? 0;
+    const seqTool = toolMsgs[0].sequence ?? 0;
+    const seq1 = assistantTexts[1].sequence ?? 0;
+    expect(seq0).toBeLessThan(seqTool);
+    expect(seqTool).toBeLessThan(seq1);
+  });
+
+  it('should not split when partId is absent (backward compatible)', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'Hello ' });
+          e({ type: 'step_delta', id: 's1', text: 'world' });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const assistantTexts = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant);
+
+    // Should still be a single message (no partId = no splitting)
+    expect(assistantTexts.length).toBe(1);
+    expect(assistantTexts[0].content).toContain('Hello ');
+    expect(assistantTexts[0].content).toContain('world');
+  });
+
+  it('should handle multiple tool calls with proper text interleaving', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          // text_0: preamble
+          e({ type: 'step_delta', id: 's1', text: 'Searching...', partId: 'text_0' });
+          // tool 1
+          e({ type: 'tool_start', toolId: 'tc_1', name: 'search', toolType: 'mcp' });
+          e({ type: 'tool_complete', toolId: 'tc_1', name: 'search', result: { id: 27 }, success: true, executionTime: 100 });
+          // text_1: between tools
+          e({ type: 'step_delta', id: 's1', text: 'Adding to cart...', partId: 'text_1' });
+          // tool 2
+          e({ type: 'tool_start', toolId: 'tc_2', name: 'add_to_cart', toolType: 'mcp' });
+          e({ type: 'tool_complete', toolId: 'tc_2', name: 'add_to_cart', result: { success: true }, success: true, executionTime: 50 });
+          // text_2: final
+          e({ type: 'step_delta', id: 's1', text: 'Done! Item added.', partId: 'text_2' });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Add item', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const allMessages = Array.from(messagesById.values());
+    const assistantTexts = allMessages
+      .filter(m => m.role === 'assistant' && !m.variant)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+    const toolMsgs = allMessages
+      .filter(m => m.variant === 'tool')
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+
+    // 3 text segments, 2 tool calls
+    expect(assistantTexts.length).toBe(3);
+    expect(toolMsgs.length).toBe(2);
+
+    expect(assistantTexts[0].content).toBe('Searching...');
+    expect(assistantTexts[1].content).toBe('Adding to cart...');
+    expect(assistantTexts[2].content).toBe('Done! Item added.');
+
+    // Verify chronological ordering: text0 < tool1 < text1 < tool2 < text2
+    const seqs = [
+      assistantTexts[0].sequence ?? 0,
+      toolMsgs[0].sequence ?? 0,
+      assistantTexts[1].sequence ?? 0,
+      toolMsgs[1].sequence ?? 0,
+      assistantTexts[2].sequence ?? 0,
+    ];
+    for (let i = 1; i < seqs.length; i++) {
+      expect(seqs[i]).toBeGreaterThan(seqs[i - 1]);
+    }
+  });
+
+  it('should give split messages unique IDs even when assistantMessageId is provided', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'Before tool.', partId: 'text_0' });
+          e({ type: 'tool_start', toolId: 'tc_1', name: 'lookup', toolType: 'mcp' });
+          e({ type: 'tool_complete', toolId: 'tc_1', name: 'lookup', result: {}, success: true, executionTime: 50 });
+          e({ type: 'step_delta', id: 's1', text: 'After tool.', partId: 'text_1' });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    // Use agent mode so assistantMessageId is forwarded to streamResponse
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    await client.dispatch(
+      {
+        messages: [{ id: 'usr_1', role: 'user', content: 'Go', createdAt: new Date().toISOString() }],
+        assistantMessageId: 'ast_pre_generated_id',
+      },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const assistantTexts = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+
+    // Should have two distinct messages
+    expect(assistantTexts.length).toBe(2);
+    // First message uses the provided ID
+    expect(assistantTexts[0].id).toBe('ast_pre_generated_id');
+    // Second message composes baseId + partId for traceability
+    expect(assistantTexts[1].id).toBe('ast_pre_generated_id_text_1');
+    // Content is correct per segment
+    expect(assistantTexts[0].content).toBe('Before tool.');
+    expect(assistantTexts[1].content).toBe('After tool.');
+  });
+
+  it('should not overwrite last segment content with full response in flow_complete', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'First part.', partId: 'text_0' });
+          e({ type: 'tool_start', toolId: 'tc_1', name: 'action', toolType: 'mcp' });
+          e({ type: 'tool_complete', toolId: 'tc_1', name: 'action', result: {}, success: true, executionTime: 10 });
+          e({ type: 'step_delta', id: 's1', text: 'Second part.', partId: 'text_1' });
+          // flow_complete with full concatenated response
+          e({ type: 'flow_complete', success: true, result: { response: 'First part.Second part.' } });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Go', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const assistantTexts = Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+
+    expect(assistantTexts.length).toBe(2);
+    // Last segment should keep its own content, NOT the full response
+    expect(assistantTexts[0].content).toBe('First part.');
+    expect(assistantTexts[1].content).toBe('Second part.');
+    // Both should be finalized
+    expect(assistantTexts[0].streaming).toBe(false);
+    expect(assistantTexts[1].streaming).toBe(false);
+  });
+});
+

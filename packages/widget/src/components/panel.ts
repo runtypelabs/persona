@@ -1,4 +1,5 @@
 import { createElement } from "../utils/dom";
+import { DEFAULT_FLOATING_LAUNCHER_WIDTH } from "../defaults";
 import { AgentWidgetConfig } from "../types";
 import { positionMap } from "../utils/positioning";
 import { isDockedMountMode } from "../utils/dock";
@@ -68,7 +69,7 @@ export const createWrapper = (config?: AgentWidgetConfig): PanelWrapper => {
     "persona-widget-panel persona-relative persona-min-h-[320px]"
   );
   const launcherWidth = config?.launcher?.width ?? config?.launcherWidth;
-  const width = launcherWidth ?? "min(400px, calc(100vw - 24px))";
+  const width = launcherWidth ?? DEFAULT_FLOATING_LAUNCHER_WIDTH;
   panel.style.width = width;
   panel.style.maxWidth = width;
 

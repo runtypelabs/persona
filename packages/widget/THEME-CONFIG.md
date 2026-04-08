@@ -305,8 +305,8 @@ Semantic tokens provide intent-based naming that references palette values.
 
 | Token | Default |
 |-------|---------|
-| `width` | `min(400px, calc(100vw - 24px))` |
-| `maxWidth` | `400px` |
+| `width` | `min(440px, calc(100vw - 24px))` |
+| `maxWidth` | `440px` |
 | `height` | `600px` |
 | `maxHeight` | `calc(100vh - 80px)` |
 | `borderRadius` | `palette.radius.xl` |
