@@ -1,5 +1,15 @@
 # @runtypelabs/persona
 
+## 3.9.0
+
+### Minor Changes
+
+- df61c73: Render assistant text and tool calls in chronological order instead of lumping all text before tools. The widget now handles `text_start`/`text_end` lifecycle events and `partId` on `step_delta` to split assistant messages at tool boundaries, matching the segmentation the Runtype API already emits. Split messages use deterministic IDs derived from the base `assistantMessageId` and `partId` (e.g. `ast_abc_text_1`) for feedback traceability, and `flow_complete` no longer overwrites segment content with the full concatenated response.
+
+### Patch Changes
+
+- 1b46d83: Increase the default floating launcher panel width from 400px to 440px (still `min(..., calc(100vw - 24px))`) so code blocks and structured replies are easier to read, aligned with common chat-widget sizing while leaving room for custom `launcher.width`.
+
 ## 3.8.3
 
 ### Patch Changes
