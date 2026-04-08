@@ -1784,5 +1784,59 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
     expect(assistantTexts[0].streaming).toBe(false);
     expect(assistantTexts[1].streaming).toBe(false);
   });
+
+  it('should not duplicate text when step_complete follows text_end', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (eventType: string, data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`event: ${eventType}\ndata: ${JSON.stringify({ type: eventType, ...data })}\n\n`));
+
+          e('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          // Tools fire first (no text before them)
+          e('tool_start', { toolId: 'tc_1', name: 'test_tool', toolType: 'custom', startedAt: new Date().toISOString() });
+          e('tool_complete', { toolId: 'tc_1', name: 'test_tool', success: true, completedAt: new Date().toISOString(), executionTime: 0 });
+          // Then text segment
+          e('text_start', { partId: 'text_1', messageId: 'msg_s1', seq: 1 });
+          e('step_delta', { id: 's1', text: 'Tool returned a result.', partId: 'text_1', messageId: 'msg_s1', seq: 2 });
+          e('text_end', { partId: 'text_1', messageId: 'msg_s1', seq: 3 });
+          // step_complete with full response (should NOT create a duplicate)
+          e('step_complete', { id: 's1', name: 'Response', stepType: 'prompt', success: true, result: { response: 'Tool returned a result.' }, executionTime: 500 });
+          e('flow_complete', { success: true });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Call tool', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const allMessages = Array.from(messagesById.values());
+    const assistantTexts = allMessages
+      .filter(m => m.role === 'assistant' && !m.variant)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+    const toolMsgs = allMessages.filter(m => m.variant === 'tool');
+
+    // Exactly ONE text message (not duplicated by step_complete)
+    expect(assistantTexts.length).toBe(1);
+    expect(assistantTexts[0].content).toBe('Tool returned a result.');
+    expect(assistantTexts[0].streaming).toBe(false);
+
+    // Tool message exists
+    expect(toolMsgs.length).toBe(1);
+  });
 });
 
