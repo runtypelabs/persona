@@ -1757,6 +1757,20 @@ export class AgentWidgetClient {
             // Skip tool-related completions - they're handled by tool_complete
             continue;
           }
+          if (didSplitByPartId) {
+            // text_end already sealed the assistant message(s) — don't recreate
+            // one from step_complete's full response (would cause duplication)
+            if (assistantMessage !== null) {
+              const msg: AgentWidgetMessage = assistantMessage;
+              streamParsers.delete(msg.id);
+              rawContentBuffers.delete(msg.id);
+              if (msg.streaming !== false) {
+                msg.streaming = false;
+                emitMessage(msg);
+              }
+            }
+            continue;
+          }
           const finalContent = payload.result?.response;
           const assistant = ensureAssistantMessage();
           if (finalContent !== undefined && finalContent !== null) {
