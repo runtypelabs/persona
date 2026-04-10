@@ -215,7 +215,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     if (toolCallConfig.codeBlockTextColor) {
       logsPre.style.color = toolCallConfig.codeBlockTextColor;
     }
-    logsPre.textContent = tool.chunks.join("\n");
+    logsPre.textContent = tool.chunks.join("");
     logsBlock.append(logsLabel, logsPre);
     content.appendChild(logsBlock);
   }
