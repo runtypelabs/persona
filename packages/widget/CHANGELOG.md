@@ -1,5 +1,12 @@
 # @runtypelabs/persona
 
+## 3.9.2
+
+### Patch Changes
+
+- a83ae8f: Fix tool call activity text rendering each streaming token on its own line
+- fa42740: Change default API URL from localhost to production Runtype API (api.runtype.com)
+
 ## 3.9.1
 
 ### Patch Changes
