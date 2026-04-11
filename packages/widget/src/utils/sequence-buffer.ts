@@ -79,7 +79,7 @@ export class SequenceReorderBuffer {
   }
 
   private flushAll(): void {
-    this.flushTimer = null;
+    this.clearGapTimer();
     if (this.buffer.size === 0) return;
 
     // Flush all buffered events in seq order
