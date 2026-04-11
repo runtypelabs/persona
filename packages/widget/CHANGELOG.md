@@ -1,5 +1,20 @@
 # @runtypelabs/persona
 
+## 3.10.0
+
+### Minor Changes
+
+- 41a6a44: Add opt-in collapsed preview, active min-height, configurable summary modes, and grouped sequential rendering for tool call and reasoning bubbles. Collapsed active rows now contribute real height to the transcript scroller, fixing auto-follow when multiple tool/reasoning steps stream in sequence. New SDK hooks (`renderCollapsedSummary`, `renderCollapsedPreview`, `renderGroupedSummary`) and config surfaces (`features.toolCallDisplay`, `features.reasoningDisplay`, `config.reasoning`) let consumers customize collapsed and grouped UX without replacing full bubble renderers. Theme editor gains controls and an interactive preview transcript builder for testing tool/reasoning scenarios. Tool message fingerprints now include chunk count and args length so streaming tool updates invalidate the render cache correctly.
+- 3047b63: Add `expandable` option to `toolCallDisplay` and `reasoningDisplay` feature configs. When set to `false`, tool call and reasoning bubbles show only their collapsed summary with no expand/collapse toggle, giving users tool awareness without exposing full details. Also re-render messages when feature display flags change via `controller.update()` so toggling display settings takes effect without a full remount, and fix collapsed preview padding showing on non-active bubbles after expand/collapse.
+
+### Patch Changes
+
+- 4ce5a10: Fix memory leak where reasonSeqBuffers was not cleaned up when reason_delta completed via done:true without a separate reason_complete event.
+- ff7c12a: Fix assistant streaming when `text_end` precedes `step_complete`: prevent duplicate bubbles, reconcile the authoritative final response into sealed segments when async parsers lag, and ensure `step_delta` callbacks update the correct message object via closure capture instead of the cleared `assistantMessage` ref.
+- 751f97e: Fix streaming UI freezing when SSE events arrive out of order
+
+  `step_delta` and `reason_delta` events can arrive with out-of-order `seq`/`sequenceIndex` values. Previously, text chunks were appended in arrival order, producing garbled content that broke markdown rendering and caused the streaming UI to appear frozen mid-response. Added a sequence-aware reorder buffer that accumulates chunks and rebuilds the full text in correct server-intended order.
+
 ## 3.9.2
 
 ### Patch Changes
