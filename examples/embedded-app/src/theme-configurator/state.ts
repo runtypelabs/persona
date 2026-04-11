@@ -18,7 +18,6 @@ import type { ConfiguratorSnapshot } from '@runtypelabs/persona/theme-editor';
 import {
   PREVIEW_STORAGE_ADAPTER,
   HOME_SUGGESTION_CHIPS,
-  appendPreviewTranscriptEntry,
   applySceneConfig,
   type PreviewTranscriptEntryPreset,
 } from '@runtypelabs/persona/theme-editor';
@@ -255,11 +254,6 @@ export function buildPreviewConfig(
   const colorScheme =
     mode === 'light' ? 'light' : mode === 'dark' ? 'dark' : (base.colorScheme ?? 'light');
 
-  const appendedMessages = previewTranscriptEntries.reduce<NonNullable<AgentWidgetConfig['initialMessages']>>(
-    (messages, preset) => appendPreviewTranscriptEntry(messages, preset),
-    []
-  );
-
   return applySceneConfig(
     {
       ...base,
@@ -267,8 +261,7 @@ export function buildPreviewConfig(
       theme: snapshot.theme,
       colorScheme,
     },
-    scene,
-    appendedMessages
+    scene
   );
 }
 

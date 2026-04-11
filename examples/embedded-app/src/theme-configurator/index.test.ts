@@ -1097,7 +1097,7 @@ describe('theme configurator shell', () => {
     expect(document.getElementById('export-dropdown')).not.toBeNull();
   });
 
-  test('preview transcript builder remounts the preview when adding an item', async () => {
+  test('preview transcript builder injects entries without remounting', async () => {
     await import('./index');
 
     const addButton = document.querySelector<HTMLButtonElement>(
@@ -1120,6 +1120,8 @@ describe('theme configurator shell', () => {
     const wrapperAfter = document.querySelector<HTMLElement>(
       '.preview-iframe-wrapper[data-mount-id="preview-current"]'
     );
-    expect(wrapperAfter?.dataset.layoutSignature).not.toBe(initialSignature);
+    // Signature should NOT change — transcript entries are injected via
+    // controller API rather than rebuilding initialMessages.
+    expect(wrapperAfter?.dataset.layoutSignature).toBe(initialSignature);
   });
 });

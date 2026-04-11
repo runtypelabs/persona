@@ -28,6 +28,8 @@ import {
   escapeHtml,
   buildShellCss,
   applyShellTheme,
+  createPreviewTranscriptEntry,
+  createPreviewMessages,
 } from '@runtypelabs/persona/theme-editor';
 import {
   createAgentExperience,
@@ -311,6 +313,7 @@ export function createPreviewManager(
   let previewLayoutCleanups: Array<() => void> = [];
   let previewResizeObserver: ResizeObserver | null = null;
   let activeHighlightZone: string | null = null;
+  let lastInjectedTranscriptCount = 0;
 
   const previewEmbedCheckInFlight = new Map<string, number>();
   const previewBackgroundOverlayTimers = new Map<string, { timeoutId: number; dismissKey: string }>();
@@ -1262,6 +1265,7 @@ export function createPreviewManager(
   function doMount(preserveBackgroundStates = false): void {
     destroyPreviewControllers();
     lastMountedScene = stateModule.getPreviewScene();
+    lastInjectedTranscriptCount = 0;
 
     const specs = getPreviewSpecs(preserveBackgroundStates);
     const renderToken = ++previewRenderToken;
@@ -1366,6 +1370,7 @@ export function createPreviewManager(
       container.scrollTop = 0;
       updateContrastSummary();
       injectPreviewArtifacts();
+      syncTranscriptEntries();
 
       setupInlineZones(iframes, getCurrentScale);
       requestAnimationFrame(() => {
@@ -1404,6 +1409,38 @@ export function createPreviewManager(
     if (totalToLoad === 0) {
       updateContrastSummary();
     }
+  }
+
+  function syncTranscriptEntries(): void {
+    const entries = stateModule.getPreviewTranscriptEntries();
+    const currentCount = entries.length;
+
+    if (currentCount === lastInjectedTranscriptCount) return;
+
+    if (currentCount === 0) {
+      for (const controller of previewControllers) {
+        controller.clearChat();
+      }
+      const scene = stateModule.getPreviewScene();
+      const config = stateModule.buildPreviewConfig();
+      const sceneMessages = createPreviewMessages(scene, config);
+      for (const controller of previewControllers) {
+        for (const msg of sceneMessages) {
+          controller.injectTestMessage({ type: 'message', message: msg });
+        }
+      }
+      lastInjectedTranscriptCount = 0;
+      return;
+    }
+
+    const newEntries = entries.slice(lastInjectedTranscriptCount);
+    for (const preset of newEntries) {
+      const msg = createPreviewTranscriptEntry(preset, lastInjectedTranscriptCount + newEntries.indexOf(preset));
+      for (const controller of previewControllers) {
+        controller.injectTestMessage({ type: 'message', message: msg });
+      }
+    }
+    lastInjectedTranscriptCount = currentCount;
   }
 
   function doUpdate(): void {
@@ -1445,6 +1482,8 @@ export function createPreviewManager(
         controller.clearArtifacts();
       }
     }
+
+    syncTranscriptEntries();
   }
 
   function resizePreviewFrames(): void {
