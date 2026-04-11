@@ -57,7 +57,9 @@ export const updateReasoningBubbleUI = (messageId: string, bubble: HTMLElement):
   
   content.style.display = expanded ? "" : "none";
   if (preview) {
-    preview.style.display = expanded ? "none" : "";
+    preview.style.display = expanded
+      ? "none"
+      : ((preview.textContent || preview.childNodes.length) ? "" : "none");
   }
 };
 

@@ -97,7 +97,9 @@ export const updateToolBubbleUI = (messageId: string, bubble: HTMLElement, confi
   
   content.style.display = expanded ? "" : "none";
   if (preview) {
-    preview.style.display = expanded ? "none" : "";
+    preview.style.display = expanded
+      ? "none"
+      : ((preview.textContent || preview.childNodes.length) ? "" : "none");
   }
 };
 
