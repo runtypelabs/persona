@@ -51,9 +51,23 @@ pnpm release            # Publish to npm
 
 ## Changesets Requirement
 
-All changes that affect published packages must include a changeset. Create one with `pnpm changeset` before committing. Changesets go in `.changeset/` and describe what changed for the changelog.
+All changes that affect published packages **must** include a changeset. This is enforced in CI — PRs without a changeset for affected packages will fail.
 
-Changes to `packages/widget` or `packages/proxy` need a changeset. Changes to `examples/`, `docs/`, CI, or tooling do not.
+Create one by adding a markdown file in `.changeset/` (e.g. `.changeset/my-change-name.md`) with the following format:
+
+```md
+---
+"@runtypelabs/persona": patch
+---
+
+Short description of the change for the changelog.
+```
+
+Use `patch` for bug fixes, `minor` for new features, and `major` for breaking changes. If both packages are affected, list both in the frontmatter.
+
+**Requires a changeset:** Any change to `packages/widget` or `packages/proxy` (source, types, styles, dependencies).
+
+**Does NOT need a changeset:** Changes to `examples/`, `docs/`, CI config, tooling, or `CLAUDE.md`.
 
 ## Architecture
 
