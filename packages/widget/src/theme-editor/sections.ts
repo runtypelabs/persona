@@ -743,6 +743,14 @@ const debugSectionDef: SectionDef = {
   fields: [
     { id: 'dev-reasoning', label: 'Show Reasoning', description: 'Display AI reasoning steps', type: 'toggle', path: 'features.showReasoning', defaultValue: false },
     { id: 'dev-tool-calls', label: 'Show Tool Calls', description: 'Display tool call details', type: 'toggle', path: 'features.showToolCalls', defaultValue: false },
+    { id: 'dev-tool-collapsed-mode', label: 'Tool Call Summary', description: 'Choose what collapsed tool rows show by default', type: 'select', path: 'features.toolCallDisplay.collapsedMode', defaultValue: 'tool-call', options: [{ value: 'tool-call', label: 'Tool Call' }, { value: 'tool-name', label: 'Tool Name' }, { value: 'tool-preview', label: 'Tool Preview' }] },
+    { id: 'dev-tool-active-preview', label: 'Tool Preview While Active', description: 'Show a lightweight preview in collapsed active tool rows', type: 'toggle', path: 'features.toolCallDisplay.activePreview', defaultValue: false },
+    { id: 'dev-tool-preview-lines', label: 'Tool Preview Lines', type: 'select', path: 'features.toolCallDisplay.previewMaxLines', defaultValue: 3, options: [{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }, { value: '5', label: '5' }], formatValue: (v: unknown) => String(v ?? 3), parseValue: (v: unknown) => Number(v) },
+    { id: 'dev-tool-active-min-height', label: 'Tool Active Min Height', description: 'CSS min-height for collapsed active tool rows (e.g. 5rem)', type: 'text', path: 'features.toolCallDisplay.activeMinHeight', defaultValue: '' },
+    { id: 'dev-tool-grouped', label: 'Group Sequential Tool Calls', description: 'Render consecutive tool rows inside a grouped container', type: 'toggle', path: 'features.toolCallDisplay.grouped', defaultValue: false },
+    { id: 'dev-reasoning-active-preview', label: 'Reasoning Preview While Active', description: 'Show a lightweight preview in collapsed active reasoning rows', type: 'toggle', path: 'features.reasoningDisplay.activePreview', defaultValue: false },
+    { id: 'dev-reasoning-preview-lines', label: 'Reasoning Preview Lines', type: 'select', path: 'features.reasoningDisplay.previewMaxLines', defaultValue: 3, options: [{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }, { value: '5', label: '5' }], formatValue: (v: unknown) => String(v ?? 3), parseValue: (v: unknown) => Number(v) },
+    { id: 'dev-reasoning-active-min-height', label: 'Reasoning Active Min Height', description: 'CSS min-height for collapsed active reasoning rows (e.g. 5rem)', type: 'text', path: 'features.reasoningDisplay.activeMinHeight', defaultValue: '' },
     { id: 'dev-debug', label: 'Debug Mode', description: 'Show debug information', type: 'toggle', path: 'debug', defaultValue: false },
   ],
 };

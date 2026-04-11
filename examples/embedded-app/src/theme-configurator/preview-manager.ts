@@ -676,9 +676,29 @@ export function createPreviewManager(
   // ─── Preview spec generation ────────────────────────────────
 
   function getPreviewLayoutSignature(config: AgentWidgetConfig): string {
-    if (!isDockedMountMode(config)) return 'floating';
-    const dock = config.launcher?.dock ?? {};
-    return ['docked', dock.side ?? 'right', dock.width ?? '420px'].join(':');
+    const initialMessagesSignature = (config.initialMessages ?? [])
+      .map((message) => {
+        const toolStatus = message.toolCall?.status ?? '';
+        const reasoningStatus = message.reasoning?.status ?? '';
+        return [message.id, message.variant ?? '', message.role, toolStatus, reasoningStatus].join(':');
+      })
+      .join('|');
+
+    const featureSignature = [
+      config.features?.showReasoning ? '1' : '0',
+      config.features?.showToolCalls ? '1' : '0',
+      config.features?.toolCallDisplay?.collapsedMode ?? '',
+      config.features?.toolCallDisplay?.activePreview ? '1' : '0',
+      config.features?.toolCallDisplay?.grouped ? '1' : '0',
+      config.features?.toolCallDisplay?.previewMaxLines ?? '',
+      config.features?.toolCallDisplay?.activeMinHeight ?? '',
+      config.features?.reasoningDisplay?.activePreview ? '1' : '0',
+      config.features?.reasoningDisplay?.previewMaxLines ?? '',
+      config.features?.reasoningDisplay?.activeMinHeight ?? '',
+    ].join(',');
+
+    const mode = isDockedMountMode(config) ? `docked:${(config.launcher?.dock ?? {}).side ?? 'right'}:${(config.launcher?.dock ?? {}).width ?? '420px'}` : 'floating';
+    return [mode, featureSignature, initialMessagesSignature].join('::');
   }
 
   function getPreviewSpecs(preserveBackgroundStates = false): PreviewMountSpec[] {

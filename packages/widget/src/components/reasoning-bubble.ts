@@ -1,16 +1,41 @@
 import { createElement } from "../utils/dom";
-import { AgentWidgetMessage } from "../types";
+import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { describeReasonStatus } from "../utils/formatting";
 import { renderLucideIcon } from "../utils/icons";
 
 // Expansion state per widget instance
 export const reasoningExpansionState = new Set<string>();
 
+const appendRenderedValue = (
+  container: HTMLElement,
+  value: HTMLElement | string | null | undefined
+): boolean => {
+  if (value == null) return false;
+  if (typeof value === "string") {
+    container.textContent = value;
+    return true;
+  }
+  container.appendChild(value);
+  return true;
+};
+
+const getReasoningPreviewText = (message: AgentWidgetMessage, maxLines: number): string => {
+  const text = message.reasoning?.chunks.join("").trim() ?? "";
+  if (!text) return "";
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, maxLines)
+    .join("\n");
+};
+
 // Helper function to update reasoning bubble UI after expansion state changes
 export const updateReasoningBubbleUI = (messageId: string, bubble: HTMLElement): void => {
   const expanded = reasoningExpansionState.has(messageId);
   const header = bubble.querySelector('button[data-expand-header="true"]') as HTMLElement;
   const content = bubble.querySelector('.persona-border-t') as HTMLElement;
+  const preview = bubble.querySelector('[data-persona-collapsed-preview="reasoning"]') as HTMLElement | null;
   
   if (!header || !content) return;
   
@@ -31,9 +56,12 @@ export const updateReasoningBubbleUI = (messageId: string, bubble: HTMLElement):
   }
   
   content.style.display = expanded ? "" : "none";
+  if (preview) {
+    preview.style.display = expanded ? "none" : "";
+  }
 };
 
-export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement => {
+export const createReasoningBubble = (message: AgentWidgetMessage, config?: AgentWidgetConfig): HTMLElement => {
   const reasoning = message.reasoning;
   const bubble = createElement(
     "div",
@@ -62,6 +90,9 @@ export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement 
   }
 
   let expanded = reasoningExpansionState.has(message.id);
+  const reasoningDisplayConfig = config?.features?.reasoningDisplay ?? {};
+  const isActive = reasoning.status !== "complete";
+  const previewText = getReasoningPreviewText(message, reasoningDisplayConfig.previewMaxLines ?? 3);
   const header = createElement(
     "button",
     "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
@@ -73,8 +104,24 @@ export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement 
 
   const headerContent = createElement("div", "persona-flex persona-flex-col persona-text-left");
   const title = createElement("span", "persona-text-xs persona-text-persona-primary");
-  title.textContent = "Thinking...";
-  headerContent.appendChild(title);
+  const defaultSummary = "Thinking...";
+  const customSummary = config?.reasoning?.renderCollapsedSummary?.({
+    message,
+    reasoning,
+    defaultSummary,
+    previewText,
+    isActive,
+    config: config ?? {},
+  });
+  if (typeof customSummary === "string" && customSummary.trim()) {
+    title.textContent = customSummary;
+    headerContent.appendChild(title);
+  } else if (customSummary instanceof HTMLElement) {
+    headerContent.appendChild(customSummary);
+  } else {
+    title.textContent = defaultSummary;
+    headerContent.appendChild(title);
+  }
 
   const status = createElement("span", "persona-text-xs persona-text-persona-primary");
   status.textContent = describeReasonStatus(reasoning);
@@ -100,6 +147,32 @@ export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement 
   headerMeta.append(toggleIcon);
 
   header.append(headerContent, headerMeta);
+
+  const collapsedPreview = createElement(
+    "div",
+    "persona-px-4 persona-py-3 persona-text-xs persona-leading-snug persona-text-persona-muted"
+  );
+  collapsedPreview.setAttribute("data-persona-collapsed-preview", "reasoning");
+  collapsedPreview.style.display = "none";
+  collapsedPreview.style.whiteSpace = "pre-wrap";
+
+  if (!expanded && isActive && reasoningDisplayConfig.activePreview && previewText) {
+    const renderedPreview = config?.reasoning?.renderCollapsedPreview?.({
+      message,
+      reasoning,
+      defaultPreview: previewText,
+      isActive,
+      config: config ?? {},
+    });
+    if (!appendRenderedValue(collapsedPreview, renderedPreview)) {
+      collapsedPreview.textContent = previewText;
+    }
+    collapsedPreview.style.display = "";
+  }
+
+  if (!expanded && isActive && reasoningDisplayConfig.activeMinHeight) {
+    bubble.style.minHeight = reasoningDisplayConfig.activeMinHeight;
+  }
 
   const content = createElement(
     "div",
@@ -132,11 +205,12 @@ export const createReasoningBubble = (message: AgentWidgetMessage): HTMLElement 
       toggleIcon.textContent = expanded ? "Hide" : "Show";
     }
     content.style.display = expanded ? "" : "none";
+    collapsedPreview.style.display = expanded ? "none" : ((collapsedPreview.textContent || collapsedPreview.childNodes.length) ? "" : "none");
   };
 
   applyExpansionState();
 
-  bubble.append(header, content);
+  bubble.append(header, collapsedPreview, content);
   return bubble;
 };
 

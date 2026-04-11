@@ -81,12 +81,17 @@ export {
   buildShellCss,
   applyShellTheme,
   buildSrcdoc,
+  getPreviewTranscriptPresetLabel,
+  createPreviewTranscriptEntry,
+  appendPreviewTranscriptEntry,
   createPreviewMessages,
   applySceneConfig,
   buildPreviewConfig,
+  buildPreviewConfigWithMessages,
 } from './preview-utils';
 export type {
   PreviewScene,
+  PreviewTranscriptEntryPreset,
   PreviewShellPalette,
   PreviewConfigOptions,
 } from './preview-utils';

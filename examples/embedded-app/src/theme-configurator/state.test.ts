@@ -224,6 +224,35 @@ describe('theme configurator state - editor ui, preview fixtures, and history', 
     expect(previewConfig.initialMessages?.length).toBeGreaterThan(1);
   });
 
+  test('preview transcript entries can be appended and cleared for interactive testing', () => {
+    expect(state.getPreviewTranscriptEntries()).toEqual([]);
+
+    state.addPreviewTranscriptEntry('tool-running');
+    state.addPreviewTranscriptEntry('reasoning-streaming');
+
+    const entries = state.getPreviewTranscriptEntries();
+    expect(entries).toEqual(['tool-running', 'reasoning-streaming']);
+
+    const previewConfig = state.buildPreviewConfig(undefined, 'light', 'conversation');
+    const toolCount = previewConfig.initialMessages?.filter((message) => message.variant === 'tool').length ?? 0;
+    const reasoningCount = previewConfig.initialMessages?.filter((message) => message.variant === 'reasoning').length ?? 0;
+    expect(toolCount).toBeGreaterThan(0);
+    expect(reasoningCount).toBeGreaterThan(0);
+
+    state.clearPreviewTranscriptEntries();
+    expect(state.getPreviewTranscriptEntries()).toEqual([]);
+  });
+
+  test('preview transcript entries persist to localStorage', () => {
+    state.addPreviewTranscriptEntry('tool-complete');
+    state.addPreviewTranscriptEntry('reasoning-complete');
+
+    const raw = localStorage.getItem('persona-theme-editor-ui');
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw!);
+    expect(parsed.previewTranscriptEntries).toEqual(['tool-complete', 'reasoning-complete']);
+  });
+
   test('buildPreviewConfig preserves dock config and merges dock defaults', () => {
     state.set('launcher.mountMode', 'docked');
     state.set('launcher.dock.side', 'left');

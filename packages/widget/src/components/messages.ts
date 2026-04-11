@@ -21,7 +21,7 @@ export const renderMessages = (
     let bubble: HTMLElement;
     if (message.variant === "reasoning" && message.reasoning) {
       if (!showReasoning) return;
-      bubble = createReasoningBubble(message);
+      bubble = createReasoningBubble(message, config);
     } else if (message.variant === "tool" && message.toolCall) {
       if (!showToolCalls) return;
       bubble = createToolBubble(message, config);
