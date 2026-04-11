@@ -6,12 +6,76 @@ import { renderLucideIcon } from "../utils/icons";
 // Expansion state per widget instance
 export const toolExpansionState = new Set<string>();
 
+const appendRenderedValue = (
+  container: HTMLElement,
+  value: HTMLElement | string | null | undefined
+): boolean => {
+  if (value == null) return false;
+  if (typeof value === "string") {
+    container.textContent = value;
+    return true;
+  }
+  container.appendChild(value);
+  return true;
+};
+
+const getToolPreviewText = (message: AgentWidgetMessage, maxLines: number): string => {
+  const tool = message.toolCall;
+  if (!tool) return "";
+
+  const chunkText = (tool.chunks ?? []).join("").trim();
+  if (chunkText) {
+    const lines = chunkText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(-maxLines);
+    return lines.join("\n");
+  }
+
+  const argsText = formatUnknownValue(tool.args).trim();
+  if (!argsText) return "";
+
+  return argsText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, maxLines)
+    .join("\n");
+};
+
+const getToolSummaryText = (
+  message: AgentWidgetMessage,
+  config?: AgentWidgetConfig
+): { summary: string; previewText: string; isActive: boolean } => {
+  const tool = message.toolCall;
+  const toolDisplayConfig = config?.features?.toolCallDisplay;
+  const collapsedMode = toolDisplayConfig?.collapsedMode ?? "tool-call";
+  const previewText = getToolPreviewText(message, toolDisplayConfig?.previewMaxLines ?? 3);
+  const defaultSummary = tool ? describeToolTitle(tool) : "";
+
+  if (!tool) {
+    return { summary: defaultSummary, previewText, isActive: false };
+  }
+
+  const isActive = tool.status !== "complete";
+  let summary = defaultSummary;
+  if (collapsedMode === "tool-name") {
+    summary = tool.name?.trim() || defaultSummary;
+  } else if (collapsedMode === "tool-preview" && previewText) {
+    summary = previewText;
+  }
+
+  return { summary, previewText, isActive };
+};
+
 // Helper function to update tool bubble UI after expansion state changes
 export const updateToolBubbleUI = (messageId: string, bubble: HTMLElement, config?: AgentWidgetConfig): void => {
   const expanded = toolExpansionState.has(messageId);
   const toolCallConfig = config?.toolCall ?? {};
   const header = bubble.querySelector('button[data-expand-header="true"]') as HTMLElement;
   const content = bubble.querySelector('.persona-border-t') as HTMLElement;
+  const preview = bubble.querySelector('[data-persona-collapsed-preview="tool"]') as HTMLElement | null;
   
   if (!header || !content) return;
   
@@ -32,6 +96,11 @@ export const updateToolBubbleUI = (messageId: string, bubble: HTMLElement, confi
   }
   
   content.style.display = expanded ? "" : "none";
+  if (preview) {
+    preview.style.display = expanded
+      ? "none"
+      : ((preview.textContent || preview.childNodes.length) ? "" : "none");
+  }
 };
 
 export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidgetConfig): HTMLElement => {
@@ -78,14 +147,21 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     return bubble;
   }
 
-  let expanded = toolExpansionState.has(message.id);
+  const toolDisplayConfig = config?.features?.toolCallDisplay ?? {};
+  const expandable = toolDisplayConfig.expandable !== false;
+  let expanded = expandable && toolExpansionState.has(message.id);
+  const { summary, previewText, isActive } = getToolSummaryText(message, config);
   const header = createElement(
     "button",
-    "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
+    expandable
+      ? "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
+      : "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-default persona-border-none"
   ) as HTMLButtonElement;
   header.type = "button";
-  header.setAttribute("aria-expanded", expanded ? "true" : "false");
-  header.setAttribute("data-expand-header", "true");
+  if (expandable) {
+    header.setAttribute("aria-expanded", expanded ? "true" : "false");
+    header.setAttribute("data-expand-header", "true");
+  }
   header.setAttribute("data-bubble-type", "tool");
 
   // Apply header styles
@@ -106,23 +182,78 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   if (toolCallConfig.headerTextColor) {
     title.style.color = toolCallConfig.headerTextColor;
   }
-  title.textContent = describeToolTitle(tool);
-  headerContent.appendChild(title);
-
-  const toggleIcon = createElement("div", "persona-flex persona-items-center");
-  const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
-  const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
-  if (chevronIcon) {
-    toggleIcon.appendChild(chevronIcon);
+  const customSummary = toolCallConfig.renderCollapsedSummary?.({
+    message,
+    toolCall: tool,
+    defaultSummary: summary,
+    previewText,
+    collapsedMode: toolDisplayConfig.collapsedMode ?? "tool-call",
+    isActive,
+    config: config ?? {},
+  });
+  if (typeof customSummary === "string" && customSummary.trim()) {
+    title.textContent = customSummary;
+    headerContent.appendChild(title);
+  } else if (customSummary instanceof HTMLElement) {
+    headerContent.appendChild(customSummary);
   } else {
-    // Fallback to text if icon fails
-    toggleIcon.textContent = expanded ? "Hide" : "Show";
+    title.textContent = summary;
+    headerContent.appendChild(title);
   }
 
-  const headerMeta = createElement("div", "persona-flex persona-items-center persona-gap-2 persona-ml-auto");
-  headerMeta.append(toggleIcon);
+  let toggleIcon: HTMLElement | null = null;
+  if (expandable) {
+    toggleIcon = createElement("div", "persona-flex persona-items-center");
+    const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
+    const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+    if (chevronIcon) {
+      toggleIcon.appendChild(chevronIcon);
+    } else {
+      toggleIcon.textContent = expanded ? "Hide" : "Show";
+    }
 
-  header.append(headerContent, headerMeta);
+    const headerMeta = createElement("div", "persona-flex persona-items-center persona-gap-2 persona-ml-auto");
+    headerMeta.append(toggleIcon);
+    header.append(headerContent, headerMeta);
+  } else {
+    header.append(headerContent);
+  }
+
+  const collapsedPreview = createElement(
+    "div",
+    "persona-px-4 persona-py-3 persona-text-xs persona-leading-snug persona-text-persona-muted"
+  );
+  collapsedPreview.setAttribute("data-persona-collapsed-preview", "tool");
+  collapsedPreview.style.display = "none";
+  collapsedPreview.style.whiteSpace = "pre-wrap";
+
+  if (
+    !expanded &&
+    isActive &&
+    toolDisplayConfig.activePreview &&
+    previewText
+  ) {
+    const renderedPreview = toolCallConfig.renderCollapsedPreview?.({
+      message,
+      toolCall: tool,
+      defaultPreview: previewText,
+      isActive,
+      config: config ?? {},
+    });
+    if (!appendRenderedValue(collapsedPreview, renderedPreview)) {
+      collapsedPreview.textContent = previewText;
+    }
+    collapsedPreview.style.display = "";
+  }
+
+  if (!expanded && isActive && toolDisplayConfig.activeMinHeight) {
+    bubble.style.minHeight = toolDisplayConfig.activeMinHeight;
+  }
+
+  if (!expandable) {
+    bubble.append(header, collapsedPreview);
+    return bubble;
+  }
 
   const content = createElement(
     "div",
@@ -265,22 +396,25 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
 
   const applyToolExpansion = () => {
     header.setAttribute("aria-expanded", expanded ? "true" : "false");
-    // Update chevron icon
-    toggleIcon.innerHTML = "";
-    const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
-    const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
-    if (chevronIcon) {
-      toggleIcon.appendChild(chevronIcon);
-    } else {
-      // Fallback to text if icon fails
-      toggleIcon.textContent = expanded ? "Hide" : "Show";
+    if (toggleIcon) {
+      toggleIcon.innerHTML = "";
+      const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
+      const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+      if (chevronIcon) {
+        toggleIcon.appendChild(chevronIcon);
+      } else {
+        toggleIcon.textContent = expanded ? "Hide" : "Show";
+      }
     }
     content.style.display = expanded ? "" : "none";
+    collapsedPreview.style.display = expanded
+      ? "none"
+      : ((collapsedPreview.textContent || collapsedPreview.childNodes.length) ? "" : "none");
   };
 
   applyToolExpansion();
 
-  bubble.append(header, content);
+  bubble.append(header, collapsedPreview, content);
   return bubble;
 };
 

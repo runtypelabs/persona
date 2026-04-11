@@ -197,7 +197,195 @@ export function buildSrcdoc(
 
 export type PreviewScene = 'home' | 'conversation' | 'minimized' | 'artifact';
 
-export function createPreviewMessages(scene: PreviewScene): AgentWidgetMessage[] {
+export type PreviewTranscriptEntryPreset =
+  | 'user-message'
+  | 'assistant-message'
+  | 'reasoning-streaming'
+  | 'reasoning-complete'
+  | 'tool-running'
+  | 'tool-complete';
+
+const PREVIEW_TRANSCRIPT_PRESET_LABELS: Record<PreviewTranscriptEntryPreset, string> = {
+  'user-message': 'User message',
+  'assistant-message': 'Assistant message',
+  'reasoning-streaming': 'Reasoning (streaming)',
+  'reasoning-complete': 'Reasoning (complete)',
+  'tool-running': 'Tool call (running)',
+  'tool-complete': 'Tool call (complete)',
+};
+
+export function getPreviewTranscriptPresetLabel(preset: PreviewTranscriptEntryPreset): string {
+  return PREVIEW_TRANSCRIPT_PRESET_LABELS[preset];
+}
+
+export function createPreviewTranscriptEntry(
+  preset: PreviewTranscriptEntryPreset,
+  index = 0
+): AgentWidgetMessage {
+  const createdAt = new Date(Date.now() - Math.max(0, 60 - index) * 1000).toISOString();
+  const suffix = `${preset}-${index}`;
+
+  switch (preset) {
+    case 'user-message':
+      return {
+        id: `preview-seq-user-${suffix}`,
+        role: 'user',
+        content: 'Can you continue with the next step?',
+        createdAt,
+      };
+    case 'assistant-message':
+      return {
+        id: `preview-seq-assistant-${suffix}`,
+        role: 'assistant',
+        content: 'Absolutely. I can keep going and explain what happens next.',
+        createdAt,
+      };
+    case 'reasoning-streaming':
+      return {
+        id: `preview-seq-reasoning-stream-${suffix}`,
+        role: 'assistant',
+        content: '',
+        createdAt,
+        streaming: true,
+        variant: 'reasoning',
+        reasoning: {
+          id: `preview-reasoning-stream-${suffix}`,
+          status: 'streaming',
+          chunks: ['Thinking through the next step in the workflow...'],
+        },
+      };
+    case 'reasoning-complete':
+      return {
+        id: `preview-seq-reasoning-complete-${suffix}`,
+        role: 'assistant',
+        content: '',
+        createdAt,
+        streaming: false,
+        variant: 'reasoning',
+        reasoning: {
+          id: `preview-reasoning-complete-${suffix}`,
+          status: 'complete',
+          chunks: ['Reviewed the requirements and finalized the reasoning output.'],
+          durationMs: 1200,
+        },
+      };
+    case 'tool-complete':
+      return {
+        id: `preview-seq-tool-complete-${suffix}`,
+        role: 'assistant',
+        content: '',
+        createdAt,
+        streaming: false,
+        variant: 'tool',
+        toolCall: {
+          id: `preview-tool-complete-${suffix}`,
+          name: 'Create build instructions',
+          status: 'complete',
+          chunks: ['Prepared the build instructions and validated the inputs.'],
+          result: { ok: true },
+          duration: 420,
+        },
+      };
+    case 'tool-running':
+    default:
+      return {
+        id: `preview-seq-tool-running-${suffix}`,
+        role: 'assistant',
+        content: '',
+        createdAt,
+        streaming: true,
+        variant: 'tool',
+        toolCall: {
+          id: `preview-tool-running-${suffix}`,
+          name: 'Get platform documentation',
+          status: 'running',
+          chunks: ['Fetching the relevant platform documentation...'],
+        },
+      };
+  }
+}
+
+export function appendPreviewTranscriptEntry(
+  messages: AgentWidgetMessage[],
+  preset: PreviewTranscriptEntryPreset
+): AgentWidgetMessage[] {
+  return [...messages, createPreviewTranscriptEntry(preset, messages.length)];
+}
+
+const createAdvancedTranscriptPreviewMessages = (): AgentWidgetMessage[] => [
+  {
+    id: "preview-adv-1",
+    role: "user",
+    content: "Can you create the product and gather the docs?",
+    createdAt: new Date(Date.now() - 180000).toISOString(),
+  },
+  {
+    id: "preview-adv-2",
+    role: "assistant",
+    content: "",
+    createdAt: new Date(Date.now() - 150000).toISOString(),
+    streaming: true,
+    variant: "reasoning",
+    reasoning: {
+      id: "preview-reasoning",
+      status: "streaming",
+      chunks: [
+        "Now let me get the Persona embed documentation and builtin tools catalog.",
+      ],
+    },
+  },
+  {
+    id: "preview-adv-3",
+    role: "assistant",
+    content: "",
+    createdAt: new Date(Date.now() - 120000).toISOString(),
+    streaming: true,
+    variant: "tool",
+    toolCall: {
+      id: "preview-tool-1",
+      name: "Load tools",
+      status: "running",
+      chunks: ["Loaded tools, used Runtype integration"],
+    },
+  },
+  {
+    id: "preview-adv-4",
+    role: "assistant",
+    content: "",
+    createdAt: new Date(Date.now() - 90000).toISOString(),
+    streaming: true,
+    variant: "tool",
+    toolCall: {
+      id: "preview-tool-2",
+      name: "Get platform documentation",
+      status: "running",
+      chunks: ["Get platform documentation"],
+    },
+  },
+  {
+    id: "preview-adv-5",
+    role: "assistant",
+    content: "I loaded the tools and fetched the docs. Next I can assemble the product details.",
+    createdAt: new Date(Date.now() - 30000).toISOString(),
+  },
+];
+
+const shouldSeedAdvancedTranscriptPreview = (
+  config?: Partial<AgentWidgetConfig>
+): boolean =>
+  Boolean(
+    config?.features?.toolCallDisplay?.activePreview ||
+      config?.features?.toolCallDisplay?.grouped ||
+      (config?.features?.toolCallDisplay?.collapsedMode &&
+        config.features.toolCallDisplay.collapsedMode !== "tool-call") ||
+      config?.features?.reasoningDisplay?.activePreview
+  );
+
+export function createPreviewMessages(
+  scene: PreviewScene,
+  config?: Partial<AgentWidgetConfig>,
+  appendedMessages: AgentWidgetMessage[] = []
+): AgentWidgetMessage[] {
   if (scene === 'home') {
     return [{ id: 'preview-home-1', role: 'assistant', content: 'Hi there! How can we help today?', createdAt: new Date().toISOString() }];
   }
@@ -210,22 +398,30 @@ export function createPreviewMessages(scene: PreviewScene): AgentWidgetMessage[]
       { id: 'preview-art-2', role: 'assistant', content: 'Here\u2019s a project overview document for you.', createdAt: new Date(Date.now() - 60000).toISOString() },
     ];
   }
+  if (scene === 'conversation' && shouldSeedAdvancedTranscriptPreview(config)) {
+    return [...createAdvancedTranscriptPreviewMessages(), ...appendedMessages];
+  }
   return [
     { id: 'preview-conv-1', role: 'assistant', content: 'Hello! How can I help you today?', createdAt: new Date(Date.now() - 180000).toISOString() },
     { id: 'preview-conv-2', role: 'user', content: 'I want to customize the theme editor preview.', createdAt: new Date(Date.now() - 120000).toISOString() },
     { id: 'preview-conv-3', role: 'assistant', content: 'Absolutely. Check out the [getting started guide](https://example.com) to see what\u2019s possible, then adjust colors and tokens to match your brand.', createdAt: new Date(Date.now() - 60000).toISOString() },
+    ...appendedMessages,
   ];
 }
 
 // ─── Scene Config ───────────────────────────────────────────────
 
-export function applySceneConfig(base: AgentWidgetConfig, scene: PreviewScene): AgentWidgetConfig {
+export function applySceneConfig(
+  base: AgentWidgetConfig,
+  scene: PreviewScene,
+  appendedMessages: AgentWidgetMessage[] = []
+): AgentWidgetConfig {
   const launcher = { ...base.launcher, enabled: true, autoExpand: scene !== 'minimized' };
   const config = {
     ...base,
     launcher,
     suggestionChips: scene === 'home' ? (base.suggestionChips?.length ? base.suggestionChips : HOME_SUGGESTION_CHIPS) : base.suggestionChips,
-    initialMessages: createPreviewMessages(scene),
+    initialMessages: createPreviewMessages(scene, base, appendedMessages),
     storageAdapter: PREVIEW_STORAGE_ADAPTER,
   } as AgentWidgetConfig;
 
@@ -244,6 +440,7 @@ export interface PreviewConfigOptions {
   theme?: DeepPartial<PersonaTheme>;
   darkTheme?: DeepPartial<PersonaTheme>;
   scene?: PreviewScene;
+  appendedMessages?: AgentWidgetMessage[];
 }
 
 export function buildPreviewConfig(
@@ -261,5 +458,24 @@ export function buildPreviewConfig(
     colorScheme: shellModeOverride ?? (options.config?.colorScheme as string) ?? 'light',
   } as AgentWidgetConfig;
 
-  return applySceneConfig(base, scene);
+  return applySceneConfig(base, scene, options.appendedMessages ?? []);
+}
+
+export function buildPreviewConfigWithMessages(
+  options: PreviewConfigOptions,
+  messages: AgentWidgetMessage[],
+  shellModeOverride?: 'light' | 'dark'
+): AgentWidgetConfig {
+  const theme = options.theme ? createTheme(options.theme, { validate: false }) : createTheme();
+  const scene = options.scene ?? 'conversation';
+
+  const base = {
+    ...DEFAULT_WIDGET_CONFIG,
+    ...options.config,
+    theme,
+    darkTheme: options.darkTheme,
+    colorScheme: shellModeOverride ?? (options.config?.colorScheme as string) ?? 'light',
+  } as AgentWidgetConfig;
+
+  return applySceneConfig(base, scene, messages);
 }

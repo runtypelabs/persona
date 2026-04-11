@@ -117,6 +117,18 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       iconName: "arrow-down",
       label: "",
     },
+    toolCallDisplay: {
+      collapsedMode: "tool-call",
+      activePreview: false,
+      grouped: false,
+      previewMaxLines: 3,
+      expandable: true,
+    },
+    reasoningDisplay: {
+      activePreview: false,
+      previewMaxLines: 3,
+      expandable: true,
+    },
   },
   suggestionChips: [
     "What can you help me with?",

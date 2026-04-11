@@ -210,9 +210,14 @@ export const THEME_TOKEN_DOCS = {
         'features.scrollToBottom.enabled, features.scrollToBottom.iconName, features.scrollToBottom.label (empty string renders icon-only). Defaults: enabled=true, iconName="arrow-down", label="".',
     },
     toolCall: {
-      description: 'Tool call display styling.',
+      description: 'Tool call display styling and collapsed/grouped rendering hooks.',
       properties:
-        'shadow, backgroundColor, borderColor, borderWidth, borderRadius, headerBackgroundColor, headerTextColor, headerPaddingX, headerPaddingY, contentBackgroundColor, contentTextColor, contentPaddingX, contentPaddingY, codeBlockBackgroundColor, codeBlockBorderColor, codeBlockTextColor, toggleTextColor, labelTextColor.',
+        'shadow, backgroundColor, borderColor, borderWidth, borderRadius, headerBackgroundColor, headerTextColor, headerPaddingX, headerPaddingY, contentBackgroundColor, contentTextColor, contentPaddingX, contentPaddingY, codeBlockBackgroundColor, codeBlockBorderColor, codeBlockTextColor, toggleTextColor, labelTextColor, renderCollapsedSummary, renderCollapsedPreview, renderGroupedSummary.',
+    },
+    reasoning: {
+      description: 'Reasoning/thinking row rendering hooks.',
+      properties:
+        'renderCollapsedSummary, renderCollapsedPreview.',
     },
     approval: {
       description:
@@ -277,7 +282,7 @@ export const THEME_TOKEN_DOCS = {
     features: {
       description: 'Feature flags.',
       properties:
-        'showReasoning (AI thinking steps), showToolCalls (tool invocations), artifacts (sidebar config).',
+        'showReasoning (AI thinking steps), showToolCalls (tool invocations), toolCallDisplay (collapsedMode, activePreview, activeMinHeight, previewMaxLines, grouped), reasoningDisplay (activePreview, activeMinHeight, previewMaxLines), artifacts (sidebar config).',
     },
   },
 }

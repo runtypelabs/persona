@@ -40,4 +40,24 @@ describe("theme editor scroll-to-bottom controls", () => {
     );
     expect(INTERFACE_ROLES_SECTION.fields.some((field) => field.id === "role-scroll-to-bottom")).toBe(true);
   });
+
+  it("exposes grouped and collapsed tool call preview controls", () => {
+    const debugSection = CONFIGURE_SECTIONS.find((section) => section.id === "debug-inspection");
+
+    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.collapsedMode")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.activePreview")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.previewMaxLines")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.activeMinHeight")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.expandable")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.grouped")).toBe(true);
+  });
+
+  it("exposes collapsed reasoning preview controls", () => {
+    const debugSection = CONFIGURE_SECTIONS.find((section) => section.id === "debug-inspection");
+
+    expect(debugSection?.fields.some((field) => field.path === "features.reasoningDisplay.expandable")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.reasoningDisplay.activePreview")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.reasoningDisplay.previewMaxLines")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.reasoningDisplay.activeMinHeight")).toBe(true);
+  });
 });

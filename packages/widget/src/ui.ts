@@ -2213,6 +2213,18 @@ export const createAgentExperience = (
     };
 
     const inlineLoadingRenderer = getInlineLoadingIndicatorRenderer();
+    const appendRenderedValue = (
+      containerEl: HTMLElement,
+      value: HTMLElement | string | null | undefined
+    ): boolean => {
+      if (value == null) return false;
+      if (typeof value === "string") {
+        containerEl.textContent = value;
+        return true;
+      }
+      containerEl.appendChild(value);
+      return true;
+    };
 
     // Track active message IDs for cache pruning
     const activeMessageIds = new Set<string>();
@@ -2255,7 +2267,7 @@ export const createAgentExperience = (
           if (!showReasoning) return;
           bubble = matchingPlugin.renderReasoning({
             message,
-            defaultRenderer: () => createReasoningBubble(message),
+            defaultRenderer: () => createReasoningBubble(message, config),
             config
           });
         } else if (message.variant === "tool" && message.toolCall && matchingPlugin.renderToolCall) {
@@ -2371,7 +2383,7 @@ export const createAgentExperience = (
       if (!bubble) {
         if (message.variant === "reasoning" && message.reasoning) {
           if (!showReasoning) return;
-          bubble = createReasoningBubble(message);
+          bubble = createReasoningBubble(message, config);
         } else if (message.variant === "tool" && message.toolCall) {
           if (!showToolCalls) return;
           bubble = createToolBubble(message, config);
@@ -2427,6 +2439,86 @@ export const createAgentExperience = (
       setCachedWrapper(messageCache, message.id, fingerprint, wrapper);
       tempContainer.appendChild(wrapper);
     });
+
+    if (config.features?.toolCallDisplay?.grouped) {
+      const toolGroups: AgentWidgetMessage[][] = [];
+      let currentGroup: AgentWidgetMessage[] = [];
+
+      messages.forEach((message) => {
+        if (message.variant === "tool" && message.toolCall && showToolCalls) {
+          currentGroup.push(message);
+          return;
+        }
+        if (currentGroup.length > 1) {
+          toolGroups.push(currentGroup);
+        }
+        currentGroup = [];
+      });
+      if (currentGroup.length > 1) {
+        toolGroups.push(currentGroup);
+      }
+
+      toolGroups.forEach((group, groupIndex) => {
+        const wrappers = group
+          .map((groupMessage) =>
+            Array.from(tempContainer.children).find(
+              (child) =>
+                child instanceof HTMLElement &&
+                child.getAttribute("data-wrapper-id") === groupMessage.id
+            ) as HTMLElement | undefined
+          )
+          .filter((wrapper): wrapper is HTMLElement => Boolean(wrapper));
+
+        if (wrappers.length < 2) {
+          return;
+        }
+
+        const groupWrapper = document.createElement("div");
+        groupWrapper.className = "persona-flex";
+        groupWrapper.id = `wrapper-tool-group-${groupIndex}-${group[0].id}`;
+        groupWrapper.setAttribute("data-wrapper-id", `tool-group-${groupIndex}-${group[0].id}`);
+
+        const groupContainer = document.createElement("div");
+        groupContainer.className =
+          "persona-tool-group persona-flex persona-w-full persona-flex-col persona-gap-2";
+        groupContainer.setAttribute("data-persona-tool-group", "true");
+
+        const summary = document.createElement("div");
+        summary.className =
+          "persona-tool-group-summary persona-text-xs persona-text-persona-muted";
+
+        const defaultSummary = `Called ${group.length} tools`;
+        const renderedSummary = config.toolCall?.renderGroupedSummary?.({
+          messages: group,
+          toolCalls: group
+            .map((groupMessage) => groupMessage.toolCall)
+            .filter((toolCall): toolCall is NonNullable<typeof group[number]["toolCall"]> => Boolean(toolCall)),
+          defaultSummary,
+          config,
+        });
+        if (!appendRenderedValue(summary, renderedSummary)) {
+          summary.textContent = defaultSummary;
+        }
+
+        const stack = document.createElement("div");
+        stack.className = "persona-tool-group-stack persona-flex persona-flex-col";
+
+        groupContainer.append(summary, stack);
+        groupWrapper.appendChild(groupContainer);
+        wrappers[0].before(groupWrapper);
+
+        wrappers.forEach((wrapper, wrapperIndex) => {
+          const item = document.createElement("div");
+          item.className = "persona-tool-group-item persona-relative";
+          item.setAttribute("data-persona-tool-group-item", "true");
+          if (wrapperIndex < wrappers.length - 1) {
+            item.setAttribute("data-persona-tool-group-connector", "true");
+          }
+          item.appendChild(wrapper);
+          stack.appendChild(item);
+        });
+      });
+    }
 
     // Remove cache entries for messages that no longer exist
     pruneCache(messageCache, activeMessageIds);
@@ -3853,6 +3945,10 @@ export const createAgentExperience = (
       const previousColorScheme = config.colorScheme;
       const previousLoadingIndicator = config.loadingIndicator;
       const previousIterationDisplay = config.iterationDisplay;
+      const previousShowReasoning = config.features?.showReasoning;
+      const previousShowToolCalls = config.features?.showToolCalls;
+      const previousToolCallDisplay = config.features?.toolCallDisplay;
+      const previousReasoningDisplay = config.features?.reasoningDisplay;
       config = { ...config, ...nextConfig };
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
@@ -4093,8 +4189,12 @@ export const createAgentExperience = (
         || config.loadingIndicator?.renderIdle !== previousLoadingIndicator?.renderIdle
         || config.loadingIndicator?.showBubble !== previousLoadingIndicator?.showBubble;
       const iterationDisplayChanged = config.iterationDisplay !== previousIterationDisplay;
+      const featuresChanged = (config.features?.showReasoning ?? true) !== (previousShowReasoning ?? true)
+        || (config.features?.showToolCalls ?? true) !== (previousShowToolCalls ?? true)
+        || JSON.stringify(config.features?.toolCallDisplay) !== JSON.stringify(previousToolCallDisplay)
+        || JSON.stringify(config.features?.reasoningDisplay) !== JSON.stringify(previousReasoningDisplay);
       const messagesConfigChanged = toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged
-        || loadingIndicatorChanged || iterationDisplayChanged;
+        || loadingIndicatorChanged || iterationDisplayChanged || featuresChanged;
       if (messagesConfigChanged && session) {
         configVersion++;
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);

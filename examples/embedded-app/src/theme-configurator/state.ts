@@ -18,8 +18,8 @@ import type { ConfiguratorSnapshot } from '@runtypelabs/persona/theme-editor';
 import {
   PREVIEW_STORAGE_ADAPTER,
   HOME_SUGGESTION_CHIPS,
-  createPreviewMessages,
   applySceneConfig,
+  type PreviewTranscriptEntryPreset,
 } from '@runtypelabs/persona/theme-editor';
 import { parseActionResponse } from '../middleware';
 
@@ -90,6 +90,7 @@ let previewDevice: PreviewDevice = 'desktop';
 let previewScene: PreviewScene = 'conversation';
 let editorMode: EditorMode = 'basic';
 let previewBackgroundUrl = '';
+let previewTranscriptEntries: PreviewTranscriptEntryPreset[] = [];
 
 // ─── Core state (delegated to ThemeEditorState) ─────────────────────
 let core = new ThemeEditorState(undefined, getDefaultConfig(), { mergeDefaults: false });
@@ -113,6 +114,7 @@ export function initStore(previewMount?: HTMLElement): AgentWidgetController | n
   previewScene = 'conversation';
   editorMode = 'basic';
   previewBackgroundUrl = '';
+  previewTranscriptEntries = [];
   savedSnapshot = null;
 
   // Try to load saved config, otherwise use defaults
@@ -132,6 +134,7 @@ export function initStore(previewMount?: HTMLElement): AgentWidgetController | n
     previewScene = savedUi.previewScene;
     editorMode = savedUi.editorMode;
     previewBackgroundUrl = savedUi.previewBackgroundUrl ?? '';
+    previewTranscriptEntries = savedUi.previewTranscriptEntries ?? [];
   }
 
   if (previewMount) {
@@ -217,6 +220,22 @@ export function getPreviewBackgroundUrl(): string {
 
 export function setPreviewBackgroundUrl(value: string): void {
   previewBackgroundUrl = value;
+  saveEditorUiToStorage();
+  notifyListeners();
+}
+
+export function getPreviewTranscriptEntries(): PreviewTranscriptEntryPreset[] {
+  return [...previewTranscriptEntries];
+}
+
+export function addPreviewTranscriptEntry(value: PreviewTranscriptEntryPreset): void {
+  previewTranscriptEntries = [...previewTranscriptEntries, value];
+  saveEditorUiToStorage();
+  notifyListeners();
+}
+
+export function clearPreviewTranscriptEntries(): void {
+  previewTranscriptEntries = [];
   saveEditorUiToStorage();
   notifyListeners();
 }
@@ -693,13 +712,22 @@ interface EditorUiState {
   previewScene: PreviewScene;
   editorMode: EditorMode;
   previewBackgroundUrl?: string;
+  previewTranscriptEntries?: PreviewTranscriptEntryPreset[];
 }
 
 function saveEditorUiToStorage(): void {
   try {
     localStorage.setItem(
       EDITOR_UI_STORAGE_KEY,
-      JSON.stringify({ editingTheme, previewMode, previewDevice, previewScene, editorMode, previewBackgroundUrl })
+      JSON.stringify({
+        editingTheme,
+        previewMode,
+        previewDevice,
+        previewScene,
+        editorMode,
+        previewBackgroundUrl,
+        previewTranscriptEntries,
+      })
     );
   } catch {
     // Ignore
@@ -729,6 +757,17 @@ function loadEditorUiFromStorage(): EditorUiState | null {
         previewScene: parsed.previewScene,
         editorMode: parsed.editorMode,
         previewBackgroundUrl: typeof parsed.previewBackgroundUrl === 'string' ? parsed.previewBackgroundUrl : '',
+        previewTranscriptEntries: Array.isArray(parsed.previewTranscriptEntries)
+          ? parsed.previewTranscriptEntries.filter(
+              (item: unknown): item is PreviewTranscriptEntryPreset =>
+                item === 'user-message' ||
+                item === 'assistant-message' ||
+                item === 'reasoning-streaming' ||
+                item === 'reasoning-complete' ||
+                item === 'tool-running' ||
+                item === 'tool-complete'
+            )
+          : [],
       };
     }
   } catch {

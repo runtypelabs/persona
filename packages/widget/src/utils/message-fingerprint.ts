@@ -16,7 +16,12 @@ export type FingerprintableMessage = {
   rawContent?: string;
   llmContent?: string;
   approval?: { status?: string; [key: string]: unknown };
-  toolCall?: { status?: string; [key: string]: unknown };
+  toolCall?: {
+    status?: string;
+    chunks?: string[];
+    args?: unknown;
+    [key: string]: unknown;
+  };
   reasoning?: { chunks?: string[]; status?: string; [key: string]: unknown };
   contentParts?: unknown[];
 };
@@ -48,6 +53,13 @@ export function computeMessageFingerprint(
     message.llmContent?.length ?? 0,
     message.approval?.status ?? "",
     message.toolCall?.status ?? "",
+    message.toolCall?.chunks?.length ?? 0,
+    message.toolCall?.chunks?.[message.toolCall.chunks.length - 1]?.slice(-32) ?? "",
+    typeof message.toolCall?.args === "string"
+      ? message.toolCall.args.length
+      : message.toolCall?.args
+        ? JSON.stringify(message.toolCall.args).length
+        : 0,
     message.reasoning?.chunks?.length ?? 0,
     message.contentParts?.length ?? 0,
     configVersion,

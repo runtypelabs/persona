@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { AgentWidgetClient } from './client';
+import { AgentWidgetClient, preferFinalStructuredContent } from './client';
 import { AgentWidgetEvent, AgentWidgetMessage } from './types';
 import { createJsonStreamParser } from './utils/formatting';
 
@@ -1837,6 +1837,191 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
 
     // Tool message exists
     expect(toolMsgs.length).toBe(1);
+  });
+
+  async function runSealedSegmentReconciliationTest(opts: {
+    parserMatchContent: string;
+    stepCompleteResponse: string;
+    expectedRawContent: string;
+  }) {
+    vi.useFakeTimers();
+    const events: AgentWidgetEvent[] = [];
+
+    const delayedJsonParser = () => {
+      let extractedText: string | null = null;
+      return {
+        processChunk: (accumulatedContent: string) =>
+          new Promise<{ text: string; raw: string } | null>((resolve) => {
+            setTimeout(() => {
+              if (accumulatedContent === opts.parserMatchContent) {
+                extractedText = 'Tool returned a result.';
+                resolve({ text: extractedText, raw: accumulatedContent });
+                return;
+              }
+              resolve(null);
+            }, 0);
+          }),
+        getExtractedText: () => extractedText,
+        close: async () => {}
+      };
+    };
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (eventType: string, data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`event: ${eventType}\ndata: ${JSON.stringify({ type: eventType, ...data })}\n\n`));
+
+          e('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e('tool_start', { toolId: 'tc_1', name: 'test_tool', toolType: 'custom', startedAt: new Date().toISOString() });
+          e('tool_complete', { toolId: 'tc_1', name: 'test_tool', success: true, completedAt: new Date().toISOString(), executionTime: 0 });
+          e('text_start', { partId: 'text_1', messageId: 'msg_s1', seq: 1 });
+          e('step_delta', {
+            id: 's1',
+            text: '{"text":"Tool returned a re',
+            partId: 'text_1',
+            messageId: 'msg_s1',
+            seq: 2
+          });
+          e('text_end', { partId: 'text_1', messageId: 'msg_s1', seq: 3 });
+          e('step_complete', {
+            id: 's1',
+            name: 'Response',
+            stepType: 'prompt',
+            success: true,
+            result: { response: opts.stepCompleteResponse },
+            executionTime: 500
+          });
+          e('flow_complete', { success: true });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      streamParser: delayedJsonParser
+    });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Call tool', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+    await vi.runAllTimersAsync();
+    vi.useRealTimers();
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const allMessages = Array.from(messagesById.values());
+    const assistantTexts = allMessages
+      .filter(m => m.role === 'assistant' && !m.variant)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+    const toolMsgs = allMessages.filter(m => m.variant === 'tool');
+
+    expect(assistantTexts.length).toBe(1);
+    expect(assistantTexts[0].content).toBe('Tool returned a result.');
+    expect(assistantTexts[0].rawContent).toBe(opts.expectedRawContent);
+    expect(assistantTexts[0].streaming).toBe(false);
+    expect(toolMsgs.length).toBe(1);
+  }
+
+  it('should reconcile a sealed text segment with async parser output from step_complete', async () => {
+    await runSealedSegmentReconciliationTest({
+      parserMatchContent: '{"text":"Tool returned a result."',
+      stepCompleteResponse: 'Tool returned a result.',
+      expectedRawContent: '{"text":"Tool returned a re',
+    });
+  });
+
+  it('should prefer the authoritative final structured response when reconciling a sealed segment', async () => {
+    await runSealedSegmentReconciliationTest({
+      parserMatchContent: '{"text":"Tool returned a result."}',
+      stepCompleteResponse: '{"text":"Tool returned a result."}',
+      expectedRawContent: '{"text":"Tool returned a result."}',
+    });
+  });
+});
+
+describe('preferFinalStructuredContent', () => {
+  it('returns finalString when rawBuffer is undefined', () => {
+    expect(preferFinalStructuredContent(undefined, 'hello')).toBe('hello');
+  });
+
+  it('returns finalString when rawBuffer is empty/whitespace', () => {
+    expect(preferFinalStructuredContent('', 'hello')).toBe('hello');
+    expect(preferFinalStructuredContent('   ', 'hello')).toBe('hello');
+  });
+
+  it('returns rawBuffer when finalString is empty/whitespace', () => {
+    expect(preferFinalStructuredContent('{"text":"hi"}', '')).toBe('{"text":"hi"}');
+    expect(preferFinalStructuredContent('{"text":"hi"}', '  ')).toBe('{"text":"hi"}');
+  });
+
+  it('returns rawBuffer when final is plain text (not structured)', () => {
+    expect(preferFinalStructuredContent('{"text":"hi"}', 'plain text')).toBe('{"text":"hi"}');
+  });
+
+  it('returns finalString when raw is plain text but final is structured', () => {
+    expect(preferFinalStructuredContent('partial plain', '{"text":"hi"}')).toBe('{"text":"hi"}');
+  });
+
+  it('returns finalString when both are identical structured content', () => {
+    const json = '{"text":"hello"}';
+    expect(preferFinalStructuredContent(json, json)).toBe(json);
+  });
+
+  it('returns finalString when final is a superset of the raw buffer', () => {
+    expect(preferFinalStructuredContent(
+      '{"text":"hel',
+      '{"text":"hello"}'
+    )).toBe('{"text":"hello"}');
+  });
+
+  it('returns finalString when final is parseable JSON but raw is not', () => {
+    expect(preferFinalStructuredContent(
+      '{"text":"hel',
+      '{"text":"hello"}'
+    )).toBe('{"text":"hello"}');
+  });
+
+  it('returns rawBuffer when both are structured but neither is a prefix of the other and both parse', () => {
+    expect(preferFinalStructuredContent(
+      '{"text":"segment two"}',
+      '{"text":"full response with segment one and two"}'
+    )).toBe('{"text":"segment two"}');
+  });
+
+  it('returns rawBuffer when both are structured, different, and raw parses', () => {
+    expect(preferFinalStructuredContent(
+      '{"text":"short"}',
+      '{"text":"different content"}'
+    )).toBe('{"text":"short"}');
+  });
+
+  it('returns finalString when final parses but raw does not (partial JSON)', () => {
+    expect(preferFinalStructuredContent(
+      '{"text":"incomp',
+      '{"text":"complete"}'
+    )).toBe('{"text":"complete"}');
+  });
+
+  it('handles XML-shaped content as structured', () => {
+    expect(preferFinalStructuredContent(
+      '<response>partial',
+      '<response>full</response>'
+    )).toBe('<response>partial');
+  });
+
+  it('handles array-shaped JSON content as structured', () => {
+    expect(preferFinalStructuredContent(
+      '[{"text":"par',
+      '[{"text":"partial"}]'
+    )).toBe('[{"text":"partial"}]');
   });
 });
 

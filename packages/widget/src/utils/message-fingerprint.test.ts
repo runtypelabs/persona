@@ -90,6 +90,23 @@ describe("computeMessageFingerprint", () => {
     expect(fp1).not.toBe(fp2);
   });
 
+  it("changes when toolCall chunks change", () => {
+    const fp1 = computeMessageFingerprint(
+      makeMessage({ toolCall: { status: "running", chunks: ["Loaded tools"] } }),
+      0
+    );
+    const fp2 = computeMessageFingerprint(
+      makeMessage({
+        toolCall: {
+          status: "running",
+          chunks: ["Loaded tools", "\nFetched platform documentation"],
+        },
+      }),
+      0
+    );
+    expect(fp1).not.toBe(fp2);
+  });
+
   it("changes when reasoning chunks change", () => {
     const fp1 = computeMessageFingerprint(makeMessage({ reasoning: { chunks: ["step 1"] } }), 0);
     const fp2 = computeMessageFingerprint(makeMessage({ reasoning: { chunks: ["step 1", "step 2"] } }), 0);

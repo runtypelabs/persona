@@ -2091,6 +2091,130 @@
   background-color: var(--cw-container, #f8fafc);
 }
 
+/* Collapsed live preview blocks — match expanded content's 1px border-top with transparent border */
+[data-persona-root] [data-persona-collapsed-preview] {
+  border-top: 1px solid transparent;
+}
+
+/* Grouped tool-call transcript chrome */
+[data-persona-root] .persona-tool-group {
+  --_rail-x: 0.5rem;
+  --_rail-w: 2px;
+  --_dot-size: 6px;
+  --_branch-len: 0.75rem;
+  --_branch-y: 1.5rem;
+  --_rail-color: var(--cw-border, #d1d5db);
+  gap: 0;
+}
+
+/* ---- Summary row ---- */
+[data-persona-root] .persona-tool-group-summary {
+  position: relative;
+  min-height: 1.5rem;
+  padding-left: calc(var(--_rail-x) + var(--_branch-len) + 0.625rem);
+  margin-bottom: 0.625rem;
+  display: flex;
+  align-items: center;
+}
+
+/* horizontal branch from rail to summary text */
+[data-persona-root] .persona-tool-group-summary::before {
+  content: "";
+  position: absolute;
+  left: var(--_rail-x);
+  top: 50%;
+  width: var(--_branch-len);
+  height: var(--_rail-w);
+  background: var(--_rail-color);
+  transform: translateY(-50%);
+}
+
+/* dot at the rail end of the summary branch */
+[data-persona-root] .persona-tool-group-summary::after {
+  content: "";
+  position: absolute;
+  left: var(--_rail-x);
+  top: 50%;
+  width: var(--_dot-size);
+  height: var(--_dot-size);
+  border-radius: 999px;
+  border: var(--_rail-w) solid var(--_rail-color);
+  background: var(--cw-surface, #fff);
+  transform: translate(-50%, -50%);
+}
+
+/* ---- Stack (children column) ---- */
+[data-persona-root] .persona-tool-group-stack {
+  position: relative;
+  margin-left: var(--_rail-x);
+  padding-left: calc(var(--_branch-len) + 0.125rem);
+  gap: 0.625rem;
+}
+
+/* vertical rail */
+[data-persona-root] .persona-tool-group-stack::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(-0.625rem - (var(--_dot-size) / 2));
+  bottom: calc(100% - var(--_branch-y));
+  width: var(--_rail-w);
+  background: var(--_rail-color);
+  transform: translateX(-50%);
+}
+
+/* extend rail between items when there are multiple */
+[data-persona-root] .persona-tool-group-stack::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--_rail-w);
+  background: var(--_rail-color);
+  transform: translateX(-50%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* clip the rail at the last item's branch-y */
+[data-persona-root] .persona-tool-group-item:last-child {
+  position: relative;
+}
+
+/* ---- Item branches ---- */
+[data-persona-root] .persona-tool-group-item {
+  position: relative;
+  z-index: 1;
+}
+
+/* horizontal branch from rail to each child bubble */
+[data-persona-root] .persona-tool-group-item::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--_branch-len) - 0.125rem);
+  top: var(--_branch-y);
+  width: calc(var(--_branch-len) + 0.125rem);
+  height: var(--_rail-w);
+  background: var(--_rail-color);
+  transform: translateY(-50%);
+}
+
+/* dot at the junction of the rail and each branch */
+[data-persona-root] .persona-tool-group-item::after {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--_branch-len) - 0.125rem);
+  top: var(--_branch-y);
+  width: var(--_dot-size);
+  height: var(--_dot-size);
+  border-radius: 999px;
+  border: var(--_rail-w) solid var(--_rail-color);
+  background: var(--cw-surface, #fff);
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
 /* ============================================
    Approval Bubble Theme Styles
    ============================================ */

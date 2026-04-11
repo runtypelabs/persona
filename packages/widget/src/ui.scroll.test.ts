@@ -135,6 +135,36 @@ const emitReasoningMessage = (
   });
 };
 
+const emitToolMessage = (
+  controller: ReturnType<typeof createAgentExperience>,
+  {
+    id = STREAM_MESSAGE_ID,
+    status = "running",
+    chunks,
+  }: {
+    id?: string;
+    status?: "pending" | "running" | "complete";
+    chunks: string[];
+  }
+) => {
+  controller.injectTestMessage({
+    type: "message",
+    message: {
+      id,
+      role: "assistant",
+      content: "",
+      createdAt: STREAM_CREATED_AT,
+      streaming: status !== "complete",
+      variant: "tool",
+      toolCall: {
+        id,
+        status,
+        chunks,
+      }
+    }
+  });
+};
+
 const createCustomComposer = () => {
   const footer = document.createElement("div");
   footer.className = "persona-widget-footer";
@@ -364,6 +394,80 @@ describe("createAgentExperience streaming scroll", () => {
     raf.flush();
 
     expect(metrics.getScrollTop()).toBe(556);
+
+    controller.destroy();
+  });
+
+  it("keeps following collapsed tool preview updates while active", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        toolCallDisplay: {
+          activePreview: true,
+        },
+      },
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    expect(scrollContainer).not.toBeNull();
+
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 980,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitToolMessage(controller, { chunks: ["Loaded tools"] });
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    metrics.setScrollHeight(1045);
+    emitToolMessage(controller, {
+      chunks: ["Loaded tools", "\nFetched platform documentation"]
+    });
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    controller.destroy();
+  });
+
+  it("keeps following grouped tool sequences as new tool rows arrive", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        toolCallDisplay: {
+          grouped: true,
+        },
+      },
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    expect(scrollContainer).not.toBeNull();
+
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 960,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitToolMessage(controller, { id: "tool-1", chunks: ["Loaded tools"] });
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    metrics.setScrollHeight(1030);
+    emitToolMessage(controller, { id: "tool-2", chunks: ["Fetched platform documentation"] });
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
 
     controller.destroy();
   });

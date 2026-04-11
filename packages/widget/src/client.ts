@@ -3,6 +3,7 @@ import {
   AgentWidgetMessage,
   AgentWidgetEvent,
   AgentWidgetStreamParser,
+  AgentWidgetStreamParserResult,
   AgentWidgetContextProvider,
   AgentWidgetRequestMiddleware,
   AgentWidgetRequestPayload,
@@ -84,6 +85,40 @@ function getParserFromType(parserType?: "plain" | "json" | "regex-json" | "xml")
 }
 
 export type SSEEventCallback = (eventType: string, payload: unknown) => void;
+
+const looksStructured = (value: string) =>
+  value.startsWith("{") || value.startsWith("[") || value.startsWith("<");
+
+/**
+ * Choose the best content source for sealed-segment reconciliation.
+ * Prefers the final structured payload from step_complete when the raw
+ * buffer is only a partial/unparseable prefix of the same structured format.
+ */
+export function preferFinalStructuredContent(
+  rawBuffer: string | undefined,
+  finalString: string
+): string {
+  if (!rawBuffer) return finalString;
+
+  const rawTrimmed = rawBuffer.trim();
+  const finalTrimmed = finalString.trim();
+  if (rawTrimmed.length === 0) return finalString;
+  if (finalTrimmed.length === 0) return rawBuffer;
+
+  const rawLooksStructured = looksStructured(rawTrimmed);
+  const finalLooksStructured = looksStructured(finalTrimmed);
+
+  if (!finalLooksStructured) return rawBuffer;
+  if (!rawLooksStructured) return finalString;
+  if (finalTrimmed === rawTrimmed) return finalString;
+  if (finalTrimmed.startsWith(rawTrimmed)) return finalString;
+
+  const rawJsonText = extractTextFromJson(rawBuffer);
+  const finalJsonText = extractTextFromJson(finalString);
+  if (finalJsonText !== null && rawJsonText === null) return finalString;
+
+  return rawBuffer;
+}
 
 export class AgentWidgetClient {
   private readonly apiUrl: string;
@@ -1261,6 +1296,103 @@ export class AgentWidgetClient {
     // Track accumulated raw content for structured formats (JSON, XML, etc.)
     const rawContentBuffers = new Map<string, string>();
 
+    // Only the most-recently sealed segment is reconciled with step_complete's
+    // final response. Earlier segments rely on their own async parser microtasks
+    // resolving via the closure-captured `assistant` variable.
+    let lastSealedTextSegment: AgentWidgetMessage | null = null;
+
+    /**
+     * After text_end + didSplitByPartId, merge the authoritative final response into the
+     * sealed message when streaming left content short (e.g. async parser lag).
+     */
+    const reconcileSealedAssistantWithFinalResponse = (
+      msg: AgentWidgetMessage,
+      finalContent: unknown
+    ) => {
+      const finalString = ensureStringContent(finalContent);
+      const rawBuffer = rawContentBuffers.get(msg.id);
+      const contentToProcess = preferFinalStructuredContent(rawBuffer, finalString);
+      msg.rawContent = contentToProcess;
+      const parser = streamParsers.get(msg.id);
+
+      const mergeIfBetter = (mergedDisplay: string) => {
+        const cur = msg.content ?? "";
+        if (mergedDisplay.trim() === "") return;
+        // Only replace when empty, or when the stream left a strict prefix of the
+        // authoritative final (truncation). Do not use length alone — multi-segment
+        // flows can have a short last bubble whose content is not a prefix of the
+        // full step response.
+        if (
+          cur.trim().length === 0 ||
+          mergedDisplay.startsWith(cur) ||
+          mergedDisplay.trimStart().startsWith(cur.trim())
+        ) {
+          msg.content = mergedDisplay;
+        }
+      };
+
+      const finalizeCleanup = () => {
+        if (parser) {
+          const closeResult = parser.close?.();
+          if (closeResult instanceof Promise) closeResult.catch(() => {});
+        }
+        streamParsers.delete(msg.id);
+        rawContentBuffers.delete(msg.id);
+        msg.streaming = false;
+        emitMessage(msg);
+      };
+
+      if (!parser) {
+        mergeIfBetter(finalString);
+        finalizeCleanup();
+        return;
+      }
+
+      // Prefer JSON fast path when the final payload is JSON-shaped
+      const extractedFromJson = extractTextFromJson(contentToProcess);
+      if (extractedFromJson !== null && extractedFromJson.trim() !== "") {
+        mergeIfBetter(extractedFromJson);
+        finalizeCleanup();
+        return;
+      }
+
+      const bestDisplayText = (
+        result: AgentWidgetStreamParserResult | string | null
+      ): string => {
+        const text =
+          typeof result === "string" ? result : result?.text ?? null;
+        if (text !== null && text.trim() !== "") return text;
+        const extracted = parser.getExtractedText();
+        if (extracted !== null && extracted.trim() !== "") return extracted;
+        return finalString;
+      };
+
+      let parsedResult: ReturnType<typeof parser.processChunk>;
+      try {
+        parsedResult = parser.processChunk(contentToProcess);
+      } catch {
+        mergeIfBetter(finalString);
+        finalizeCleanup();
+        return;
+      }
+
+      if (parsedResult instanceof Promise) {
+        parsedResult
+          .then((result) => {
+            mergeIfBetter(bestDisplayText(result));
+            finalizeCleanup();
+          })
+          .catch(() => {
+            mergeIfBetter(finalString);
+            finalizeCleanup();
+          });
+        return;
+      }
+
+      mergeIfBetter(bestDisplayText(parsedResult));
+      finalizeCleanup();
+    };
+
     // Agent execution state tracking
     let agentExecution: AgentExecutionState | null = null;
     // Track assistant messages per agent iteration for 'separate' mode
@@ -1527,6 +1659,7 @@ export class AgentWidgetClient {
             if (prev) {
               prev.streaming = false;
               emitMessage(prev);
+              lastSealedTextSegment = prev;
               assistantMessage = null;
               didSplitByPartId = true;
             }
@@ -1541,6 +1674,7 @@ export class AgentWidgetClient {
           if (prev) {
             prev.streaming = false;
             emitMessage(prev);
+            lastSealedTextSegment = prev;
             assistantMessage = null;
             didSplitByPartId = true;
           }
@@ -1561,6 +1695,7 @@ export class AgentWidgetClient {
             if (prev) {
               prev.streaming = false;
               emitMessage(prev);
+              lastSealedTextSegment = prev;
               assistantMessage = null;
               didSplitByPartId = true;
             }
@@ -1620,23 +1755,17 @@ export class AgentWidgetClient {
                 const text = typeof result === 'string' ? result : result?.text ?? null;
                 
                 if (text !== null && text.trim() !== "") {
-                  // Parser successfully extracted text
-                  // Update the message content with extracted text
-                  const currentAssistant = assistantMessage;
-                  if (currentAssistant && currentAssistant.id === assistant.id) {
-                    currentAssistant.content = text;
-                    emitMessage(currentAssistant);
-                  }
+                  // Parser successfully extracted text — update the chunk's assistant
+                  // (not assistantMessage; text_end may have cleared that ref before microtasks run)
+                  assistant.content = text;
+                  emitMessage(assistant);
                 } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith('<')) {
                   // Not a structured format - show as plain text
-                  const currentAssistant = assistantMessage;
-                  if (currentAssistant && currentAssistant.id === assistant.id) {
-                    currentAssistant.content += chunk;
-                    rawContentBuffers.delete(currentAssistant.id);
-                    streamParsers.delete(currentAssistant.id);
-                    currentAssistant.rawContent = undefined;
-                    emitMessage(currentAssistant);
-                  }
+                  assistant.content += chunk;
+                  rawContentBuffers.delete(assistant.id);
+                  streamParsers.delete(assistant.id);
+                  assistant.rawContent = undefined;
+                  emitMessage(assistant);
                 }
                 // Otherwise wait for more chunks (incomplete structured format)
                 // Don't emit message if parser hasn't extracted text yet
@@ -1706,15 +1835,11 @@ export class AgentWidgetClient {
                       // Extract text from result (could be string or object)
                       const text = typeof result === 'string' ? result : result?.text ?? null;
                       if (text !== null) {
-                        const currentAssistant = assistantMessage;
-                        if (currentAssistant && currentAssistant.id === assistant.id) {
-                          currentAssistant.content = text;
-                          currentAssistant.streaming = false;
-                          // Clean up
-                          streamParsers.delete(currentAssistant.id);
-                          rawContentBuffers.delete(currentAssistant.id);
-                          emitMessage(currentAssistant);
-                        }
+                        assistant.content = text;
+                        assistant.streaming = false;
+                        streamParsers.delete(assistant.id);
+                        rawContentBuffers.delete(assistant.id);
+                        emitMessage(assistant);
                       }
                     });
                   } else {
@@ -1758,8 +1883,8 @@ export class AgentWidgetClient {
             continue;
           }
           if (didSplitByPartId) {
-            // text_end already sealed the assistant message(s) — don't recreate
-            // one from step_complete's full response (would cause duplication)
+            // Sealed segment(s) — do not create a second bubble from step_complete.
+            // Merge authoritative final response into the last sealed segment (fixes async lag).
             if (assistantMessage !== null) {
               const msg: AgentWidgetMessage = assistantMessage;
               streamParsers.delete(msg.id);
@@ -1769,6 +1894,17 @@ export class AgentWidgetClient {
                 emitMessage(msg);
               }
             }
+            const splitFinalContent = payload.result?.response;
+            const sealedForReconcile = lastSealedTextSegment;
+            if (sealedForReconcile) {
+              if (splitFinalContent !== undefined && splitFinalContent !== null) {
+                reconcileSealedAssistantWithFinalResponse(sealedForReconcile, splitFinalContent);
+              } else {
+                streamParsers.delete(sealedForReconcile.id);
+                rawContentBuffers.delete(sealedForReconcile.id);
+              }
+            }
+            lastSealedTextSegment = null;
             continue;
           }
           const finalContent = payload.result?.response;
@@ -1810,32 +1946,23 @@ export class AgentWidgetClient {
                       const text = typeof result === 'string' ? result : result?.text ?? null;
                       
                       if (text !== null && text.trim() !== "") {
-                        const currentAssistant = assistantMessage;
-                        if (currentAssistant && currentAssistant.id === assistant.id) {
-                          currentAssistant.content = text;
-                          currentAssistant.streaming = false;
-                          // Clean up
-                          streamParsers.delete(currentAssistant.id);
-                          rawContentBuffers.delete(currentAssistant.id);
-                          emitMessage(currentAssistant);
-                        }
+                        assistant.content = text;
+                        assistant.streaming = false;
+                        streamParsers.delete(assistant.id);
+                        rawContentBuffers.delete(assistant.id);
+                        emitMessage(assistant);
                       } else {
                         // No extracted text - check if we should show raw content
                         const finalExtractedText = parser.getExtractedText();
-                        const currentAssistant = assistantMessage;
-                        if (currentAssistant && currentAssistant.id === assistant.id) {
-                          if (finalExtractedText !== null && finalExtractedText.trim() !== "") {
-                            currentAssistant.content = finalExtractedText;
-                          } else if (!rawContentBuffers.has(currentAssistant.id)) {
-                            // Only show raw content if we never had any extracted text
-                            currentAssistant.content = ensureStringContent(finalContent);
-                          }
-                          currentAssistant.streaming = false;
-                          // Clean up
-                          streamParsers.delete(currentAssistant.id);
-                          rawContentBuffers.delete(currentAssistant.id);
-                          emitMessage(currentAssistant);
+                        if (finalExtractedText !== null && finalExtractedText.trim() !== "") {
+                          assistant.content = finalExtractedText;
+                        } else if (!rawContentBuffers.has(assistant.id)) {
+                          assistant.content = ensureStringContent(finalContent);
                         }
+                        assistant.streaming = false;
+                        streamParsers.delete(assistant.id);
+                        rawContentBuffers.delete(assistant.id);
+                        emitMessage(assistant);
                       }
                     });
                   } else {
@@ -1926,12 +2053,9 @@ export class AgentWidgetClient {
                     // Extract text from result (could be string or object)
                     const text = typeof result === 'string' ? result : result?.text ?? null;
                     if (text !== null) {
-                      const currentAssistant = assistantMessage;
-                      if (currentAssistant && currentAssistant.id === assistant.id) {
-                        currentAssistant.content = text;
-                        currentAssistant.streaming = false;
-                        emitMessage(currentAssistant);
-                      }
+                      assistant.content = text;
+                      assistant.streaming = false;
+                      emitMessage(assistant);
                     }
                   });
                 }

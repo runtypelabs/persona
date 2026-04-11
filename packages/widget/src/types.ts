@@ -572,12 +572,77 @@ export type AgentWidgetScrollToBottomFeature = {
   label?: string;
 };
 
+export type AgentWidgetToolCallCollapsedMode =
+  | "tool-call"
+  | "tool-name"
+  | "tool-preview";
+
+export type AgentWidgetToolCallDisplayFeature = {
+  /**
+   * Controls what collapsed tool call rows show in their header/summary area.
+   * @default "tool-call"
+   */
+  collapsedMode?: AgentWidgetToolCallCollapsedMode;
+  /**
+   * When true, active collapsed tool calls can render a lightweight preview block.
+   * @default false
+   */
+  activePreview?: boolean;
+  /**
+   * Optional CSS min-height applied to active collapsed tool call rows.
+   */
+  activeMinHeight?: string;
+  /**
+   * Maximum preview lines shown for collapsed active tool calls.
+   * @default 3
+   */
+  previewMaxLines?: number;
+  /**
+   * When true, consecutive tool call rows can be visually grouped.
+   * @default false
+   */
+  grouped?: boolean;
+  /**
+   * When false, tool call bubbles show only the collapsed summary with no
+   * expand/collapse toggle. Users see tool awareness without full details.
+   * @default true
+   */
+  expandable?: boolean;
+};
+
+export type AgentWidgetReasoningDisplayFeature = {
+  /**
+   * When true, active collapsed reasoning rows can render a lightweight preview block.
+   * @default false
+   */
+  activePreview?: boolean;
+  /**
+   * Optional CSS min-height applied to active collapsed reasoning rows.
+   */
+  activeMinHeight?: string;
+  /**
+   * Maximum preview lines shown for collapsed active reasoning rows.
+   * @default 3
+   */
+  previewMaxLines?: number;
+  /**
+   * When false, reasoning bubbles show only the collapsed summary with no
+   * expand/collapse toggle. Users see reasoning awareness without full details.
+   * @default true
+   */
+  expandable?: boolean;
+};
+
 export type AgentWidgetFeatureFlags = {
   showReasoning?: boolean;
   showToolCalls?: boolean;
   showEventStreamToggle?: boolean;
   /** Shared transcript + event stream scroll-to-bottom affordance. */
   scrollToBottom?: AgentWidgetScrollToBottomFeature;
+  /** Collapsed transcript behavior for tool call rows. */
+  toolCallDisplay?: AgentWidgetToolCallDisplayFeature;
+  /** Collapsed transcript behavior for reasoning rows. */
+  reasoningDisplay?: AgentWidgetReasoningDisplayFeature;
   /** Configuration for the Event Stream inspector view */
   eventStream?: EventStreamConfig;
   /** Optional artifact sidebar (split pane / mobile drawer) */
@@ -1186,6 +1251,66 @@ export type AgentWidgetToolCallConfig = {
   codeBlockTextColor?: string;
   toggleTextColor?: string;
   labelTextColor?: string;
+  /**
+   * Override the collapsed summary row content for a tool call bubble.
+   * Return `null` to fall back to the built-in summary for the active display mode.
+   */
+  renderCollapsedSummary?: (context: {
+    message: AgentWidgetMessage;
+    toolCall: AgentWidgetToolCall;
+    defaultSummary: string;
+    previewText: string;
+    collapsedMode: AgentWidgetToolCallCollapsedMode;
+    isActive: boolean;
+    config: AgentWidgetConfig;
+  }) => HTMLElement | string | null;
+  /**
+   * Override the lightweight collapsed preview content shown for active tool rows.
+   * Return `null` to fall back to the built-in preview text.
+   */
+  renderCollapsedPreview?: (context: {
+    message: AgentWidgetMessage;
+    toolCall: AgentWidgetToolCall;
+    defaultPreview: string;
+    isActive: boolean;
+    config: AgentWidgetConfig;
+  }) => HTMLElement | string | null;
+  /**
+   * Override the summary content for grouped consecutive tool-call containers.
+   * Return `null` to fall back to the built-in `Called [x] tools` summary.
+   */
+  renderGroupedSummary?: (context: {
+    messages: AgentWidgetMessage[];
+    toolCalls: AgentWidgetToolCall[];
+    defaultSummary: string;
+    config: AgentWidgetConfig;
+  }) => HTMLElement | string | null;
+};
+
+export type AgentWidgetReasoningConfig = {
+  /**
+   * Override the collapsed summary row content for a reasoning bubble.
+   * Return `null` to fall back to the built-in summary.
+   */
+  renderCollapsedSummary?: (context: {
+    message: AgentWidgetMessage;
+    reasoning: AgentWidgetReasoning;
+    defaultSummary: string;
+    previewText: string;
+    isActive: boolean;
+    config: AgentWidgetConfig;
+  }) => HTMLElement | string | null;
+  /**
+   * Override the lightweight collapsed preview content shown for active reasoning rows.
+   * Return `null` to fall back to the built-in preview text.
+   */
+  renderCollapsedPreview?: (context: {
+    message: AgentWidgetMessage;
+    reasoning: AgentWidgetReasoning;
+    defaultPreview: string;
+    isActive: boolean;
+    config: AgentWidgetConfig;
+  }) => HTMLElement | string | null;
 };
 
 export type AgentWidgetSuggestionChipsConfig = {
@@ -2358,6 +2483,7 @@ export type AgentWidgetConfig = {
    */
   textToSpeech?: TextToSpeechConfig;
   toolCall?: AgentWidgetToolCallConfig;
+  reasoning?: AgentWidgetReasoningConfig;
   /**
    * Configuration for tool approval bubbles.
    * Set to `false` to disable built-in approval handling entirely.

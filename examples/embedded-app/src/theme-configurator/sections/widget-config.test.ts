@@ -3,6 +3,7 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import { render } from './widget-config';
+import * as state from '../state';
 
 describe('widget config section parity', () => {
   test('renders all configure tab sections with sub-group dividers', () => {
@@ -67,5 +68,40 @@ describe('widget config section parity', () => {
     expect(action?.textContent).toContain('Edit appearance');
     expect(action?.dataset.crosslinkTab).toBe('style');
     expect(action?.dataset.crosslinkSection).toBe('launcher-style');
+  });
+
+  test('debug inspection section renders preview transcript builder controls', () => {
+    const container = document.createElement('div');
+    render(container, vi.fn());
+
+    const debugSection = container.querySelector('[data-section-id="debug-inspection"]');
+    const previewTypeSelect = debugSection?.querySelector('[data-preview-transcript-select]') as HTMLSelectElement | null;
+    const addButton = debugSection?.querySelector('[data-preview-transcript-add]') as HTMLButtonElement | null;
+    const clearButton = debugSection?.querySelector('[data-preview-transcript-clear]') as HTMLButtonElement | null;
+
+    expect(previewTypeSelect).not.toBeNull();
+    expect(addButton?.textContent).toContain('Add');
+    expect(clearButton?.textContent).toContain('Clear');
+  });
+
+  test('preview transcript builder appends and clears entries', () => {
+    const container = document.createElement('div');
+    state.initStore();
+    render(container, vi.fn());
+
+    const debugSection = container.querySelector('[data-section-id="debug-inspection"]')!;
+    const previewTypeSelect = debugSection.querySelector('[data-preview-transcript-select]') as HTMLSelectElement;
+    const addButton = debugSection.querySelector('[data-preview-transcript-add]') as HTMLButtonElement;
+    const clearButton = debugSection.querySelector('[data-preview-transcript-clear]') as HTMLButtonElement;
+
+    previewTypeSelect.value = 'tool-running';
+    addButton.click();
+    previewTypeSelect.value = 'reasoning-streaming';
+    addButton.click();
+
+    expect(state.getPreviewTranscriptEntries()).toEqual(['tool-running', 'reasoning-streaming']);
+
+    clearButton.click();
+    expect(state.getPreviewTranscriptEntries()).toEqual([]);
   });
 });
