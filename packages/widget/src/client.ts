@@ -1552,6 +1552,7 @@ export class AgentWidgetClient {
               0,
               (reasoningMessage.reasoning.completedAt ?? Date.now()) - start
             );
+            reasonSeqBuffers.delete(reasoningId);
           }
           reasoningMessage.streaming = reasoningMessage.reasoning.status !== "complete";
           emitMessage(reasoningMessage);
