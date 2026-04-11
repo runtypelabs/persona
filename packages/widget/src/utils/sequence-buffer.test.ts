@@ -177,6 +177,36 @@ describe("SequenceReorderBuffer", () => {
     buf2.destroy();
   });
 
+  it("no-seq flush does not leak a gap timer", () => {
+    const buf = new SequenceReorderBuffer(emitter, 50);
+    buf.push("step_delta", { seq: 1, text: "a" });
+    buf.push("step_delta", { seq: 3, text: "c" }); // buffered, starts gap timer
+    expect(emitted).toHaveLength(1);
+
+    // A no-seq event triggers flushAll, which should also cancel the gap timer
+    buf.push("flow_complete", { flowId: "done" });
+    expect(emitted).toHaveLength(3); // a, c, flow_complete
+
+    // Reset to simulate a new flow with a fresh sequence space
+    buf.reset();
+
+    // Now push new sequenced events in a fresh range
+    buf.push("step_delta", { seq: 10, text: "j" }); // first in new range, emits
+    buf.push("step_delta", { seq: 12, text: "l" }); // buffered, starts new gap timer
+
+    // Advance past the original gap timeout (100ms > 50ms) — the orphaned timer
+    // must NOT have fired. Only the new gap timer (for seq 12) should fire.
+    // If the old timer leaked, it would have fired at 50ms and flushed 'l' early,
+    // then the new timer would fire again at 100ms causing a double-flush.
+    vi.advanceTimersByTime(50);
+
+    // The new gap timer fires, flushing 'l'
+    expect(emitted).toHaveLength(5); // a, c, flow_complete, j, l
+    expect(emitted[3].payload.text).toBe("j");
+    expect(emitted[4].payload.text).toBe("l");
+    buf.destroy();
+  });
+
   it("supports sequenceIndex as an alternative to seq", () => {
     const buf = new SequenceReorderBuffer(emitter);
     buf.push("text_delta", { sequenceIndex: 1, text: "a" });
