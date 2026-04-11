@@ -2025,3 +2025,129 @@ describe('preferFinalStructuredContent', () => {
   });
 });
 
+describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
+  it('should reorder step_delta chunks by seq when events arrive out of order', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // Send chunks out of order (seq 3 before seq 2)
+          e({ type: 'step_delta', id: 's1', text: 'Hello', partId: 'text_0', seq: 1 });
+          e({ type: 'step_delta', id: 's1', text: ' world', partId: 'text_0', seq: 3 });
+          e({ type: 'step_delta', id: 's1', text: ' beautiful', partId: 'text_0', seq: 2 });
+          e({ type: 'step_delta', id: 's1', text: '!', partId: 'text_0', seq: 4 });
+          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const finalMessages = messageEvents.filter((e) => !e.message.streaming);
+    expect(finalMessages.length).toBeGreaterThan(0);
+
+    const lastFinal = finalMessages[finalMessages.length - 1];
+    // Content should be in seq order, not arrival order
+    expect(lastFinal.message.content).toBe('Hello beautiful world!');
+  });
+
+  it('should reorder reason_delta chunks by sequenceIndex', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          e({ type: 'reason_start', reasoningId: 'r1', hidden: false, done: false });
+          // Send reasoning chunks out of order
+          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'I ', hidden: false, done: false, sequenceIndex: 1 });
+          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'about', hidden: false, done: false, sequenceIndex: 3 });
+          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'think ', hidden: false, done: false, sequenceIndex: 2 });
+          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: ' this.', hidden: false, done: false, sequenceIndex: 4 });
+          e({ type: 'reason_complete', reasoningId: 'r1', hidden: false, done: true });
+          e({ type: 'step_delta', id: 's1', text: 'Result', partId: 'text_0' });
+          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const reasoningMsgs = messageEvents.filter(
+      (e) => e.message.reasoning && e.message.reasoning.chunks.length > 0
+    );
+    expect(reasoningMsgs.length).toBeGreaterThan(0);
+
+    const lastReasoning = reasoningMsgs[reasoningMsgs.length - 1];
+    // Reasoning chunks should be in sequenceIndex order
+    const fullReasoning = lastReasoning.message.reasoning!.chunks.join('');
+    expect(fullReasoning).toBe('I think about this.');
+  });
+
+  it('should handle step_delta without seq gracefully (no reordering)', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // No seq field — should append in arrival order
+          e({ type: 'step_delta', id: 's1', text: 'Hello ' });
+          e({ type: 'step_delta', id: 's1', text: 'world' });
+          e({ type: 'step_delta', id: 's1', text: '!' });
+          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const finalMessages = messageEvents.filter((e) => !e.message.streaming);
+    expect(finalMessages.length).toBeGreaterThan(0);
+
+    const lastFinal = finalMessages[finalMessages.length - 1];
+    expect(lastFinal.message.content).toBe('Hello world!');
+  });
+});
+
