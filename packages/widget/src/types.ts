@@ -602,6 +602,12 @@ export type AgentWidgetToolCallDisplayFeature = {
    * @default false
    */
   grouped?: boolean;
+  /**
+   * When false, tool call bubbles show only the collapsed summary with no
+   * expand/collapse toggle. Users see tool awareness without full details.
+   * @default true
+   */
+  expandable?: boolean;
 };
 
 export type AgentWidgetReasoningDisplayFeature = {
@@ -619,6 +625,12 @@ export type AgentWidgetReasoningDisplayFeature = {
    * @default 3
    */
   previewMaxLines?: number;
+  /**
+   * When false, reasoning bubbles show only the collapsed summary with no
+   * expand/collapse toggle. Users see reasoning awareness without full details.
+   * @default true
+   */
+  expandable?: boolean;
 };
 
 export type AgentWidgetFeatureFlags = {

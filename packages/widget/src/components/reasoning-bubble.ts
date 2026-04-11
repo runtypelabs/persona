@@ -91,17 +91,22 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
     return bubble;
   }
 
-  let expanded = reasoningExpansionState.has(message.id);
   const reasoningDisplayConfig = config?.features?.reasoningDisplay ?? {};
+  const expandable = reasoningDisplayConfig.expandable !== false;
+  let expanded = expandable && reasoningExpansionState.has(message.id);
   const isActive = reasoning.status !== "complete";
   const previewText = getReasoningPreviewText(message, reasoningDisplayConfig.previewMaxLines ?? 3);
   const header = createElement(
     "button",
-    "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
+    expandable
+      ? "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
+      : "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-default persona-border-none"
   ) as HTMLButtonElement;
   header.type = "button";
-  header.setAttribute("aria-expanded", expanded ? "true" : "false");
-  header.setAttribute("data-expand-header", "true");
+  if (expandable) {
+    header.setAttribute("aria-expanded", expanded ? "true" : "false");
+    header.setAttribute("data-expand-header", "true");
+  }
   header.setAttribute("data-bubble-type", "reasoning");
 
   const headerContent = createElement("div", "persona-flex persona-flex-col persona-text-left");
@@ -135,20 +140,23 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
     title.style.display = "";
   }
 
-  const toggleIcon = createElement("div", "persona-flex persona-items-center");
-  const iconColor = "currentColor";
-  const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
-  if (chevronIcon) {
-    toggleIcon.appendChild(chevronIcon);
+  let toggleIcon: HTMLElement | null = null;
+  if (expandable) {
+    toggleIcon = createElement("div", "persona-flex persona-items-center");
+    const iconColor = "currentColor";
+    const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+    if (chevronIcon) {
+      toggleIcon.appendChild(chevronIcon);
+    } else {
+      toggleIcon.textContent = expanded ? "Hide" : "Show";
+    }
+
+    const headerMeta = createElement("div", "persona-flex persona-items-center persona-ml-auto");
+    headerMeta.append(toggleIcon);
+    header.append(headerContent, headerMeta);
   } else {
-    // Fallback to text if icon fails
-    toggleIcon.textContent = expanded ? "Hide" : "Show";
+    header.append(headerContent);
   }
-
-  const headerMeta = createElement("div", "persona-flex persona-items-center persona-ml-auto");
-  headerMeta.append(toggleIcon);
-
-  header.append(headerContent, headerMeta);
 
   const collapsedPreview = createElement(
     "div",
@@ -176,6 +184,11 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
     bubble.style.minHeight = reasoningDisplayConfig.activeMinHeight;
   }
 
+  if (!expandable) {
+    bubble.append(header, collapsedPreview);
+    return bubble;
+  }
+
   const content = createElement(
     "div",
     "persona-border-t persona-border-gray-200 persona-bg-gray-50 persona-px-4 persona-py-3"
@@ -196,15 +209,15 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
 
   const applyExpansionState = () => {
     header.setAttribute("aria-expanded", expanded ? "true" : "false");
-    // Update chevron icon
-    toggleIcon.innerHTML = "";
-    const iconColor = "currentColor";
-    const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
-    if (chevronIcon) {
-      toggleIcon.appendChild(chevronIcon);
-    } else {
-      // Fallback to text if icon fails
-      toggleIcon.textContent = expanded ? "Hide" : "Show";
+    if (toggleIcon) {
+      toggleIcon.innerHTML = "";
+      const iconColor = "currentColor";
+      const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+      if (chevronIcon) {
+        toggleIcon.appendChild(chevronIcon);
+      } else {
+        toggleIcon.textContent = expanded ? "Hide" : "Show";
+      }
     }
     content.style.display = expanded ? "" : "none";
     collapsedPreview.style.display = expanded ? "none" : ((collapsedPreview.textContent || collapsedPreview.childNodes.length) ? "" : "none");

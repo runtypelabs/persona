@@ -147,16 +147,21 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     return bubble;
   }
 
-  let expanded = toolExpansionState.has(message.id);
   const toolDisplayConfig = config?.features?.toolCallDisplay ?? {};
+  const expandable = toolDisplayConfig.expandable !== false;
+  let expanded = expandable && toolExpansionState.has(message.id);
   const { summary, previewText, isActive } = getToolSummaryText(message, config);
   const header = createElement(
     "button",
-    "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
+    expandable
+      ? "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
+      : "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-default persona-border-none"
   ) as HTMLButtonElement;
   header.type = "button";
-  header.setAttribute("aria-expanded", expanded ? "true" : "false");
-  header.setAttribute("data-expand-header", "true");
+  if (expandable) {
+    header.setAttribute("aria-expanded", expanded ? "true" : "false");
+    header.setAttribute("data-expand-header", "true");
+  }
   header.setAttribute("data-bubble-type", "tool");
 
   // Apply header styles
@@ -196,20 +201,23 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     headerContent.appendChild(title);
   }
 
-  const toggleIcon = createElement("div", "persona-flex persona-items-center");
-  const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
-  const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
-  if (chevronIcon) {
-    toggleIcon.appendChild(chevronIcon);
+  let toggleIcon: HTMLElement | null = null;
+  if (expandable) {
+    toggleIcon = createElement("div", "persona-flex persona-items-center");
+    const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
+    const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+    if (chevronIcon) {
+      toggleIcon.appendChild(chevronIcon);
+    } else {
+      toggleIcon.textContent = expanded ? "Hide" : "Show";
+    }
+
+    const headerMeta = createElement("div", "persona-flex persona-items-center persona-gap-2 persona-ml-auto");
+    headerMeta.append(toggleIcon);
+    header.append(headerContent, headerMeta);
   } else {
-    // Fallback to text if icon fails
-    toggleIcon.textContent = expanded ? "Hide" : "Show";
+    header.append(headerContent);
   }
-
-  const headerMeta = createElement("div", "persona-flex persona-items-center persona-gap-2 persona-ml-auto");
-  headerMeta.append(toggleIcon);
-
-  header.append(headerContent, headerMeta);
 
   const collapsedPreview = createElement(
     "div",
@@ -240,6 +248,11 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
 
   if (!expanded && isActive && toolDisplayConfig.activeMinHeight) {
     bubble.style.minHeight = toolDisplayConfig.activeMinHeight;
+  }
+
+  if (!expandable) {
+    bubble.append(header, collapsedPreview);
+    return bubble;
   }
 
   const content = createElement(
@@ -383,15 +396,15 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
 
   const applyToolExpansion = () => {
     header.setAttribute("aria-expanded", expanded ? "true" : "false");
-    // Update chevron icon
-    toggleIcon.innerHTML = "";
-    const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
-    const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
-    if (chevronIcon) {
-      toggleIcon.appendChild(chevronIcon);
-    } else {
-      // Fallback to text if icon fails
-      toggleIcon.textContent = expanded ? "Hide" : "Show";
+    if (toggleIcon) {
+      toggleIcon.innerHTML = "";
+      const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
+      const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+      if (chevronIcon) {
+        toggleIcon.appendChild(chevronIcon);
+      } else {
+        toggleIcon.textContent = expanded ? "Hide" : "Show";
+      }
     }
     content.style.display = expanded ? "" : "none";
     collapsedPreview.style.display = expanded

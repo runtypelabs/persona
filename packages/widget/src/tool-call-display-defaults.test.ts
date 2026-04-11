@@ -9,6 +9,7 @@ describe("tool call display defaults", () => {
       activePreview: false,
       grouped: false,
       previewMaxLines: 3,
+      expandable: true,
     });
   });
 
@@ -16,6 +17,7 @@ describe("tool call display defaults", () => {
     expect(DEFAULT_WIDGET_CONFIG.features?.reasoningDisplay).toEqual({
       activePreview: false,
       previewMaxLines: 3,
+      expandable: true,
     });
   });
 });

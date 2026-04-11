@@ -122,10 +122,12 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       activePreview: false,
       grouped: false,
       previewMaxLines: 3,
+      expandable: true,
     },
     reasoningDisplay: {
       activePreview: false,
       previewMaxLines: 3,
+      expandable: true,
     },
   },
   suggestionChips: [
