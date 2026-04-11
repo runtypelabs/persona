@@ -3945,6 +3945,10 @@ export const createAgentExperience = (
       const previousColorScheme = config.colorScheme;
       const previousLoadingIndicator = config.loadingIndicator;
       const previousIterationDisplay = config.iterationDisplay;
+      const previousShowReasoning = config.features?.showReasoning;
+      const previousShowToolCalls = config.features?.showToolCalls;
+      const previousToolCallDisplay = config.features?.toolCallDisplay;
+      const previousReasoningDisplay = config.features?.reasoningDisplay;
       config = { ...config, ...nextConfig };
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
@@ -4185,8 +4189,12 @@ export const createAgentExperience = (
         || config.loadingIndicator?.renderIdle !== previousLoadingIndicator?.renderIdle
         || config.loadingIndicator?.showBubble !== previousLoadingIndicator?.showBubble;
       const iterationDisplayChanged = config.iterationDisplay !== previousIterationDisplay;
+      const featuresChanged = (config.features?.showReasoning ?? true) !== (previousShowReasoning ?? true)
+        || (config.features?.showToolCalls ?? true) !== (previousShowToolCalls ?? true)
+        || JSON.stringify(config.features?.toolCallDisplay) !== JSON.stringify(previousToolCallDisplay)
+        || JSON.stringify(config.features?.reasoningDisplay) !== JSON.stringify(previousReasoningDisplay);
       const messagesConfigChanged = toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged
-        || loadingIndicatorChanged || iterationDisplayChanged;
+        || loadingIndicatorChanged || iterationDisplayChanged || featuresChanged;
       if (messagesConfigChanged && session) {
         configVersion++;
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);

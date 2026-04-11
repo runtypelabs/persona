@@ -684,21 +684,11 @@ export function createPreviewManager(
       })
       .join('|');
 
-    const featureSignature = [
-      config.features?.showReasoning ? '1' : '0',
-      config.features?.showToolCalls ? '1' : '0',
-      config.features?.toolCallDisplay?.collapsedMode ?? '',
-      config.features?.toolCallDisplay?.activePreview ? '1' : '0',
-      config.features?.toolCallDisplay?.grouped ? '1' : '0',
-      config.features?.toolCallDisplay?.previewMaxLines ?? '',
-      config.features?.toolCallDisplay?.activeMinHeight ?? '',
-      config.features?.reasoningDisplay?.activePreview ? '1' : '0',
-      config.features?.reasoningDisplay?.previewMaxLines ?? '',
-      config.features?.reasoningDisplay?.activeMinHeight ?? '',
-    ].join(',');
-
+    // Feature display flags (showReasoning, showToolCalls, toolCallDisplay,
+    // reasoningDisplay) are intentionally excluded — they are handled live by
+    // controller.update() without requiring an iframe remount.
     const mode = isDockedMountMode(config) ? `docked:${(config.launcher?.dock ?? {}).side ?? 'right'}:${(config.launcher?.dock ?? {}).width ?? '420px'}` : 'floating';
-    return [mode, featureSignature, initialMessagesSignature].join('::');
+    return [mode, initialMessagesSignature].join('::');
   }
 
   function getPreviewSpecs(preserveBackgroundStates = false): PreviewMountSpec[] {
