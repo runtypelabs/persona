@@ -13,6 +13,10 @@ export class SequenceReorderBuffer {
   }
 
   push(payloadType: string, payload: any): void {
+    // All three fields are sourced from the same FlowExecutionEngine.sequenceCounter:
+    //   - `seq`: step_delta, text_start, text_end, agent_* events (top-level)
+    //   - `sequenceIndex`: reason_start, reason_delta, reason_complete, source
+    //   - `agentContext.seq`: tool_start, tool_delta, tool_complete (agent loop)
     const seq = payload?.seq ?? payload?.sequenceIndex ?? payload?.agentContext?.seq;
 
     // No seq field — emit immediately (backward compat).
@@ -27,9 +31,10 @@ export class SequenceReorderBuffer {
       return;
     }
 
-    // Initialize expected seq from first event
+    // Server's sequenceCounter resets to 0 on each execution and pre-increments,
+    // so the first sequenced event in any stream always has seq=1.
     if (this.nextExpectedSeq === null) {
-      this.nextExpectedSeq = seq;
+      this.nextExpectedSeq = 1;
     }
 
     // If this is the expected event, emit it and drain consecutive buffered events
