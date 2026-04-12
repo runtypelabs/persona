@@ -2149,5 +2149,133 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
     const lastFinal = finalMessages[finalMessages.length - 1];
     expect(lastFinal.message.content).toBe('Hello world!');
   });
+
+  it('should handle leading-gap arrival (first event is not seq=1)', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // seq=3 arrives first (leading gap — seq 1 and 2 arrive later)
+          e({ type: 'step_delta', id: 's1', text: 'c', partId: 'text_0', seq: 3 });
+          e({ type: 'step_delta', id: 's1', text: 'a', partId: 'text_0', seq: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'b', partId: 'text_0', seq: 2 });
+          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const finalMessages = messageEvents.filter((e) => !e.message.streaming);
+    expect(finalMessages.length).toBeGreaterThan(0);
+
+    const lastFinal = finalMessages[finalMessages.length - 1];
+    // Must be in seq order, not arrival order
+    expect(lastFinal.message.content).toBe('abc');
+  });
+
+  it('should handle mixed seq + sequenceIndex in one stream', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // reason_delta uses sequenceIndex, step_delta uses seq — same counter
+          e({ type: 'reason_start', reasoningId: 'r1', hidden: false, done: false });
+          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'thinking', hidden: false, done: false, sequenceIndex: 1 });
+          e({ type: 'reason_complete', reasoningId: 'r1', hidden: false, done: true });
+          // step_delta seq=2 continues from the same counter
+          e({ type: 'step_delta', id: 's1', text: 'Result', partId: 'text_0', seq: 2 });
+          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    // Should have both reasoning and text messages, properly ordered
+    const reasoningMsgs = messageEvents.filter(e => e.message.reasoning?.chunks?.length);
+    expect(reasoningMsgs.length).toBeGreaterThan(0);
+    expect(reasoningMsgs[reasoningMsgs.length - 1].message.reasoning!.chunks.join('')).toBe('thinking');
+
+    const textMsgs = messageEvents.filter(e => e.message.role === 'assistant' && !e.message.variant && e.message.content);
+    expect(textMsgs.length).toBeGreaterThan(0);
+    expect(textMsgs[textMsgs.length - 1].message.content).toContain('Result');
+  });
+
+  it('should handle cross-event buffering around tool events', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // text_start and step_delta with seq, then tool events (no seq), then more text
+          e({ type: 'text_start', partId: 'text_0', messageId: 'msg_1', seq: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'Before tool ', partId: 'text_0', seq: 2 });
+          e({ type: 'text_end', partId: 'text_0', messageId: 'msg_1', seq: 3 });
+          // Tool events don't carry top-level seq in non-agent flows
+          e({ type: 'tool_start', toolCallId: 'tc1', name: 'fetch', parameters: {} });
+          e({ type: 'tool_complete', toolCallId: 'tc1', name: 'fetch', result: { data: 'ok' }, executionTime: 100 });
+          e({ type: 'text_start', partId: 'text_1', messageId: 'msg_1', seq: 4 });
+          e({ type: 'step_delta', id: 's1', text: 'after tool', partId: 'text_1', seq: 5 });
+          e({ type: 'text_end', partId: 'text_1', messageId: 'msg_1', seq: 6 });
+          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    // Should have text content from both segments
+    const allContent = messageEvents
+      .filter(e => e.message.role === 'assistant' && !e.message.variant)
+      .map(e => e.message.content);
+    const combinedContent = allContent.join('');
+    expect(combinedContent).toContain('Before tool ');
+    expect(combinedContent).toContain('after tool');
+  });
 });
 
