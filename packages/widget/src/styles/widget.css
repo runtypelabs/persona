@@ -93,6 +93,35 @@
   gap: 1.5rem;
 }
 
+[data-persona-root] .persona-widget-container .persona-attachment-drop-overlay {
+  display: none;
+  position: absolute;
+  inset: var(--persona-drop-overlay-inset, 0);
+  z-index: 50;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  pointer-events: none;
+  background: var(--persona-drop-overlay-bg, rgba(59, 130, 246, 0.08));
+  -webkit-backdrop-filter: blur(var(--persona-drop-overlay-blur, 8px));
+  backdrop-filter: blur(var(--persona-drop-overlay-blur, 8px));
+  border: var(--persona-drop-overlay-border, 2px dashed rgba(59, 130, 246, 0.4));
+  border-radius: var(--persona-drop-overlay-radius, inherit);
+  transition: opacity 0.15s ease;
+}
+
+[data-persona-root] .persona-widget-container .persona-attachment-drop-overlay .persona-drop-overlay-label {
+  font-size: var(--persona-drop-overlay-label-size, 0.875rem);
+  color: var(--persona-drop-overlay-label-color, rgba(59, 130, 246, 0.8));
+  font-weight: 500;
+  user-select: none;
+}
+
+[data-persona-root] .persona-widget-container.persona-attachment-drop-active .persona-attachment-drop-overlay {
+  display: flex;
+}
+
 /* Widget CSS Variables - scoped to widget root to avoid polluting global namespace */
 [data-persona-root] {
   --persona-radius-sm: 0.125rem;
@@ -935,6 +964,7 @@
 }
 
 .persona-widget-container {
+  position: relative;
   border-radius: var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem));
 }
 

@@ -2081,6 +2081,35 @@ export type AgentWidgetAttachmentsConfig = {
    * Callback when a file is rejected (wrong type or too large).
    */
   onFileRejected?: (file: File, reason: 'type' | 'size' | 'count') => void;
+  /**
+   * Customize the drag-and-drop overlay that appears when files are dragged over the widget.
+   */
+  dropOverlay?: {
+    /** Background color/value of the overlay. @default 'rgba(59, 130, 246, 0.08)' */
+    background?: string;
+    /** Backdrop blur applied behind the overlay (CSS value). @default '8px' */
+    backdropBlur?: string;
+    /** Border style shown during drag. @default '2px dashed rgba(59, 130, 246, 0.4)' */
+    border?: string;
+    /** Border radius of the overlay. @default 'inherit' */
+    borderRadius?: string;
+    /** Inset/margin pulling the overlay away from the container edges (CSS value). @default '0' */
+    inset?: string;
+    /** Lucide icon name displayed in the center. @default 'upload' */
+    iconName?: string;
+    /** Icon size (CSS value). @default '48px' */
+    iconSize?: string;
+    /** Icon stroke color. @default 'rgba(59, 130, 246, 0.6)' */
+    iconColor?: string;
+    /** Icon stroke width. @default 0.5 */
+    iconStrokeWidth?: number;
+    /** Optional label text shown below the icon. */
+    label?: string;
+    /** Label font size. @default '0.875rem' */
+    labelSize?: string;
+    /** Label color. @default 'rgba(59, 130, 246, 0.8)' */
+    labelColor?: string;
+  };
 };
 
 /**

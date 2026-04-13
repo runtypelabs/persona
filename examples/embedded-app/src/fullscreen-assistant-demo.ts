@@ -186,7 +186,8 @@ const fullscreenAssistantComposerPlugin: AgentWidgetPlugin = {
     const input = document.createElement("textarea");
     input.setAttribute("data-persona-composer-input", "");
     input.rows = 1;
-    input.placeholder = config.copy?.inputPlaceholder ?? "Reply…";
+    input.placeholder =
+      config.copy?.inputPlaceholder ?? "Reply… (drop files on the chat to attach)";
     input.className =
       "persona-w-full persona-resize-none persona-border-none persona-bg-transparent persona-text-sm persona-outline-none persona-px-5";
     input.style.color = COLORS.text;
@@ -283,7 +284,7 @@ const fullscreenAssistantComposerPlugin: AgentWidgetPlugin = {
 
     const trySend = () => {
       const v = input.value.trim();
-      if (v) onSubmit(v);
+      onSubmit(v);
       input.value = "";
     };
 
@@ -481,7 +482,7 @@ const config = mergeWithDefaults({
   launcher: { enabled: false, fullHeight: true },
   copy: {
     showWelcomeCard: false,
-    inputPlaceholder: "Reply…"
+    inputPlaceholder: "Reply… (drop files on the chat to attach)"
   },
   voiceRecognition: { enabled: true },
   messageActions: {
