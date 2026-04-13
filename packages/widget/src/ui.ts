@@ -1989,8 +1989,13 @@ export const createAgentExperience = (
   let isAutoScrolling = false;
   let hasPendingAutoScroll = false;
 
-  const USER_SCROLL_THRESHOLD = 1;
-  const BOTTOM_THRESHOLD = 8;
+  // Scroll events caused by layout, scroll anchoring, and smooth-scroll
+  // easing can easily move by a couple pixels. Keep manual wheel intent
+  // responsive, but require a slightly larger raw scroll delta before we
+  // treat a plain scroll event as the user breaking away.
+  const USER_SCROLL_THRESHOLD = 4;
+  const BOTTOM_THRESHOLD = 24;
+  const AUTO_SCROLL_SNAP_THRESHOLD = 80;
   const messageState = new Map<
     string,
     { streaming?: boolean; role: AgentWidgetMessage["role"] }
@@ -2174,6 +2179,18 @@ export const createAgentExperience = (
     // If already at bottom or very close, skip animation to prevent glitch
     if (Math.abs(distance) < 1) {
       lastScrollTop = element.scrollTop;
+      return;
+    }
+
+    // If the transcript has fallen noticeably behind, catch up immediately
+    // instead of easing over multiple frames. This keeps fast streaming /
+    // bursty tool and reasoning updates pinned to the bottom.
+    if (Math.abs(distance) >= AUTO_SCROLL_SNAP_THRESHOLD) {
+      cancelSmoothScroll();
+      isAutoScrolling = true;
+      element.scrollTop = target;
+      lastScrollTop = element.scrollTop;
+      isAutoScrolling = false;
       return;
     }
 
