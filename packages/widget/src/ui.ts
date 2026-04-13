@@ -147,6 +147,19 @@ function getClipboardImageFiles(clipboardData: DataTransfer | null): File[] {
   return imageFiles;
 }
 
+function dataTransferHasFiles(
+  dataTransfer: DataTransfer | null
+): dataTransfer is DataTransfer {
+  if (!dataTransfer) return false;
+  const types = dataTransfer.types;
+  if (!types) return false;
+  // Real browsers return DOMStringList which has .contains(); test polyfills use plain arrays.
+  if (typeof (types as unknown as { contains?: unknown }).contains === "function") {
+    return (types as unknown as DOMStringList).contains("Files");
+  }
+  return Array.from(types).includes("Files");
+}
+
 // ============================================================================
 // PERSIST STATE HELPERS
 // ============================================================================
@@ -389,11 +402,43 @@ const buildPostprocessor = (
   };
 };
 
+function buildDropOverlay(
+  dropCfg?: NonNullable<AgentWidgetConfig["attachments"]>["dropOverlay"]
+): HTMLElement {
+  const overlay = createElement("div", "persona-attachment-drop-overlay");
+  if (dropCfg?.background) overlay.style.setProperty("--persona-drop-overlay-bg", dropCfg.background);
+  if (dropCfg?.backdropBlur !== undefined) overlay.style.setProperty("--persona-drop-overlay-blur", dropCfg.backdropBlur);
+  if (dropCfg?.border) overlay.style.setProperty("--persona-drop-overlay-border", dropCfg.border);
+  if (dropCfg?.borderRadius) overlay.style.setProperty("--persona-drop-overlay-radius", dropCfg.borderRadius);
+  if (dropCfg?.inset) overlay.style.setProperty("--persona-drop-overlay-inset", dropCfg.inset);
+  if (dropCfg?.labelSize) overlay.style.setProperty("--persona-drop-overlay-label-size", dropCfg.labelSize);
+  if (dropCfg?.labelColor) overlay.style.setProperty("--persona-drop-overlay-label-color", dropCfg.labelColor);
+
+  const iconName = dropCfg?.iconName ?? "upload";
+  const iconSize = dropCfg?.iconSize ?? "48px";
+  const iconColor = dropCfg?.iconColor ?? "rgba(59, 130, 246, 0.6)";
+  const iconStrokeWidth = dropCfg?.iconStrokeWidth ?? 0.5;
+  const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, iconStrokeWidth);
+  if (iconSvg) overlay.appendChild(iconSvg);
+
+  if (dropCfg?.label) {
+    const labelEl = createElement("span", "persona-drop-overlay-label");
+    labelEl.textContent = dropCfg.label;
+    overlay.appendChild(labelEl);
+  }
+  return overlay;
+}
+
 export const createAgentExperience = (
   mount: HTMLElement,
   initialConfig?: AgentWidgetConfig,
   runtimeOptions?: { debugTools?: boolean }
 ): Controller => {
+  if (mount == null) {
+    throw new Error(
+      "createAgentExperience: mount must be a non-null HTMLElement (e.g. pass document.getElementById(\"my-root\") after the node exists)."
+    );
+  }
   // Preserve original mount id as data attribute for window event instance scoping
   if (mount.id && !mount.getAttribute("data-persona-instance")) {
     mount.setAttribute("data-persona-instance", mount.id);
@@ -870,8 +915,21 @@ export const createAgentExperience = (
         return composerElements.footer;
       },
       onSubmit: (text: string) => {
-        if (session && !session.isStreaming()) {
-          session.sendMessage(text);
+        if (!session || session.isStreaming()) return;
+        const value = text.trim();
+        const hasAttachments = attachmentManager?.hasAttachments() ?? false;
+        if (!value && !hasAttachments) return;
+        let contentParts: ContentPart[] | undefined;
+        if (hasAttachments) {
+          contentParts = [];
+          contentParts.push(...attachmentManager!.getContentParts());
+          if (value) {
+            contentParts.push(createTextPart(value));
+          }
+        }
+        session.sendMessage(value, { contentParts });
+        if (hasAttachments) {
+          attachmentManager!.clearAttachments();
         }
       },
       streaming: false,
@@ -959,6 +1017,10 @@ export const createAgentExperience = (
       attachmentManager?.handleFileSelect(target.files);
       target.value = "";
     });
+
+    const dropCfg = config.attachments.dropOverlay;
+    const overlay = buildDropOverlay(dropCfg);
+    container.appendChild(overlay);
   }
 
   // Slot system: allow custom content injection into specific regions
@@ -1925,6 +1987,7 @@ export const createAgentExperience = (
   let lastScrollTop = 0;
   let scrollRAF: number | null = null;
   let isAutoScrolling = false;
+  let hasPendingAutoScroll = false;
 
   const USER_SCROLL_THRESHOLD = 1;
   const BOTTOM_THRESHOLD = 8;
@@ -2041,6 +2104,7 @@ export const createAgentExperience = (
       cancelAnimationFrame(scrollRAF);
       scrollRAF = null;
     }
+    hasPendingAutoScroll = false;
     cancelSmoothScroll();
   };
 
@@ -2076,10 +2140,25 @@ export const createAgentExperience = (
 
     if (!force && !isStreaming) return;
 
-    cancelAutoScroll();
+    // Only cancel the pending schedule rAF — keep the ongoing smooth scroll
+    // animation alive so isAutoScrolling stays true.  This prevents scroll
+    // events fired by DOM morphing (between cancel and the next rAF) from
+    // being misinterpreted as user-initiated upward scrolls that would
+    // permanently pause auto-follow during streaming.
+    // smoothScrollToBottom() already calls cancelSmoothScroll() internally
+    // before starting its new animation.
+    if (scrollRAF !== null) {
+      cancelAnimationFrame(scrollRAF);
+      scrollRAF = null;
+    }
 
+    // Treat the render -> next-rAF window as programmatic scrolling too.
+    // This prevents layout/scroll-anchoring scroll events fired before the
+    // actual smooth scroll starts from being misread as user intent.
+    hasPendingAutoScroll = true;
     scrollRAF = requestAnimationFrame(() => {
       scrollRAF = null;
+      hasPendingAutoScroll = false;
       if (!autoFollow.isFollowing()) return;
       smoothScrollToBottom(getScrollableContainer(), force ? 220 : 140);
     });
@@ -3776,7 +3855,7 @@ export const createAgentExperience = (
       lastScrollTop,
       nearBottom: isElementNearBottom(body, BOTTOM_THRESHOLD),
       userScrollThreshold: USER_SCROLL_THRESHOLD,
-      isAutoScrolling,
+      isAutoScrolling: isAutoScrolling || hasPendingAutoScroll,
       pauseOnUpwardScroll: true,
       pauseWhenAwayFromBottom: false,
       resumeRequiresDownwardScroll: true
@@ -3915,12 +3994,94 @@ export const createAgentExperience = (
   textarea?.addEventListener("keydown", handleInputEnter);
   textarea?.addEventListener("paste", handleInputPaste);
 
+  const ATTACHMENT_DROP_ACTIVE_CLASS = "persona-attachment-drop-active";
+  let attachmentFileDragDepth = 0;
+
+  const clearAttachmentDropVisual = () => {
+    attachmentFileDragDepth = 0;
+    container.classList.remove(ATTACHMENT_DROP_ACTIVE_CLASS);
+  };
+
+  const attachmentDropHandlingActive = (): boolean =>
+    config.attachments?.enabled === true && attachmentManager !== null;
+
+  // Visual highlight tracked on `container` (the chat column).
+  const handleAttachmentDragEnterCapture = (e: DragEvent) => {
+    if (!dataTransferHasFiles(e.dataTransfer) || !attachmentDropHandlingActive()) return;
+    attachmentFileDragDepth++;
+    if (attachmentFileDragDepth === 1) {
+      container.classList.add(ATTACHMENT_DROP_ACTIVE_CLASS);
+    }
+  };
+
+  const handleAttachmentDragLeaveCapture = (e: DragEvent) => {
+    if (!dataTransferHasFiles(e.dataTransfer) || !attachmentDropHandlingActive()) return;
+    attachmentFileDragDepth--;
+    if (attachmentFileDragDepth <= 0) {
+      clearAttachmentDropVisual();
+    }
+  };
+
+  // dragover + drop registered on `mount` so the browser default (open file)
+  // is suppressed across the entire widget surface (artifact pane, gaps, etc.).
+  const handleAttachmentDragOverCapture = (e: DragEvent) => {
+    if (!dataTransferHasFiles(e.dataTransfer) || !attachmentDropHandlingActive()) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleAttachmentDropCapture = (e: DragEvent) => {
+    if (!dataTransferHasFiles(e.dataTransfer) || !attachmentDropHandlingActive()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    clearAttachmentDropVisual();
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length === 0) return;
+    void attachmentManager!.handleFiles(files);
+  };
+
+  const attachmentDropCapture = true;
+  container.addEventListener("dragenter", handleAttachmentDragEnterCapture, attachmentDropCapture);
+  container.addEventListener("dragleave", handleAttachmentDragLeaveCapture, attachmentDropCapture);
+  mount.addEventListener("dragover", handleAttachmentDragOverCapture, attachmentDropCapture);
+  mount.addEventListener("drop", handleAttachmentDropCapture, attachmentDropCapture);
+
+  // Prevent the browser from navigating to/opening a dropped file anywhere on
+  // the page while this widget instance has attachments enabled.  These guards
+  // intentionally skip the `dataTransferHasFiles` check because real OS drags
+  // may expose `dataTransfer.types` as a DOMStringList or restrict access
+  // during certain drag phases.  The cost is minimal: we suppress the native
+  // "open file" default for ALL drag-overs while the widget is alive and
+  // attachments are on — text drags into the textarea still work because
+  // element-level handlers are unaffected (we don't stopPropagation here).
+  const ownerDoc = mount.ownerDocument;
+  const handleDocDragOver = (e: DragEvent) => {
+    if (!attachmentDropHandlingActive()) return;
+    e.preventDefault();
+  };
+  const handleDocDrop = (e: DragEvent) => {
+    if (!attachmentDropHandlingActive()) return;
+    e.preventDefault();
+  };
+  ownerDoc.addEventListener("dragover", handleDocDragOver);
+  ownerDoc.addEventListener("drop", handleDocDrop);
+
   destroyCallbacks.push(() => {
     if (composerForm) {
       composerForm.removeEventListener("submit", handleSubmit);
     }
     textarea?.removeEventListener("keydown", handleInputEnter);
     textarea?.removeEventListener("paste", handleInputPaste);
+  });
+
+  destroyCallbacks.push(() => {
+    container.removeEventListener("dragenter", handleAttachmentDragEnterCapture, attachmentDropCapture);
+    container.removeEventListener("dragleave", handleAttachmentDragLeaveCapture, attachmentDropCapture);
+    mount.removeEventListener("dragover", handleAttachmentDragOverCapture, attachmentDropCapture);
+    mount.removeEventListener("drop", handleAttachmentDropCapture, attachmentDropCapture);
+    ownerDoc.removeEventListener("dragover", handleDocDragOver);
+    ownerDoc.removeEventListener("drop", handleDocDrop);
+    clearAttachmentDropVisual();
   });
 
   destroyCallbacks.push(() => {
@@ -4958,6 +5119,11 @@ export const createAgentExperience = (
               }
             });
           }
+
+          // Create drop overlay if missing
+          if (!container.querySelector(".persona-attachment-drop-overlay")) {
+            container.appendChild(buildDropOverlay(attachmentsConfig.dropOverlay));
+          }
         } else {
           // Show existing attachment button and update config
           attachmentButtonWrapper.style.display = "";
@@ -4987,6 +5153,8 @@ export const createAgentExperience = (
         if (attachmentManager) {
           attachmentManager.clearAttachments();
         }
+        // Remove drop overlay
+        container.querySelector(".persona-attachment-drop-overlay")?.remove();
       }
 
       // Update send button styling

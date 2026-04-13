@@ -286,6 +286,7 @@ export default defineConfig({
         'bakery-goods': path.resolve(__dirname, 'bakery-goods.html'),
         'bakery-services': path.resolve(__dirname, 'bakery-services.html'),
         // Approval demo
+        'attachments-demo': path.resolve(__dirname, 'attachments-demo.html'),
         'approval-demo': path.resolve(__dirname, 'approval-demo.html'),
         // Focus input demo
         'focus-input-demo': path.resolve(__dirname, 'focus-input-demo.html'),
@@ -295,6 +296,7 @@ export default defineConfig({
         'launcher-demo': path.resolve(__dirname, 'launcher-demo.html'),
         'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
         'voice-integration-demo': path.resolve(__dirname, 'voice-integration-demo.html'),
+        'autoscroll-stress-test': path.resolve(__dirname, 'autoscroll-stress-test.html'),
         // Standalone (CDN / Copy-Paste) pages
         'standalone/shopify': path.resolve(__dirname, 'standalone/shopify.html'),
         'standalone/example-shop': path.resolve(__dirname, 'standalone/example-shop.html'),

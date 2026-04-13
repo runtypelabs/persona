@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css">
+    <link rel="icon" href="/favicon.ico" />
+    <title>Auto-Scroll Stress Test - Persona</title>
+    <style>
+      body {
+        padding: 1.5rem;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      h1 { margin: 0 0 0.25rem 0; }
+      .subtitle { color: var(--muted); margin: 0 0 1.5rem 0; font-size: 0.875rem; }
+
+      .layout {
+        width: 100%;
+      }
+
+      .controls {
+        background: var(--card);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem;
+        box-shadow: var(--shadow-md);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        position: sticky;
+        top: 1.5rem;
+      }
+      .controls h2 {
+        font-size: 0.9375rem;
+        margin: 0;
+        color: var(--foreground);
+      }
+      .controls p {
+        font-size: 0.8125rem;
+        color: var(--muted);
+        margin: 0;
+      }
+      .btn-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .btn-group label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+      button {
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--foreground);
+        font-size: 0.8125rem;
+        cursor: pointer;
+        transition: background 0.15s;
+        text-align: left;
+      }
+      button:hover { background: var(--border); }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      button.running {
+        border-color: #f59e0b;
+        background: rgba(245, 158, 11, 0.1);
+      }
+      .status-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        font-size: 0.8125rem;
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .status-dot.following { background: #22c55e; }
+      .status-dot.paused { background: #ef4444; }
+      .status-dot.idle { background: #94a3b8; }
+      #log {
+        font-size: 0.75rem;
+        font-family: monospace;
+        background: #111;
+        color: #aaa;
+        border-radius: var(--radius-sm);
+        padding: 0.5rem;
+        max-height: 160px;
+        overflow-y: auto;
+        line-height: 1.6;
+      }
+      #log .info { color: #60a5fa; }
+      #log .warn { color: #f59e0b; }
+    </style>
+  </head>
+  <body>
+    <!-- Mount first so it always exists before the module runs (deferred ES modules). -->
+    <div id="autoscroll-launcher-root" aria-hidden="true"></div>
+
+    <h1>Auto-Scroll Stress Test</h1>
+    <p class="subtitle">
+      Uses the floating launcher (bottom-right). The panel opens automatically. Run a scenario and watch the
+      message list — it should stay pinned to the bottom unless you scroll up inside the chat.
+    </p>
+
+    <div class="layout">
+      <div class="controls">
+        <div>
+          <h2>Status</h2>
+          <div class="status-row" id="follow-status">
+            <span class="status-dot following"></span>
+            <span>Auto-follow: active</span>
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <label>Scenarios</label>
+          <button id="btn-rapid">Rapid Messages (20 msgs, 100ms apart)</button>
+          <button id="btn-stream">Simulate Streaming (word-by-word)</button>
+          <button id="btn-conversation">Realistic Conversation</button>
+          <button id="btn-mixed">Mixed Content (markdown, code, lists)</button>
+          <button id="btn-trace">Tool + Reasoning Trace</button>
+          <button id="btn-stress">Stress Test (all at once)</button>
+        </div>
+
+        <div class="btn-group">
+          <label>Utilities</label>
+          <button id="btn-cancel">Cancel Running Scenario</button>
+          <button id="btn-reset">Reset Session</button>
+        </div>
+
+        <div>
+          <h2>Log</h2>
+          <div id="log"></div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import "@runtypelabs/persona/widget.css";
+      import "./src/index.css";
+      import { createAgentExperience, DEFAULT_WIDGET_CONFIG } from "@runtypelabs/persona";
+
+      // ── helpers ──────────────────────────────────────────────────
+
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      let cancelToken = { cancelled: false };
+
+      function freshCancel() {
+        cancelToken.cancelled = true;
+        cancelToken = { cancelled: false };
+        return cancelToken;
+      }
+
+      const logEl = document.getElementById("log");
+      function log(msg, cls = "") {
+        if (!logEl) return;
+        const line = document.createElement("div");
+        if (cls) line.className = cls;
+        line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function setAllButtons(disabled) {
+        document.querySelectorAll(".btn-group button").forEach((b) => {
+          if (b.id !== "btn-cancel" && b.id !== "btn-reset") b.disabled = disabled;
+        });
+      }
+
+      let msgCounter = 0;
+      const nextId = (prefix) => `${prefix}-${++msgCounter}`;
+
+      // ── widget init ─────────────────────────────────────────────
+
+      const mount = document.getElementById("autoscroll-launcher-root");
+      if (!mount) {
+        throw new Error('[autoscroll-stress-test] Missing #autoscroll-launcher-root in the DOM.');
+      }
+      const controller = createAgentExperience(mount, {
+        ...DEFAULT_WIDGET_CONFIG,
+        apiUrl: "https://noop.test/chat",
+        launcher: {
+          ...DEFAULT_WIDGET_CONFIG.launcher,
+          enabled: true,
+          autoExpand: true,
+          width: "560px",
+          position: "bottom-right",
+        },
+        suggestionChips: [],
+        persistState: false,
+        features: {
+          ...DEFAULT_WIDGET_CONFIG.features,
+          toolCallDisplay: {
+            collapsedMode: "tool-name",
+            activePreview: true,
+          },
+          reasoningDisplay: {
+            activePreview: true,
+          },
+        },
+        theme: {
+          ...DEFAULT_WIDGET_CONFIG.theme,
+          primary: "#0d9488",
+          accent: "#0d9488",
+          surface: "#ffffff",
+          muted: "#64748b",
+        },
+        copy: {
+          ...DEFAULT_WIDGET_CONFIG.copy,
+          welcomeTitle: "Auto-Scroll Stress Test",
+          welcomeSubtitle: "Run a scenario from the test page, or type here. The transcript should auto-scroll while streaming.",
+        },
+      });
+
+      // ── follow-state monitor ────────────────────────────────────
+
+      const statusEl = document.getElementById("follow-status");
+
+      function findScrollContainer() {
+        return (
+          mount.querySelector("#persona-scroll-container") ??
+          mount.shadowRoot?.querySelector("#persona-scroll-container")
+        );
+      }
+
+      function pollFollowState() {
+        const dot = statusEl.querySelector(".status-dot");
+        const label = statusEl.querySelector("span:last-child");
+        const { open } = controller.getState();
+        if (!open) {
+          dot.className = "status-dot idle";
+          label.textContent = "Panel closed — open the chat to see scroll state";
+          requestAnimationFrame(pollFollowState);
+          return;
+        }
+        const scrollContainer = findScrollContainer();
+        if (!scrollContainer || scrollContainer.clientHeight === 0) {
+          dot.className = "status-dot idle";
+          label.textContent = "Scroll area not ready";
+          requestAnimationFrame(pollFollowState);
+          return;
+        }
+        const atBottom =
+          scrollContainer.scrollHeight - scrollContainer.clientHeight - scrollContainer.scrollTop < 12;
+        if (atBottom) {
+          dot.className = "status-dot following";
+          label.textContent = "Auto-follow: active (at bottom of transcript)";
+        } else {
+          dot.className = "status-dot paused";
+          label.textContent = "Auto-follow: paused (scrolled up in chat)";
+        }
+        requestAnimationFrame(pollFollowState);
+      }
+      requestAnimationFrame(pollFollowState);
+
+      // ── content generators ──────────────────────────────────────
+
+      const SHORT_MESSAGES = [
+        "Got it!", "Working on that now.", "Sure thing.", "Here you go!",
+        "Let me check.", "One moment please.", "Absolutely!", "Done.",
+        "I can help with that.", "Interesting question!",
+      ];
+
+      const LONG_PARAGRAPHS = [
+        "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the English alphabet at least once, making it a pangram. Pangrams are often used to display typefaces and test keyboards.",
+        "Artificial intelligence has made remarkable strides in recent years, transforming industries from healthcare to transportation. Machine learning models can now process natural language, recognize images, generate creative content, and even write code. The implications for society are both exciting and challenging.",
+        "In software engineering, maintaining clean code is not just about aesthetics — it directly impacts a team's velocity, the frequency of production incidents, and how quickly new developers can onboard. Code that is easy to read is easy to reason about, and code that is easy to reason about is easy to change safely.",
+      ];
+
+      const MARKDOWN_BLOCKS = [
+        "## Search Results\n\nHere are the top results:\n\n1. **Product A** — $29.99\n   - In stock, ships tomorrow\n   - Rating: ★★★★☆\n2. **Product B** — $49.99\n   - Limited availability\n   - Rating: ★★★★★\n3. **Product C** — $19.99\n   - Backordered until next week\n   - Rating: ★★★☆☆\n\n> *Prices may vary by region.*",
+
+        "### Steps to Complete\n\n- [x] Initialize the project\n- [x] Set up the database\n- [ ] Build the API endpoints\n- [ ] Write integration tests\n- [ ] Deploy to staging\n\nWe're making good progress! The first two steps are done.",
+
+        "Here's a code example:\n\n```javascript\nfunction fibonacci(n) {\n  if (n <= 1) return n;\n  let a = 0, b = 1;\n  for (let i = 2; i <= n; i++) {\n    [a, b] = [b, a + b];\n  }\n  return b;\n}\n\nconsole.log(fibonacci(10)); // 55\n```\n\nThis iterative approach runs in O(n) time and O(1) space.",
+
+        "| Feature | Free | Pro | Enterprise |\n|---------|------|-----|------------|\n| Users | 5 | 50 | Unlimited |\n| Storage | 1 GB | 100 GB | 1 TB |\n| Support | Community | Email | Dedicated |\n| SSO | No | No | Yes |\n\nI'd recommend the **Pro** plan for your team size.",
+      ];
+
+      const USER_MESSAGES = [
+        "Can you help me find a product?",
+        "What are the pricing options?",
+        "Tell me more about the enterprise plan.",
+        "Can you show me a code example?",
+        "What's the status of my order?",
+        "How do I set up the project?",
+        "Thanks, that's really helpful!",
+        "One more question — do you support SSO?",
+      ];
+
+      function injectReasoningMessage({ id, status = "streaming", chunks = [] }) {
+        controller.injectTestMessage({
+          type: "message",
+          message: {
+            id,
+            role: "assistant",
+            content: "",
+            createdAt: new Date().toISOString(),
+            streaming: status !== "complete",
+            variant: "reasoning",
+            reasoning: {
+              id,
+              status,
+              chunks,
+            },
+          },
+        });
+      }
+
+      function injectToolMessage({ id, name, status = "running", chunks = [], args, result }) {
+        controller.injectTestMessage({
+          type: "message",
+          message: {
+            id,
+            role: "assistant",
+            content: "",
+            createdAt: new Date().toISOString(),
+            streaming: status !== "complete",
+            variant: "tool",
+            toolCall: {
+              id,
+              name,
+              status,
+              chunks,
+              args,
+              result,
+            },
+          },
+        });
+      }
+
+      const STREAMING_TEXT = `Let me walk you through the complete setup process for your new project.
+
+First, you'll need to install the dependencies. Make sure you have Node.js version 20 or higher installed on your system. You can verify this by running \`node --version\` in your terminal.
+
+Next, clone the repository and navigate into the project directory:
+
+\`\`\`bash
+git clone https://github.com/example/project.git
+cd project
+npm install
+\`\`\`
+
+Once the dependencies are installed, you'll need to configure your environment variables. Create a \`.env\` file in the root directory with the following contents:
+
+\`\`\`
+DATABASE_URL=postgresql://localhost:5432/mydb
+API_KEY=your-api-key-here
+NODE_ENV=development
+\`\`\`
+
+Now you can start the development server:
+
+\`\`\`bash
+npm run dev
+\`\`\`
+
+The server will start on port 3000 by default. Open your browser and navigate to **http://localhost:3000** to see the application running.
+
+If you encounter any issues, check the following:
+
+1. Make sure PostgreSQL is running locally
+2. Verify your API key is valid
+3. Check that port 3000 isn't already in use
+4. Review the logs in the terminal for error messages
+
+Let me know if you need any additional help with the setup!`;
+
+      // ── scenarios ───────────────────────────────────────────────
+
+      async function rapidMessages() {
+        const token = freshCancel();
+        log("Starting: Rapid Messages", "info");
+        setAllButtons(true);
+        document.getElementById("btn-rapid").classList.add("running");
+
+        for (let i = 0; i < 20; i++) {
+          if (token.cancelled) break;
+          const isUser = i % 3 === 0;
+          if (isUser) {
+            controller.injectUserMessage({
+              id: nextId("rapid-user"),
+              content: USER_MESSAGES[i % USER_MESSAGES.length],
+            });
+          } else {
+            const long = i % 5 === 0;
+            controller.injectAssistantMessage({
+              id: nextId("rapid-asst"),
+              content: long
+                ? LONG_PARAGRAPHS[i % LONG_PARAGRAPHS.length]
+                : SHORT_MESSAGES[i % SHORT_MESSAGES.length],
+            });
+          }
+          await sleep(100);
+        }
+
+        document.getElementById("btn-rapid").classList.remove("running");
+        setAllButtons(false);
+        log("Done: Rapid Messages");
+      }
+
+      async function simulateStreaming() {
+        const token = freshCancel();
+        log("Starting: Simulate Streaming", "info");
+        setAllButtons(true);
+        document.getElementById("btn-stream").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("stream-user"),
+          content: "Can you walk me through the project setup?",
+        });
+        await sleep(400);
+
+        const msgId = nextId("stream-asst");
+        const words = STREAMING_TEXT.split(/(\s+)/);
+        let accumulated = "";
+
+        for (let i = 0; i < words.length; i++) {
+          if (token.cancelled) break;
+          accumulated += words[i];
+          controller.injectAssistantMessage({
+            id: msgId,
+            content: accumulated,
+            streaming: true,
+          });
+          // Variable delay: shorter for whitespace, longer for punctuation
+          const word = words[i].trim();
+          const delay = !word ? 0 : word.endsWith(".") || word.endsWith(":") ? 60 : 25;
+          if (delay > 0) await sleep(delay);
+        }
+
+        if (!token.cancelled) {
+          controller.injectAssistantMessage({
+            id: msgId,
+            content: accumulated,
+            streaming: false,
+          });
+        }
+
+        document.getElementById("btn-stream").classList.remove("running");
+        setAllButtons(false);
+        log("Done: Simulate Streaming");
+      }
+
+      async function realisticConversation() {
+        const token = freshCancel();
+        log("Starting: Realistic Conversation", "info");
+        setAllButtons(true);
+        document.getElementById("btn-conversation").classList.add("running");
+
+        const exchanges = [
+          { role: "user", content: "Hi! I'm looking for a good laptop for software development." },
+          { role: "assistant", content: "I'd be happy to help you find the right laptop for development! To give you the best recommendations, I have a few questions:\n\n1. **Budget range** — What's your price range?\n2. **Primary use** — What kind of development? (web, mobile, ML/AI, etc.)\n3. **OS preference** — macOS, Windows, or Linux?\n4. **Portability** — Do you need something lightweight for travel?" },
+          { role: "user", content: "Budget is around $2000, mostly web development and some Docker work. I prefer macOS but open to Linux." },
+          { role: "assistant", content: MARKDOWN_BLOCKS[0].replace(/Product/g, "Laptop").replace(/\$\d+\.\d+/g, (m, i) => ["$1,799", "$1,999", "$1,599"][i] || m) },
+          { role: "user", content: "The second one sounds good. What about the specs?" },
+          { role: "assistant", content: "Great choice! Here are the detailed specs:\n\n" + MARKDOWN_BLOCKS[3].replace(/Feature|Free|Pro|Enterprise/g, (m) => ({ Feature: "Spec", Free: "Base", Pro: "Recommended", Enterprise: "Max" }[m] || m)) },
+          { role: "user", content: "Perfect, I'll go with the recommended config. How do I order?" },
+          { role: "assistant", content: "Excellent! I'll set up the order for you. " + LONG_PARAGRAPHS[1] },
+        ];
+
+        for (const msg of exchanges) {
+          if (token.cancelled) break;
+          if (msg.role === "user") {
+            controller.injectUserMessage({ id: nextId("conv-user"), content: msg.content });
+            await sleep(800);
+          } else {
+            // Simulate word-by-word streaming for assistant
+            const msgId = nextId("conv-asst");
+            const words = msg.content.split(/(\s+)/);
+            let acc = "";
+            for (let i = 0; i < words.length; i++) {
+              if (token.cancelled) break;
+              acc += words[i];
+              controller.injectAssistantMessage({ id: msgId, content: acc, streaming: true });
+              if (words[i].trim()) await sleep(15);
+            }
+            if (!token.cancelled) {
+              controller.injectAssistantMessage({ id: msgId, content: acc, streaming: false });
+            }
+            await sleep(500);
+          }
+        }
+
+        document.getElementById("btn-conversation").classList.remove("running");
+        setAllButtons(false);
+        log("Done: Realistic Conversation");
+      }
+
+      async function mixedContent() {
+        const token = freshCancel();
+        log("Starting: Mixed Content", "info");
+        setAllButtons(true);
+        document.getElementById("btn-mixed").classList.add("running");
+
+        for (let i = 0; i < MARKDOWN_BLOCKS.length; i++) {
+          if (token.cancelled) break;
+          controller.injectUserMessage({
+            id: nextId("mix-user"),
+            content: USER_MESSAGES[i % USER_MESSAGES.length],
+          });
+          await sleep(300);
+
+          if (token.cancelled) break;
+          // Stream each markdown block word-by-word
+          const msgId = nextId("mix-asst");
+          const words = MARKDOWN_BLOCKS[i].split(/(\s+)/);
+          let acc = "";
+          for (let j = 0; j < words.length; j++) {
+            if (token.cancelled) break;
+            acc += words[j];
+            controller.injectAssistantMessage({ id: msgId, content: acc, streaming: true });
+            if (words[j].trim()) await sleep(20);
+          }
+          if (!token.cancelled) {
+            controller.injectAssistantMessage({ id: msgId, content: acc, streaming: false });
+          }
+          await sleep(400);
+        }
+
+        document.getElementById("btn-mixed").classList.remove("running");
+        setAllButtons(false);
+        log("Done: Mixed Content");
+      }
+
+      async function toolReasoningTrace() {
+        const token = freshCancel();
+        log("Starting: Tool + Reasoning Trace", "info");
+        setAllButtons(true);
+        document.getElementById("btn-trace").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("trace-user"),
+          content: "Can you analyze the integration docs and summarize the best setup path?",
+        });
+        await sleep(250);
+
+        const reasoningId = nextId("trace-reasoning");
+        const reasoningChunks = [
+          "I should first inspect the official integration docs, then compare installation options, and finally summarize the shortest path for a production-ready setup.",
+          "I also want to note any caveats around styling, proxying, and event stream visibility so the recommendation is practical rather than generic.",
+        ];
+        injectReasoningMessage({
+          id: reasoningId,
+          status: "streaming",
+          chunks: [reasoningChunks[0]],
+        });
+        await sleep(500);
+        if (token.cancelled) return finish();
+
+        injectReasoningMessage({
+          id: reasoningId,
+          status: "complete",
+          chunks: reasoningChunks,
+        });
+        await sleep(250);
+        if (token.cancelled) return finish();
+
+        const toolOneId = nextId("trace-tool");
+        injectToolMessage({
+          id: toolOneId,
+          name: "Fetch integration docs",
+          status: "running",
+          args: { source: "docs", topic: "embed setup" },
+          chunks: ["Loading widget install guide and configuration reference..."],
+        });
+        await sleep(550);
+        if (token.cancelled) return finish();
+
+        injectToolMessage({
+          id: toolOneId,
+          name: "Fetch integration docs",
+          status: "complete",
+          args: { source: "docs", topic: "embed setup" },
+          chunks: [
+            "Loading widget install guide and configuration reference...",
+            "Found inline embed, launcher mode, and proxy examples.",
+          ],
+          result: {
+            recommended: "launcher",
+            notes: ["supports auto-open", "simple setup", "good for testing transcript behavior"],
+          },
+        });
+        await sleep(250);
+        if (token.cancelled) return finish();
+
+        const toolTwoId = nextId("trace-tool");
+        injectToolMessage({
+          id: toolTwoId,
+          name: "Compare demo layouts",
+          status: "running",
+          args: { demos: ["homepage", "event-stream-testing", "autoscroll-stress-test"] },
+          chunks: ["Comparing working examples for panel width, scroll behavior, and launcher configuration..."],
+        });
+        await sleep(500);
+        if (token.cancelled) return finish();
+
+        injectToolMessage({
+          id: toolTwoId,
+          name: "Compare demo layouts",
+          status: "complete",
+          args: { demos: ["homepage", "event-stream-testing", "autoscroll-stress-test"] },
+          chunks: [
+            "Comparing working examples for panel width, scroll behavior, and launcher configuration...",
+            "Launcher mode works best here once the panel width is increased and transcript rows include reasoning/tool variants.",
+          ],
+          result: {
+            launcherWidth: "560px",
+            activePreview: true,
+          },
+        });
+        await sleep(300);
+        if (token.cancelled) return finish();
+
+        controller.injectAssistantMessage({
+          id: nextId("trace-summary"),
+          content:
+            "Best path: use the launcher for this stress test, keep the panel wider, and exercise transcript behavior with explicit **reasoning** and **tool** rows. Expand the new rows above to verify their collapsed summaries, previews, and final content all auto-scroll correctly.",
+        });
+
+        finish();
+
+        function finish() {
+          document.getElementById("btn-trace").classList.remove("running");
+          setAllButtons(false);
+          log("Done: Tool + Reasoning Trace");
+        }
+      }
+
+      async function stressTest() {
+        const token = freshCancel();
+        log("Starting: Stress Test", "warn");
+        setAllButtons(true);
+        document.getElementById("btn-stress").classList.add("running");
+
+        // Phase 1: burst of short messages
+        log("Phase 1/3: Rapid burst");
+        for (let i = 0; i < 10; i++) {
+          if (token.cancelled) break;
+          const isUser = i % 2 === 0;
+          if (isUser) {
+            controller.injectUserMessage({ id: nextId("stress-user"), content: USER_MESSAGES[i % USER_MESSAGES.length] });
+          } else {
+            controller.injectAssistantMessage({ id: nextId("stress-asst"), content: SHORT_MESSAGES[i % SHORT_MESSAGES.length] });
+          }
+          await sleep(50);
+        }
+
+        if (token.cancelled) { finish(); return; }
+
+        // Phase 2: long streaming message while short messages interleave
+        log("Phase 2/3: Streaming + interleaved injections");
+        const streamId = nextId("stress-stream");
+        const words = STREAMING_TEXT.split(/(\s+)/);
+        let acc = "";
+        let interleaveIdx = 0;
+
+        for (let i = 0; i < words.length; i++) {
+          if (token.cancelled) break;
+          acc += words[i];
+          controller.injectAssistantMessage({ id: streamId, content: acc, streaming: true });
+
+          // Every ~40 words, inject a user message (simulates concurrent activity)
+          if (i > 0 && i % 80 === 0) {
+            controller.injectUserMessage({
+              id: nextId("stress-interleave"),
+              content: USER_MESSAGES[interleaveIdx++ % USER_MESSAGES.length],
+            });
+          }
+          if (words[i].trim()) await sleep(15);
+        }
+        if (!token.cancelled) {
+          controller.injectAssistantMessage({ id: streamId, content: acc, streaming: false });
+        }
+
+        if (token.cancelled) { finish(); return; }
+        await sleep(200);
+
+        // Phase 3: rapid markdown blocks
+        log("Phase 3/3: Rapid rich content");
+        for (const block of MARKDOWN_BLOCKS) {
+          if (token.cancelled) break;
+          controller.injectAssistantMessage({ id: nextId("stress-md"), content: block });
+          await sleep(150);
+        }
+
+        finish();
+        function finish() {
+          document.getElementById("btn-stress").classList.remove("running");
+          setAllButtons(false);
+          log("Done: Stress Test");
+        }
+      }
+
+      // ── wire buttons ────────────────────────────────────────────
+
+      document.getElementById("btn-rapid").addEventListener("click", rapidMessages);
+      document.getElementById("btn-stream").addEventListener("click", simulateStreaming);
+      document.getElementById("btn-conversation").addEventListener("click", realisticConversation);
+      document.getElementById("btn-mixed").addEventListener("click", mixedContent);
+      document.getElementById("btn-trace").addEventListener("click", toolReasoningTrace);
+      document.getElementById("btn-stress").addEventListener("click", stressTest);
+
+      document.getElementById("btn-cancel").addEventListener("click", () => {
+        cancelToken.cancelled = true;
+        setAllButtons(false);
+        document.querySelectorAll(".running").forEach((b) => b.classList.remove("running"));
+        log("Cancelled", "warn");
+      });
+
+      document.getElementById("btn-reset").addEventListener("click", () => {
+        cancelToken.cancelled = true;
+        controller.clearChat();
+        msgCounter = 0;
+        setAllButtons(false);
+        document.querySelectorAll(".running").forEach((b) => b.classList.remove("running"));
+        log("Session reset", "info");
+      });
+
+      // Seed the launcher with a deterministic transcript that includes
+      // reasoning + tool rows so the demo is immediately useful on load.
+      controller.clearChat();
+      requestAnimationFrame(() => {
+        toolReasoningTrace();
+      });
+    </script>
+  </body>
+</html>

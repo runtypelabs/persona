@@ -472,6 +472,52 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
+  it("ignores layout-driven scroll events before a scheduled auto-scroll starts", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        toolCallDisplay: {
+          activePreview: true,
+        },
+      },
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    expect(scrollContainer).not.toBeNull();
+
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 960,
+      clientHeight: 400,
+    });
+
+    emitStreamingStatus(controller);
+    emitToolMessage(controller, { id: "tool-1", chunks: ["Loaded tools"] });
+    emitToolMessage(controller, { id: "tool-2", chunks: ["Fetched docs"] });
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    metrics.setScrollHeight(1035);
+    emitToolMessage(controller, {
+      id: "tool-3",
+      chunks: ["Compared layouts and noted launcher sizing"],
+    });
+
+    // Simulate the browser emitting a scroll event caused by layout/scroll
+    // anchoring before the scheduled auto-scroll rAF has started.
+    metrics.setScrollTop(metrics.getScrollTop() - 2);
+    scrollContainer!.dispatchEvent(new Event("scroll"));
+
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    controller.destroy();
+  });
+
   it("uses icon-only arrow-down defaults for the transcript affordance", () => {
     const raf = installRafMock();
     const mount = createMount();

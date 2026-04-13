@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" />
+  <title>Attachments Demo</title>
+  <style>
+    #attachments-widget { height: 100%; }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .config-field label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+
+    .config-field select,
+    .config-field input {
+      width: 100%;
+      padding: 0.4rem 0.5rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--foreground);
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <a href="/" class="back-link">&larr; Back to examples</a>
+
+  <div class="layout">
+    <!-- Left: Info Panel -->
+    <div class="info-panel">
+      <h1>Attachments Demo</h1>
+      <p>Enable file attachments in the composer. Users can click the attach button or drag &amp; drop files onto the widget.</p>
+
+      <div class="info-section">
+        <h3>How it works</h3>
+        <p>Set <code>attachments.enabled: true</code> in the widget config. Files are converted to base64 content parts and sent alongside the message text. You can constrain allowed types, max file size, and max file count.</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Configuration</h3>
+        <div class="config-grid">
+          <div class="config-field">
+            <label for="cfg-max-files">Max files</label>
+            <select id="cfg-max-files">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="4" selected>4</option>
+              <option value="6">6</option>
+              <option value="8">8</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label for="cfg-max-size">Max file size</label>
+            <select id="cfg-max-size">
+              <option value="1">1 MB</option>
+              <option value="5">5 MB</option>
+              <option value="10" selected>10 MB</option>
+              <option value="25">25 MB</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label for="cfg-allowed-types">Allowed types</label>
+            <select id="cfg-allowed-types">
+              <option value="images" selected>Images only</option>
+              <option value="images-pdf">Images + PDF</option>
+              <option value="all">All supported</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label for="cfg-icon">Button icon</label>
+            <select id="cfg-icon">
+              <option value="paperclip" selected>paperclip</option>
+              <option value="image-plus">image-plus</option>
+              <option value="upload">upload</option>
+            </select>
+          </div>
+        </div>
+
+        <h3 style="margin: 0.75rem 0 0.5rem; font-size: 0.85rem;">Drop Overlay</h3>
+        <div class="config-grid">
+          <div class="config-field">
+            <label for="cfg-drop-bg">Background</label>
+            <select id="cfg-drop-bg">
+              <option value="" selected>Default (light blue)</option>
+              <option value="rgba(59,130,246,0.15)" data-no-blur>Color only (blue, no blur)</option>
+              <option value="rgba(34,197,94,0.08)">Green tint</option>
+              <option value="rgba(168,85,247,0.08)">Purple tint</option>
+              <option value="rgba(0,0,0,0.06)">Neutral</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label for="cfg-drop-icon">Overlay icon</label>
+            <select id="cfg-drop-icon">
+              <option value="" selected>upload (default)</option>
+              <option value="image-plus">image-plus</option>
+              <option value="file-up">file-up</option>
+              <option value="cloud-upload">cloud-upload</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label for="cfg-drop-stroke">Icon stroke width</label>
+            <select id="cfg-drop-stroke">
+              <option value="" selected>Default (0.5)</option>
+              <option value="1">Thin (1)</option>
+              <option value="2">Medium (2)</option>
+              <option value="2.5">Thick (2.5)</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label for="cfg-drop-label">Label text</label>
+            <input type="text" id="cfg-drop-label" placeholder="e.g. Drop files here" />
+          </div>
+          <div class="config-field">
+            <label for="cfg-drop-border">Border style</label>
+            <select id="cfg-drop-border">
+              <option value="" selected>Default (dashed blue)</option>
+              <option value="2px dashed rgba(34,197,94,0.4)">Dashed green</option>
+              <option value="2px solid rgba(59,130,246,0.3)">Solid blue</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label for="cfg-drop-blur">Backdrop blur</label>
+            <select id="cfg-drop-blur">
+              <option value="" selected>Default (8px)</option>
+              <option value="0px">None</option>
+              <option value="4px">Subtle (4px)</option>
+              <option value="16px">Heavy (16px)</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label for="cfg-drop-inset">Inset (margin)</label>
+            <select id="cfg-drop-inset">
+              <option value="" selected>None (0)</option>
+              <option value="4px">4px</option>
+              <option value="8px">8px</option>
+              <option value="12px">12px</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="apply-config">Apply &amp; Reload Widget</button>
+      </div>
+
+      <div class="info-section">
+        <h3>Try it</h3>
+        <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.85rem; color: var(--muted);">
+          <li>Click the attach button in the composer</li>
+          <li>Drag &amp; drop a file onto the chat</li>
+          <li>Paste an image from your clipboard</li>
+          <li>Attach multiple files, then send a message</li>
+        </ul>
+      </div>
+
+      <div class="code-block">
+        <span class="comment">// Enable attachments with a custom drop overlay</span><br>
+        <span class="keyword">const</span> config = {<br>
+        &nbsp;&nbsp;<span class="prop">attachments</span>: {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="prop">enabled</span>: <span class="keyword">true</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="prop">maxFiles</span>: <span class="string">4</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="prop">maxFileSize</span>: <span class="string">10 * 1024 * 1024</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="prop">dropOverlay</span>: {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="prop">background</span>: <span class="string">'rgba(59,130,246,0.08)'</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="prop">iconName</span>: <span class="string">'upload'</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="prop">label</span>: <span class="string">'Drop files here'</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+        &nbsp;&nbsp;}<br>
+        };
+      </div>
+
+      <h3 style="margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--muted);">Event Log</h3>
+      <div class="event-log" id="log">
+        <div style="color: var(--muted);">Waiting for attachment events…</div>
+      </div>
+    </div>
+
+    <!-- Right: Widget -->
+    <div class="panel widget-container">
+      <div id="attachments-widget"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/attachments-demo.ts"></script>
+</body>
+</html>
