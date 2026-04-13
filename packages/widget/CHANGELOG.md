@@ -1,5 +1,13 @@
 # @runtypelabs/persona
 
+## 3.10.1
+
+### Patch Changes
+
+- b40b9b0: Add drag-and-drop file upload on the chat panel when attachments are enabled, with a subtle drop-target highlight.
+- b40b9b0: `createAgentExperience` now throws a clear error when `mount` is null or undefined instead of failing on property access.
+- b40b9b0: `renderComposer` `onSubmit` now sends pending attachments (and optional text) the same way as the built-in composer.
+
 ## 3.10.0
 
 ### Minor Changes
