@@ -623,12 +623,13 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 ### Styling
 | Property | Description |
 |----------|-------------|
+| `shadow` | Box-shadow for tool call bubbles; overrides `theme.toolBubbleShadow` |
 | `backgroundColor` / `borderColor` / `borderWidth` / `borderRadius` | Container styling |
 | `headerBackgroundColor` / `headerTextColor` / `headerPaddingX` / `headerPaddingY` | Header styling |
 | `contentBackgroundColor` / `contentTextColor` / `contentPaddingX` / `contentPaddingY` | Content styling |
 | `codeBlockBackgroundColor` / `codeBlockBorderColor` / `codeBlockTextColor` | Code block styling |
 | `toggleTextColor` | Expand/collapse toggle color |
-| `labelTextColor` | Label color |
+| `labelTextColor` | Section label color ("Arguments", "Result", etc.) |
 
 ### Text Templates
 | Property | Default | Description |
@@ -640,9 +641,15 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 
 **Example:** `"Calling {toolName}... ~{duration}~"` renders the duration in a muted/dim style.
 
-### Loading Animations (`config.features.toolCallDisplay.*`)
+### Display Features (`config.features.toolCallDisplay.*`)
 | Property | Default | Description |
 |----------|---------|-------------|
+| `collapsedMode` | `"tool-call"` | What collapsed rows show: `"tool-call"` \| `"tool-name"` \| `"tool-preview"` |
+| `activePreview` | `false` | Show a lightweight preview block on active collapsed tool calls |
+| `activeMinHeight` | — | CSS min-height for active collapsed rows (e.g. `"100px"`) |
+| `previewMaxLines` | `3` | Maximum preview lines for collapsed active tool calls |
+| `grouped` | `false` | Visually group consecutive tool call rows |
+| `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
 | `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
 
 | Property (`config.toolCall.*`) | Default | Description |
