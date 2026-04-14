@@ -1,0 +1,6 @@
+{
+  "name": "@runtypelabs/persona-devtools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome DevTools extension for debugging and styling the Persona chat widget"
+}
