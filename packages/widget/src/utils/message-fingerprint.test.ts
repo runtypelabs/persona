@@ -90,6 +90,18 @@ describe("computeMessageFingerprint", () => {
     expect(fp1).not.toBe(fp2);
   });
 
+  it("changes when toolCall name changes", () => {
+    const fp1 = computeMessageFingerprint(
+      makeMessage({ toolCall: { status: "running" } }),
+      0
+    );
+    const fp2 = computeMessageFingerprint(
+      makeMessage({ toolCall: { status: "running", name: "UCP Search Catalog" } }),
+      0
+    );
+    expect(fp1).not.toBe(fp2);
+  });
+
   it("changes when toolCall chunks change", () => {
     const fp1 = computeMessageFingerprint(
       makeMessage({ toolCall: { status: "running", chunks: ["Loaded tools"] } }),

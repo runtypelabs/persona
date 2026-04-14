@@ -35,6 +35,14 @@ export const morphMessages = (
             if (newNode instanceof HTMLElement && !newNode.hasAttribute("data-preserve-animation")) {
               return;
             }
+            // Allow morph when content has meaningfully changed (e.g. tool name arrived)
+            if (newNode instanceof HTMLElement && newNode.hasAttribute("data-preserve-animation")) {
+              const oldText = oldNode.textContent ?? "";
+              const newText = newNode.textContent ?? "";
+              if (oldText !== newText) {
+                return;
+              }
+            }
             return false;
           }
         }

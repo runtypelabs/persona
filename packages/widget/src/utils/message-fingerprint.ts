@@ -53,6 +53,7 @@ export function computeMessageFingerprint(
     message.llmContent?.length ?? 0,
     message.approval?.status ?? "",
     message.toolCall?.status ?? "",
+    message.toolCall?.name ?? "",
     message.toolCall?.chunks?.length ?? 0,
     message.toolCall?.chunks?.[message.toolCall.chunks.length - 1]?.slice(-32) ?? "",
     typeof message.toolCall?.args === "string"
