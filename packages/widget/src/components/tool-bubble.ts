@@ -1,10 +1,11 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
-import { formatUnknownValue, describeToolTitle } from "../utils/formatting";
+import { formatUnknownValue, describeToolTitle, resolveToolHeaderText, computeToolElapsed, parseFormattedTemplate } from "../utils/formatting";
 import { renderLucideIcon } from "../utils/icons";
 
 // Expansion state per widget instance
 export const toolExpansionState = new Set<string>();
+
 
 const appendRenderedValue = (
   container: HTMLElement,
@@ -59,11 +60,19 @@ const getToolSummaryText = (
   }
 
   const isActive = tool.status !== "complete";
+  const toolCallConfig = config?.toolCall ?? {};
   let summary = defaultSummary;
   if (collapsedMode === "tool-name") {
     summary = tool.name?.trim() || defaultSummary;
   } else if (collapsedMode === "tool-preview" && previewText) {
     summary = previewText;
+  }
+
+  // Apply text templates if configured
+  if (isActive && toolCallConfig.activeTextTemplate) {
+    summary = resolveToolHeaderText(tool, toolCallConfig.activeTextTemplate, summary);
+  } else if (!isActive && toolCallConfig.completeTextTemplate) {
+    summary = resolveToolHeaderText(tool, toolCallConfig.completeTextTemplate, summary);
   }
 
   return { summary, previewText, isActive };
@@ -151,6 +160,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   const expandable = toolDisplayConfig.expandable !== false;
   let expanded = expandable && toolExpansionState.has(message.id);
   const { summary, previewText, isActive } = getToolSummaryText(message, config);
+
   const header = createElement(
     "button",
     expandable
@@ -182,6 +192,18 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   if (toolCallConfig.headerTextColor) {
     title.style.color = toolCallConfig.headerTextColor;
   }
+
+  // Elapsed helpers — defined early so they're available to renderCollapsedSummary
+  const startedAt = String(tool.startedAt ?? Date.now());
+
+  // Helper: build a <span data-tool-elapsed> that the global timer in ui.ts updates
+  const createElapsedSpan = (): HTMLElement => {
+    const span = createElement("span", "");
+    span.setAttribute("data-tool-elapsed", startedAt);
+    span.textContent = computeToolElapsed(tool);
+    return span;
+  };
+
   const customSummary = toolCallConfig.renderCollapsedSummary?.({
     message,
     toolCall: tool,
@@ -190,6 +212,8 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     collapsedMode: toolDisplayConfig.collapsedMode ?? "tool-call",
     isActive,
     config: config ?? {},
+    elapsed: computeToolElapsed(tool),
+    createElapsedElement: createElapsedSpan,
   });
   if (typeof customSummary === "string" && customSummary.trim()) {
     title.textContent = customSummary;
@@ -199,6 +223,102 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   } else {
     title.textContent = summary;
     headerContent.appendChild(title);
+  }
+
+  // Apply loading animation when tool is active and no custom HTMLElement was provided
+  const loadingAnimation = toolDisplayConfig.loadingAnimation ?? "none";
+  const activeTemplate = toolCallConfig.activeTextTemplate;
+  const completeTemplate = toolCallConfig.completeTextTemplate;
+  const currentTemplate = isActive ? activeTemplate : completeTemplate;
+  const skipCustomElement = customSummary instanceof HTMLElement;
+
+  // Helper: append text as individual animated character spans
+  const appendCharSpans = (container: HTMLElement, text: string, startIndex: number): number => {
+    let idx = startIndex;
+    for (const char of text) {
+      const span = createElement("span", "persona-tool-char");
+      span.style.setProperty("--char-index", String(idx));
+      span.textContent = char === " " ? "\u00A0" : char;
+      container.appendChild(span);
+      idx++;
+    }
+    return idx;
+  };
+
+  /**
+   * Renders a template into the title element, handling:
+   * - Inline formatting markers: **bold**, *italic*, ~dim~
+   * - {duration} as a live-updating elapsed span (active) or static text (complete)
+   * - Character-by-character animation wrapping when `animated` is true
+   */
+  const renderFormattedTitle = (template: string, animated: boolean) => {
+    title.textContent = "";
+    const toolName = tool.name?.trim() || "tool";
+    const segments = parseFormattedTemplate(template, toolName);
+    let charIndex = 0;
+
+    for (const seg of segments) {
+      // Determine parent: wrap in a styled span if formatting is present
+      const parent = seg.styles.length > 0
+        ? (() => {
+            const w = createElement("span", seg.styles.map(s => `persona-tool-text-${s}`).join(" "));
+            title.appendChild(w);
+            return w;
+          })()
+        : title;
+
+      if (seg.isDuration && isActive) {
+        // Live-updating elapsed span for active tools
+        parent.appendChild(createElapsedSpan());
+      } else {
+        // Static text (or resolved duration for completed tools)
+        const text = seg.isDuration ? computeToolElapsed(tool) : seg.text;
+        if (animated) {
+          charIndex = appendCharSpans(parent, text, charIndex);
+        } else {
+          parent.appendChild(document.createTextNode(text));
+        }
+      }
+    }
+  };
+
+  if (!skipCustomElement) {
+    if (isActive && loadingAnimation !== "none") {
+      const animDuration = toolCallConfig.loadingAnimationDuration ?? 2000;
+      title.setAttribute("data-preserve-animation", "true");
+
+      if (loadingAnimation === "pulse") {
+        title.classList.add("persona-tool-loading-pulse");
+        title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
+        if (currentTemplate) {
+          renderFormattedTitle(currentTemplate, false);
+        }
+      } else {
+        // Character-by-character modes: shimmer, shimmer-color, rainbow
+        title.classList.add(`persona-tool-loading-${loadingAnimation}`);
+        title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
+
+        if (loadingAnimation === "shimmer-color") {
+          if (toolCallConfig.loadingAnimationColor) {
+            title.style.setProperty("--persona-tool-anim-color", toolCallConfig.loadingAnimationColor);
+          }
+          if (toolCallConfig.loadingAnimationSecondaryColor) {
+            title.style.setProperty("--persona-tool-anim-secondary-color", toolCallConfig.loadingAnimationSecondaryColor);
+          }
+        }
+
+        if (currentTemplate) {
+          renderFormattedTitle(currentTemplate, true);
+        } else {
+          const text = title.textContent || summary;
+          title.textContent = "";
+          appendCharSpans(title, text, 0);
+        }
+      }
+    } else if (currentTemplate) {
+      // Template with formatting but no animation (or completed tool)
+      renderFormattedTitle(currentTemplate, false);
+    }
   }
 
   let toggleIcon: HTMLElement | null = null;

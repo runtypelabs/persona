@@ -10,6 +10,7 @@ describe("tool call display defaults", () => {
       grouped: false,
       previewMaxLines: 3,
       expandable: true,
+      loadingAnimation: "none",
     });
   });
 

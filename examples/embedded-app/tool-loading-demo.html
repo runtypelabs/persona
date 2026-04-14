@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css">
+    <link rel="icon" href="/favicon.ico" />
+    <title>Tool Loading Animations - Persona</title>
+    <style>
+      body {
+        padding: 1.5rem;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      h1 { margin: 0 0 0.25rem 0; }
+      .subtitle { color: var(--muted); margin: 0 0 1.5rem 0; font-size: 0.875rem; }
+
+      .controls {
+        background: var(--card);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem;
+        box-shadow: var(--shadow-md);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        position: sticky;
+        top: 1.5rem;
+      }
+      .controls h2 {
+        font-size: 0.9375rem;
+        margin: 0;
+        color: var(--foreground);
+      }
+      .section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .section label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+
+      /* Mode selector buttons */
+      .mode-group {
+        display: flex;
+        gap: 0.375rem;
+        flex-wrap: wrap;
+      }
+      .mode-btn {
+        padding: 0.375rem 0.75rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--foreground);
+        font-size: 0.8125rem;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .mode-btn:hover { background: var(--border); }
+      .mode-btn.active {
+        border-color: #0d9488;
+        background: rgba(13, 148, 136, 0.1);
+        color: #0d9488;
+        font-weight: 600;
+      }
+
+      /* Inputs */
+      input[type="text"], input[type="number"] {
+        padding: 0.4rem 0.6rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--foreground);
+        font-size: 0.8125rem;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      input[type="range"] {
+        width: 100%;
+      }
+      .range-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .range-row span {
+        font-size: 0.8125rem;
+        color: var(--muted);
+        min-width: 50px;
+        text-align: right;
+      }
+      .color-row {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+      }
+      .color-row label {
+        font-size: 0.75rem;
+        color: var(--muted);
+        text-transform: none;
+        letter-spacing: 0;
+        font-weight: 400;
+      }
+      input[type="color"] {
+        width: 32px;
+        height: 28px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        padding: 0;
+      }
+
+      /* Scenario buttons */
+      button {
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--foreground);
+        font-size: 0.8125rem;
+        cursor: pointer;
+        transition: background 0.15s;
+        text-align: left;
+      }
+      button:hover { background: var(--border); }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      button.running {
+        border-color: #f59e0b;
+        background: rgba(245, 158, 11, 0.1);
+      }
+      .btn-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .btn-row {
+        display: flex;
+        gap: 0.5rem;
+      }
+      .btn-row button { flex: 1; }
+
+      #log {
+        font-size: 0.75rem;
+        font-family: monospace;
+        background: #111;
+        color: #aaa;
+        border-radius: var(--radius-sm);
+        padding: 0.5rem;
+        max-height: 120px;
+        overflow-y: auto;
+        line-height: 1.6;
+      }
+      #log .info { color: #60a5fa; }
+    </style>
+  </head>
+  <body>
+    <div id="tool-loading-launcher-root" aria-hidden="true"></div>
+
+    <h1>Tool Loading Animations</h1>
+    <p class="subtitle">
+      Configure animation mode, text templates, and colors, then run tool scenarios to preview. The widget opens automatically (bottom-right).
+    </p>
+
+    <div class="controls">
+      <div class="section">
+        <label>Animation Mode</label>
+        <div class="mode-group" id="mode-selector">
+          <button class="mode-btn active" data-mode="none">None</button>
+          <button class="mode-btn" data-mode="pulse">Pulse</button>
+          <button class="mode-btn" data-mode="shimmer">Shimmer</button>
+          <button class="mode-btn" data-mode="shimmer-color">Shimmer Color</button>
+          <button class="mode-btn" data-mode="rainbow">Rainbow</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Active Text Template</label>
+        <input type="text" id="active-template" placeholder="e.g. Calling {toolName}..." value="Calling {toolName}... ~{duration}~" />
+        <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
+          Placeholders: <code>{toolName}</code> <code>{duration}</code> &nbsp;|&nbsp; Formatting: <code>~dim~</code> <code>*italic*</code> <code>**bold**</code>
+        </small>
+      </div>
+
+      <div class="section">
+        <label>Complete Text Template</label>
+        <input type="text" id="complete-template" placeholder="e.g. Finished {toolName} ({duration})" value="Finished {toolName} ~{duration}~" />
+      </div>
+
+      <div class="section">
+        <label>Animation Duration</label>
+        <div class="range-row">
+          <input type="range" id="anim-duration" min="500" max="5000" step="100" value="2000" />
+          <span id="anim-duration-label">2000ms</span>
+        </div>
+      </div>
+
+      <div class="section" id="color-section">
+        <label>Shimmer Color Options</label>
+        <div class="color-row">
+          <label>Primary</label>
+          <input type="color" id="color-primary" value="#0d9488" />
+          <label>Secondary</label>
+          <input type="color" id="color-secondary" value="#3b82f6" />
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Tool Scenarios</label>
+        <div class="btn-group">
+          <button id="btn-short">Short Tool (1s)</button>
+          <button id="btn-medium">Medium Tool (4s)</button>
+          <button id="btn-long">Long Tool (8s) with streaming chunks</button>
+          <button id="btn-concurrent">Multiple Concurrent Tools (3 tools)</button>
+          <button id="btn-names">Tool Name Variants (short, long, empty)</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Actions</label>
+        <div class="btn-row">
+          <button id="btn-apply">Apply Config</button>
+          <button id="btn-reset">Reset</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Log</label>
+        <div id="log"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      import "@runtypelabs/persona/widget.css";
+      import "./src/index.css";
+      import { createAgentExperience, DEFAULT_WIDGET_CONFIG } from "@runtypelabs/persona";
+
+      // ── helpers ──────────────────────────────────────────────────
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      let cancelToken = { cancelled: false };
+      function freshCancel() {
+        cancelToken.cancelled = true;
+        cancelToken = { cancelled: false };
+        return cancelToken;
+      }
+
+      const logEl = document.getElementById("log");
+      function log(msg, cls = "") {
+        if (!logEl) return;
+        const line = document.createElement("div");
+        if (cls) line.className = cls;
+        line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function setAllScenarioButtons(disabled) {
+        document.querySelectorAll(".btn-group button").forEach((b) => { b.disabled = disabled; });
+      }
+
+      let msgCounter = 0;
+      const nextId = (prefix) => `${prefix}-${++msgCounter}`;
+
+      // ── state ───────────────────────────────────────────────────
+      let currentMode = "none";
+      let controller = null;
+
+      function getConfig() {
+        const mode = currentMode;
+        const activeTemplate = document.getElementById("active-template").value || undefined;
+        const completeTemplate = document.getElementById("complete-template").value || undefined;
+        const duration = parseInt(document.getElementById("anim-duration").value, 10);
+        const primaryColor = document.getElementById("color-primary").value;
+        const secondaryColor = document.getElementById("color-secondary").value;
+
+        return {
+          ...DEFAULT_WIDGET_CONFIG,
+          apiUrl: "https://noop.test/chat",
+          launcher: {
+            ...DEFAULT_WIDGET_CONFIG.launcher,
+            enabled: true,
+            autoExpand: true,
+            width: "560px",
+            position: "bottom-right",
+          },
+          suggestionChips: [],
+          persistState: false,
+          features: {
+            ...DEFAULT_WIDGET_CONFIG.features,
+            toolCallDisplay: {
+              collapsedMode: "tool-name",
+              activePreview: false,
+              expandable: true,
+              loadingAnimation: mode,
+            },
+          },
+          toolCall: {
+            activeTextTemplate: activeTemplate,
+            completeTextTemplate: completeTemplate,
+            loadingAnimationDuration: duration,
+            ...(mode === "shimmer-color" ? {
+              loadingAnimationColor: primaryColor,
+              loadingAnimationSecondaryColor: secondaryColor,
+            } : {}),
+          },
+          theme: {
+            ...DEFAULT_WIDGET_CONFIG.theme,
+            primary: "#0d9488",
+            accent: "#0d9488",
+            surface: "#ffffff",
+            muted: "#64748b",
+          },
+          copy: {
+            ...DEFAULT_WIDGET_CONFIG.copy,
+            welcomeTitle: "Tool Loading Animations",
+            welcomeSubtitle: "Use the controls to change animation settings, then run a scenario.",
+          },
+        };
+      }
+
+      function createWidget() {
+        const mount = document.getElementById("tool-loading-launcher-root");
+        if (controller) {
+          controller.destroy();
+        }
+        mount.innerHTML = "";
+        controller = createAgentExperience(mount, getConfig());
+        log("Widget created with loadingAnimation: " + currentMode, "info");
+      }
+
+      // ── mode selector ───────────────────────────────────────────
+      const modeSelector = document.getElementById("mode-selector");
+      modeSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        modeSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentMode = btn.dataset.mode;
+        // Show/hide color section
+        document.getElementById("color-section").style.display =
+          currentMode === "shimmer-color" ? "" : "none";
+      });
+      // Initialize color section visibility
+      document.getElementById("color-section").style.display = "none";
+
+      // Duration slider
+      const durationSlider = document.getElementById("anim-duration");
+      const durationLabel = document.getElementById("anim-duration-label");
+      durationSlider.addEventListener("input", () => {
+        durationLabel.textContent = durationSlider.value + "ms";
+      });
+
+      // ── tool injection helper ───────────────────────────────────
+      function injectToolMessage({ id, name, status = "running", chunks = [], args, result, startedAt, completedAt, duration }) {
+        controller.injectTestMessage({
+          type: "message",
+          message: {
+            id,
+            role: "assistant",
+            content: "",
+            createdAt: new Date().toISOString(),
+            streaming: status !== "complete",
+            variant: "tool",
+            toolCall: {
+              id,
+              name,
+              status,
+              chunks,
+              args,
+              result,
+              startedAt,
+              completedAt,
+              duration,
+            },
+          },
+        });
+      }
+
+      // ── scenarios ───────────────────────────────────────────────
+
+      async function shortTool() {
+        const token = freshCancel();
+        log("Starting: Short Tool (1s)", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-short").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Quick lookup please",
+        });
+        await sleep(300);
+
+        const toolId = nextId("tool");
+        const start = Date.now();
+        injectToolMessage({
+          id: toolId,
+          name: "Quick Lookup",
+          status: "running",
+          args: { query: "test" },
+          startedAt: start,
+        });
+
+        await sleep(1000);
+        if (token.cancelled) return finish();
+
+        injectToolMessage({
+          id: toolId,
+          name: "Quick Lookup",
+          status: "complete",
+          args: { query: "test" },
+          result: { found: true, value: "42" },
+          startedAt: start,
+          completedAt: Date.now(),
+          duration: Date.now() - start,
+        });
+
+        finish();
+        function finish() {
+          document.getElementById("btn-short").classList.remove("running");
+          setAllScenarioButtons(false);
+          log("Done: Short Tool");
+        }
+      }
+
+      async function mediumTool() {
+        const token = freshCancel();
+        log("Starting: Medium Tool (4s)", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-medium").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Search the catalog for flowers",
+        });
+        await sleep(300);
+
+        const toolId = nextId("tool");
+        const start = Date.now();
+        injectToolMessage({
+          id: toolId,
+          name: "UCP Search Catalog",
+          status: "running",
+          args: { category: "flowers", limit: 10 },
+          startedAt: start,
+        });
+
+        const chunkTexts = [
+          "Searching catalog index...",
+          "Found 47 matching products...",
+          "Filtering by availability...",
+        ];
+        for (let i = 0; i < chunkTexts.length; i++) {
+          await sleep(1200);
+          if (token.cancelled) return finish();
+          injectToolMessage({
+            id: toolId,
+            name: "UCP Search Catalog",
+            status: "running",
+            args: { category: "flowers", limit: 10 },
+            chunks: chunkTexts.slice(0, i + 1),
+            startedAt: start,
+          });
+        }
+
+        await sleep(400);
+        if (token.cancelled) return finish();
+
+        injectToolMessage({
+          id: toolId,
+          name: "UCP Search Catalog",
+          status: "complete",
+          args: { category: "flowers", limit: 10 },
+          chunks: chunkTexts,
+          result: { products: ["Roses", "Tulips", "Sunflowers", "Lilies"], total: 47 },
+          startedAt: start,
+          completedAt: Date.now(),
+          duration: Date.now() - start,
+        });
+
+        finish();
+        function finish() {
+          document.getElementById("btn-medium").classList.remove("running");
+          setAllScenarioButtons(false);
+          log("Done: Medium Tool");
+        }
+      }
+
+      async function longTool() {
+        const token = freshCancel();
+        log("Starting: Long Tool (8s)", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-long").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Run a deep analysis of our inventory",
+        });
+        await sleep(300);
+
+        const toolId = nextId("tool");
+        const start = Date.now();
+        injectToolMessage({
+          id: toolId,
+          name: "Deep Inventory Analysis",
+          status: "running",
+          args: { scope: "full", includeForecasting: true },
+          startedAt: start,
+        });
+
+        const chunkTexts = [
+          "Connecting to inventory database...",
+          "Scanning 12,847 SKUs...",
+          "Analyzing stock levels by category...",
+          "Running demand forecasting model...",
+          "Calculating reorder recommendations...",
+          "Generating summary report...",
+        ];
+        for (let i = 0; i < chunkTexts.length; i++) {
+          await sleep(1200);
+          if (token.cancelled) return finish();
+          injectToolMessage({
+            id: toolId,
+            name: "Deep Inventory Analysis",
+            status: "running",
+            args: { scope: "full", includeForecasting: true },
+            chunks: chunkTexts.slice(0, i + 1),
+            startedAt: start,
+          });
+        }
+
+        await sleep(800);
+        if (token.cancelled) return finish();
+
+        injectToolMessage({
+          id: toolId,
+          name: "Deep Inventory Analysis",
+          status: "complete",
+          args: { scope: "full", includeForecasting: true },
+          chunks: chunkTexts,
+          result: { totalSKUs: 12847, lowStock: 234, reorderNeeded: 89 },
+          startedAt: start,
+          completedAt: Date.now(),
+          duration: Date.now() - start,
+        });
+
+        finish();
+        function finish() {
+          document.getElementById("btn-long").classList.remove("running");
+          setAllScenarioButtons(false);
+          log("Done: Long Tool");
+        }
+      }
+
+      async function concurrentTools() {
+        const token = freshCancel();
+        log("Starting: Concurrent Tools", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-concurrent").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Check weather, stock price, and news headlines",
+        });
+        await sleep(300);
+
+        const tools = [
+          { name: "Get Weather", args: { city: "NYC" }, delay: 2000 },
+          { name: "Stock Price", args: { ticker: "AAPL" }, delay: 3500 },
+          { name: "News Headlines", args: { topic: "tech" }, delay: 5000 },
+        ];
+
+        const toolIds = tools.map(() => nextId("tool"));
+        const start = Date.now();
+
+        // Start all tools
+        for (let i = 0; i < tools.length; i++) {
+          injectToolMessage({
+            id: toolIds[i],
+            name: tools[i].name,
+            status: "running",
+            args: tools[i].args,
+            startedAt: start,
+          });
+          await sleep(200);
+        }
+
+        // Complete them at staggered times
+        for (let i = 0; i < tools.length; i++) {
+          await sleep(tools[i].delay - (i > 0 ? tools[i-1].delay : 0));
+          if (token.cancelled) return finish();
+          injectToolMessage({
+            id: toolIds[i],
+            name: tools[i].name,
+            status: "complete",
+            args: tools[i].args,
+            result: { status: "ok", data: `Result from ${tools[i].name}` },
+            startedAt: start,
+            completedAt: Date.now(),
+            duration: Date.now() - start,
+          });
+          log(`  Completed: ${tools[i].name}`);
+        }
+
+        finish();
+        function finish() {
+          document.getElementById("btn-concurrent").classList.remove("running");
+          setAllScenarioButtons(false);
+          log("Done: Concurrent Tools");
+        }
+      }
+
+      async function nameVariants() {
+        const token = freshCancel();
+        log("Starting: Name Variants", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-names").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Testing different tool name lengths",
+        });
+        await sleep(300);
+
+        const names = [
+          "X",
+          "Get Weather Forecast For Location",
+          "analyze_user_behavior_patterns_across_multiple_segments_and_cohorts",
+          "",  // empty name
+        ];
+
+        for (const name of names) {
+          if (token.cancelled) return finish();
+          const toolId = nextId("tool");
+          const start = Date.now();
+          injectToolMessage({
+            id: toolId,
+            name: name || undefined,
+            status: "running",
+            args: { test: true },
+            startedAt: start,
+          });
+
+          await sleep(2000);
+          if (token.cancelled) return finish();
+
+          injectToolMessage({
+            id: toolId,
+            name: name || undefined,
+            status: "complete",
+            args: { test: true },
+            result: { ok: true },
+            startedAt: start,
+            completedAt: Date.now(),
+            duration: Date.now() - start,
+          });
+          await sleep(300);
+        }
+
+        finish();
+        function finish() {
+          document.getElementById("btn-names").classList.remove("running");
+          setAllScenarioButtons(false);
+          log("Done: Name Variants");
+        }
+      }
+
+      // ── wire buttons ────────────────────────────────────────────
+
+      document.getElementById("btn-short").addEventListener("click", shortTool);
+      document.getElementById("btn-medium").addEventListener("click", mediumTool);
+      document.getElementById("btn-long").addEventListener("click", longTool);
+      document.getElementById("btn-concurrent").addEventListener("click", concurrentTools);
+      document.getElementById("btn-names").addEventListener("click", nameVariants);
+
+      document.getElementById("btn-apply").addEventListener("click", () => {
+        createWidget();
+      });
+
+      document.getElementById("btn-reset").addEventListener("click", () => {
+        cancelToken.cancelled = true;
+        currentMode = "none";
+        modeSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        modeSelector.querySelector('[data-mode="none"]').classList.add("active");
+        document.getElementById("active-template").value = "Calling {toolName}...";
+        document.getElementById("complete-template").value = "Finished {toolName} ({duration})";
+        durationSlider.value = "2000";
+        durationLabel.textContent = "2000ms";
+        document.getElementById("color-primary").value = "#0d9488";
+        document.getElementById("color-secondary").value = "#3b82f6";
+        document.getElementById("color-section").style.display = "none";
+        msgCounter = 0;
+        setAllScenarioButtons(false);
+        document.querySelectorAll(".running").forEach((b) => b.classList.remove("running"));
+        createWidget();
+        log("Reset to defaults", "info");
+      });
+
+      // ── init ────────────────────────────────────────────────────
+      createWidget();
+    </script>
+  </body>
+</html>

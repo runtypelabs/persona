@@ -620,6 +620,7 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 
 ## Tool Call Display (`config.toolCall.*`)
 
+### Styling
 | Property | Description |
 |----------|-------------|
 | `backgroundColor` / `borderColor` / `borderWidth` / `borderRadius` | Container styling |
@@ -628,6 +629,34 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 | `codeBlockBackgroundColor` / `codeBlockBorderColor` / `codeBlockTextColor` | Code block styling |
 | `toggleTextColor` | Expand/collapse toggle color |
 | `labelTextColor` | Label color |
+
+### Text Templates
+| Property | Default | Description |
+|----------|---------|-------------|
+| `activeTextTemplate` | — | Header text while tool is running. Placeholders: `{toolName}`, `{duration}` (live-updating) |
+| `completeTextTemplate` | — | Header text when tool is complete. Placeholders: `{toolName}`, `{duration}` |
+
+Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, `**bold text**`. These are parsed at render time and rendered as styled spans. They compose with all animation modes.
+
+**Example:** `"Calling {toolName}... ~{duration}~"` renders the duration in a muted/dim style.
+
+### Loading Animations (`config.features.toolCallDisplay.*`)
+| Property | Default | Description |
+|----------|---------|-------------|
+| `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
+
+| Property (`config.toolCall.*`) | Default | Description |
+|----------|---------|-------------|
+| `loadingAnimationDuration` | `2000` | Cycle duration in ms |
+| `loadingAnimationColor` | `currentColor` | Primary color for `shimmer-color` mode |
+| `loadingAnimationSecondaryColor` | `#3b82f6` | Secondary color for `shimmer-color` mode |
+
+### Custom Rendering Hooks
+| Property | Description |
+|----------|-------------|
+| `renderCollapsedSummary` | Override collapsed summary. Context includes `elapsed` (static string) and `createElapsedElement()` (returns a live-updating `<span>`) |
+| `renderCollapsedPreview` | Override collapsed preview content for active tool rows |
+| `renderGroupedSummary` | Override grouped tool container summary |
 
 ## Message Actions (`config.messageActions.*`)
 

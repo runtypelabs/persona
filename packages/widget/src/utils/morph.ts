@@ -21,14 +21,20 @@ export const morphMessages = (
   Idiomorph.morph(container, newContent.innerHTML, {
     morphStyle: "innerHTML",
     callbacks: {
-      beforeNodeMorphed(oldNode: Node, _newNode: Node): boolean | void {
+      beforeNodeMorphed(oldNode: Node, newNode: Node): boolean | void {
         if (!(oldNode instanceof HTMLElement)) return;
 
         // Preserve typing indicator dots to maintain animation continuity
         // Also preserve elements with data-preserve-animation attribute for custom loading indicators
         if (preserveTypingAnimation) {
-          if (oldNode.classList.contains("persona-animate-typing") ||
-              oldNode.hasAttribute("data-preserve-animation")) {
+          if (oldNode.classList.contains("persona-animate-typing")) {
+            return false;
+          }
+          if (oldNode.hasAttribute("data-preserve-animation")) {
+            // Allow morph when the new node drops the attribute (e.g. tool completed)
+            if (newNode instanceof HTMLElement && !newNode.hasAttribute("data-preserve-animation")) {
+              return;
+            }
             return false;
           }
         }

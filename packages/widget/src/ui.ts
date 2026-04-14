@@ -54,6 +54,7 @@ import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer } fr
 import { createStandardBubble, createTypingIndicator } from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
+import { formatElapsedMs } from "./utils/formatting";
 import { createApprovalBubble } from "./components/approval-bubble";
 import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
@@ -2977,9 +2978,33 @@ export const createAgentExperience = (
     };
   }
 
+  // Global timer for live-updating tool elapsed time spans.
+  // Runs at 100ms while any [data-tool-elapsed] span exists in the message area,
+  // auto-stops when none remain. Operates on real DOM after morph, not temp elements.
+  let toolElapsedTimerId: ReturnType<typeof setInterval> | null = null;
+  const ensureToolElapsedTimer = () => {
+    if (toolElapsedTimerId != null) return;
+    toolElapsedTimerId = setInterval(() => {
+      const spans = messagesWrapper.querySelectorAll<HTMLElement>("[data-tool-elapsed]");
+      if (spans.length === 0) {
+        clearInterval(toolElapsedTimerId!);
+        toolElapsedTimerId = null;
+        return;
+      }
+      const now = Date.now();
+      spans.forEach((span) => {
+        const startedAt = Number(span.getAttribute("data-tool-elapsed"));
+        if (!startedAt) return;
+        span.textContent = formatElapsedMs(now - startedAt);
+      });
+    }, 100);
+  };
+
   session = new AgentWidgetSession(config, {
     onMessagesChanged(messages) {
       renderMessagesWithPlugins(messagesWrapper, messages, postprocess);
+      // Start elapsed timer if any active tool has a live duration span
+      ensureToolElapsedTimer();
       // Re-render suggestions to hide them after first user message
       // Pass messages directly to avoid calling session.getMessages() during construction
       if (session) {
@@ -5733,6 +5758,10 @@ export const createAgentExperience = (
       return session.submitNPSFeedback(rating, comment);
     },
     destroy() {
+      if (toolElapsedTimerId != null) {
+        clearInterval(toolElapsedTimerId);
+        toolElapsedTimerId = null;
+      }
       destroyCallbacks.forEach((cb) => cb());
       wrapper.remove();
       launcherButtonInstance?.destroy();

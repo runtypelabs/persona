@@ -123,6 +123,7 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       grouped: false,
       previewMaxLines: 3,
       expandable: true,
+      loadingAnimation: "none",
     },
     reasoningDisplay: {
       activePreview: false,
