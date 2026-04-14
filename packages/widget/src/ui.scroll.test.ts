@@ -34,6 +34,16 @@ const installRafMock = () => {
   });
 
   return {
+    step(frameCount = 1) {
+      let frames = 0;
+      while (callbacks.size > 0 && frames < frameCount) {
+        const pending = [...callbacks.entries()];
+        callbacks.clear();
+        frames += 1;
+        now += 16;
+        pending.forEach(([, callback]) => callback(now));
+      }
+    },
     flush(maxFrames = 80) {
       let frames = 0;
       while (callbacks.size > 0 && frames < maxFrames) {
@@ -215,14 +225,14 @@ describe("createAgentExperience streaming scroll", () => {
 
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
 
-    metrics.setScrollTop(metrics.getBottomScrollTop() - 3);
+    metrics.setScrollTop(metrics.getBottomScrollTop() - 6);
     scrollContainer!.dispatchEvent(new Event("scroll"));
 
     metrics.setScrollHeight(1040);
     emitStreamingMessage(controller, "Second chunk");
     raf.flush();
 
-    expect(metrics.getScrollTop()).toBe(597);
+    expect(metrics.getScrollTop()).toBe(594);
 
     controller.destroy();
   });
@@ -358,6 +368,39 @@ describe("createAgentExperience streaming scroll", () => {
     metrics.setScrollHeight(980);
     emitStreamingMessage(controller, "Chunk two");
     raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    controller.destroy();
+  });
+
+  it("catches up immediately when a streamed update lands far behind", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    });
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    expect(scrollContainer).not.toBeNull();
+
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 900,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "Chunk one");
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    metrics.setScrollHeight(1080);
+    emitStreamingMessage(controller, "Chunk two");
+
+    // Only run the scheduled auto-scroll frame, not the whole animation.
+    raf.step(1);
 
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
 

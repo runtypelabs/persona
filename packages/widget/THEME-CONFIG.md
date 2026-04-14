@@ -620,14 +620,50 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 
 ## Tool Call Display (`config.toolCall.*`)
 
+### Styling
 | Property | Description |
 |----------|-------------|
+| `shadow` | Box-shadow for tool call bubbles; overrides `theme.toolBubbleShadow` |
 | `backgroundColor` / `borderColor` / `borderWidth` / `borderRadius` | Container styling |
 | `headerBackgroundColor` / `headerTextColor` / `headerPaddingX` / `headerPaddingY` | Header styling |
 | `contentBackgroundColor` / `contentTextColor` / `contentPaddingX` / `contentPaddingY` | Content styling |
 | `codeBlockBackgroundColor` / `codeBlockBorderColor` / `codeBlockTextColor` | Code block styling |
 | `toggleTextColor` | Expand/collapse toggle color |
-| `labelTextColor` | Label color |
+| `labelTextColor` | Section label color ("Arguments", "Result", etc.) |
+
+### Text Templates
+| Property | Default | Description |
+|----------|---------|-------------|
+| `activeTextTemplate` | — | Header text while tool is running. Placeholders: `{toolName}`, `{duration}` (live-updating) |
+| `completeTextTemplate` | — | Header text when tool is complete. Placeholders: `{toolName}`, `{duration}` |
+
+Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, `**bold text**`. These are parsed at render time and rendered as styled spans. They compose with all animation modes.
+
+**Example:** `"Calling {toolName}... ~{duration}~"` renders the duration in a muted/dim style.
+
+### Display Features (`config.features.toolCallDisplay.*`)
+| Property | Default | Description |
+|----------|---------|-------------|
+| `collapsedMode` | `"tool-call"` | What collapsed rows show: `"tool-call"` \| `"tool-name"` \| `"tool-preview"` |
+| `activePreview` | `false` | Show a lightweight preview block on active collapsed tool calls |
+| `activeMinHeight` | — | CSS min-height for active collapsed rows (e.g. `"100px"`) |
+| `previewMaxLines` | `3` | Maximum preview lines for collapsed active tool calls |
+| `grouped` | `false` | Visually group consecutive tool call rows |
+| `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
+| `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
+
+| Property (`config.toolCall.*`) | Default | Description |
+|----------|---------|-------------|
+| `loadingAnimationDuration` | `2000` | Cycle duration in ms |
+| `loadingAnimationColor` | `currentColor` | Primary color for `shimmer-color` mode |
+| `loadingAnimationSecondaryColor` | `#3b82f6` | Secondary color for `shimmer-color` mode |
+
+### Custom Rendering Hooks
+| Property | Description |
+|----------|-------------|
+| `renderCollapsedSummary` | Override collapsed summary. Context includes `elapsed` (static string) and `createElapsedElement()` (returns a live-updating `<span>`) |
+| `renderCollapsedPreview` | Override collapsed preview content for active tool rows |
+| `renderGroupedSummary` | Override grouped tool container summary |
 
 ## Message Actions (`config.messageActions.*`)
 

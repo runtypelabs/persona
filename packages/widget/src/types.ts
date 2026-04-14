@@ -577,6 +577,19 @@ export type AgentWidgetToolCallCollapsedMode =
   | "tool-name"
   | "tool-preview";
 
+/**
+ * Animation mode applied to tool call header text while the tool is running.
+ * Character-by-character modes (`shimmer`, `shimmer-color`, `rainbow`) wrap each
+ * character in a span with staggered `animation-delay`. `pulse` applies to the
+ * entire text container. Honors `prefers-reduced-motion`.
+ */
+export type AgentWidgetToolCallLoadingAnimation =
+  | "none"
+  | "pulse"
+  | "shimmer"
+  | "shimmer-color"
+  | "rainbow";
+
 export type AgentWidgetToolCallDisplayFeature = {
   /**
    * Controls what collapsed tool call rows show in their header/summary area.
@@ -590,6 +603,8 @@ export type AgentWidgetToolCallDisplayFeature = {
   activePreview?: boolean;
   /**
    * Optional CSS min-height applied to active collapsed tool call rows.
+   * @default undefined (no min-height)
+   * @example "100px"
    */
   activeMinHeight?: string;
   /**
@@ -608,6 +623,16 @@ export type AgentWidgetToolCallDisplayFeature = {
    * @default true
    */
   expandable?: boolean;
+  /**
+   * Animation mode applied to the tool call header text while the tool is active.
+   * - "none" — static text, no animation
+   * - "pulse" — opacity pulse on the entire header text
+   * - "shimmer" — monochrome opacity sweep per character
+   * - "shimmer-color" — color gradient sweep per character
+   * - "rainbow" — rainbow color cycle per character
+   * @default "none"
+   */
+  loadingAnimation?: AgentWidgetToolCallLoadingAnimation;
 };
 
 export type AgentWidgetReasoningDisplayFeature = {
@@ -1234,22 +1259,39 @@ export type AgentWidgetApprovalConfig = {
 export type AgentWidgetToolCallConfig = {
   /** Box-shadow for tool-call bubbles; overrides `theme.toolBubbleShadow` when set. */
   shadow?: string;
+  /** Background color of the tool call bubble container. */
   backgroundColor?: string;
+  /** Border color of the tool call bubble container. */
   borderColor?: string;
+  /** Border width of the tool call bubble container (CSS value, e.g. `"1px"`). */
   borderWidth?: string;
+  /** Border radius of the tool call bubble container (CSS value, e.g. `"12px"`). */
   borderRadius?: string;
+  /** Background color of the collapsed header row. */
   headerBackgroundColor?: string;
+  /** Text color of the collapsed header row (tool name / summary). */
   headerTextColor?: string;
+  /** Horizontal padding of the collapsed header row (CSS value). */
   headerPaddingX?: string;
+  /** Vertical padding of the collapsed header row (CSS value). */
   headerPaddingY?: string;
+  /** Background color of the expanded content area. */
   contentBackgroundColor?: string;
+  /** Text color of the expanded content area. */
   contentTextColor?: string;
+  /** Horizontal padding of the expanded content area (CSS value). */
   contentPaddingX?: string;
+  /** Vertical padding of the expanded content area (CSS value). */
   contentPaddingY?: string;
+  /** Background color of code blocks (arguments / result) in the expanded area. */
   codeBlockBackgroundColor?: string;
+  /** Border color of code blocks in the expanded area. */
   codeBlockBorderColor?: string;
+  /** Text color of code blocks in the expanded area. */
   codeBlockTextColor?: string;
+  /** Color of the expand/collapse toggle icon. */
   toggleTextColor?: string;
+  /** Color of section labels ("Arguments", "Result", "Activity") in the expanded area. */
   labelTextColor?: string;
   /**
    * Override the collapsed summary row content for a tool call bubble.
@@ -1263,6 +1305,14 @@ export type AgentWidgetToolCallConfig = {
     collapsedMode: AgentWidgetToolCallCollapsedMode;
     isActive: boolean;
     config: AgentWidgetConfig;
+    /** Static elapsed time snapshot, e.g. "2.6s". */
+    elapsed: string;
+    /**
+     * Returns a `<span>` whose text content is automatically updated every
+     * 100ms by the widget's global timer. Place it anywhere in your returned
+     * HTMLElement to get a live-ticking duration display.
+     */
+    createElapsedElement: () => HTMLElement;
   }) => HTMLElement | string | null;
   /**
    * Override the lightweight collapsed preview content shown for active tool rows.
@@ -1285,6 +1335,47 @@ export type AgentWidgetToolCallConfig = {
     defaultSummary: string;
     config: AgentWidgetConfig;
   }) => HTMLElement | string | null;
+  /**
+   * Template string for the header text while a tool call is active (running).
+   *
+   * **Placeholders:** `{toolName}` (tool name), `{duration}` (live-updating elapsed time).
+   *
+   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**` — parsed at render time and
+   * applied as styled `<span>` elements. Works with all animation modes.
+   *
+   * When not set, falls back to the current `collapsedMode` behavior.
+   * @example "Calling {toolName}... ~{duration}~"
+   * @example "**Searching** *{toolName}*..."
+   */
+  activeTextTemplate?: string;
+  /**
+   * Template string for the header text when a tool call is complete.
+   *
+   * **Placeholders:** `{toolName}` (tool name), `{duration}` (final elapsed time).
+   *
+   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**` — same syntax as `activeTextTemplate`.
+   *
+   * When not set, falls back to the existing "Used tool for X seconds" text.
+   * @example "Finished {toolName} ~{duration}~"
+   */
+  completeTextTemplate?: string;
+  /**
+   * Primary color for shimmer-color animation mode.
+   * Defaults to the current text color.
+   */
+  loadingAnimationColor?: string;
+  /**
+   * Secondary/end color for shimmer-color animation mode.
+   * Creates a gradient sweep between `loadingAnimationColor` and this color.
+   * @default "#3b82f6"
+   */
+  loadingAnimationSecondaryColor?: string;
+  /**
+   * Duration of one full animation cycle in milliseconds.
+   * Applies to pulse, shimmer, shimmer-color, and rainbow modes.
+   * @default 2000
+   */
+  loadingAnimationDuration?: number;
 };
 
 export type AgentWidgetReasoningConfig = {

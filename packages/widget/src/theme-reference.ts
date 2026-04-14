@@ -210,9 +210,12 @@ export const THEME_TOKEN_DOCS = {
         'features.scrollToBottom.enabled, features.scrollToBottom.iconName, features.scrollToBottom.label (empty string renders icon-only). Defaults: enabled=true, iconName="arrow-down", label="".',
     },
     toolCall: {
-      description: 'Tool call display styling and collapsed/grouped rendering hooks.',
+      description:
+        'Tool call display styling, text templates, loading animations, and rendering hooks. ' +
+        'Text templates support placeholders ({toolName}, {duration}) and inline formatting (~dim~, *italic*, **bold**). ' +
+        'renderCollapsedSummary receives elapsed (static string) and createElapsedElement() (live-updating span) in its context.',
       properties:
-        'shadow, backgroundColor, borderColor, borderWidth, borderRadius, headerBackgroundColor, headerTextColor, headerPaddingX, headerPaddingY, contentBackgroundColor, contentTextColor, contentPaddingX, contentPaddingY, codeBlockBackgroundColor, codeBlockBorderColor, codeBlockTextColor, toggleTextColor, labelTextColor, renderCollapsedSummary, renderCollapsedPreview, renderGroupedSummary.',
+        'shadow, backgroundColor, borderColor, borderWidth, borderRadius, headerBackgroundColor, headerTextColor, headerPaddingX, headerPaddingY, contentBackgroundColor, contentTextColor, contentPaddingX, contentPaddingY, codeBlockBackgroundColor, codeBlockBorderColor, codeBlockTextColor, toggleTextColor, labelTextColor, activeTextTemplate, completeTextTemplate, loadingAnimationColor, loadingAnimationSecondaryColor, loadingAnimationDuration, renderCollapsedSummary, renderCollapsedPreview, renderGroupedSummary.',
     },
     reasoning: {
       description: 'Reasoning/thinking row rendering hooks.',
@@ -282,7 +285,7 @@ export const THEME_TOKEN_DOCS = {
     features: {
       description: 'Feature flags.',
       properties:
-        'showReasoning (AI thinking steps), showToolCalls (tool invocations), toolCallDisplay (collapsedMode, activePreview, activeMinHeight, previewMaxLines, grouped), reasoningDisplay (activePreview, activeMinHeight, previewMaxLines), artifacts (sidebar config).',
+        'showReasoning (AI thinking steps), showToolCalls (tool invocations), toolCallDisplay (collapsedMode, activePreview, activeMinHeight, previewMaxLines, grouped, expandable, loadingAnimation), reasoningDisplay (activePreview, activeMinHeight, previewMaxLines, expandable), artifacts (sidebar config).',
     },
   },
 }

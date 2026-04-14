@@ -129,6 +129,7 @@
           <button id="btn-conversation">Realistic Conversation</button>
           <button id="btn-mixed">Mixed Content (markdown, code, lists)</button>
           <button id="btn-trace">Tool + Reasoning Trace</button>
+          <button id="btn-burst">Burst Mixed Types (catch-up test)</button>
           <button id="btn-stress">Stress Test (all at once)</button>
         </div>
 
@@ -337,6 +338,31 @@
             },
           },
         });
+      }
+
+      async function streamAssistantMessage(token, id, text, delay = 16) {
+        const words = text.split(/(\s+)/);
+        let accumulated = "";
+        for (let i = 0; i < words.length; i++) {
+          if (token.cancelled) return null;
+          accumulated += words[i];
+          controller.injectAssistantMessage({
+            id,
+            content: accumulated,
+            streaming: true,
+          });
+          if (words[i].trim()) {
+            await sleep(delay);
+          }
+        }
+        if (!token.cancelled) {
+          controller.injectAssistantMessage({
+            id,
+            content: accumulated,
+            streaming: false,
+          });
+        }
+        return accumulated;
       }
 
       const STREAMING_TEXT = `Let me walk you through the complete setup process for your new project.
@@ -637,6 +663,131 @@ Let me know if you need any additional help with the setup!`;
         }
       }
 
+      async function burstMixedTypes() {
+        const token = freshCancel();
+        log("Starting: Burst Mixed Types", "warn");
+        setAllButtons(true);
+        document.getElementById("btn-burst").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("burst-user"),
+          content: "Can you quickly compare options and recommend the fastest setup path?",
+        });
+        await sleep(120);
+        if (token.cancelled) return finish();
+
+        controller.injectAssistantMessage({
+          id: nextId("burst-short"),
+          content: "Yes — I'll compare the quickest approaches and keep a running trace below.",
+        });
+        await sleep(90);
+        if (token.cancelled) return finish();
+
+        const reasoningId = nextId("burst-reasoning");
+        injectReasoningMessage({
+          id: reasoningId,
+          status: "streaming",
+          chunks: [
+            "First compare launcher vs inline embed, then verify which path gives reliable scrolling with the fewest moving parts.",
+          ],
+        });
+        await sleep(120);
+        if (token.cancelled) return finish();
+
+        injectReasoningMessage({
+          id: reasoningId,
+          status: "complete",
+          chunks: [
+            "First compare launcher vs inline embed, then verify which path gives reliable scrolling with the fewest moving parts.",
+            "Launcher mode is lower friction for this reproduction page, so I should gather docs and then summarize the tradeoffs.",
+          ],
+        });
+        await sleep(90);
+        if (token.cancelled) return finish();
+
+        const toolOneId = nextId("burst-tool");
+        injectToolMessage({
+          id: toolOneId,
+          name: "Fetch embed setup docs",
+          status: "running",
+          args: { mode: "launcher", source: "docs" },
+          chunks: ["Loading launcher installation and configuration guidance..."],
+        });
+        await sleep(100);
+        if (token.cancelled) return finish();
+
+        injectToolMessage({
+          id: toolOneId,
+          name: "Fetch embed setup docs",
+          status: "complete",
+          args: { mode: "launcher", source: "docs" },
+          chunks: [
+            "Loading launcher installation and configuration guidance...",
+            "Found examples for floating launcher, auto-open, and transcript rendering.",
+          ],
+          result: { mode: "launcher", width: "560px" },
+        });
+        await sleep(85);
+        if (token.cancelled) return finish();
+
+        controller.injectAssistantMessage({
+          id: nextId("burst-long"),
+          content: LONG_PARAGRAPHS[1],
+        });
+        await sleep(80);
+        if (token.cancelled) return finish();
+
+        const streamId = nextId("burst-stream");
+        await streamAssistantMessage(
+          token,
+          streamId,
+          `${MARKDOWN_BLOCKS[0]}\n\n${MARKDOWN_BLOCKS[2]}`,
+          8
+        );
+        if (token.cancelled) return finish();
+
+        const toolTwoId = nextId("burst-tool");
+        injectToolMessage({
+          id: toolTwoId,
+          name: "Compare demo layouts",
+          status: "running",
+          args: { pages: ["homepage", "event-stream-testing", "stress-test"] },
+          chunks: [
+            "Comparing launcher width, scroll affordance placement, and overflow behavior across demos...",
+          ],
+        });
+        await sleep(90);
+        if (token.cancelled) return finish();
+
+        injectToolMessage({
+          id: toolTwoId,
+          name: "Compare demo layouts",
+          status: "complete",
+          args: { pages: ["homepage", "event-stream-testing", "stress-test"] },
+          chunks: [
+            "Comparing launcher width, scroll affordance placement, and overflow behavior across demos...",
+            "The mixed launcher scenario is the best place to verify that auto-follow catches up after large transcript jumps.",
+          ],
+          result: { verdict: "use burst mixed types scenario" },
+        });
+        await sleep(90);
+        if (token.cancelled) return finish();
+
+        controller.injectAssistantMessage({
+          id: nextId("burst-summary"),
+          content:
+            "This scenario intentionally mixes short replies, long paragraphs, streamed markdown, reasoning rows, and tool rows in a tight burst. If auto-follow is healthy, the transcript should stay pinned to the newest content without leaving the scroll-to-bottom button stranded mid-thread.",
+        });
+
+        finish();
+
+        function finish() {
+          document.getElementById("btn-burst").classList.remove("running");
+          setAllButtons(false);
+          log("Done: Burst Mixed Types");
+        }
+      }
+
       async function stressTest() {
         const token = freshCancel();
         log("Starting: Stress Test", "warn");
@@ -709,6 +860,7 @@ Let me know if you need any additional help with the setup!`;
       document.getElementById("btn-conversation").addEventListener("click", realisticConversation);
       document.getElementById("btn-mixed").addEventListener("click", mixedContent);
       document.getElementById("btn-trace").addEventListener("click", toolReasoningTrace);
+      document.getElementById("btn-burst").addEventListener("click", burstMixedTypes);
       document.getElementById("btn-stress").addEventListener("click", stressTest);
 
       document.getElementById("btn-cancel").addEventListener("click", () => {

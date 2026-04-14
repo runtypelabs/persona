@@ -1220,6 +1220,86 @@
   box-shadow: var(--persona-tool-bubble-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
 }
 
+/* ==============================
+   Tool call loading animations
+   ============================== */
+
+/* Inline formatting classes for template text */
+[data-persona-root] .persona-tool-text-dim {
+  opacity: 0.5;
+}
+[data-persona-root] .persona-tool-text-bold {
+  font-weight: 600;
+}
+[data-persona-root] .persona-tool-text-italic {
+  font-style: italic;
+}
+
+/* Pulse mode: entire text element pulses opacity */
+@keyframes persona-tool-loading-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+[data-persona-root] .persona-tool-loading-pulse {
+  animation: persona-tool-loading-pulse var(--persona-tool-anim-duration, 2s) ease-in-out infinite;
+}
+
+/* Shimmer mode: monochrome brightness sweep per character */
+@keyframes persona-tool-loading-shimmer {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+[data-persona-root] .persona-tool-loading-shimmer .persona-tool-char {
+  display: inline-block;
+  animation: persona-tool-loading-shimmer var(--persona-tool-anim-duration, 2s) ease-in-out infinite;
+  animation-delay: calc(var(--char-index, 0) * 60ms);
+}
+
+/* Shimmer-color mode: color gradient sweep per character */
+@keyframes persona-tool-loading-shimmer-color {
+  0%, 100% {
+    color: var(--persona-tool-anim-color, currentColor);
+  }
+  50% {
+    color: var(--persona-tool-anim-secondary-color, #3b82f6);
+  }
+}
+
+[data-persona-root] .persona-tool-loading-shimmer-color .persona-tool-char {
+  display: inline-block;
+  animation: persona-tool-loading-shimmer-color var(--persona-tool-anim-duration, 2s) ease-in-out infinite;
+  animation-delay: calc(var(--char-index, 0) * 60ms);
+}
+
+/* Rainbow mode: hue rotation per character */
+@keyframes persona-tool-loading-rainbow {
+  0% { color: #ef4444; }
+  16% { color: #f59e0b; }
+  33% { color: #22c55e; }
+  50% { color: #06b6d4; }
+  66% { color: #3b82f6; }
+  83% { color: #8b5cf6; }
+  100% { color: #ef4444; }
+}
+
+[data-persona-root] .persona-tool-loading-rainbow .persona-tool-char {
+  display: inline-block;
+  animation: persona-tool-loading-rainbow var(--persona-tool-anim-duration, 2s) linear infinite;
+  animation-delay: calc(var(--char-index, 0) * 80ms);
+}
+
+/* Prefers-reduced-motion: disable all tool loading animations */
+@media (prefers-reduced-motion: reduce) {
+  [data-persona-root] .persona-tool-loading-pulse,
+  [data-persona-root] .persona-tool-loading-shimmer .persona-tool-char,
+  [data-persona-root] .persona-tool-loading-shimmer-color .persona-tool-char,
+  [data-persona-root] .persona-tool-loading-rainbow .persona-tool-char {
+    animation: none !important;
+  }
+}
+
 [data-persona-root] .persona-reasoning-bubble.persona-shadow-sm {
   box-shadow: var(--persona-reasoning-bubble-shadow, 0 5px 15px rgba(15, 23, 42, 0.08));
 }

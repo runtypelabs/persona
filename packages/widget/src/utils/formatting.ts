@@ -88,6 +88,136 @@ export const describeToolTitle = (tool: AgentWidgetToolCall) => {
 };
 
 /**
+ * Formats a millisecond duration as a short human-readable string.
+ * Returns "2.3s", "15s", or "<0.1s".
+ */
+export const formatElapsedMs = (ms: number): string => {
+  const seconds = ms / 1000;
+  if (seconds < 0.1) return "<0.1s";
+  if (seconds >= 10) return `${Math.round(seconds)}s`;
+  return `${seconds.toFixed(1).replace(/\.0$/, "")}s`;
+};
+
+/**
+ * Computes the current elapsed time string for a tool call.
+ */
+export const computeToolElapsed = (tool: AgentWidgetToolCall): string => {
+  const durationMs =
+    typeof tool.duration === "number"
+      ? tool.duration
+      : typeof tool.durationMs === "number"
+        ? tool.durationMs
+        : Math.max(
+            0,
+            (tool.completedAt ?? Date.now()) -
+              (tool.startedAt ?? tool.completedAt ?? Date.now())
+          );
+  return formatElapsedMs(durationMs);
+};
+
+/**
+ * Resolves a text template with tool call placeholders.
+ * Supported placeholders: {toolName}, {duration}
+ * Returns the fallback if template is undefined.
+ */
+export const resolveToolHeaderText = (
+  tool: AgentWidgetToolCall,
+  template: string | undefined,
+  fallback: string
+): string => {
+  if (!template) return fallback;
+
+  const toolName = tool.name?.trim() || "tool";
+  const duration = computeToolElapsed(tool);
+
+  return template
+    .replace(/\{toolName\}/g, toolName)
+    .replace(/\{duration\}/g, duration);
+};
+
+/**
+ * A segment of parsed template text with optional inline formatting.
+ */
+export interface TemplateSegment {
+  /** The text content (or "{duration}" for duration placeholders) */
+  text: string;
+  /** CSS modifier names to apply: "dim", "bold", "italic" */
+  styles: string[];
+  /** True when this segment represents a {duration} placeholder */
+  isDuration?: boolean;
+}
+
+/**
+ * Parses a template string with inline formatting markers into segments.
+ *
+ * Supported markers (Markdown-like):
+ * - `**text**` → bold
+ * - `*text*`  → italic
+ * - `~text~`  → dim / muted
+ *
+ * Placeholders `{toolName}` are resolved; `{duration}` is preserved as a
+ * typed segment so the caller can render it as a live-updating DOM node.
+ *
+ * @example
+ * parseFormattedTemplate("Finished {toolName} ~{duration}~", "Get Weather")
+ * // → [
+ * //   { text: "Finished Get Weather ", styles: [] },
+ * //   { text: "{duration}", styles: ["dim"], isDuration: true }
+ * // ]
+ */
+export const parseFormattedTemplate = (
+  template: string,
+  toolName: string
+): TemplateSegment[] => {
+  const resolved = template.replace(/\{toolName\}/g, toolName);
+  const segments: TemplateSegment[] = [];
+  // Order matters: ** must match before *
+  const regex = /\*\*(.+?)\*\*|\*(.+?)\*|~(.+?)~/g;
+
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(resolved)) !== null) {
+    if (match.index > lastIndex) {
+      pushSegments(segments, resolved.slice(lastIndex, match.index), []);
+    }
+
+    if (match[1] !== undefined) {
+      pushSegments(segments, match[1], ["bold"]);
+    } else if (match[2] !== undefined) {
+      pushSegments(segments, match[2], ["italic"]);
+    } else if (match[3] !== undefined) {
+      pushSegments(segments, match[3], ["dim"]);
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < resolved.length) {
+    pushSegments(segments, resolved.slice(lastIndex), []);
+  }
+
+  return segments;
+};
+
+/** Splits text on {duration} and pushes typed segments. */
+const pushSegments = (
+  segments: TemplateSegment[],
+  text: string,
+  styles: string[]
+): void => {
+  const parts = text.split("{duration}");
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i]) {
+      segments.push({ text: parts[i], styles });
+    }
+    if (i < parts.length - 1) {
+      segments.push({ text: "{duration}", styles, isDuration: true });
+    }
+  }
+};
+
+/**
  * Creates a regex-based parser for extracting text from JSON streams.
  * This is a simpler alternative to schema-stream that uses regex to extract
  * the 'text' field incrementally as JSON streams in.

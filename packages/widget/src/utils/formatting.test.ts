@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createJsonStreamParser } from "./formatting";
+import { createJsonStreamParser, parseFormattedTemplate } from "./formatting";
 
 describe("JSON Stream Parser", () => {
   it("should extract text field incrementally as JSON streams in", () => {
@@ -168,5 +168,79 @@ describe("JSON Stream Parser", () => {
     // Final result should be the complete text
     const finalResult = parser.getExtractedText();
     expect(finalResult).toBe("You're welcome! Enjoy your browsing, and I'm here if you need anything!");
+  });
+});
+
+describe("parseFormattedTemplate", () => {
+  it("returns plain text segments when no formatting markers are present", () => {
+    const segments = parseFormattedTemplate("Calling {toolName}...", "Get Weather");
+    expect(segments).toEqual([
+      { text: "Calling Get Weather...", styles: [] },
+    ]);
+  });
+
+  it("resolves {toolName} placeholder", () => {
+    const segments = parseFormattedTemplate("{toolName} running", "Search Catalog");
+    expect(segments).toEqual([
+      { text: "Search Catalog running", styles: [] },
+    ]);
+  });
+
+  it("parses ~dim~ markers", () => {
+    const segments = parseFormattedTemplate("Finished {toolName} ~{duration}~", "Get Weather");
+    expect(segments).toEqual([
+      { text: "Finished Get Weather ", styles: [] },
+      { text: "{duration}", styles: ["dim"], isDuration: true },
+    ]);
+  });
+
+  it("parses *italic* markers", () => {
+    const segments = parseFormattedTemplate("*{toolName}* completed", "Search");
+    expect(segments).toEqual([
+      { text: "Search", styles: ["italic"] },
+      { text: " completed", styles: [] },
+    ]);
+  });
+
+  it("parses **bold** markers", () => {
+    const segments = parseFormattedTemplate("**Calling** {toolName}", "Lookup");
+    expect(segments).toEqual([
+      { text: "Calling", styles: ["bold"] },
+      { text: " Lookup", styles: [] },
+    ]);
+  });
+
+  it("handles multiple formatting markers in one template", () => {
+    const segments = parseFormattedTemplate("**Done** *{toolName}* ~{duration}~", "API");
+    expect(segments).toEqual([
+      { text: "Done", styles: ["bold"] },
+      { text: " ", styles: [] },
+      { text: "API", styles: ["italic"] },
+      { text: " ", styles: [] },
+      { text: "{duration}", styles: ["dim"], isDuration: true },
+    ]);
+  });
+
+  it("handles {duration} without formatting markers", () => {
+    const segments = parseFormattedTemplate("Ran for {duration}", "Tool");
+    expect(segments).toEqual([
+      { text: "Ran for ", styles: [] },
+      { text: "{duration}", styles: [], isDuration: true },
+    ]);
+  });
+
+  it("handles template with no placeholders", () => {
+    const segments = parseFormattedTemplate("Running...", "Ignored");
+    expect(segments).toEqual([
+      { text: "Running...", styles: [] },
+    ]);
+  });
+
+  it("handles empty tool name fallback in template", () => {
+    const segments = parseFormattedTemplate("{toolName}", "  ");
+    // toolName is resolved before parsing, so whitespace stays
+    expect(segments).toEqual([
+      { text: "  ", styles: [] },
+    ]);
   });
 });
