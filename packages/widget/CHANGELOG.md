@@ -1,5 +1,16 @@
 # @runtypelabs/persona
 
+## 3.12.0
+
+### Minor Changes
+
+- 51530e5: Add configurable loading animations and text templates for tool call and reasoning bubbles. New `loadingAnimation` display option (`pulse`, `shimmer`, `shimmer-color`, `rainbow`) provides visual feedback during tool execution and reasoning. Text templates (`activeTextTemplate`, `completeTextTemplate`) support `{toolName}` and `{duration}` placeholders with inline formatting syntax (`~dim~`, `*italic*`, `**bold**`). The `renderCollapsedSummary` callback for both tool calls and reasoning now receives `elapsed` and `createElapsedElement()` for custom renderers to display live-updating duration.
+
+### Patch Changes
+
+- acb1669: Fix JSON parse error when `data-config` attribute contains line breaks in HTML
+- 4ffd721: Fix tool call bubbles showing fallback "tool" instead of the actual tool name in active text templates. When `agent_tool_start` arrived before `tool_start`, the name-less first render was cached and preserved by the animation morph guard. The fingerprint now includes `toolCall.name` so the cache invalidates when the name arrives, and the morph callback allows content updates when text has meaningfully changed.
+
 ## 3.11.0
 
 ### Minor Changes
