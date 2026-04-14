@@ -116,6 +116,21 @@ export const computeToolElapsed = (tool: AgentWidgetToolCall): string => {
 };
 
 /**
+ * Computes the current elapsed time string for a reasoning block.
+ */
+export const computeReasoningElapsed = (reasoning: AgentWidgetReasoning): string => {
+  const durationMs =
+    reasoning.durationMs !== undefined
+      ? reasoning.durationMs
+      : Math.max(
+          0,
+          (reasoning.completedAt ?? Date.now()) -
+            (reasoning.startedAt ?? reasoning.completedAt ?? Date.now())
+        );
+  return formatElapsedMs(durationMs);
+};
+
+/**
  * Resolves a text template with tool call placeholders.
  * Supported placeholders: {toolName}, {duration}
  * Returns the fallback if template is undefined.

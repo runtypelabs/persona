@@ -218,9 +218,12 @@ export const THEME_TOKEN_DOCS = {
         'shadow, backgroundColor, borderColor, borderWidth, borderRadius, headerBackgroundColor, headerTextColor, headerPaddingX, headerPaddingY, contentBackgroundColor, contentTextColor, contentPaddingX, contentPaddingY, codeBlockBackgroundColor, codeBlockBorderColor, codeBlockTextColor, toggleTextColor, labelTextColor, activeTextTemplate, completeTextTemplate, loadingAnimationColor, loadingAnimationSecondaryColor, loadingAnimationDuration, renderCollapsedSummary, renderCollapsedPreview, renderGroupedSummary.',
     },
     reasoning: {
-      description: 'Reasoning/thinking row rendering hooks.',
+      description:
+        'Reasoning/thinking row rendering hooks, text templates, and loading animations. ' +
+        'Text templates support {duration} placeholder and inline formatting (~dim~, *italic*, **bold**). ' +
+        'renderCollapsedSummary receives elapsed (static string) and createElapsedElement() (live-updating span) in its context.',
       properties:
-        'renderCollapsedSummary, renderCollapsedPreview.',
+        'renderCollapsedSummary, renderCollapsedPreview, activeTextTemplate, completeTextTemplate, loadingAnimationColor, loadingAnimationSecondaryColor, loadingAnimationDuration.',
     },
     approval: {
       description:
@@ -285,7 +288,7 @@ export const THEME_TOKEN_DOCS = {
     features: {
       description: 'Feature flags.',
       properties:
-        'showReasoning (AI thinking steps), showToolCalls (tool invocations), toolCallDisplay (collapsedMode, activePreview, activeMinHeight, previewMaxLines, grouped, expandable, loadingAnimation), reasoningDisplay (activePreview, activeMinHeight, previewMaxLines, expandable), artifacts (sidebar config).',
+        'showReasoning (AI thinking steps), showToolCalls (tool invocations), toolCallDisplay (collapsedMode, activePreview, activeMinHeight, previewMaxLines, grouped, expandable, loadingAnimation), reasoningDisplay (activePreview, activeMinHeight, previewMaxLines, expandable, loadingAnimation), artifacts (sidebar config).',
     },
   },
 }

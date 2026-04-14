@@ -129,6 +129,7 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       activePreview: false,
       previewMaxLines: 3,
       expandable: true,
+      loadingAnimation: "none",
     },
   },
   suggestionChips: [

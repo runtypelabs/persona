@@ -1,6 +1,6 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
-import { describeReasonStatus } from "../utils/formatting";
+import { describeReasonStatus, computeReasoningElapsed, parseFormattedTemplate } from "../utils/formatting";
 import { renderLucideIcon } from "../utils/icons";
 
 // Expansion state per widget instance
@@ -112,13 +112,27 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
   const headerContent = createElement("div", "persona-flex persona-flex-col persona-text-left");
   const title = createElement("span", "persona-text-xs persona-text-persona-primary");
   const defaultSummary = "Thinking...";
-  const customSummary = config?.reasoning?.renderCollapsedSummary?.({
+  const reasoningConfig = config?.reasoning ?? {};
+
+  // Elapsed helpers — defined early so they're available to renderCollapsedSummary
+  const startedAt = String(reasoning.startedAt ?? Date.now());
+
+  const createElapsedSpan = (): HTMLElement => {
+    const span = createElement("span", "");
+    span.setAttribute("data-tool-elapsed", startedAt);
+    span.textContent = computeReasoningElapsed(reasoning);
+    return span;
+  };
+
+  const customSummary = reasoningConfig.renderCollapsedSummary?.({
     message,
     reasoning,
     defaultSummary,
     previewText,
     isActive,
     config: config ?? {},
+    elapsed: computeReasoningElapsed(reasoning),
+    createElapsedElement: createElapsedSpan,
   });
   if (typeof customSummary === "string" && customSummary.trim()) {
     title.textContent = customSummary;
@@ -130,14 +144,134 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
     headerContent.appendChild(title);
   }
 
+  // Status span — used in the legacy (no-template) path
   const status = createElement("span", "persona-text-xs persona-text-persona-primary");
   status.textContent = describeReasonStatus(reasoning);
   headerContent.appendChild(status);
 
-  if (reasoning.status === "complete") {
-    title.style.display = "none";
-  } else {
+  // Template and animation support
+  const loadingAnimation = reasoningDisplayConfig.loadingAnimation ?? "none";
+  const activeTemplate = reasoningConfig.activeTextTemplate;
+  const completeTemplate = reasoningConfig.completeTextTemplate;
+  const currentTemplate = isActive ? activeTemplate : completeTemplate;
+  const skipCustomElement = customSummary instanceof HTMLElement;
+
+  // Helper: append text as individual animated character spans
+  const appendCharSpans = (container: HTMLElement, text: string, startIndex: number): number => {
+    let idx = startIndex;
+    for (const char of text) {
+      const span = createElement("span", "persona-tool-char");
+      span.style.setProperty("--char-index", String(idx));
+      span.textContent = char === " " ? "\u00A0" : char;
+      container.appendChild(span);
+      idx++;
+    }
+    return idx;
+  };
+
+  /**
+   * Renders a template into the title element, handling:
+   * - Inline formatting markers: **bold**, *italic*, ~dim~
+   * - {duration} as a live-updating elapsed span (active) or static text (complete)
+   * - Character-by-character animation wrapping when `animated` is true
+   */
+  const renderFormattedTitle = (template: string, animated: boolean) => {
+    title.textContent = "";
+    const segments = parseFormattedTemplate(template, "");
+    let charIndex = 0;
+
+    for (const seg of segments) {
+      const parent = seg.styles.length > 0
+        ? (() => {
+            const w = createElement("span", seg.styles.map(s => `persona-tool-text-${s}`).join(" "));
+            title.appendChild(w);
+            return w;
+          })()
+        : title;
+
+      if (seg.isDuration && isActive) {
+        parent.appendChild(createElapsedSpan());
+      } else {
+        const text = seg.isDuration ? computeReasoningElapsed(reasoning) : seg.text;
+        if (animated) {
+          charIndex = appendCharSpans(parent, text, charIndex);
+        } else {
+          parent.appendChild(document.createTextNode(text));
+        }
+      }
+    }
+  };
+
+  // Apply template + animation, or fall back to legacy title/status approach
+  if (!skipCustomElement && currentTemplate) {
+    // Template mode: unified title replaces separate title/status spans
+    status.style.display = "none";
     title.style.display = "";
+
+    if (isActive && loadingAnimation !== "none") {
+      const animDuration = reasoningConfig.loadingAnimationDuration ?? 2000;
+      title.setAttribute("data-preserve-animation", "true");
+
+      if (loadingAnimation === "pulse") {
+        title.classList.add("persona-tool-loading-pulse");
+        title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
+        renderFormattedTitle(currentTemplate, false);
+      } else {
+        title.classList.add(`persona-tool-loading-${loadingAnimation}`);
+        title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
+
+        if (loadingAnimation === "shimmer-color") {
+          if (reasoningConfig.loadingAnimationColor) {
+            title.style.setProperty("--persona-tool-anim-color", reasoningConfig.loadingAnimationColor);
+          }
+          if (reasoningConfig.loadingAnimationSecondaryColor) {
+            title.style.setProperty("--persona-tool-anim-secondary-color", reasoningConfig.loadingAnimationSecondaryColor);
+          }
+        }
+
+        renderFormattedTitle(currentTemplate, true);
+      }
+    } else {
+      renderFormattedTitle(currentTemplate, false);
+    }
+  } else if (!skipCustomElement && isActive && loadingAnimation !== "none") {
+    // Animation without template: animate the default "Thinking..." text
+    title.style.display = "";
+    const animDuration = reasoningConfig.loadingAnimationDuration ?? 2000;
+    title.setAttribute("data-preserve-animation", "true");
+
+    if (loadingAnimation === "pulse") {
+      title.classList.add("persona-tool-loading-pulse");
+      title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
+    } else {
+      title.classList.add(`persona-tool-loading-${loadingAnimation}`);
+      title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
+
+      if (loadingAnimation === "shimmer-color") {
+        if (reasoningConfig.loadingAnimationColor) {
+          title.style.setProperty("--persona-tool-anim-color", reasoningConfig.loadingAnimationColor);
+        }
+        if (reasoningConfig.loadingAnimationSecondaryColor) {
+          title.style.setProperty("--persona-tool-anim-secondary-color", reasoningConfig.loadingAnimationSecondaryColor);
+        }
+      }
+
+      const text = title.textContent || defaultSummary;
+      title.textContent = "";
+      appendCharSpans(title, text, 0);
+    }
+
+    // Legacy: hide title on complete, show status
+    if (reasoning.status === "complete") {
+      title.style.display = "none";
+    }
+  } else if (!skipCustomElement) {
+    // Legacy path: no template, no animation
+    if (reasoning.status === "complete") {
+      title.style.display = "none";
+    } else {
+      title.style.display = "";
+    }
   }
 
   let toggleIcon: HTMLElement | null = null;

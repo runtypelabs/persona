@@ -55,7 +55,10 @@ declare global {
     const configJson = script.getAttribute('data-config');
     if (configJson) {
       try {
-        const parsedConfig = JSON.parse(configJson);
+        // HTML attributes preserve literal newlines/tabs which are invalid
+        // control characters inside JSON string literals — strip them.
+        const normalizedJson = configJson.replace(/[\r\n]+\s*/g, '');
+        const parsedConfig = JSON.parse(normalizedJson);
         // If it has nested 'config' property, use it; otherwise treat as widget config
         if (parsedConfig.config) {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -656,6 +656,17 @@ export type AgentWidgetReasoningDisplayFeature = {
    * @default true
    */
   expandable?: boolean;
+  /**
+   * Animation mode applied to the reasoning header text while reasoning is active.
+   * Reuses the same modes as tool call animations.
+   * - "none" — static text, no animation
+   * - "pulse" — opacity pulse on the entire header text
+   * - "shimmer" — monochrome opacity sweep per character
+   * - "shimmer-color" — color gradient sweep per character
+   * - "rainbow" — rainbow color cycle per character
+   * @default "none"
+   */
+  loadingAnimation?: AgentWidgetToolCallLoadingAnimation;
 };
 
 export type AgentWidgetFeatureFlags = {
@@ -1390,6 +1401,14 @@ export type AgentWidgetReasoningConfig = {
     previewText: string;
     isActive: boolean;
     config: AgentWidgetConfig;
+    /** Static elapsed time snapshot, e.g. "2.6s". */
+    elapsed: string;
+    /**
+     * Returns a `<span>` whose text content is automatically updated every
+     * 100ms by the widget's global timer. Place it anywhere in your returned
+     * HTMLElement to get a live-ticking duration display.
+     */
+    createElapsedElement: () => HTMLElement;
   }) => HTMLElement | string | null;
   /**
    * Override the lightweight collapsed preview content shown for active reasoning rows.
@@ -1402,6 +1421,45 @@ export type AgentWidgetReasoningConfig = {
     isActive: boolean;
     config: AgentWidgetConfig;
   }) => HTMLElement | string | null;
+  /**
+   * Template string for the header text while reasoning is active (streaming).
+   *
+   * **Placeholders:** `{duration}` (live-updating elapsed time).
+   *
+   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**` — parsed at render time.
+   *
+   * When not set, falls back to the default "Thinking..." text.
+   * @example "Thinking... ~{duration}~"
+   */
+  activeTextTemplate?: string;
+  /**
+   * Template string for the header text when reasoning is complete.
+   *
+   * **Placeholders:** `{duration}` (final elapsed time).
+   *
+   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**` — same syntax as `activeTextTemplate`.
+   *
+   * When not set, falls back to the default "Thought for X seconds" text.
+   * @example "Thought for ~{duration}~"
+   */
+  completeTextTemplate?: string;
+  /**
+   * Primary color for shimmer-color animation mode.
+   * Defaults to the current text color.
+   */
+  loadingAnimationColor?: string;
+  /**
+   * Secondary/end color for shimmer-color animation mode.
+   * Creates a gradient sweep between `loadingAnimationColor` and this color.
+   * @default "#3b82f6"
+   */
+  loadingAnimationSecondaryColor?: string;
+  /**
+   * Duration of one full animation cycle in milliseconds.
+   * Applies to pulse, shimmer, shimmer-color, and rainbow modes.
+   * @default 2000
+   */
+  loadingAnimationDuration?: number;
 };
 
 export type AgentWidgetSuggestionChipsConfig = {

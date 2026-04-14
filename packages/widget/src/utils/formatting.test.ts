@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createJsonStreamParser, parseFormattedTemplate } from "./formatting";
+import { createJsonStreamParser, parseFormattedTemplate, computeReasoningElapsed } from "./formatting";
 
 describe("JSON Stream Parser", () => {
   it("should extract text field incrementally as JSON streams in", () => {
@@ -242,5 +242,29 @@ describe("parseFormattedTemplate", () => {
     expect(segments).toEqual([
       { text: "  ", styles: [] },
     ]);
+  });
+});
+
+describe("computeReasoningElapsed", () => {
+  it("uses durationMs when provided", () => {
+    const result = computeReasoningElapsed({
+      id: "r1", status: "complete", chunks: [], durationMs: 2600,
+    });
+    expect(result).toBe("2.6s");
+  });
+
+  it("computes from startedAt/completedAt when durationMs is undefined", () => {
+    const result = computeReasoningElapsed({
+      id: "r2", status: "complete", chunks: [],
+      startedAt: 1000, completedAt: 16000,
+    });
+    expect(result).toBe("15s");
+  });
+
+  it("returns <0.1s for very short durations", () => {
+    const result = computeReasoningElapsed({
+      id: "r3", status: "complete", chunks: [], durationMs: 50,
+    });
+    expect(result).toBe("<0.1s");
   });
 });
