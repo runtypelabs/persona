@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/src/demo-shared.css">
     <link rel="icon" href="/favicon.ico" />
-    <title>Tool Loading Animations - Persona</title>
+    <title>Tool &amp; Reasoning Loading Animations - Persona</title>
     <style>
       body {
         padding: 1.5rem;
@@ -163,9 +163,9 @@
   <body>
     <div id="tool-loading-launcher-root" aria-hidden="true"></div>
 
-    <h1>Tool Loading Animations</h1>
+    <h1>Tool &amp; Reasoning Loading Animations</h1>
     <p class="subtitle">
-      Configure animation mode, text templates, and colors, then run tool scenarios to preview. The widget opens automatically (bottom-right).
+      Configure animation mode, text templates, and colors, then run tool or reasoning scenarios to preview. The widget opens automatically (bottom-right).
     </p>
 
     <div class="controls">
@@ -181,16 +181,21 @@
       </div>
 
       <div class="section">
-        <label>Active Text Template</label>
+        <label>Tool Text Templates</label>
         <input type="text" id="active-template" placeholder="e.g. Calling {toolName}..." value="Calling {toolName}... ~{duration}~" />
+        <input type="text" id="complete-template" placeholder="e.g. Finished {toolName} ({duration})" value="Finished {toolName} ~{duration}~" />
         <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
           Placeholders: <code>{toolName}</code> <code>{duration}</code> &nbsp;|&nbsp; Formatting: <code>~dim~</code> <code>*italic*</code> <code>**bold**</code>
         </small>
       </div>
 
       <div class="section">
-        <label>Complete Text Template</label>
-        <input type="text" id="complete-template" placeholder="e.g. Finished {toolName} ({duration})" value="Finished {toolName} ~{duration}~" />
+        <label>Reasoning Text Templates</label>
+        <input type="text" id="reason-active-template" placeholder="e.g. Thinking... ~{duration}~" value="Thinking... ~{duration}~" />
+        <input type="text" id="reason-complete-template" placeholder="e.g. Thought for ~{duration}~" value="Thought for ~{duration}~" />
+        <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
+          Placeholder: <code>{duration}</code> &nbsp;|&nbsp; Formatting: <code>~dim~</code> <code>*italic*</code> <code>**bold**</code>
+        </small>
       </div>
 
       <div class="section">
@@ -219,6 +224,14 @@
           <button id="btn-long">Long Tool (8s) with streaming chunks</button>
           <button id="btn-concurrent">Multiple Concurrent Tools (3 tools)</button>
           <button id="btn-names">Tool Name Variants (short, long, empty)</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Reasoning Scenarios</label>
+        <div class="btn-group">
+          <button id="btn-reason-short">Short Thinking (2s)</button>
+          <button id="btn-reason-long">Long Thinking (6s) with chunks</button>
         </div>
       </div>
 
@@ -275,6 +288,8 @@
         const mode = currentMode;
         const activeTemplate = document.getElementById("active-template").value || undefined;
         const completeTemplate = document.getElementById("complete-template").value || undefined;
+        const reasonActiveTemplate = document.getElementById("reason-active-template").value || undefined;
+        const reasonCompleteTemplate = document.getElementById("reason-complete-template").value || undefined;
         const duration = parseInt(document.getElementById("anim-duration").value, 10);
         const primaryColor = document.getElementById("color-primary").value;
         const secondaryColor = document.getElementById("color-secondary").value;
@@ -293,9 +308,15 @@
           persistState: false,
           features: {
             ...DEFAULT_WIDGET_CONFIG.features,
+            showReasoning: true,
             toolCallDisplay: {
               collapsedMode: "tool-name",
               activePreview: false,
+              expandable: true,
+              loadingAnimation: mode,
+            },
+            reasoningDisplay: {
+              activePreview: true,
               expandable: true,
               loadingAnimation: mode,
             },
@@ -303,6 +324,15 @@
           toolCall: {
             activeTextTemplate: activeTemplate,
             completeTextTemplate: completeTemplate,
+            loadingAnimationDuration: duration,
+            ...(mode === "shimmer-color" ? {
+              loadingAnimationColor: primaryColor,
+              loadingAnimationSecondaryColor: secondaryColor,
+            } : {}),
+          },
+          reasoning: {
+            activeTextTemplate: reasonActiveTemplate,
+            completeTextTemplate: reasonCompleteTemplate,
             loadingAnimationDuration: duration,
             ...(mode === "shimmer-color" ? {
               loadingAnimationColor: primaryColor,
@@ -318,8 +348,8 @@
           },
           copy: {
             ...DEFAULT_WIDGET_CONFIG.copy,
-            welcomeTitle: "Tool Loading Animations",
-            welcomeSubtitle: "Use the controls to change animation settings, then run a scenario.",
+            welcomeTitle: "Tool & Reasoning Loading Animations",
+            welcomeSubtitle: "Use the controls to change animation settings, then run a tool or reasoning scenario.",
           },
         };
       }
@@ -670,6 +700,99 @@
         }
       }
 
+      // ── reasoning scenarios ──────────────────────────────────────
+
+      function injectReasoningMessage({ id, status = "streaming", chunks = [], startedAt, completedAt, durationMs }) {
+        controller.injectTestMessage({
+          type: "message",
+          message: {
+            id,
+            role: "assistant",
+            content: "",
+            createdAt: new Date().toISOString(),
+            streaming: status !== "complete",
+            variant: "reasoning",
+            reasoning: { id, status, chunks, startedAt, completedAt, durationMs },
+          },
+        });
+      }
+
+      async function shortReasoning() {
+        const token = freshCancel();
+        log("Starting: Short Thinking (2s)", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-reason-short").classList.add("running");
+
+        controller.injectUserMessage({ id: nextId("user"), content: "Explain quantum computing" });
+        await sleep(300);
+
+        const rId = nextId("reason");
+        const start = Date.now();
+        injectReasoningMessage({ id: rId, status: "streaming", startedAt: start });
+
+        await sleep(2000);
+        if (token.cancelled) return finish();
+
+        injectReasoningMessage({
+          id: rId, status: "complete",
+          chunks: ["Quantum computing uses qubits that can exist in superposition..."],
+          startedAt: start, completedAt: Date.now(), durationMs: Date.now() - start,
+        });
+
+        finish();
+        function finish() {
+          document.getElementById("btn-reason-short").classList.remove("running");
+          setAllScenarioButtons(false);
+          log("Done: Short Thinking");
+        }
+      }
+
+      async function longReasoning() {
+        const token = freshCancel();
+        log("Starting: Long Thinking (6s)", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-reason-long").classList.add("running");
+
+        controller.injectUserMessage({ id: nextId("user"), content: "Solve this complex optimization problem" });
+        await sleep(300);
+
+        const rId = nextId("reason");
+        const start = Date.now();
+        injectReasoningMessage({ id: rId, status: "streaming", startedAt: start });
+
+        const thoughtChunks = [
+          "Let me break this down step by step...\n",
+          "First, I need to consider the constraints.\n",
+          "The optimal approach uses dynamic programming.\n",
+          "Checking edge cases...\n",
+        ];
+        for (let i = 0; i < thoughtChunks.length; i++) {
+          await sleep(1200);
+          if (token.cancelled) return finish();
+          injectReasoningMessage({
+            id: rId, status: "streaming",
+            chunks: thoughtChunks.slice(0, i + 1),
+            startedAt: start,
+          });
+        }
+
+        await sleep(800);
+        if (token.cancelled) return finish();
+
+        injectReasoningMessage({
+          id: rId, status: "complete",
+          chunks: thoughtChunks,
+          startedAt: start, completedAt: Date.now(), durationMs: Date.now() - start,
+        });
+
+        finish();
+        function finish() {
+          document.getElementById("btn-reason-long").classList.remove("running");
+          setAllScenarioButtons(false);
+          log("Done: Long Thinking");
+        }
+      }
+
       // ── wire buttons ────────────────────────────────────────────
 
       document.getElementById("btn-short").addEventListener("click", shortTool);
@@ -677,6 +800,8 @@
       document.getElementById("btn-long").addEventListener("click", longTool);
       document.getElementById("btn-concurrent").addEventListener("click", concurrentTools);
       document.getElementById("btn-names").addEventListener("click", nameVariants);
+      document.getElementById("btn-reason-short").addEventListener("click", shortReasoning);
+      document.getElementById("btn-reason-long").addEventListener("click", longReasoning);
 
       document.getElementById("btn-apply").addEventListener("click", () => {
         createWidget();
@@ -687,8 +812,10 @@
         currentMode = "none";
         modeSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
         modeSelector.querySelector('[data-mode="none"]').classList.add("active");
-        document.getElementById("active-template").value = "Calling {toolName}...";
-        document.getElementById("complete-template").value = "Finished {toolName} ({duration})";
+        document.getElementById("active-template").value = "Calling {toolName}... ~{duration}~";
+        document.getElementById("complete-template").value = "Finished {toolName} ~{duration}~";
+        document.getElementById("reason-active-template").value = "Thinking... ~{duration}~";
+        document.getElementById("reason-complete-template").value = "Thought for ~{duration}~";
         durationSlider.value = "2000";
         durationLabel.textContent = "2000ms";
         document.getElementById("color-primary").value = "#0d9488";

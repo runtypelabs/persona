@@ -665,6 +665,39 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 | `renderCollapsedPreview` | Override collapsed preview content for active tool rows |
 | `renderGroupedSummary` | Override grouped tool container summary |
 
+## Reasoning Display (`config.reasoning.*`)
+
+### Display Features (`config.features.reasoningDisplay.*`)
+| Property | Default | Description |
+|----------|---------|-------------|
+| `activePreview` | `false` | Show a lightweight preview block on active collapsed reasoning rows |
+| `activeMinHeight` | — | CSS min-height for active collapsed rows (e.g. `"100px"`) |
+| `previewMaxLines` | `3` | Maximum preview lines for collapsed active reasoning rows |
+| `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
+| `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
+
+### Text Templates
+| Property | Default | Description |
+|----------|---------|-------------|
+| `activeTextTemplate` | — | Header text while reasoning is active. Placeholder: `{duration}` (live-updating) |
+| `completeTextTemplate` | — | Header text when reasoning is complete. Placeholder: `{duration}` |
+
+Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, `**bold text**`. Same syntax as tool call templates.
+
+**Example:** `"Thinking... ~{duration}~"` renders the duration in a muted/dim style.
+
+| Property (`config.reasoning.*`) | Default | Description |
+|----------|---------|-------------|
+| `loadingAnimationDuration` | `2000` | Cycle duration in ms |
+| `loadingAnimationColor` | `currentColor` | Primary color for `shimmer-color` mode |
+| `loadingAnimationSecondaryColor` | `#3b82f6` | Secondary color for `shimmer-color` mode |
+
+### Custom Rendering Hooks
+| Property | Description |
+|----------|-------------|
+| `renderCollapsedSummary` | Override collapsed summary. Context includes `elapsed` (static string) and `createElapsedElement()` (returns a live-updating `<span>`) |
+| `renderCollapsedPreview` | Override collapsed preview content for active reasoning rows |
+
 ## Message Actions (`config.messageActions.*`)
 
 ### Basic Options
