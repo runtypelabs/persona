@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 3.13.0
+
+### Minor Changes
+
+- 4dca9ca: Add programmatic access to widget handle from the install script via `windowKey`, `onReady` callback, and `persona:ready` custom event. The code generator now supports an optional `windowKey` option for script formats.
+
 ## 3.12.0
 
 ### Minor Changes
