@@ -295,6 +295,7 @@ export default defineConfig({
         'fullscreen-assistant-demo': path.resolve(__dirname, 'fullscreen-assistant-demo.html'),
         'launcher-demo': path.resolve(__dirname, 'launcher-demo.html'),
         'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
+        'tool-loading-demo': path.resolve(__dirname, 'tool-loading-demo.html'),
         'voice-integration-demo': path.resolve(__dirname, 'voice-integration-demo.html'),
         'autoscroll-stress-test': path.resolve(__dirname, 'autoscroll-stress-test.html'),
         // Standalone (CDN / Copy-Paste) pages
