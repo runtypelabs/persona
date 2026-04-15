@@ -171,9 +171,9 @@ describe("install script onReady and persona:ready event", () => {
     document.body.innerHTML = `<div id="target"></div>`;
 
     const eventPromise = new Promise<any>((resolve) => {
-      window.addEventListener("persona:ready", ((e: CustomEvent) => {
-        resolve(e.detail);
-      }) as EventListener, { once: true });
+      window.addEventListener("persona:ready", (e) => {
+        resolve((e as CustomEvent).detail);
+      }, { once: true });
     });
 
     const handle = initAgentWidget({
@@ -198,9 +198,9 @@ describe("install script onReady and persona:ready event", () => {
     document.body.innerHTML = `<div id="target"></div>`;
 
     const received: any[] = [];
-    window.addEventListener("persona:ready", ((e: CustomEvent) => {
-      received.push(e.detail);
-    }) as EventListener, { once: true });
+    window.addEventListener("persona:ready", (e) => {
+      received.push((e as CustomEvent).detail);
+    }, { once: true });
 
     const handle = initAgentWidget({
       target: "#target",
