@@ -620,3 +620,60 @@ describe("CDN Version", () => {
     expect(VERSION).toMatch(/^\d+\.\d+\.\d+/);
   });
 });
+
+// =============================================================================
+// windowKey option
+// =============================================================================
+
+describe("windowKey option", () => {
+  it("script-installer with windowKey nests config and includes windowKey in JSON", () => {
+    const code = generateCodeSnippet(minimalConfig, "script-installer", { windowKey: "myWidget" });
+
+    // Parse the data-config JSON from the output
+    const match = code.match(/data-config='([^']*)'/);
+    expect(match).not.toBeNull();
+    const parsed = JSON.parse(match![1]);
+
+    expect(parsed.windowKey).toBe("myWidget");
+    expect(parsed.config).toBeDefined();
+    expect(parsed.config.apiUrl).toBe(minimalConfig.apiUrl);
+  });
+
+  it("script-installer without windowKey uses flat config (no nesting)", () => {
+    const code = generateCodeSnippet(minimalConfig, "script-installer");
+
+    const match = code.match(/data-config='([^']*)'/);
+    expect(match).not.toBeNull();
+    const parsed = JSON.parse(match![1]);
+
+    expect(parsed.windowKey).toBeUndefined();
+    expect(parsed.config).toBeUndefined();
+    expect(parsed.apiUrl).toBe(minimalConfig.apiUrl);
+  });
+
+  it("script-manual with windowKey includes windowKey and captures handle", () => {
+    const code = generateCodeSnippet(minimalConfig, "script-manual", { windowKey: "myWidget" });
+
+    expect(code).toContain("var handle = window.AgentWidget.initAgentWidget(");
+    expect(code).toContain("windowKey: 'myWidget'");
+  });
+
+  it("script-manual without windowKey still captures handle but omits windowKey", () => {
+    const code = generateCodeSnippet(minimalConfig, "script-manual");
+
+    expect(code).toContain("var handle = window.AgentWidget.initAgentWidget(");
+    expect(code).not.toContain("windowKey");
+  });
+
+  it("script-advanced with windowKey includes windowKey in initAgentWidget call", () => {
+    const code = generateCodeSnippet(minimalConfig, "script-advanced", { windowKey: "myWidget" });
+
+    expect(code).toContain("windowKey: 'myWidget'");
+  });
+
+  it("script-advanced without windowKey omits windowKey", () => {
+    const code = generateCodeSnippet(minimalConfig, "script-advanced");
+
+    expect(code).not.toContain("windowKey");
+  });
+});

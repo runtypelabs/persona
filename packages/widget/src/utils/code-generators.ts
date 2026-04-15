@@ -134,6 +134,13 @@ export type CodeGeneratorOptions = {
    * @default true
    */
   includeHookComments?: boolean;
+
+  /**
+   * If provided, emits `windowKey` in the generated `initAgentWidget()` call
+   * so the widget handle is stored on `window[windowKey]`.
+   * Only affects script formats (script-installer, script-manual, script-advanced).
+   */
+  windowKey?: string;
 };
 
 // Internal type for normalized hooks (always strings)
@@ -551,7 +558,7 @@ export function generateCodeSnippet(
   if (format === "esm") {
     return generateESMCode(cleanConfig, normalizedOptions);
   } else if (format === "script-installer") {
-    return generateScriptInstallerCode(cleanConfig);
+    return generateScriptInstallerCode(cleanConfig, normalizedOptions);
   } else if (format === "script-advanced") {
     return generateScriptAdvancedCode(cleanConfig, normalizedOptions);
   } else if (format === "react-component") {
@@ -1346,12 +1353,18 @@ function buildSerializableConfig(config: any): Record<string, any> {
   return serializableConfig;
 }
 
-function generateScriptInstallerCode(config: any): string {
+function generateScriptInstallerCode(config: any, options?: CodeGeneratorOptions): string {
   const serializableConfig = buildSerializableConfig(config);
-  
+
+  // When windowKey is provided, nest the widget config under `config` so the
+  // install script's parsedConfig.config detection picks it up alongside windowKey.
+  const payload = options?.windowKey
+    ? { config: serializableConfig, windowKey: options.windowKey }
+    : serializableConfig;
+
   // Escape single quotes in JSON for HTML attribute
-  const configJson = JSON.stringify(serializableConfig, null, 0).replace(/'/g, "&#39;");
-  
+  const configJson = JSON.stringify(payload, null, 0).replace(/'/g, "&#39;");
+
   return `<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist/install.global.js" data-config='${configJson}'></script>`;
 }
 
@@ -1369,8 +1382,9 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
     "",
     "<!-- Initialize widget -->",
     "<script>",
-    "  window.AgentWidget.initAgentWidget({",
+    "  var handle = window.AgentWidget.initAgentWidget({",
     "    target: 'body',",
+    ...(options?.windowKey ? [`    windowKey: '${options.windowKey}',`] : []),
     "    config: {"
   ];
 
@@ -1723,6 +1737,7 @@ function generateScriptAdvancedCode(config: any, options?: CodeGeneratorOptions)
     "    var handle = agentWidget.initAgentWidget({",
     "      target: 'body',",
     "      useShadowDom: false,",
+    ...(options?.windowKey ? [`      windowKey: '${options.windowKey}',`] : []),
     "      config: widgetConfig",
     "    });",
     "",

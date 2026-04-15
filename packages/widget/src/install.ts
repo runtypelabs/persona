@@ -22,6 +22,10 @@ interface SiteAgentInstallConfig {
   previewQueryParam?: string;
   // Shadow DOM option (defaults to false for better CSS compatibility)
   useShadowDom?: boolean;
+  // Expose the widget handle on window[windowKey] for programmatic access
+  windowKey?: string;
+  // Called when the widget is initialized and ready for interaction
+  onReady?: (handle: any) => void;
 }
 
 declare global {
@@ -273,12 +277,16 @@ declare global {
     }
 
     try {
-      window.AgentWidget.initAgentWidget({
+      const handle = window.AgentWidget.initAgentWidget({
         target,
         config: widgetConfig,
         // Explicitly disable shadow DOM for better CSS compatibility with host page
-        useShadowDom: config.useShadowDom ?? false
+        useShadowDom: config.useShadowDom ?? false,
+        windowKey: config.windowKey
       });
+
+      config.onReady?.(handle);
+      window.dispatchEvent(new CustomEvent("persona:ready", { detail: handle }));
     } catch (error) {
       console.error("Failed to initialize AgentWidget:", error);
     }
