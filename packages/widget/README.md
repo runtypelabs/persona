@@ -311,6 +311,8 @@ window.chatController.submitMessage("Test message")
 window.chatController.startVoiceRecognition()
 ```
 
+When using the automatic installer script (`install.global.js`), see [Programmatic access with the installer](#programmatic-access-with-the-installer) for additional approaches including the `onReady` callback and `persona:ready` event.
+
 #### Message Types
 
 The widget uses `AgentWidgetMessage` objects to represent messages in the conversation. You can access these through `postprocessMessage` callbacks or by inspecting the session's message array.
@@ -482,6 +484,20 @@ window.dispatchEvent(new CustomEvent('persona:focusInput', {
 ```
 
 **Instance scoping:** Same as `persona:showEventStream` — use `detail.instanceId` to target a specific widget. Without `instanceId`, all instances receive the event.
+
+#### `persona:ready`
+
+Dispatched on `window` by the automatic installer script (`install.global.js`) after the widget is initialized. The `event.detail` contains the `AgentWidgetInitHandle` (the same object returned by `initAgentWidget()`).
+
+```ts
+window.addEventListener('persona:ready', (e) => {
+  const handle = e.detail;
+  handle.on('message:sent', (msg) => console.log(msg));
+  handle.open();
+});
+```
+
+> **Note:** This event is only dispatched by the automatic installer script. Direct calls to `initAgentWidget()` return the handle synchronously and do not fire this event.
 
 ### Controller Events
 
@@ -1249,6 +1265,13 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 - `target` - CSS selector or element where widget mounts (default: `"body"`)
 - `config` - Widget configuration object (see Configuration reference)
 - `autoInit` - Automatically initialize after loading (default: `true`)
+- `clientToken` - Client token for authentication (alternative to proxy `apiUrl`)
+- `flowId` - Flow ID for client token authentication
+- `apiUrl` - API URL for the chat endpoint (can also be set inside `config`)
+- `previewQueryParam` - Query parameter key that gates widget loading; widget only loads when the parameter is present and truthy
+- `useShadowDom` - Use Shadow DOM for style isolation (default: `false`)
+- `windowKey` - If provided, stores the widget handle on `window[windowKey]` for programmatic access
+- `onReady` - Callback fired with the widget handle after initialization; signature: `(handle) => void`
 
 **Example with version pinning:**
 
@@ -1263,6 +1286,62 @@ The easiest way is to use the automatic installer script. It handles loading CSS
   };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@0.1.0/dist/install.global.js"></script>
+```
+
+#### Programmatic access with the installer
+
+The installer is fully asynchronous (it waits for framework hydration, then loads CSS and JS). To interact with the widget after it initializes, use one of these approaches:
+
+**`onReady` callback** — best when config and access logic live in the same script:
+
+```html
+<script>
+  window.siteAgentConfig = {
+    clientToken: 'YOUR_TOKEN',
+    windowKey: 'myChat',
+    onReady(handle) {
+      handle.on('message:sent', (e) => console.log('sent:', e));
+      handle.on('message:received', (e) => console.log('received:', e));
+    }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
+```
+
+**`persona:ready` event** — best for decoupled integration (e.g. tag managers, separate scripts):
+
+```html
+<script>
+  window.addEventListener('persona:ready', (e) => {
+    const handle = e.detail;
+    handle.on('message:sent', (e) => console.log('sent:', e));
+  });
+</script>
+
+<!-- Can be in a different script, tag manager snippet, etc. -->
+<script>
+  window.siteAgentConfig = { clientToken: 'YOUR_TOKEN' };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
+```
+
+**`windowKey`** — stores the handle on `window[windowKey]` for persistent global access. Combine with `onReady` or `persona:ready` to know when it's available:
+
+```html
+<script>
+  window.siteAgentConfig = {
+    clientToken: 'YOUR_TOKEN',
+    windowKey: 'myChat'
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
+
+<script>
+  window.addEventListener('persona:ready', () => {
+    // window.myChat is now available and persists until destroy()
+    window.myChat.open();
+  });
+</script>
 ```
 
 #### Method 2: Manual installation

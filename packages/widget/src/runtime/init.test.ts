@@ -85,6 +85,138 @@ function createMockController(config?: { launcher?: { enabled?: boolean; autoExp
   };
 }
 
+describe("initAgentWidget windowKey and ready notifications", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    createAgentExperienceMock.mockReset();
+    createAgentExperienceMock.mockImplementation((_mount, config) => createMockController(config));
+  });
+
+  it("assigns the handle to window[windowKey] when windowKey is provided", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    const handle = initAgentWidget({
+      target: "#target",
+      windowKey: "testWidget",
+      config: { launcher: { enabled: false } },
+    });
+
+    expect((window as any).testWidget).toBe(handle);
+
+    handle.destroy();
+    expect((window as any).testWidget).toBeUndefined();
+  });
+
+  it("does not set a window key when windowKey is omitted", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    const handle = initAgentWidget({
+      target: "#target",
+      config: { launcher: { enabled: false } },
+    });
+
+    // No arbitrary key should have been set
+    expect((window as any).testWidget2).toBeUndefined();
+    handle.destroy();
+  });
+
+  it("calls onReady after initialization", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    const onReady = vi.fn();
+    const handle = initAgentWidget({
+      target: "#target",
+      onReady,
+      config: { launcher: { enabled: false } },
+    });
+
+    expect(onReady).toHaveBeenCalledOnce();
+    handle.destroy();
+  });
+
+  it("the window key handle proxies controller methods", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    initAgentWidget({
+      target: "#target",
+      windowKey: "proxyTest",
+      config: { launcher: { enabled: false } },
+    });
+
+    const proxy = (window as any).proxyTest;
+    expect(proxy).toBeDefined();
+    expect(typeof proxy.open).toBe("function");
+    expect(typeof proxy.close).toBe("function");
+    expect(typeof proxy.on).toBe("function");
+    expect(typeof proxy.destroy).toBe("function");
+    expect(typeof proxy.getState).toBe("function");
+
+    proxy.destroy();
+  });
+});
+
+describe("install script onReady and persona:ready event", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    createAgentExperienceMock.mockReset();
+    createAgentExperienceMock.mockImplementation((_mount, config) => createMockController(config));
+  });
+
+  it("persona:ready event fires with the handle as detail", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    const eventPromise = new Promise<any>((resolve) => {
+      window.addEventListener("persona:ready", (e) => {
+        resolve((e as CustomEvent).detail);
+      }, { once: true });
+    });
+
+    const handle = initAgentWidget({
+      target: "#target",
+      windowKey: "eventTest",
+      config: { launcher: { enabled: false } },
+    });
+
+    // Simulate what install.ts does after initAgentWidget returns
+    window.dispatchEvent(new CustomEvent("persona:ready", { detail: handle }));
+
+    const detail = await eventPromise;
+    expect(detail).toBe(handle);
+    expect(typeof detail.open).toBe("function");
+    expect(typeof detail.on).toBe("function");
+
+    handle.destroy();
+  });
+
+  it("persona:ready event listener set up before init receives the handle", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    const received: any[] = [];
+    window.addEventListener("persona:ready", (e) => {
+      received.push((e as CustomEvent).detail);
+    }, { once: true });
+
+    const handle = initAgentWidget({
+      target: "#target",
+      config: { launcher: { enabled: false } },
+    });
+
+    // Simulate install.ts dispatching the event
+    window.dispatchEvent(new CustomEvent("persona:ready", { detail: handle }));
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toBe(handle);
+
+    handle.destroy();
+  });
+});
+
 describe("initAgentWidget docked mode", () => {
   beforeEach(() => {
     document.body.innerHTML = "";

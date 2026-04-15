@@ -43,6 +43,20 @@ const scriptCode = generateCodeSnippet(config, 'script-manual');
 | `script-manual` | Manual script tag with full control |
 | `script-advanced` | Script tag with DOM context collection and action handling |
 
+## `windowKey` Option
+
+Pass `windowKey` in the options to emit a `windowKey` property in the generated `initAgentWidget()` call, storing the widget handle on `window[windowKey]` for programmatic access:
+
+```typescript
+const code = generateCodeSnippet(config, 'script-installer', { windowKey: 'myChat' });
+```
+
+How it works per format:
+
+- **`script-installer`**: The `data-config` JSON includes `windowKey` alongside a nested `config` object, matching the install script's expected structure.
+- **`script-manual`** and **`script-advanced`**: `windowKey` is added to the `initAgentWidget()` call options.
+- **`esm`**, **`react-component`**, **`react-advanced`**: No effect — these formats return the handle directly as a variable.
+
 ## Custom Hooks
 
 The third parameter accepts options including custom hooks that inject code into the generated snippet. Hooks can be provided as strings or functions (functions are automatically serialized via `.toString()`).
@@ -166,6 +180,7 @@ type CodeGeneratorHooks = {
 type CodeGeneratorOptions = {
   hooks?: CodeGeneratorHooks;
   includeHookComments?: boolean;
+  windowKey?: string; // Emit windowKey in generated initAgentWidget call (script formats only)
 };
 ```
 
