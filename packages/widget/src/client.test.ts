@@ -1121,6 +1121,70 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     }
   });
 
+  it('should emit error and finalize streaming on step_error', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    global.fetch = createAgentStreamFetch([
+      'data: {"type":"flow_start","flowId":"f1","flowName":"Test","totalSteps":1}\n\n',
+      'data: {"type":"step_delta","id":"s1","name":"Prompt","executionType":"prompt","text":"partial"}\n\n',
+      sseEvent('step_error', { error: 'step blew up', seq: 3 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const errorEvents = events.filter(e => e.type === 'error');
+    expect(errorEvents.length).toBe(1);
+    if (errorEvents[0].type === 'error') {
+      expect(errorEvents[0].error.message).toBe('step blew up');
+    }
+
+    const statusIdle = events.filter(e => e.type === 'status' && e.status === 'idle');
+    expect(statusIdle.length).toBeGreaterThanOrEqual(1);
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const lastAssistant = [...messageEvents]
+      .reverse()
+      .find(e => e.type === 'message' && e.message.role === 'assistant' && !e.message.variant);
+    expect(lastAssistant?.type === 'message' && lastAssistant.message.streaming).toBe(false);
+  });
+
+  it('should emit error and finalize streaming on dispatch_error (message only)', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    global.fetch = createAgentStreamFetch([
+      'data: {"type":"flow_start","flowId":"f1","flowName":"Test","totalSteps":1}\n\n',
+      'data: {"type":"step_delta","id":"s1","name":"Prompt","executionType":"prompt","text":"x"}\n\n',
+      sseEvent('dispatch_error', { message: 'bad config', seq: 2 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const errorEvents = events.filter(e => e.type === 'error');
+    expect(errorEvents.length).toBe(1);
+    if (errorEvents[0].type === 'error') {
+      expect(errorEvents[0].error.message).toBe('bad config');
+    }
+
+    const statusIdle = events.filter(e => e.type === 'status' && e.status === 'idle');
+    expect(statusIdle.length).toBeGreaterThanOrEqual(1);
+  });
+
   it('should handle agent reflection events', async () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_test_7';
