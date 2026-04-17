@@ -2277,5 +2277,80 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
     expect(combinedContent).toContain('Before tool ');
     expect(combinedContent).toContain('after tool');
   });
+
+  it('delivers sequenced events still buffered when the stream closes', async () => {
+    // Regression: if the SSE stream ends while the reorder buffer is still
+    // waiting for a missing seq number, previously those events were silently
+    // dropped (destroy() cancelled the gap timer without flushing). The fix
+    // is an end-of-stream flush + drain; this test guards against regression.
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // Only a seq=3 event arrives — seq=1 and seq=2 are never delivered.
+          // Without the end-of-stream flush, this event would be stranded in
+          // the reorder buffer and never emitted.
+          e({ type: 'step_delta', id: 's1', text: 'tail', partId: 'text_0', seq: 3 });
+          // Stream closes immediately, well inside the 50ms gap timer window.
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const assistantContent = messageEvents
+      .filter((e) => e.message.role === 'assistant' && !e.message.variant)
+      .map((e) => e.message.content)
+      .join('');
+
+    expect(assistantContent).toContain('tail');
+  });
+
+  it('delivers a buffered error event when the stream closes mid-gap', async () => {
+    // Regression: an error event with seq > 1 arriving right before the
+    // stream closes was being swallowed by the reorder buffer, leaving the
+    // widget stuck in a streaming state with no error surfaced.
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          // Only sequenced event — but seq > 1 so it would be buffered.
+          e({ type: 'error', error: 'boom', seq: 2 });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const errorEvents = events.filter((e) => e.type === 'error');
+    expect(errorEvents.length).toBe(1);
+    if (errorEvents[0].type === 'error') {
+      expect(errorEvents[0].error.message).toBe('boom');
+    }
+  });
 });
 

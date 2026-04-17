@@ -225,4 +225,61 @@ describe("SequenceReorderBuffer", () => {
     expect(emitted[1].payload.text).toBe("c");
     buf.destroy();
   });
+
+  it("handles a stream whose first seq is > 1 via the gap timeout (no loss)", () => {
+    // Defensive: if the server's counter ever starts above 1 (e.g. a resumed
+    // stream), the hardcoded nextExpectedSeq=1 would buffer the first event.
+    // The gap timer must still flush it so nothing is lost.
+    const buf = new SequenceReorderBuffer(emitter, 50);
+    buf.push("step_delta", { seq: 5, text: "first" });
+    buf.push("step_delta", { seq: 6, text: "second" });
+    expect(emitted).toHaveLength(0);
+
+    vi.advanceTimersByTime(50);
+
+    expect(emitted).toHaveLength(2);
+    expect(emitted[0].payload.text).toBe("first");
+    expect(emitted[1].payload.text).toBe("second");
+
+    // Subsequent in-order events should pass through immediately.
+    buf.push("step_delta", { seq: 7, text: "third" });
+    expect(emitted).toHaveLength(3);
+    expect(emitted[2].payload.text).toBe("third");
+    buf.destroy();
+  });
+
+  it("warns and emits both events on seq collision (does not silently drop)", () => {
+    // Server invariant: seq is unique per stream. If it's ever violated
+    // (bug, replay, mixed counters), Map.set would silently overwrite. The
+    // buffer must detect this, warn, and emit the prior event so nothing is
+    // dropped.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const buf = new SequenceReorderBuffer(emitter, 50);
+
+    buf.push("step_delta", { seq: 1, text: "a" });
+    // seq=3 buffered, waiting for seq=2
+    buf.push("step_delta", { seq: 3, text: "first-at-3" });
+    expect(emitted).toHaveLength(1);
+
+    // Second event with same seq=3 — prior one should be emitted out-of-order
+    buf.push("reason_delta", { seq: 3, text: "second-at-3" });
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain("duplicate seq=3");
+    expect(warnSpy.mock.calls[0][0]).toContain("step_delta");
+    expect(warnSpy.mock.calls[0][0]).toContain("reason_delta");
+
+    // Prior event flushed immediately (out of seq order), nothing lost
+    expect(emitted).toHaveLength(2);
+    expect(emitted[1].payload.text).toBe("first-at-3");
+
+    // seq=2 arrives — advances nextExpected through the buffered second-at-3
+    buf.push("step_delta", { seq: 2, text: "b" });
+    expect(emitted).toHaveLength(4);
+    expect(emitted[2].payload.text).toBe("b");
+    expect(emitted[3].payload.text).toBe("second-at-3");
+
+    warnSpy.mockRestore();
+    buf.destroy();
+  });
 });

@@ -1400,6 +1400,11 @@ export class AgentWidgetClient {
     const seqBuffer = new SequenceReorderBuffer((payloadType: string, payload: any) => {
       seqReadyQueue.push({ payloadType, payload });
     });
+    // Assigned inside the SSE loop (captures all closure state); also invoked
+    // after the loop exits so any events buffered at end-of-stream are processed.
+    let drainReadyQueue: () => void = () => {
+      seqReadyQueue.length = 0;
+    };
 
     // Agent execution state tracking
     let agentExecution: AgentExecutionState | null = null;
@@ -1472,6 +1477,7 @@ export class AgentWidgetClient {
         // Push through the sequence reorder buffer
         seqBuffer.push(payloadType, payload);
 
+        drainReadyQueue = () => {
         for (let _qi = 0; _qi < seqReadyQueue.length; _qi++) {
           const payloadType = seqReadyQueue[_qi].payloadType;
           const payload = seqReadyQueue[_qi].payload;
@@ -2543,9 +2549,13 @@ export class AgentWidgetClient {
         }
         } // end seqReadyQueue for loop
         seqReadyQueue.length = 0;
+        };
+        drainReadyQueue();
       }
     }
 
+    seqBuffer.flushPending();
+    drainReadyQueue();
     seqBuffer.destroy();
   }
 }

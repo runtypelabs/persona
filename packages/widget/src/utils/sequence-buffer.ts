@@ -32,7 +32,11 @@ export class SequenceReorderBuffer {
     }
 
     // Server's sequenceCounter resets to 0 on each execution and pre-increments,
-    // so the first sequenced event in any stream always has seq=1.
+    // so the first sequenced event in any stream is expected to have seq=1.
+    // If a server ever starts at a different number (e.g. a resumed stream),
+    // the 50ms gap timer below is the safety net: the first event gets
+    // buffered, then flushed after the gap elapses. Correctness is preserved;
+    // the only cost is a one-time latency on the leading event.
     if (this.nextExpectedSeq === null) {
       this.nextExpectedSeq = 1;
     }
@@ -51,7 +55,23 @@ export class SequenceReorderBuffer {
       return;
     }
 
-    // seq > nextExpected — buffer it and start gap timer
+    // seq > nextExpected — buffer it and start gap timer.
+    // If another event with the same seq is already buffered, the server
+    // broke its "seq is unique per stream" invariant. Rather than silently
+    // overwrite (losing one event) or swallow the new one, emit the prior
+    // event immediately — out of order, but better than dropping it — and
+    // warn so the issue is visible.
+    const existing = this.buffer.get(seq);
+    if (existing !== undefined) {
+      if (typeof console !== "undefined" && typeof console.warn === "function") {
+        console.warn(
+          `[persona] SequenceReorderBuffer: duplicate seq=${seq} ` +
+            `(${existing.payloadType} vs ${payloadType}); ` +
+            `emitting earlier event out-of-order to avoid loss`
+        );
+      }
+      this.emitter(existing.payloadType, existing.payload);
+    }
     this.buffer.set(seq, { payloadType, payload, seq });
     this.startGapTimer();
   }
@@ -108,5 +128,13 @@ export class SequenceReorderBuffer {
   destroy(): void {
     this.clearGapTimer();
     this.buffer.clear();
+  }
+
+  hasPending(): boolean {
+    return this.buffer.size > 0;
+  }
+
+  flushPending(): void {
+    this.flushAll();
   }
 }
