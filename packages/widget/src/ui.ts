@@ -3118,9 +3118,10 @@ export const createAgentExperience = (
     });
   }
 
-  // Wire up event stream buffer to capture SSE events
-  if (eventStreamBuffer) {
+  // Wire up optional SSE tap (host) + event stream buffer to capture SSE events
+  if (eventStreamBuffer || config.onSSEEvent) {
     session.setSSEEventCallback((type: string, payload: unknown) => {
+      config.onSSEEvent?.(type, payload);
       eventStreamBuffer?.push({
         id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         type,
@@ -4187,8 +4188,9 @@ export const createAgentExperience = (
           eventStreamStore = new EventStreamStore(eventStreamDbName);
           eventStreamBuffer = new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore);
           eventStreamStore.open().then(() => eventStreamBuffer?.restore()).catch(() => {});
-          // Register the SSE event callback
+          // Register the SSE event callback (host tap + buffer)
           session.setSSEEventCallback((type: string, payload: unknown) => {
+            config.onSSEEvent?.(type, payload);
             eventStreamBuffer!.push({
               id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               type,
