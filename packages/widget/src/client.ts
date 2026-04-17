@@ -1432,12 +1432,23 @@ export class AgentWidgetClient {
     // field are held and re-emitted in sequence order so that transport-level
     // reordering doesn't produce garbled output.
     const seqReadyQueue: Array<{ payloadType: string; payload: any }> = [];
+    let isDrainScheduled = false;
+    const scheduleReadyQueueDrain = () => {
+      if (isDrainScheduled) return;
+      isDrainScheduled = true;
+      queueMicrotask(() => {
+        isDrainScheduled = false;
+        drainReadyQueue();
+      });
+    };
     const seqBuffer = new SequenceReorderBuffer((payloadType: string, payload: any) => {
       seqReadyQueue.push({ payloadType, payload });
+      scheduleReadyQueueDrain();
     });
     // Assigned inside the SSE loop (captures all closure state); also invoked
     // after the loop exits so any events buffered at end-of-stream are processed.
     let drainReadyQueue: () => void = () => {
+      isDrainScheduled = false;
       seqReadyQueue.length = 0;
     };
 

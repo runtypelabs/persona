@@ -2437,6 +2437,55 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
     expect(assistantContent).toContain('tail');
   });
 
+  it('drains timer-flushed sequenced events before the next SSE chunk arrives', async () => {
+    vi.useFakeTimers();
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'a', partId: 'text_0', seq: 1 });
+          // seq=3 buffers while seq=2 is missing.
+          e({ type: 'step_delta', id: 's1', text: 'c', partId: 'text_0', seq: 3 });
+
+          // Keep the stream open without delivering another SSE event until after
+          // the gap timeout has fired. The buffered seq=3 event should still render.
+          setTimeout(() => {
+            e({ type: 'flow_complete', success: true });
+            controller.close();
+          }, 120);
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    const dispatchPromise = client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    await vi.advanceTimersByTimeAsync(60);
+
+    const messageEventsDuringPause = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const assistantContentDuringPause = messageEventsDuringPause
+      .filter((e) => e.message.role === 'assistant' && !e.message.variant)
+      .map((e) => e.message.content)
+      .join('');
+
+    expect(assistantContentDuringPause).toContain('ac');
+
+    await vi.advanceTimersByTimeAsync(70);
+    await dispatchPromise;
+    vi.useRealTimers();
+  });
+
   it('delivers a buffered error event when the stream closes mid-gap', async () => {
     // Regression: an error event with seq > 1 arriving right before the
     // stream closes was being swallowed by the reorder buffer, leaving the
