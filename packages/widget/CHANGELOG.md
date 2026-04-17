@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 3.15.0
+
+### Minor Changes
+
+- 5d5b2a3: Add optional `config.onSSEEvent` so hosts can observe every parsed SSE frame (e.g. artifact side effects) without short-circuiting native streaming.
+
 ## 3.14.0
 
 ### Minor Changes
