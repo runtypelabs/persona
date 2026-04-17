@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 3.14.0
+
+### Minor Changes
+
+- 610f4a3: Handle `step_error`, `dispatch_error`, and `flow_error` SSE frames natively: emit `error` events, finalize streaming assistant messages, and transition status to `idle`. Hosts no longer need a custom `parseSSEEvent` callback for these Runtype flow/dispatch error types.
+
 ## 3.8.5
 
 ### Patch Changes
