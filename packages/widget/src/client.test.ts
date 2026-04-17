@@ -2130,6 +2130,59 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
     expect(lastFinal.message.content).toBe('Hello beautiful world!');
   });
 
+  it('repairs a delayed step_delta that arrives after the gap-timeout flush', async () => {
+    vi.useFakeTimers();
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          e({ type: 'text_start', partId: 'text_0', messageId: 'msg_1', seq: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'a', partId: 'text_0', messageId: 'msg_1', seq: 2 });
+          // seq=3 is delayed long enough for the reorder buffer to flush seq=4 and seq=5.
+          e({ type: 'step_delta', id: 's1', text: 'c', partId: 'text_0', messageId: 'msg_1', seq: 4 });
+          e({ type: 'text_end', partId: 'text_0', messageId: 'msg_1', seq: 5 });
+
+          setTimeout(() => {
+            e({ type: 'step_delta', id: 's1', text: 'b', partId: 'text_0', messageId: 'msg_1', seq: 3 });
+          }, 60);
+
+          setTimeout(() => {
+            e({ type: 'flow_complete', success: true });
+            controller.close();
+          }, 70);
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    const dispatchPromise = client.dispatch({ messages: [] }, (event) => events.push(event));
+    await vi.advanceTimersByTimeAsync(80);
+    await dispatchPromise;
+    vi.useRealTimers();
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const assistantMessages = messageEvents
+      .filter((e) => e.message.role === 'assistant' && !e.message.variant)
+      .map((e) => e.message);
+    expect(assistantMessages.length).toBeGreaterThan(0);
+
+    const repairedMessage = assistantMessages[assistantMessages.length - 1];
+    expect(repairedMessage.content).toBe('abc');
+    expect(repairedMessage.partId).toBe('text_0');
+  });
+
   it('should reorder reason_delta chunks by sequenceIndex', async () => {
     const events: AgentWidgetEvent[] = [];
 

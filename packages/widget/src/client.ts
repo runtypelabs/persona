@@ -1296,10 +1296,45 @@ export class AgentWidgetClient {
     const streamParsers = new Map<string, AgentWidgetStreamParser>();
     // Track accumulated raw content for structured formats (JSON, XML, etc.)
     const rawContentBuffers = new Map<string, string>();
+    // Rebuild incremental text by sequence so late arrivals can repair already-emitted
+    // content after the reorder buffer's gap-timeout flush.
+    const orderedChunkBuffers = new Map<string, Array<{ seq: number; text: string }>>();
+    const assistantMessagesByPartId = new Map<string, AgentWidgetMessage>();
     // Only the most-recently sealed segment is reconciled with step_complete's
     // final response. Earlier segments rely on their own async parser microtasks
     // resolving via the closure-captured `assistant` variable.
     let lastSealedTextSegment: AgentWidgetMessage | null = null;
+
+    const insertOrderedChunk = (key: string, seq: number, text: string): string => {
+      let chunks = orderedChunkBuffers.get(key);
+      if (!chunks) {
+        chunks = [];
+        orderedChunkBuffers.set(key, chunks);
+      }
+
+      let lo = 0;
+      let hi = chunks.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (chunks[mid].seq < seq) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
+
+      if (chunks[lo]?.seq === seq) {
+        chunks[lo] = { seq, text };
+      } else {
+        chunks.splice(lo, 0, { seq, text });
+      }
+
+      let accumulated = "";
+      for (let index = 0; index < chunks.length; index++) {
+        accumulated += chunks[index].text;
+      }
+      return accumulated;
+    };
 
     /**
      * After text_end + didSplitByPartId, merge the authoritative final response into the
@@ -1727,18 +1762,31 @@ export class AgentWidgetClient {
             partIdState.current = incomingPartId;
           }
 
-          const assistant = ensureAssistantMessage();
-          if (incomingPartId !== undefined && !assistant.partId) {
-            assistant.partId = incomingPartId;
+          const assistant =
+            incomingPartId !== undefined
+              ? (assistantMessagesByPartId.get(incomingPartId) ?? ensureAssistantMessage())
+              : ensureAssistantMessage();
+          if (incomingPartId !== undefined) {
+            if (!assistant.partId) {
+              assistant.partId = incomingPartId;
+            }
+            assistantMessagesByPartId.set(incomingPartId, assistant);
           }
           // Support various field names: text, delta, content, chunk (Runtype uses 'chunk')
           const chunk = payload.text ?? payload.delta ?? payload.content ?? payload.chunk ?? "";
           if (chunk) {
             // Accumulate raw content for structured format parsing.
-            // Events are already reordered by SequenceReorderBuffer at the
-            // dispatch level, so simple append is correct here.
+            // Most out-of-order events are fixed at the dispatch layer, but once the
+            // gap timeout flushes later seqs we can still see genuine late arrivals.
+            // Rebuild chunked content by seq so those events repair prior output
+            // instead of appending in the wrong position.
+            const chunkSeq = typeof payload.seq === "number" ? payload.seq : undefined;
+            const chunkBufferKey = incomingPartId ?? assistant.id;
             const rawBuffer = rawContentBuffers.get(assistant.id) ?? "";
-            const accumulatedRaw = rawBuffer + chunk;
+            const accumulatedRaw =
+              chunkSeq !== undefined
+                ? insertOrderedChunk(chunkBufferKey, chunkSeq, String(chunk))
+                : rawBuffer + chunk;
             // Store raw content for action parsing, but NEVER set assistant.content to raw JSON
             assistant.rawContent = accumulatedRaw;
             
@@ -1761,7 +1809,7 @@ export class AgentWidgetClient {
             
             // If plain text parser, just append the chunk directly
             if (isPlainTextParser) {
-              assistant.content += chunk;
+              assistant.content = chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
               // Clear any raw buffer/parser since we're in plain text mode
               rawContentBuffers.delete(assistant.id);
               streamParsers.delete(assistant.id);
@@ -1787,19 +1835,25 @@ export class AgentWidgetClient {
                 } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith('<')) {
                   // Not a structured format - show as plain text
                   const currentAssistant = assistantMessage;
-                  if (currentAssistant && currentAssistant.id === assistant.id) {
-                    currentAssistant.content += chunk;
-                    rawContentBuffers.delete(currentAssistant.id);
-                    streamParsers.delete(currentAssistant.id);
-                    currentAssistant.rawContent = undefined;
-                    emitMessage(currentAssistant);
+                  const targetAssistant =
+                    currentAssistant && currentAssistant.id === assistant.id
+                      ? currentAssistant
+                      : assistant;
+                  if (targetAssistant.id === assistant.id) {
+                    targetAssistant.content =
+                      chunkSeq !== undefined ? accumulatedRaw : targetAssistant.content + chunk;
+                    rawContentBuffers.delete(targetAssistant.id);
+                    streamParsers.delete(targetAssistant.id);
+                    targetAssistant.rawContent = undefined;
+                    emitMessage(targetAssistant);
                   }
                 }
                 // Otherwise wait for more chunks (incomplete structured format)
                 // Don't emit message if parser hasn't extracted text yet
               }).catch(() => {
                 // On error, treat as plain text
-                assistant.content += chunk;
+                assistant.content =
+                  chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
                 rawContentBuffers.delete(assistant.id);
                 streamParsers.delete(assistant.id);
                 assistant.rawContent = undefined;
@@ -1817,7 +1871,8 @@ export class AgentWidgetClient {
                 emitMessage(assistant);
               } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith('<')) {
                 // Not a structured format - show as plain text
-                assistant.content += chunk;
+                assistant.content =
+                  chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
                 // Clear any raw buffer/parser if we were in structured format mode
                 rawContentBuffers.delete(assistant.id);
                 streamParsers.delete(assistant.id);
