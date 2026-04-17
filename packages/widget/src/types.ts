@@ -2902,6 +2902,15 @@ export type AgentWidgetConfig = {
    */
   parseSSEEvent?: AgentWidgetSSEEventParser;
   /**
+   * Called for every parsed SSE frame (after JSON parse), before native handling.
+   * Use for lightweight side effects (e.g. telemetry). Does not replace native
+   * streaming; pair with {@link parseSSEEvent} only when you need to override text mapping.
+   *
+   * When the event stream inspector is enabled, this runs in the same order as
+   * events are appended to the inspector buffer.
+   */
+  onSSEEvent?: (eventType: string, payload: unknown) => void;
+  /**
    * Layout configuration for customizing widget appearance and structure.
    * Provides control over header, messages, and content slots.
    * 
