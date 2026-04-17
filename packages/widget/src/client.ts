@@ -2592,14 +2592,43 @@ export class AgentWidgetClient {
           streamParsers.delete(id);
           rawContentBuffers.delete(id);
           seqChunkBuffers.delete(id);
-        } else if (payloadType === "error" && payload.error) {
-          onEvent({
-            type: "error",
-            error:
-              payload.error instanceof Error
-                ? payload.error
-                : new Error(String(payload.error))
-          });
+        } else if (
+          payloadType === "error" ||
+          payloadType === "step_error" ||
+          payloadType === "dispatch_error" ||
+          payloadType === "flow_error"
+        ) {
+          let resolvedError: Error | null = null;
+          if (payload.error instanceof Error) {
+            resolvedError = payload.error;
+          } else if (payloadType === "dispatch_error") {
+            const msg = payload.message ?? payload.error;
+            if (msg != null && msg !== "") {
+              resolvedError = new Error(String(msg));
+            }
+          } else if (
+            payloadType === "step_error" ||
+            payloadType === "flow_error"
+          ) {
+            const e = payload.error;
+            if (typeof e === "string" && e !== "") {
+              resolvedError = new Error(e);
+            } else if (e != null && typeof e === "object" && "message" in e) {
+              resolvedError = new Error(String((e as { message?: unknown }).message ?? e));
+            }
+          } else if (payloadType === "error" && payload.error != null && payload.error !== "") {
+            resolvedError = new Error(String(payload.error));
+          }
+
+          if (resolvedError) {
+            onEvent({ type: "error", error: resolvedError });
+            const finalMsg = assistantMessage as AgentWidgetMessage | null;
+            if (finalMsg && finalMsg.streaming) {
+              finalMsg.streaming = false;
+              emitMessage(finalMsg);
+            }
+            onEvent({ type: "status", status: "idle" });
+          }
         }
       }
     }
