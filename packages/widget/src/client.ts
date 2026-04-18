@@ -1057,6 +1057,16 @@ export class AgentWidgetClient {
     let didSplitByPartId = false;
     const reasoningMessages = new Map<string, AgentWidgetMessage>();
     const toolMessages = new Map<string, AgentWidgetMessage>();
+    // Messages produced by steps inside a nested flow executed as a tool.
+    // Keyed by `${parentToolId}::${nestedStepId}::${partId}` so each nested
+    // step (send-stream, prompt) gets its own assistant message, and prompts
+    // with inner tool calls split into one message per text segment — still
+    // attributable to the parent tool call.
+    const nestedStepMessages = new Map<string, AgentWidgetMessage>();
+    // Most-recent partId seen for a given `${toolId}::${stepId}` scope, used
+    // to seal the previous segment when a new partId arrives within the
+    // same nested prompt step.
+    const nestedPartIdByStep = new Map<string, string>();
     const reasoningContext = {
       lastId: null as string | null,
       byStep: new Map<string, string>()
@@ -1064,6 +1074,49 @@ export class AgentWidgetClient {
     const toolContext = {
       lastId: null as string | null,
       byCall: new Map<string, string>()
+    };
+
+    // Nested message key. partId defaults to "" so steps without segmentation
+    // (e.g. send-stream) still have a deterministic single key.
+    const getNestedStepKey = (
+      toolId: string,
+      stepId: string,
+      partId: string = ""
+    ) => `${toolId}::${stepId}::${partId}`;
+
+    // Prefix used to sweep every nested message belonging to a single
+    // (toolId, stepId) scope — needed on step_complete to seal any segments
+    // that are still streaming.
+    const getNestedStepPrefix = (toolId: string, stepId: string) =>
+      `${toolId}::${stepId}::`;
+
+    const ensureNestedStepMessage = (
+      toolId: string,
+      stepId: string,
+      partId: string,
+      executionId?: string
+    ): AgentWidgetMessage => {
+      const key = getNestedStepKey(toolId, stepId, partId);
+      const existing = nestedStepMessages.get(key);
+      if (existing) return existing;
+      const idSuffix = partId ? `-${partId}` : "";
+      const message: AgentWidgetMessage = {
+        id: `nested-${toolId}-${stepId}${idSuffix}`,
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+        streaming: true,
+        sequence: nextSequence(),
+        ...(partId ? { partId } : {}),
+        agentMetadata: {
+          executionId,
+          parentToolId: toolId,
+          parentStepId: stepId,
+        },
+      };
+      nestedStepMessages.set(key, message);
+      emitMessage(message);
+      return message;
     };
 
     const normalizeKey = (value: unknown): string | null => {
@@ -1669,7 +1722,13 @@ export class AgentWidgetClient {
             toolContext.byCall.delete(callKey);
           }
         } else if (payloadType === "text_start") {
-          // Lifecycle event: a new text segment is beginning (emitted at tool boundaries)
+          // Lifecycle event: a new text segment is beginning (emitted at tool boundaries).
+          // When toolContext is present this fired inside a nested flow — it must not
+          // seal or rotate the outer assistant message. Nested prompt segmentation is
+          // handled via nestedStepMessages keyed by (toolId, stepId).
+          if ((payload as any).toolContext?.toolId) {
+            continue;
+          }
           const incomingPartId = payload.partId;
           if (incomingPartId !== undefined && partIdState.current !== null && incomingPartId !== partIdState.current) {
             const prev = assistantMessage as AgentWidgetMessage | null;
@@ -1685,7 +1744,13 @@ export class AgentWidgetClient {
             partIdState.current = incomingPartId;
           }
         } else if (payloadType === "text_end") {
-          // Lifecycle event: current text segment ended (tool call about to start)
+          // Lifecycle event: current text segment ended (tool call about to start).
+          // When toolContext is present the boundary belongs to a nested flow — leave
+          // outer assistant state alone so the outer stream is never interrupted by
+          // nested activity.
+          if ((payload as any).toolContext?.toolId) {
+            continue;
+          }
           // Seal the current assistant message so the next segment gets a new one
           const prev = assistantMessage as AgentWidgetMessage | null;
           if (prev) {
@@ -1701,6 +1766,77 @@ export class AgentWidgetClient {
           const executionType = (payload as any).executionType;
           if (stepType === "tool" || executionType === "context") {
             // Skip tool-related chunks - they're handled by tool_start/tool_complete
+            continue;
+          }
+
+          // Nested flow routing: when toolContext is present, this step_delta
+          // originated inside a nested flow executed as a tool. Surface it as
+          // its own assistant message keyed by the nested step id, so authors
+          // who add send-stream / prompt steps inside their flow see them as
+          // real messages in the timeline, in order — rather than merging
+          // into the outer assistant bubble or getting buried in the tool
+          // card. Each nested step id gets its own message; the parent tool
+          // bubble continues to represent the invocation via tool_* events.
+          const nestedToolCtx = (payload as any).toolContext as
+            | { toolId?: string; stepId?: string; executionId?: string }
+            | undefined;
+          if (nestedToolCtx?.toolId) {
+            const nestedStepId = String(
+              payload.id ?? nestedToolCtx.stepId ?? `step-${nextSequence()}`
+            );
+            const incomingPartId =
+              payload.partId !== undefined && payload.partId !== null
+                ? String(payload.partId)
+                : "";
+            const stepScopeKey = `${nestedToolCtx.toolId}::${nestedStepId}`;
+            const prevPartId = nestedPartIdByStep.get(stepScopeKey);
+
+            // If partId changed within this nested step (prompt with inner
+            // tool call emitting a new text segment), seal the previous
+            // segment's message so each segment renders as its own bubble.
+            if (
+              incomingPartId !== "" &&
+              prevPartId !== undefined &&
+              prevPartId !== "" &&
+              prevPartId !== incomingPartId
+            ) {
+              const prev = nestedStepMessages.get(
+                getNestedStepKey(
+                  nestedToolCtx.toolId,
+                  nestedStepId,
+                  prevPartId
+                )
+              );
+              if (prev && prev.streaming !== false) {
+                prev.streaming = false;
+                emitMessage(prev);
+              }
+            }
+            if (incomingPartId !== "") {
+              nestedPartIdByStep.set(stepScopeKey, incomingPartId);
+            }
+
+            const nestedMsg = ensureNestedStepMessage(
+              nestedToolCtx.toolId,
+              nestedStepId,
+              incomingPartId,
+              nestedToolCtx.executionId
+            );
+            const nestedChunk =
+              payload.text ??
+              payload.delta ??
+              payload.content ??
+              payload.chunk ??
+              "";
+            if (nestedChunk) {
+              nestedMsg.content += String(nestedChunk);
+              nestedMsg.streaming = true;
+              emitMessage(nestedMsg);
+            }
+            if (payload.isComplete) {
+              nestedMsg.streaming = false;
+              emitMessage(nestedMsg);
+            }
             continue;
           }
 
@@ -1927,6 +2063,37 @@ export class AgentWidgetClient {
             // Skip tool-related completions - they're handled by tool_complete
             continue;
           }
+
+          // Nested flow: seal every segment message produced by this nested
+          // step (a single nested prompt step may have produced multiple
+          // messages, one per partId, when inner tool calls split it). The
+          // outer assistantMessage state is untouched so reconciliation for
+          // the outer flow still works.
+          const nestedCompleteCtx = (payload as any).toolContext as
+            | { toolId?: string; stepId?: string; executionId?: string }
+            | undefined;
+          if (nestedCompleteCtx?.toolId) {
+            const nestedStepId = String(
+              payload.id ?? nestedCompleteCtx.stepId ?? ""
+            );
+            if (nestedStepId) {
+              const prefix = getNestedStepPrefix(
+                nestedCompleteCtx.toolId,
+                nestedStepId
+              );
+              for (const [key, msg] of nestedStepMessages) {
+                if (key.startsWith(prefix) && msg.streaming !== false) {
+                  msg.streaming = false;
+                  emitMessage(msg);
+                }
+              }
+              nestedPartIdByStep.delete(
+                `${nestedCompleteCtx.toolId}::${nestedStepId}`
+              );
+            }
+            continue;
+          }
+
           if (didSplitByPartId) {
             // Sealed segment(s) — do not create a second bubble from step_complete.
             // Merge authoritative final response into the last sealed segment (fixes async lag).

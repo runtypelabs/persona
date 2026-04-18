@@ -247,6 +247,21 @@
       </div>
 
       <div class="section">
+        <label>Nested Flow (QA)</label>
+        <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
+          Exercises nested-flow-as-tool routing: <code>step_delta</code> with
+          <code>toolContext</code>, partId-based segmentation, and outer-stream
+          isolation. Simulates what Runtype emits when an outer agent calls a
+          flow as a tool.
+        </small>
+        <div class="btn-group">
+          <button id="btn-nested-send-stream">Nested send-streams + reasoning</button>
+          <button id="btn-nested-prompt-split">Nested prompt split by inner tool call</button>
+          <button id="btn-nested-interleave">Outer text ↔ nested flow interleave</button>
+        </div>
+      </div>
+
+      <div class="section">
         <label>Actions</label>
         <div class="btn-row">
           <button id="btn-apply">Apply Config</button>
@@ -988,6 +1003,256 @@
         log("Done: Markdown table + box-drawing (scrambled seq)");
       }
 
+      // ── nested flow QA scenarios ────────────────────────────────
+      //
+      // These simulate what Runtype emits when an outer agent calls a
+      // flow as a tool (`executionMode: 'tool_nested'`):
+      //   • outer `tool_start` / `tool_complete` bracket the invocation
+      //   • nested `flow_start` / `step_start` / `step_delta` /
+      //     `step_complete` / `flow_complete` all carry `toolContext:
+      //     { toolId, stepId, executionId }` (enriched by
+      //     FilteredStream on the API side)
+      //   • `text_start` / `text_end` inside the nested flow are also
+      //     enriched, and Persona should early-return on them so outer
+      //     assistant state is never touched
+      //
+      // If Persona's nested routing regresses, the visual symptoms are:
+      //   - nested send-stream text buried inside the tool card instead
+      //     of its own assistant bubble
+      //   - multi-segment nested prompts concatenated into one bubble
+      //   - the outer assistant message prematurely sealed/rotated by a
+      //     nested `text_start`
+
+      /** Wrap a payload with nested-flow toolContext enrichment. */
+      function withToolContext(data, ctx) {
+        return { ...data, toolContext: { ...ctx } };
+      }
+
+      async function nestedSendStreams() {
+        log("Starting: Nested send-streams + reasoning", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-nested-send-stream").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Run sample_flow",
+        });
+        await sleep(200);
+
+        const outerToolId = nextId("toolu");
+        const outerStepId = nextId("outer-step");
+        const executionId = nextId("exec");
+        const ctx = {
+          toolId: outerToolId,
+          stepId: outerStepId,
+          executionId,
+        };
+
+        const nestedFlowId = nextId("flow");
+        const stream1Id = nextId("step");
+        const reasoningStepId = nextId("step");
+        const reasoningId = nextId("reason");
+        const stream2Id = nextId("step");
+
+        const entries = [
+          // Outer: agent calls the flow as a tool.
+          { data: { type: "tool_start", toolId: outerToolId, name: "sample_flow", args: { input: "hi" }, seq: 1 } },
+
+          // Nested flow begins (all events carry toolContext).
+          { data: withToolContext({ type: "flow_start", flowId: nestedFlowId, flowName: "sample_flow", totalSteps: 3, seq: 2 }, ctx) },
+
+          // Nested step 1: send-stream "Testing stream begin"
+          { data: withToolContext({ type: "step_start", id: stream1Id, name: "Intro", stepType: "send-stream", index: 1, totalSteps: 3, seq: 3 }, ctx) },
+          { data: withToolContext({ type: "step_delta", id: stream1Id, stepType: "send-stream", text: "Testing ", seq: 4 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_delta", id: stream1Id, stepType: "send-stream", text: "stream ", seq: 5 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_delta", id: stream1Id, stepType: "send-stream", text: "begin", seq: 6 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_complete", id: stream1Id, name: "Intro", stepType: "send-stream", success: true, duration: 240, seq: 7 }, ctx) },
+
+          // Nested step 2: reasoning between the two send-streams
+          { data: withToolContext({ type: "step_start", id: reasoningStepId, name: "Think", stepType: "prompt", index: 2, totalSteps: 3, seq: 8 }, ctx) },
+          { data: withToolContext({ type: "reason_start", reasoningId, hidden: false, done: false, seq: 9 }, ctx) },
+          { data: withToolContext({ type: "reason_delta", reasoningId, reasoningText: "Considering next streamed line... ", hidden: false, done: false, seq: 10 }, ctx), delayMs: 150 },
+          { data: withToolContext({ type: "reason_delta", reasoningId, reasoningText: "ready.", hidden: false, done: false, seq: 11 }, ctx), delayMs: 120 },
+          { data: withToolContext({ type: "reason_complete", reasoningId, hidden: false, done: true, seq: 12 }, ctx), delayMs: 60 },
+          { data: withToolContext({ type: "step_complete", id: reasoningStepId, name: "Think", stepType: "prompt", success: true, duration: 330, seq: 13 }, ctx) },
+
+          // Nested step 3: send-stream "End of stream"
+          { data: withToolContext({ type: "step_start", id: stream2Id, name: "Outro", stepType: "send-stream", index: 3, totalSteps: 3, seq: 14 }, ctx) },
+          { data: withToolContext({ type: "step_delta", id: stream2Id, stepType: "send-stream", text: "End ", seq: 15 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_delta", id: stream2Id, stepType: "send-stream", text: "of ", seq: 16 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_delta", id: stream2Id, stepType: "send-stream", text: "stream", seq: 17 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_complete", id: stream2Id, name: "Outro", stepType: "send-stream", success: true, duration: 240, seq: 18 }, ctx) },
+
+          // Nested flow ends.
+          { data: withToolContext({ type: "flow_complete", flowId: nestedFlowId, success: true, duration: 900, seq: 19 }, ctx) },
+
+          // Outer: tool call completes.
+          { data: { type: "tool_complete", toolId: outerToolId, result: { ok: true }, duration: 900, seq: 20 } },
+        ];
+
+        try {
+          await controller.connectStream(buildSSEStream(entries));
+          log("Expected: one tool bubble for sample_flow, two assistant bubbles");
+          log("  ('Testing stream begin' and 'End of stream'), reasoning between.");
+        } catch (err) {
+          log(`Error: ${err?.message ?? err}`);
+        }
+
+        document.getElementById("btn-nested-send-stream").classList.remove("running");
+        setAllScenarioButtons(false);
+        log("Done: Nested send-streams + reasoning");
+      }
+
+      async function nestedPromptSplitByInnerTool() {
+        log("Starting: Nested prompt split by inner tool call", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-nested-prompt-split").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Run research_flow",
+        });
+        await sleep(200);
+
+        const outerToolId = nextId("toolu");
+        const outerStepId = nextId("outer-step");
+        const executionId = nextId("exec");
+        const ctx = {
+          toolId: outerToolId,
+          stepId: outerStepId,
+          executionId,
+        };
+
+        const nestedFlowId = nextId("flow");
+        const nestedPromptStepId = nextId("step");
+        const partA = nextId("part");
+        const partB = nextId("part");
+        const messageIdA = nextId("msg");
+        const messageIdB = nextId("msg");
+        const innerToolId = nextId("toolu");
+
+        const entries = [
+          // Outer: agent calls the flow as a tool.
+          { data: { type: "tool_start", toolId: outerToolId, name: "research_flow", args: { topic: "birds" }, seq: 1 } },
+
+          { data: withToolContext({ type: "flow_start", flowId: nestedFlowId, flowName: "research_flow", totalSteps: 1, seq: 2 }, ctx) },
+          { data: withToolContext({ type: "step_start", id: nestedPromptStepId, name: "Research", stepType: "prompt", index: 1, totalSteps: 1, seq: 3 }, ctx) },
+
+          // Segment A: prompt begins, streams some text.
+          { data: withToolContext({ type: "text_start", partId: partA, messageId: messageIdA, seq: 4 }, ctx) },
+          { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "Let me look ", partId: partA, messageId: messageIdA, seq: 5 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "that up.", partId: partA, messageId: messageIdA, seq: 6 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "text_end", partId: partA, messageId: messageIdA, seq: 7 }, ctx), delayMs: 40 },
+
+          // Inner tool call — own tool bubble (independent toolId).
+          // Using `advisor` because that is the real producer of `tool_delta`
+          // events in production. External / custom / builtin / mcp / flow
+          // tools do NOT emit tool_delta — they go tool_start → tool_complete
+          // with a result blob only. Swapping to advisor makes the "Activity"
+          // block in this demo reflect production behavior faithfully.
+          { data: { type: "tool_start", toolId: innerToolId, name: "advisor", args: { question: "What should I consider about bird migration?" }, seq: 8 } },
+          { data: { type: "tool_delta", toolId: innerToolId, delta: "Let me think about this. ", seq: 9 }, delayMs: 150 },
+          { data: { type: "tool_delta", toolId: innerToolId, delta: "Consider seasonality, ", seq: 10 }, delayMs: 150 },
+          { data: { type: "tool_delta", toolId: innerToolId, delta: "species variance, and routes.", seq: 11 }, delayMs: 150 },
+          { data: { type: "tool_complete", toolId: innerToolId, result: { guidance: "Focus on seasonality and species." }, duration: 500, seq: 12 } },
+
+          // Segment B: prompt continues in a new text segment (new partId).
+          // This is the key scenario the partId-rotation code handles.
+          { data: withToolContext({ type: "text_start", partId: partB, messageId: messageIdB, seq: 13 }, ctx), delayMs: 40 },
+          { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "Based on ", partId: partB, messageId: messageIdB, seq: 14 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "the advisor's guidance, ", partId: partB, messageId: messageIdB, seq: 15 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "birds migrate seasonally.", partId: partB, messageId: messageIdB, seq: 16 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "text_end", partId: partB, messageId: messageIdB, seq: 17 }, ctx), delayMs: 40 },
+
+          // step_complete sweeps both partId segments under this nested step.
+          { data: withToolContext({ type: "step_complete", id: nestedPromptStepId, name: "Research", stepType: "prompt", success: true, duration: 900, seq: 18 }, ctx) },
+          { data: withToolContext({ type: "flow_complete", flowId: nestedFlowId, success: true, duration: 1100, seq: 19 }, ctx) },
+
+          // Outer tool_complete.
+          { data: { type: "tool_complete", toolId: outerToolId, result: { ok: true }, duration: 1100, seq: 20 } },
+        ];
+
+        try {
+          await controller.connectStream(buildSSEStream(entries));
+          log("Expected: one outer research_flow tool bubble, two nested");
+          log("  assistant bubbles (pre-advisor and post-advisor text), and a");
+          log("  separate inner advisor tool bubble (with streaming Activity)");
+          log("  between them.");
+        } catch (err) {
+          log(`Error: ${err?.message ?? err}`);
+        }
+
+        document.getElementById("btn-nested-prompt-split").classList.remove("running");
+        setAllScenarioButtons(false);
+        log("Done: Nested prompt split by inner tool call");
+      }
+
+      async function nestedOuterInterleave() {
+        log("Starting: Outer text ↔ nested flow interleave", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-nested-interleave").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Give me a quick intro, run the flow, then wrap up.",
+        });
+        await sleep(200);
+
+        const outerPartA = nextId("part");
+        const outerMsgA = nextId("msg");
+        const outerPartB = nextId("part");
+        const outerMsgB = nextId("msg");
+
+        const outerToolId = nextId("toolu");
+        const outerStepId = nextId("outer-step");
+        const executionId = nextId("exec");
+        const ctx = { toolId: outerToolId, stepId: outerStepId, executionId };
+
+        const nestedFlowId = nextId("flow");
+        const nestedStreamId = nextId("step");
+
+        // Outer agent flow id/step id for the outer text segments.
+        const outerFlowStepId = nextId("step");
+
+        const entries = [
+          { data: { type: "text_start", partId: outerPartA, messageId: outerMsgA, seq: 1 } },
+          { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "Sure, one ", partId: outerPartA, messageId: outerMsgA, seq: 2 }, delayMs: 80 },
+          { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "moment...", partId: outerPartA, messageId: outerMsgA, seq: 3 }, delayMs: 80 },
+          { data: { type: "text_end", partId: outerPartA, messageId: outerMsgA, seq: 4 }, delayMs: 40 },
+
+          // Outer tool call starts — nested flow runs in between.
+          { data: { type: "tool_start", toolId: outerToolId, name: "sample_flow", args: { input: "hi" }, seq: 5 } },
+          { data: withToolContext({ type: "flow_start", flowId: nestedFlowId, flowName: "sample_flow", totalSteps: 1, seq: 6 }, ctx) },
+          { data: withToolContext({ type: "step_start", id: nestedStreamId, name: "Stream", stepType: "send-stream", index: 1, totalSteps: 1, seq: 7 }, ctx) },
+          { data: withToolContext({ type: "step_delta", id: nestedStreamId, stepType: "send-stream", text: "Working ", seq: 8 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_delta", id: nestedStreamId, stepType: "send-stream", text: "on it.", seq: 9 }, ctx), delayMs: 80 },
+          { data: withToolContext({ type: "step_complete", id: nestedStreamId, name: "Stream", stepType: "send-stream", success: true, duration: 240, seq: 10 }, ctx) },
+          { data: withToolContext({ type: "flow_complete", flowId: nestedFlowId, success: true, duration: 300, seq: 11 }, ctx) },
+          { data: { type: "tool_complete", toolId: outerToolId, result: { ok: true }, duration: 300, seq: 12 } },
+
+          // Outer text resumes in a new partId segment — must NOT be corrupted
+          // by nested text_start/text_end that fired in between.
+          { data: { type: "text_start", partId: outerPartB, messageId: outerMsgB, seq: 13 }, delayMs: 40 },
+          { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "All done — ", partId: outerPartB, messageId: outerMsgB, seq: 14 }, delayMs: 80 },
+          { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "anything else?", partId: outerPartB, messageId: outerMsgB, seq: 15 }, delayMs: 80 },
+          { data: { type: "text_end", partId: outerPartB, messageId: outerMsgB, seq: 16 }, delayMs: 40 },
+          { data: { type: "step_complete", id: outerFlowStepId, stepType: "prompt", success: true, duration: 600, seq: 17 } },
+        ];
+
+        try {
+          await controller.connectStream(buildSSEStream(entries));
+          log("Expected: outer bubble 'Sure, one moment...' → sample_flow tool");
+          log("  bubble → nested 'Working on it.' → outer bubble 'All done —");
+          log("  anything else?' (NOT merged into a single outer message).");
+        } catch (err) {
+          log(`Error: ${err?.message ?? err}`);
+        }
+
+        document.getElementById("btn-nested-interleave").classList.remove("running");
+        setAllScenarioButtons(false);
+        log("Done: Outer text ↔ nested flow interleave");
+      }
+
       // ── wire buttons ────────────────────────────────────────────
 
       document.getElementById("btn-short").addEventListener("click", shortTool);
@@ -999,6 +1264,9 @@
       document.getElementById("btn-reason-long").addEventListener("click", longReasoning);
       document.getElementById("btn-seq-reason-text").addEventListener("click", reasoningPlusTextScrambled);
       document.getElementById("btn-seq-markdown").addEventListener("click", markdownTableScrambled);
+      document.getElementById("btn-nested-send-stream").addEventListener("click", nestedSendStreams);
+      document.getElementById("btn-nested-prompt-split").addEventListener("click", nestedPromptSplitByInnerTool);
+      document.getElementById("btn-nested-interleave").addEventListener("click", nestedOuterInterleave);
 
       document.getElementById("btn-apply").addEventListener("click", () => {
         createWidget();

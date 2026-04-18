@@ -43,6 +43,12 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
     agentIconSize: "40px",
     headerIconSize: "40px",
     closeButtonSize: "32px",
+    // Zero out browser-default <button> padding so the icon gets the full
+    // 32x32 content box, matching clearChat.paddingX/Y below. Without this,
+    // UA stylesheets add ~1-2px vertical and ~6px horizontal padding that
+    // eats into the border-box width and shrinks the rendered icon.
+    closeButtonPaddingX: "0px",
+    closeButtonPaddingY: "0px",
     callToActionIconName: "arrow-up-right",
     callToActionIconText: "",
     callToActionIconSize: "32px",
