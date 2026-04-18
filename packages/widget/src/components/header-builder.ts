@@ -159,9 +159,11 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     clearChatButton.style.color =
       clearChatIconColor || HEADER_THEME_CSS.actionIconColor;
 
-    // Add icon
+    // Add icon. display:block eliminates inline-baseline spacing that can
+    // push the icon a fractional pixel off-center inside the button.
     const iconSvg = renderLucideIcon(clearChatIconName, "20px", "currentColor", 1);
     if (iconSvg) {
+      iconSvg.style.display = "block";
       clearChatButton.appendChild(iconSvg);
     }
 
@@ -276,15 +278,17 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     }
   }
 
-  // Create close button wrapper for tooltip positioning
-  // Only needs ml-auto if clear chat is disabled or top-right positioned
+  // Create close button wrapper for tooltip positioning.
+  // Mirrors the clear-chat wrapper's inline-flex centering so both
+  // header action buttons vertically align identically within the
+  // header's flex row.
   const closeButtonWrapper = createElement(
     "div",
     closeButtonPlacement === "top-right"
       ? "persona-absolute persona-top-4 persona-right-4 persona-z-50"
       : clearChatEnabled && clearChatPlacement === "inline"
-        ? ""
-        : "persona-ml-auto"
+        ? "persona-relative persona-inline-flex persona-items-center persona-justify-center"
+        : "persona-relative persona-ml-auto persona-inline-flex persona-items-center persona-justify-center"
   );
 
   // Create close button with base classes
@@ -309,9 +313,16 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   closeButton.style.color =
     launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
 
-  // Try to render Lucide icon, fallback to text if not provided or fails
-  const closeIconSvg = renderLucideIcon(closeButtonIconName, "20px", "currentColor", 1);
+  // Try to render Lucide icon, fallback to text if not provided or fails.
+  // The X glyph's paths occupy only the middle 50% of its 24x24 viewBox
+  // (from 6,6 to 18,18), while other header icons (e.g. refresh-cw) span
+  // ~75% of the viewBox. Rendering X at a larger intrinsic size brings
+  // its visible extent into parity with sibling icons in the header.
+  // display:block eliminates inline-baseline spacing that can push the
+  // icon a fractional pixel off-center inside the button.
+  const closeIconSvg = renderLucideIcon(closeButtonIconName, "28px", "currentColor", 1);
   if (closeIconSvg) {
+    closeIconSvg.style.display = "block";
     closeButton.appendChild(closeIconSvg);
   } else {
     closeButton.textContent = closeButtonIconText;

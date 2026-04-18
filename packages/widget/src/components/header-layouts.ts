@@ -215,7 +215,9 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
 
   const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-  const closeIconSvg = renderLucideIcon(closeButtonIconName, "20px", "currentColor", 2);
+  // Larger intrinsic size compensates for the X glyph's sparse viewBox
+  // (paths only occupy the middle 50%). Matches header-builder.ts.
+  const closeIconSvg = renderLucideIcon(closeButtonIconName, "28px", "currentColor", 1);
   if (closeIconSvg) {
     closeButton.appendChild(closeIconSvg);
   } else {

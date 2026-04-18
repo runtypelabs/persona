@@ -4617,9 +4617,11 @@ export const createAgentExperience = (
         const closeButtonIconName = launcher.closeButtonIconName ?? "x";
         const closeButtonIconText = launcher.closeButtonIconText ?? "×";
 
-        // Clear existing content and render new icon
+        // Clear existing content and render new icon.
+        // Larger intrinsic size compensates for the X glyph's sparse
+        // viewBox so the close button visually matches sibling icons.
         closeButton.innerHTML = "";
-        const iconSvg = renderLucideIcon(closeButtonIconName, "20px", "currentColor", 2);
+        const iconSvg = renderLucideIcon(closeButtonIconName, "28px", "currentColor", 1);
         if (iconSvg) {
           closeButton.appendChild(iconSvg);
         } else {
