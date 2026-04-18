@@ -2130,6 +2130,59 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
     expect(lastFinal.message.content).toBe('Hello beautiful world!');
   });
 
+  it('repairs a delayed step_delta that arrives after the gap-timeout flush', async () => {
+    vi.useFakeTimers();
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          e({ type: 'text_start', partId: 'text_0', messageId: 'msg_1', seq: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'a', partId: 'text_0', messageId: 'msg_1', seq: 2 });
+          // seq=3 is delayed long enough for the reorder buffer to flush seq=4 and seq=5.
+          e({ type: 'step_delta', id: 's1', text: 'c', partId: 'text_0', messageId: 'msg_1', seq: 4 });
+          e({ type: 'text_end', partId: 'text_0', messageId: 'msg_1', seq: 5 });
+
+          setTimeout(() => {
+            e({ type: 'step_delta', id: 's1', text: 'b', partId: 'text_0', messageId: 'msg_1', seq: 3 });
+          }, 60);
+
+          setTimeout(() => {
+            e({ type: 'flow_complete', success: true });
+            controller.close();
+          }, 70);
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    const dispatchPromise = client.dispatch({ messages: [] }, (event) => events.push(event));
+    await vi.advanceTimersByTimeAsync(80);
+    await dispatchPromise;
+    vi.useRealTimers();
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const assistantMessages = messageEvents
+      .filter((e) => e.message.role === 'assistant' && !e.message.variant)
+      .map((e) => e.message);
+    expect(assistantMessages.length).toBeGreaterThan(0);
+
+    const repairedMessage = assistantMessages[assistantMessages.length - 1];
+    expect(repairedMessage.content).toBe('abc');
+    expect(repairedMessage.partId).toBe('text_0');
+  });
+
   it('should reorder reason_delta chunks by sequenceIndex', async () => {
     const events: AgentWidgetEvent[] = [];
 
@@ -2176,6 +2229,62 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
     expect(fullReasoning).toBe('I think about this.');
   });
 
+  it('repairs a delayed reason_delta that arrives after the gap-timeout flush', async () => {
+    vi.useFakeTimers();
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          e({ type: 'reason_start', reasoningId: 'r1', hidden: false, done: false, sequenceIndex: 1 });
+          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'a', hidden: false, done: false, sequenceIndex: 2 });
+          // sequenceIndex=3 is delayed long enough for the gap-timeout to flush sequenceIndex=4
+          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'c', hidden: false, done: false, sequenceIndex: 4 });
+
+          setTimeout(() => {
+            // Late arrival after gap-timeout flush
+            e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'b', hidden: false, done: false, sequenceIndex: 3 });
+          }, 60);
+
+          setTimeout(() => {
+            e({ type: 'reason_complete', reasoningId: 'r1', hidden: false, done: true, sequenceIndex: 5 });
+            e({ type: 'step_delta', id: 's1', text: 'Result', partId: 'text_0', sequenceIndex: 6 });
+            e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+            e({ type: 'flow_complete', success: true });
+            controller.close();
+          }, 70);
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    const dispatchPromise = client.dispatch({ messages: [] }, (event) => events.push(event));
+    await vi.advanceTimersByTimeAsync(80);
+    await dispatchPromise;
+    vi.useRealTimers();
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const reasoningMsgs = messageEvents.filter(
+      (e) => e.message.reasoning && e.message.reasoning.chunks.length > 0
+    );
+    expect(reasoningMsgs.length).toBeGreaterThan(0);
+
+    const lastReasoning = reasoningMsgs[reasoningMsgs.length - 1];
+    const fullReasoning = lastReasoning.message.reasoning!.chunks.join('');
+    expect(fullReasoning).toBe('abc');
+  });
+
   it('should handle step_delta without seq gracefully (no reordering)', async () => {
     const events: AgentWidgetEvent[] = [];
 
@@ -2212,6 +2321,258 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
 
     const lastFinal = finalMessages[finalMessages.length - 1];
     expect(lastFinal.message.content).toBe('Hello world!');
+  });
+
+  it('should handle leading-gap arrival (first event is not seq=1)', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // seq=3 arrives first (leading gap — seq 1 and 2 arrive later)
+          e({ type: 'step_delta', id: 's1', text: 'c', partId: 'text_0', seq: 3 });
+          e({ type: 'step_delta', id: 's1', text: 'a', partId: 'text_0', seq: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'b', partId: 'text_0', seq: 2 });
+          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const finalMessages = messageEvents.filter((e) => !e.message.streaming);
+    expect(finalMessages.length).toBeGreaterThan(0);
+
+    const lastFinal = finalMessages[finalMessages.length - 1];
+    // Must be in seq order, not arrival order
+    expect(lastFinal.message.content).toBe('abc');
+  });
+
+  it('should handle mixed seq + sequenceIndex in one stream', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // reason_delta uses sequenceIndex, step_delta uses seq — same counter
+          e({ type: 'reason_start', reasoningId: 'r1', hidden: false, done: false });
+          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'thinking', hidden: false, done: false, sequenceIndex: 1 });
+          e({ type: 'reason_complete', reasoningId: 'r1', hidden: false, done: true });
+          // step_delta seq=2 continues from the same counter
+          e({ type: 'step_delta', id: 's1', text: 'Result', partId: 'text_0', seq: 2 });
+          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    // Should have both reasoning and text messages, properly ordered
+    const reasoningMsgs = messageEvents.filter(e => e.message.reasoning?.chunks?.length);
+    expect(reasoningMsgs.length).toBeGreaterThan(0);
+    expect(reasoningMsgs[reasoningMsgs.length - 1].message.reasoning!.chunks.join('')).toBe('thinking');
+
+    const textMsgs = messageEvents.filter(e => e.message.role === 'assistant' && !e.message.variant && e.message.content);
+    expect(textMsgs.length).toBeGreaterThan(0);
+    expect(textMsgs[textMsgs.length - 1].message.content).toContain('Result');
+  });
+
+  it('should handle cross-event buffering around tool events', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // text_start and step_delta with seq, then tool events (no seq), then more text
+          e({ type: 'text_start', partId: 'text_0', messageId: 'msg_1', seq: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'Before tool ', partId: 'text_0', seq: 2 });
+          e({ type: 'text_end', partId: 'text_0', messageId: 'msg_1', seq: 3 });
+          // Tool events don't carry top-level seq in non-agent flows
+          e({ type: 'tool_start', toolCallId: 'tc1', name: 'fetch', parameters: {} });
+          e({ type: 'tool_complete', toolCallId: 'tc1', name: 'fetch', result: { data: 'ok' }, executionTime: 100 });
+          e({ type: 'text_start', partId: 'text_1', messageId: 'msg_1', seq: 4 });
+          e({ type: 'step_delta', id: 's1', text: 'after tool', partId: 'text_1', seq: 5 });
+          e({ type: 'text_end', partId: 'text_1', messageId: 'msg_1', seq: 6 });
+          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+          e({ type: 'flow_complete', success: true });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    // Should have text content from both segments
+    const allContent = messageEvents
+      .filter(e => e.message.role === 'assistant' && !e.message.variant)
+      .map(e => e.message.content);
+    const combinedContent = allContent.join('');
+    expect(combinedContent).toContain('Before tool ');
+    expect(combinedContent).toContain('after tool');
+  });
+
+  it('delivers sequenced events still buffered when the stream closes', async () => {
+    // Regression: if the SSE stream ends while the reorder buffer is still
+    // waiting for a missing seq number, previously those events were silently
+    // dropped (destroy() cancelled the gap timer without flushing). The fix
+    // is an end-of-stream flush + drain; this test guards against regression.
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // Only a seq=3 event arrives — seq=1 and seq=2 are never delivered.
+          // Without the end-of-stream flush, this event would be stranded in
+          // the reorder buffer and never emitted.
+          e({ type: 'step_delta', id: 's1', text: 'tail', partId: 'text_0', seq: 3 });
+          // Stream closes immediately, well inside the 50ms gap timer window.
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const assistantContent = messageEvents
+      .filter((e) => e.message.role === 'assistant' && !e.message.variant)
+      .map((e) => e.message.content)
+      .join('');
+
+    expect(assistantContent).toContain('tail');
+  });
+
+  it('drains timer-flushed sequenced events before the next SSE chunk arrives', async () => {
+    vi.useFakeTimers();
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          e({ type: 'step_delta', id: 's1', text: 'a', partId: 'text_0', seq: 1 });
+          // seq=3 buffers while seq=2 is missing.
+          e({ type: 'step_delta', id: 's1', text: 'c', partId: 'text_0', seq: 3 });
+
+          // Keep the stream open without delivering another SSE event until after
+          // the gap timeout has fired. The buffered seq=3 event should still render.
+          setTimeout(() => {
+            e({ type: 'flow_complete', success: true });
+            controller.close();
+          }, 120);
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    const dispatchPromise = client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    await vi.advanceTimersByTimeAsync(60);
+
+    const messageEventsDuringPause = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const assistantContentDuringPause = messageEventsDuringPause
+      .filter((e) => e.message.role === 'assistant' && !e.message.variant)
+      .map((e) => e.message.content)
+      .join('');
+
+    expect(assistantContentDuringPause).toContain('ac');
+
+    await vi.advanceTimersByTimeAsync(70);
+    await dispatchPromise;
+    vi.useRealTimers();
+  });
+
+  it('delivers a buffered error event when the stream closes mid-gap', async () => {
+    // Regression: an error event with seq > 1 arriving right before the
+    // stream closes was being swallowed by the reorder buffer, leaving the
+    // widget stuck in a streaming state with no error surfaced.
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          // Only sequenced event — but seq > 1 so it would be buffered.
+          e({ type: 'error', error: 'boom', seq: 2 });
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch({ messages: [] }, (event) => events.push(event));
+
+    const errorEvents = events.filter((e) => e.type === 'error');
+    expect(errorEvents.length).toBe(1);
+    if (errorEvents[0].type === 'error') {
+      expect(errorEvents[0].error.message).toBe('boom');
+    }
   });
 });
 

@@ -20,13 +20,14 @@ import {
   ClientFeedbackType,
   PersonaArtifactKind
 } from "./types";
-import { 
-  extractTextFromJson, 
+import {
+  extractTextFromJson,
   createPlainTextParser,
   createJsonStreamParser,
   createRegexJsonParser,
   createXmlParser
 } from "./utils/formatting";
+import { SequenceReorderBuffer } from "./utils/sequence-buffer";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
 
@@ -1295,44 +1296,45 @@ export class AgentWidgetClient {
     const streamParsers = new Map<string, AgentWidgetStreamParser>();
     // Track accumulated raw content for structured formats (JSON, XML, etc.)
     const rawContentBuffers = new Map<string, string>();
-    // Reorder buffer for out-of-order step_delta chunks (keyed by assistant message id)
-    const seqChunkBuffers = new Map<string, Array<{ seq: number; text: string }>>();
-    // Reorder buffer for out-of-order reason_delta chunks (keyed by reasoning id)
-    const reasonSeqBuffers = new Map<string, Array<{ seq: number; text: string }>>();
-
-    /**
-     * Insert a chunk into a sequence-ordered buffer and return
-     * the full accumulated text in correct sequence order.
-     */
-    function insertSeqChunk(
-      bufferMap: Map<string, Array<{ seq: number; text: string }>>,
-      key: string,
-      seq: number,
-      text: string
-    ): string {
-      let buf = bufferMap.get(key);
-      if (!buf) {
-        buf = [];
-        bufferMap.set(key, buf);
-      }
-      // Binary-search insert to keep sorted by seq
-      let lo = 0, hi = buf.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >>> 1;
-        if (buf[mid].seq < seq) lo = mid + 1;
-        else hi = mid;
-      }
-      buf.splice(lo, 0, { seq, text });
-      // Join all chunks in seq order
-      let result = "";
-      for (let i = 0; i < buf.length; i++) result += buf[i].text;
-      return result;
-    }
-
+    // Rebuild incremental text by sequence so late arrivals can repair already-emitted
+    // content after the reorder buffer's gap-timeout flush.
+    const orderedChunkBuffers = new Map<string, Array<{ seq: number; text: string }>>();
+    const assistantMessagesByPartId = new Map<string, AgentWidgetMessage>();
     // Only the most-recently sealed segment is reconciled with step_complete's
     // final response. Earlier segments rely on their own async parser microtasks
     // resolving via the closure-captured `assistant` variable.
     let lastSealedTextSegment: AgentWidgetMessage | null = null;
+
+    const insertOrderedChunk = (key: string, seq: number, text: string): string => {
+      let chunks = orderedChunkBuffers.get(key);
+      if (!chunks) {
+        chunks = [];
+        orderedChunkBuffers.set(key, chunks);
+      }
+
+      let lo = 0;
+      let hi = chunks.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (chunks[mid].seq < seq) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
+
+      if (chunks[lo]?.seq === seq) {
+        chunks[lo] = { seq, text };
+      } else {
+        chunks.splice(lo, 0, { seq, text });
+      }
+
+      let accumulated = "";
+      for (let index = 0; index < chunks.length; index++) {
+        accumulated += chunks[index].text;
+      }
+      return accumulated;
+    };
 
     /**
      * After text_end + didSplitByPartId, merge the authoritative final response into the
@@ -1426,73 +1428,45 @@ export class AgentWidgetClient {
       finalizeCleanup();
     };
 
+    // Sequence reorder buffer: SSE events carrying a `seq` (or `sequenceIndex`)
+    // field are held and re-emitted in sequence order so that transport-level
+    // reordering doesn't produce garbled output.
+    const seqReadyQueue: Array<{ payloadType: string; payload: any }> = [];
+    let isDrainScheduled = false;
+    // Declared here so scheduleReadyQueueDrain can reference it; assigned
+    // after all handler-scoped variables are initialised (before the SSE loop).
+    let drainReadyQueue: () => void;
+    // Two drain paths — both are intentional, do not remove either:
+    //   1. Microtask drain (scheduleReadyQueueDrain): required when the
+    //      buffer's emitter fires from the gap-timeout setTimeout callback,
+    //      because there is no surrounding synchronous drain site there.
+    //   2. Synchronous drain (drainReadyQueue() after each seqBuffer.push):
+    //      skips an extra microtask hop on the hot in-order push path.
+    const scheduleReadyQueueDrain = () => {
+      if (isDrainScheduled) return;
+      isDrainScheduled = true;
+      queueMicrotask(() => {
+        isDrainScheduled = false;
+        drainReadyQueue();
+      });
+    };
+    const seqBuffer = new SequenceReorderBuffer((payloadType: string, payload: any) => {
+      seqReadyQueue.push({ payloadType, payload });
+      scheduleReadyQueueDrain();
+    });
     // Agent execution state tracking
     let agentExecution: AgentExecutionState | null = null;
     // Track assistant messages per agent iteration for 'separate' mode
     const agentIterationMessages = new Map<number, AgentWidgetMessage>();
     const iterationDisplay = this.config.iterationDisplay ?? 'separate';
 
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split("\n\n");
-      buffer = events.pop() ?? "";
-
-      for (const event of events) {
-        const lines = event.split("\n");
-        let eventType = "message";
-        let data = "";
-
-        for (const line of lines) {
-          if (line.startsWith("event:")) {
-            eventType = line.replace("event:", "").trim();
-          } else if (line.startsWith("data:")) {
-            data += line.replace("data:", "").trim();
-          }
-        }
-
-        if (!data) continue;
-        let payload: any;
-        try {
-          payload = JSON.parse(data);
-        } catch (error) {
-          onEvent({
-            type: "error",
-            error:
-              error instanceof Error
-                ? error
-                : new Error("Failed to parse chat stream payload")
-          });
-          continue;
-        }
-
-        const payloadType =
-          eventType !== "message" ? eventType : payload.type ?? "message";
-
-        // Tap: capture raw SSE event for event stream inspector
-        this.onSSEEvent?.(payloadType, payload);
-
-        // If custom SSE event parser is provided, try it first
-        if (this.parseSSEEvent) {
-          // Keep assistant message ref in sync
-          assistantMessageRef.current = assistantMessage;
-          const handled = await this.handleCustomSSEEvent(
-            payload,
-            onEvent,
-            assistantMessageRef,
-            emitMessage,
-            nextSequence,
-            partIdState
-          );
-          // Update assistantMessage from ref (in case it was created or replaced by partId segmentation)
-          if (assistantMessageRef.current && assistantMessageRef.current !== assistantMessage) {
-            assistantMessage = assistantMessageRef.current;
-          }
-          if (handled) continue; // Skip default handling if custom handler processed it
-        }
+    // Drains reorder-buffered events through the main event handler.
+    // Also invoked after the SSE loop exits so any events buffered at
+    // end-of-stream are processed.
+    drainReadyQueue = () => {
+      for (let i = 0; i < seqReadyQueue.length; i++) {
+        const payloadType = seqReadyQueue[i].payloadType;
+        const payload = seqReadyQueue[i].payload;
 
         if (payloadType === "reason_start") {
           const reasoningId =
@@ -1531,12 +1505,11 @@ export class AgentWidgetClient {
             payload.delta ??
             "";
           if (chunk && payload.hidden !== true) {
-            const reasonSeq = typeof payload.sequenceIndex === 'number' ? payload.sequenceIndex : undefined;
+            const reasonSeq = typeof payload.sequenceIndex === "number" ? payload.sequenceIndex : undefined;
             if (reasonSeq !== undefined) {
-              // Use reorder buffer so out-of-order chunks are assembled correctly
-              const ordered = insertSeqChunk(reasonSeqBuffers, reasoningId, reasonSeq, String(chunk));
-              // Rebuild the chunks array from the ordered concatenation.
-              // We store a single joined string to avoid duplicated / mis-ordered entries.
+              // Rebuild chunks by seq so late arrivals after a gap-timeout flush
+              // are inserted at the correct position rather than appended.
+              const ordered = insertOrderedChunk(reasoningId, reasonSeq, String(chunk));
               reasoningMessage.reasoning.chunks = [ordered];
             } else {
               reasoningMessage.reasoning.chunks.push(String(chunk));
@@ -1552,7 +1525,7 @@ export class AgentWidgetClient {
               0,
               (reasoningMessage.reasoning.completedAt ?? Date.now()) - start
             );
-            reasonSeqBuffers.delete(reasoningId);
+
           }
           reasoningMessage.streaming = reasoningMessage.reasoning.status !== "complete";
           emitMessage(reasoningMessage);
@@ -1573,7 +1546,7 @@ export class AgentWidgetClient {
               (reasoningMessage.reasoning.completedAt ?? Date.now()) - start
             );
             reasoningMessage.streaming = false;
-            reasonSeqBuffers.delete(reasoningId);
+
             emitMessage(reasoningMessage);
           }
           const stepKey = getStepKey(payload);
@@ -1748,26 +1721,30 @@ export class AgentWidgetClient {
             partIdState.current = incomingPartId;
           }
 
-          const assistant = ensureAssistantMessage();
-          if (incomingPartId !== undefined && !assistant.partId) {
-            assistant.partId = incomingPartId;
+          const assistant =
+            incomingPartId !== undefined
+              ? (assistantMessagesByPartId.get(incomingPartId) ?? ensureAssistantMessage())
+              : ensureAssistantMessage();
+          if (incomingPartId !== undefined) {
+            if (!assistant.partId) {
+              assistant.partId = incomingPartId;
+            }
+            assistantMessagesByPartId.set(incomingPartId, assistant);
           }
           // Support various field names: text, delta, content, chunk (Runtype uses 'chunk')
           const chunk = payload.text ?? payload.delta ?? payload.content ?? payload.chunk ?? "";
           if (chunk) {
-            // Check if the event carries a sequence number for reordering
-            const chunkSeq = typeof payload.seq === 'number' ? payload.seq : undefined;
-
             // Accumulate raw content for structured format parsing.
-            // When seq is present, use the reorder buffer so out-of-order
-            // chunks are assembled in the correct server-intended order.
-            let accumulatedRaw: string;
-            if (chunkSeq !== undefined) {
-              accumulatedRaw = insertSeqChunk(seqChunkBuffers, assistant.id, chunkSeq, chunk);
-            } else {
-              const rawBuffer = rawContentBuffers.get(assistant.id) ?? "";
-              accumulatedRaw = rawBuffer + chunk;
-            }
+            // Most out-of-order events are fixed at the dispatch layer, but once the
+            // gap timeout flushes later seqs we can still see genuine late arrivals.
+            // Rebuild chunked content by seq so those events repair prior output
+            // instead of appending in the wrong position.
+            const chunkSeq = typeof payload.seq === "number" ? payload.seq : undefined;
+            const chunkBufferKey = incomingPartId ?? assistant.id;
+            const accumulatedRaw =
+              chunkSeq !== undefined
+                ? insertOrderedChunk(chunkBufferKey, chunkSeq, String(chunk))
+                : (rawContentBuffers.get(assistant.id) ?? "") + chunk;
             // Store raw content for action parsing, but NEVER set assistant.content to raw JSON
             assistant.rawContent = accumulatedRaw;
             
@@ -1790,13 +1767,7 @@ export class AgentWidgetClient {
             
             // If plain text parser, just append the chunk directly
             if (isPlainTextParser) {
-              // When seq-ordered, rebuild from the reorder buffer;
-              // otherwise fall back to simple append.
-              if (chunkSeq !== undefined) {
-                assistant.content = accumulatedRaw;
-              } else {
-                assistant.content += chunk;
-              }
+              assistant.content = chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
               // Clear any raw buffer/parser since we're in plain text mode
               rawContentBuffers.delete(assistant.id);
               streamParsers.delete(assistant.id);
@@ -1822,27 +1793,25 @@ export class AgentWidgetClient {
                 } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith('<')) {
                   // Not a structured format - show as plain text
                   const currentAssistant = assistantMessage;
-                  if (currentAssistant && currentAssistant.id === assistant.id) {
-                    if (chunkSeq !== undefined) {
-                      currentAssistant.content = accumulatedRaw;
-                    } else {
-                      currentAssistant.content += chunk;
-                    }
-                    rawContentBuffers.delete(currentAssistant.id);
-                    streamParsers.delete(currentAssistant.id);
-                    currentAssistant.rawContent = undefined;
-                    emitMessage(currentAssistant);
+                  const targetAssistant =
+                    currentAssistant && currentAssistant.id === assistant.id
+                      ? currentAssistant
+                      : assistant;
+                  if (targetAssistant.id === assistant.id) {
+                    targetAssistant.content =
+                      chunkSeq !== undefined ? accumulatedRaw : targetAssistant.content + chunk;
+                    rawContentBuffers.delete(targetAssistant.id);
+                    streamParsers.delete(targetAssistant.id);
+                    targetAssistant.rawContent = undefined;
+                    emitMessage(targetAssistant);
                   }
                 }
                 // Otherwise wait for more chunks (incomplete structured format)
                 // Don't emit message if parser hasn't extracted text yet
               }).catch(() => {
                 // On error, treat as plain text
-                if (chunkSeq !== undefined) {
-                  assistant.content = accumulatedRaw;
-                } else {
-                  assistant.content += chunk;
-                }
+                assistant.content =
+                  chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
                 rawContentBuffers.delete(assistant.id);
                 streamParsers.delete(assistant.id);
                 assistant.rawContent = undefined;
@@ -1860,11 +1829,8 @@ export class AgentWidgetClient {
                 emitMessage(assistant);
               } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith('<')) {
                 // Not a structured format - show as plain text
-                if (chunkSeq !== undefined) {
-                  assistant.content = accumulatedRaw;
-                } else {
-                  assistant.content += chunk;
-                }
+                assistant.content =
+                  chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
                 // Clear any raw buffer/parser if we were in structured format mode
                 rawContentBuffers.delete(assistant.id);
                 streamParsers.delete(assistant.id);
@@ -1917,7 +1883,6 @@ export class AgentWidgetClient {
                           // Clean up
                           streamParsers.delete(currentAssistant.id);
                           rawContentBuffers.delete(currentAssistant.id);
-                          seqChunkBuffers.delete(currentAssistant.id);
                           emitMessage(currentAssistant);
                         }
                       }
@@ -1949,7 +1914,6 @@ export class AgentWidgetClient {
                   streamParsers.delete(assistant.id);
                 }
                 rawContentBuffers.delete(assistant.id);
-                seqChunkBuffers.delete(assistant.id);
                 assistant.streaming = false;
                 emitMessage(assistant);
               }
@@ -1970,7 +1934,6 @@ export class AgentWidgetClient {
               const msg: AgentWidgetMessage = assistantMessage;
               streamParsers.delete(msg.id);
               rawContentBuffers.delete(msg.id);
-              seqChunkBuffers.delete(msg.id);
               if (msg.streaming !== false) {
                 msg.streaming = false;
                 emitMessage(msg);
@@ -2035,7 +1998,6 @@ export class AgentWidgetClient {
                           // Clean up
                           streamParsers.delete(currentAssistant.id);
                           rawContentBuffers.delete(currentAssistant.id);
-                          seqChunkBuffers.delete(currentAssistant.id);
                           emitMessage(currentAssistant);
                         }
                       } else {
@@ -2053,7 +2015,6 @@ export class AgentWidgetClient {
                           // Clean up
                           streamParsers.delete(currentAssistant.id);
                           rawContentBuffers.delete(currentAssistant.id);
-                          seqChunkBuffers.delete(currentAssistant.id);
                           emitMessage(currentAssistant);
                         }
                       }
@@ -2101,7 +2062,6 @@ export class AgentWidgetClient {
               }
               streamParsers.delete(assistant.id);
               rawContentBuffers.delete(assistant.id);
-              seqChunkBuffers.delete(assistant.id);
               assistant.streaming = false;
               emitMessage(assistant);
             }
@@ -2109,7 +2069,6 @@ export class AgentWidgetClient {
             // No final content, just mark as complete and clean up
             streamParsers.delete(assistant.id);
             rawContentBuffers.delete(assistant.id);
-            seqChunkBuffers.delete(assistant.id);
             assistant.streaming = false;
             emitMessage(assistant);
           }
@@ -2122,7 +2081,6 @@ export class AgentWidgetClient {
               const msg: AgentWidgetMessage = assistantMessage;
               streamParsers.delete(msg.id);
               rawContentBuffers.delete(msg.id);
-              seqChunkBuffers.delete(msg.id);
               if (msg.streaming !== false) {
                 msg.streaming = false;
                 emitMessage(msg);
@@ -2164,7 +2122,6 @@ export class AgentWidgetClient {
             // Clean up parser and buffer
             streamParsers.delete(assistant.id);
             rawContentBuffers.delete(assistant.id);
-            seqChunkBuffers.delete(assistant.id);
 
             // Only emit if something actually changed to avoid flicker
             const contentChanged = displayContent !== assistant.content;
@@ -2187,8 +2144,6 @@ export class AgentWidgetClient {
               const msg: AgentWidgetMessage = assistantMessage;
               streamParsers.delete(msg.id);
               rawContentBuffers.delete(msg.id);
-              seqChunkBuffers.delete(msg.id);
-              
               // Only emit if streaming state changed
               if (msg.streaming !== false) {
                 msg.streaming = false;
@@ -2591,7 +2546,6 @@ export class AgentWidgetClient {
           assistantMessageRef.current = null;
           streamParsers.delete(id);
           rawContentBuffers.delete(id);
-          seqChunkBuffers.delete(id);
         } else if (
           payloadType === "error" ||
           payloadType === "step_error" ||
@@ -2631,6 +2585,79 @@ export class AgentWidgetClient {
           }
         }
       }
+      seqReadyQueue.length = 0;
+    };
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+
+      for (const event of events) {
+        const lines = event.split("\n");
+        let eventType = "message";
+        let data = "";
+
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            eventType = line.replace("event:", "").trim();
+          } else if (line.startsWith("data:")) {
+            data += line.replace("data:", "").trim();
+          }
+        }
+
+        if (!data) continue;
+        let payload: any;
+        try {
+          payload = JSON.parse(data);
+        } catch (error) {
+          onEvent({
+            type: "error",
+            error:
+              error instanceof Error
+                ? error
+                : new Error("Failed to parse chat stream payload")
+          });
+          continue;
+        }
+
+        const payloadType =
+          eventType !== "message" ? eventType : payload.type ?? "message";
+
+        // Tap: capture raw SSE event for event stream inspector
+        this.onSSEEvent?.(payloadType, payload);
+
+        // If custom SSE event parser is provided, try it first
+        if (this.parseSSEEvent) {
+          // Keep assistant message ref in sync
+          assistantMessageRef.current = assistantMessage;
+          const handled = await this.handleCustomSSEEvent(
+            payload,
+            onEvent,
+            assistantMessageRef,
+            emitMessage,
+            nextSequence,
+            partIdState
+          );
+          // Update assistantMessage from ref (in case it was created or replaced by partId segmentation)
+          if (assistantMessageRef.current && assistantMessageRef.current !== assistantMessage) {
+            assistantMessage = assistantMessageRef.current;
+          }
+          if (handled) continue; // Skip default handling if custom handler processed it
+        }
+
+        // Push through the sequence reorder buffer
+        seqBuffer.push(payloadType, payload);
+        drainReadyQueue();
+      }
     }
+
+    seqBuffer.flushPending();
+    drainReadyQueue();
+    seqBuffer.destroy();
   }
 }

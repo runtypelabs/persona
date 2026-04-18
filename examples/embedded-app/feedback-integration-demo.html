@@ -88,13 +88,55 @@
       </div>
       <div class="panel-content">
         <div class="info-section">
-          <h3>What's New</h3>
+          <h3>How it works</h3>
           <p>
-            Message IDs are now generated on the client using <code>generateMessageId()</code>.
+            Message IDs are generated on the client using <code>generateMessageId()</code>.
             In client token mode, feedback is automatically sent to the Runtype API.
-            User and assistant messages can be tracked throughout their lifecycle.
+            Use the controls below to configure which action buttons appear on messages.
           </p>
         </div>
+
+        <!-- Message Actions Config -->
+        <h3 class="section-title">Message Actions</h3>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+          <div style="display: flex; gap: 1.25rem;">
+            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="cfg-copy" checked> Copy
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="cfg-upvote" checked> Upvote
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="cfg-downvote" checked> Downvote
+            </label>
+          </div>
+          <div style="display: flex; gap: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
+              Visibility
+              <select id="cfg-visibility" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
+                <option value="always" selected>Always</option>
+                <option value="hover">Hover</option>
+              </select>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
+              Layout
+              <select id="cfg-layout" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
+                <option value="pill-inside" selected>Pill</option>
+                <option value="row-inside">Row</option>
+              </select>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
+              Align
+              <select id="cfg-align" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right" selected>Right</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <hr class="divider">
 
         <!-- Message Stats -->
         <h3 class="section-title">Message Feedback Stats</h3>
