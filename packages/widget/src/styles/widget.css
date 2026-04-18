@@ -1932,6 +1932,17 @@
   opacity: 0.9;
 }
 
+/* Vote pop animation */
+@keyframes persona-vote-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+.persona-message-action-btn.persona-message-action-pop {
+  animation: persona-vote-pop 0.3s ease;
+}
+
 /* Success state (after copy) */
 .persona-message-action-btn.persona-message-action-success {
   background-color: #10b981;

@@ -1229,21 +1229,46 @@ export const createAgentExperience = (
     } else if (action === 'upvote' || action === 'downvote') {
       const currentVote = messageVoteState.get(messageId) ?? null;
       const wasActive = currentVote === action;
+      const iconName = action === 'upvote' ? 'thumbs-up' : 'thumbs-down';
 
       if (wasActive) {
-        // Toggle off
+        // Toggle off — revert to outline icon
         messageVoteState.delete(messageId);
         actionBtn.classList.remove("persona-message-action-active");
+        const outlineIcon = renderLucideIcon(iconName, 14, "currentColor", 2);
+        if (outlineIcon) {
+          actionBtn.innerHTML = "";
+          actionBtn.appendChild(outlineIcon);
+        }
       } else {
-        // Clear opposite vote button
+        // Clear opposite vote button and revert its icon
         const oppositeAction = action === 'upvote' ? 'downvote' : 'upvote';
         const oppositeBtn = actionsContainer.querySelector(`[data-action="${oppositeAction}"]`);
         if (oppositeBtn) {
           oppositeBtn.classList.remove("persona-message-action-active");
+          const oppositeIconName = oppositeAction === 'upvote' ? 'thumbs-up' : 'thumbs-down';
+          const outlineIcon = renderLucideIcon(oppositeIconName, 14, "currentColor", 2);
+          if (outlineIcon) {
+            oppositeBtn.innerHTML = "";
+            oppositeBtn.appendChild(outlineIcon);
+          }
         }
 
         messageVoteState.set(messageId, action);
         actionBtn.classList.add("persona-message-action-active");
+
+        // Swap to filled icon
+        const filledIcon = renderLucideIcon(iconName, 14, "currentColor", 2);
+        if (filledIcon) {
+          filledIcon.setAttribute("fill", "currentColor");
+          actionBtn.innerHTML = "";
+          actionBtn.appendChild(filledIcon);
+        }
+
+        // Pop animation
+        actionBtn.classList.remove("persona-message-action-pop");
+        void actionBtn.offsetWidth; // force reflow to restart animation
+        actionBtn.classList.add("persona-message-action-pop");
 
         // Trigger feedback
         const messages = session.getMessages();
