@@ -194,6 +194,17 @@ export type AgentMessageMetadata = {
   iteration?: number;
   turnId?: string;
   agentName?: string;
+  /**
+   * When this message was produced by a step inside a nested flow executed
+   * as a tool, identifies the parent tool call id. Enables renderers to
+   * visually group or indent nested-flow output under its parent tool.
+   */
+  parentToolId?: string;
+  /**
+   * Nested flow step id that produced this message (e.g. a `send-stream`
+   * or `prompt` step inside the nested flow). Stable key for that step.
+   */
+  parentStepId?: string;
 };
 
 export type AgentWidgetRequestMiddlewareContext = {
