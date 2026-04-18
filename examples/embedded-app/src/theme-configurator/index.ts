@@ -757,15 +757,11 @@ const SECTION_TO_DRILLDOWN: Record<string, DrilldownView> = {
 
 function initSearch(): void {
   initSearchUI((tabId, sectionId, fieldId) => {
-    // Switch to the correct tab for this field
-    const targetTab = TAB_ID_TO_TAB[tabId];
-    if (targetTab) {
-      switchTab(targetTab);
-    }
+    switchTab(tabId);
 
     // Check if this field is in a drill-down view
     const drilldownTarget = SECTION_TO_DRILLDOWN[sectionId];
-    if (drilldownTarget && targetTab === 'style') {
+    if (drilldownTarget && tabId === 'style') {
       navigateToDrilldown(drilldownTarget);
     }
 
