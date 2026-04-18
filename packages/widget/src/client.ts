@@ -1565,7 +1565,15 @@ export class AgentWidgetClient {
             payload.delta ??
             "";
           if (chunk && payload.hidden !== true) {
-            reasoningMessage.reasoning.chunks.push(String(chunk));
+            const reasonSeq = typeof payload.sequenceIndex === "number" ? payload.sequenceIndex : undefined;
+            if (reasonSeq !== undefined) {
+              // Rebuild chunks by seq so late arrivals after a gap-timeout flush
+              // are inserted at the correct position rather than appended.
+              const ordered = insertOrderedChunk(reasoningId, reasonSeq, String(chunk));
+              reasoningMessage.reasoning.chunks = [ordered];
+            } else {
+              reasoningMessage.reasoning.chunks.push(String(chunk));
+            }
           }
           reasoningMessage.reasoning.status = payload.done ? "complete" : "streaming";
           if (payload.done) {

@@ -2229,6 +2229,62 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
     expect(fullReasoning).toBe('I think about this.');
   });
 
+  it('repairs a delayed reason_delta that arrives after the gap-timeout flush', async () => {
+    vi.useFakeTimers();
+    const events: AgentWidgetEvent[] = [];
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (data: any) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          };
+
+          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          e({ type: 'reason_start', reasoningId: 'r1', hidden: false, done: false, sequenceIndex: 1 });
+          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'a', hidden: false, done: false, sequenceIndex: 2 });
+          // sequenceIndex=3 is delayed long enough for the gap-timeout to flush sequenceIndex=4
+          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'c', hidden: false, done: false, sequenceIndex: 4 });
+
+          setTimeout(() => {
+            // Late arrival after gap-timeout flush
+            e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'b', hidden: false, done: false, sequenceIndex: 3 });
+          }, 60);
+
+          setTimeout(() => {
+            e({ type: 'reason_complete', reasoningId: 'r1', hidden: false, done: true, sequenceIndex: 5 });
+            e({ type: 'step_delta', id: 's1', text: 'Result', partId: 'text_0', sequenceIndex: 6 });
+            e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
+            e({ type: 'flow_complete', success: true });
+            controller.close();
+          }, 70);
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    const dispatchPromise = client.dispatch({ messages: [] }, (event) => events.push(event));
+    await vi.advanceTimersByTimeAsync(80);
+    await dispatchPromise;
+    vi.useRealTimers();
+
+    const messageEvents = events.filter(
+      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
+    );
+    const reasoningMsgs = messageEvents.filter(
+      (e) => e.message.reasoning && e.message.reasoning.chunks.length > 0
+    );
+    expect(reasoningMsgs.length).toBeGreaterThan(0);
+
+    const lastReasoning = reasoningMsgs[reasoningMsgs.length - 1];
+    const fullReasoning = lastReasoning.message.reasoning!.chunks.join('');
+    expect(fullReasoning).toBe('abc');
+  });
+
   it('should handle step_delta without seq gracefully (no reordering)', async () => {
     const events: AgentWidgetEvent[] = [];
 
