@@ -1433,6 +1433,9 @@ export class AgentWidgetClient {
     // reordering doesn't produce garbled output.
     const seqReadyQueue: Array<{ payloadType: string; payload: any }> = [];
     let isDrainScheduled = false;
+    // Declared here so scheduleReadyQueueDrain can reference it; assigned
+    // after all handler-scoped variables are initialised (before the SSE loop).
+    let drainReadyQueue: () => void;
     const scheduleReadyQueueDrain = () => {
       if (isDrainScheduled) return;
       isDrainScheduled = true;
@@ -1445,88 +1448,19 @@ export class AgentWidgetClient {
       seqReadyQueue.push({ payloadType, payload });
       scheduleReadyQueueDrain();
     });
-    // Assigned inside the SSE loop (captures all closure state); also invoked
-    // after the loop exits so any events buffered at end-of-stream are processed.
-    let drainReadyQueue: () => void = () => {
-      isDrainScheduled = false;
-      seqReadyQueue.length = 0;
-    };
-
     // Agent execution state tracking
     let agentExecution: AgentExecutionState | null = null;
     // Track assistant messages per agent iteration for 'separate' mode
     const agentIterationMessages = new Map<number, AgentWidgetMessage>();
     const iterationDisplay = this.config.iterationDisplay ?? 'separate';
 
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split("\n\n");
-      buffer = events.pop() ?? "";
-
-      for (const event of events) {
-        const lines = event.split("\n");
-        let eventType = "message";
-        let data = "";
-
-        for (const line of lines) {
-          if (line.startsWith("event:")) {
-            eventType = line.replace("event:", "").trim();
-          } else if (line.startsWith("data:")) {
-            data += line.replace("data:", "").trim();
-          }
-        }
-
-        if (!data) continue;
-        let payload: any;
-        try {
-          payload = JSON.parse(data);
-        } catch (error) {
-          onEvent({
-            type: "error",
-            error:
-              error instanceof Error
-                ? error
-                : new Error("Failed to parse chat stream payload")
-          });
-          continue;
-        }
-
-        const payloadType =
-          eventType !== "message" ? eventType : payload.type ?? "message";
-
-        // Tap: capture raw SSE event for event stream inspector
-        this.onSSEEvent?.(payloadType, payload);
-
-        // If custom SSE event parser is provided, try it first
-        if (this.parseSSEEvent) {
-          // Keep assistant message ref in sync
-          assistantMessageRef.current = assistantMessage;
-          const handled = await this.handleCustomSSEEvent(
-            payload,
-            onEvent,
-            assistantMessageRef,
-            emitMessage,
-            nextSequence,
-            partIdState
-          );
-          // Update assistantMessage from ref (in case it was created or replaced by partId segmentation)
-          if (assistantMessageRef.current && assistantMessageRef.current !== assistantMessage) {
-            assistantMessage = assistantMessageRef.current;
-          }
-          if (handled) continue; // Skip default handling if custom handler processed it
-        }
-
-        // Push through the sequence reorder buffer
-        seqBuffer.push(payloadType, payload);
-
-        drainReadyQueue = () => {
-        for (let _qi = 0; _qi < seqReadyQueue.length; _qi++) {
-          const payloadType = seqReadyQueue[_qi].payloadType;
-          const payload = seqReadyQueue[_qi].payload;
+    // Drains reorder-buffered events through the main event handler.
+    // Also invoked after the SSE loop exits so any events buffered at
+    // end-of-stream are processed.
+    drainReadyQueue = () => {
+      for (let _qi = 0; _qi < seqReadyQueue.length; _qi++) {
+        const payloadType = seqReadyQueue[_qi].payloadType;
+        const payload = seqReadyQueue[_qi].payload;
 
         if (payloadType === "reason_start") {
           const reasoningId =
@@ -2652,7 +2586,72 @@ export class AgentWidgetClient {
         }
         } // end seqReadyQueue for loop
         seqReadyQueue.length = 0;
-        };
+    };
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+
+      for (const event of events) {
+        const lines = event.split("\n");
+        let eventType = "message";
+        let data = "";
+
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            eventType = line.replace("event:", "").trim();
+          } else if (line.startsWith("data:")) {
+            data += line.replace("data:", "").trim();
+          }
+        }
+
+        if (!data) continue;
+        let payload: any;
+        try {
+          payload = JSON.parse(data);
+        } catch (error) {
+          onEvent({
+            type: "error",
+            error:
+              error instanceof Error
+                ? error
+                : new Error("Failed to parse chat stream payload")
+          });
+          continue;
+        }
+
+        const payloadType =
+          eventType !== "message" ? eventType : payload.type ?? "message";
+
+        // Tap: capture raw SSE event for event stream inspector
+        this.onSSEEvent?.(payloadType, payload);
+
+        // If custom SSE event parser is provided, try it first
+        if (this.parseSSEEvent) {
+          // Keep assistant message ref in sync
+          assistantMessageRef.current = assistantMessage;
+          const handled = await this.handleCustomSSEEvent(
+            payload,
+            onEvent,
+            assistantMessageRef,
+            emitMessage,
+            nextSequence,
+            partIdState
+          );
+          // Update assistantMessage from ref (in case it was created or replaced by partId segmentation)
+          if (assistantMessageRef.current && assistantMessageRef.current !== assistantMessage) {
+            assistantMessage = assistantMessageRef.current;
+          }
+          if (handled) continue; // Skip default handling if custom handler processed it
+        }
+
+        // Push through the sequence reorder buffer
+        seqBuffer.push(payloadType, payload);
         drainReadyQueue();
       }
     }
