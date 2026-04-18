@@ -236,6 +236,17 @@
       </div>
 
       <div class="section">
+        <label>Sequence Reorder (QA)</label>
+        <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
+          Exercises <code>SequenceReorderBuffer</code> end-to-end via <code>connectStream</code>. Chunks are emitted out of server order.
+        </small>
+        <div class="btn-group">
+          <button id="btn-seq-reason-text">Reasoning + text (scrambled seq)</button>
+          <button id="btn-seq-markdown">Markdown table + box-drawing (scrambled seq)</button>
+        </div>
+      </div>
+
+      <div class="section">
         <label>Actions</label>
         <div class="btn-row">
           <button id="btn-apply">Apply Config</button>
@@ -252,7 +263,7 @@
     <script type="module">
       import "@runtypelabs/persona/widget.css";
       import "./src/index.css";
-      import { createAgentExperience, DEFAULT_WIDGET_CONFIG } from "@runtypelabs/persona";
+      import { createAgentExperience, DEFAULT_WIDGET_CONFIG, markdownPostprocessor } from "@runtypelabs/persona";
 
       // ── helpers ──────────────────────────────────────────────────
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -351,6 +362,9 @@
             welcomeTitle: "Tool & Reasoning Loading Animations",
             welcomeSubtitle: "Use the controls to change animation settings, then run a tool or reasoning scenario.",
           },
+          // Needed so the Sequence Reorder QA scenarios render their
+          // markdown table + box-drawing output instead of raw text.
+          postprocessMessage: ({ text }) => markdownPostprocessor(text),
         };
       }
 
@@ -793,6 +807,187 @@
         }
       }
 
+      // ── sequence reorder QA scenarios ───────────────────────────
+      //
+      // These scenarios build a real SSE ReadableStream and pipe it
+      // through controller.connectStream(), which routes through the
+      // same client.processStream() pipeline a live dispatch uses.
+      // That means events go through SequenceReorderBuffer — the
+      // subject of PR #168 — so scrambled `seq` / `sequenceIndex`
+      // ordering here actually exercises the reorder/repair code.
+
+      /**
+       * Build a ReadableStream<Uint8Array> of SSE events. Each entry is
+       * { data: <object>, delayMs?: number } — delay is applied BEFORE
+       * the event is enqueued, so you can simulate gap-timeout flushes
+       * by delaying a mid-sequence chunk past the buffer's 50ms gap.
+       */
+      function buildSSEStream(entries) {
+        const encoder = new TextEncoder();
+        return new ReadableStream({
+          async start(controller) {
+            for (const entry of entries) {
+              if (entry.delayMs) await sleep(entry.delayMs);
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify(entry.data)}\n\n`)
+              );
+            }
+            controller.close();
+          },
+        });
+      }
+
+      async function reasoningPlusTextScrambled() {
+        log("Starting: Reasoning + text (scrambled seq)", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-seq-reason-text").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Think about it, then explain why the sky is blue.",
+        });
+        await sleep(200);
+
+        const flowId = nextId("flow");
+        const stepId = nextId("step");
+        const reasoningId = nextId("reason");
+        const partId = nextId("part");
+        const messageId = nextId("msg");
+
+        // Reasoning chunks that should concatenate to "Rayleigh scattering is why."
+        // Sent with sequenceIndex out of order: 2,4,3,5,6 → buffer reorders.
+        const r1 = "Rayleigh ";
+        const r2 = "scattering ";
+        const r3 = "is why.";
+
+        // Text chunks → "Short wavelengths dominate, so the sky looks blue."
+        // One chunk (seq=10) arrives AFTER a late gap so that the gap timer
+        // flushes seq 11 first, then the late seq=10 repairs via
+        // insertOrderedChunk — the exact path the PR adds regression tests
+        // for.
+        const t1 = "Short wavelengths ";
+        const t2 = "dominate, ";
+        const t3 = "so the sky ";
+        const t4 = "looks blue.";
+
+        const entries = [
+          { data: { type: "flow_start", flowId, flowName: "QA", totalSteps: 1 } },
+          { data: { type: "step_start", id: stepId, name: "Prompt", stepType: "prompt", index: 1, totalSteps: 1 } },
+
+          // Reasoning, scrambled: send indices 2, 4, 3 then 5 (done)
+          { data: { type: "reason_start", reasoningId, hidden: false, done: false, sequenceIndex: 1 } },
+          { data: { type: "reason_delta", reasoningId, reasoningText: r1, hidden: false, done: false, sequenceIndex: 2 }, delayMs: 120 },
+          { data: { type: "reason_delta", reasoningId, reasoningText: r3, hidden: false, done: false, sequenceIndex: 4 }, delayMs: 30 },
+          { data: { type: "reason_delta", reasoningId, reasoningText: r2, hidden: false, done: false, sequenceIndex: 3 }, delayMs: 30 },
+          { data: { type: "reason_complete", reasoningId, hidden: false, done: true, sequenceIndex: 5 }, delayMs: 120 },
+
+          // Text — first two chunks arrive in order, then a GAP (seq=10 is
+          // missing) while seq=11 arrives; buffer waits 50ms then flushes
+          // seq=11. Then seq=10 shows up late and insertOrderedChunk
+          // repairs the rendered content back into correct order.
+          { data: { type: "text_start", partId, messageId, seq: 6 }, delayMs: 150 },
+          { data: { type: "step_delta", id: stepId, text: t1, partId, messageId, seq: 7 }, delayMs: 120 },
+          { data: { type: "step_delta", id: stepId, text: t2, partId, messageId, seq: 8 }, delayMs: 120 },
+          // seq=9 withheld until after the gap timeout to trigger late repair
+          { data: { type: "step_delta", id: stepId, text: t4, partId, messageId, seq: 10 }, delayMs: 120 },
+          // Gap timer (50ms) fires here; buffer flushes seq=10 prematurely
+          { data: { type: "step_delta", id: stepId, text: t3, partId, messageId, seq: 9 }, delayMs: 120 },
+          { data: { type: "text_end", partId, messageId, seq: 11 }, delayMs: 60 },
+
+          { data: { type: "step_complete", id: stepId, name: "Prompt", success: true } },
+          { data: { type: "flow_complete", success: true } },
+        ];
+
+        try {
+          await controller.connectStream(buildSSEStream(entries));
+          log("Expected reasoning: 'Rayleigh scattering is why.'");
+          log("Expected text: 'Short wavelengths dominate, so the sky looks blue.'");
+        } catch (err) {
+          log(`Error: ${err?.message ?? err}`);
+        }
+
+        document.getElementById("btn-seq-reason-text").classList.remove("running");
+        setAllScenarioButtons(false);
+        log("Done: Reasoning + text (scrambled seq)");
+      }
+
+      async function markdownTableScrambled() {
+        log("Starting: Markdown table + box-drawing (scrambled seq)", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-seq-markdown").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Show me a small markdown table and a box-drawing grid.",
+        });
+        await sleep(200);
+
+        const flowId = nextId("flow");
+        const stepId = nextId("step");
+        const partId = nextId("part");
+        const messageId = nextId("msg");
+
+        // Full expected output, split into 10 chunks. Sent with `seq`
+        // scrambled so the buffer has to reorder to rebuild correctly.
+        // A broken order here is instantly visible: table rows fall
+        // apart, column separators misalign, or box-drawing characters
+        // land in the wrong cells.
+        const chunks = [
+          "Here is a small table:\n\n",
+          "| Item | Qty | Price |\n",
+          "|------|-----|-------|\n",
+          "| Apple | 3 | $1.20 |\n",
+          "| Pear  | 2 | $0.95 |\n",
+          "| Kiwi  | 5 | $2.50 |\n",
+          "\nAnd a 3x3 grid:\n\n```\n",
+          "┌───┬───┬───┐\n│ A │ B │ C │\n├───┼───┼───┤\n",
+          "│ D │ E │ F │\n├───┼───┼───┤\n│ G │ H │ I │\n",
+          "└───┴───┴───┘\n```\n",
+        ];
+
+        // Scrambled send order (1-based seqs after text_start@seq=1):
+        // text_start=1, then chunks at seqs 2..11, but sent in this order:
+        //   2, 4, 3, 6, 5, 7, 9, 8, 11, 10
+        // That exercises both "small gap + fill" and "later-than-expected"
+        // reordering for every chunk boundary in the table.
+        const sendOrder = [
+          { seq: 2, text: chunks[0], delay: 80 },
+          { seq: 4, text: chunks[2], delay: 40 },
+          { seq: 3, text: chunks[1], delay: 40 },
+          { seq: 6, text: chunks[4], delay: 60 },
+          { seq: 5, text: chunks[3], delay: 40 },
+          { seq: 7, text: chunks[5], delay: 40 },
+          { seq: 9, text: chunks[7], delay: 60 },
+          { seq: 8, text: chunks[6], delay: 40 },
+          { seq: 11, text: chunks[9], delay: 60 },
+          { seq: 10, text: chunks[8], delay: 40 },
+        ];
+
+        const entries = [
+          { data: { type: "flow_start", flowId, flowName: "QA", totalSteps: 1 } },
+          { data: { type: "step_start", id: stepId, name: "Prompt", stepType: "prompt", index: 1, totalSteps: 1 } },
+          { data: { type: "text_start", partId, messageId, seq: 1 } },
+          ...sendOrder.map((c) => ({
+            data: { type: "step_delta", id: stepId, text: c.text, partId, messageId, seq: c.seq },
+            delayMs: c.delay,
+          })),
+          { data: { type: "text_end", partId, messageId, seq: 12 }, delayMs: 60 },
+          { data: { type: "step_complete", id: stepId, name: "Prompt", success: true } },
+          { data: { type: "flow_complete", success: true } },
+        ];
+
+        try {
+          await controller.connectStream(buildSSEStream(entries));
+          log("Table and box-drawing should render cleanly with no broken rows.");
+        } catch (err) {
+          log(`Error: ${err?.message ?? err}`);
+        }
+
+        document.getElementById("btn-seq-markdown").classList.remove("running");
+        setAllScenarioButtons(false);
+        log("Done: Markdown table + box-drawing (scrambled seq)");
+      }
+
       // ── wire buttons ────────────────────────────────────────────
 
       document.getElementById("btn-short").addEventListener("click", shortTool);
@@ -802,6 +997,8 @@
       document.getElementById("btn-names").addEventListener("click", nameVariants);
       document.getElementById("btn-reason-short").addEventListener("click", shortReasoning);
       document.getElementById("btn-reason-long").addEventListener("click", longReasoning);
+      document.getElementById("btn-seq-reason-text").addEventListener("click", reasoningPlusTextScrambled);
+      document.getElementById("btn-seq-markdown").addEventListener("click", markdownTableScrambled);
 
       document.getElementById("btn-apply").addEventListener("click", () => {
         createWidget();
