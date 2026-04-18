@@ -272,7 +272,6 @@ export default defineConfig({
         theme: path.resolve(__dirname, 'theme.html'),
         products: path.resolve(__dirname, 'products.html'),
         'custom-components': path.resolve(__dirname, 'custom-components.html'),
-        'feedback-demo': path.resolve(__dirname, 'feedback-demo.html'),
         'feedback-integration-demo': path.resolve(__dirname, 'feedback-integration-demo.html'),
         'client-token-demo': path.resolve(__dirname, 'client-token-demo.html'),
         'client-token-feedback-demo': path.resolve(__dirname, 'client-token-feedback-demo.html'),

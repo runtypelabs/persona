@@ -28,6 +28,14 @@ import type {
 const clientToken = import.meta.env.VITE_CLIENT_TOKEN || '';
 const apiUrl = import.meta.env.VITE_API_URL || 'https://api.runtype.com';
 
+// Message actions config controls
+const cfgCopy = document.getElementById("cfg-copy") as HTMLInputElement;
+const cfgUpvote = document.getElementById("cfg-upvote") as HTMLInputElement;
+const cfgDownvote = document.getElementById("cfg-downvote") as HTMLInputElement;
+const cfgVisibility = document.getElementById("cfg-visibility") as HTMLSelectElement;
+const cfgLayout = document.getElementById("cfg-layout") as HTMLSelectElement;
+const cfgAlign = document.getElementById("cfg-align") as HTMLSelectElement;
+
 // Stats tracking
 const stats = { upvotes: 0, downvotes: 0, copies: 0, csat: null as number | null, nps: null as number | null };
 
@@ -71,6 +79,34 @@ function addLogEntry(type: string, details: string) {
   }
 }
 
+function getMessageActionsConfig() {
+  return {
+    enabled: true,
+    showCopy: cfgCopy.checked,
+    showUpvote: cfgUpvote.checked,
+    showDownvote: cfgDownvote.checked,
+    visibility: cfgVisibility.value as "always" | "hover",
+    layout: cfgLayout.value as "pill-inside" | "row-inside",
+    align: cfgAlign.value as "left" | "center" | "right",
+    onCopy: (message: AgentWidgetMessage) => {
+      stats.copies++;
+      updateStats();
+      addLogEntry("copy", `Message ID: ${message.id}`);
+      console.log("[Feedback Demo] Message copied:", message.id);
+    },
+    onFeedback: (feedback: AgentWidgetMessageFeedback) => {
+      if (feedback.type === "upvote") {
+        stats.upvotes++;
+      } else {
+        stats.downvotes++;
+      }
+      updateStats();
+      addLogEntry(feedback.type, `Message ID: ${feedback.messageId}`);
+      console.log("[Feedback Demo] Feedback received:", feedback.type, feedback.messageId);
+    }
+  };
+}
+
 // Initialize widget
 const mount = document.getElementById("feedback-widget");
 if (!mount) throw new Error("Widget mount not found");
@@ -103,36 +139,7 @@ const controller = createAgentExperience(mount, {
     "Write a haiku about coding"
   ],
   
-  // Message actions configuration
-  // In client token mode, feedback is automatically sent to the API
-  messageActions: {
-    enabled: true,
-    showCopy: true,
-    showUpvote: true,
-    showDownvote: true,
-    visibility: "always",
-    align: "right",
-    
-    // These callbacks are called IN ADDITION to the automatic API calls
-    // Use them for local tracking, analytics, etc.
-    onCopy: (message: AgentWidgetMessage) => {
-      stats.copies++;
-      updateStats();
-      addLogEntry("copy", `Message ID: ${message.id}`);
-      console.log("[Feedback Demo] Message copied:", message.id);
-    },
-    
-    onFeedback: (feedback: AgentWidgetMessageFeedback) => {
-      if (feedback.type === "upvote") {
-        stats.upvotes++;
-      } else {
-        stats.downvotes++;
-      }
-      updateStats();
-      addLogEntry(feedback.type, `Message ID: ${feedback.messageId}`);
-      console.log("[Feedback Demo] Feedback received:", feedback.type, feedback.messageId);
-    }
-  },
+  messageActions: getMessageActionsConfig(),
   
   // Session callbacks
   onSessionInit: (session) => {
@@ -148,6 +155,13 @@ const controller = createAgentExperience(mount, {
   postprocessMessage: ({ text }) => markdownPostprocessor(text),
   debug: true
 });
+
+// Update widget when message actions config controls change
+for (const el of [cfgCopy, cfgUpvote, cfgDownvote, cfgVisibility, cfgLayout, cfgAlign]) {
+  el.addEventListener("change", () => {
+    controller.update({ messageActions: getMessageActionsConfig() });
+  });
+}
 
 // Event listeners for additional logging
 controller.on("message:copy", (message) => {

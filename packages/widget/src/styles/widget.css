@@ -1778,10 +1778,6 @@
   margin-top: 0.5rem;
   padding: 0.25rem 0.5rem;
   border-top: none;
-  border-radius: var(--persona-radius-md, 0.75rem);
-  background-color: var(--persona-surface, #ffffff);
-  border: 1px solid var(--persona-divider, #f1f5f9);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 /* Pill alignment in always-visible mode (block flow: use margin to position) */
@@ -1826,10 +1822,6 @@
     padding: 0.25rem;
     border-top: none;
     width: fit-content;
-    background-color: var(--persona-surface, #ffffff);
-    border: 1px solid var(--persona-divider, #f1f5f9);
-    border-radius: var(--persona-radius-md, 0.75rem);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   }
 
   /* Pill layout - position based on alignment */
