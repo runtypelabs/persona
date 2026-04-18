@@ -1436,6 +1436,12 @@ export class AgentWidgetClient {
     // Declared here so scheduleReadyQueueDrain can reference it; assigned
     // after all handler-scoped variables are initialised (before the SSE loop).
     let drainReadyQueue: () => void;
+    // Two drain paths — both are intentional, do not remove either:
+    //   1. Microtask drain (scheduleReadyQueueDrain): required when the
+    //      buffer's emitter fires from the gap-timeout setTimeout callback,
+    //      because there is no surrounding synchronous drain site there.
+    //   2. Synchronous drain (drainReadyQueue() after each seqBuffer.push):
+    //      skips an extra microtask hop on the hot in-order push path.
     const scheduleReadyQueueDrain = () => {
       if (isDrainScheduled) return;
       isDrainScheduled = true;
@@ -1458,9 +1464,9 @@ export class AgentWidgetClient {
     // Also invoked after the SSE loop exits so any events buffered at
     // end-of-stream are processed.
     drainReadyQueue = () => {
-      for (let _qi = 0; _qi < seqReadyQueue.length; _qi++) {
-        const payloadType = seqReadyQueue[_qi].payloadType;
-        const payload = seqReadyQueue[_qi].payload;
+      for (let i = 0; i < seqReadyQueue.length; i++) {
+        const payloadType = seqReadyQueue[i].payloadType;
+        const payload = seqReadyQueue[i].payload;
 
         if (payloadType === "reason_start") {
           const reasoningId =
@@ -1735,11 +1741,10 @@ export class AgentWidgetClient {
             // instead of appending in the wrong position.
             const chunkSeq = typeof payload.seq === "number" ? payload.seq : undefined;
             const chunkBufferKey = incomingPartId ?? assistant.id;
-            const rawBuffer = rawContentBuffers.get(assistant.id) ?? "";
             const accumulatedRaw =
               chunkSeq !== undefined
                 ? insertOrderedChunk(chunkBufferKey, chunkSeq, String(chunk))
-                : rawBuffer + chunk;
+                : (rawContentBuffers.get(assistant.id) ?? "") + chunk;
             // Store raw content for action parsing, but NEVER set assistant.content to raw JSON
             assistant.rawContent = accumulatedRaw;
             
@@ -1878,7 +1883,6 @@ export class AgentWidgetClient {
                           // Clean up
                           streamParsers.delete(currentAssistant.id);
                           rawContentBuffers.delete(currentAssistant.id);
-
                           emitMessage(currentAssistant);
                         }
                       }
@@ -1910,7 +1914,6 @@ export class AgentWidgetClient {
                   streamParsers.delete(assistant.id);
                 }
                 rawContentBuffers.delete(assistant.id);
-
                 assistant.streaming = false;
                 emitMessage(assistant);
               }
@@ -1995,7 +1998,6 @@ export class AgentWidgetClient {
                           // Clean up
                           streamParsers.delete(currentAssistant.id);
                           rawContentBuffers.delete(currentAssistant.id);
-
                           emitMessage(currentAssistant);
                         }
                       } else {
@@ -2013,7 +2015,6 @@ export class AgentWidgetClient {
                           // Clean up
                           streamParsers.delete(currentAssistant.id);
                           rawContentBuffers.delete(currentAssistant.id);
-
                           emitMessage(currentAssistant);
                         }
                       }
@@ -2143,7 +2144,6 @@ export class AgentWidgetClient {
               const msg: AgentWidgetMessage = assistantMessage;
               streamParsers.delete(msg.id);
               rawContentBuffers.delete(msg.id);
-
               // Only emit if streaming state changed
               if (msg.streaming !== false) {
                 msg.streaming = false;
@@ -2584,8 +2584,8 @@ export class AgentWidgetClient {
             onEvent({ type: "status", status: "idle" });
           }
         }
-        } // end seqReadyQueue for loop
-        seqReadyQueue.length = 0;
+      }
+      seqReadyQueue.length = 0;
     };
 
     // eslint-disable-next-line no-constant-condition

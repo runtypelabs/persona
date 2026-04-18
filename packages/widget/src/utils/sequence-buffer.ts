@@ -119,12 +119,6 @@ export class SequenceReorderBuffer {
     }
   }
 
-  reset(): void {
-    this.clearGapTimer();
-    this.buffer.clear();
-    this.nextExpectedSeq = null;
-  }
-
   destroy(): void {
     this.clearGapTimer();
     this.buffer.clear();

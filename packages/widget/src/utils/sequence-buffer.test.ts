@@ -103,27 +103,6 @@ describe("SequenceReorderBuffer", () => {
     buf.destroy();
   });
 
-  it("reset() clears state and re-initializes nextExpectedSeq", () => {
-    const buf = new SequenceReorderBuffer(emitter);
-    buf.push("step_delta", { seq: 1, text: "a" });
-    buf.push("step_delta", { seq: 3, text: "c" }); // buffered
-
-    expect(emitted).toHaveLength(1);
-
-    buf.reset();
-
-    // After reset, nextExpectedSeq is null, so next push re-initializes to 1.
-    // seq=1 matches, emits immediately.
-    buf.push("step_delta", { seq: 1, text: "x" });
-    expect(emitted).toHaveLength(2);
-    expect(emitted[1].payload.text).toBe("x");
-
-    // Buffered seq=3 from before reset should NOT flush
-    vi.advanceTimersByTime(100);
-    expect(emitted).toHaveLength(2);
-    buf.destroy();
-  });
-
   it("handles mixed seq and no-seq events", () => {
     const buf = new SequenceReorderBuffer(emitter);
     buf.push("step_delta", { seq: 1, text: "a" });
@@ -173,28 +152,20 @@ describe("SequenceReorderBuffer", () => {
     buf.destroy();
   });
 
-  it("no-seq event flushes pending buffer and does not leak timer", () => {
+  it("no-seq event flushes pending buffer and cancels the gap timer", () => {
     const buf = new SequenceReorderBuffer(emitter, 50);
     buf.push("step_delta", { seq: 1, text: "a" });
     buf.push("step_delta", { seq: 3, text: "c" }); // buffered, starts gap timer
     expect(emitted).toHaveLength(1);
 
-    // A no-seq event triggers flushAll, which cancels the gap timer
+    // A no-seq event triggers flushAll, which drains the buffer in seq order
+    // and cancels the gap timer.
     buf.push("flow_complete", { flowId: "done" });
     expect(emitted).toHaveLength(3); // a, c, flow_complete
 
-    // Reset to simulate a new flow
-    buf.reset();
-
-    // Push new events — seq=1 emits immediately, seq=3 is buffered
-    buf.push("step_delta", { seq: 1, text: "j" });
-    buf.push("step_delta", { seq: 3, text: "l" }); // buffered, starts new timer
-
-    // Advance 50ms — only the new timer should fire (old was cancelled)
-    vi.advanceTimersByTime(50);
-    expect(emitted).toHaveLength(5); // a, c, flow_complete, j, l
-    expect(emitted[3].payload.text).toBe("j");
-    expect(emitted[4].payload.text).toBe("l");
+    // The gap timer must no longer fire after the flushAll.
+    vi.advanceTimersByTime(100);
+    expect(emitted).toHaveLength(3);
     buf.destroy();
   });
 
