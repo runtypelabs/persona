@@ -130,10 +130,6 @@ export class SequenceReorderBuffer {
     this.buffer.clear();
   }
 
-  hasPending(): boolean {
-    return this.buffer.size > 0;
-  }
-
   flushPending(): void {
     this.flushAll();
   }
