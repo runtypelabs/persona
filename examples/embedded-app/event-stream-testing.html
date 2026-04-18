@@ -53,11 +53,12 @@
       display: none;
     }
     .widget-frame {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
       overflow: hidden;
-      min-height: 420px;
-      height: min(52vh, 520px);
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
     }
     #es-inline-widget {
       height: 100%;
@@ -137,12 +138,11 @@
       </div>
     </div>
 
-    <div class="panel">
-      <p style="padding: 0 0 0.75rem 0; margin: 0; font-size: 0.9rem; color: var(--muted);">
-        Inline widget (below). Launcher is fixed bottom-right.
-      </p>
-      <div class="widget-frame">
-        <div id="es-inline-widget"></div>
+    <div class="panel" style="display: flex; flex-direction: column;">
+      <div style="position: relative; flex: 1 1 0%; min-height: 0;">
+        <div class="widget-frame">
+          <div id="es-inline-widget"></div>
+        </div>
       </div>
     </div>
   </div>
