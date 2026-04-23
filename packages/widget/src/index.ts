@@ -178,6 +178,24 @@ export type { AgentWidgetInitHandle };
 export type { AgentWidgetPlugin } from "./plugins/types";
 export { pluginRegistry } from "./plugins/registry";
 
+// Stream animation plugin API — lets consumers register custom animations
+// that match the built-in surface (typewriter, pop-bubble) and subpath
+// modules (letter-rise, word-fade, wipe, glyph-cycle).
+export {
+  registerStreamAnimationPlugin,
+  unregisterStreamAnimationPlugin,
+  listRegisteredStreamAnimations,
+} from "./utils/stream-animation";
+export type {
+  StreamAnimationPlugin,
+  StreamAnimationContext,
+  AgentWidgetStreamAnimationBuffer,
+  AgentWidgetStreamAnimationBuiltinType,
+  AgentWidgetStreamAnimationType,
+  AgentWidgetStreamAnimationFeature,
+  AgentWidgetStreamAnimationPlaceholder,
+} from "./types";
+
 // Dropdown utility exports
 export { createDropdownMenu } from "./utils/dropdown";
 export type { DropdownMenuItem, CreateDropdownOptions, DropdownMenuHandle } from "./utils/dropdown";

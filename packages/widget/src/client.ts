@@ -13,6 +13,7 @@ import {
   AgentWidgetHeadersFunction,
   AgentWidgetSSEEventResult as _AgentWidgetSSEEventResult,
   AgentExecutionState,
+  StopReasonKind,
   ClientSession,
   ClientInitResponse,
   ClientChatRequest,
@@ -2094,11 +2095,20 @@ export class AgentWidgetClient {
             continue;
           }
 
+          // Capture optional per-step stopReason emitted by the runtime
+          // (e.g. `'max_tool_calls'`, `'length'`). This is the dispatch-mode
+          // fallback — `agent_turn_complete` will overwrite it later in
+          // agent-loop streams.
+          const stepStopReason = (payload as any).stopReason as
+            | StopReasonKind
+            | undefined;
+
           if (didSplitByPartId) {
             // Sealed segment(s) — do not create a second bubble from step_complete.
             // Merge authoritative final response into the last sealed segment (fixes async lag).
             if (assistantMessage !== null) {
               const msg: AgentWidgetMessage = assistantMessage;
+              if (stepStopReason) msg.stopReason = stepStopReason;
               streamParsers.delete(msg.id);
               rawContentBuffers.delete(msg.id);
               if (msg.streaming !== false) {
@@ -2109,6 +2119,7 @@ export class AgentWidgetClient {
             const splitFinalContent = payload.result?.response;
             const sealedForReconcile = lastSealedTextSegment;
             if (sealedForReconcile) {
+              if (stepStopReason) sealedForReconcile.stopReason = stepStopReason;
               if (splitFinalContent !== undefined && splitFinalContent !== null) {
                 reconcileSealedAssistantWithFinalResponse(sealedForReconcile, splitFinalContent);
               } else {
@@ -2121,6 +2132,7 @@ export class AgentWidgetClient {
           }
           const finalContent = payload.result?.response;
           const assistant = ensureAssistantMessage();
+          if (stepStopReason) assistant.stopReason = stepStopReason;
           if (finalContent !== undefined && finalContent !== null) {
             // Check if we already have extracted text from streaming
             const parser = streamParsers.get(assistant.id);
@@ -2406,6 +2418,22 @@ export class AgentWidgetClient {
               );
               reasoningMessage.streaming = false;
               emitMessage(reasoningMessage);
+            }
+          }
+
+          // Attach the turn-level stopReason to the assistant message
+          // produced by this turn. Only overwrite the current message —
+          // prior turns already sealed their own stopReason via step_complete.
+          const turnStopReason = (payload as any).stopReason as
+            | StopReasonKind
+            | undefined;
+          if (turnStopReason && assistantMessage !== null) {
+            const turnId = payload.turnId;
+            const matchesTurn =
+              !turnId || assistantMessage.agentMetadata?.turnId === turnId;
+            if (matchesTurn) {
+              assistantMessage.stopReason = turnStopReason;
+              emitMessage(assistantMessage);
             }
           }
         } else if (payloadType === "agent_tool_start") {

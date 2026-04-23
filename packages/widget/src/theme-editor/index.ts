@@ -84,6 +84,8 @@ export {
   getPreviewTranscriptPresetLabel,
   createPreviewTranscriptEntry,
   appendPreviewTranscriptEntry,
+  presetStreamsText,
+  buildTranscriptStreamFrames,
   createPreviewMessages,
   applySceneConfig,
   buildPreviewConfig,
@@ -94,6 +96,8 @@ export type {
   PreviewTranscriptEntryPreset,
   PreviewShellPalette,
   PreviewConfigOptions,
+  TranscriptStreamFrame,
+  BuildTranscriptStreamFramesOptions,
 } from './preview-utils';
 
 // Role mappings (Interface Roles editor)

@@ -6,27 +6,7 @@ import {
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetController,
 } from "@runtypelabs/persona";
-
-// ── Simulated SSE stream helper ──────────────────────────────
-function createSSEStream(events: Array<{ type: string; [key: string]: unknown }>, delayMs = 300): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  let index = 0;
-
-  return new ReadableStream({
-    async pull(controller) {
-      if (index >= events.length) {
-        controller.close();
-        return;
-      }
-
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-
-      const event = events[index++];
-      const data = JSON.stringify(event);
-      controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-    }
-  });
-}
+import { createMockSSEResponse, createMockSSEStream } from "@runtypelabs/persona/testing";
 
 // ── Mount ──────────────────────────────────────────────────────
 const mount = document.getElementById("approval-widget");
@@ -64,12 +44,7 @@ function createWidget() {
         },
       ];
 
-      const stream = createSSEStream(events, 200);
-
-      return new Response(stream, {
-        status: 200,
-        headers: { "Content-Type": "text/event-stream" },
-      });
+      return createMockSSEResponse(events, { delayMs: 200 });
     },
 
     // Custom approval handler that simulates the approve/deny response
@@ -86,7 +61,7 @@ function createWidget() {
             { type: "agent_turn_complete", executionId: data.executionId, turnId: "turn-denied" },
             { type: "agent_complete", executionId: data.executionId, success: true, stopReason: "complete" },
           ];
-          return createSSEStream(events, 150);
+          return createMockSSEStream(events, { delayMs: 150 });
         }
 
         // Simulate an approval response with tool execution
@@ -102,7 +77,7 @@ function createWidget() {
           { type: "agent_turn_complete", executionId: data.executionId, turnId: "turn-2" },
           { type: "agent_complete", executionId: data.executionId, success: true, stopReason: "complete" },
         ];
-        return createSSEStream(events, 150);
+        return createMockSSEStream(events, { delayMs: 150 });
       },
     },
 

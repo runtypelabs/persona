@@ -137,6 +137,12 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       expandable: true,
       loadingAnimation: "none",
     },
+    streamAnimation: {
+      type: "none",
+      placeholder: "none",
+      speed: 120,
+      duration: 1800,
+    },
   },
   suggestionChips: [
     "What can you help me with?",
@@ -251,6 +257,8 @@ export function mergeWithDefaults(
       const ca = config.features?.artifacts;
       const dsb = DEFAULT_WIDGET_CONFIG.features?.scrollToBottom;
       const csb = config.features?.scrollToBottom;
+      const dsa = DEFAULT_WIDGET_CONFIG.features?.streamAnimation;
+      const csa = config.features?.streamAnimation;
       const mergedArtifacts =
         da === undefined && ca === undefined
           ? undefined
@@ -269,11 +277,19 @@ export function mergeWithDefaults(
               ...dsb,
               ...csb,
             };
+      const mergedStreamAnimation =
+        dsa === undefined && csa === undefined
+          ? undefined
+          : {
+              ...dsa,
+              ...csa,
+            };
       return {
         ...DEFAULT_WIDGET_CONFIG.features,
         ...config.features,
         ...(mergedScrollToBottom !== undefined ? { scrollToBottom: mergedScrollToBottom } : {}),
         ...(mergedArtifacts !== undefined ? { artifacts: mergedArtifacts } : {}),
+        ...(mergedStreamAnimation !== undefined ? { streamAnimation: mergedStreamAnimation } : {}),
       };
     })(),
     suggestionChips: config.suggestionChips ?? DEFAULT_WIDGET_CONFIG.suggestionChips,

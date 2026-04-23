@@ -24,6 +24,7 @@ export type FingerprintableMessage = {
   };
   reasoning?: { chunks?: string[]; status?: string; [key: string]: unknown };
   contentParts?: unknown[];
+  stopReason?: string;
 };
 
 export type MessageCacheEntry = {
@@ -63,6 +64,7 @@ export function computeMessageFingerprint(
         : 0,
     message.reasoning?.chunks?.length ?? 0,
     message.contentParts?.length ?? 0,
+    message.stopReason ?? "",
     configVersion,
   ].join("\x00");
 }

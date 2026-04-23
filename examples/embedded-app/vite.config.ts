@@ -252,6 +252,10 @@ export default defineConfig({
         __dirname,
         "../../packages/widget/src/theme-editor"
       ),
+      "@runtypelabs/persona/testing": path.resolve(
+        __dirname,
+        "../../packages/widget/src/testing"
+      ),
       "@runtypelabs/persona/widget.css": path.resolve(
         __dirname,
         "../../packages/widget/src/styles/widget.css"
@@ -295,6 +299,7 @@ export default defineConfig({
         'launcher-demo': path.resolve(__dirname, 'launcher-demo.html'),
         'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
         'tool-loading-demo': path.resolve(__dirname, 'tool-loading-demo.html'),
+        'stream-animations-demo': path.resolve(__dirname, 'stream-animations-demo.html'),
         'voice-integration-demo': path.resolve(__dirname, 'voice-integration-demo.html'),
         'autoscroll-stress-test': path.resolve(__dirname, 'autoscroll-stress-test.html'),
         // Standalone (CDN / Copy-Paste) pages

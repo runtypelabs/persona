@@ -28,15 +28,21 @@ import {
   escapeHtml,
   buildShellCss,
   applyShellTheme,
-  createPreviewTranscriptEntry,
   createPreviewMessages,
+  buildTranscriptStreamFrames,
+  presetStreamsText,
 } from '@runtypelabs/persona/theme-editor';
 import {
   createAgentExperience,
   createWidgetHostLayout,
   isDockedMountMode,
 } from '@runtypelabs/persona';
-import type { AgentWidgetConfig, AgentWidgetController } from '@runtypelabs/persona';
+import type {
+  AgentWidgetConfig,
+  AgentWidgetController,
+  AgentWidgetMessage,
+} from '@runtypelabs/persona';
+import type { TranscriptStreamFrame } from '@runtypelabs/persona/theme-editor';
 import { Idiomorph } from 'idiomorph';
 import type * as StateModule from './state';
 import { setupInlineZones, destroyInlineZones, refreshInlineZones } from './inline-editor';
@@ -97,6 +103,15 @@ const PREVIEW_BG_ERROR_OVERLAY_TIMEOUT_MS = 3000;
 const PREVIEW_BG_MESSAGE_TYPE = 'persona-theme-preview-background-state';
 const PREVIEW_BG_EMBED_CHECK_ENDPOINT = '/api/preview/embed-check';
 const PREVIEW_IFRAME_SHELL_STYLE_ID = SHELL_STYLE_ID;
+
+// Preview transcript streaming cadence — tuned to be closer to real LLM output
+// so Stream Animation settings (typewriter, letter-rise, word-fade, etc.) have
+// enough time on screen to be legible, instead of finishing in a blink.
+// ~75 chars/sec, plus a short pause after the empty bubble appears so any
+// skeleton / loading state is observable before tokens begin to arrive.
+const STREAM_CHUNK_SIZE = 6;
+const STREAM_CHUNK_DELAY_MS = 80;
+const STREAM_INITIAL_DELAY_MS = 600;
 
 // ─── Test Helpers (re-exported) ─────────────────────────────────
 
@@ -314,6 +329,8 @@ export function createPreviewManager(
   let previewResizeObserver: ResizeObserver | null = null;
   let activeHighlightZone: string | null = null;
   let lastInjectedTranscriptCount = 0;
+  let lastStreamAnimationSignature: string | null = null;
+  let pendingStreamTimers: Array<ReturnType<typeof setTimeout>> = [];
 
   const previewEmbedCheckInFlight = new Map<string, number>();
   const previewBackgroundOverlayTimers = new Map<string, { timeoutId: number; dismissKey: string }>();
@@ -1198,6 +1215,7 @@ export function createPreviewManager(
   }
 
   function destroyPreviewControllers(): void {
+    cancelPendingStreamTimers();
     destroyInlineZones();
     for (const controller of previewControllers) {
       controller.destroy();
@@ -1266,6 +1284,8 @@ export function createPreviewManager(
     destroyPreviewControllers();
     lastMountedScene = stateModule.getPreviewScene();
     lastInjectedTranscriptCount = 0;
+    cancelPendingStreamTimers();
+    lastStreamAnimationSignature = getStreamAnimationSignature();
 
     const specs = getPreviewSpecs(preserveBackgroundStates);
     const renderToken = ++previewRenderToken;
@@ -1433,14 +1453,128 @@ export function createPreviewManager(
       return;
     }
 
+    // Snap each preview widget to the bottom of its current transcript before
+    // the new entry streams in. This engages the widget's auto-follow state so
+    // the incoming frames (and any streaming animation) stay visible as the
+    // content grows, instead of landing below the fold on a scrolled-up user.
+    scrollPreviewWidgetsToBottom();
+
     const newEntries = entries.slice(lastInjectedTranscriptCount);
-    for (const preset of newEntries) {
-      const msg = createPreviewTranscriptEntry(preset, lastInjectedTranscriptCount + newEntries.indexOf(preset));
-      for (const controller of previewControllers) {
-        controller.injectTestMessage({ type: 'message', message: msg });
+    newEntries.forEach((preset, idx) => {
+      const suffix = lastInjectedTranscriptCount + idx;
+      const frames = buildTranscriptStreamFrames(preset, suffix, {
+        chunkSize: STREAM_CHUNK_SIZE,
+        delayMs: STREAM_CHUNK_DELAY_MS,
+      });
+      emitStreamFrames(frames);
+    });
+    lastInjectedTranscriptCount = currentCount;
+  }
+
+  function scrollPreviewWidgetsToBottom(): void {
+    for (const iframe of Array.from(
+      container.querySelectorAll<HTMLIFrameElement>('iframe[data-mount-id]')
+    )) {
+      const scrollBody = iframe.contentDocument?.getElementById('persona-scroll-container');
+      if (scrollBody) {
+        scrollBody.scrollTop = scrollBody.scrollHeight;
       }
     }
-    lastInjectedTranscriptCount = currentCount;
+  }
+
+  function getStreamAnimationSignature(): string {
+    const sa = (stateModule.get('features.streamAnimation') ?? {}) as {
+      type?: string;
+      placeholder?: string;
+      speed?: number;
+      duration?: number;
+      buffer?: string;
+    };
+    return JSON.stringify({
+      type: sa.type ?? 'none',
+      placeholder: sa.placeholder ?? 'none',
+      speed: sa.speed ?? 120,
+      duration: sa.duration ?? 1800,
+      buffer: sa.buffer ?? 'none',
+    });
+  }
+
+  function cancelPendingStreamTimers(): void {
+    for (const timer of pendingStreamTimers) clearTimeout(timer);
+    pendingStreamTimers = [];
+  }
+
+  function scheduleStreamEmit(fn: () => void, delay: number): void {
+    const timer = setTimeout(() => {
+      pendingStreamTimers = pendingStreamTimers.filter((t) => t !== timer);
+      fn();
+    }, delay);
+    pendingStreamTimers.push(timer);
+  }
+
+  /**
+   * Emit a sequence of transcript stream frames to every mounted preview
+   * controller with a pacing that mirrors real LLM streaming: the empty
+   * streaming bubble lands immediately, then a short pause lets the loading /
+   * skeleton state register, then content streams in at ~75 chars/sec so the
+   * Stream Animation plugins actually have time to play.
+   */
+  function emitStreamFrames(
+    frames: TranscriptStreamFrame[],
+    transform: (message: AgentWidgetMessage) => AgentWidgetMessage = (m) => m
+  ): void {
+    if (frames.length === 0 || previewControllers.length === 0) return;
+
+    const emit = (message: AgentWidgetMessage): void => {
+      for (const controller of previewControllers) {
+        controller.injectTestMessage({ type: 'message', message });
+      }
+    };
+
+    emit(transform(frames[0].message));
+    if (frames.length === 1) return;
+
+    let cumulative = 0;
+    for (let i = 1; i < frames.length; i += 1) {
+      // First post-empty frame waits STREAM_INITIAL_DELAY_MS so the skeleton /
+      // loading state is observable; subsequent frames use the per-chunk cadence.
+      cumulative += i === 1 ? STREAM_INITIAL_DELAY_MS : frames[i].delayMs;
+      const message = transform(frames[i].message);
+      scheduleStreamEmit(() => emit(message), cumulative);
+    }
+  }
+
+  /**
+   * Re-emit the most recent streaming-capable transcript preset so the user
+   * can immediately see the effect of a Stream Animation change without having
+   * to add another message. Frames upsert by message id so this replaces the
+   * existing bubble in-place; createdAt is locked to the first frame to keep
+   * the message's position in the transcript stable.
+   */
+  function replayLastStreamableTranscriptEntry(): void {
+    if (previewControllers.length === 0) return;
+
+    const entries = stateModule.getPreviewTranscriptEntries();
+    let lastIdx = -1;
+    for (let i = entries.length - 1; i >= 0; i -= 1) {
+      if (presetStreamsText(entries[i])) {
+        lastIdx = i;
+        break;
+      }
+    }
+    if (lastIdx === -1) return;
+
+    cancelPendingStreamTimers();
+
+    const frames = buildTranscriptStreamFrames(entries[lastIdx], lastIdx, {
+      chunkSize: STREAM_CHUNK_SIZE,
+      delayMs: STREAM_CHUNK_DELAY_MS,
+    });
+    if (frames.length === 0) return;
+
+    const stableCreatedAt = frames[0].message.createdAt;
+    scrollPreviewWidgetsToBottom();
+    emitStreamFrames(frames, (message) => ({ ...message, createdAt: stableCreatedAt }));
   }
 
   function doUpdate(): void {
@@ -1463,6 +1597,12 @@ export function createPreviewManager(
       return;
     }
 
+    const nextStreamAnimationSignature = getStreamAnimationSignature();
+    const streamAnimationChanged =
+      lastStreamAnimationSignature !== null &&
+      nextStreamAnimationSignature !== lastStreamAnimationSignature;
+    lastStreamAnimationSignature = nextStreamAnimationSignature;
+
     previewControllers.forEach((controller, index) => {
       controller.update(specs[index].previewConfig);
       applyPreviewBackgroundStateToWrapper(specs[index].mountId, specs[index].backgroundState);
@@ -1470,6 +1610,7 @@ export function createPreviewManager(
         controller.close();
       }
     });
+
     syncPreviewStageLayoutForScene();
     syncPreviewWrapperShellAndShellMode(specs);
     updatePreviewStatusLabel();
@@ -1484,6 +1625,10 @@ export function createPreviewManager(
     }
 
     syncTranscriptEntries();
+
+    if (streamAnimationChanged) {
+      replayLastStreamableTranscriptEntry();
+    }
   }
 
   function resizePreviewFrames(): void {

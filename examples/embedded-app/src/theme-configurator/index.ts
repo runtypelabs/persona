@@ -21,6 +21,7 @@ import * as colorsStyleTab from './sections/colors-style';
 import * as componentsTab from './sections/components';
 import * as configureTab from './sections/widget-config';
 import * as exportTab from './sections/export';
+import { initPreviewTranscriptToolbar } from './preview-transcript-toolbar';
 import { DynamicForm } from '../components';
 import { applyPreset, getAllPresets } from './presets';
 import {
@@ -178,6 +179,7 @@ function init(): void {
   initSearch();
   initWizard();
   initPillDropdown();
+  initPreviewTranscriptToolbar();
   rebuildEditorSurface();
   syncEditorUi();
 

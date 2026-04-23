@@ -7,10 +7,85 @@ import {
   AgentWidgetMessageActionsConfig,
   AgentWidgetMessageFeedback,
   LoadingIndicatorRenderContext,
-  ImageContentPart
+  ImageContentPart,
+  StopReasonKind
 } from "../types";
 import { createIconButton } from "../utils/buttons";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "../utils/content";
+import {
+  applyStreamBuffer,
+  createSkeletonPlaceholder,
+  createStreamCaret,
+  resolveStreamAnimation,
+  resolveStreamAnimationPlugin,
+  wrapStreamAnimation,
+} from "../utils/stream-animation";
+
+/**
+ * Default copy for the inline notice rendered when a turn ends with a
+ * non-natural stop reason. Deployers override per-reason via
+ * `config.copy.stopReasonNotice`. Returns `null` for natural completions
+ * (`end_turn`) and uninformative reasons (`unknown`) — those never render
+ * an affordance.
+ */
+export const getDefaultStopReasonNoticeCopy = (
+  stopReason: StopReasonKind
+): string | null => {
+  switch (stopReason) {
+    case "max_tool_calls":
+      return "Stopped after calling a tool. Send a follow-up to continue.";
+    case "length":
+      return "Response cut off as max tokens reached. Ask for more to continue.";
+    case "content_filter":
+      return "The provider filtered this response.";
+    case "error":
+      return "Something went wrong generating this response.";
+    case "end_turn":
+    case "unknown":
+    default:
+      return null;
+  }
+};
+
+/**
+ * Resolve the notice text for a stop reason, applying user overrides on
+ * top of the built-in defaults. Returns `null` when the reason does not
+ * warrant a notice or when the resolved string is empty (deployers can
+ * suppress per-reason by setting an empty override).
+ */
+export const resolveStopReasonNoticeText = (
+  stopReason: StopReasonKind | undefined,
+  overrides?: Partial<Record<StopReasonKind, string>>
+): string | null => {
+  if (!stopReason) return null;
+  const fallback = getDefaultStopReasonNoticeCopy(stopReason);
+  // Reasons without a default (end_turn, unknown) never render — overrides
+  // for those keys are intentionally ignored.
+  if (fallback === null) return null;
+  const override = overrides?.[stopReason];
+  const text = override !== undefined ? override : fallback;
+  if (!text) return null;
+  return text;
+};
+
+/**
+ * Build the inline notice element rendered on assistant bubbles whose
+ * turn ended with `max_tool_calls`, `length`, `content_filter`, or `error`.
+ */
+const createStopReasonNotice = (
+  stopReason: StopReasonKind,
+  text: string
+): HTMLElement => {
+  const notice = createElement(
+    "div",
+    "persona-message-stop-reason persona-text-xs persona-mt-2 persona-italic"
+  );
+  notice.setAttribute("data-stop-reason", stopReason);
+  notice.setAttribute("role", "note");
+  notice.style.opacity = "0.75";
+  notice.textContent = text;
+  return notice;
+};
 
 /** Validate that an image src URL uses a safe scheme (blocks javascript: and SVG data URIs). */
 export const isSafeImageSrc = (src: string): boolean => {
@@ -507,24 +582,107 @@ export const createStandardBubble = (
     imageParts.length > 0 && messageContentText === IMAGE_ONLY_MESSAGE_FALLBACK_TEXT;
   const shouldHideTextUntilPreviewFails = isImageOnlyFallbackMessage;
 
+  const streamAnimation = resolveStreamAnimation(
+    options?.widgetConfig?.features?.streamAnimation
+  );
+  const streamPluginOverrides =
+    options?.widgetConfig?.features?.streamAnimation?.plugins;
+  const streamPlugin =
+    message.role === "assistant" && streamAnimation.type !== "none"
+      ? resolveStreamAnimationPlugin(streamAnimation.type, streamPluginOverrides)
+      : null;
+  // Stay in "streaming-animated" mode while the plugin reports in-flight
+  // work for this message — e.g. glyph-cycle's tick loops still walking
+  // through the tail after the last token arrived. Without this, the final
+  // non-animated render rips out the cycling spans mid-animation.
+  const pluginStillAnimating =
+    message.role === "assistant" &&
+    streamPlugin?.isAnimating?.(message) === true;
+  const streamAnimationActive =
+    message.role === "assistant" &&
+    streamPlugin !== null &&
+    (Boolean(message.streaming) || pluginStillAnimating);
+
+  if (streamAnimationActive && streamPlugin?.bubbleClass) {
+    bubble.classList.add(streamPlugin.bubbleClass);
+  }
+
   // Add message content
   const contentDiv = document.createElement("div");
   contentDiv.classList.add("persona-message-content");
+
+  if (streamAnimationActive && streamPlugin) {
+    if (streamPlugin.containerClass) {
+      contentDiv.classList.add(streamPlugin.containerClass);
+    }
+    contentDiv.style.setProperty("--persona-stream-step", `${streamAnimation.speed}ms`);
+    contentDiv.style.setProperty("--persona-stream-duration", `${streamAnimation.duration}ms`);
+  }
+
+  const bufferedContent = streamAnimationActive
+    ? applyStreamBuffer(
+        message.content ?? "",
+        streamAnimation.buffer,
+        streamPlugin,
+        message,
+        Boolean(message.streaming)
+      )
+    : (message.content ?? "");
+
   const transformedContent = transform({
-    text: message.content,
+    text: bufferedContent,
     message,
     streaming: Boolean(message.streaming),
     raw: message.rawContent
   });
+
+  let animatedContent = transformedContent;
+  if (streamAnimationActive && streamPlugin?.wrap === "char") {
+    animatedContent = wrapStreamAnimation(transformedContent, "char", message.id, {
+      skipTags: streamPlugin.skipTags,
+    });
+  } else if (streamAnimationActive && streamPlugin?.wrap === "word") {
+    animatedContent = wrapStreamAnimation(transformedContent, "word", message.id, {
+      skipTags: streamPlugin.skipTags,
+    });
+  }
+
   let textContentDiv: HTMLElement | null = null;
 
   if (shouldHideTextUntilPreviewFails) {
     textContentDiv = document.createElement("div");
-    textContentDiv.innerHTML = transformedContent;
+    textContentDiv.innerHTML = animatedContent;
     textContentDiv.style.display = "none";
     contentDiv.appendChild(textContentDiv);
   } else {
-    contentDiv.innerHTML = transformedContent;
+    contentDiv.innerHTML = animatedContent;
+  }
+
+  if (
+    streamAnimationActive &&
+    streamPlugin?.useCaret &&
+    !shouldHideTextUntilPreviewFails &&
+    messageContentText
+  ) {
+    const caret = createStreamCaret();
+    // Caret must sit on the same line as the final char. Markdown wraps text
+    // in block elements (<p>, <li>, <pre>), so appending to contentDiv would
+    // drop the caret onto a fresh line. Tuck it after the last char/word span,
+    // or fall back to the last block when no spans exist yet.
+    const spans = contentDiv.querySelectorAll(
+      ".persona-stream-char, .persona-stream-word"
+    );
+    const lastSpan = spans[spans.length - 1];
+    if (lastSpan?.parentNode) {
+      lastSpan.parentNode.insertBefore(caret, lastSpan.nextSibling);
+    } else {
+      const lastChild = contentDiv.lastElementChild;
+      if (lastChild) {
+        lastChild.appendChild(caret);
+      } else {
+        contentDiv.appendChild(caret);
+      }
+    }
   }
 
   // Add inline timestamp if configured
@@ -561,19 +719,56 @@ export const createStandardBubble = (
     bubble.appendChild(timestamp);
   }
 
-  // Add typing indicator if this is a streaming assistant message
+  // Resolve the stop-reason notice (if any). Only assistant messages can
+  // carry a stop reason worth surfacing.
+  const stopReasonNoticeText =
+    message.role === "assistant"
+      ? resolveStopReasonNoticeText(
+          message.stopReason,
+          options?.widgetConfig?.copy?.stopReasonNotice
+        )
+      : null;
+
+  // Add typing indicator (or skeleton placeholder) for streaming assistant
+  // messages. Check the buffered content — a plugin's `bufferContent` may
+  // hold back the first N chars (e.g. glyph-cycle waits for 50 chars), during
+  // which the bubble would otherwise appear empty.
+  //
+  // When the `"line"` buffer strategy is paired with the skeleton placeholder,
+  // the skeleton trails below any already-revealed content to hint that more
+  // lines are on the way. It disappears on stream completion.
   if (message.streaming && message.role === "assistant") {
-    if (!message.content || !message.content.trim()) {
-      // Use custom renderer if provided, otherwise default
-      const indicator = renderLoadingIndicatorWithFallback(
-        'inline',
-        options?.loadingIndicatorRenderer,
-        options?.widgetConfig
-      );
-      if (indicator) {
-        bubble.appendChild(indicator);
+    const hasVisibleContent = Boolean(bufferedContent && bufferedContent.trim());
+    const skeletonEnabled = streamAnimation.placeholder === "skeleton";
+    const trailSkeleton =
+      skeletonEnabled && streamAnimation.buffer === "line" && hasVisibleContent;
+    if (!hasVisibleContent) {
+      if (skeletonEnabled) {
+        bubble.appendChild(createSkeletonPlaceholder());
+      } else {
+        const indicator = renderLoadingIndicatorWithFallback(
+          'inline',
+          options?.loadingIndicatorRenderer,
+          options?.widgetConfig
+        );
+        if (indicator) {
+          bubble.appendChild(indicator);
+        }
       }
+    } else if (trailSkeleton) {
+      bubble.appendChild(createSkeletonPlaceholder());
     }
+  }
+
+  // Append the stop-reason notice for non-natural completions. When the
+  // assistant produced no text (the `max_tool_calls` empty-bubble symptom),
+  // hide the empty content div so the notice carries the entire bubble
+  // instead of trailing under a blank space.
+  if (stopReasonNoticeText && message.stopReason && !message.streaming) {
+    if (!messageContentText) {
+      contentDiv.style.display = "none";
+    }
+    bubble.appendChild(createStopReasonNotice(message.stopReason, stopReasonNoticeText));
   }
 
   // Add message actions for assistant messages (only when not streaming and has content)

@@ -4,103 +4,10 @@ import type { SectionDef, OnChangeCallback, ControlResult } from '../types';
 import { renderSection } from '../controls';
 import { setSearchContext } from '../search';
 import * as state from '../state';
-import {
-  CONFIGURE_SUB_GROUPS,
-  getPreviewTranscriptPresetLabel,
-  type PreviewTranscriptEntryPreset,
-} from '@runtypelabs/persona/theme-editor';
+import { CONFIGURE_SUB_GROUPS } from '@runtypelabs/persona/theme-editor';
 
 export const TAB_ID = 'configure';
 export const TAB_LABEL = 'Configure';
-
-const PREVIEW_TRANSCRIPT_PRESETS: PreviewTranscriptEntryPreset[] = [
-  'user-message',
-  'assistant-message',
-  'reasoning-streaming',
-  'reasoning-complete',
-  'tool-running',
-  'tool-complete',
-];
-
-function attachPreviewTranscriptBuilder(content: Element): void {
-  const builder = document.createElement('div');
-  builder.className = 'preview-transcript-builder';
-  builder.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;';
-
-  const title = document.createElement('div');
-  title.textContent = 'Preview Transcript Builder';
-  title.style.cssText = 'font-size:12px;font-weight:600;color:var(--text);';
-
-  const description = document.createElement('div');
-  description.textContent = 'Append tool, reasoning, and message rows to test different back-and-forth scenarios in the preview.';
-  description.style.cssText = 'font-size:12px;color:var(--text-muted);line-height:1.4;';
-
-  const select = document.createElement('select');
-  select.className = 'control-select';
-  select.setAttribute('data-preview-transcript-select', 'true');
-  PREVIEW_TRANSCRIPT_PRESETS.forEach((preset) => {
-    const option = document.createElement('option');
-    option.value = preset;
-    option.textContent = getPreviewTranscriptPresetLabel(preset);
-    select.appendChild(option);
-  });
-
-  const actions = document.createElement('div');
-  actions.style.cssText = 'display:flex;gap:8px;';
-
-  const addBtn = document.createElement('button');
-  addBtn.type = 'button';
-  addBtn.textContent = 'Add to Preview';
-  addBtn.className = 'config-action-btn';
-  addBtn.setAttribute('data-preview-transcript-add', 'true');
-  addBtn.style.cssText = 'flex:1;padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:12px;cursor:pointer;';
-
-  const clearBtn = document.createElement('button');
-  clearBtn.type = 'button';
-  clearBtn.textContent = 'Clear';
-  clearBtn.className = 'config-action-btn';
-  clearBtn.setAttribute('data-preview-transcript-clear', 'true');
-  clearBtn.style.cssText = 'padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:12px;cursor:pointer;';
-
-  const list = document.createElement('div');
-  list.setAttribute('data-preview-transcript-list', 'true');
-  list.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
-
-  const renderList = () => {
-    const entries = state.getPreviewTranscriptEntries();
-    list.innerHTML = '';
-    clearBtn.disabled = entries.length === 0;
-    clearBtn.style.opacity = entries.length === 0 ? '0.5' : '1';
-    if (entries.length === 0) {
-      const empty = document.createElement('span');
-      empty.textContent = 'No custom preview items added yet.';
-      empty.style.cssText = 'font-size:12px;color:var(--text-muted);';
-      list.appendChild(empty);
-      return;
-    }
-
-    entries.forEach((entry, index) => {
-      const chip = document.createElement('span');
-      chip.textContent = `${index + 1}. ${getPreviewTranscriptPresetLabel(entry)}`;
-      chip.style.cssText = 'display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);font-size:11px;color:var(--text);';
-      list.appendChild(chip);
-    });
-  };
-
-  addBtn.addEventListener('click', () => {
-    state.addPreviewTranscriptEntry(select.value as PreviewTranscriptEntryPreset);
-    renderList();
-  });
-  clearBtn.addEventListener('click', () => {
-    state.clearPreviewTranscriptEntries();
-    renderList();
-  });
-
-  actions.append(addBtn, clearBtn);
-  builder.append(title, description, select, actions, list);
-  content.appendChild(builder);
-  renderList();
-}
 
 // ─── Render ───────────────────────────────────────────────────────
 
@@ -134,12 +41,6 @@ function renderSections(
       }
     }
 
-    if (section.id === 'debug-inspection') {
-      const content = element.querySelector('.accordion-content');
-      if (content) {
-        attachPreviewTranscriptBuilder(content);
-      }
-    }
   }
 
   return allControls;
