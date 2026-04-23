@@ -2576,3 +2576,144 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
   });
 });
 
+// ============================================================================
+// stopReason wiring (agent_turn_complete / step_complete)
+// ============================================================================
+
+describe('AgentWidgetClient - stopReason propagation', () => {
+  const dispatchModeStream = (stopReason?: string) => {
+    const data: Record<string, unknown> = {
+      type: 'step_complete',
+      id: 'step_1',
+      stepType: 'prompt',
+      result: { response: 'Hello there.' },
+    };
+    if (stopReason) data.stopReason = stopReason;
+    return [
+      `data: ${JSON.stringify(data)}\n\n`,
+      `data: ${JSON.stringify({ type: 'flow_complete', success: true })}\n\n`,
+    ];
+  };
+
+  const collectFinalAssistant = (events: AgentWidgetEvent[]): AgentWidgetMessage | null => {
+    const messageEvents = events.filter(e => e.type === 'message');
+    for (let i = messageEvents.length - 1; i >= 0; i--) {
+      const ev = messageEvents[i];
+      if (ev.type === 'message' && ev.message.role === 'assistant' && !ev.message.streaming) {
+        return ev.message;
+      }
+    }
+    return null;
+  };
+
+  const runDispatch = async (chunks: string[]): Promise<AgentWidgetEvent[]> => {
+    global.fetch = vi.fn().mockImplementation(async (_url: string, _options: any) => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+    return events;
+  };
+
+  it.each(['end_turn', 'max_tool_calls', 'length', 'content_filter', 'error', 'unknown'] as const)(
+    'attaches stopReason=%s from step_complete (dispatch / flow path)',
+    async (stopReason) => {
+      const events = await runDispatch(dispatchModeStream(stopReason));
+      const final = collectFinalAssistant(events);
+      expect(final).not.toBeNull();
+      expect(final!.stopReason).toBe(stopReason);
+    }
+  );
+
+  it('leaves stopReason undefined when step_complete omits it (backcompat)', async () => {
+    const events = await runDispatch(dispatchModeStream(undefined));
+    const final = collectFinalAssistant(events);
+    expect(final).not.toBeNull();
+    expect(final!.stopReason).toBeUndefined();
+  });
+
+  it('captures the empty-content + max_tool_calls regression case', async () => {
+    // Symptom the upstream fix targets: model emits a tool call then gets cut
+    // off before producing follow-up text. Persona must record stopReason so
+    // the UI can render an affordance instead of an empty bubble.
+    const events = await runDispatch([
+      `data: ${JSON.stringify({
+        type: 'step_complete',
+        id: 'step_1',
+        stepType: 'prompt',
+        result: { response: '' },
+        stopReason: 'max_tool_calls',
+      })}\n\n`,
+      `data: ${JSON.stringify({ type: 'flow_complete', success: true })}\n\n`,
+    ]);
+    const final = collectFinalAssistant(events);
+    expect(final).not.toBeNull();
+    expect(final!.content).toBe('');
+    expect(final!.stopReason).toBe('max_tool_calls');
+  });
+
+  it('agent_turn_complete.stopReason overrides any earlier step_complete value (agent-loop path)', async () => {
+    // Build an agent-mode stream that emits both events. agent_turn_complete
+    // arrives last; its stopReason should win.
+    const execId = 'exec_stopreason';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxTurns: 1,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_turn_start', {
+        executionId: execId, iteration: 1, turnIndex: 0,
+        role: 'assistant', turnId: 'turn_1', seq: 3,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'partial answer',
+        contentType: 'text', turnId: 'turn_1', seq: 4,
+      }),
+      sseEvent('agent_turn_complete', {
+        executionId: execId, iteration: 1, role: 'assistant',
+        turnId: 'turn_1', completedAt: new Date().toISOString(),
+        stopReason: 'max_tool_calls', seq: 5,
+      }),
+      sseEvent('agent_iteration_complete', {
+        executionId: execId, iteration: 1, toolCallsMade: 0,
+        stopConditionMet: true, completedAt: new Date().toISOString(), seq: 6,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 7,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const final = collectFinalAssistant(events);
+    expect(final).not.toBeNull();
+    expect(final!.stopReason).toBe('max_tool_calls');
+    expect(final!.agentMetadata?.turnId).toBe('turn_1');
+  });
+});
+

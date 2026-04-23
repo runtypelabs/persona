@@ -2782,6 +2782,14 @@ export type AgentWidgetConfig = {
      * @default true
      */
     showWelcomeCard?: boolean;
+    /**
+     * Per-stop-reason copy for the inline notice rendered on assistant
+     * bubbles when the runtime reports a non-natural stop (e.g. the agent
+     * loop hit `max_tool_calls` and was cut off mid-loop). Each key is
+     * optional — keys you omit fall back to the built-in defaults. Set a
+     * key to an empty string to suppress the notice for that reason.
+     */
+    stopReasonNotice?: Partial<Record<StopReasonKind, string>>;
   };
   /**
    * Semantic design tokens (`palette`, `semantic`, `components`).
@@ -3291,6 +3299,28 @@ export type AgentWidgetApproval = {
 export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool" | "approval";
 
 /**
+ * Per-turn / per-step stop reason emitted by the runtime on
+ * `agent_turn_complete` and `step_complete` SSE events. The vocabulary is
+ * owned by the upstream Runtype API — do not extend without coordination.
+ *
+ * - `end_turn` — natural completion (no affordance needed)
+ * - `max_tool_calls` — agent loop tripped the configured tool-call ceiling
+ * - `length` — provider hit max output tokens
+ * - `content_filter` — provider content filter intervened
+ * - `error` — provider/runtime error (prefer existing error rendering)
+ * - `unknown` — explicitly reported but uninformative
+ *
+ * Absent (`undefined`) means "not reported" — distinct from `'unknown'`.
+ */
+export type StopReasonKind =
+  | 'end_turn'
+  | 'max_tool_calls'
+  | 'length'
+  | 'content_filter'
+  | 'error'
+  | 'unknown';
+
+/**
  * Represents a message in the chat conversation.
  *
  * @property id - Unique message identifier
@@ -3376,6 +3406,17 @@ export type AgentWidgetMessage = {
    * Contains execution context like iteration number and turn ID.
    */
   agentMetadata?: AgentMessageMetadata;
+  /**
+   * Per-turn stop reason reported by the runtime on `agent_turn_complete`
+   * (agent-loop path) or the last `step_complete` for a prompt step
+   * (dispatch / flow path). Absent when the API did not report a value.
+   *
+   * When set to a non-natural value (`max_tool_calls`, `length`,
+   * `content_filter`, `error`), the widget renders an inline notice on
+   * the assistant bubble. See `config.copy.stopReasonNotice` to override
+   * the default copy.
+   */
+  stopReason?: StopReasonKind;
 };
 
 // ============================================================================
