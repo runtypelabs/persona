@@ -22,6 +22,13 @@ export interface ComposerElements {
   actionsRow: HTMLElement;
   leftActions: HTMLElement;
   rightActions: HTMLElement;
+  /**
+   * Swap the send button between its idle ("send") appearance and its
+   * streaming ("stop") appearance. In icon mode this swaps the SVG; in text
+   * mode it swaps the button label. Tooltip text is updated when a tooltip
+   * element is present.
+   */
+  setSendButtonMode: (mode: "send" | "stop") => void;
 }
 
 /**
@@ -122,7 +129,11 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   const useIcon = sendButtonConfig.useIcon ?? false;
   const iconText = sendButtonConfig.iconText ?? "↑";
   const iconName = sendButtonConfig.iconName;
+  const stopIconName = sendButtonConfig.stopIconName ?? "square";
   const tooltipText = sendButtonConfig.tooltipText ?? "Send message";
+  const stopTooltipText = sendButtonConfig.stopTooltipText ?? "Stop generating";
+  const sendLabel = config?.copy?.sendButtonLabel ?? "Send";
+  const stopLabel = config?.copy?.stopButtonLabel ?? "Stop";
   const showTooltip = sendButtonConfig.showTooltip ?? false;
   const buttonSize = sendButtonConfig.size ?? "40px";
   const backgroundColor = sendButtonConfig.backgroundColor;
@@ -140,6 +151,11 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
 
   sendButton.type = "submit";
   sendButton.setAttribute("data-persona-composer-submit", "");
+
+  // Icons for both modes are pre-rendered so setSendButtonMode can swap them
+  // without having to re-render on every streaming state change.
+  let sendIcon: SVGElement | null = null;
+  let stopIcon: SVGElement | null = null;
 
   if (useIcon) {
     // Icon mode: circular button
@@ -160,19 +176,23 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
       sendButton.style.color = "var(--persona-button-primary-fg, #ffffff)";
     }
 
+    const iconSize = parseFloat(buttonSize) || 24;
+    const iconColor = textColor?.trim() || "currentColor";
+
     // Use Lucide icon if iconName is provided, otherwise fall back to iconText
     if (iconName) {
-      const iconSize = parseFloat(buttonSize) || 24;
-      const iconColor = textColor?.trim() || "currentColor";
-      const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, 2);
-      if (iconSvg) {
-        sendButton.appendChild(iconSvg);
+      sendIcon = renderLucideIcon(iconName, iconSize, iconColor, 2);
+      if (sendIcon) {
+        sendButton.appendChild(sendIcon);
       } else {
         sendButton.textContent = iconText;
       }
     } else {
       sendButton.textContent = iconText;
     }
+
+    // Pre-render the stop icon so mode swaps are cheap; it starts detached.
+    stopIcon = renderLucideIcon(stopIconName, iconSize, iconColor, 2);
 
     if (backgroundColor) {
       sendButton.style.backgroundColor = backgroundColor;
@@ -181,7 +201,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     }
   } else {
     // Text mode: existing behavior
-    sendButton.textContent = config?.copy?.sendButtonLabel ?? "Send";
+    sendButton.textContent = sendLabel;
     if (textColor) {
       sendButton.style.color = textColor;
     } else {
@@ -215,13 +235,43 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   }
 
   // Add tooltip if enabled
+  let sendTooltip: HTMLElement | null = null;
   if (showTooltip && tooltipText) {
-    const tooltip = createElement("div", "persona-send-button-tooltip");
-    tooltip.textContent = tooltipText;
-    sendButtonWrapper.appendChild(tooltip);
+    sendTooltip = createElement("div", "persona-send-button-tooltip");
+    sendTooltip.textContent = tooltipText;
+    sendButtonWrapper.appendChild(sendTooltip);
   }
 
+  sendButton.setAttribute("aria-label", tooltipText);
+
   sendButtonWrapper.appendChild(sendButton);
+
+  let currentMode: "send" | "stop" = "send";
+  const setSendButtonMode = (mode: "send" | "stop") => {
+    if (mode === currentMode) return;
+    currentMode = mode;
+    const label = mode === "stop" ? stopTooltipText : tooltipText;
+    sendButton.setAttribute("aria-label", label);
+    if (sendTooltip) {
+      sendTooltip.textContent = label;
+    }
+
+    if (useIcon) {
+      // Only swap icons if both were rendered successfully; otherwise the
+      // button is using textContent fallback and there's nothing to swap.
+      if (sendIcon && stopIcon) {
+        const next = mode === "stop" ? stopIcon : sendIcon;
+        const prev = mode === "stop" ? sendIcon : stopIcon;
+        if (prev.parentNode === sendButton) {
+          sendButton.replaceChild(next, prev);
+        } else {
+          sendButton.appendChild(next);
+        }
+      }
+    } else {
+      sendButton.textContent = mode === "stop" ? stopLabel : sendLabel;
+    }
+  };
 
   // Voice recognition mic button
   const voiceRecognitionConfig = config?.voiceRecognition ?? {};
@@ -515,7 +565,8 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     // Actions row layout elements
     actionsRow,
     leftActions,
-    rightActions
+    rightActions,
+    setSendButtonMode
   };
 };
 

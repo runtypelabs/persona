@@ -706,6 +706,7 @@ export const createAgentExperience = (
     leftActions,
     rightActions
   } = panelElements;
+  let setSendButtonMode = panelElements.setSendButtonMode;
 
   // Use mutable references for mic button so we can update them dynamically
   let micButton: HTMLButtonElement | null = panelElements.micButton;
@@ -2968,9 +2969,10 @@ export const createAgentExperience = (
   };
 
   const setComposerDisabled = (disabled: boolean) => {
-    // Keep textarea always enabled so users can type while streaming
-    // Only disable submit controls to prevent sending during streaming
-    sendButton.disabled = disabled;
+    // The send button stays enabled while streaming — it doubles as a stop
+    // button. Ancillary controls (mic, suggestions, opt-in targets) still
+    // disable so the user can't race a send against an in-flight stream.
+    setSendButtonMode(disabled ? "stop" : "send");
     if (micButton) {
       micButton.disabled = disabled;
     }
@@ -3021,9 +3023,10 @@ export const createAgentExperience = (
       }
     }
 
-    // Only update send button text if NOT using icon mode
+    // Only update send button text if NOT using icon mode. Skip while
+    // streaming so we don't stomp on the "Stop" label.
     const useIcon = config.sendButton?.useIcon ?? false;
-    if (!useIcon) {
+    if (!useIcon && !session?.isStreaming()) {
       sendButton.textContent = config.copy?.sendButtonLabel ?? "Send";
     }
 
@@ -3225,6 +3228,15 @@ export const createAgentExperience = (
 
   const handleSubmit = (event: Event) => {
     event.preventDefault();
+
+    // While a response is streaming, the submit button acts as a stop button.
+    // Abort the in-flight stream and leave textarea contents / attachments
+    // intact so the user can edit and resend without retyping.
+    if (session.isStreaming()) {
+      session.cancel();
+      return;
+    }
+
     const value = textarea.value.trim();
     const hasAttachments = attachmentManager?.hasAttachments() ?? false;
 

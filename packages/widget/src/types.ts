@@ -1159,6 +1159,10 @@ export type AgentWidgetSendButtonConfig = {
   backgroundColor?: string;
   textColor?: string;
   size?: string;
+  /** Lucide icon name shown while a response is streaming. Clicking the button in this state aborts the stream. Default: "square". */
+  stopIconName?: string;
+  /** Tooltip text shown while streaming. Default: "Stop generating". */
+  stopTooltipText?: string;
 };
 
 /** Optional composer UI state for custom `renderComposer` implementations. */
@@ -2771,6 +2775,8 @@ export type AgentWidgetConfig = {
     welcomeSubtitle?: string;
     inputPlaceholder?: string;
     sendButtonLabel?: string;
+    /** Button label shown in text mode while a response is streaming. Default: "Stop". */
+    stopButtonLabel?: string;
     /**
      * When false, the welcome / intro card is not shown above the message list.
      * @default true

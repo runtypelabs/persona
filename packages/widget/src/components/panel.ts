@@ -110,6 +110,8 @@ export interface PanelElements {
   actionsRow: HTMLElement;
   leftActions: HTMLElement;
   rightActions: HTMLElement;
+  /** Swap the send button between its send and stop appearances. */
+  setSendButtonMode: (mode: "send" | "stop") => void;
 }
 
 export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelElements => {
@@ -230,7 +232,8 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     // Actions row layout elements
     actionsRow: composerElements.actionsRow,
     leftActions: composerElements.leftActions,
-    rightActions: composerElements.rightActions
+    rightActions: composerElements.rightActions,
+    setSendButtonMode: composerElements.setSendButtonMode
   };
 };
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { AgentWidgetSession, AgentWidgetSessionStatus } from './session';
 import { AgentWidgetMessage } from './types';
 
@@ -243,5 +243,78 @@ describe('AgentWidgetSession - Message Injection', () => {
       expect(messages).toHaveLength(1);
       expect(messages[0].content).toBe('Legacy message');
     });
+  });
+});
+
+describe('AgentWidgetSession - cancel()', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('aborts the in-flight dispatch and flips streaming/status back to idle', async () => {
+    let capturedSignal: AbortSignal | null = null;
+    // Fetch returns a promise that only settles when the AbortSignal fires —
+    // modeling a dispatch that's still receiving SSE tokens.
+    global.fetch = vi.fn().mockImplementation((_url: string, options: any) => {
+      capturedSignal = options.signal as AbortSignal;
+      return new Promise((_resolve, reject) => {
+        options.signal?.addEventListener('abort', () => {
+          const err = new Error('aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      });
+    });
+
+    let streaming = false;
+    let status: AgentWidgetSessionStatus = 'idle';
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://example.invalid/chat' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: (s) => { status = s; },
+        onStreamingChanged: (s) => { streaming = s; }
+      }
+    );
+
+    // Kick off the dispatch but don't await — we want it in-flight when we cancel.
+    const dispatchPromise = session.sendMessage('Hello');
+    // Let the session set up the AbortController and call fetch.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(streaming).toBe(true);
+    expect(session.isStreaming()).toBe(true);
+    expect(capturedSignal).not.toBeNull();
+    expect(capturedSignal!.aborted).toBe(false);
+
+    session.cancel();
+
+    expect(session.isStreaming()).toBe(false);
+    expect(streaming).toBe(false);
+    expect(status).toBe('idle');
+    expect(capturedSignal!.aborted).toBe(true);
+
+    // Drain the dispatch promise so the test doesn't leak a rejection.
+    await dispatchPromise;
+  });
+
+  it('is a no-op when not streaming', () => {
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://example.invalid/chat' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {}
+      }
+    );
+
+    expect(session.isStreaming()).toBe(false);
+    expect(() => session.cancel()).not.toThrow();
+    expect(session.isStreaming()).toBe(false);
+    expect(session.getStatus()).toBe('idle');
   });
 });
