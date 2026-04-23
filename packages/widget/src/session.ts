@@ -971,6 +971,11 @@ export class AgentWidgetSession {
   public cancel() {
     this.abortController?.abort();
     this.abortController = null;
+    // Stop any in-progress audio too — when the user hits "stop", they want
+    // the assistant to actually stop talking, not just stop generating tokens.
+    // Both helpers are safe no-ops when audio isn't configured.
+    this.stopSpeaking();
+    this.stopVoicePlayback();
     this.setStreaming(false);
     this.setStatus("idle");
   }

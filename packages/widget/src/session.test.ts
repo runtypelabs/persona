@@ -317,4 +317,23 @@ describe('AgentWidgetSession - cancel()', () => {
     expect(session.isStreaming()).toBe(false);
     expect(session.getStatus()).toBe('idle');
   });
+
+  it('stops in-progress audio playback (TTS + voice provider) on cancel', () => {
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://example.invalid/chat' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {}
+      }
+    );
+
+    const stopSpeakingSpy = vi.spyOn(session, 'stopSpeaking');
+    const stopVoicePlaybackSpy = vi.spyOn(session, 'stopVoicePlayback');
+
+    session.cancel();
+
+    expect(stopSpeakingSpy).toHaveBeenCalledTimes(1);
+    expect(stopVoicePlaybackSpy).toHaveBeenCalledTimes(1);
+  });
 });
