@@ -30,6 +30,13 @@ export const morphMessages = (
           if (oldNode.classList.contains("persona-animate-typing")) {
             return false;
           }
+          // Plugins actively mutating a node (e.g. glyph-cycle's tick loop)
+          // opt out of morph entirely via this attribute. Unlike
+          // `data-preserve-animation`, this is honored regardless of whether
+          // the new DOM carries the attribute — it's a runtime-only marker.
+          if (oldNode.hasAttribute("data-preserve-runtime")) {
+            return false;
+          }
           if (oldNode.hasAttribute("data-preserve-animation")) {
             // Allow morph when the new node drops the attribute (e.g. tool completed)
             if (newNode instanceof HTMLElement && !newNode.hasAttribute("data-preserve-animation")) {

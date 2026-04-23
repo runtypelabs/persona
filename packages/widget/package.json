@@ -22,6 +22,21 @@
       "import": "./dist/theme-editor.js",
       "require": "./dist/theme-editor.cjs"
     },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.cjs"
+    },
+    "./animations/glyph-cycle": {
+      "types": "./dist/animations/glyph-cycle.d.ts",
+      "import": "./dist/animations/glyph-cycle.js",
+      "require": "./dist/animations/glyph-cycle.cjs"
+    },
+    "./animations/wipe": {
+      "types": "./dist/animations/wipe.d.ts",
+      "import": "./dist/animations/wipe.js",
+      "require": "./dist/animations/wipe.cjs"
+    },
     "./widget.css": "./dist/widget.css"
   },
   "files": [
@@ -29,11 +44,13 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer && pnpm run build:theme-ref && pnpm run build:theme-editor",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer && pnpm run build:theme-ref && pnpm run build:theme-editor && pnpm run build:testing && pnpm run build:animations",
     "build:theme-editor": "tsup src/theme-editor.ts --format esm,cjs --dts --out-dir dist --no-splitting",
+    "build:testing": "tsup src/testing.ts --format esm,cjs --dts --out-dir dist --no-splitting",
+    "build:animations": "tsup src/animations/glyph-cycle.ts src/animations/wipe.ts --format esm,cjs --dts --out-dir dist/animations --no-splitting",
     "build:theme-ref": "tsup src/theme-reference.ts --format esm,cjs --minify --dts",
     "build:styles": "node -e \"const fs=require('fs');fs.mkdirSync('dist',{recursive:true});fs.copyFileSync('src/styles/widget.css','dist/widget.css');\"",
-    "build:client": "tsup src/index.ts --format esm,cjs,iife --global-name AgentWidget --minify --sourcemap --splitting false --dts --loader \".css=text\"",
+    "build:client": "tsup src/index.ts --format esm,cjs --minify --sourcemap --splitting false --dts --loader \".css=text\" && tsup src/index-global.ts --format iife --global-name AgentWidget --minify --sourcemap --splitting false --out-dir dist --loader \".css=text\" && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/index-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/index'+ext);}\"",
     "build:installer": "tsup src/install.ts --format iife --global-name SiteAgentInstaller --out-dir dist --minify --sourcemap --no-splitting",
     "lint": "eslint . --ext .ts",
     "typecheck": "tsc --noEmit",

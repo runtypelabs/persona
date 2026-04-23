@@ -200,6 +200,9 @@ export type PreviewScene = 'home' | 'conversation' | 'minimized' | 'artifact';
 export type PreviewTranscriptEntryPreset =
   | 'user-message'
   | 'assistant-message'
+  | 'assistant-code-block'
+  | 'assistant-markdown-table'
+  | 'assistant-image'
   | 'reasoning-streaming'
   | 'reasoning-complete'
   | 'tool-running'
@@ -208,6 +211,9 @@ export type PreviewTranscriptEntryPreset =
 const PREVIEW_TRANSCRIPT_PRESET_LABELS: Record<PreviewTranscriptEntryPreset, string> = {
   'user-message': 'User message',
   'assistant-message': 'Assistant message',
+  'assistant-code-block': 'Assistant — code block',
+  'assistant-markdown-table': 'Assistant — markdown table',
+  'assistant-image': 'Assistant — image',
   'reasoning-streaming': 'Reasoning (streaming)',
   'reasoning-complete': 'Reasoning (complete)',
   'tool-running': 'Tool call (running)',
@@ -238,6 +244,56 @@ export function createPreviewTranscriptEntry(
         id: `preview-seq-assistant-${suffix}`,
         role: 'assistant',
         content: 'Absolutely. I can keep going and explain what happens next.',
+        createdAt,
+      };
+    case 'assistant-code-block':
+      return {
+        id: `preview-seq-assistant-code-${suffix}`,
+        role: 'assistant',
+        content: [
+          "Here's how you'd wire up a streaming animation:",
+          '',
+          '```ts',
+          "import { createAgentExperience } from '@runtypelabs/persona';",
+          '',
+          'createAgentExperience(el, {',
+          '  features: {',
+          '    streamAnimation: { type: "letter-rise", speed: 120 },',
+          '  },',
+          '});',
+          '```',
+          '',
+          'Swap the `type` value to try the other presets.',
+        ].join('\n'),
+        createdAt,
+      };
+    case 'assistant-markdown-table':
+      return {
+        id: `preview-seq-assistant-table-${suffix}`,
+        role: 'assistant',
+        content: [
+          'Here are the built-in streaming animations at a glance:',
+          '',
+          '| Preset       | Wrap unit | Best for                    |',
+          '| ------------ | --------- | --------------------------- |',
+          '| Typewriter   | Character | Classic terminal feel       |',
+          '| Letter rise  | Character | Soft, staggered entrance    |',
+          '| Word fade    | Word      | Longer-form assistant replies |',
+          '| Pop bubble   | Bubble    | Short, punchy affirmations  |',
+        ].join('\n'),
+        createdAt,
+      };
+    case 'assistant-image':
+      return {
+        id: `preview-seq-assistant-image-${suffix}`,
+        role: 'assistant',
+        content: [
+          "Here's the reference diagram you asked for — let me know if you'd like a different view:",
+          '',
+          '![Stream animation reference](https://placehold.co/320x200/png?text=Stream+Animation)',
+          '',
+          'The gradient shows how per-unit delays stagger across the reply.',
+        ].join('\n'),
         createdAt,
       };
     case 'reasoning-streaming':
@@ -310,6 +366,79 @@ export function appendPreviewTranscriptEntry(
   preset: PreviewTranscriptEntryPreset
 ): AgentWidgetMessage[] {
   return [...messages, createPreviewTranscriptEntry(preset, messages.length)];
+}
+
+/** Presets whose assistant content should stream in so Stream Animation settings engage. */
+export function presetStreamsText(preset: PreviewTranscriptEntryPreset): boolean {
+  return (
+    preset === 'assistant-message' ||
+    preset === 'assistant-code-block' ||
+    preset === 'assistant-markdown-table' ||
+    preset === 'assistant-image'
+  );
+}
+
+export interface TranscriptStreamFrame {
+  /** Message to upsert into the session. */
+  message: AgentWidgetMessage;
+  /** Delay from the previous frame in ms. The first frame uses 0. */
+  delayMs: number;
+  /** True when this is the final frame (message is no longer streaming). */
+  done: boolean;
+}
+
+export interface BuildTranscriptStreamFramesOptions {
+  /** Characters per progressive chunk. Default: 24. */
+  chunkSize?: number;
+  /** Delay between chunks in ms. Default: 42. */
+  delayMs?: number;
+}
+
+/**
+ * Builds progressive snapshots for a transcript preset suitable for feeding into
+ * `injectTestMessage({ type: 'message', message })` on a timer. Each frame upserts
+ * the same message id with more content, ending with `streaming: false`.
+ *
+ * - Streaming-capable presets (assistant text) yield many frames.
+ * - All other presets yield a single `done` frame matching `createPreviewTranscriptEntry`.
+ */
+export function buildTranscriptStreamFrames(
+  preset: PreviewTranscriptEntryPreset,
+  suffix: number,
+  options?: BuildTranscriptStreamFramesOptions
+): TranscriptStreamFrame[] {
+  const completed = createPreviewTranscriptEntry(preset, suffix);
+  if (!presetStreamsText(preset) || typeof completed.content !== 'string') {
+    return [{ message: completed, delayMs: 0, done: true }];
+  }
+
+  const chunkSize = Math.max(1, options?.chunkSize ?? 24);
+  const delayMs = Math.max(0, options?.delayMs ?? 42);
+  const fullText = completed.content;
+  const frames: TranscriptStreamFrame[] = [];
+
+  // Seed with an empty streaming bubble so the animation plugin can attach from the first tick.
+  frames.push({
+    message: { ...completed, content: '', streaming: true },
+    delayMs: 0,
+    done: false,
+  });
+
+  for (let i = chunkSize; i < fullText.length; i += chunkSize) {
+    frames.push({
+      message: { ...completed, content: fullText.slice(0, i), streaming: true },
+      delayMs,
+      done: false,
+    });
+  }
+
+  frames.push({
+    message: { ...completed, content: fullText, streaming: false },
+    delayMs,
+    done: true,
+  });
+
+  return frames;
 }
 
 const createAdvancedTranscriptPreviewMessages = (): AgentWidgetMessage[] => [

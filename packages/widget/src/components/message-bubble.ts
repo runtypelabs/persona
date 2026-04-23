@@ -11,6 +11,14 @@ import {
 } from "../types";
 import { createIconButton } from "../utils/buttons";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "../utils/content";
+import {
+  applyStreamBuffer,
+  createSkeletonPlaceholder,
+  createStreamCaret,
+  resolveStreamAnimation,
+  resolveStreamAnimationPlugin,
+  wrapStreamAnimation,
+} from "../utils/stream-animation";
 
 /** Validate that an image src URL uses a safe scheme (blocks javascript: and SVG data URIs). */
 export const isSafeImageSrc = (src: string): boolean => {
@@ -507,24 +515,107 @@ export const createStandardBubble = (
     imageParts.length > 0 && messageContentText === IMAGE_ONLY_MESSAGE_FALLBACK_TEXT;
   const shouldHideTextUntilPreviewFails = isImageOnlyFallbackMessage;
 
+  const streamAnimation = resolveStreamAnimation(
+    options?.widgetConfig?.features?.streamAnimation
+  );
+  const streamPluginOverrides =
+    options?.widgetConfig?.features?.streamAnimation?.plugins;
+  const streamPlugin =
+    message.role === "assistant" && streamAnimation.type !== "none"
+      ? resolveStreamAnimationPlugin(streamAnimation.type, streamPluginOverrides)
+      : null;
+  // Stay in "streaming-animated" mode while the plugin reports in-flight
+  // work for this message — e.g. glyph-cycle's tick loops still walking
+  // through the tail after the last token arrived. Without this, the final
+  // non-animated render rips out the cycling spans mid-animation.
+  const pluginStillAnimating =
+    message.role === "assistant" &&
+    streamPlugin?.isAnimating?.(message) === true;
+  const streamAnimationActive =
+    message.role === "assistant" &&
+    streamPlugin !== null &&
+    (Boolean(message.streaming) || pluginStillAnimating);
+
+  if (streamAnimationActive && streamPlugin?.bubbleClass) {
+    bubble.classList.add(streamPlugin.bubbleClass);
+  }
+
   // Add message content
   const contentDiv = document.createElement("div");
   contentDiv.classList.add("persona-message-content");
+
+  if (streamAnimationActive && streamPlugin) {
+    if (streamPlugin.containerClass) {
+      contentDiv.classList.add(streamPlugin.containerClass);
+    }
+    contentDiv.style.setProperty("--persona-stream-step", `${streamAnimation.speed}ms`);
+    contentDiv.style.setProperty("--persona-stream-duration", `${streamAnimation.duration}ms`);
+  }
+
+  const bufferedContent = streamAnimationActive
+    ? applyStreamBuffer(
+        message.content ?? "",
+        streamAnimation.buffer,
+        streamPlugin,
+        message,
+        Boolean(message.streaming)
+      )
+    : (message.content ?? "");
+
   const transformedContent = transform({
-    text: message.content,
+    text: bufferedContent,
     message,
     streaming: Boolean(message.streaming),
     raw: message.rawContent
   });
+
+  let animatedContent = transformedContent;
+  if (streamAnimationActive && streamPlugin?.wrap === "char") {
+    animatedContent = wrapStreamAnimation(transformedContent, "char", message.id, {
+      skipTags: streamPlugin.skipTags,
+    });
+  } else if (streamAnimationActive && streamPlugin?.wrap === "word") {
+    animatedContent = wrapStreamAnimation(transformedContent, "word", message.id, {
+      skipTags: streamPlugin.skipTags,
+    });
+  }
+
   let textContentDiv: HTMLElement | null = null;
 
   if (shouldHideTextUntilPreviewFails) {
     textContentDiv = document.createElement("div");
-    textContentDiv.innerHTML = transformedContent;
+    textContentDiv.innerHTML = animatedContent;
     textContentDiv.style.display = "none";
     contentDiv.appendChild(textContentDiv);
   } else {
-    contentDiv.innerHTML = transformedContent;
+    contentDiv.innerHTML = animatedContent;
+  }
+
+  if (
+    streamAnimationActive &&
+    streamPlugin?.useCaret &&
+    !shouldHideTextUntilPreviewFails &&
+    messageContentText
+  ) {
+    const caret = createStreamCaret();
+    // Caret must sit on the same line as the final char. Markdown wraps text
+    // in block elements (<p>, <li>, <pre>), so appending to contentDiv would
+    // drop the caret onto a fresh line. Tuck it after the last char/word span,
+    // or fall back to the last block when no spans exist yet.
+    const spans = contentDiv.querySelectorAll(
+      ".persona-stream-char, .persona-stream-word"
+    );
+    const lastSpan = spans[spans.length - 1];
+    if (lastSpan?.parentNode) {
+      lastSpan.parentNode.insertBefore(caret, lastSpan.nextSibling);
+    } else {
+      const lastChild = contentDiv.lastElementChild;
+      if (lastChild) {
+        lastChild.appendChild(caret);
+      } else {
+        contentDiv.appendChild(caret);
+      }
+    }
   }
 
   // Add inline timestamp if configured
@@ -561,18 +652,34 @@ export const createStandardBubble = (
     bubble.appendChild(timestamp);
   }
 
-  // Add typing indicator if this is a streaming assistant message
+  // Add typing indicator (or skeleton placeholder) for streaming assistant
+  // messages. Check the buffered content — a plugin's `bufferContent` may
+  // hold back the first N chars (e.g. glyph-cycle waits for 50 chars), during
+  // which the bubble would otherwise appear empty.
+  //
+  // When the `"line"` buffer strategy is paired with the skeleton placeholder,
+  // the skeleton trails below any already-revealed content to hint that more
+  // lines are on the way. It disappears on stream completion.
   if (message.streaming && message.role === "assistant") {
-    if (!message.content || !message.content.trim()) {
-      // Use custom renderer if provided, otherwise default
-      const indicator = renderLoadingIndicatorWithFallback(
-        'inline',
-        options?.loadingIndicatorRenderer,
-        options?.widgetConfig
-      );
-      if (indicator) {
-        bubble.appendChild(indicator);
+    const hasVisibleContent = Boolean(bufferedContent && bufferedContent.trim());
+    const skeletonEnabled = streamAnimation.placeholder === "skeleton";
+    const trailSkeleton =
+      skeletonEnabled && streamAnimation.buffer === "line" && hasVisibleContent;
+    if (!hasVisibleContent) {
+      if (skeletonEnabled) {
+        bubble.appendChild(createSkeletonPlaceholder());
+      } else {
+        const indicator = renderLoadingIndicatorWithFallback(
+          'inline',
+          options?.loadingIndicatorRenderer,
+          options?.widgetConfig
+        );
+        if (indicator) {
+          bubble.appendChild(indicator);
+        }
       }
+    } else if (trailSkeleton) {
+      bubble.appendChild(createSkeletonPlaceholder());
     }
   }
 

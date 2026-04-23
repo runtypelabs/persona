@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>Stream Animations — Persona</title>
+    <style>
+      body {
+        padding: 1.5rem;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      h1 { margin: 0 0 0.25rem 0; }
+      .subtitle { color: var(--muted); margin: 0 0 1.5rem 0; font-size: 0.875rem; }
+
+      .controls {
+        background: var(--card);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem;
+        box-shadow: var(--shadow-md);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        position: sticky;
+        top: 1.5rem;
+      }
+      .section { display: flex; flex-direction: column; gap: 0.5rem; }
+      .section label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+
+      .mode-group {
+        display: flex;
+        gap: 0.375rem;
+        flex-wrap: wrap;
+      }
+      .mode-btn {
+        padding: 0.375rem 0.75rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--foreground);
+        font-size: 0.8125rem;
+        cursor: pointer;
+      }
+      .mode-btn:hover { background: var(--border); }
+      .mode-btn.active {
+        border-color: #5b2eff;
+        background: rgba(91, 46, 255, 0.1);
+        color: #5b2eff;
+        font-weight: 600;
+      }
+
+      .range-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .range-row span {
+        font-size: 0.8125rem;
+        color: var(--muted);
+        min-width: 60px;
+        text-align: right;
+      }
+      input[type="range"] { width: 100%; }
+
+      button.play {
+        padding: 0.6rem 0.9rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid #5b2eff;
+        background: #5b2eff;
+        color: white;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.play:disabled { opacity: 0.5; cursor: not-allowed; }
+
+      .reply-row { display: flex; flex-direction: column; gap: 0.5rem; }
+      .reply-row textarea {
+        padding: 0.4rem 0.6rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--foreground);
+        font-size: 0.8125rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        min-height: 6rem;
+        resize: vertical;
+      }
+      .reply-row button.play { align-self: flex-start; }
+
+      #log {
+        font-size: 0.75rem;
+        font-family: monospace;
+        background: #111;
+        color: #aaa;
+        border-radius: var(--radius-sm);
+        padding: 0.5rem;
+        max-height: 120px;
+        overflow-y: auto;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stream-anim-launcher-root" aria-hidden="true"></div>
+
+    <h1>Stream Animations</h1>
+    <p class="subtitle">
+      Switch <code>features.streamAnimation.type</code> on the widget, then replay a canned streamed reply to
+      see the effect. Re-applies config each time so the widget is reset.
+    </p>
+
+    <div class="controls">
+      <div class="section">
+        <label>Animation type</label>
+        <div class="mode-group" id="type-selector">
+          <button class="mode-btn active" data-type="none">None</button>
+          <button class="mode-btn" data-type="typewriter">Typewriter</button>
+          <button class="mode-btn" data-type="word-fade">Word fade</button>
+          <button class="mode-btn" data-type="letter-rise">Letter rise</button>
+          <button class="mode-btn" data-type="glyph-cycle">Glyph cycle</button>
+          <button class="mode-btn" data-type="wipe">Wipe</button>
+          <button class="mode-btn" data-type="pop-bubble">Pop bubble</button>
+          <button class="mode-btn" data-type="rainbow">Rainbow (custom)</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Buffering</label>
+        <div class="mode-group" id="buffer-selector">
+          <button class="mode-btn active" data-buffer="none">None</button>
+          <button class="mode-btn" data-buffer="word">Word</button>
+          <button class="mode-btn" data-buffer="line">Line</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Pre-first-token placeholder</label>
+        <div class="mode-group" id="placeholder-selector">
+          <button class="mode-btn active" data-placeholder="none">Typing dots (default)</button>
+          <button class="mode-btn" data-placeholder="skeleton">Skeleton shimmer</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Per-char animation duration (ms)</label>
+        <div class="range-row">
+          <input type="range" id="speed" min="40" max="500" step="10" value="120" />
+          <span id="speed-label">120ms</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Container animation duration (pop-bubble)</label>
+        <div class="range-row">
+          <input type="range" id="duration" min="200" max="4000" step="100" value="1800" />
+          <span id="duration-label">1800ms</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Canned reply</label>
+        <div class="mode-group" id="preset-selector">
+          <button class="mode-btn active" data-preset="default">Default</button>
+          <button class="mode-btn" data-preset="code">Code block</button>
+          <button class="mode-btn" data-preset="table">Markdown table</button>
+          <button class="mode-btn" data-preset="images">Images</button>
+        </div>
+        <div class="reply-row">
+          <textarea id="reply-text" spellcheck="false"></textarea>
+          <button class="play" id="btn-play">Replay stream</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Log</label>
+        <div id="log"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      import "@runtypelabs/persona/widget.css";
+      import "./src/index.css";
+      import {
+        createAgentExperience,
+        DEFAULT_WIDGET_CONFIG,
+        markdownPostprocessor,
+        registerStreamAnimationPlugin,
+      } from "@runtypelabs/persona";
+
+      // Subpath plugins: each import auto-registers the plugin. Removing any
+      // of these `import` lines drops that animation from the bundle.
+      // (`letter-rise` and `word-fade` are core built-ins — no import needed.)
+      import "@runtypelabs/persona/animations/wipe";
+      import "@runtypelabs/persona/animations/glyph-cycle";
+
+      // Custom inline plugin — shows how a consumer can extend the widget
+      // with their own per-char reveal effect. Registered globally, so any
+      // widget instance can reference it by name.
+      const RAINBOW_STYLES = `
+        @keyframes rainbow-rise {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        [data-persona-root] .rainbow-stream .persona-stream-char {
+          background: linear-gradient(90deg, #f87171, #fbbf24, #34d399, #60a5fa, #a78bfa);
+          background-size: 400% 100%;
+          background-position: calc(var(--char-index, 0) * -8%) 0;
+          -webkit-background-clip: text;
+                  background-clip: text;
+          color: transparent;
+          animation: rainbow-rise calc(var(--persona-stream-step, 120ms) * 2) ease-out both;
+        }
+      `;
+      registerStreamAnimationPlugin({
+        name: "rainbow",
+        containerClass: "rainbow-stream",
+        wrap: "char",
+        styles: RAINBOW_STYLES,
+      });
+
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      let cancelToken = { cancelled: false };
+      const freshCancel = () => {
+        cancelToken.cancelled = true;
+        cancelToken = { cancelled: false };
+        return cancelToken;
+      };
+
+      const logEl = document.getElementById("log");
+      const log = (msg) => {
+        const line = document.createElement("div");
+        line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      };
+
+      let currentType = "none";
+      let currentPlaceholder = "none";
+      let currentBuffer = "none";
+      let controller = null;
+      let msgCounter = 0;
+      const nextId = (p) => `${p}-${++msgCounter}`;
+
+      // Canned replies — cover the content shapes that stress-test the
+      // wrapper + markdown pipeline: inline emphasis, fenced code blocks
+      // (the wrapper skips `<pre>` descendants), GFM tables, and images.
+      const PRESETS = {
+        default:
+          "Here's what I found — the quiet revolution in interface design continues, with **bold** moments and `small` touches that add up.",
+        code: `Here's a quick TypeScript snippet for you:
+
+\`\`\`ts
+const greet = (name: string) => {
+  console.log(\`Hello, \${name}!\`);
+  return name.toUpperCase();
+};
+\`\`\`
+
+Call it with \`greet("world")\` — notice the **template literal** inside the body.`,
+        table: `Here's a quick comparison of the top options:
+
+| Option | Speed | Memory | Notes |
+| --- | --- | --- | --- |
+| Alpha | Fast | Low | Best for small projects |
+| Beta | Medium | Medium | Balanced tradeoff |
+| Gamma | Slow | High | Feature-rich and **flexible** |
+
+The \`Alpha\` plan is typically the best starting point.`,
+        images: `I found a couple of interesting examples:
+
+![Sunset over mountains](https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&auto=format)
+
+And this **stunning cityscape**:
+
+![City at night](https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=400&auto=format)
+
+Both were captured at *golden hour*.`,
+      };
+
+      const getConfig = () => ({
+        ...DEFAULT_WIDGET_CONFIG,
+        apiUrl: "https://noop.test/chat",
+        launcher: {
+          ...DEFAULT_WIDGET_CONFIG.launcher,
+          enabled: true,
+          autoExpand: true,
+          width: "560px",
+          position: "bottom-right",
+        },
+        suggestionChips: [],
+        persistState: false,
+        features: {
+          ...DEFAULT_WIDGET_CONFIG.features,
+          streamAnimation: {
+            type: currentType,
+            placeholder: currentPlaceholder,
+            buffer: currentBuffer,
+            speed: parseInt(document.getElementById("speed").value, 10),
+            duration: parseInt(document.getElementById("duration").value, 10),
+          },
+        },
+        copy: {
+          ...DEFAULT_WIDGET_CONFIG.copy,
+          welcomeTitle: "Stream animations",
+          welcomeSubtitle: "Pick a mode and press Replay to see it stream in.",
+        },
+        postprocessMessage: ({ text }) => markdownPostprocessor(text),
+      });
+
+      const createWidget = () => {
+        const mount = document.getElementById("stream-anim-launcher-root");
+        if (controller) controller.destroy();
+        mount.innerHTML = "";
+        controller = createAgentExperience(mount, getConfig());
+      };
+
+      const playReply = async () => {
+        const token = freshCancel();
+        const playBtn = document.getElementById("btn-play");
+        playBtn.disabled = true;
+        createWidget();
+        await sleep(100);
+        log(`Playing stream — type=${currentType}, placeholder=${currentPlaceholder}`);
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Show me something interesting.",
+        });
+
+        const reply = document.getElementById("reply-text").value;
+        const msgId = nextId("asst");
+
+        // Open the assistant bubble with empty content so the placeholder shows
+        controller.injectAssistantMessage({ id: msgId, content: "", streaming: true });
+        await sleep(600);
+        if (token.cancelled) { playBtn.disabled = false; return; }
+
+        // Stream char-by-char with small jitter, matching the design prototype's feel
+        let acc = "";
+        for (const ch of reply) {
+          if (token.cancelled) break;
+          acc += ch;
+          controller.injectAssistantMessage({ id: msgId, content: acc, streaming: true });
+          await sleep(18 + Math.random() * 14);
+        }
+
+        if (!token.cancelled) {
+          controller.injectAssistantMessage({ id: msgId, content: acc, streaming: false });
+        }
+        log("Stream complete");
+        playBtn.disabled = false;
+      };
+
+      // Selectors
+      const typeSelector = document.getElementById("type-selector");
+      typeSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        typeSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentType = btn.dataset.type;
+      });
+
+      const placeholderSelector = document.getElementById("placeholder-selector");
+      placeholderSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        placeholderSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentPlaceholder = btn.dataset.placeholder;
+      });
+
+      const bufferSelector = document.getElementById("buffer-selector");
+      bufferSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        bufferSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentBuffer = btn.dataset.buffer;
+      });
+
+      const speedSlider = document.getElementById("speed");
+      const speedLabel = document.getElementById("speed-label");
+      speedSlider.addEventListener("input", () => { speedLabel.textContent = `${speedSlider.value}ms`; });
+
+      const durationSlider = document.getElementById("duration");
+      const durationLabel = document.getElementById("duration-label");
+      durationSlider.addEventListener("input", () => { durationLabel.textContent = `${durationSlider.value}ms`; });
+
+      document.getElementById("btn-play").addEventListener("click", playReply);
+
+      const replyTextarea = document.getElementById("reply-text");
+      const presetSelector = document.getElementById("preset-selector");
+      presetSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        presetSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const preset = PRESETS[btn.dataset.preset];
+        if (preset != null) replyTextarea.value = preset;
+      });
+
+      // Boot
+      replyTextarea.value = PRESETS.default;
+      createWidget();
+      log("Ready — pick a type and click Replay.");
+    </script>
+  </body>
+</html>

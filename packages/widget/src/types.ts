@@ -680,6 +680,167 @@ export type AgentWidgetReasoningDisplayFeature = {
   loadingAnimation?: AgentWidgetToolCallLoadingAnimation;
 };
 
+/**
+ * Reveal animation applied to assistant message text while it is streaming.
+ *
+ * Built-in types always available:
+ * - `none` — text appears as tokens arrive (default).
+ * - `typewriter` — characters fade in with a blinking caret.
+ * - `pop-bubble` — the bubble scales in; text streams normally afterward.
+ * - `letter-rise` — per-char translateY + fade reveal.
+ * - `word-fade` — per-word blur + translateY fade-in.
+ *
+ * Subpath plugins (import from `@runtypelabs/persona/animations/*` to register):
+ * - `wipe`, `glyph-cycle`.
+ *
+ * Custom types are allowed — register a plugin with any string name and
+ * reference it by that name in `type`.
+ */
+export type AgentWidgetStreamAnimationBuiltinType =
+  | "none"
+  | "typewriter"
+  | "word-fade"
+  | "letter-rise"
+  | "glyph-cycle"
+  | "wipe"
+  | "pop-bubble";
+
+export type AgentWidgetStreamAnimationType =
+  | AgentWidgetStreamAnimationBuiltinType
+  | (string & {});
+
+/**
+ * Placeholder shown inside a streaming assistant bubble before the first token arrives.
+ * - `none` — use the default typing-dots indicator (existing behavior).
+ * - `skeleton` — shimmer bars, replaced by streaming content once it starts.
+ */
+export type AgentWidgetStreamAnimationPlaceholder = "none" | "skeleton";
+
+/**
+ * How much of the accumulated streaming content to display while tokens are
+ * still arriving. Trimming to a boundary means in-progress words or lines
+ * stay hidden until they complete — useful for animations that benefit from
+ * unit-complete reveals (e.g. wipe, glyph-cycle).
+ * - `none` — show every character as it arrives (default).
+ * - `word` — trim to the last whitespace boundary.
+ * - `line` — trim to the last newline boundary.
+ */
+export type AgentWidgetStreamAnimationBuffer = "none" | "word" | "line";
+
+/**
+ * Context passed to plugin lifecycle hooks. Carries the live DOM references
+ * and resolved animation settings for the currently-streaming message.
+ */
+export type StreamAnimationContext = {
+  /** The `.persona-message-content` element owning the streamed text. */
+  container: HTMLElement;
+  /** The outer message bubble element. */
+  bubble: HTMLElement;
+  /** ID of the streaming message. */
+  messageId: string;
+  /** Read-only reference to the message being streamed. */
+  message: AgentWidgetMessage;
+  /** Effective `speed` from `streamAnimation.speed`. */
+  speed: number;
+  /** Effective `duration` from `streamAnimation.duration`. */
+  duration: number;
+};
+
+/**
+ * Pluggable stream animation. Third-party packages and inline registrations
+ * implement this interface to add custom reveal effects.
+ *
+ * Lifecycle:
+ * - When the widget mounts and detects a plugin (either passed via config or
+ *   auto-registered in the IIFE bundle), it injects `styles` once into the
+ *   widget's style host.
+ * - For each streaming assistant message whose `type` matches `name`, the
+ *   widget applies `containerClass` / `bubbleClass`, wraps text per `wrap`,
+ *   and — if `useCaret` is true — appends a blinking caret.
+ * - Hooks fire after the live DOM is morphed; plugins use stable element IDs
+ *   and `data-preserve-animation` to safely mutate per-char or per-word spans
+ *   without idiomorph clobbering in-flight work.
+ */
+export type StreamAnimationPlugin = {
+  /** Plugin identifier. Matches the `type` field in `streamAnimation`. */
+  name: string;
+  /** Class added to `.persona-message-content` while streaming. */
+  containerClass?: string;
+  /** Class added to the bubble element (e.g. a one-shot scale animation). */
+  bubbleClass?: string;
+  /** Wrap mode applied to text nodes during streaming. @default "none" */
+  wrap?: "none" | "char" | "word";
+  /**
+   * HTML tags whose descendant text is skipped during wrapping. Defaults to
+   * `["pre", "code", "a", "script", "style"]` — useful for keeping code
+   * blocks legible and link click-targets intact. Plugins that want to
+   * animate characters inside inline code (e.g. `glyph-cycle`) can narrow
+   * the list.
+   */
+  skipTags?: string[];
+  /** Append a blinking caret after the last rendered char/word. */
+  useCaret?: boolean;
+  /** CSS string injected into the widget style host on first activation. */
+  styles?: string;
+  /**
+   * Optional custom buffering strategy. Returns the portion of `content`
+   * that should be rendered during streaming. Use this for buffering
+   * schemes beyond the built-in `word` / `line` strategies.
+   */
+  bufferContent?: (content: string, message: AgentWidgetMessage) => string;
+  /**
+   * Fires once when the plugin is first activated inside a widget instance.
+   * Use this to set up MutationObservers or other long-lived listeners.
+   * Return an optional cleanup function that runs on widget destroy.
+   */
+  onAttach?: (root: HTMLElement | ShadowRoot) => (() => void) | void;
+  /** Fires after each render that reaches the live DOM. */
+  onAfterRender?: (ctx: StreamAnimationContext) => void;
+  /** Fires when a streamed message's `streaming` flag flips to false. */
+  onStreamComplete?: (ctx: StreamAnimationContext) => void;
+  /**
+   * Report whether the plugin still has in-flight animation work for a
+   * message. When `true`, the widget keeps rendering the message in its
+   * "streaming-animated" mode even after `message.streaming` flips false —
+   * preventing the final non-animated render from yanking the rug out from
+   * under unfinished per-char cycles or reveals.
+   */
+  isAnimating?: (message: AgentWidgetMessage) => boolean;
+};
+
+export type AgentWidgetStreamAnimationFeature = {
+  /** Reveal animation to apply while streaming. @default "none" */
+  type?: AgentWidgetStreamAnimationType;
+  /** Pre-first-token placeholder. @default "none" */
+  placeholder?: AgentWidgetStreamAnimationPlaceholder;
+  /**
+   * Per-unit animation duration (ms) for `typewriter`, `letter-rise`, `word-fade`,
+   * and per-unit plugin animations. Each arriving character/word animates from
+   * invisible to visible over this duration, independent of its position — the
+   * streaming cadence itself provides the visible stagger.
+   * @default 120
+   */
+  speed?: number;
+  /**
+   * Total duration of container-level animations (`pop-bubble` and custom
+   * plugin animations), in milliseconds.
+   * @default 1800
+   */
+  duration?: number;
+  /**
+   * Trim the accumulated streaming content to a word or line boundary before
+   * rendering. Hides in-progress units until they complete.
+   * @default "none"
+   */
+  buffer?: AgentWidgetStreamAnimationBuffer;
+  /**
+   * Extra animation plugins available to this widget instance. Keys are
+   * plugin names; the matching plugin activates when `type` is set to that
+   * name. Built-in types (`typewriter`, `pop-bubble`) are always registered.
+   */
+  plugins?: Record<string, StreamAnimationPlugin>;
+};
+
 export type AgentWidgetFeatureFlags = {
   showReasoning?: boolean;
   showToolCalls?: boolean;
@@ -694,6 +855,8 @@ export type AgentWidgetFeatureFlags = {
   eventStream?: EventStreamConfig;
   /** Optional artifact sidebar (split pane / mobile drawer) */
   artifacts?: AgentWidgetArtifactsFeature;
+  /** Reveal animation for streaming assistant text. */
+  streamAnimation?: AgentWidgetStreamAnimationFeature;
 };
 
 export type SSEEventRecord = {

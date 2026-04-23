@@ -41,6 +41,11 @@ import {
   resolveFollowStateFromWheel
 } from "./utils/auto-follow";
 import { statusCopy, DEFAULT_OVERLAY_Z_INDEX, PORTALED_OVERLAY_Z_INDEX } from "./utils/constants";
+import {
+  detachAllPlugins,
+  ensurePluginActive,
+  resolveStreamAnimationPlugin,
+} from "./utils/stream-animation";
 import { syncOverlayHostStacking } from "./utils/overlay-host-stacking";
 import { acquireScrollLock } from "./utils/scroll-lock";
 import { isDockedMountMode, resolveDockConfig } from "./utils/dock";
@@ -1671,6 +1676,16 @@ export const createAgentExperience = (
     const panelShadow = resolvePanelChrome(panelPartial?.shadow, defaultPanelShadow);
     const panelBorderRadius = resolvePanelChrome(panelPartial?.borderRadius, defaultPanelBorderRadius);
 
+    // Clearing body.style.cssText below wipes the inline `flex: 1 1 0%` /
+    // `min-height: 0` / `overflow-y: auto` that make the messages area a
+    // scroll container. Between the reset and the mode-specific reapply,
+    // the body's clientHeight == scrollHeight momentarily, so the browser
+    // clamps scrollTop to 0 — and a synchronous restore at the end of this
+    // function runs before layout has reflowed, so the write is also
+    // clamped. Defer the restore to the next frame, once the reapplied
+    // styles have produced a scrollable container again.
+    const prevBodyScrollTop = body.scrollTop;
+
     // Reset all inline styles first to handle mode toggling
     // This ensures styles don't persist when switching between modes
     mount.style.cssText = '';
@@ -1679,6 +1694,18 @@ export const createAgentExperience = (
     container.style.cssText = '';
     body.style.cssText = '';
     footer.style.cssText = '';
+
+    const restoreBodyScrollTop = (): void => {
+      if (prevBodyScrollTop <= 0) return;
+      const ownerWindow = body.ownerDocument.defaultView ?? window;
+      ownerWindow.requestAnimationFrame(() => {
+        if (body.scrollTop === prevBodyScrollTop) return;
+        // If scrollHeight collapsed (content actually shrank), don't fight it
+        const maxScrollTop = body.scrollHeight - body.clientHeight;
+        if (maxScrollTop <= 0) return;
+        body.scrollTop = Math.min(prevBodyScrollTop, maxScrollTop);
+      });
+    };
     
     // Mobile fullscreen: fill entire viewport with no radius/shadow/margins
     if (shouldGoFullscreen) {
@@ -1742,6 +1769,7 @@ export const createAgentExperience = (
       footer.style.flexShrink = '0';
 
       wasMobileFullscreen = true;
+      restoreBodyScrollTop();
       return; // Skip remaining mode logic
     }
 
@@ -1926,6 +1954,8 @@ export const createAgentExperience = (
         : '';
       wrapper.style.cssText += maxHeightStyles + paddingStyles + zIndexStyles;
     }
+
+    restoreBodyScrollTop();
   };
   applyFullHeightStyles();
   // Apply theme variables after applyFullHeightStyles since it resets mount.style.cssText
@@ -2002,6 +2032,23 @@ export const createAgentExperience = (
       cleanupThemeObserver = null;
     }
   });
+
+  // Activate the stream-animation plugin for this widget instance. Plugins
+  // with `styles` inject their CSS into the widget root once; plugins with
+  // `onAttach` (e.g., glyph-cycle's MutationObserver for real glyph tick
+  // loops) can register long-lived DOM listeners here. Detach callbacks are
+  // deferred to widget destroy.
+  const streamAnimationConfig = config.features?.streamAnimation;
+  if (streamAnimationConfig?.type && streamAnimationConfig.type !== "none") {
+    const plugin = resolveStreamAnimationPlugin(
+      streamAnimationConfig.type,
+      streamAnimationConfig.plugins
+    );
+    if (plugin) {
+      ensurePluginActive(plugin, mount);
+      destroyCallbacks.push(() => detachAllPlugins(mount));
+    }
+  }
 
   const suggestionsManager = createSuggestions(suggestions);
   let closeHandler: (() => void) | null = null;
@@ -3914,16 +3961,26 @@ export const createAgentExperience = (
   }
 
   lastScrollTop = body.scrollTop;
+  let lastScrollHeight = body.scrollHeight;
 
   const handleScroll = () => {
     const scrollTop = body.scrollTop;
+    // When content mutates (e.g. stream-animation plugins re-rendering text),
+    // scrollHeight can shrink and force the browser to clamp scrollTop downward.
+    // That emits a scroll event with a negative delta that would otherwise be
+    // misread as the user scrolling up, pausing auto-follow and flashing the
+    // scroll-to-bottom button. Treat those as non-user events.
+    const currentScrollHeight = body.scrollHeight;
+    const scrollHeightShrank = currentScrollHeight < lastScrollHeight;
+    lastScrollHeight = currentScrollHeight;
+
     const { action, nextLastScrollTop } = resolveFollowStateFromScroll({
       following: autoFollow.isFollowing(),
       currentScrollTop: scrollTop,
       lastScrollTop,
       nearBottom: isElementNearBottom(body, BOTTOM_THRESHOLD),
       userScrollThreshold: USER_SCROLL_THRESHOLD,
-      isAutoScrolling: isAutoScrolling || hasPendingAutoScroll,
+      isAutoScrolling: isAutoScrolling || hasPendingAutoScroll || scrollHeightShrank,
       pauseOnUpwardScroll: true,
       pauseWhenAwayFromBottom: false,
       resumeRequiresDownwardScroll: true

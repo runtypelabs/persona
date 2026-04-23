@@ -60,4 +60,23 @@ describe("theme editor scroll-to-bottom controls", () => {
     expect(debugSection?.fields.some((field) => field.path === "features.reasoningDisplay.previewMaxLines")).toBe(true);
     expect(debugSection?.fields.some((field) => field.path === "features.reasoningDisplay.activeMinHeight")).toBe(true);
   });
+
+  it("exposes stream animation controls", () => {
+    const section = CONFIGURE_SECTIONS.find((entry) => entry.id === "stream-animation");
+
+    expect(section).toBeDefined();
+    const paths = section?.fields.map((field) => field.path) ?? [];
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "features.streamAnimation.type",
+        "features.streamAnimation.placeholder",
+        "features.streamAnimation.buffer",
+        "features.streamAnimation.speed",
+        "features.streamAnimation.duration",
+      ])
+    );
+
+    const speedField = section?.fields.find((field) => field.path === "features.streamAnimation.speed");
+    expect(speedField?.parseValue?.("240")).toBe(240);
+  });
 });

@@ -697,6 +697,89 @@ const featuresSectionDef: SectionDef = {
   ],
 };
 
+const streamAnimationSectionDef: SectionDef = {
+  id: 'stream-animation', title: 'Stream Animation', description: 'Control how assistant text appears while streaming.', collapsed: true,
+  fields: [
+    {
+      id: 'stream-anim-type',
+      label: 'Animation',
+      description: 'Reveal effect applied to each assistant reply as it streams.',
+      type: 'select',
+      path: 'features.streamAnimation.type',
+      defaultValue: 'none',
+      options: [
+        { value: 'none', label: 'None' },
+        { value: 'typewriter', label: 'Typewriter' },
+        { value: 'word-fade', label: 'Word fade' },
+        { value: 'letter-rise', label: 'Letter rise' },
+        { value: 'glyph-cycle', label: 'Glyph cycle' },
+        { value: 'wipe', label: 'Wipe' },
+        { value: 'pop-bubble', label: 'Pop bubble' },
+      ],
+    },
+    {
+      id: 'stream-anim-placeholder',
+      label: 'Pre-first-token Placeholder',
+      description: 'What to show before the first token arrives.',
+      type: 'select',
+      path: 'features.streamAnimation.placeholder',
+      defaultValue: 'none',
+      options: [
+        { value: 'none', label: 'Typing indicator (default)' },
+        { value: 'skeleton', label: 'Skeleton shimmer' },
+      ],
+    },
+    {
+      id: 'stream-anim-buffer',
+      label: 'Content Buffering',
+      description: 'Trim in-progress units so only complete words/lines reveal.',
+      type: 'select',
+      path: 'features.streamAnimation.buffer',
+      defaultValue: 'none',
+      options: [
+        { value: 'none', label: 'None — stream every character' },
+        { value: 'word', label: 'Word — hold until whitespace' },
+        { value: 'line', label: 'Line — hold until newline' },
+      ],
+    },
+    {
+      id: 'stream-anim-speed',
+      label: 'Per-unit Duration (ms)',
+      description: 'Animation length for each character or word.',
+      type: 'select',
+      path: 'features.streamAnimation.speed',
+      defaultValue: 120,
+      options: [
+        { value: '40', label: '40ms — snappy' },
+        { value: '80', label: '80ms' },
+        { value: '120', label: '120ms (default)' },
+        { value: '200', label: '200ms' },
+        { value: '320', label: '320ms' },
+        { value: '480', label: '480ms — slow' },
+      ],
+      formatValue: (v: unknown) => String(v ?? 120),
+      parseValue: (v: unknown) => Number(v),
+    },
+    {
+      id: 'stream-anim-duration',
+      label: 'Container Duration (ms)',
+      description: 'Length of container-level effects (pop-bubble, custom plugins).',
+      type: 'select',
+      path: 'features.streamAnimation.duration',
+      defaultValue: 1800,
+      options: [
+        { value: '600', label: '600ms' },
+        { value: '1200', label: '1200ms' },
+        { value: '1800', label: '1800ms (default)' },
+        { value: '2400', label: '2400ms' },
+        { value: '3600', label: '3600ms — slow' },
+      ],
+      formatValue: (v: unknown) => String(v ?? 1800),
+      parseValue: (v: unknown) => Number(v),
+    },
+  ],
+};
+
 const attachmentsSectionDef: SectionDef = {
   id: 'attachments-config', title: 'Attachments', collapsed: true,
   fields: [
@@ -773,7 +856,7 @@ export const CONFIGURE_SUB_GROUPS: SubGroupDef[] = [
   { label: 'Content', sections: [copySectionDef, suggestionsSectionDef] },
   { label: 'Layout', sections: [generalLayoutSectionDef, headerLayoutSectionDef, messagesLayoutSectionDef, messageActionsSectionDef] },
   { label: 'Widget', sections: [launcherBasicsSectionDef, launcherAdvancedSectionDef, sendButtonSectionDef, closeButtonSectionDef, clearChatSectionDef, statusIndicatorSectionDef] },
-  { label: 'Features', sections: [featuresSectionDef, attachmentsSectionDef, artifactsSectionDef, artifactCustomizationSectionDef] },
+  { label: 'Features', sections: [featuresSectionDef, streamAnimationSectionDef, attachmentsSectionDef, artifactsSectionDef, artifactCustomizationSectionDef] },
   { label: 'Developer', collapsedByDefault: true, sections: [apiIntegrationSectionDef, debugSectionDef, markdownSectionDef] },
 ];
 

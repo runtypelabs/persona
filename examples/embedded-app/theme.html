@@ -237,6 +237,21 @@
                 </div>
               </div>
             </div>
+            <div class="preview-pill-wrapper preview-transcript-wrapper">
+              <button id="preview-transcript-btn" class="preview-pill-btn preview-transcript-btn" type="button"
+                      aria-label="Add preview transcript entry" title="Add preview transcript entry">
+                <span class="preview-pill-theme-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </span>
+                <span id="preview-transcript-count" class="preview-transcript-count" aria-hidden="true"></span>
+                <span class="preview-pill-chevron" aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+              </button>
+              <div id="preview-transcript-dropdown" class="preview-pill-dropdown preview-transcript-dropdown hidden" role="menu">
+                <!-- populated by initPreviewTranscriptToolbar -->
+              </div>
+            </div>
             <div id="preview-pill-backdrop" class="preview-pill-backdrop" aria-hidden="true"></div>
           </div>
         </div>
