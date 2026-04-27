@@ -1,7 +1,8 @@
 import type {
   AgentWidgetMessage,
   AgentWidgetStorageAdapter,
-  AgentWidgetStoredState
+  AgentWidgetStoredState,
+  PersonaArtifactRecord
 } from "../types";
 
 const safeJsonParse = (value: string | null) => {
@@ -21,6 +22,12 @@ const sanitizeMessages = (messages: AgentWidgetMessage[]) =>
   messages.map((message) => ({
     ...message,
     streaming: false
+  }));
+
+const sanitizeArtifacts = (artifacts: PersonaArtifactRecord[]) =>
+  artifacts.map((artifact) => ({
+    ...artifact,
+    status: "complete" as const
   }));
 
 export const createLocalStorageAdapter = (
@@ -45,7 +52,8 @@ export const createLocalStorageAdapter = (
       try {
         const payload: AgentWidgetStoredState = {
           ...state,
-          messages: state.messages ? sanitizeMessages(state.messages) : undefined
+          messages: state.messages ? sanitizeMessages(state.messages) : undefined,
+          artifacts: state.artifacts ? sanitizeArtifacts(state.artifacts) : undefined
         };
         storage.setItem(key, JSON.stringify(payload));
       } catch (error) {

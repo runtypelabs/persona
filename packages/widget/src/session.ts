@@ -81,8 +81,21 @@ export class AgentWidgetSession {
     this.messages = this.sortMessages(this.messages);
     this.client = new AgentWidgetClient(config);
 
+    // Hydrate artifacts from config (mirrors `initialMessages`). Restored
+    // records are forced to `status: "complete"` — a mid-stream artifact should
+    // never reappear after a refresh with its skeleton still showing.
+    for (const rec of config.initialArtifacts ?? []) {
+      this.artifacts.set(rec.id, { ...rec, status: "complete" });
+    }
+    if (config.initialSelectedArtifactId != null) {
+      this.selectedArtifactId = config.initialSelectedArtifactId;
+    }
+
     if (this.messages.length) {
       this.callbacks.onMessagesChanged([...this.messages]);
+    }
+    if (this.artifacts.size > 0) {
+      this.emitArtifactsState();
     }
     this.callbacks.onStatusChanged(this.status);
   }
@@ -968,6 +981,194 @@ export class AgentWidgetSession {
     }
   }
 
+  /**
+   * Resolve a paused `ask_user_question` LOCAL tool call.
+   *
+   * When the server emits `step_await` for `ask_user_question`, the widget
+   * renders the answer-pill sheet and calls this method once the user
+   * picks. Steps:
+   *   1. POST the answer to `/resume` via `client.resumeFlow`.
+   *   2. Pipe the resulting SSE stream through `connectStream()` so the
+   *      paused agent execution continues.
+   *   3. Append a user-visible bubble with the answer text so the
+   *      transcript reads naturally.
+   */
+  /**
+   * Persist in-progress answers and the current page index for a multi-question
+   * `ask_user_question` payload, so a refresh resumes on the same page with
+   * prior answers intact. Called by ui.ts on every Back/Next/pick interaction.
+   */
+  public persistAskUserQuestionProgress(
+    toolMessage: AgentWidgetMessage,
+    progress: {
+      answers: Record<string, string | string[]>;
+      currentIndex: number;
+    }
+  ): void {
+    const current = this.messages.find((m) => m.id === toolMessage.id);
+    if (!current) return;
+    this.upsertMessage({
+      ...current,
+      agentMetadata: {
+        ...current.agentMetadata,
+        askUserQuestionAnswers: progress.answers,
+        askUserQuestionIndex: progress.currentIndex,
+      },
+    });
+  }
+
+  /**
+   * Flip an `ask_user_question` tool message from awaiting → answered so
+   * render passes stop re-mounting its answer-pill sheet. Idempotent.
+   * When `answers` is provided, persists the full structured answer Record
+   * atomically with the answered flag — guarding against later events that
+   * could re-emit the tool message and clobber the per-pick persisted
+   * answers via top-level merge.
+   */
+  public markAskUserQuestionResolved(
+    toolMessage: AgentWidgetMessage,
+    answers?: Record<string, string | string[]>
+  ): void {
+    const current = this.messages.find((m) => m.id === toolMessage.id);
+    if (!current) return;
+    this.upsertMessage({
+      ...current,
+      agentMetadata: {
+        ...current.agentMetadata,
+        awaitingLocalTool: false,
+        askUserQuestionAnswered: true,
+        ...(answers ? { askUserQuestionAnswers: answers } : {}),
+      },
+    });
+  }
+
+  public async resolveAskUserQuestion(
+    toolMessage: AgentWidgetMessage,
+    answer: string | Record<string, string | string[]>
+  ): Promise<void> {
+    // Idempotent — guards against rapid double-clicks on answer pills before
+    // the re-render swaps the card to its collapsed/answered state.
+    const live = this.messages.find((m) => m.id === toolMessage.id);
+    if (live?.agentMetadata?.askUserQuestionAnswered === true) return;
+
+    const executionId = toolMessage.agentMetadata?.executionId;
+    const toolName = toolMessage.toolCall?.name;
+    if (!executionId || !toolName) {
+      this.callbacks.onError?.(
+        new Error(
+          "resolveAskUserQuestion: message is missing executionId or toolCall.name"
+        )
+      );
+      return;
+    }
+
+    // Flip answered flag first so the next render skips the sheet re-mount,
+    // avoiding the race between removeAskUserQuestionSheet's 180ms slide-out
+    // timer and the renders that fire as the resume stream lands. Pass the
+    // structured answer Record (when present) so it's atomically persisted
+    // alongside the flag — the answered-state review card depends on
+    // `agentMetadata.askUserQuestionAnswers` being populated at render time.
+    //
+    // For single-question payloads, callers (built-in pick handler, plugins)
+    // resolve with a plain string. Derive a `{ [questionText]: answer }` Record
+    // from the toolCall args so the answered-card render path is consistent
+    // with grouped flows.
+    let structuredAnswers: Record<string, string | string[]> | undefined =
+      typeof answer === "string" ? undefined : answer;
+    if (structuredAnswers === undefined && typeof answer === "string") {
+      const args = toolMessage.toolCall?.args as
+        | { questions?: Array<{ question?: unknown }> }
+        | undefined;
+      const questions = Array.isArray(args?.questions) ? args!.questions : [];
+      if (questions.length === 1) {
+        const qText = typeof questions[0]?.question === "string"
+          ? (questions[0].question as string)
+          : "";
+        if (qText) structuredAnswers = { [qText]: answer };
+      }
+    }
+    this.markAskUserQuestionResolved(toolMessage, structuredAnswers);
+
+    // Inject Q→A pair messages — one assistant bubble per question, one user
+    // bubble per answer — so the transcript reads like a normal conversation.
+    // The original ask_user_question tool message is suppressed by the
+    // renderer once `askUserQuestionAnswered` is true. Skipped questions get
+    // a muted italic `*Skipped*` user bubble (rendered through the standard
+    // markdown pipeline).
+    const toolCallId = toolMessage.toolCall!.id;
+    const args = toolMessage.toolCall?.args as
+      | { questions?: Array<{ question?: unknown; header?: unknown }> }
+      | undefined;
+    const questions = Array.isArray(args?.questions) ? args!.questions : [];
+    if (questions.length === 0) {
+      const fallback =
+        typeof answer === "string"
+          ? answer
+          : Object.entries(answer)
+              .map(
+                ([q, v]) => `${q}: ${Array.isArray(v) ? v.join(", ") : v}`
+              )
+              .join(" | ");
+      this.appendMessage({
+        id: `ask-user-answer-${toolCallId}`,
+        role: "user",
+        content: fallback,
+        createdAt: new Date().toISOString(),
+        streaming: false,
+        sequence: this.nextSequence(),
+      });
+    } else {
+      const stored = structuredAnswers ?? {};
+      questions.forEach((p, i) => {
+        const qText = typeof p?.question === "string" ? p.question : "";
+        if (!qText) return;
+        const ans = stored[qText];
+        const answerStr = Array.isArray(ans)
+          ? ans.join(", ")
+          : typeof ans === "string"
+            ? ans
+            : "";
+        this.appendMessage({
+          id: `ask-user-q-${toolCallId}-${i}`,
+          role: "assistant",
+          content: qText,
+          createdAt: new Date().toISOString(),
+          streaming: false,
+          sequence: this.nextSequence(),
+        });
+        this.appendMessage({
+          id: `ask-user-a-${toolCallId}-${i}`,
+          role: "user",
+          content: answerStr || "*Skipped*",
+          createdAt: new Date().toISOString(),
+          streaming: false,
+          sequence: this.nextSequence(),
+        });
+      });
+    }
+
+    try {
+      const response = await this.client.resumeFlow(executionId, {
+        [toolName]: answer,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.error ?? `Resume failed: ${response.status}`
+        );
+      }
+
+      if (response.body) {
+        await this.connectStream(response.body);
+      }
+    } catch (error) {
+      this.callbacks.onError?.(
+        error instanceof Error ? error : new Error(String(error))
+      );
+    }
+  }
+
   public cancel() {
     this.abortController?.abort();
     this.abortController = null;
@@ -1121,6 +1322,18 @@ export class AgentWidgetSession {
     this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);
+  }
+
+  public hydrateArtifacts(
+    artifacts: PersonaArtifactRecord[],
+    selectedId: string | null = null
+  ) {
+    this.artifacts.clear();
+    for (const rec of artifacts) {
+      this.artifacts.set(rec.id, { ...rec, status: "complete" });
+    }
+    this.selectedArtifactId = selectedId;
+    this.emitArtifactsState();
   }
 
   private handleEvent = (event: AgentWidgetEvent) => {
@@ -1317,9 +1530,35 @@ export class AgentWidgetSession {
       return;
     }
 
-    this.messages = this.messages.map((existing, idx) =>
-      idx === index ? { ...existing, ...withSequence } : existing
-    );
+    this.messages = this.messages.map((existing, idx) => {
+      if (idx !== index) return existing;
+      const merged = { ...existing, ...withSequence };
+      // Preserve `ask_user_question` answered state across re-emissions.
+      // Top-level merge would otherwise replace `agentMetadata` wholesale —
+      // post-resume events (e.g. `tool_complete` re-emitted from a stale
+      // client-side cache) would wipe `askUserQuestionAnswered` and
+      // `askUserQuestionAnswers`, causing the answered review card to
+      // lose its answers and revert to "(skipped)" placeholders.
+      if (
+        existing.agentMetadata?.askUserQuestionAnswered === true &&
+        withSequence.agentMetadata
+      ) {
+        merged.agentMetadata = {
+          ...withSequence.agentMetadata,
+          askUserQuestionAnswered: true,
+          ...(existing.agentMetadata.askUserQuestionAnswers
+            ? {
+                askUserQuestionAnswers:
+                  existing.agentMetadata.askUserQuestionAnswers,
+              }
+            : {}),
+          // Keep awaiting flag false once resolved — never let a stale
+          // re-emit flip us back to awaiting.
+          awaitingLocalTool: false,
+        };
+      }
+      return merged;
+    });
     this.messages = this.sortMessages(this.messages);
     this.callbacks.onMessagesChanged([...this.messages]);
   }

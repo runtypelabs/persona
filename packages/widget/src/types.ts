@@ -205,6 +205,31 @@ export type AgentMessageMetadata = {
    * or `prompt` step inside the nested flow). Stable key for that step.
    */
   parentStepId?: string;
+  /**
+   * Set to `true` on a tool-variant message produced from a `step_await`
+   * event (`awaitReason: "local_tool_required"`). Signals to UI code that
+   * the tool call is a LOCAL tool and the server is paused waiting for a
+   * `POST /v1/dispatch/resume` with the user's answer keyed by tool name.
+   */
+  awaitingLocalTool?: boolean;
+  /**
+   * Set to `true` once the user has picked / typed / dismissed an answer for
+   * an `ask_user_question` tool call, so renderers stop re-mounting the
+   * answer-pill sheet for this tool call on subsequent render passes.
+   */
+  askUserQuestionAnswered?: boolean;
+  /**
+   * In-progress answers for a multi-question `ask_user_question` payload,
+   * keyed by question text. Persisted across refresh so the user lands back
+   * where they were if the page reloads mid-flow. Cleared once
+   * `askUserQuestionAnswered` flips to `true`.
+   */
+  askUserQuestionAnswers?: Record<string, string | string[]>;
+  /**
+   * Current page index for a multi-question `ask_user_question` payload's
+   * paginated stepper. Persists alongside `askUserQuestionAnswers`.
+   */
+  askUserQuestionIndex?: number;
 };
 
 export type AgentWidgetRequestMiddlewareContext = {
@@ -270,6 +295,8 @@ export type AgentWidgetActionHandler = (
 export type AgentWidgetStoredState = {
   messages?: AgentWidgetMessage[];
   metadata?: Record<string, unknown>;
+  artifacts?: PersonaArtifactRecord[];
+  selectedArtifactId?: string | null;
 };
 
 export interface AgentWidgetStorageAdapter {
@@ -857,6 +884,118 @@ export type AgentWidgetFeatureFlags = {
   artifacts?: AgentWidgetArtifactsFeature;
   /** Reveal animation for streaming assistant text. */
   streamAnimation?: AgentWidgetStreamAnimationFeature;
+  /**
+   * Built-in interactive answer-pill sheet shown when the assistant invokes
+   * the `ask_user_question` tool. Slides up over the composer with tappable
+   * pills + optional free-text input.
+   */
+  askUserQuestion?: AgentWidgetAskUserQuestionFeature;
+};
+
+/**
+ * Single selectable option in an `ask_user_question` prompt.
+ * Mirrors Anthropic's AskUserQuestion schema.
+ */
+export type AskUserQuestionOption = {
+  /** Pill label (required). */
+  label: string;
+  /** Optional long-form description (shown as a subtitle on tap-hover). */
+  description?: string;
+  /** Optional rich preview — reserved for future rendering; ignored in v1. */
+  preview?: string;
+};
+
+/**
+ * A single question in an `ask_user_question` tool call.
+ * The tool may carry 1–8 prompts. When more than one is supplied, the built-in
+ * renderer paginates them as a "Question N of M" stepper with Back / Next /
+ * Submit-all controls; single-question payloads render without stepper chrome.
+ */
+export type AskUserQuestionPrompt = {
+  /** The question text shown to the user. */
+  question: string;
+  /** Optional short header label (≤12 chars) used as a compact group title. */
+  header?: string;
+  /** 2–4 selectable options. */
+  options: AskUserQuestionOption[];
+  /** When true, the user can pick multiple options and submit together. Default false. */
+  multiSelect?: boolean;
+  /** When true, a free-text "Other…" pill expands to an input. Default true. */
+  allowFreeText?: boolean;
+};
+
+/** Parsed payload of an `ask_user_question` tool call. */
+export type AskUserQuestionPayload = {
+  /** 1–8 questions. Anything beyond the renderer's cap is truncated with a console warning. */
+  questions: AskUserQuestionPrompt[];
+};
+
+/**
+ * Style overrides for the answer-pill sheet. All values are raw CSS strings
+ * and are plumbed through as CSS custom properties on the sheet root.
+ */
+export type AgentWidgetAskUserQuestionStyles = {
+  sheetBackground?: string;
+  sheetBorder?: string;
+  sheetShadow?: string;
+  pillBackground?: string;
+  pillBackgroundSelected?: string;
+  pillTextColor?: string;
+  pillTextColorSelected?: string;
+  pillBorderRadius?: string;
+  customInputBackground?: string;
+};
+
+/**
+ * Feature config for the built-in `ask_user_question` answer-pill sheet.
+ * When a tool call with the name `ask_user_question` arrives, the widget
+ * renders an interactive sheet over the composer in place of the generic
+ * tool bubble.
+ */
+export type AgentWidgetAskUserQuestionFeature = {
+  /** Enable the feature. Defaults to true. When false, `ask_user_question` renders as a regular tool bubble. */
+  enabled?: boolean;
+  /** Slide-in animation duration in ms. Defaults to 180. */
+  slideInMs?: number;
+  /** Label for the free-text pill. Defaults to "Other…". */
+  freeTextLabel?: string;
+  /** Placeholder text in the free-text input. Defaults to "Type your answer…". */
+  freeTextPlaceholder?: string;
+  /** Button label for submitting multi-select / free-text answers. Defaults to "Send". */
+  submitLabel?: string;
+  /** Button label advancing to the next question in grouped (paginated) payloads. Defaults to "Next". */
+  nextLabel?: string;
+  /** Button label moving back to the previous question in grouped payloads. Defaults to "Back". */
+  backLabel?: string;
+  /** Button label submitting all answers from the final page of a grouped payload. Defaults to "Submit all". */
+  submitAllLabel?: string;
+  /**
+   * In grouped (multi-question) mode, auto-advance to the next page after a
+   * single-select pill pick or free-text submit on intermediate pages.
+   * Defaults to `true`. The final page never auto-submits — users always
+   * confirm with an explicit "Submit all" click. Multi-select pages always
+   * require an explicit Next regardless of this setting.
+   */
+  groupedAutoAdvance?: boolean;
+  /**
+   * Visual layout for the option list.
+   * - `"rows"` (default) — full-width stacked rows with always-visible
+   *   descriptions, right-edge number badges (single-select) or checkboxes
+   *   (multi-select), and an always-visible inline "Other" input.
+   * - `"pills"` — legacy compact pill list with horizontal wrap; description
+   *   surfaces as a tooltip and the "Other…" pill expands on click.
+   */
+  layout?: "rows" | "pills";
+  /**
+   * Button label for skipping the current question in grouped payloads.
+   * Defaults to "Skip". On intermediate pages Skip advances without recording
+   * an answer; on the final page Skip submits the partial answer record
+   * (skipped questions absent from the resolved object). For single-question
+   * payloads Skip behaves like dismiss.
+   */
+  skipLabel?: string;
+  /** Style overrides for the sheet and pills. */
+  styles?: AgentWidgetAskUserQuestionStyles;
 };
 
 export type SSEEventRecord = {
@@ -2823,6 +2962,17 @@ export type AgentWidgetConfig = {
   autoFocusInput?: boolean;
   launcher?: AgentWidgetLauncherConfig;
   initialMessages?: AgentWidgetMessage[];
+  /**
+   * Artifacts to hydrate into the pane at init. Typically populated from
+   * `storageAdapter.load()` alongside `initialMessages` so the artifact pane
+   * survives a page refresh.
+   */
+  initialArtifacts?: PersonaArtifactRecord[];
+  /**
+   * Which artifact id (if any) should be selected in the pane at init. Paired
+   * with `initialArtifacts`.
+   */
+  initialSelectedArtifactId?: string | null;
   suggestionChips?: string[];
   suggestionChipsConfig?: AgentWidgetSuggestionChipsConfig;
   debug?: boolean;

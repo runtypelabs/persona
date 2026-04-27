@@ -86,8 +86,23 @@ export type {
   EventStreamToolbarRenderContext,
   EventStreamPayloadRenderContext,
   // Controller event map
-  AgentWidgetControllerEventMap
+  AgentWidgetControllerEventMap,
+  // Ask-user-question (built-in answer-pill sheet) types
+  AskUserQuestionPayload,
+  AskUserQuestionPrompt,
+  AskUserQuestionOption,
+  AgentWidgetAskUserQuestionFeature,
+  AgentWidgetAskUserQuestionStyles
 } from "./types";
+
+export {
+  ASK_USER_QUESTION_TOOL_NAME,
+  createAskUserQuestionBubble,
+  ensureAskUserQuestionSheet,
+  removeAskUserQuestionSheet,
+  isAskUserQuestionMessage,
+  parseAskUserQuestionPayload
+} from "./components/ask-user-question-bubble";
 
 export { initAgentWidgetFn as initAgentWidget };
 export {

@@ -252,6 +252,42 @@ describe('theme utils', () => {
     expect(cssVars['--persona-scroll-to-bottom-icon-size']).toBe('14px');
   });
 
+  it('maps introCard component tokens to dedicated CSS variables', () => {
+    const theme = createTheme({
+      components: {
+        introCard: {
+          background: 'palette.colors.accent.50',
+          borderRadius: 'palette.radius.xl',
+          padding: 'semantic.spacing.lg',
+          shadow: '0 10px 30px rgba(53, 44, 131, 0.15)',
+        },
+      },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-components-introCard-background']).toBe('#ecfeff');
+    expect(cssVars['--persona-components-introCard-borderRadius']).toBe('0.75rem');
+    expect(cssVars['--persona-components-introCard-padding']).toBe('1.5rem');
+    expect(cssVars['--persona-components-introCard-shadow']).toBe(
+      '0 10px 30px rgba(53, 44, 131, 0.15)'
+    );
+    expect(cssVars['--persona-intro-card-bg']).toBe('#ecfeff');
+    expect(cssVars['--persona-intro-card-radius']).toBe('0.75rem');
+    expect(cssVars['--persona-intro-card-padding']).toBe('1.5rem');
+    expect(cssVars['--persona-intro-card-shadow']).toBe(
+      '0 10px 30px rgba(53, 44, 131, 0.15)'
+    );
+  });
+
+  it('falls back to the legacy intro-card shadow when no token is set', () => {
+    const theme = createTheme({});
+    const cssVars = themeToCssVariables(theme);
+    expect(cssVars['--persona-intro-card-shadow']).toBe(
+      '0 5px 15px rgba(15, 23, 42, 0.08)'
+    );
+  });
+
   it('lets config.toolCall.shadow override theme tool bubble shadow on the root element', () => {
     const el = document.createElement('div');
     applyThemeVariables(el, {

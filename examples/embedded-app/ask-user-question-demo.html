@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css">
+    <link rel="icon" href="/favicon.ico" />
+    <title>Ask User Question - Persona</title>
+    <style>
+      body {
+        padding: 1.5rem;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      h1 { margin: 0 0 0.25rem 0; }
+      .subtitle { color: var(--muted); margin: 0 0 1.5rem 0; font-size: 0.875rem; }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 1.5rem;
+        align-items: start;
+      }
+
+      .controls {
+        background: var(--card);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem;
+        box-shadow: var(--shadow-md);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-self: start;
+      }
+      .controls h2 {
+        font-size: 0.9375rem;
+        margin: 0;
+        color: var(--foreground);
+      }
+      .section { display: flex; flex-direction: column; gap: 0.5rem; }
+      .section label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+
+      .mode-group {
+        display: flex;
+        gap: 0.375rem;
+        flex-wrap: wrap;
+      }
+      .mode-btn {
+        padding: 0.375rem 0.75rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--foreground);
+        font-size: 0.8125rem;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .mode-btn:hover { background: var(--border); }
+      .mode-btn.active {
+        border-color: #7c3aed;
+        background: rgba(124, 58, 237, 0.1);
+        color: #7c3aed;
+        font-weight: 600;
+      }
+      .hint {
+        margin: 0.25rem 0 0 0;
+        font-size: 0.75rem;
+        line-height: 1.4;
+        color: var(--muted);
+      }
+
+      .btn-group { display: flex; flex-direction: column; gap: 0.5rem; }
+      .btn-group button {
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--foreground);
+        font-size: 0.8125rem;
+        cursor: pointer;
+        text-align: left;
+      }
+      .btn-group button:hover { background: var(--border); }
+
+      .btn-row { display: flex; gap: 0.5rem; }
+      .btn-row button { flex: 1; }
+
+      #log {
+        font-size: 0.75rem;
+        font-family: monospace;
+        background: #111;
+        color: #aaa;
+        border-radius: var(--radius-sm);
+        padding: 0.5rem;
+        max-height: 160px;
+        overflow-y: auto;
+        line-height: 1.6;
+      }
+      #log .answered { color: #34d399; }
+      #log .dismissed { color: #f87171; }
+      #log .info { color: #60a5fa; }
+
+      /* Right column — bare container so the widget sits directly on the
+         page background. The widget brings its own surface, header, and
+         shadow, so wrapping it in another card was redundant chrome. */
+      .widget-shell {
+        height: 680px;
+      }
+      #widget-mount {
+        height: 100%;
+        width: 100%;
+      }
+
+      /* Mobile-only summary bar — hidden on desktop. */
+      .controls-summary { display: none; }
+      .controls-close { display: none; }
+      .controls-backdrop { display: none; }
+
+      @media (max-width: 768px) {
+        body { padding: 0.75rem; }
+        .subtitle { margin-bottom: 1rem; }
+
+        .layout {
+          grid-template-columns: 1fr;
+          gap: 0.75rem;
+        }
+
+        /* Compact summary bar visible above the widget on mobile. */
+        .controls-summary {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+          padding: 0.6rem 0.75rem;
+          background: var(--card);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-md);
+        }
+        .summary-chip {
+          font-size: 0.7rem;
+          font-weight: 600;
+          letter-spacing: 0.03em;
+          color: var(--muted);
+          background: transparent;
+          padding: 0.25rem 0.55rem;
+          border: 1px solid var(--border);
+          border-radius: 999px;
+          white-space: nowrap;
+        }
+        .summary-edit {
+          margin-left: auto;
+          padding: 0.4rem 0.85rem;
+          font-size: 0.8125rem;
+          font-weight: 600;
+          border-radius: var(--radius-sm);
+          border: 1px solid #7c3aed;
+          background: #7c3aed;
+          color: #fafafa;
+          cursor: pointer;
+        }
+        .summary-edit:hover { filter: brightness(0.95); }
+
+        /* Controls become a left-side drawer over the widget. */
+        .controls {
+          position: fixed;
+          top: 0;
+          left: 0;
+          bottom: 0;
+          width: min(420px, 92vw);
+          margin: 0;
+          border-radius: 0;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+          padding: 1rem 1rem 1.25rem;
+          overflow-y: auto;
+          transform: translateX(-100%);
+          transition: transform 240ms ease;
+          z-index: 50;
+        }
+        body.controls-open .controls { transform: translateX(0); }
+
+        .controls-close {
+          display: inline-flex;
+          align-self: flex-end;
+          width: 2rem;
+          height: 2rem;
+          align-items: center;
+          justify-content: center;
+          border: none;
+          background: transparent;
+          color: var(--foreground);
+          font-size: 1.4rem;
+          line-height: 1;
+          border-radius: 999px;
+          cursor: pointer;
+        }
+        .controls-close:hover { background: var(--border); }
+
+        .controls-backdrop {
+          display: block;
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.4);
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 200ms ease;
+          z-index: 40;
+        }
+        body.controls-open .controls-backdrop {
+          opacity: 1;
+          pointer-events: auto;
+        }
+
+        /* Let the widget fill the remaining viewport on mobile. */
+        .widget-shell {
+          height: calc(100dvh - 8rem);
+          min-height: 420px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Ask User Question</h1>
+    <p class="subtitle">
+      The <code>ask_user_question</code> local-tool sheet — built-in stacked layout vs. the horizontal-pill layout shipped as a plugin example. Pick a preset and click Trigger to inject a simulated tool call.
+    </p>
+
+    <div class="controls-summary">
+      <span class="summary-chip" data-summary="variant">Variant: Built-in</span>
+      <span class="summary-chip" data-summary="autoadvance">Auto-advance: On</span>
+      <button class="summary-edit" type="button" id="btn-controls-toggle">
+        Edit settings
+      </button>
+    </div>
+    <div class="controls-backdrop" id="controls-backdrop"></div>
+
+    <div class="layout">
+      <div class="controls">
+        <button class="controls-close" type="button" id="btn-controls-close" aria-label="Close settings">×</button>
+        <div class="section">
+          <label>Variant</label>
+          <div class="mode-group" id="variant-selector">
+            <button class="mode-btn active" data-variant="builtin">Built-in (stacked)</button>
+            <button class="mode-btn" data-variant="plugin">Plugin (horizontal pills)</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>Auto-advance (grouped)</label>
+          <div class="mode-group" id="autoadvance-selector">
+            <button class="mode-btn active" data-autoadvance="on">On</button>
+            <button class="mode-btn" data-autoadvance="off">Off</button>
+          </div>
+          <p class="hint">
+            When on, picking a single-select pill or pressing Send on free-text
+            jumps to the next question automatically. The final page always waits
+            for an explicit "Submit all" click. Multi-select pages always require Next.
+          </p>
+        </div>
+
+        <div class="section">
+          <label>Question Presets</label>
+          <div class="btn-group" id="preset-group">
+            <button data-preset="single5">Single-select (5 short options)</button>
+            <button data-preset="longLabels">Single-select (long labels)</button>
+            <button data-preset="multi">Multi-select</button>
+            <button data-preset="freeText">Free-text only</button>
+            <button data-preset="grouped3">Grouped (3 mixed)</button>
+            <button data-preset="grouped5">Grouped (5 short)</button>
+            <button data-preset="grouped8">Grouped (8 — cap)</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>Actions</label>
+          <div class="btn-row">
+            <button id="btn-reset">Reset transcript</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>Events</label>
+          <div id="log"></div>
+        </div>
+      </div>
+
+      <div class="widget-shell">
+        <div id="widget-mount"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      import "@runtypelabs/persona/widget.css";
+      import "./src/index.css";
+      import { createAgentExperience } from "@runtypelabs/persona";
+      import { horizontalPillsAskPlugin } from "./src/plugins/ask-horizontal-pills-plugin.js";
+
+      const mount = document.getElementById("widget-mount");
+      const logEl = document.getElementById("log");
+      const log = (msg, cls = "info") => {
+        const line = document.createElement("div");
+        line.className = cls;
+        line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      };
+
+      let variant = "builtin";
+      let autoAdvance = true;
+      let controller = null;
+
+      const PRESETS = {
+        single5: {
+          questions: [{
+            question: "Which tone best fits your brand voice on the homepage?",
+            options: [
+              { label: "Trust-first" },
+              { label: "Story-driven" },
+              { label: "Catalog-forward" },
+              { label: "Promotional" },
+              { label: "Editorial" },
+            ],
+            allowFreeText: true,
+          }],
+        },
+        longLabels: {
+          questions: [{
+            question: "Who is the primary audience for this homepage?",
+            options: [
+              { label: "Direct-to-consumer brands under $1M ARR" },
+              { label: "Mid-market retailers with wholesale channels" },
+              { label: "Enterprise catalog publishers" },
+              { label: "Hobbyist / bootstrapped operators" },
+            ],
+            allowFreeText: false,
+          }],
+        },
+        multi: {
+          questions: [{
+            question: "Which sections should the homepage include?",
+            options: [
+              { label: "Hero" },
+              { label: "Best sellers" },
+              { label: "Testimonials" },
+              { label: "Newsletter signup" },
+              { label: "Brand story" },
+            ],
+            multiSelect: true,
+            allowFreeText: false,
+          }],
+        },
+        freeText: {
+          questions: [{
+            question: "Describe the primary call-to-action in one sentence.",
+            options: [],
+            allowFreeText: true,
+          }],
+        },
+        grouped3: {
+          questions: [
+            {
+              question: "Which tone fits your brand voice?",
+              header: "Tone",
+              options: [
+                { label: "Trust-first" },
+                { label: "Story-driven" },
+                { label: "Catalog-forward" },
+                { label: "Promotional" },
+              ],
+              allowFreeText: true,
+            },
+            {
+              question: "Which sections should the homepage include?",
+              header: "Sections",
+              options: [
+                { label: "Hero" },
+                { label: "Best sellers" },
+                { label: "Testimonials" },
+                { label: "Newsletter signup" },
+              ],
+              multiSelect: true,
+              allowFreeText: false,
+            },
+            {
+              question: "Describe the primary CTA in one sentence.",
+              header: "CTA",
+              options: [],
+              allowFreeText: true,
+            },
+          ],
+        },
+        grouped5: {
+          questions: [
+            {
+              question: "Which industry is your store in?",
+              header: "Industry",
+              options: [
+                { label: "Apparel" },
+                { label: "Beauty" },
+                { label: "Home goods" },
+                { label: "Food & beverage" },
+              ],
+            },
+            {
+              question: "What's your average order value?",
+              header: "AOV",
+              options: [
+                { label: "Under $50" },
+                { label: "$50–$150" },
+                { label: "$150–$500" },
+                { label: "$500+" },
+              ],
+            },
+            {
+              question: "Who's your primary audience?",
+              header: "Audience",
+              options: [
+                { label: "Gen Z" },
+                { label: "Millennials" },
+                { label: "Gen X" },
+                { label: "Boomers" },
+              ],
+            },
+            {
+              question: "What's your primary growth channel?",
+              header: "Channel",
+              options: [
+                { label: "Paid social" },
+                { label: "SEO" },
+                { label: "Influencer" },
+                { label: "Email" },
+              ],
+            },
+            {
+              question: "Which goal matters most this quarter?",
+              header: "Goal",
+              options: [
+                { label: "More traffic" },
+                { label: "Higher conversion" },
+                { label: "Bigger AOV" },
+                { label: "Repeat purchase" },
+              ],
+            },
+          ],
+        },
+        grouped8: {
+          questions: Array.from({ length: 8 }, (_, i) => ({
+            question: `Step ${i + 1} — pick an option`,
+            header: `Step ${i + 1}`,
+            options: [
+              { label: `${i + 1}-A` },
+              { label: `${i + 1}-B` },
+              { label: `${i + 1}-C` },
+            ],
+          })),
+        },
+      };
+
+      function createWidget() {
+        if (controller) controller.destroy();
+        mount.innerHTML = "";
+        const plugins = variant === "plugin" ? [horizontalPillsAskPlugin] : [];
+        controller = createAgentExperience(mount, {
+          apiUrl: "https://noop.test/chat",
+          launcher: { enabled: false },
+          persistState: false,
+          plugins,
+          features: {
+            askUserQuestion: { groupedAutoAdvance: autoAdvance },
+          },
+          copy: {
+            welcomeTitle: "Ask User Question Demo",
+            welcomeSubtitle: "Trigger a preset question from the left panel.",
+          },
+        });
+        log(`Widget initialized — variant: ${variant}, autoAdvance: ${autoAdvance}`, "info");
+      }
+
+      let askCounter = 0;
+      function triggerQuestion(key) {
+        const args = PRESETS[key];
+        if (!args || !controller) return;
+        const id = `demo-ask-${++askCounter}`;
+        controller.injectTestMessage({
+          type: "message",
+          message: {
+            id,
+            role: "assistant",
+            content: "",
+            createdAt: new Date().toISOString(),
+            streaming: false,
+            variant: "tool",
+            toolCall: {
+              id,
+              name: "ask_user_question",
+              status: "complete",
+              args,
+              chunks: [],
+            },
+            agentMetadata: {
+              executionId: "demo-exec",
+              awaitingLocalTool: true,
+            },
+          },
+        });
+        log(`Injected preset: ${key} (toolCallId=${id})`, "info");
+      }
+
+      // Mobile drawer + summary chip handling. The drawer is css-driven via
+      // `body.controls-open`; this just toggles that class and keeps the
+      // summary chips in sync with the live state.
+      const mobileQuery = window.matchMedia("(max-width: 768px)");
+      const summaryChips = {
+        variant: document.querySelector('[data-summary="variant"]'),
+        autoadvance: document.querySelector('[data-summary="autoadvance"]'),
+      };
+      const variantLabel = (v) => (v === "plugin" ? "Plugin (pills)" : "Built-in");
+      const updateSummary = () => {
+        if (summaryChips.variant) summaryChips.variant.textContent = `Variant: ${variantLabel(variant)}`;
+        if (summaryChips.autoadvance) summaryChips.autoadvance.textContent = `Auto-advance: ${autoAdvance ? "On" : "Off"}`;
+      };
+      const openDrawer = () => document.body.classList.add("controls-open");
+      const closeDrawer = () => document.body.classList.remove("controls-open");
+      document.getElementById("btn-controls-toggle").addEventListener("click", openDrawer);
+      document.getElementById("btn-controls-close").addEventListener("click", closeDrawer);
+      document.getElementById("controls-backdrop").addEventListener("click", closeDrawer);
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeDrawer();
+      });
+      // If the user resizes back to desktop while the drawer is open, drop
+      // the body class so reopening on desktop doesn't start in drawer state.
+      mobileQuery.addEventListener("change", (e) => {
+        if (!e.matches) closeDrawer();
+      });
+
+      // Variant selector
+      const variantSelector = document.getElementById("variant-selector");
+      variantSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        variantSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        variant = btn.dataset.variant;
+        updateSummary();
+        createWidget();
+      });
+
+      // Auto-advance toggle
+      const autoAdvanceSelector = document.getElementById("autoadvance-selector");
+      autoAdvanceSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        autoAdvanceSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        autoAdvance = btn.dataset.autoadvance === "on";
+        updateSummary();
+        createWidget();
+      });
+
+      // Preset buttons. On mobile, auto-close the drawer right after a preset
+      // is picked so the widget is immediately visible underneath.
+      document.getElementById("preset-group").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-preset]");
+        if (!btn) return;
+        triggerQuestion(btn.dataset.preset);
+        if (mobileQuery.matches) closeDrawer();
+      });
+
+      // Reset
+      document.getElementById("btn-reset").addEventListener("click", () => {
+        createWidget();
+        logEl.innerHTML = "";
+        log("Reset", "info");
+      });
+
+      // Listen for widget DOM events
+      window.addEventListener("persona:askUserQuestion:answered", (e) => {
+        const { answer, answers, toolUseId } = e.detail ?? {};
+        if (answers && typeof answers === "object" && Object.keys(answers).length > 1) {
+          log(`answered → ${JSON.stringify(answers)} (toolUseId=${toolUseId})`, "answered");
+        } else {
+          log(`answered → "${answer}" (toolUseId=${toolUseId})`, "answered");
+        }
+      });
+      window.addEventListener("persona:askUserQuestion:dismissed", (e) => {
+        const { toolCallId } = e.detail ?? {};
+        log(`dismissed (toolCallId=${toolCallId})`, "dismissed");
+      });
+
+      // Initial mount
+      updateSummary();
+      createWidget();
+    </script>
+  </body>
+</html>

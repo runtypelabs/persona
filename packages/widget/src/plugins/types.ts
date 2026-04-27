@@ -1,6 +1,7 @@
 import {
   AgentWidgetMessage,
   AgentWidgetConfig,
+  AskUserQuestionPayload,
   LoadingIndicatorRenderContext,
   IdleIndicatorRenderContext,
   EventStreamViewRenderContext,
@@ -104,6 +105,62 @@ export interface AgentWidgetPlugin {
   renderToolCall?: (context: {
     message: AgentWidgetMessage;
     defaultRenderer: () => HTMLElement;
+    config: AgentWidgetConfig;
+  }) => HTMLElement | null;
+
+  /**
+   * Custom renderer for `ask_user_question` tool calls.
+   *
+   * When a plugin returns an `HTMLElement`, it is inserted into the transcript
+   * in place of the default (which is no transcript bubble — the built-in
+   * renders a sheet over the composer). The built-in composer-overlay sheet
+   * is suppressed so the plugin's UI fully owns the interaction.
+   *
+   * Return `null` to fall through to the built-in overlay sheet.
+   *
+   * The context gives you a pre-parsed `payload` (may be partial while the
+   * tool call is still streaming — check `complete`) and two callbacks:
+   * `resolve(answer)` resumes the paused LOCAL tool with the user's answer,
+   * and `dismiss()` cancels with the sentinel `"(dismissed)"`.
+   *
+   * @example
+   * ```typescript
+   * renderAskUserQuestion: ({ payload, resolve, dismiss }) => {
+   *   const prompt = payload.questions?.[0];
+   *   if (!prompt) return null;
+   *   const root = document.createElement("div");
+   *   root.textContent = prompt.question ?? "";
+   *   (prompt.options ?? []).forEach((option) => {
+   *     const btn = document.createElement("button");
+   *     btn.textContent = option.label;
+   *     btn.addEventListener("click", () => resolve(option.label));
+   *     root.appendChild(btn);
+   *   });
+   *   return root;
+   * }
+   * ```
+   */
+  renderAskUserQuestion?: (context: {
+    message: AgentWidgetMessage;
+    /**
+     * Parsed `{ questions: [...] }` payload. May be partial while the tool
+     * call is still streaming; see `complete`. `null` when no payload has
+     * arrived yet.
+     */
+    payload: Partial<AskUserQuestionPayload> | null;
+    /** `true` once the tool-call args have fully streamed in. */
+    complete: boolean;
+    /**
+     * Resume the paused LOCAL tool with the user's answer. Posts to the
+     * resume endpoint, pipes the SSE stream back into the session, and
+     * appends a user-visible answer bubble to the transcript.
+     */
+    resolve: (answer: string) => void;
+    /**
+     * Cancel the question. Resumes with the sentinel `"(dismissed)"` so the
+     * server doesn't sit in `waiting_for_local` forever. Idempotent.
+     */
+    dismiss: () => void;
     config: AgentWidgetConfig;
   }) => HTMLElement | null;
 

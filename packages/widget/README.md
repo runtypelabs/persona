@@ -939,6 +939,148 @@ Indicators are resolved in this order:
 2. **Config function** (`loadingIndicator.render` / `loadingIndicator.renderIdle`)
 3. **Default** (3-dot bouncing animation for loading, `null` for idle)
 
+### Ask User Question
+
+The `ask_user_question` feature turns a LOCAL agent tool into an interactive prompt with tappable option pills. When the agent calls the `ask_user_question` tool, the server pauses execution and emits a `step_await` event; the widget renders an answer-pill sheet over the composer; the user picks / types / dismisses; the widget POSTs the answer to `/v1/dispatch/resume` and the paused execution continues with a structured `tool_result`.
+
+This is the recommended pattern for human-in-the-loop clarifying questions. The agent-side setup (declare `ask_user_question` as a `runtimeTools` LOCAL tool and instruct the model to call it) lives in your `RuntypeFlowConfig` in the proxy — pair it with a `POST` handler that forwards to the upstream `/resume` endpoint (see `@runtypelabs/persona-proxy` and your deployment’s `resume` route).
+
+#### Configuration
+
+```ts
+features: {
+  askUserQuestion: {
+    enabled: true,             // default: true. When false, the tool falls through to the normal tool-bubble path.
+    dismissible: true,         // default: true. Shows a × close button on the sheet.
+    slideInMs: 180,            // slide-in animation duration.
+    freeTextLabel: 'Other…',
+    freeTextPlaceholder: 'Type your answer…',
+    submitLabel: 'Send',
+    styles: {
+      sheetBackground: '#ffffff',
+      sheetBorder: '#e5e7eb',
+      sheetShadow: '0 12px 28px -10px rgba(0,0,0,0.15)',
+      pillBackground: 'transparent',
+      pillBackgroundSelected: '#0f0f0f',
+      pillTextColor: '#1f2937',
+      pillTextColorSelected: '#fafafa',
+      pillBorderRadius: '999px',
+      customInputBackground: '#ffffff'
+    }
+  }
+}
+```
+
+The composer-overlay sheet is the only question UI — no transcript stub is rendered. After the user picks, the picked answer appears as a normal user bubble so the transcript reads naturally.
+
+#### DOM events
+
+The widget dispatches two events on the mount element so the host page can react without touching the plugin API:
+
+| Event | Detail |
+|---|---|
+| `persona:askUserQuestion:answered` | `{ toolUseId, answer, values, isFreeText, source }` where `source` is `'pick' \| 'multi' \| 'free-text'` |
+| `persona:askUserQuestion:dismissed` | `{ toolUseId }` |
+
+```ts
+mount.addEventListener('persona:askUserQuestion:answered', (event) => {
+  const { answer, source } = event.detail;
+  console.log('User picked', answer, 'via', source);
+});
+```
+
+#### Custom UI via the `renderAskUserQuestion` plugin hook
+
+For full control over the question UI — a modal, a sidebar form, a command palette, whatever — register a plugin with `renderAskUserQuestion`. Returning a non-null `HTMLElement` renders inline in the transcript and suppresses the built-in overlay sheet. Returning `null` falls through to the default sheet.
+
+```ts
+import type { AgentWidgetPlugin } from '@runtypelabs/persona';
+
+const customAskPlugin: AgentWidgetPlugin = {
+  id: 'custom-ask',
+  renderAskUserQuestion: ({ payload, complete, resolve, dismiss }) => {
+    const prompt = payload?.questions?.[0];
+    if (!prompt) return null; // streaming — wait for more data, or show a skeleton
+
+    const root = document.createElement('div');
+    root.className = 'my-question-card';
+
+    const q = document.createElement('p');
+    q.textContent = prompt.question ?? '';
+    root.appendChild(q);
+
+    (prompt.options ?? []).forEach((option) => {
+      const btn = document.createElement('button');
+      btn.textContent = option.label;
+      btn.addEventListener('click', () => resolve(option.label));
+      root.appendChild(btn);
+    });
+
+    if (prompt.allowFreeText !== false) {
+      const input = document.createElement('input');
+      input.placeholder = 'Other…';
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && input.value.trim()) resolve(input.value.trim());
+      });
+      root.appendChild(input);
+    }
+
+    const close = document.createElement('button');
+    close.textContent = '×';
+    close.addEventListener('click', () => dismiss());
+    root.appendChild(close);
+
+    return root;
+  }
+};
+
+initAgentWidget({
+  target: '#app',
+  config: {
+    plugins: [customAskPlugin]
+  }
+});
+```
+
+#### Type Definitions
+
+```ts
+type AskUserQuestionOption = {
+  label: string;
+  description?: string;
+};
+
+type AskUserQuestionPrompt = {
+  question: string;
+  header?: string;           // short chip label, ≤12 chars
+  options: AskUserQuestionOption[];
+  multiSelect?: boolean;     // allow multiple picks with a Submit button
+  allowFreeText?: boolean;   // show an "Other…" free-text pill
+};
+
+type AskUserQuestionPayload = {
+  questions: AskUserQuestionPrompt[];
+};
+
+// Plugin hook signature
+renderAskUserQuestion?: (context: {
+  message: AgentWidgetMessage;
+  payload: Partial<AskUserQuestionPayload> | null;  // may be partial mid-stream
+  complete: boolean;                                // true once tool-call args fully stream
+  resolve: (answer: string) => void;                // posts /resume with structured toolOutput
+  dismiss: () => void;                              // sends "(dismissed)" sentinel
+  config: AgentWidgetConfig;
+}) => HTMLElement | null;
+```
+
+For plugins that want to re-parse a tool message outside the hook context, the widget also exports a `parseAskUserQuestionPayload(message)` helper that returns `{ payload, complete }` using the same partial-JSON logic the built-in sheet uses.
+
+#### Priority chain
+
+1. **Plugin hook** (`renderAskUserQuestion` returning a non-null element) — fully owns the UI; built-in overlay is suppressed.
+2. **Built-in overlay sheet** — when the feature is enabled and no plugin handles it.
+3. **Generic tool bubble** — when `features.askUserQuestion.enabled` is `false`, the tool call renders through the normal `renderToolCall` path.
+
 ### Dropdown Menu
 
 A reusable dropdown menu utility for building custom menus in plugins, custom components, or host-page UI that matches the widget's theme.

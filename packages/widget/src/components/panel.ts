@@ -81,6 +81,12 @@ export interface PanelElements {
   container: HTMLElement;
   body: HTMLElement;
   messagesWrapper: HTMLElement;
+  /**
+   * Absolute-positioned slot above the composer footer. Interactive sheets
+   * (e.g. the answer-pill sheet for the ask_user_question tool) mount here
+   * so they slide in without reflowing the chat transcript.
+   */
+  composerOverlay: HTMLElement;
   suggestions: HTMLElement;
   textarea: HTMLTextAreaElement;
   sendButton: HTMLButtonElement;
@@ -138,10 +144,17 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
   body.id = "persona-scroll-container";
   body.setAttribute("data-persona-theme-zone", "messages");
   
-  const introCardClasses = isDockedMountMode(config)
-    ? "persona-rounded-2xl persona-bg-persona-surface persona-p-6"
-    : "persona-rounded-2xl persona-bg-persona-surface persona-p-6 persona-shadow-sm";
-  const introCard = createElement("div", introCardClasses);
+  const introCard = createElement(
+    "div",
+    "persona-rounded-2xl persona-bg-persona-surface persona-p-6"
+  );
+  // Box-shadow flows through the themable `components.introCard.shadow` token
+  // (--persona-intro-card-shadow). Docked mode keeps a flat look by default;
+  // floating mode falls back to the legacy `persona-shadow-sm` value when no
+  // token is set.
+  introCard.style.boxShadow = isDockedMountMode(config)
+    ? "none"
+    : "var(--persona-intro-card-shadow, 0 5px 15px rgba(15, 23, 42, 0.08))";
   const introTitle = createElement(
     "h2",
     "persona-text-lg persona-font-semibold persona-text-persona-primary"
@@ -193,6 +206,26 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
   
   container.append(body);
   
+  // Composer overlay slot: sits between body and footer, absolutely positioned
+  // above the composer so sheets (e.g. the ask_user_question answer-pill sheet)
+  // can slide up without reflowing the chat transcript above. Uses inline
+  // styles for left/right/bottom because widget.css is hand-authored and
+  // doesn't ship `.persona-left-0` / `.persona-right-0` rules — without
+  // them the overlay shrink-wraps to content and collapses the sheet width.
+  const composerOverlay = createElement(
+    "div",
+    "persona-composer-overlay persona-pointer-events-none"
+  );
+  composerOverlay.setAttribute("data-persona-composer-overlay", "");
+  composerOverlay.style.position = "absolute";
+  composerOverlay.style.left = "0";
+  composerOverlay.style.right = "0";
+  composerOverlay.style.bottom = "0";
+  // Above .persona-scroll-to-bottom-indicator (z-index 10, sibling in the
+  // container) so suggestion chips and the ask-user-question sheet are not
+  // covered by the "jump to latest" button.
+  composerOverlay.style.zIndex = "20";
+
   if (showFooter) {
     container.append(composerElements.footer);
   } else {
@@ -201,10 +234,14 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     container.append(composerElements.footer);
   }
 
+  // Append overlay last so it stacks above the footer / body content.
+  container.append(composerOverlay);
+
   return {
     container,
     body,
     messagesWrapper,
+    composerOverlay,
     suggestions: composerElements.suggestions,
     textarea: composerElements.textarea,
     sendButton: composerElements.sendButton,

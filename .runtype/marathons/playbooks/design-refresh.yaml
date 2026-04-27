@@ -1,0 +1,153 @@
+# Design System Normalization Playbook
+# Researches an existing app's current design standards, creates a unified
+# design-system migration plan, then processes exactly one target file per run.
+#
+# Copy to .runtype/marathons/playbooks/design-refresh.yaml to use:
+# npx @runtypelabs/cli@latest marathon "Design refresh" \
+#   --playbook design-refresh \
+#   --goal "Normalize all the advanced examples in the embedded-app under a single design system. Only modify the examples that are linked to under the advanced accordian. Do not touch the widget package." \
+#   --tool-context hot-tail
+
+name: design-refresh
+description: Normalize an existing app under a single design system through research, planning, and one-file-per-run migrations
+
+rules: |
+  This playbook is for an EXISTING app in the current workspace. Do NOT create a
+  new app, demo, sandbox, or isolated component library unless the user explicitly
+  asks for one.
+
+  The goal is to discover the app's current design standards, define the target
+  design system, and then migrate the codebase incrementally until the app is
+  normalized under that system.
+
+  You must maintain exactly two state files at the workspace root:
+    - conversion-memory.md
+    - todo.md
+
+  At the start of EVERY run, read both files if they exist before deciding what to
+  do next. If they do not exist yet, create them in the earliest appropriate run.
+
+  conversion-memory.md is the rolling journal for the marathon. It should capture:
+    - the current understanding of the app's design standards
+    - the target design-system decisions
+    - a brief log of each completed run
+    - risks, open questions, and notable discoveries
+
+  todo.md is the execution queue. It should contain:
+    - the ordered list of files or file groups to normalize
+    - the status of each item (pending, active, done, blocked)
+    - the next recommended target for the following run
+
+  During execution, each run must edit EXACTLY ONE product/source file. The only
+  additional files that may be edited in that same run are:
+    - conversion-memory.md
+    - todo.md
+
+  A single run may read multiple supporting files for context, but it may only
+  change one actual app file before stopping.
+
+  Every edited app file should be moved toward the shared design system by
+  normalizing tokens, spacing, typography, colors, states, component usage,
+  naming, and layout patterns where relevant.
+
+  Before ending any run that changes a product/source file:
+    - update conversion-memory.md with a concise summary of the work completed
+    - update todo.md to mark the file done and point to the next target
+    - note any follow-up dependencies that future runs must consider
+
+milestones:
+  - name: research
+    description: Audit the existing app and identify the design standards already in use
+    model: gpt-5-mini
+    instructions: |
+      Read the goal and inspect the current app as it exists today.
+
+      Research the design standards already present across the app. Look for:
+        - shared UI primitives and design-system packages
+        - color usage, typography, spacing, radii, borders, shadows, and iconography
+        - layout shells, page structure, form patterns, table/list patterns, and navigation
+        - interaction states, accessibility patterns, responsive behavior, and inconsistencies
+        - one-off styling that should eventually be normalized
+
+      Read enough representative files to understand the real state of the app,
+      not just one component.
+
+      Create or overwrite conversion-memory.md with:
+        - Current Standards
+        - Inconsistencies / Drift
+        - Candidate Design-System Rules
+        - Risks / Open Questions
+
+      If todo.md does not exist yet, create a stub with a placeholder section for
+      the migration backlog that will be filled in during the planning milestone.
+    completionCriteria:
+      type: evidence
+      minReadFiles: 5
+
+  - name: planning
+    description: Turn the research into a concrete normalization plan and ordered migration queue
+    model: claude-sonnet-4-5
+    instructions: |
+      Start by reading conversion-memory.md and todo.md.
+
+      Synthesize the research into a single target design system for this app.
+      Define the normalization strategy, including:
+        - the preferred token sources and component primitives
+        - styling rules that should become the standard
+        - anti-patterns that should be removed over time
+        - the migration order, prioritizing foundational files first
+
+      Then fully populate todo.md with an ordered file-by-file migration queue.
+      Each item should be small enough that one run can complete it. If a file is
+      too large, split it into clearly named sub-tasks, but the default unit should
+      still be a single file per run.
+
+      Update conversion-memory.md with:
+        - Target Design System
+        - Migration Strategy
+        - Prioritization Notes
+        - Initial Ordered Queue
+
+      End this run with a clear next file selected in todo.md.
+    completionCriteria:
+      type: sessions
+      minSessions: 1
+
+  - name: execute
+    description: Migrate the app one file per run until the queue is complete
+    model: claude-sonnet-4-5
+    instructions: |
+      At the very beginning of the run, read conversion-memory.md and todo.md.
+      Use them as the source of truth for what has already been done and what
+      should happen next.
+
+      Select the highest-priority pending item from todo.md and work on exactly
+      one product/source file in this run.
+
+      For the chosen file:
+        - read the file itself
+        - read any immediately relevant supporting files needed for safe edits
+        - update the file to align with the target design system
+        - keep the change scoped; do not branch into other product files
+
+      The goal of each execution run is to finish one meaningful normalization
+      step, not to partially touch many files.
+
+      After the file change:
+        - append a dated run summary to conversion-memory.md
+        - record what standards were applied and any blockers discovered
+        - update todo.md statuses
+        - nominate the next file for the next run
+
+      If validation is practical, run the smallest relevant check for the file you
+      changed and record the result in conversion-memory.md.
+
+      If there are still pending items after this run, stop after updating the two
+      state files so the next run can continue from there.
+
+      Only emit TASK_COMPLETE when todo.md shows that all migration items are done
+      or intentionally cancelled and conversion-memory.md contains a final summary
+      of the completed normalization effort.
+    completionCriteria:
+      type: never
+    canAcceptCompletion: true

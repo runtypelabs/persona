@@ -775,6 +775,49 @@ export class AgentWidgetClient {
     });
   }
 
+  /**
+   * Resume a paused flow execution by supplying outputs for LOCAL
+   * (client-executed) tools. Used by the built-in `ask_user_question`
+   * answer-pill sheet, but generic enough for any LOCAL tool.
+   *
+   * Posts to the upstream `/resume` endpoint (the dispatch URL with
+   * `/dispatch` replaced by `/resume` — works for both direct-to-Runtype
+   * and the persona proxy) and returns the raw Response so the caller can
+   * pipe its SSE body through `connectStream()`.
+   *
+   * @param executionId - The paused execution id carried on `step_await`.
+   * @param toolOutputs - Map keyed by tool name → the tool's result value.
+   */
+  public async resumeFlow(
+    executionId: string,
+    toolOutputs: Record<string, unknown>,
+    options?: { streamResponse?: boolean }
+  ): Promise<Response> {
+    const trimmed = this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE;
+    // Runtype mounts POST /resume as a child route of /v1/dispatch, so the
+    // final URL is always `${apiUrl}/resume`. Proxies should follow the
+    // same shape (`/api/chat/dispatch/resume`) to keep the widget agnostic.
+    const url = `${trimmed}/resume`;
+
+    let headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...this.headers
+    };
+    if (this.getHeaders) {
+      Object.assign(headers, await this.getHeaders());
+    }
+
+    return fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        executionId,
+        toolOutputs,
+        streamResponse: options?.streamResponse ?? true,
+      }),
+    });
+  }
+
   private async buildAgentPayload(
     messages: AgentWidgetMessage[]
   ): Promise<AgentWidgetAgentRequestPayload> {
@@ -1722,6 +1765,34 @@ export class AgentWidgetClient {
           if (callKey) {
             toolContext.byCall.delete(callKey);
           }
+        } else if (payloadType === "step_await" && payload.awaitReason === "local_tool_required" && payload.toolName) {
+          // LOCAL tool pause. Runtype's prompt step throws LocalToolRequiredError
+          // when the model calls a tool with `toolType: "local"`. The server
+          // emits step_await with the tool name, params, and execution id; the
+          // execution pauses until the client POSTs /resume with toolOutputs.
+          //
+          // Upsert a fully-populated tool-variant message so the existing
+          // ask_user_question bubble + sheet paths fire. Mark the message with
+          // `awaitingLocalTool: true` so the UI knows to resolve via
+          // resumeFlow rather than the legacy sendMessage fallback.
+          const toolId = (payload.toolId as string) ?? `local-${nextSequence()}`;
+          const toolMessage = ensureToolMessage(toolId);
+          const tool = toolMessage.toolCall ?? { id: toolId, status: "pending" as const };
+          tool.name = payload.toolName as string;
+          tool.args = payload.parameters;
+          tool.status = "complete";
+          tool.chunks = tool.chunks ?? [];
+          tool.startedAt =
+            tool.startedAt ?? resolveTimestamp(payload.startedAt ?? payload.timestamp);
+          tool.completedAt = tool.completedAt ?? tool.startedAt;
+          toolMessage.toolCall = tool;
+          toolMessage.streaming = false;
+          toolMessage.agentMetadata = {
+            ...toolMessage.agentMetadata,
+            executionId: (payload.executionId as string) ?? toolMessage.agentMetadata?.executionId,
+            awaitingLocalTool: true,
+          };
+          emitMessage(toolMessage);
         } else if (payloadType === "text_start") {
           // Lifecycle event: a new text segment is beginning (emitted at tool boundaries).
           // When toolContext is present this fired inside a nested flow — it must not

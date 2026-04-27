@@ -2717,3 +2717,137 @@ describe('AgentWidgetClient - stopReason propagation', () => {
   });
 });
 
+// ============================================================================
+// step_await (LOCAL tool pause) + resumeFlow
+// ============================================================================
+
+describe('AgentWidgetClient — step_await parsing', () => {
+  const buildStepAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
+    const encoder = new TextEncoder();
+    const body = `event: step_await\ndata: ${JSON.stringify({ type: 'step_await', ...payload })}\n\n`;
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(body));
+        controller.close();
+      },
+    });
+  };
+
+  it('emits a complete tool message with awaitingLocalTool=true for local_tool_required', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: buildStepAwaitStream({
+        awaitReason: 'local_tool_required',
+        id: 'step-1',
+        name: 'Test Step',
+        stepType: 'prompt',
+        index: 0,
+        toolId: 'runtime_ask_user_question_123',
+        toolName: 'ask_user_question',
+        executionId: 'exec_abc',
+        parameters: {
+          questions: [{ question: 'Who?', options: [{ label: 'A' }, { label: 'B' }] }],
+        },
+      }),
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const toolMsg = events
+      .filter((e) => e.type === 'message')
+      .map((e) => (e as { message: AgentWidgetMessage }).message)
+      .find((m) => m.variant === 'tool' && m.toolCall?.name === 'ask_user_question');
+
+    expect(toolMsg).toBeDefined();
+    expect(toolMsg!.toolCall!.id).toBe('runtime_ask_user_question_123');
+    expect(toolMsg!.toolCall!.status).toBe('complete');
+    expect(toolMsg!.toolCall!.args).toMatchObject({
+      questions: [{ question: 'Who?', options: [{ label: 'A' }, { label: 'B' }] }],
+    });
+    expect(toolMsg!.agentMetadata?.executionId).toBe('exec_abc');
+    expect(toolMsg!.agentMetadata?.awaitingLocalTool).toBe(true);
+  });
+
+  it('ignores step_await events whose awaitReason is not local_tool_required', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: buildStepAwaitStream({
+        awaitReason: 'approval_required',
+        toolId: 't1',
+        toolName: 'some_tool',
+        executionId: 'exec_abc',
+        parameters: {},
+      }),
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const toolMsg = events
+      .filter((e) => e.type === 'message')
+      .map((e) => (e as { message: AgentWidgetMessage }).message)
+      .find((m) => m.agentMetadata?.awaitingLocalTool);
+    expect(toolMsg).toBeUndefined();
+  });
+});
+
+describe('AgentWidgetClient.resumeFlow', () => {
+  it('POSTs to ${apiUrl}/resume with the expected body shape', async () => {
+    let capturedUrl: string | undefined;
+    let capturedBody: Record<string, unknown> | undefined;
+    let capturedHeaders: Record<string, string> | undefined;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      capturedUrl = url;
+      capturedBody = JSON.parse(init.body as string);
+      capturedHeaders = init.headers as Record<string, string>;
+      return { ok: true, body: null };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'https://api.runtype.com/v1/dispatch' });
+    await client.resumeFlow('exec_xyz', { ["ask_user_question"]: 'Hobbyists' });
+
+    expect(capturedUrl).toBe('https://api.runtype.com/v1/dispatch/resume');
+    expect(capturedBody).toEqual({
+      executionId: 'exec_xyz',
+      toolOutputs: { ["ask_user_question"]: 'Hobbyists' },
+      streamResponse: true,
+    });
+    expect(capturedHeaders!['Content-Type']).toBe('application/json');
+  });
+
+  it('honors a custom streamResponse option', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(init.body as string);
+      return { ok: true, body: null };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:43111/api/chat/dispatch' });
+    await client.resumeFlow('exec_abc', { t: 'ok' }, { streamResponse: false });
+
+    expect(capturedBody!.streamResponse).toBe(false);
+  });
+
+  it('derives the URL correctly for proxy-style dispatch paths', async () => {
+    let capturedUrl: string | undefined;
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      capturedUrl = url;
+      return { ok: true, body: null };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:43111/api/chat/dispatch' });
+    await client.resumeFlow('exec_abc', {});
+
+    expect(capturedUrl).toBe('http://localhost:43111/api/chat/dispatch/resume');
+  });
+});
+
