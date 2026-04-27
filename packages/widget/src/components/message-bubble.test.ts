@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   createStandardBubble,
   isSafeImageSrc,
+  isSafeMediaSrc,
   resolveStopReasonNoticeText,
   getDefaultStopReasonNoticeCopy,
 } from "./message-bubble";
@@ -272,5 +273,196 @@ describe("createStandardBubble — stopReason notice", () => {
       stopReason: "max_tool_calls",
     });
     expect(bubble.querySelector(".persona-message-stop-reason")).toBeNull();
+  });
+});
+
+describe("isSafeMediaSrc", () => {
+  it("allows https URLs", () => {
+    expect(isSafeMediaSrc("https://example.com/audio.mp3")).toBe(true);
+  });
+
+  it("allows http URLs", () => {
+    expect(isSafeMediaSrc("http://example.com/audio.mp3")).toBe(true);
+  });
+
+  it("allows blob URLs", () => {
+    expect(isSafeMediaSrc("blob:http://example.com/abc-123")).toBe(true);
+  });
+
+  it("allows audio data URIs", () => {
+    expect(isSafeMediaSrc("data:audio/mpeg;base64,AAAA")).toBe(true);
+  });
+
+  it("allows video data URIs", () => {
+    expect(isSafeMediaSrc("data:video/mp4;base64,AAAA")).toBe(true);
+  });
+
+  it("allows binary file data URIs", () => {
+    expect(isSafeMediaSrc("data:application/pdf;base64,AAAA")).toBe(true);
+  });
+
+  it("blocks javascript: URIs", () => {
+    expect(isSafeMediaSrc("javascript:alert(1)")).toBe(false);
+  });
+
+  it("blocks data:text/html URIs", () => {
+    expect(isSafeMediaSrc("data:text/html,<script>alert(1)</script>")).toBe(false);
+    expect(isSafeMediaSrc("data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==")).toBe(false);
+  });
+
+  it("blocks other executable data: types", () => {
+    expect(isSafeMediaSrc("data:text/javascript,alert(1)")).toBe(false);
+    expect(isSafeMediaSrc("data:text/xml,<svg onload=alert(1)/>")).toBe(false);
+    expect(isSafeMediaSrc("data:application/xhtml+xml,<html>")).toBe(false);
+  });
+
+  it("blocks data:image/svg+xml URIs (XSS via right-click open in new tab)", () => {
+    expect(isSafeMediaSrc("data:image/svg+xml,<svg onload=alert(1)>")).toBe(false);
+    expect(isSafeMediaSrc("data:image/svg+xml;base64,PHN2Zz4=")).toBe(false);
+    expect(isSafeMediaSrc("data:image/SVG+XML;base64,PHN2Zz4=")).toBe(false);
+  });
+
+  it("allows inert data:text/* payloads (plain, csv, markdown)", () => {
+    expect(isSafeMediaSrc("data:text/plain;base64,SGVsbG8=")).toBe(true);
+    expect(isSafeMediaSrc("data:text/csv;base64,YSxiCjEsMg==")).toBe(true);
+    expect(isSafeMediaSrc("data:text/markdown;base64,IyBIaQ==")).toBe(true);
+  });
+
+  it("allows relative paths", () => {
+    expect(isSafeMediaSrc("relative/file.mp3")).toBe(true);
+  });
+});
+
+describe("createStandardBubble — audio/video/file content parts", () => {
+  it("renders an <audio> element with controls for an audio content part", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        contentParts: [
+          {
+            type: "audio",
+            audio: "data:audio/mpeg;base64,AAAA",
+            mimeType: "audio/mpeg",
+          },
+        ],
+      }),
+      ({ text }) => text
+    );
+
+    const container = bubble.querySelector('[data-message-attachments="audio"]');
+    expect(container).not.toBeNull();
+    const audio = container?.querySelector("audio") as HTMLAudioElement | null;
+    expect(audio).not.toBeNull();
+    expect(audio?.controls).toBe(true);
+    expect(audio?.getAttribute("src")).toBe("data:audio/mpeg;base64,AAAA");
+  });
+
+  it("renders an <audio> element for a URL-based audio part", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        contentParts: [
+          {
+            type: "audio",
+            audio: "https://example.com/clip.mp3",
+            mimeType: "audio/mpeg",
+          },
+        ],
+      }),
+      ({ text }) => text
+    );
+
+    const audio = bubble.querySelector(
+      '[data-message-attachments="audio"] audio'
+    ) as HTMLAudioElement | null;
+    expect(audio?.getAttribute("src")).toBe("https://example.com/clip.mp3");
+  });
+
+  it("skips audio parts with unsafe schemes", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        contentParts: [
+          {
+            type: "audio",
+            audio: "javascript:alert(1)",
+            mimeType: "audio/mpeg",
+          },
+        ],
+      }),
+      ({ text }) => text
+    );
+
+    expect(
+      bubble.querySelector('[data-message-attachments="audio"]')
+    ).toBeNull();
+  });
+
+  it("renders a <video> element with controls for a video content part", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        contentParts: [
+          {
+            type: "video",
+            video: "https://example.com/clip.mp4",
+            mimeType: "video/mp4",
+          },
+        ],
+      }),
+      ({ text }) => text
+    );
+
+    const video = bubble.querySelector(
+      '[data-message-attachments="video"] video'
+    ) as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    expect(video?.controls).toBe(true);
+    expect(video?.getAttribute("src")).toBe("https://example.com/clip.mp4");
+  });
+
+  it("renders a download link for a file content part", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        contentParts: [
+          {
+            type: "file",
+            data: "data:application/pdf;base64,AAAA",
+            mimeType: "application/pdf",
+            filename: "report.pdf",
+          },
+        ],
+      }),
+      ({ text }) => text
+    );
+
+    const link = bubble.querySelector(
+      '[data-message-attachments="files"] a'
+    ) as HTMLAnchorElement | null;
+    expect(link).not.toBeNull();
+    expect(link?.getAttribute("href")).toBe("data:application/pdf;base64,AAAA");
+    expect(link?.getAttribute("download")).toBe("report.pdf");
+    expect(link?.textContent).toBe("report.pdf");
+    // Cross-origin URLs ignore `download`, so we open in a new tab to avoid
+    // navigating the chat page away from the conversation.
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  it("renders a download link for a URL-hosted file", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        contentParts: [
+          {
+            type: "file",
+            data: "https://example.com/report.pdf",
+            mimeType: "application/pdf",
+            filename: "report.pdf",
+          },
+        ],
+      }),
+      ({ text }) => text
+    );
+
+    const link = bubble.querySelector(
+      '[data-message-attachments="files"] a'
+    ) as HTMLAnchorElement | null;
+    expect(link?.getAttribute("href")).toBe("https://example.com/report.pdf");
   });
 });

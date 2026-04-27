@@ -2851,3 +2851,524 @@ describe('AgentWidgetClient.resumeFlow', () => {
   });
 });
 
+// ============================================================================
+// agent_media Event Handling
+// ============================================================================
+
+describe('AgentWidgetClient - agent_media events', () => {
+  const collectMediaMessages = (events: AgentWidgetEvent[]): AgentWidgetMessage[] => {
+    const byId = new Map<string, AgentWidgetMessage>();
+    for (const event of events) {
+      if (event.type === 'message' && event.message.id.startsWith('agent-media-')) {
+        byId.set(event.message.id, event.message);
+      }
+    }
+    return Array.from(byId.values());
+  };
+
+  it('renders a base64 image (AI SDK v6 type:"media") as a synthetic message', async () => {
+    const execId = 'exec_media_image';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxTurns: 1,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_tool_start', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_shot',
+        toolName: 'browser:screenshot', startedAt: new Date().toISOString(), seq: 3,
+      }),
+      sseEvent('agent_tool_complete', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_shot',
+        toolName: 'browser:screenshot', completedAt: new Date().toISOString(), seq: 4,
+      }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_shot',
+        toolName: 'browser:screenshot',
+        media: [
+          { type: 'media', data: 'iVBORw==', mediaType: 'image/png' },
+        ],
+        seq: 5,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 6,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Snap', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const mediaMessages = collectMediaMessages(events);
+    expect(mediaMessages).toHaveLength(1);
+    const msg = mediaMessages[0]!;
+    expect(msg.id).toMatch(/^agent-media-tc_shot-\d+$/);
+    expect(msg.role).toBe('assistant');
+    expect(msg.streaming).toBe(false);
+    expect(msg.contentParts).toBeDefined();
+    expect(msg.contentParts).toHaveLength(1);
+    const part = msg.contentParts![0];
+    expect(part.type).toBe('image');
+    if (part.type === 'image') {
+      expect(part.image).toBe('data:image/png;base64,iVBORw==');
+      expect(part.mimeType).toBe('image/png');
+    }
+    expect(msg.agentMetadata?.executionId).toBe(execId);
+    expect(msg.agentMetadata?.iteration).toBe(1);
+  });
+
+  it('renders a hosted image (AI SDK v3/v4 type:"image-url") as a synthetic message', async () => {
+    const execId = 'exec_media_url';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_dalle', toolName: 'dalle',
+        media: [{ type: 'image-url', url: 'https://r2.example.com/img.png' }],
+        seq: 3,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Generate', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const mediaMessages = collectMediaMessages(events);
+    expect(mediaMessages).toHaveLength(1);
+    const part = mediaMessages[0]!.contentParts![0];
+    expect(part.type).toBe('image');
+    if (part.type === 'image') {
+      expect(part.image).toBe('https://r2.example.com/img.png');
+      expect(part.mimeType).toBeUndefined();
+    }
+  });
+
+  it('preserves mediaType on image-url parts when provided', async () => {
+    const execId = 'exec_media_url_typed';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_dalle', toolName: 'dalle',
+        media: [{ type: 'image-url', url: 'https://r2.example.com/img.png', mediaType: 'image/png' }],
+        seq: 3,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Generate', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const part = collectMediaMessages(events)[0]!.contentParts![0];
+    expect(part.type).toBe('image');
+    if (part.type === 'image') {
+      expect(part.image).toBe('https://r2.example.com/img.png');
+      expect(part.mimeType).toBe('image/png');
+    }
+  });
+
+  it('renders a base64 audio part with mediaType', async () => {
+    const execId = 'exec_media_audio';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_tts', toolName: 'elevenlabs-tts',
+        media: [{ type: 'media', data: 'AAAA', mediaType: 'audio/mpeg' }],
+        seq: 3,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Speak', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const mediaMessages = collectMediaMessages(events);
+    expect(mediaMessages).toHaveLength(1);
+    const part = mediaMessages[0]!.contentParts![0];
+    expect(part.type).toBe('audio');
+    if (part.type === 'audio') {
+      expect(part.audio).toBe('data:audio/mpeg;base64,AAAA');
+      expect(part.mimeType).toBe('audio/mpeg');
+    }
+  });
+
+  it('routes file-url parts by mediaType (audio/video/file)', async () => {
+    const execId = 'exec_media_file_url';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_files', toolName: 'multi',
+        media: [
+          { type: 'file-url', url: 'https://example.com/a.mp3', mediaType: 'audio/mpeg' },
+          { type: 'file-url', url: 'https://example.com/v.mp4', mediaType: 'video/mp4' },
+          { type: 'file-url', url: 'https://example.com/r.pdf', mediaType: 'application/pdf' },
+        ],
+        seq: 3,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const parts = collectMediaMessages(events)[0]!.contentParts!;
+    expect(parts).toHaveLength(3);
+    expect(parts[0].type).toBe('audio');
+    expect(parts[1].type).toBe('video');
+    expect(parts[2].type).toBe('file');
+    if (parts[0].type === 'audio') expect(parts[0].audio).toBe('https://example.com/a.mp3');
+    if (parts[1].type === 'video') expect(parts[1].video).toBe('https://example.com/v.mp4');
+    if (parts[2].type === 'file') {
+      expect(parts[2].data).toBe('https://example.com/r.pdf');
+      expect(parts[2].mimeType).toBe('application/pdf');
+      expect(parts[2].filename).toBe('attachment.pdf');
+    }
+  });
+
+  it('renders mixed media parts in a single message', async () => {
+    const execId = 'exec_media_mixed';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_mix', toolName: 'multi',
+        media: [
+          { type: 'media', data: 'IMG', mediaType: 'image/png' },
+          { type: 'image-url', url: 'https://example.com/dalle.png' },
+          { type: 'media', data: 'FILE', mediaType: 'application/pdf' },
+        ],
+        seq: 3,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const mediaMessages = collectMediaMessages(events);
+    expect(mediaMessages).toHaveLength(1);
+    const parts = mediaMessages[0]!.contentParts!;
+    expect(parts).toHaveLength(3);
+    expect(parts[0].type).toBe('image');
+    expect(parts[1].type).toBe('image');
+    expect(parts[2].type).toBe('file');
+    if (parts[2].type === 'file') {
+      expect(parts[2].data).toBe('data:application/pdf;base64,FILE');
+      expect(parts[2].filename).toBe('attachment.pdf');
+    }
+  });
+
+  it('inserts media between tool bubble and the next text turn', async () => {
+    const execId = 'exec_media_order';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_turn_start', { executionId: execId, iteration: 1, turnIndex: 0, role: 'assistant', turnId: 'turn_1', seq: 3 }),
+      sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: 'Calling tool...', contentType: 'text', turnId: 'turn_1', seq: 4 }),
+      sseEvent('agent_tool_start', { executionId: execId, iteration: 1, toolCallId: 'tc_1', toolName: 'browser:screenshot', startedAt: new Date().toISOString(), seq: 5 }),
+      sseEvent('agent_tool_complete', { executionId: execId, iteration: 1, toolCallId: 'tc_1', toolName: 'browser:screenshot', completedAt: new Date().toISOString(), seq: 6 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_1', toolName: 'browser:screenshot',
+        media: [{ type: 'media', data: 'PNG', mediaType: 'image/png' }],
+        seq: 7,
+      }),
+      sseEvent('agent_turn_start', { executionId: execId, iteration: 1, turnIndex: 1, role: 'assistant', turnId: 'turn_2', seq: 8 }),
+      sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: 'Done!', contentType: 'text', turnId: 'turn_2', seq: 9 }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 10 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Take a snap', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    // Collect the most-recent state of every emitted message by id.
+    const latest = new Map<string, AgentWidgetMessage>();
+    for (const e of events) {
+      if (e.type === 'message') latest.set(e.message.id, e.message);
+    }
+    const ordered = Array.from(latest.values()).sort(
+      (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)
+    );
+
+    // Find the media bubble plus the assistant text bubble that came AFTER it
+    const mediaMsg = ordered.find((m) => m.id.startsWith('agent-media-tc_1-'));
+    expect(mediaMsg).toBeDefined();
+    const followingText = ordered.find(
+      (m) =>
+        m.role === 'assistant' &&
+        !m.variant &&
+        !m.id.startsWith('agent-media-') &&
+        (m.sequence ?? 0) > (mediaMsg!.sequence ?? 0)
+    );
+    expect(followingText).toBeDefined();
+    expect(followingText!.content).toBe('Done!');
+  });
+
+  it('skips malformed media parts that have neither data nor url', async () => {
+    const execId = 'exec_media_empty';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_x', toolName: 'noop',
+        media: [
+          { type: 'media', mediaType: 'image/png' },         // missing data
+          { type: 'image-url' },                              // missing url
+          { type: 'unknown-shape', payload: 'whatever' },     // unknown discriminator
+        ],
+        seq: 3,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    expect(collectMediaMessages(events)).toHaveLength(0);
+  });
+
+  it('produces unique ids for repeated agent_media events on the same toolCallId', async () => {
+    const execId = 'exec_media_repeat';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_repeat', toolName: 'multi',
+        media: [{ type: 'media', data: 'A', mediaType: 'image/png' }],
+        seq: 3,
+      }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_repeat', toolName: 'multi',
+        media: [{ type: 'media', data: 'B', mediaType: 'image/png' }],
+        seq: 4,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 5 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const mediaMessages = collectMediaMessages(events);
+    expect(mediaMessages).toHaveLength(2);
+    expect(mediaMessages[0]!.id).not.toBe(mediaMessages[1]!.id);
+    // Both messages should preserve the toolCallId in the id for traceability
+    for (const m of mediaMessages) {
+      expect(m.id).toMatch(/^agent-media-tc_repeat-\d+$/);
+    }
+    // First message keeps its first content part; not overwritten by the second
+    const first = mediaMessages.find((m) => {
+      const p = m.contentParts?.[0];
+      return p?.type === 'image' && p.image === 'data:image/png;base64,A';
+    });
+    expect(first).toBeDefined();
+  });
+
+  it('seals an in-flight assistant text bubble before splitting on agent_media', async () => {
+    const execId = 'exec_media_seal';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_turn_start', { executionId: execId, iteration: 1, turnIndex: 0, role: 'assistant', turnId: 'turn_1', seq: 3 }),
+      sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: 'Streaming...', contentType: 'text', turnId: 'turn_1', seq: 4 }),
+      // Media arrives mid-stream — earlier text bubble is still streaming.
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_seal', toolName: 'shot',
+        media: [{ type: 'media', data: 'PNG', mediaType: 'image/png' }],
+        seq: 5,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 6 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Go', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const latest = new Map<string, AgentWidgetMessage>();
+    for (const e of events) {
+      if (e.type === 'message') latest.set(e.message.id, e.message);
+    }
+
+    // The pre-media assistant bubble must be sealed (no orphan typing indicator).
+    const orphan = Array.from(latest.values()).find(
+      (m) =>
+        m.role === 'assistant' &&
+        !m.variant &&
+        !m.id.startsWith('agent-media-') &&
+        m.content === 'Streaming...'
+    );
+    expect(orphan).toBeDefined();
+    expect(orphan!.streaming).toBe(false);
+  });
+
+  it('routes audio parts case-insensitively (RFC 7231)', async () => {
+    const execId = 'exec_media_case';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_case', toolName: 'tts',
+        // Non-canonical casing should still land in the audio bucket, not the file bucket.
+        media: [{ type: 'media', data: 'AAAA', mediaType: 'Audio/MPEG' }],
+        seq: 3,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Speak', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const part = collectMediaMessages(events)[0]!.contentParts![0];
+    expect(part.type).toBe('audio');
+    if (part.type === 'audio') {
+      // mediaType is canonicalized to lowercase for both routing and storage.
+      expect(part.mimeType).toBe('audio/mpeg');
+      expect(part.audio).toBe('data:audio/mpeg;base64,AAAA');
+    }
+  });
+
+  it('renders a base64 text/csv attachment as a file part (not silently dropped)', async () => {
+    const execId = 'exec_media_csv';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_csv', toolName: 'export',
+        media: [{ type: 'media', data: 'YSxiCjEsMg==', mediaType: 'text/csv' }],
+        seq: 3,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Export', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const part = collectMediaMessages(events)[0]!.contentParts![0];
+    expect(part.type).toBe('file');
+    if (part.type === 'file') {
+      expect(part.mimeType).toBe('text/csv');
+      expect(part.filename).toBe('attachment.csv');
+      expect(part.data).toBe('data:text/csv;base64,YSxiCjEsMg==');
+    }
+  });
+
+  it('defaults missing mediaType on a type:"media" part to application/octet-stream', async () => {
+    const execId = 'exec_media_no_type';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
+      sseEvent('agent_media', {
+        executionId: execId, iteration: 1, toolCallId: 'tc_blob', toolName: 'opaque',
+        // mediaType is empty — should not produce a malformed `data:;base64,...` URI.
+        media: [{ type: 'media', data: 'AAAA', mediaType: '' }],
+        seq: 3,
+      }),
+      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const part = collectMediaMessages(events)[0]!.contentParts![0];
+    expect(part.type).toBe('file');
+    if (part.type === 'file') {
+      expect(part.mimeType).toBe('application/octet-stream');
+      expect(part.data).toBe('data:application/octet-stream;base64,AAAA');
+    }
+  });
+});
+
