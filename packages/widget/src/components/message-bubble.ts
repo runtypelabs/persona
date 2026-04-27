@@ -8,6 +8,9 @@ import {
   AgentWidgetMessageFeedback,
   LoadingIndicatorRenderContext,
   ImageContentPart,
+  AudioContentPart,
+  VideoContentPart,
+  FileContentPart,
   StopReasonKind
 } from "../types";
 import { createIconButton } from "../utils/buttons";
@@ -98,6 +101,31 @@ export const isSafeImageSrc = (src: string): boolean => {
   return false;
 };
 
+/**
+ * Validate that a media src URL (audio/video/file) uses a safe scheme.
+ * Allows http(s), blob:, and inert data: URIs. Blocks `javascript:` and the
+ * executable data: types whose payloads a browser would render or run when a
+ * user right-clicks the link → "Open in new tab" (bypassing `download`):
+ * `data:text/html`, `data:text/javascript`, `data:text/xml`,
+ * `data:application/xhtml`, and `data:image/svg+xml`. Inert text payloads
+ * (`text/plain`, `text/csv`, `text/markdown`) remain allowed so attachments
+ * with those mime types render as download links instead of vanishing.
+ */
+export const isSafeMediaSrc = (src: string): boolean => {
+  const lower = src.toLowerCase();
+  if (lower.startsWith("javascript:")) return false;
+  if (lower.startsWith("data:text/html")) return false;
+  if (lower.startsWith("data:text/javascript")) return false;
+  if (lower.startsWith("data:text/xml")) return false;
+  if (lower.startsWith("data:application/xhtml")) return false;
+  if (lower.startsWith("data:image/svg+xml")) return false;
+  if (/^(?:https?|blob):/i.test(src)) return true;
+  if (lower.startsWith("data:")) return true;
+  // Relative URLs are safe
+  if (!src.includes(":")) return true;
+  return false;
+};
+
 export type LoadingIndicatorRenderer = (context: LoadingIndicatorRenderContext) => HTMLElement | null;
 
 export type MessageTransform = (context: {
@@ -125,6 +153,36 @@ const getMessageImageParts = (message: AgentWidgetMessage): ImageContentPart[] =
       part.type === "image" &&
       typeof part.image === "string" &&
       part.image.trim().length > 0
+  );
+};
+
+const getMessageAudioParts = (message: AgentWidgetMessage): AudioContentPart[] => {
+  if (!message.contentParts || message.contentParts.length === 0) return [];
+  return message.contentParts.filter(
+    (part): part is AudioContentPart =>
+      part.type === "audio" &&
+      typeof part.audio === "string" &&
+      part.audio.trim().length > 0
+  );
+};
+
+const getMessageVideoParts = (message: AgentWidgetMessage): VideoContentPart[] => {
+  if (!message.contentParts || message.contentParts.length === 0) return [];
+  return message.contentParts.filter(
+    (part): part is VideoContentPart =>
+      part.type === "video" &&
+      typeof part.video === "string" &&
+      part.video.trim().length > 0
+  );
+};
+
+const getMessageFileParts = (message: AgentWidgetMessage): FileContentPart[] => {
+  if (!message.contentParts || message.contentParts.length === 0) return [];
+  return message.contentParts.filter(
+    (part): part is FileContentPart =>
+      part.type === "file" &&
+      typeof part.data === "string" &&
+      part.data.trim().length > 0
   );
 };
 
@@ -205,6 +263,124 @@ const createMessageImagePreviews = (
     return container;
   } catch {
     onPreviewFailed?.();
+    return null;
+  }
+};
+
+const createMessageAudioPreviews = (
+  audioParts: AudioContentPart[]
+): HTMLElement | null => {
+  if (audioParts.length === 0) return null;
+  try {
+    const container = createElement(
+      "div",
+      "persona-flex persona-flex-col persona-gap-2"
+    );
+    container.setAttribute("data-message-attachments", "audio");
+    let visible = 0;
+    audioParts.forEach((part) => {
+      if (!isSafeMediaSrc(part.audio)) return;
+      const audioElement = createElement("audio") as HTMLAudioElement;
+      audioElement.controls = true;
+      audioElement.preload = "metadata";
+      audioElement.src = part.audio;
+      audioElement.style.display = "block";
+      audioElement.style.width = "100%";
+      audioElement.style.maxWidth = `${MESSAGE_IMAGE_PREVIEW_MAX_WIDTH_PX}px`;
+      container.appendChild(audioElement);
+      visible += 1;
+    });
+    if (visible === 0) {
+      container.remove();
+      return null;
+    }
+    return container;
+  } catch {
+    return null;
+  }
+};
+
+const createMessageVideoPreviews = (
+  videoParts: VideoContentPart[]
+): HTMLElement | null => {
+  if (videoParts.length === 0) return null;
+  try {
+    const container = createElement(
+      "div",
+      "persona-flex persona-flex-col persona-gap-2"
+    );
+    container.setAttribute("data-message-attachments", "video");
+    let visible = 0;
+    videoParts.forEach((part) => {
+      if (!isSafeMediaSrc(part.video)) return;
+      const videoElement = createElement("video") as HTMLVideoElement;
+      videoElement.controls = true;
+      videoElement.preload = "metadata";
+      videoElement.src = part.video;
+      videoElement.style.display = "block";
+      videoElement.style.width = "100%";
+      videoElement.style.maxWidth = `${MESSAGE_IMAGE_PREVIEW_MAX_WIDTH_PX}px`;
+      videoElement.style.maxHeight = `${MESSAGE_IMAGE_PREVIEW_MAX_HEIGHT_PX}px`;
+      videoElement.style.borderRadius = "10px";
+      videoElement.style.backgroundColor =
+        "var(--persona-attachment-image-bg, var(--persona-container, #f3f4f6))";
+      container.appendChild(videoElement);
+      visible += 1;
+    });
+    if (visible === 0) {
+      container.remove();
+      return null;
+    }
+    return container;
+  } catch {
+    return null;
+  }
+};
+
+const createMessageFilePreviews = (
+  fileParts: FileContentPart[]
+): HTMLElement | null => {
+  if (fileParts.length === 0) return null;
+  try {
+    const container = createElement(
+      "div",
+      "persona-flex persona-flex-col persona-gap-2"
+    );
+    container.setAttribute("data-message-attachments", "files");
+    let visible = 0;
+    fileParts.forEach((part) => {
+      if (!isSafeMediaSrc(part.data)) return;
+      const link = createElement("a") as HTMLAnchorElement;
+      link.href = part.data;
+      link.download = part.filename;
+      // Cross-origin URLs ignore the `download` attribute, so without
+      // `target=_blank` the link would navigate the chat page to the file.
+      // Pair with `rel="noopener noreferrer"` to prevent reverse tabnabbing.
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = part.filename;
+      link.className = "persona-message-file-attachment";
+      link.style.display = "inline-flex";
+      link.style.alignItems = "center";
+      link.style.gap = "6px";
+      link.style.padding = "6px 10px";
+      link.style.borderRadius = "8px";
+      link.style.fontSize = "0.875rem";
+      link.style.textDecoration = "underline";
+      link.style.backgroundColor =
+        "var(--persona-attachment-file-bg, var(--persona-container, #f3f4f6))";
+      link.style.border =
+        "1px solid var(--persona-attachment-file-border, var(--persona-border, #e5e7eb))";
+      link.style.color = "inherit";
+      container.appendChild(link);
+      visible += 1;
+    });
+    if (visible === 0) {
+      container.remove();
+      return null;
+    }
+    return container;
+  } catch {
     return null;
   }
 };
@@ -707,6 +883,30 @@ export const createStandardBubble = (
       bubble.appendChild(imagePreviews);
     } else if (shouldHideTextUntilPreviewFails && textContentDiv) {
       textContentDiv.style.display = "";
+    }
+  }
+
+  const audioParts = getMessageAudioParts(message);
+  if (audioParts.length > 0) {
+    const audioPreviews = createMessageAudioPreviews(audioParts);
+    if (audioPreviews) {
+      bubble.appendChild(audioPreviews);
+    }
+  }
+
+  const videoParts = getMessageVideoParts(message);
+  if (videoParts.length > 0) {
+    const videoPreviews = createMessageVideoPreviews(videoParts);
+    if (videoPreviews) {
+      bubble.appendChild(videoPreviews);
+    }
+  }
+
+  const fileParts = getMessageFileParts(message);
+  if (fileParts.length > 0) {
+    const filePreviews = createMessageFilePreviews(fileParts);
+    if (filePreviews) {
+      bubble.appendChild(filePreviews);
     }
   }
 
