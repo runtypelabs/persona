@@ -337,3 +337,186 @@ describe('AgentWidgetSession - cancel()', () => {
     expect(stopVoicePlaybackSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('AgentWidgetSession.resolveAskUserQuestion', () => {
+  const makeAwaitingMessage = (): AgentWidgetMessage => ({
+    id: 'tool-msg-1',
+    role: 'assistant',
+    content: '',
+    createdAt: new Date().toISOString(),
+    variant: 'tool',
+    streaming: false,
+    toolCall: {
+      id: 'runtime_ask_user_question_1',
+      name: 'ask_user_question',
+      status: 'complete',
+      args: { questions: [{ question: 'Who?', options: [{ label: 'A' }] }] },
+      chunks: [],
+    },
+    agentMetadata: {
+      executionId: 'exec_abc',
+      awaitingLocalTool: true,
+    },
+  });
+
+  it('POSTs to /resume, appends a user bubble, and pipes the SSE stream through connectStream', async () => {
+    let capturedUrl: string | undefined;
+    let capturedBody: Record<string, unknown> | undefined;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      capturedUrl = url;
+      capturedBody = JSON.parse(init.body as string);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    const seen: AgentWidgetMessage[] = [];
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://localhost:43111/api/chat/dispatch' },
+      {
+        onMessagesChanged: (msgs) => { seen.splice(0, seen.length, ...msgs); },
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+
+    const connectSpy = vi.spyOn(session, 'connectStream').mockResolvedValue(undefined);
+    await session.resolveAskUserQuestion(makeAwaitingMessage(), 'Hobbyists');
+
+    expect(capturedUrl).toBe('http://localhost:43111/api/chat/dispatch/resume');
+    expect(capturedBody).toEqual({
+      executionId: 'exec_abc',
+      toolOutputs: { ["ask_user_question"]: 'Hobbyists' },
+      streamResponse: true,
+    });
+
+    const userBubble = seen.find((m) => m.role === 'user' && m.content === 'Hobbyists');
+    expect(userBubble).toBeDefined();
+
+    expect(connectSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('flips askUserQuestionAnswered on the tool message before the POST fires', async () => {
+    const awaiting = makeAwaitingMessage();
+
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+    global.fetch = fetchMock;
+
+    let latest: AgentWidgetMessage[] = [];
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://localhost:43111/api/chat/dispatch',
+        initialMessages: [awaiting],
+      },
+      {
+        onMessagesChanged: (msgs) => { latest = msgs; },
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+
+    vi.spyOn(session, 'connectStream').mockResolvedValue(undefined);
+
+    // Capture the flag state at the exact moment fetch is called — this is
+    // the "before the POST fires" assertion. The flag must be flipped BEFORE
+    // any network I/O so the subsequent stream-driven renders skip the sheet.
+    let flagAtFetch: { awaiting?: boolean; answered?: boolean } | undefined;
+    fetchMock.mockImplementationOnce(async () => {
+      const toolMsg = session.getMessages().find((m) => m.id === awaiting.id);
+      flagAtFetch = {
+        awaiting: toolMsg?.agentMetadata?.awaitingLocalTool,
+        answered: toolMsg?.agentMetadata?.askUserQuestionAnswered,
+      };
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    await session.resolveAskUserQuestion(awaiting, 'Hobbyists');
+
+    expect(flagAtFetch).toEqual({ awaiting: false, answered: true });
+
+    const finalToolMsg = latest.find((m) => m.id === awaiting.id);
+    expect(finalToolMsg?.agentMetadata?.askUserQuestionAnswered).toBe(true);
+    expect(finalToolMsg?.agentMetadata?.awaitingLocalTool).toBe(false);
+    expect(finalToolMsg?.agentMetadata?.executionId).toBe('exec_abc');
+  });
+
+  it('leaves the answered flag flipped even when resume fails', async () => {
+    const awaiting = makeAwaitingMessage();
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({ error: 'boom' }) });
+
+    const errors: Error[] = [];
+    let latest: AgentWidgetMessage[] = [];
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://localhost:43111/api/chat/dispatch',
+        initialMessages: [awaiting],
+      },
+      {
+        onMessagesChanged: (msgs) => { latest = msgs; },
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onError: (e) => errors.push(e),
+      }
+    );
+
+    await session.resolveAskUserQuestion(awaiting, 'Hobbyists');
+
+    expect(errors.length).toBe(1);
+    const finalToolMsg = latest.find((m) => m.id === awaiting.id);
+    expect(finalToolMsg?.agentMetadata?.askUserQuestionAnswered).toBe(true);
+  });
+
+  it('markAskUserQuestionResolved is idempotent and a no-op when the message is not in state', () => {
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://localhost:8000' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+    // No throw when the tool message isn't tracked in session state
+    expect(() => session.markAskUserQuestionResolved(makeAwaitingMessage())).not.toThrow();
+  });
+
+  it('surfaces errors through onError when the message is missing executionId', async () => {
+    const errors: Error[] = [];
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://localhost:8000' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onError: (e) => errors.push(e),
+      }
+    );
+
+    const bad = makeAwaitingMessage();
+    bad.agentMetadata = { ...bad.agentMetadata, executionId: undefined };
+
+    await session.resolveAskUserQuestion(bad, 'x');
+    expect(errors.length).toBe(1);
+    expect(errors[0].message).toMatch(/executionId/);
+  });
+});

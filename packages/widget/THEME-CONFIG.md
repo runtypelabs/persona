@@ -362,6 +362,19 @@ Semantic tokens provide intent-based naming that references palette values.
 | `image.background` | `palette.colors.gray.100` |
 | `image.border` | `palette.colors.gray.200` |
 
+### Intro Card (`components.introCard.*`)
+
+The welcome panel rendered above the message list when no messages exist.
+Set `copy.showWelcomeCard: false` to hide it entirely, or use
+`layout.slots["body-top"]` to replace it with a custom element.
+
+| Token | Default Reference |
+|-------|-------------------|
+| `background` | `semantic.colors.surface` |
+| `borderRadius` | `palette.radius.2xl` |
+| `padding` | `semantic.spacing.lg` |
+| `shadow` | `"0 5px 15px rgba(15, 23, 42, 0.08)"` *(matches the legacy `persona-shadow-sm` look)* |
+
 ### Scroll To Bottom (`components.scrollToBottom.*`)
 
 | Token | Default Reference |
@@ -470,6 +483,15 @@ Common tokens have short aliases for easier use in custom CSS:
 ```css
 --persona-attachment-image-bg
 --persona-attachment-image-border
+```
+
+### Intro Card Aliases
+
+```css
+--persona-intro-card-bg
+--persona-intro-card-radius
+--persona-intro-card-padding
+--persona-intro-card-shadow
 ```
 
 ---

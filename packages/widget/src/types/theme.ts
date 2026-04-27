@@ -237,6 +237,19 @@ export interface MessageTokens {
   border?: TokenReference<'color'>;
 }
 
+/**
+ * Welcome / intro card rendered above the message list when no messages exist.
+ * Set `copy.showWelcomeCard: false` to hide it; use `layout.slots["body-top"]`
+ * to replace it wholesale.
+ */
+export interface IntroCardTokens extends ComponentTokenSet {
+  background?: TokenReference<'color'>;
+  borderRadius?: TokenReference<'radius'>;
+  padding?: TokenReference<'spacing'>;
+  /** Box-shadow on the intro card (token ref or raw CSS, e.g. `none`). */
+  shadow?: string;
+}
+
 /** Collapsible widget chrome (tool bubbles, reasoning bubbles, approval bubbles). */
 export interface CollapsibleWidgetTokens {
   /** Background for content areas. */
@@ -449,6 +462,8 @@ export interface ComponentTokens {
   panel: PanelTokens;
   header: HeaderTokens;
   message: MessageTokens;
+  /** Welcome / intro card shown above the message list. */
+  introCard?: IntroCardTokens;
   /** Markdown surfaces (chat + artifact pane). */
   markdown?: MarkdownTokens;
   voice: VoiceTokens;

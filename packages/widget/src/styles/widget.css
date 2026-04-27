@@ -1759,6 +1759,30 @@
   animation: persona-message-actions-fade-in 0.3s ease-out forwards;
 }
 
+/* ask_user_question — collapsed answered state.
+ * When the user picks an option, the interactive card is replaced with a
+ * plain assistant bubble showing the question text. A short fade + slight
+ * upward slide sells the "card resolved into history" feel.
+ */
+@keyframes persona-ask-resolved {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+[data-ask-answered="true"] {
+  animation: persona-ask-resolved 0.22s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-ask-answered="true"] {
+    animation: none;
+  }
+}
+
 /* Action bar alignment */
 .persona-message-actions-left {
   justify-content: flex-start;
@@ -2955,5 +2979,413 @@
     background: none !important;
     -webkit-background-clip: border-box !important;
             background-clip: border-box !important;
+  }
+}
+
+/* ========================================================================
+ * ask_user_question — built-in answer-pill sheet
+ * Slides in over the composer when the assistant invokes `ask_user_question`.
+ * Overridable via `config.features.askUserQuestion.styles`.
+ * ======================================================================== */
+
+[data-persona-root] .persona-hidden {
+  display: none !important;
+}
+
+/* In-transcript stub — small "Awaiting…" chip. */
+[data-persona-root] .persona-ask-stub {
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--persona-muted, #6b7280);
+  background: var(--persona-container, #f3f4f6);
+  border: 1px dashed var(--persona-border, #e5e7eb);
+}
+
+[data-persona-root] .persona-ask-stub-label {
+  font-weight: 500;
+}
+
+/* Sheet container — absolute inside composerOverlay. */
+[data-persona-root] .persona-ask-sheet {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: calc(100% + 0.5rem);
+  box-sizing: border-box;
+  padding: 0.85rem 1rem;
+  background: var(--persona-ask-sheet-bg, var(--persona-surface, #ffffff));
+  border: 1px solid var(--persona-ask-sheet-border, var(--persona-border, #e5e7eb));
+  border-radius: 1rem;
+  box-shadow: var(--persona-ask-sheet-shadow, 0 12px 28px -10px rgba(0, 0, 0, 0.15), 0 4px 10px -6px rgba(0, 0, 0, 0.08));
+  transition: transform var(--persona-ask-sheet-duration, 180ms) ease, opacity var(--persona-ask-sheet-duration, 180ms) ease;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+[data-persona-root] .persona-ask-sheet.persona-ask-sheet-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+[data-persona-root] .persona-ask-sheet.persona-ask-sheet-leave {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+/* Header row — question + close button */
+[data-persona-root] .persona-ask-sheet-header {
+  margin-bottom: 0.55rem;
+}
+
+[data-persona-root] .persona-ask-sheet-question {
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--persona-text, #1f2937);
+  min-height: 1.35em;
+}
+
+[data-persona-root] .persona-ask-question-skeleton {
+  display: block;
+  width: 60%;
+  height: 0.85rem;
+  border-radius: 0.3rem;
+  background: linear-gradient(90deg,
+    var(--persona-container, #f3f4f6) 0%,
+    var(--persona-border, #e5e7eb) 50%,
+    var(--persona-container, #f3f4f6) 100%);
+  background-size: 200% 100%;
+  animation: persona-ask-skeleton-shimmer 1.2s ease-in-out infinite;
+  color: transparent;
+}
+
+[data-persona-root] .persona-ask-sheet-step-inline {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  line-height: 1;
+  color: var(--persona-text-muted, #6b7280);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+[data-persona-root] .persona-ask-sheet-step-inline:empty {
+  display: none;
+}
+
+/* Option list — stacked one per row by default ("rows" layout). The "pills"
+   layout opt-in switches to horizontal wrap with compact pills; see also
+   horizontalPillsAskPlugin example for a custom variant. */
+[data-persona-root] .persona-ask-pills {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  row-gap: 0.4rem;
+  column-gap: 0;
+}
+
+[data-persona-root] .persona-ask-pills--rows {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+}
+
+/* Pills layout opt-in — horizontal wrap, auto-width compact pills. */
+[data-persona-root] .persona-ask-sheet--pills .persona-ask-pills:not(.persona-ask-pills--rows) {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+[data-persona-root] .persona-ask-sheet--pills .persona-ask-pills:not(.persona-ask-pills--rows) .persona-ask-pill {
+  width: auto;
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--persona-ask-pill-radius, 9999px);
+}
+
+[data-persona-root] .persona-ask-pill {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  text-align: left;
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--persona-ask-pill-radius, 0.6rem);
+  background: var(--persona-ask-pill-bg, transparent);
+  color: var(--persona-ask-pill-fg, var(--persona-text, #1f2937));
+  border: 1px solid var(--persona-border, #e5e7eb);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+[data-persona-root] .persona-ask-pill:hover:not(:disabled):not(.persona-ask-pill-skeleton):not(.persona-ask-pill-selected):not([aria-pressed="true"]) {
+  border-color: var(--persona-text, #1f2937);
+  background: var(--persona-container, #f3f4f6);
+}
+
+[data-persona-root] .persona-ask-pill:active {
+  transform: translateY(1px);
+}
+
+[data-persona-root] .persona-ask-pill-selected,
+[data-persona-root] .persona-ask-pill[aria-pressed="true"] {
+  background: var(--persona-ask-pill-bg-selected, var(--persona-accent, #0f0f0f));
+  color: var(--persona-ask-pill-fg-selected, #fafafa);
+  border-color: var(--persona-ask-pill-bg-selected, var(--persona-accent, #0f0f0f));
+}
+
+[data-persona-root] .persona-ask-pill:focus:not(:focus-visible) {
+  outline: none;
+}
+
+[data-persona-root] .persona-ask-pill:focus-visible {
+  outline: 2px solid var(--persona-accent, #0f0f0f);
+  outline-offset: 2px;
+}
+
+[data-persona-root] .persona-ask-pill-custom {
+  border-style: dashed;
+}
+
+[data-persona-root] .persona-ask-pill-skeleton {
+  min-width: 5rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--persona-border, #e5e7eb);
+  background: linear-gradient(90deg,
+    var(--persona-container, #f3f4f6) 0%,
+    var(--persona-border, #e5e7eb) 50%,
+    var(--persona-container, #f3f4f6) 100%);
+  background-size: 200% 100%;
+  animation: persona-ask-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes persona-ask-skeleton-shimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: -100% 50%; }
+}
+
+/* Row layout — full-width stacked rows with always-visible description
+   and a right-edge affordance (number badge for single-select, check for
+   multi-select). Layered on top of .persona-ask-pill base styles. */
+[data-persona-root] .persona-ask-row {
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+}
+
+[data-persona-root] .persona-ask-row-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+[data-persona-root] .persona-ask-row-label {
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+[data-persona-root] .persona-ask-row-description {
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--persona-text-muted, #6b7280);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+[data-persona-root] .persona-ask-pill-selected .persona-ask-row-description,
+[data-persona-root] .persona-ask-pill[aria-pressed="true"] .persona-ask-row-description {
+  color: var(--persona-ask-pill-fg-selected, #fafafa);
+  opacity: 0.85;
+}
+
+[data-persona-root] .persona-ask-row-affordance {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+[data-persona-root] .persona-ask-row-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--persona-border, #e5e7eb);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--persona-text-muted, #6b7280);
+  background: transparent;
+}
+
+[data-persona-root] .persona-ask-pill-selected .persona-ask-row-badge,
+[data-persona-root] .persona-ask-pill[aria-pressed="true"] .persona-ask-row-badge {
+  border-color: var(--persona-ask-pill-fg-selected, #fafafa);
+  color: var(--persona-ask-pill-fg-selected, #fafafa);
+}
+
+[data-persona-root] .persona-ask-row-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 0.35rem;
+  border: 1.5px solid var(--persona-border, #d1d5db);
+  background: transparent;
+  position: relative;
+}
+
+[data-persona-root] .persona-ask-pill-selected .persona-ask-row-check,
+[data-persona-root] .persona-ask-pill[aria-pressed="true"] .persona-ask-row-check {
+  background: var(--persona-ask-pill-fg-selected, #fafafa);
+  border-color: var(--persona-ask-pill-fg-selected, #fafafa);
+}
+
+[data-persona-root] .persona-ask-pill-selected .persona-ask-row-check::after,
+[data-persona-root] .persona-ask-pill[aria-pressed="true"] .persona-ask-row-check::after {
+  content: "";
+  width: 0.45rem;
+  height: 0.75rem;
+  border-right: 2px solid var(--persona-ask-pill-bg-selected, var(--persona-accent, #0f0f0f));
+  border-bottom: 2px solid var(--persona-ask-pill-bg-selected, var(--persona-accent, #0f0f0f));
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+[data-persona-root] .persona-ask-row.persona-ask-pill-skeleton {
+  height: 3rem;
+}
+
+/* Other row (rows mode) — composite row that contains the free-text input
+ * directly. The input fills the row body; the badge sits on the right. */
+[data-persona-root] .persona-ask-row--other {
+  cursor: text;
+}
+
+[data-persona-root] .persona-ask-row-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 0.92rem;
+  color: inherit;
+  outline: none;
+  width: 100%;
+}
+
+[data-persona-root] .persona-ask-row-input::placeholder {
+  color: var(--persona-text-muted, #6b7280);
+  opacity: 1;
+}
+
+/* Free-text expansion row (pills layout only) */
+[data-persona-root] .persona-ask-free-text {
+  width: 100%;
+}
+
+[data-persona-root] .persona-ask-free-text--rows {
+  margin-top: 0.4rem;
+}
+
+[data-persona-root] .persona-ask-free-text-input {
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--persona-border, #e5e7eb);
+  border-radius: 0.55rem;
+  font-size: 0.88rem;
+  background: var(--persona-ask-input-bg, var(--persona-surface, #ffffff));
+  color: var(--persona-text, #1f2937);
+}
+
+[data-persona-root] .persona-ask-free-text-input:focus {
+  outline: 2px solid var(--persona-accent, #0f0f0f);
+  outline-offset: 1px;
+}
+
+[data-persona-root] .persona-ask-free-text-submit,
+[data-persona-root] .persona-ask-multi-submit {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.55rem;
+  background: var(--persona-accent, #0f0f0f);
+  color: #fafafa;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+[data-persona-root] .persona-ask-free-text-submit:disabled,
+[data-persona-root] .persona-ask-multi-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Nav row — Back / Skip / Next-or-Submit buttons for grouped payloads. */
+[data-persona-root] .persona-ask-nav-back,
+[data-persona-root] .persona-ask-nav-skip {
+  padding: 0.45rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--persona-text-muted, #6b7280);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+[data-persona-root] .persona-ask-nav-back:hover:not(:disabled),
+[data-persona-root] .persona-ask-nav-skip:hover:not(:disabled) {
+  background: var(--persona-container, #f3f4f6);
+  color: var(--persona-text, #1f2937);
+}
+
+[data-persona-root] .persona-ask-nav-back:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+[data-persona-root] .persona-ask-nav-next {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.55rem;
+  background: var(--persona-accent, #0f0f0f);
+  color: #fafafa;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+[data-persona-root] .persona-ask-nav-next:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-persona-root] .persona-ask-sheet,
+  [data-persona-root] .persona-ask-pill-skeleton,
+  [data-persona-root] .persona-ask-question-skeleton {
+    transition: none !important;
+    animation: none !important;
   }
 }

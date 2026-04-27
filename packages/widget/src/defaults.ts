@@ -143,6 +143,13 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       speed: 120,
       duration: 1800,
     },
+    askUserQuestion: {
+      enabled: true,
+      slideInMs: 180,
+      freeTextLabel: "Other…",
+      freeTextPlaceholder: "Type your answer…",
+      submitLabel: "Send",
+    },
   },
   suggestionChips: [
     "What can you help me with?",
@@ -259,6 +266,8 @@ export function mergeWithDefaults(
       const csb = config.features?.scrollToBottom;
       const dsa = DEFAULT_WIDGET_CONFIG.features?.streamAnimation;
       const csa = config.features?.streamAnimation;
+      const dau = DEFAULT_WIDGET_CONFIG.features?.askUserQuestion;
+      const cau = config.features?.askUserQuestion;
       const mergedArtifacts =
         da === undefined && ca === undefined
           ? undefined
@@ -284,12 +293,24 @@ export function mergeWithDefaults(
               ...dsa,
               ...csa,
             };
+      const mergedAskUserQuestion =
+        dau === undefined && cau === undefined
+          ? undefined
+          : {
+              ...dau,
+              ...cau,
+              styles: {
+                ...dau?.styles,
+                ...cau?.styles,
+              },
+            };
       return {
         ...DEFAULT_WIDGET_CONFIG.features,
         ...config.features,
         ...(mergedScrollToBottom !== undefined ? { scrollToBottom: mergedScrollToBottom } : {}),
         ...(mergedArtifacts !== undefined ? { artifacts: mergedArtifacts } : {}),
         ...(mergedStreamAnimation !== undefined ? { streamAnimation: mergedStreamAnimation } : {}),
+        ...(mergedAskUserQuestion !== undefined ? { askUserQuestion: mergedAskUserQuestion } : {}),
       };
     })(),
     suggestionChips: config.suggestionChips ?? DEFAULT_WIDGET_CONFIG.suggestionChips,

@@ -318,6 +318,14 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     },
     border: 'semantic.colors.border',
   },
+  introCard: {
+    // Defaults preserve the legacy `persona-shadow-sm` look exactly so existing
+    // pages render unchanged when no token is set.
+    background: 'semantic.colors.surface',
+    borderRadius: 'palette.radius.2xl',
+    padding: 'semantic.spacing.lg',
+    shadow: '0 5px 15px rgba(15, 23, 42, 0.08)',
+  },
   toolBubble: {
     shadow: 'palette.shadows.sm',
   },
@@ -762,6 +770,21 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   const headerTokens = theme.components?.header;
   if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;
   if (headerTokens?.borderBottom) cssVars['--persona-header-border-bottom'] = headerTokens.borderBottom;
+
+  // Intro card aliases — short names the panel inline-styles read directly.
+  // The full-path `--persona-components-introCard-*` variables auto-emit above;
+  // these mirror them with sensible fallbacks so existing pages keep their look.
+  const introCardTokens = theme.components?.introCard;
+  cssVars['--persona-intro-card-bg'] =
+    cssVars['--persona-components-introCard-background'] ?? cssVars['--persona-surface'];
+  cssVars['--persona-intro-card-radius'] =
+    cssVars['--persona-components-introCard-borderRadius'] ?? '1rem';
+  cssVars['--persona-intro-card-padding'] =
+    cssVars['--persona-components-introCard-padding'] ?? '1.5rem';
+  cssVars['--persona-intro-card-shadow'] =
+    introCardTokens?.shadow
+      ?? cssVars['--persona-components-introCard-shadow']
+      ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
 
   cssVars['--persona-input-background'] =
     cssVars['--persona-components-input-background'] ?? cssVars['--persona-surface'];

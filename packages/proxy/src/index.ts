@@ -327,6 +327,67 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
     });
   });
 
+  // Resume endpoint — forwards client-executed (LOCAL) tool results back to
+  // the Runtype upstream so a paused flow execution can continue. Mounted as
+  // a child of the dispatch path so the widget can derive its URL by
+  // appending "/resume" to whatever `apiUrl` it was configured with.
+  app.post(`${path}/resume`, async (c) => {
+    const apiKey = options.apiKey ?? getRuntimeEnv()?.RUNTYPE_API_KEY;
+    if (!apiKey) {
+      return c.json(
+        { error: "Missing API key. Set RUNTYPE_API_KEY." },
+        401
+      );
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = await c.req.json();
+    } catch (error) {
+      return c.json(
+        { error: "Invalid JSON body", details: error },
+        400
+      );
+    }
+
+    const isDevelopment = isDevelopmentRuntime();
+    const upstreamResumeUrl = `${upstream.replace(/\/+$/, '')}/resume`;
+
+    if (isDevelopment) {
+      console.log("\n=== Runtype Proxy Resume ===");
+      console.log("URL:", upstreamResumeUrl);
+      console.log(
+        "executionId:",
+        typeof body.executionId === "string" ? body.executionId : "(missing)"
+      );
+      console.log(
+        "toolOutputs keys:",
+        body.toolOutputs && typeof body.toolOutputs === "object"
+          ? Object.keys(body.toolOutputs)
+          : "(none)"
+      );
+      console.log("=== End Runtype Proxy Resume ===\n");
+    }
+
+    const response = await fetch(upstreamResumeUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+
+    return new Response(response.body, {
+      status: response.status,
+      headers: {
+        "Content-Type":
+          response.headers.get("content-type") ?? "application/json",
+        "Cache-Control": "no-store"
+      }
+    });
+  });
+
   return app;
 };
 
