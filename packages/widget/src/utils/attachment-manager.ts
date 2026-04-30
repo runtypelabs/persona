@@ -66,7 +66,7 @@ function getFileIconName(mimeType: string): string {
   if (mimeType.startsWith('text/')) return 'file-text';
   if (mimeType.includes('word')) return 'file-text';
   if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return 'file-spreadsheet';
-  if (mimeType === 'application/json') return 'file-json';
+  if (mimeType === 'application/json') return 'file-code';
   return 'file';
 }
 

@@ -217,6 +217,7 @@ export type { DropdownMenuItem, CreateDropdownOptions, DropdownMenuHandle } from
 
 // Icon utility exports
 export { renderLucideIcon } from "./utils/icons";
+export type { IconName } from "./utils/icons";
 
 // Button utility exports
 export { createIconButton, createLabelButton, createToggleGroup, createComboButton } from "./utils/buttons";
