@@ -2468,6 +2468,12 @@ export const createAgentExperience = (
   // bubble for, per message id. Lets us skip unnecessary rebuilds across
   // re-renders so user state inside the plugin (typed text, focus) survives.
   const lastAskBubbleFingerprint = new Map<string, string>();
+  // Same idea for component-directive bubbles (registered custom components
+  // rendered from JSON directives). The renderer's element is injected into the
+  // live DOM post-morph so its event listeners survive; this map gates the
+  // expensive rebuild on fingerprint change so user state inside the rendered
+  // component (e.g. partially-filled form inputs) is not wiped on every pass.
+  const lastComponentDirectiveFingerprint = new Map<string, string>();
   let configVersion = 0;
   const autoFollow = createFollowStateController();
   let lastScrollTop = 0;
@@ -2832,10 +2838,39 @@ export const createAgentExperience = (
     };
     const askPluginHydrate: AskPluginHydrate[] = [];
 
+    // Component-directive bubbles use the same stub-and-hydrate pattern as
+    // ask_user_question plugins: the renderer's HTMLElement is built live and
+    // injected into the morphed wrapper afterward, so listeners attached via
+    // `addEventListener` (e.g. form `submit` handlers) survive transcript
+    // morphs. `bubble: null` means the fingerprint matched a previous pass and
+    // the live wrapper is reused as-is.
+    type ComponentDirectiveHydrate = {
+      messageId: string;
+      fingerprint: string;
+      bubble: HTMLElement | null;
+    };
+    const componentDirectiveHydrate: ComponentDirectiveHydrate[] = [];
+    const componentStreamingEnabled = config.enableComponentStreaming !== false;
+
     messages.forEach((message) => {
       activeMessageIds.add(message.id);
 
       const askWithPlugin = hasAskPlugin && isAskUserQuestionMessage(message);
+      const hasDirectiveBubble =
+        !askWithPlugin &&
+        message.role === "assistant" &&
+        !message.variant &&
+        componentStreamingEnabled &&
+        hasComponentDirective(message);
+
+      // If a message previously rendered as a directive bubble but no longer
+      // does (e.g. content was rewritten), strip `data-preserve-runtime` from
+      // the live wrapper so the next morph can replace it.
+      if (!hasDirectiveBubble && lastComponentDirectiveFingerprint.has(message.id)) {
+        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        existing?.removeAttribute("data-preserve-runtime");
+        lastComponentDirectiveFingerprint.delete(message.id);
+      }
 
       // Fingerprint cache: skip re-rendering unchanged messages. Append the
       // ask-user-question answered/answers state so flipping `askUserQuestionAnswered`
@@ -2849,7 +2884,7 @@ export const createAgentExperience = (
           }`
         : "";
       const fingerprint = computeMessageFingerprint(message, configVersion) + askMeta;
-      const cachedWrapper = askWithPlugin
+      const cachedWrapper = (askWithPlugin || hasDirectiveBubble)
         ? null
         : getCachedWrapper(messageCache, message.id, fingerprint);
       if (cachedWrapper) {
@@ -3046,19 +3081,26 @@ export const createAgentExperience = (
         }
       }
 
-      // Check for component directive if no plugin handled it
-      if (!bubble && message.role === "assistant" && !message.variant) {
-        const enableComponentStreaming = config.enableComponentStreaming !== false; // Default to true
-        if (enableComponentStreaming && hasComponentDirective(message)) {
-          const directive = extractComponentDirectiveFromMessage(message);
-          if (directive) {
+      // Check for component directive if no plugin handled it. We use the
+      // same stub-and-hydrate trick as ask_user_question plugins (see comment
+      // above `componentDirectiveHydrate`): build the live element with its
+      // listeners, append a stub for the morph pass, then inject the live
+      // element into the morphed wrapper afterward.
+      if (!bubble && hasDirectiveBubble) {
+        const directive = extractComponentDirectiveFromMessage(message);
+        if (directive) {
+          const lastFp = lastComponentDirectiveFingerprint.get(message.id);
+          const needsRebuild = lastFp !== fingerprint;
+          const wrapChrome = config.wrapComponentDirectiveInBubble !== false;
+          let liveBubble: HTMLElement | null = null;
+
+          if (needsRebuild) {
             const componentBubble = renderComponentDirective(directive, {
               config,
               message,
               transform
             });
             if (componentBubble) {
-              const wrapChrome = config.wrapComponentDirectiveInBubble !== false;
               if (wrapChrome) {
                 const componentWrapper = document.createElement("div");
                 componentWrapper.className = [
@@ -3086,7 +3128,7 @@ export const createAgentExperience = (
                 }
 
                 componentWrapper.appendChild(componentBubble);
-                bubble = componentWrapper;
+                liveBubble = componentWrapper;
               } else {
                 const stack = document.createElement("div");
                 stack.className =
@@ -3109,9 +3151,32 @@ export const createAgentExperience = (
                 }
 
                 stack.appendChild(componentBubble);
-                bubble = stack;
+                liveBubble = stack;
               }
             }
+          }
+
+          // If the directive is registered (live bubble built or already
+          // mounted from a previous pass), use the stub-and-hydrate path.
+          // Otherwise fall through to the standard render path so the message
+          // text is at least visible.
+          if (liveBubble || lastFp != null) {
+            const stub = document.createElement("div");
+            stub.className = "persona-flex";
+            stub.id = `wrapper-${message.id}`;
+            stub.setAttribute("data-wrapper-id", message.id);
+            stub.setAttribute("data-component-directive-stub", "true");
+            stub.setAttribute("data-preserve-runtime", "true");
+            if (!wrapChrome) {
+              stub.classList.add("persona-w-full");
+            }
+            tempContainer.appendChild(stub);
+            componentDirectiveHydrate.push({
+              messageId: message.id,
+              fingerprint,
+              bubble: liveBubble
+            });
+            return;
           }
         }
       }
@@ -3447,6 +3512,30 @@ export const createAgentExperience = (
     if (lastAskBubbleFingerprint.size > 0) {
       for (const id of lastAskBubbleFingerprint.keys()) {
         if (!activeMessageIds.has(id)) lastAskBubbleFingerprint.delete(id);
+      }
+    }
+
+    // Hydrate component-directive bubbles into their stub wrappers, mirroring
+    // the ask-question hydration above.
+    if (componentDirectiveHydrate.length > 0) {
+      for (const { messageId, fingerprint, bubble } of componentDirectiveHydrate) {
+        const wrapper = container.querySelector(`#wrapper-${messageId}`);
+        if (!wrapper) continue;
+        if (bubble === null) {
+          // Fingerprint matched the previous pass — the live wrapper (kept
+          // alive by `data-preserve-runtime`) still holds the listener-bearing
+          // bubble from a prior render. Leave it untouched.
+          continue;
+        }
+        wrapper.replaceChildren(bubble);
+        wrapper.setAttribute("data-bubble-fp", fingerprint);
+        lastComponentDirectiveFingerprint.set(messageId, fingerprint);
+      }
+    }
+
+    if (lastComponentDirectiveFingerprint.size > 0) {
+      for (const id of lastComponentDirectiveFingerprint.keys()) {
+        if (!activeMessageIds.has(id)) lastComponentDirectiveFingerprint.delete(id);
       }
     }
   };

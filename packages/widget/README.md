@@ -2062,7 +2062,7 @@ In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because 
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `components` | `Record<string, AgentWidgetComponentRenderer>` | Registry of custom components rendered from JSON directives (`{"component": "Name", "props": {...}}`). Each renderer receives `(props, context)` and returns an `HTMLElement`. |
+| `components` | `Record<string, AgentWidgetComponentRenderer>` | Registry of custom components rendered from JSON directives (`{"component": "Name", "props": {...}}`). Each renderer receives `(props, context)` and returns an `HTMLElement`. Event listeners attached via `addEventListener` (and any other imperative state on the returned element) are preserved across transcript updates — the widget injects the live element directly into the morphed wrapper so listeners survive subsequent re-renders. The renderer is re-invoked when the directive's props change; for state you want to persist across prop changes, hold it in a closure outside the render. |
 
 ```typescript
 config: {

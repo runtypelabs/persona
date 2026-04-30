@@ -31,6 +31,9 @@ createAgentExperience(inlineMount, {
   apiUrl: proxyUrl,
   parserType: "json", // Use JSON parser for component directives
   enableComponentStreaming: true,
+  // The DynamicForm renders its own card chrome (border, padding, shadow),
+  // so disable Persona's default bubble wrap to avoid a card-on-card look.
+  wrapComponentDirectiveInBubble: false,
   launcher: { enabled: false, width: "100%" },
   formEndpoint: "/form",
   theme: {
@@ -67,6 +70,7 @@ initAgentWidget({
     apiUrl: proxyUrl,
     parserType: "json",
     enableComponentStreaming: true,
+    wrapComponentDirectiveInBubble: false,
     formEndpoint: "/form",
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
