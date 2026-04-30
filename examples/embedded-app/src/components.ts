@@ -464,7 +464,7 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
   titleEl.style.cssText = `
     margin: 0 0 0.5rem 0;
     color: ${textVar};
-    font-size: ${styles.titleFontSize || "1.625rem"};
+    font-size: ${styles.titleFontSize || "1.425rem"};
     font-weight: ${styles.titleFontWeight || "700"};
     line-height: 1.2;
     letter-spacing: -0.01em;
@@ -902,25 +902,28 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 56px;
-      height: 56px;
+      width: 52px;
+      height: 52px;
       border-radius: 9999px;
-      background: ${successAccent};
+      background: ${textVar};
       color: var(--persona-button-primary-fg, #ffffff);
-      box-shadow: 0 6px 18px ${accentFallback}33;
-      margin-bottom: 1rem;
+      margin-bottom: 1.25rem;
     `;
     const check = buildCheckmarkSvg();
+    check.setAttribute("width", "26");
+    check.setAttribute("height", "26");
     checkWrap.appendChild(check);
     successWrapper.appendChild(checkWrap);
 
     const heading = document.createElement("h3");
     heading.tabIndex = -1;
     heading.style.cssText = `
-      margin: 0 0 0.375rem 0;
+      margin: 0 0 0.5rem 0;
       color: ${textVar};
-      font-size: 1.125rem;
-      font-weight: 600;
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
       outline: none;
     `;
     heading.textContent = successTitle;
@@ -928,9 +931,9 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
 
     const bodyEl = document.createElement("p");
     bodyEl.style.cssText = `
-      margin: 0 0 1.25rem 0;
+      margin: 0 0 1.75rem 0;
       color: ${mutedVar};
-      font-size: 0.9375rem;
+      font-size: 1rem;
       line-height: 1.5;
     `;
     bodyEl.textContent = body;
@@ -946,30 +949,63 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
       .filter((entry): entry is { label: string; value: string } => entry !== null);
 
     if (recapEntries.length > 0) {
+      const recapSection = document.createElement("div");
+      recapSection.style.cssText = `
+        text-align: left;
+        margin: 0 0 1.5rem 0;
+      `;
+
+      const sectionLabel = document.createElement("div");
+      sectionLabel.textContent = "Submitted details";
+      sectionLabel.style.cssText = `
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: ${mutedVar};
+        margin-bottom: 0.625rem;
+      `;
+      recapSection.appendChild(sectionLabel);
+
       const recap = document.createElement("dl");
       recap.style.cssText = `
         display: grid;
-        grid-template-columns: max-content 1fr;
-        column-gap: 1rem;
-        row-gap: 0.5rem;
-        text-align: left;
-        margin: 0 0 1.25rem 0;
-        padding: 0.875rem 0;
-        border-top: 1px solid ${dividerVar};
-        border-bottom: 1px solid ${dividerVar};
-        font-size: 0.875rem;
+        grid-template-columns: minmax(7rem, max-content) 1fr;
+        margin: 0;
+        padding: 0;
+        border: 1px solid ${borderVar};
+        border-radius: 0.75rem;
+        overflow: hidden;
       `;
-      recapEntries.forEach(({ label, value }) => {
+      recapEntries.forEach(({ label, value }, index) => {
+        const isLast = index === recapEntries.length - 1;
+        const cellBorder = isLast ? "none" : `1px solid ${dividerVar}`;
         const dt = document.createElement("dt");
-        dt.style.cssText = `color: ${mutedVar}; font-weight: 500;`;
+        dt.style.cssText = `
+          margin: 0;
+          padding: 0.875rem 1rem;
+          color: ${mutedVar};
+          font-size: 0.9375rem;
+          font-weight: 500;
+          border-bottom: ${cellBorder};
+        `;
         dt.textContent = label;
         const dd = document.createElement("dd");
-        dd.style.cssText = `margin: 0; color: ${textVar}; word-break: break-word;`;
+        dd.style.cssText = `
+          margin: 0;
+          padding: 0.875rem 1rem;
+          color: ${textVar};
+          font-size: 0.9375rem;
+          font-weight: 600;
+          word-break: break-word;
+          border-bottom: ${cellBorder};
+        `;
         dd.textContent = value;
         recap.appendChild(dt);
         recap.appendChild(dd);
       });
-      successWrapper.appendChild(recap);
+      recapSection.appendChild(recap);
+      successWrapper.appendChild(recapSection);
     }
 
     if (allowEdit) {
@@ -978,10 +1014,10 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.375rem;
+        gap: 0.625rem;
       `;
       const editPrompt = document.createElement("div");
-      editPrompt.style.cssText = `font-size: 0.8125rem; color: ${mutedVar};`;
+      editPrompt.style.cssText = `font-size: 0.9375rem; color: ${mutedVar};`;
       editPrompt.textContent = "Need to update something?";
       const editBtn = document.createElement("button");
       editBtn.type = "button";
@@ -991,11 +1027,11 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
         background: transparent;
         border: 1px solid ${borderVar};
         color: ${textVar};
-        padding: 0.5rem 1rem;
-        min-height: 36px;
+        padding: 0.625rem 1.25rem;
+        min-height: 40px;
         border-radius: 9999px;
-        font-size: 0.875rem;
-        font-weight: 500;
+        font-size: 0.9375rem;
+        font-weight: 600;
         font-family: inherit;
         cursor: pointer;
         transition: background 0.15s ease, border-color 0.15s ease;

@@ -98,6 +98,14 @@ initAgentWidget({
       "I have extra requirements",
       "What's next after the form?"
     ],
+    formStyles: {
+      borderRadius: "6px",
+      borderWidth: "1px",
+      borderColor: "#e5e7eb",
+      padding: "1.25rem",
+      titleFontSize: "1.25rem",
+      buttonBorderRadius: "6px"
+    },
     postprocessMessage: ({ text }) => markdownPostprocessor(text)
   }
 });

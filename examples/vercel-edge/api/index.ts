@@ -162,11 +162,10 @@ app.post("/form", async (c) => {
 
   const summaryLines = [
     type === "init"
-      ? "We'll follow up shortly to confirm your demo slot."
+      ? "We'll follow up shortly to confirm."
       : "Thanks for the additional context.",
   ];
   if (name) summaryLines.push(`Name: ${name}`);
-  if (email) summaryLines.push(`Email: ${email}`);
 
   return c.json({
     success: true,
