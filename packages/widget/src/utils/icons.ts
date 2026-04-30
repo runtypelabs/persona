@@ -122,6 +122,9 @@ import {
   Sun,
   Moon,
   Flag,
+  // ---------- Devices ----------
+  Monitor,
+  Smartphone,
 } from "lucide";
 
 /**
@@ -268,6 +271,9 @@ const LUCIDE_ICONS = {
   "sun": Sun,
   "moon": Moon,
   "flag": Flag,
+  // Devices
+  "monitor": Monitor,
+  "smartphone": Smartphone,
 } as const satisfies Record<string, IconNode>;
 
 /**
