@@ -116,6 +116,48 @@ describe("localStorage driver", () => {
   });
 });
 
+describe("createStorageAdapter", () => {
+  it("bridges PersonaStorage to AgentWidgetStorageAdapter", async () => {
+    const { createStorageAdapter } = await import("./storage");
+    const storage = createStorage({ driver: createMemoryDriver() });
+    const adapter = createStorageAdapter(storage, "persona-state");
+
+    await adapter.save?.({
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          content: "hi",
+          streaming: true
+        } as unknown as never
+      ],
+      metadata: { foo: "bar" }
+    });
+
+    const loaded = await adapter.load?.();
+    expect(loaded?.metadata).toEqual({ foo: "bar" });
+    // streaming=true is sanitized to false on persist
+    expect(loaded?.messages?.[0]).toMatchObject({ streaming: false });
+
+    await adapter.clear?.();
+    expect(await adapter.load?.()).toBeNull();
+  });
+
+  it("sanitizes artifact status to complete", async () => {
+    const { createStorageAdapter } = await import("./storage");
+    const storage = createStorage({ driver: createMemoryDriver() });
+    const adapter = createStorageAdapter(storage, "k");
+
+    await adapter.save?.({
+      artifacts: [
+        { id: "a", status: "streaming" } as unknown as never
+      ]
+    });
+    const loaded = await adapter.load?.();
+    expect(loaded?.artifacts?.[0]).toMatchObject({ status: "complete" });
+  });
+});
+
 describe("indexedDB driver", () => {
   let dbCounter = 0;
   const freshDb = () => `persona-storage-test-${Date.now()}-${dbCounter++}`;

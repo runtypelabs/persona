@@ -96,7 +96,7 @@ import {
   defaultActionHandlers,
   defaultJsonActionParser
 } from "./utils/actions";
-import { createLocalStorageAdapter } from "./utils/storage";
+import { createLocalStorageAdapter, createStorageAdapter } from "./utils/storage";
 import { componentRegistry } from "./components/registry";
 import {
   renderComponentDirective,
@@ -486,7 +486,10 @@ export const createAgentExperience = (
   const eventBus = createEventBus<AgentWidgetControllerEventMap>();
 
   const storageAdapter: AgentWidgetStorageAdapter =
-    config.storageAdapter ?? createLocalStorageAdapter();
+    config.storageAdapter ??
+    (config.storage
+      ? createStorageAdapter(config.storage, config.storageKey)
+      : createLocalStorageAdapter(config.storageKey));
   let persistentMetadata: Record<string, unknown> = {};
   let pendingStoredState: Promise<AgentWidgetStoredState | null> | null = null;
 

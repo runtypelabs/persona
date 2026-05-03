@@ -1,5 +1,6 @@
 import type { AgentWidgetPlugin } from "./plugins/types";
 import type { DeepPartial, PersonaTheme } from "./types/theme";
+import type { PersonaStorage } from "./utils/persona-storage";
 
 // ============================================================================
 // Multi-Modal Content Types
@@ -3029,6 +3030,23 @@ export type AgentWidgetConfig = {
   actionParsers?: AgentWidgetActionParser[];
   actionHandlers?: AgentWidgetActionHandler[];
   storageAdapter?: AgentWidgetStorageAdapter;
+  /**
+   * Optional `PersonaStorage` instance used as the default backing for state
+   * persistence. When provided (and `storageAdapter` is not), the widget
+   * derives an adapter from this storage via `createStorageAdapter`. Pass any
+   * `PersonaStorage` — memory, localStorage, IndexedDB, or a custom driver —
+   * to swap the persistence backend without writing your own adapter.
+   *
+   * Ignored when `storageAdapter` is also provided (the explicit adapter wins,
+   * for backward compatibility).
+   */
+  storage?: PersonaStorage;
+  /**
+   * Optional key used when deriving a storage adapter from `storage`.
+   * Defaults to `"persona-state"`. Useful for isolating multiple widget
+   * instances on the same page that share an underlying storage.
+   */
+  storageKey?: string;
   /**
    * Called after state is loaded from the storage adapter, but before the widget
    * initializes with that state. Use this to transform or inject messages based
