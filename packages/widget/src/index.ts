@@ -125,6 +125,7 @@ export {
   createStorage,
   createMemoryDriver,
   createLocalStorageDriver,
+  createIndexedDBDriver,
   prefixStorage,
   type PersonaStorage,
   type PersonaStorageDriver,

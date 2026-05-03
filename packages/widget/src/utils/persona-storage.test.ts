@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from "vitest";
+import "fake-indexeddb/auto";
 import {
+  createIndexedDBDriver,
   createLocalStorageDriver,
   createMemoryDriver,
   createStorage,
@@ -111,5 +113,72 @@ describe("localStorage driver", () => {
 
     await storage.clear();
     expect(window.localStorage.getItem("unrelated")).toBe("ignore-me");
+  });
+});
+
+describe("indexedDB driver", () => {
+  let dbCounter = 0;
+  const freshDb = () => `persona-storage-test-${Date.now()}-${dbCounter++}`;
+
+  it("round-trips JSON values", async () => {
+    const storage = createStorage({
+      driver: createIndexedDBDriver({ dbName: freshDb() })
+    });
+    await storage.setItem("alpha", { value: 1 });
+    await storage.setItem("beta", "hello");
+
+    expect(await storage.getItem("alpha")).toEqual({ value: 1 });
+    expect(await storage.getItem("beta")).toBe("hello");
+    expect((await storage.getKeys()).sort()).toEqual(["alpha", "beta"]);
+  });
+
+  it("removes individual keys", async () => {
+    const storage = createStorage({
+      driver: createIndexedDBDriver({ dbName: freshDb() })
+    });
+    await storage.setItem("keep", 1);
+    await storage.setItem("drop", 2);
+    await storage.removeItem("drop");
+
+    expect(await storage.hasItem("drop")).toBe(false);
+    expect(await storage.getItem("keep")).toBe(1);
+  });
+
+  it("clears entries by prefix", async () => {
+    const storage = createStorage({
+      driver: createIndexedDBDriver({ dbName: freshDb() })
+    });
+    await storage.setItem("ev:1", "a");
+    await storage.setItem("ev:2", "b");
+    await storage.setItem("meta:x", "keep");
+    await storage.clear("ev:");
+
+    expect((await storage.getKeys()).sort()).toEqual(["meta:x"]);
+  });
+
+  it("isolates writes by configured prefix", async () => {
+    const dbName = freshDb();
+    const scoped = createStorage({
+      driver: createIndexedDBDriver({ dbName, prefix: "session:" })
+    });
+    const raw = createStorage({ driver: createIndexedDBDriver({ dbName }) });
+
+    await scoped.setItem("a", 1);
+    expect(await scoped.getKeys()).toEqual(["a"]);
+    expect((await raw.getKeys()).sort()).toEqual(["session:a"]);
+  });
+
+  it("snapshot and restore round-trip across drivers", async () => {
+    const source = createStorage({
+      driver: createIndexedDBDriver({ dbName: freshDb() })
+    });
+    await source.setItem("k1", { n: 1 });
+    await source.setItem("k2", "two");
+
+    const target = createStorage({ driver: createMemoryDriver() });
+    await target.restore(await source.snapshot());
+
+    expect(await target.getItem("k1")).toEqual({ n: 1 });
+    expect(await target.getItem("k2")).toBe("two");
   });
 });

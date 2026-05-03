@@ -215,6 +215,153 @@ export const createLocalStorageDriver = (
   };
 };
 
+export interface IndexedDBDriverOptions {
+  /** Database name. Defaults to `persona-storage`. */
+  dbName?: string;
+  /** Object store name. Defaults to `kv`. */
+  storeName?: string;
+  /** Optional key prefix prepended to every stored key. */
+  prefix?: string;
+}
+
+/**
+ * IndexedDB-backed driver. Each entry is a single row keyed by string;
+ * values are stored as already-serialized strings (the `Storage` wrapper
+ * handles JSON encoding). The database is opened lazily on first use.
+ */
+export const createIndexedDBDriver = (
+  options: IndexedDBDriverOptions = {}
+): PersonaStorageDriver => {
+  const dbName = options.dbName ?? "persona-storage";
+  const storeName = options.storeName ?? "kv";
+  const prefix = options.prefix ?? "";
+  const fullKey = (key: string) => `${prefix}${key}`;
+  const stripPrefix = (key: string) =>
+    prefix && key.startsWith(prefix) ? key.slice(prefix.length) : key;
+
+  const watchers = new Set<PersonaStorageWatchCallback>();
+  const emit = (event: PersonaStorageWatchEvent, key: string) => {
+    for (const cb of watchers) cb(event, key);
+  };
+
+  let dbPromise: Promise<IDBDatabase | null> | null = null;
+  const getDB = (): Promise<IDBDatabase | null> => {
+    if (dbPromise) return dbPromise;
+    if (typeof indexedDB === "undefined") {
+      dbPromise = Promise.resolve(null);
+      return dbPromise;
+    }
+    dbPromise = new Promise<IDBDatabase | null>((resolve) => {
+      try {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(storeName)) {
+            db.createObjectStore(storeName);
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => {
+          logError("indexedDB.open", request.error);
+          resolve(null);
+        };
+      } catch (error) {
+        logError("indexedDB.open", error);
+        resolve(null);
+      }
+    });
+    return dbPromise;
+  };
+
+  const runRequest = <T>(
+    mode: "readonly" | "readwrite",
+    action: (store: IDBObjectStore) => IDBRequest<T>
+  ): Promise<T | null> =>
+    getDB().then(
+      (db) =>
+        new Promise<T | null>((resolve) => {
+          if (!db) return resolve(null);
+          try {
+            const tx = db.transaction(storeName, mode);
+            const store = tx.objectStore(storeName);
+            const request = action(store);
+            request.onsuccess = () => resolve(request.result as T);
+            request.onerror = () => {
+              logError("indexedDB.request", request.error);
+              resolve(null);
+            };
+          } catch (error) {
+            logError("indexedDB.transaction", error);
+            resolve(null);
+          }
+        })
+    );
+
+  return {
+    name: "indexedDB",
+    getItem: async (key) => {
+      const result = await runRequest<unknown>("readonly", (store) =>
+        store.get(fullKey(key))
+      );
+      return result === undefined || result === null
+        ? null
+        : (result as string);
+    },
+    setItem: async (key, value) => {
+      await runRequest("readwrite", (store) => store.put(value, fullKey(key)));
+      emit("update", key);
+    },
+    removeItem: async (key) => {
+      await runRequest("readwrite", (store) => store.delete(fullKey(key)));
+      emit("remove", key);
+    },
+    getKeys: async (scopePrefix) => {
+      const fullScope = scopePrefix ? fullKey(scopePrefix) : prefix;
+      const keys = (await runRequest<unknown[]>("readonly", (store) =>
+        store.getAllKeys() as IDBRequest<unknown[]>
+      )) as unknown[] | null;
+      if (!keys) return [];
+      const result: string[] = [];
+      for (const key of keys) {
+        if (typeof key !== "string") continue;
+        if (fullScope && !key.startsWith(fullScope)) continue;
+        result.push(stripPrefix(key));
+      }
+      return result;
+    },
+    clear: async (scopePrefix) => {
+      const fullScope = scopePrefix ? fullKey(scopePrefix) : prefix;
+      if (!fullScope) {
+        await runRequest("readwrite", (store) => store.clear());
+        emit("remove", "");
+        return;
+      }
+      const allKeys = (await runRequest<unknown[]>("readonly", (store) =>
+        store.getAllKeys() as IDBRequest<unknown[]>
+      )) as unknown[] | null;
+      if (!allKeys) return;
+      const targets: string[] = [];
+      for (const key of allKeys) {
+        if (typeof key === "string" && key.startsWith(fullScope)) {
+          targets.push(key);
+        }
+      }
+      await Promise.all(
+        targets.map((raw) =>
+          runRequest("readwrite", (store) => store.delete(raw))
+        )
+      );
+      for (const raw of targets) emit("remove", stripPrefix(raw));
+    },
+    watch: (callback) => {
+      watchers.add(callback);
+      return () => {
+        watchers.delete(callback);
+      };
+    }
+  };
+};
+
 const wrapDriver = (driver: PersonaStorageDriver): PersonaStorage => {
   const watchers = new Set<PersonaStorageWatchCallback>();
   let detachDriverWatch: PersonaStorageUnwatch | null = null;
