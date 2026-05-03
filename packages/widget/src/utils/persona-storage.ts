@@ -439,6 +439,117 @@ export const createStorage = (
   options: CreateStorageOptions = {}
 ): PersonaStorage => wrapDriver(options.driver ?? createMemoryDriver());
 
+interface BroadcastMessage {
+  sender: string;
+  event: PersonaStorageWatchEvent;
+  key: string;
+}
+
+export interface BroadcastChannelOptions {
+  /**
+   * BroadcastChannel name. Defaults to `persona-storage`. Pick a unique name
+   * if multiple independent stores share the same origin.
+   */
+  channelName?: string;
+}
+
+/**
+ * Wraps a `PersonaStorage` so that local writes broadcast watch events to
+ * other browser tabs/contexts on the same origin via the BroadcastChannel
+ * API. Subscribers via `wrapped.watch()` receive both local-write events
+ * (from the underlying driver) and remote-write events (from other tabs).
+ *
+ * Reads, writes, and snapshots pass straight through — only watch events are
+ * shared across tabs. In environments without BroadcastChannel, this is a
+ * no-op pass-through.
+ *
+ * Note: this layer does not arbitrate concurrent writers. Two tabs writing
+ * to the same key still last-write-wins. Use Web Locks (`navigator.locks`)
+ * or a "single interactive tab" pattern to coordinate writers when needed.
+ */
+export const withBroadcastChannel = (
+  storage: PersonaStorage,
+  options: BroadcastChannelOptions = {}
+): PersonaStorage => {
+  const channelName = options.channelName ?? "persona-storage";
+  const senderId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`;
+
+  const watchers = new Set<PersonaStorageWatchCallback>();
+  let channel: BroadcastChannel | null = null;
+  let detachLocal: PersonaStorageUnwatch | null = null;
+
+  const ensureBridge = () => {
+    if (channel || typeof BroadcastChannel === "undefined") return;
+    try {
+      channel = new BroadcastChannel(channelName);
+    } catch (error) {
+      logError("broadcastChannel.open", error);
+      return;
+    }
+    channel.onmessage = (event: MessageEvent<BroadcastMessage>) => {
+      const data = event.data;
+      if (!data || data.sender === senderId) return;
+      for (const cb of watchers) cb(data.event, data.key);
+    };
+    detachLocal = storage.watch((event, key) => {
+      for (const cb of watchers) cb(event, key);
+    });
+  };
+
+  const teardownBridge = () => {
+    if (watchers.size > 0) return;
+    detachLocal?.();
+    detachLocal = null;
+    channel?.close();
+    channel = null;
+  };
+
+  const broadcast = (event: PersonaStorageWatchEvent, key: string) => {
+    if (!channel) return;
+    try {
+      channel.postMessage({ sender: senderId, event, key } satisfies BroadcastMessage);
+    } catch (error) {
+      logError("broadcastChannel.postMessage", error);
+    }
+  };
+
+  return {
+    driver: storage.driver,
+    getItem: (key) => storage.getItem(key),
+    hasItem: (key) => storage.hasItem(key),
+    getKeys: (prefix) => storage.getKeys(prefix),
+    snapshot: (prefix) => storage.snapshot(prefix),
+    restore: (snap) => storage.restore(snap),
+    async setItem(key, value) {
+      ensureBridge();
+      await storage.setItem(key, value);
+      broadcast("update", key);
+    },
+    async removeItem(key) {
+      ensureBridge();
+      await storage.removeItem(key);
+      broadcast("remove", key);
+    },
+    async clear(prefix) {
+      ensureBridge();
+      const keys = await storage.getKeys(prefix);
+      await storage.clear(prefix);
+      for (const key of keys) broadcast("remove", key);
+    },
+    watch(callback) {
+      ensureBridge();
+      watchers.add(callback);
+      return () => {
+        watchers.delete(callback);
+        teardownBridge();
+      };
+    }
+  };
+};
+
 /**
  * Returns a view of `parent` scoped under `prefix`. Reads, writes, and watches
  * transparently apply the prefix; consumers see un-prefixed keys.

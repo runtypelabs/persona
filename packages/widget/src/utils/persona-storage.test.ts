@@ -6,7 +6,8 @@ import {
   createLocalStorageDriver,
   createMemoryDriver,
   createStorage,
-  prefixStorage
+  prefixStorage,
+  withBroadcastChannel
 } from "./persona-storage";
 
 describe("memory driver", () => {
@@ -222,5 +223,66 @@ describe("indexedDB driver", () => {
 
     expect(await target.getItem("k1")).toEqual({ n: 1 });
     expect(await target.getItem("k2")).toBe("two");
+  });
+});
+
+describe("withBroadcastChannel", () => {
+  let counter = 0;
+  const freshChannel = () => `persona-bc-test-${Date.now()}-${counter++}`;
+
+  it("propagates write events to peers on the same channel", async () => {
+    const channelName = freshChannel();
+    const a = withBroadcastChannel(
+      createStorage({ driver: createMemoryDriver() }),
+      { channelName }
+    );
+    const b = withBroadcastChannel(
+      createStorage({ driver: createMemoryDriver() }),
+      { channelName }
+    );
+
+    const received: Array<[string, string]> = [];
+    b.watch((event, key) => received.push([event, key]));
+
+    await a.setItem("foo", 1);
+    await a.removeItem("foo");
+
+    // BroadcastChannel delivery is async — let the microtask queue drain.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(received).toEqual([
+      ["update", "foo"],
+      ["remove", "foo"]
+    ]);
+  });
+
+  it("does not echo a tab's own writes back to itself", async () => {
+    const channelName = freshChannel();
+    const storage = withBroadcastChannel(
+      createStorage({ driver: createMemoryDriver() }),
+      { channelName }
+    );
+
+    const received: Array<[string, string]> = [];
+    storage.watch((event, key) => received.push([event, key]));
+
+    await storage.setItem("foo", 1);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Local watch fires once (from the underlying driver), no broadcast loop.
+    expect(received).toEqual([["update", "foo"]]);
+  });
+
+  it("passes reads, snapshots, and clears through to the underlying storage", async () => {
+    const inner = createStorage({ driver: createMemoryDriver() });
+    const wrapped = withBroadcastChannel(inner, { channelName: freshChannel() });
+
+    await wrapped.setItem("a", 1);
+    await wrapped.setItem("b", 2);
+    expect(await wrapped.getItem("a")).toBe(1);
+    expect(await wrapped.snapshot()).toEqual({ a: 1, b: 2 });
+
+    await wrapped.clear();
+    expect(await wrapped.getKeys()).toEqual([]);
   });
 });

@@ -127,6 +127,7 @@ export {
   createLocalStorageDriver,
   createIndexedDBDriver,
   prefixStorage,
+  withBroadcastChannel,
   type PersonaStorage,
   type PersonaStorageDriver,
   type PersonaStorageWatchCallback,

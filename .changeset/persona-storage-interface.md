@@ -2,14 +2,21 @@
 "@runtypelabs/persona": minor
 ---
 
-Add `PersonaStorage` — a small async key-value abstraction inspired by [unstorage](https://github.com/unjs/unstorage) — and expose `createStorage`, `createMemoryDriver`, `createLocalStorageDriver`, `createIndexedDBDriver`, `prefixStorage`, and `createStorageAdapter` from the public API. The widget config now accepts a `storage` option (a `PersonaStorage` instance) and an optional `storageKey`, so embedders can swap the persistence backend without writing a custom adapter:
+Add `PersonaStorage` — a small async key-value abstraction inspired by [unstorage](https://github.com/unjs/unstorage) — and expose `createStorage`, `createMemoryDriver`, `createLocalStorageDriver`, `createIndexedDBDriver`, `prefixStorage`, `withBroadcastChannel`, and `createStorageAdapter` from the public API. The widget config now accepts a `storage` option (a `PersonaStorage` instance) and an optional `storageKey`, so embedders can swap the persistence backend — and add cross-tab sync — without writing a custom adapter:
 
 ```ts
-import { createAgentExperience, createStorage, createIndexedDBDriver } from "@runtypelabs/persona";
+import {
+  createAgentExperience,
+  createStorage,
+  createIndexedDBDriver,
+  withBroadcastChannel
+} from "@runtypelabs/persona";
 
 createAgentExperience(mount, {
   apiUrl: "...",
-  storage: createStorage({ driver: createIndexedDBDriver() })
+  storage: withBroadcastChannel(
+    createStorage({ driver: createIndexedDBDriver() })
+  )
 });
 ```
 
