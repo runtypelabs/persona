@@ -120,7 +120,18 @@ export {
 } from "./session";
 export { AgentWidgetClient } from "./client";
 export type { SSEEventCallback } from "./client";
-export { createLocalStorageAdapter } from "./utils/storage";
+export { createLocalStorageAdapter, createStorageAdapter } from "./utils/storage";
+export {
+  createStorage,
+  createMemoryDriver,
+  createLocalStorageDriver,
+  prefixStorage,
+  type PersonaStorage,
+  type PersonaStorageDriver,
+  type PersonaStorageWatchCallback,
+  type PersonaStorageWatchEvent,
+  type PersonaStorageUnwatch
+} from "./utils/persona-storage";
 export {
   createActionManager,
   defaultActionHandlers,

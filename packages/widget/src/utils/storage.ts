@@ -4,6 +4,7 @@ import type {
   AgentWidgetStoredState,
   PersonaArtifactRecord
 } from "../types";
+import type { PersonaStorage } from "./persona-storage";
 
 const safeJsonParse = (value: string | null) => {
   if (!value) return null;
@@ -30,6 +31,14 @@ const sanitizeArtifacts = (artifacts: PersonaArtifactRecord[]) =>
     status: "complete" as const
   }));
 
+const sanitizeStateForPersistence = (
+  state: AgentWidgetStoredState
+): AgentWidgetStoredState => ({
+  ...state,
+  messages: state.messages ? sanitizeMessages(state.messages) : undefined,
+  artifacts: state.artifacts ? sanitizeArtifacts(state.artifacts) : undefined
+});
+
 export const createLocalStorageAdapter = (
   key = "persona-state"
 ): AgentWidgetStorageAdapter => {
@@ -50,12 +59,7 @@ export const createLocalStorageAdapter = (
       const storage = getStorage();
       if (!storage) return;
       try {
-        const payload: AgentWidgetStoredState = {
-          ...state,
-          messages: state.messages ? sanitizeMessages(state.messages) : undefined,
-          artifacts: state.artifacts ? sanitizeArtifacts(state.artifacts) : undefined
-        };
-        storage.setItem(key, JSON.stringify(payload));
+        storage.setItem(key, JSON.stringify(sanitizeStateForPersistence(state)));
       } catch (error) {
         if (typeof console !== "undefined") {
           // eslint-disable-next-line no-console
@@ -78,3 +82,18 @@ export const createLocalStorageAdapter = (
   };
 };
 
+/**
+ * Adapter factory backed by a `PersonaStorage` instance. Unlike the legacy
+ * `createLocalStorageAdapter`, this is fully async — callers must be prepared
+ * for `load`/`save`/`clear` to return Promises. Use this when composing with
+ * non-localStorage drivers (memory, IndexedDB, HTTP, etc.) or when you want
+ * snapshot/watch capabilities on the underlying storage.
+ */
+export const createStorageAdapter = (
+  storage: PersonaStorage,
+  key = "persona-state"
+): AgentWidgetStorageAdapter => ({
+  load: () => storage.getItem<AgentWidgetStoredState>(key),
+  save: (state) => storage.setItem(key, sanitizeStateForPersistence(state)),
+  clear: () => storage.removeItem(key)
+});
