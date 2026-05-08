@@ -1,7 +1,13 @@
 import { createElement } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig, ContentPart } from "../types";
-import { ALL_SUPPORTED_MIME_TYPES } from "../utils/content";
+import {
+  createAttachmentControls,
+  createComposerTextarea,
+  createMicButton,
+  createSendButton,
+  createStatusText,
+  createSuggestionsRow,
+} from "./composer-parts";
 
 export interface ComposerElements {
   footer: HTMLElement;
@@ -13,12 +19,10 @@ export interface ComposerElements {
   micButton: HTMLButtonElement | null;
   micButtonWrapper: HTMLElement | null;
   statusText: HTMLElement;
-  // Attachment elements
   attachmentButton: HTMLButtonElement | null;
   attachmentButtonWrapper: HTMLElement | null;
   attachmentInput: HTMLInputElement | null;
   attachmentPreviewsContainer: HTMLElement | null;
-  // Actions row layout elements
   actionsRow: HTMLElement;
   leftActions: HTMLElement;
   rightActions: HTMLElement;
@@ -31,9 +35,6 @@ export interface ComposerElements {
   setSendButtonMode: (mode: "send" | "stop") => void;
 }
 
-/**
- * Pending attachment before it's added to the message
- */
 export interface PendingAttachment {
   id: string;
   file: File;
@@ -48,8 +49,10 @@ export interface ComposerBuildContext {
 }
 
 /**
- * Build the composer/footer section of the panel.
- * Extracted for reuse and plugin override support.
+ * Build the full footer + composer form (column-stacked card layout) for
+ * the floating, docked, and inline-embed launcher modes. The pill variant
+ * for `mountMode: "composer-bar"` lives in `pill-composer-builder.ts` and
+ * shares the same low-level part factories from `composer-parts.ts`.
  */
 export const buildComposer = (context: ComposerBuildContext): ComposerElements => {
   const { config } = context;
@@ -60,490 +63,68 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   );
   footer.setAttribute("data-persona-theme-zone", "composer");
 
-  const suggestions = createElement(
-    "div",
-    "persona-mb-3 persona-flex persona-flex-wrap persona-gap-2"
-  );
+  const suggestions = createSuggestionsRow();
 
-  // Composer form uses column layout: textarea on top, actions row below
   const composerForm = createElement(
     "form",
-    `persona-widget-composer persona-flex persona-flex-col persona-gap-2 persona-rounded-2xl persona-border persona-border-gray-200 persona-bg-persona-input-background persona-px-4 persona-py-3`
+    "persona-widget-composer persona-flex persona-flex-col persona-gap-2 persona-rounded-2xl persona-border persona-border-gray-200 persona-bg-persona-input-background persona-px-4 persona-py-3"
   ) as HTMLFormElement;
   composerForm.setAttribute("data-persona-composer-form", "");
-  // Prevent form from getting focus styles
   composerForm.style.outline = "none";
 
-  const textarea = createElement("textarea") as HTMLTextAreaElement;
-  textarea.setAttribute("data-persona-composer-input", "");
-  textarea.placeholder = config?.copy?.inputPlaceholder ?? "Type your message…";
-  textarea.className =
-    "persona-w-full persona-min-h-[24px] persona-resize-none persona-border-none persona-bg-transparent persona-text-sm persona-text-persona-primary focus:persona-outline-none focus:persona-border-none persona-composer-textarea";
-  textarea.rows = 1;
+  const { textarea, attachAutoResize } = createComposerTextarea(config);
+  attachAutoResize();
 
-  textarea.style.fontFamily =
-    'var(--persona-input-font-family, var(--persona-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif))';
-  textarea.style.fontWeight = "var(--persona-input-font-weight, var(--persona-font-weight, 400))";
+  const send = createSendButton(config);
+  const mic = createMicButton(config);
+  const attachment = createAttachmentControls(config);
+  const statusText = createStatusText(config);
 
-  // Set up auto-resize: expand up to 3 lines, then scroll
-  // Line height is ~20px for text-sm (14px * 1.25 line-height), so 3 lines ≈ 60px
-  const maxLines = 3;
-  const lineHeight = 20; // Approximate line height for text-sm
-  const maxHeight = maxLines * lineHeight;
-  textarea.style.maxHeight = `${maxHeight}px`;
-  textarea.style.overflowY = "auto";
-
-  // Auto-resize function
-  const autoResize = () => {
-    // Reset height to auto to get the correct scrollHeight
-    textarea.style.height = "auto";
-    // Set height to scrollHeight (capped by maxHeight via CSS)
-    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-    textarea.style.height = `${newHeight}px`;
-  };
-
-  // Listen for input to auto-resize
-  textarea.addEventListener("input", autoResize);
-
-  // Explicitly remove border and outline on focus to prevent browser defaults
-  textarea.style.border = "none";
-  textarea.style.outline = "none";
-  textarea.style.borderWidth = "0";
-  textarea.style.borderStyle = "none";
-  textarea.style.borderColor = "transparent";
-  textarea.addEventListener("focus", () => {
-    textarea.style.border = "none";
-    textarea.style.outline = "none";
-    textarea.style.borderWidth = "0";
-    textarea.style.borderStyle = "none";
-    textarea.style.borderColor = "transparent";
-    textarea.style.boxShadow = "none";
-  });
-  textarea.addEventListener("blur", () => {
-    textarea.style.border = "none";
-    textarea.style.outline = "none";
-  });
-
-  // Send button configuration
-  const sendButtonConfig = config?.sendButton ?? {};
-  const useIcon = sendButtonConfig.useIcon ?? false;
-  const iconText = sendButtonConfig.iconText ?? "↑";
-  const iconName = sendButtonConfig.iconName;
-  const stopIconName = sendButtonConfig.stopIconName ?? "square";
-  const tooltipText = sendButtonConfig.tooltipText ?? "Send message";
-  const stopTooltipText = sendButtonConfig.stopTooltipText ?? "Stop generating";
-  const sendLabel = config?.copy?.sendButtonLabel ?? "Send";
-  const stopLabel = config?.copy?.stopButtonLabel ?? "Stop";
-  const showTooltip = sendButtonConfig.showTooltip ?? false;
-  const buttonSize = sendButtonConfig.size ?? "40px";
-  const backgroundColor = sendButtonConfig.backgroundColor;
-  const textColor = sendButtonConfig.textColor;
-
-  // Create wrapper for tooltip positioning
-  const sendButtonWrapper = createElement("div", "persona-send-button-wrapper");
-
-  const sendButton = createElement(
-    "button",
-    useIcon
-      ? "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer"
-      : "persona-rounded-button persona-bg-persona-accent persona-px-4 persona-py-2 persona-text-sm persona-font-semibold disabled:persona-opacity-50 persona-cursor-pointer"
-  ) as HTMLButtonElement;
-
-  sendButton.type = "submit";
-  sendButton.setAttribute("data-persona-composer-submit", "");
-
-  // Icons for both modes are pre-rendered so setSendButtonMode can swap them
-  // without having to re-render on every streaming state change.
-  let sendIcon: SVGElement | null = null;
-  let stopIcon: SVGElement | null = null;
-
-  if (useIcon) {
-    // Icon mode: circular button
-    sendButton.style.width = buttonSize;
-    sendButton.style.height = buttonSize;
-    sendButton.style.minWidth = buttonSize;
-    sendButton.style.minHeight = buttonSize;
-    sendButton.style.fontSize = "18px";
-    sendButton.style.lineHeight = "1";
-
-    // Clear any existing content
-    sendButton.innerHTML = "";
-
-    // Set button foreground color from config or theme token
-    if (textColor) {
-      sendButton.style.color = textColor;
-    } else {
-      sendButton.style.color = "var(--persona-button-primary-fg, #ffffff)";
-    }
-
-    const iconSize = parseFloat(buttonSize) || 24;
-    const iconColor = textColor?.trim() || "currentColor";
-
-    // Use Lucide icon if iconName is provided, otherwise fall back to iconText
-    if (iconName) {
-      sendIcon = renderLucideIcon(iconName, iconSize, iconColor, 2);
-      if (sendIcon) {
-        sendButton.appendChild(sendIcon);
-      } else {
-        sendButton.textContent = iconText;
-      }
-    } else {
-      sendButton.textContent = iconText;
-    }
-
-    // Pre-render the stop icon so mode swaps are cheap; it starts detached.
-    stopIcon = renderLucideIcon(stopIconName, iconSize, iconColor, 2);
-
-    if (backgroundColor) {
-      sendButton.style.backgroundColor = backgroundColor;
-    } else {
-      sendButton.classList.add("persona-bg-persona-primary");
-    }
-  } else {
-    // Text mode: existing behavior
-    sendButton.textContent = sendLabel;
-    if (textColor) {
-      sendButton.style.color = textColor;
-    } else {
-      sendButton.classList.add("persona-text-white");
-    }
+  // Layout (column):
+  //   row 1: attachment previews (above textarea, smaller)
+  //   row 2: textarea (full width)
+  //   row 3: actions (paperclip left, mic + send right)
+  if (attachment) {
+    attachment.previewsContainer.style.gap = "8px";
+    composerForm.append(attachment.previewsContainer, attachment.input);
   }
+  composerForm.append(textarea);
 
-  // Apply existing styling from config
-  if (sendButtonConfig.borderWidth) {
-    sendButton.style.borderWidth = sendButtonConfig.borderWidth;
-    sendButton.style.borderStyle = "solid";
-  }
-  if (sendButtonConfig.borderColor) {
-    sendButton.style.borderColor = sendButtonConfig.borderColor;
-  }
+  // The bare class names (persona-widget-composer__actions / __left-actions /
+  // __right-actions) are stable CSS hooks. The pill composer reuses
+  // __left-actions / __right-actions as semantic markers in its grid.
+  const actionsRow = createElement(
+    "div",
+    "persona-widget-composer__actions persona-flex persona-items-center persona-justify-between persona-w-full"
+  );
+  const leftActions = createElement(
+    "div",
+    "persona-widget-composer__left-actions persona-flex persona-items-center persona-gap-2"
+  );
+  const rightActions = createElement(
+    "div",
+    "persona-widget-composer__right-actions persona-flex persona-items-center persona-gap-1"
+  );
+  if (attachment) leftActions.append(attachment.wrapper);
+  if (mic) rightActions.append(mic.wrapper);
+  rightActions.append(send.wrapper);
+  actionsRow.append(leftActions, rightActions);
+  composerForm.append(actionsRow);
 
-  // Apply padding styling (works in both icon and text mode)
-  if (sendButtonConfig.paddingX) {
-    sendButton.style.paddingLeft = sendButtonConfig.paddingX;
-    sendButton.style.paddingRight = sendButtonConfig.paddingX;
-  } else {
-    sendButton.style.paddingLeft = "";
-    sendButton.style.paddingRight = "";
-  }
-  if (sendButtonConfig.paddingY) {
-    sendButton.style.paddingTop = sendButtonConfig.paddingY;
-    sendButton.style.paddingBottom = sendButtonConfig.paddingY;
-  } else {
-    sendButton.style.paddingTop = "";
-    sendButton.style.paddingBottom = "";
-  }
-
-  // Add tooltip if enabled
-  let sendTooltip: HTMLElement | null = null;
-  if (showTooltip && tooltipText) {
-    sendTooltip = createElement("div", "persona-send-button-tooltip");
-    sendTooltip.textContent = tooltipText;
-    sendButtonWrapper.appendChild(sendTooltip);
-  }
-
-  sendButton.setAttribute("aria-label", tooltipText);
-
-  sendButtonWrapper.appendChild(sendButton);
-
-  let currentMode: "send" | "stop" = "send";
-  const setSendButtonMode = (mode: "send" | "stop") => {
-    if (mode === currentMode) return;
-    currentMode = mode;
-    const label = mode === "stop" ? stopTooltipText : tooltipText;
-    sendButton.setAttribute("aria-label", label);
-    if (sendTooltip) {
-      sendTooltip.textContent = label;
-    }
-
-    if (useIcon) {
-      // Only swap icons if both were rendered successfully; otherwise the
-      // button is using textContent fallback and there's nothing to swap.
-      if (sendIcon && stopIcon) {
-        const next = mode === "stop" ? stopIcon : sendIcon;
-        const prev = mode === "stop" ? sendIcon : stopIcon;
-        if (prev.parentNode === sendButton) {
-          sendButton.replaceChild(next, prev);
-        } else {
-          sendButton.appendChild(next);
-        }
-      }
-    } else {
-      sendButton.textContent = mode === "stop" ? stopLabel : sendLabel;
-    }
-  };
-
-  // Voice recognition mic button
-  const voiceRecognitionConfig = config?.voiceRecognition ?? {};
-  const voiceRecognitionEnabled = voiceRecognitionConfig.enabled === true;
-  let micButton: HTMLButtonElement | null = null;
-  let micButtonWrapper: HTMLElement | null = null;
-
-  // Check browser support for speech recognition or Runtype provider
-  const hasSpeechRecognition =
-    typeof window !== "undefined" &&
-    (typeof (window as any).webkitSpeechRecognition !== "undefined" ||
-      typeof (window as any).SpeechRecognition !== "undefined");
-  const hasRuntypeProvider =
-    voiceRecognitionConfig.provider?.type === "runtype";
-  const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider;
-
-  if (voiceRecognitionEnabled && hasVoiceInput) {
-    micButtonWrapper = createElement("div", "persona-send-button-wrapper");
-    micButton = createElement(
-      "button",
-      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer"
-    ) as HTMLButtonElement;
-
-    micButton.type = "button";
-    micButton.setAttribute("data-persona-composer-mic", "");
-    micButton.setAttribute("aria-label", "Start voice recognition");
-
-    const micIconName = voiceRecognitionConfig.iconName ?? "mic";
-    const micIconSize = voiceRecognitionConfig.iconSize ?? buttonSize;
-    const micIconSizeNum = parseFloat(micIconSize) || 24;
-
-    // Use dedicated colors from voice recognition config, fallback to send button colors
-    const micBackgroundColor =
-      voiceRecognitionConfig.backgroundColor ?? backgroundColor;
-    const micIconColor = voiceRecognitionConfig.iconColor ?? textColor;
-
-    micButton.style.width = micIconSize;
-    micButton.style.height = micIconSize;
-    micButton.style.minWidth = micIconSize;
-    micButton.style.minHeight = micIconSize;
-    micButton.style.fontSize = "18px";
-    micButton.style.lineHeight = "1";
-
-    // Set mic button foreground from config or theme token
-    if (micIconColor) {
-      micButton.style.color = micIconColor;
-    } else {
-      micButton.style.color = "var(--persona-text, #111827)";
-    }
-
-    // Use Lucide mic icon (stroke width 1.5 for minimalist outline style)
-    const iconColorValue = micIconColor || "currentColor";
-    const micIconSvg = renderLucideIcon(
-      micIconName,
-      micIconSizeNum,
-      iconColorValue,
-      1.5
-    );
-    if (micIconSvg) {
-      micButton.appendChild(micIconSvg);
-    } else {
-      micButton.textContent = "🎤";
-    }
-
-    // Apply background color
-    if (micBackgroundColor) {
-      micButton.style.backgroundColor = micBackgroundColor;
-    }
-
-    // Apply border styling
-    if (voiceRecognitionConfig.borderWidth) {
-      micButton.style.borderWidth = voiceRecognitionConfig.borderWidth;
-      micButton.style.borderStyle = "solid";
-    }
-    if (voiceRecognitionConfig.borderColor) {
-      micButton.style.borderColor = voiceRecognitionConfig.borderColor;
-    }
-
-    // Apply padding styling
-    if (voiceRecognitionConfig.paddingX) {
-      micButton.style.paddingLeft = voiceRecognitionConfig.paddingX;
-      micButton.style.paddingRight = voiceRecognitionConfig.paddingX;
-    }
-    if (voiceRecognitionConfig.paddingY) {
-      micButton.style.paddingTop = voiceRecognitionConfig.paddingY;
-      micButton.style.paddingBottom = voiceRecognitionConfig.paddingY;
-    }
-
-    micButtonWrapper.appendChild(micButton);
-
-    // Add tooltip if enabled
-    const micTooltipText =
-      voiceRecognitionConfig.tooltipText ?? "Start voice recognition";
-    const showMicTooltip = voiceRecognitionConfig.showTooltip ?? false;
-    if (showMicTooltip && micTooltipText) {
-      const tooltip = createElement("div", "persona-send-button-tooltip");
-      tooltip.textContent = micTooltipText;
-      micButtonWrapper.appendChild(tooltip);
-    }
-  }
-
-  // Attachment button and file input
-  const attachmentsConfig = config?.attachments ?? {};
-  const attachmentsEnabled = attachmentsConfig.enabled === true;
-  let attachmentButton: HTMLButtonElement | null = null;
-  let attachmentButtonWrapper: HTMLElement | null = null;
-  let attachmentInput: HTMLInputElement | null = null;
-  let attachmentPreviewsContainer: HTMLElement | null = null;
-
-  if (attachmentsEnabled) {
-    // Create previews container (shown above textarea when attachments are added)
-    attachmentPreviewsContainer = createElement(
-      "div",
-      "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2"
-    );
-    attachmentPreviewsContainer.style.display = "none"; // Hidden until attachments added
-
-    // Create hidden file input
-    attachmentInput = createElement("input") as HTMLInputElement;
-    attachmentInput.type = "file";
-    attachmentInput.accept = (attachmentsConfig.allowedTypes ?? ALL_SUPPORTED_MIME_TYPES).join(",");
-    attachmentInput.multiple = (attachmentsConfig.maxFiles ?? 4) > 1;
-    attachmentInput.style.display = "none";
-    attachmentInput.setAttribute("aria-label", "Attach files");
-
-    // Create attachment button wrapper for tooltip
-    attachmentButtonWrapper = createElement("div", "persona-send-button-wrapper");
-
-    // Create attachment button
-    attachmentButton = createElement(
-      "button",
-      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button"
-    ) as HTMLButtonElement;
-    attachmentButton.type = "button";
-    attachmentButton.setAttribute("aria-label", attachmentsConfig.buttonTooltipText ?? "Attach file");
-
-    // Default to paperclip icon
-    const attachIconName = attachmentsConfig.buttonIconName ?? "paperclip";
-    const attachIconSize = buttonSize;
-    const buttonSizeNum = parseFloat(attachIconSize) || 40;
-    // Icon should be ~60% of button size to match other icons visually
-    const attachIconSizeNum = Math.round(buttonSizeNum * 0.6);
-
-    attachmentButton.style.width = attachIconSize;
-    attachmentButton.style.height = attachIconSize;
-    attachmentButton.style.minWidth = attachIconSize;
-    attachmentButton.style.minHeight = attachIconSize;
-    attachmentButton.style.fontSize = "18px";
-    attachmentButton.style.lineHeight = "1";
-    attachmentButton.style.backgroundColor = "transparent";
-    attachmentButton.style.color = "var(--persona-primary, #111827)";
-    attachmentButton.style.border = "none";
-    attachmentButton.style.borderRadius = "6px";
-    attachmentButton.style.transition = "background-color 0.15s ease";
-
-    // Add hover effect via mouseenter/mouseleave
-    attachmentButton.addEventListener("mouseenter", () => {
-      attachmentButton!.style.backgroundColor = "var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.05))";
-    });
-    attachmentButton.addEventListener("mouseleave", () => {
-      attachmentButton!.style.backgroundColor = "transparent";
-    });
-
-    // Render the icon
-    const attachIconSvg = renderLucideIcon(
-      attachIconName,
-      attachIconSizeNum,
-      "currentColor",
-      1.5
-    );
-    if (attachIconSvg) {
-      attachmentButton.appendChild(attachIconSvg);
-    } else {
-      attachmentButton.textContent = "📎";
-    }
-
-    // Click handler to open file picker
-    attachmentButton.addEventListener("click", (e) => {
-      e.preventDefault();
-      attachmentInput?.click();
-    });
-
-    attachmentButtonWrapper.appendChild(attachmentButton);
-
-    // Add tooltip if configured
-    const attachTooltipText = attachmentsConfig.buttonTooltipText ?? "Attach file";
-    const tooltip = createElement("div", "persona-send-button-tooltip");
-    tooltip.textContent = attachTooltipText;
-    attachmentButtonWrapper.appendChild(tooltip);
-  }
-
-  // Focus textarea when composer form container is clicked
+  // Click anywhere on the composer (other than the action buttons) → focus
+  // textarea so the click target feels like the whole input bar.
   composerForm.addEventListener("click", (e) => {
-    // Don't focus if clicking on the send button, mic button, attachment button, or their wrappers
     if (
-      e.target !== sendButton &&
-      e.target !== sendButtonWrapper &&
-      e.target !== micButton &&
-      e.target !== micButtonWrapper &&
-      e.target !== attachmentButton &&
-      e.target !== attachmentButtonWrapper
+      e.target !== send.button &&
+      e.target !== send.wrapper &&
+      e.target !== mic?.button &&
+      e.target !== mic?.wrapper &&
+      e.target !== attachment?.button &&
+      e.target !== attachment?.wrapper
     ) {
       textarea.focus();
     }
   });
-
-  // Layout structure:
-  // - Row 1: Image previews (smaller, above textarea)
-  // - Row 2: Textarea (full width)
-  // - Row 3: Actions row (attachment left, mic/send right)
-
-  // Add image previews first (above textarea)
-  if (attachmentPreviewsContainer) {
-    // Make previews smaller
-    attachmentPreviewsContainer.style.gap = "8px";
-    composerForm.append(attachmentPreviewsContainer);
-  }
-
-  // Hidden file input
-  if (attachmentInput) {
-    composerForm.append(attachmentInput);
-  }
-
-  // Textarea row (full width)
-  composerForm.append(textarea);
-
-  // Actions row: attachment on left, mic/send on right
-  const actionsRow = createElement("div", "persona-flex persona-items-center persona-justify-between persona-w-full");
-
-  // Left side: attachment button
-  const leftActions = createElement("div", "persona-flex persona-items-center persona-gap-2");
-  if (attachmentButtonWrapper) {
-    leftActions.append(attachmentButtonWrapper);
-  }
-
-  // Right side: mic and send buttons
-  const rightActions = createElement("div", "persona-flex persona-items-center persona-gap-1");
-  if (micButtonWrapper) {
-    rightActions.append(micButtonWrapper);
-  }
-  rightActions.append(sendButtonWrapper);
-
-  actionsRow.append(leftActions, rightActions);
-  composerForm.append(actionsRow);
-
-  // Apply status indicator config
-  const statusConfig = config?.statusIndicator ?? {};
-  const alignClass =
-    statusConfig.align === "left" ? "persona-text-left"
-    : statusConfig.align === "center" ? "persona-text-center"
-    : "persona-text-right";
-  const statusText = createElement(
-    "div",
-    `persona-mt-2 ${alignClass} persona-text-xs persona-text-persona-muted`
-  );
-  statusText.setAttribute("data-persona-composer-status", "");
-
-  const isVisible = statusConfig.visible ?? true;
-  statusText.style.display = isVisible ? "" : "none";
-  const idleLabel = statusConfig.idleText ?? "Online";
-  if (statusConfig.idleLink) {
-    const link = createElement("a");
-    link.href = statusConfig.idleLink;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = idleLabel;
-    link.style.color = "inherit";
-    link.style.textDecoration = "none";
-    statusText.appendChild(link);
-  } else {
-    statusText.textContent = idleLabel;
-  }
 
   footer.append(suggestions, composerForm, statusText);
 
@@ -552,22 +133,18 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     suggestions,
     composerForm,
     textarea,
-    sendButton,
-    sendButtonWrapper,
-    micButton,
-    micButtonWrapper,
+    sendButton: send.button,
+    sendButtonWrapper: send.wrapper,
+    micButton: mic?.button ?? null,
+    micButtonWrapper: mic?.wrapper ?? null,
     statusText,
-    // Attachment elements
-    attachmentButton,
-    attachmentButtonWrapper,
-    attachmentInput,
-    attachmentPreviewsContainer,
-    // Actions row layout elements
+    attachmentButton: attachment?.button ?? null,
+    attachmentButtonWrapper: attachment?.wrapper ?? null,
+    attachmentInput: attachment?.input ?? null,
+    attachmentPreviewsContainer: attachment?.previewsContainer ?? null,
     actionsRow,
     leftActions,
     rightActions,
-    setSendButtonMode
+    setSendButtonMode: send.setMode,
   };
 };
-
-

@@ -280,6 +280,7 @@ export default defineConfig({
         'client-token-demo': path.resolve(__dirname, 'client-token-demo.html'),
         'client-token-feedback-demo': path.resolve(__dirname, 'client-token-feedback-demo.html'),
         'docked-panel-demo': path.resolve(__dirname, 'docked-panel-demo.html'),
+        'persistent-composer': path.resolve(__dirname, 'persistent-composer.html'),
         // Agent demo
         'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
         // Bakery demo pages
@@ -322,6 +323,7 @@ export default defineConfig({
       "/api/chat/dispatch-action": `http://localhost:${proxyPort}`,
       "/api/chat/dispatch-component": `http://localhost:${proxyPort}`,
       "/api/chat/dispatch-bakery": `http://localhost:${proxyPort}`,
+      "/api/chat/dispatch-storefront": `http://localhost:${proxyPort}`,
       "/api/checkout": `http://localhost:${proxyPort}`,
       "/form": `http://localhost:${proxyPort}`
     }

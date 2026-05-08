@@ -10,6 +10,9 @@ const DEFAULT_DOCK_CONFIG: Required<AgentWidgetDockConfig> = {
 export const isDockedMountMode = (config?: AgentWidgetConfig): boolean =>
   (config?.launcher?.mountMode ?? "floating") === "docked";
 
+export const isComposerBarMountMode = (config?: AgentWidgetConfig): boolean =>
+  (config?.launcher?.mountMode ?? "floating") === "composer-bar";
+
 /**
  * Resolved dock layout. For `reveal: "resize"`, when the panel is closed the dock column is `0px`.
  * For `reveal: "overlay"`, the panel overlays with `transform`. For `reveal: "push"`, a sliding track

@@ -10,3 +10,4 @@ export {
 } from "./shopping-assistant.js";
 export { COMPONENT_FLOW } from "./components.js";
 export { BAKERY_ASSISTANT_FLOW } from "./bakery-assistant.js";
+export { STOREFRONT_ASSISTANT_FLOW } from "./storefront-assistant.js";
