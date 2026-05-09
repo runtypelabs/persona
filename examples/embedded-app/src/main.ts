@@ -10,8 +10,8 @@ import {
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
 
-/** Same key as the widget default — shared with other embedded-app pages that use persisted chat. */
-const sharedWidgetStorage = createLocalStorageAdapter("persona-state");
+/** Storage key scoped to this index demo so it does not collide with other demos. */
+const sharedWidgetStorage = createLocalStorageAdapter("persona-state-index-demo");
 
 // ---------------------------------------------------------------------------
 // Code block copy button postprocessor

@@ -3462,6 +3462,13 @@ export type AgentWidgetConfig = {
    * When `true`, uses default settings with sessionStorage.
    * When an object, allows customizing storage type, key prefix, and what to persist.
    *
+   * Setting this to `false` is the explicit kill-switch: it disables UI-state
+   * persistence **and** message-history persistence. When `false`, any
+   * `storageAdapter` you configure is ignored and the default localStorage
+   * adapter is not created — no chat history is read or written. Pass `true`
+   * (or omit) to keep the default behavior of persisting messages via the
+   * configured `storageAdapter` (or the built-in localStorage adapter).
+   *
    * @example
    * ```typescript
    * // Simple usage - persist open state in sessionStorage
@@ -3482,6 +3489,14 @@ export type AgentWidgetConfig = {
    *       focusInput: true
    *     }
    *   }
+   * }
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Ephemeral widget — no message history written anywhere
+   * config: {
+   *   persistState: false
    * }
    * ```
    */

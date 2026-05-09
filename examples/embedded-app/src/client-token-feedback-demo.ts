@@ -2,6 +2,7 @@ import "@runtypelabs/persona/widget.css";
 
 import {
   initAgentWidget,
+  createLocalStorageAdapter,
   DEFAULT_WIDGET_CONFIG,
   markdownPostprocessor
 } from "@runtypelabs/persona";
@@ -117,6 +118,7 @@ function initializeWidget() {
     const config: Record<string, unknown> = {
       ...DEFAULT_WIDGET_CONFIG,
       debug: true,
+      storageAdapter: createLocalStorageAdapter("persona-state-client-token-feedback-demo"),
       launcher: {
         ...DEFAULT_WIDGET_CONFIG.launcher,
         enabled: false,

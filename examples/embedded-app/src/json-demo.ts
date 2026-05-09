@@ -6,6 +6,7 @@ import {
   createAgentExperience,
   initAgentWidget,
   componentRegistry,
+  createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
@@ -29,6 +30,7 @@ if (!inlineMount) {
 createAgentExperience(inlineMount, {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
+  storageAdapter: createLocalStorageAdapter("persona-state-json-inline"),
   parserType: "json", // Use JSON parser for component directives
   enableComponentStreaming: true,
   // The DynamicForm renders its own card chrome (border, padding, shadow),
@@ -68,6 +70,7 @@ initAgentWidget({
   config: {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
+    storageAdapter: createLocalStorageAdapter("persona-state-json-launcher"),
     parserType: "json",
     enableComponentStreaming: true,
     wrapComponentDirectiveInBubble: false,

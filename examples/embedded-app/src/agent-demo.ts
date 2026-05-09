@@ -2,6 +2,7 @@ import "@runtypelabs/persona/widget.css";
 
 import {
   createAgentExperience,
+  createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
@@ -22,6 +23,7 @@ if (!mount) throw new Error("Agent widget mount node missing");
 const controller = createAgentExperience(mount, {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl,
+  storageAdapter: createLocalStorageAdapter("persona-state-agent-demo"),
 
   // Agent execution config (replaces flowId)
   agent: {

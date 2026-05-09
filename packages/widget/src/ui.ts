@@ -490,8 +490,14 @@ export const createAgentExperience = (
   }
   const eventBus = createEventBus<AgentWidgetControllerEventMap>();
 
-  const storageAdapter: AgentWidgetStorageAdapter =
-    config.storageAdapter ?? createLocalStorageAdapter();
+  // When persistState is explicitly false, message-history persistence is
+  // disabled — including any user-supplied storageAdapter. This is the strict
+  // kill-switch semantic; pass `persistState: true` (or omit it) to opt in.
+  const messagePersistenceDisabled = config.persistState === false;
+  const storageAdapter: AgentWidgetStorageAdapter | null =
+    messagePersistenceDisabled
+      ? null
+      : (config.storageAdapter ?? createLocalStorageAdapter());
   let persistentMetadata: Record<string, unknown> = {};
   let pendingStoredState: Promise<AgentWidgetStoredState | null> | null = null;
 

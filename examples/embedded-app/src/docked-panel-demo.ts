@@ -2,6 +2,7 @@ import "@runtypelabs/persona/widget.css";
 
 import {
   DEFAULT_WIDGET_CONFIG,
+  createLocalStorageAdapter,
   initAgentWidget,
   markdownPostprocessor,
   type AgentWidgetInitHandle,
@@ -113,6 +114,7 @@ function createController(): AgentWidgetInitHandle {
     config: {
       ...DEFAULT_WIDGET_CONFIG,
       apiUrl,
+      storageAdapter: createLocalStorageAdapter("persona-state-docked-panel-demo"),
       launcher: getDemoLauncher(),
       theme: {
         semantic: {

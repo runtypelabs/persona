@@ -6,6 +6,7 @@ import {
   createAgentExperience,
   initAgentWidget,
   componentRegistry,
+  createLocalStorageAdapter,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
 
@@ -36,6 +37,7 @@ if (!inlineMount) {
 createAgentExperience(inlineMount, {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
+  storageAdapter: createLocalStorageAdapter("persona-state-custom-components-inline"),
   parserType: "json", // Use JSON parser to handle component directives
   enableComponentStreaming: true, // Enable component streaming (default: true)
   launcher: { enabled: false },
@@ -65,6 +67,7 @@ initAgentWidget({
   config: {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
+    storageAdapter: createLocalStorageAdapter("persona-state-custom-components-launcher"),
     parserType: "json",
     enableComponentStreaming: true,
     launcher: {
