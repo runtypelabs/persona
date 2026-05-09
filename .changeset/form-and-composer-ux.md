@@ -1,6 +1,11 @@
 ---
 "@runtypelabs/persona": minor
+"@runtypelabs/persona-proxy": minor
 ---
+
+## `@runtypelabs/persona`
+
+### `launcher.mountMode: "composer-bar"` — persistent pill composer
 
 Add `launcher.mountMode: "composer-bar"` — a sleek rounded-pill composer fixed at the bottom of the viewport that morphs into an expanded chat panel on submit and minimizes back. Single composer DOM instance, so messages, drafts, and attachments persist across collapse/expand. The collapsed pill is single-row (paperclip · textarea · mic · send) with no surrounding card chrome; suggestions and status indicator stay hidden until expanded.
 
@@ -27,3 +32,48 @@ In `expandedSize: "modal"` and `expandedSize: "anchored"`, the wrapper's geometr
 The collapsed pill includes a "peek" affordance for re-entering chat history: a chrome-less row above the pill that shows a chat-bubble icon, a trailing-100-character preview of the most recent assistant message, and a chevron-up. The peek fades in while a response is streaming OR when the user hovers the composer area, and fades out otherwise. Clicking the peek expands the panel. This replaces the earlier pill-internal chat-bubble button + focus-to-open behavior, which read as composer chrome rather than as navigation.
 
 The peek banner shares the same animation surface as the main message stream. Configure once via `features.streamAnimation` and both surfaces inherit (matching `type`, `speed`, `duration`, `buffer`, `placeholder`, and custom plugins). To animate the peek differently — e.g. faster cadence in the ticker than in the bubble — set `launcher.composerBar.peek.streamAnimation` with the same `AgentWidgetStreamAnimationFeature` shape. Carve-out: `bubbleClass` is ignored on the peek (no bubble analog); `containerClass`, `wrap` (`"char"`/`"word"`), `useCaret`, the `"skeleton"` placeholder (used when `buffer: "line"` trims to empty between line completions), and `onAfterRender` plugin hooks all port over. Per-char/per-word span IDs are namespaced with a `peek-` prefix so they don't collide with the main bubble's spans for the same message id, and use absolute char indices so animations on already-revealed chars survive each chunk's slice shift.
+
+### Icon registry: explicit named imports + public `renderLucideIcon` export
+
+Two changes that ship together:
+
+1. **Public `renderLucideIcon` (and `IconName` type) export.** The widget already used this helper internally for every icon in its chrome (header, composer, launcher, tool/reasoning bubbles, attachment manager, etc.); exposing it lets custom `ComponentRenderer` authors draw the same icons without re-implementing inline SVG.
+
+   ```ts
+   import { renderLucideIcon, type IconName } from "@runtypelabs/persona";
+
+   const clock = renderLucideIcon("clock", 14, "currentColor");
+   if (clock) container.appendChild(clock);
+   ```
+
+2. **Closed icon registry — drops ~400KB from the IIFE bundle.** The previous implementation was `import * as icons from "lucide"` plus a runtime string lookup, which defeated tree-shaking; the script-tag/CDN distribution (`dist/index.global.js`) shipped all 1640 lucide icons. The registry is now a curated set of ~110 named imports covering the widget's internal usage and common UI patterns (forms, status, navigation, commerce, media, files, social, decorative). Names outside the registry return `null` and log a warning. See `packages/widget/docs/icon-registry-shortlist.md` for the full list and the rule for adding more.
+
+**Behavior note for config consumers:** any place where you previously passed an arbitrary lucide icon name string (e.g. `launcher.callToActionIconName`, `sendButton.iconName`, `voiceRecognition.iconName`) now resolves against the closed registry. The default values are unchanged. If you were passing a custom name that isn't on the shortlist, the icon will silently render as null and you'll see a console warning telling you to add it to the registry. The new `IconName` type gives TypeScript users autocomplete and compile-time errors for unknown names.
+
+**Side fix:** `attachment-manager.ts` previously returned `"file-json"` as the icon name for `application/json` attachments — that name doesn't exist in lucide v0.552 and silently failed. Switched to `"file-code"`.
+
+### Component directives: preserve event listeners across morph passes
+
+Event listeners on custom component renderers (registered via `config.components` and rendered from JSON directives) are preserved across transcript updates. Previously, serializing through `tempContainer.innerHTML` during the morph pass dropped `addEventListener`-attached listeners (e.g. `DynamicForm` submit handlers calling `preventDefault()` could revert to full-page navigation after later messages). Directive bubbles now use stub-and-hydrate like `renderAskUserQuestion`; fingerprint-gated rebuilds avoid wiping mid-stream form input when other messages re-render.
+
+### `persistState: false` is now an explicit storage kill-switch
+
+Make `persistState: false` an explicit kill-switch for chat-history persistence. Previously, setting `persistState: false` only suppressed UI state (open/closed, voice mode, focus) — message history was still written to the default `localStorage["persona-state"]` adapter. Now `persistState: false` also short-circuits the storage adapter: the default localStorage adapter is never created, and any user-supplied `storageAdapter` is ignored. This is the strict semantic — passing `persistState: false` means "no chat history is read or written, period." Pass `persistState: true` (or omit it) to keep the prior behavior of persisting messages via the configured `storageAdapter` (or the built-in localStorage adapter).
+
+Why this matters: multiple widgets on the same origin (e.g. several demos served from `localhost:5173`) used to share a single `localStorage` key by default, so injecting a tool call or message in one demo would leak into the next. Setting `persistState: false` now prevents that leakage; for cases that *want* persistence, pass an explicit `storageAdapter: createLocalStorageAdapter("my-unique-key")`.
+
+## `@runtypelabs/persona-proxy`
+
+### `STOREFRONT_ASSISTANT_FLOW`
+
+Add `STOREFRONT_ASSISTANT_FLOW` for product-discovery demos. The flow emits three JSON actions:
+
+- `{"action": "show_products", "text": "...", "products": [{"id", "title", "price", "image", "description"}]}` — the host page renders these as a product card grid alongside the chat.
+- `{"action": "add_to_cart", "text": "...", "item": {"id", "title", "price"}}` — the host adds the item to its cart.
+- `{"action": "message", "text": "..."}` — plain conversational reply that stays in the chat panel.
+
+Wired into `examples/persistent-composer.html` as the "Everspun" storefront demo, where asking the agent for products dynamically populates a host-page product grid below the existing hero.
+
+### Scheduling flow: half-width form fields
+
+Teach `DynamicForm` prompts about `width: "half"` so the AI can pair short related inputs (e.g. Phone + Company, City + Zip) side-by-side instead of stacking every field full-width.
