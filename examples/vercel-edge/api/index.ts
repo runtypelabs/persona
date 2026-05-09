@@ -5,6 +5,7 @@ import {
   SHOPPING_ASSISTANT_FLOW,
   COMPONENT_FLOW,
   BAKERY_ASSISTANT_FLOW,
+  STOREFRONT_ASSISTANT_FLOW,
   createCheckoutSession,
 } from "@runtypelabs/persona-proxy";
 
@@ -52,10 +53,19 @@ const bakeryApp = createChatProxyApp({
   upstreamUrl,
 });
 
+const storefrontApp = createChatProxyApp({
+  path: "/api/chat/dispatch-storefront",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_STOREFRONT || undefined,
+  flowConfig: process.env.FLOW_ID_STOREFRONT ? undefined : STOREFRONT_ASSISTANT_FLOW,
+  upstreamUrl,
+});
+
 app.route("/", directiveApp);
 app.route("/", actionApp);
 app.route("/", componentApp);
 app.route("/", bakeryApp);
+app.route("/", storefrontApp);
 
 app.post("/api/checkout", async (c) => {
   const origin = c.req.header("origin");
@@ -86,6 +96,50 @@ app.post("/api/checkout", async (c) => {
       items,
       successUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/action-middleware.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/action-middleware.html?checkout=cancelled`,
+      stripeContext: process.env.STRIPE_CONTEXT?.trim() || undefined,
+    });
+
+    return c.json(result, result.success ? 200 : 400, {
+      "Access-Control-Allow-Origin": corsOrigin,
+    });
+  } catch (error) {
+    return c.json(
+      { success: false, error: error instanceof Error ? error.message : "Failed to create checkout session" },
+      500,
+      { "Access-Control-Allow-Origin": corsOrigin },
+    );
+  }
+});
+
+app.post("/api/checkout/storefront", async (c) => {
+  const origin = c.req.header("origin");
+  const corsOrigin = (origin && allowedOrigins.includes(origin)) ? origin : allowedOrigins[0];
+
+  if (c.req.method === "OPTIONS") {
+    return c.json({}, 200, {
+      "Access-Control-Allow-Origin": corsOrigin,
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    });
+  }
+
+  try {
+    const body = await c.req.json();
+    const { items } = body;
+
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return c.json(
+        { success: false, error: "Stripe is not configured." },
+        500,
+        { "Access-Control-Allow-Origin": corsOrigin },
+      );
+    }
+
+    const result = await createCheckoutSession({
+      secretKey: process.env.STRIPE_SECRET_KEY,
+      items,
+      successUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/persistent-composer.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/persistent-composer.html?checkout=cancelled`,
       stripeContext: process.env.STRIPE_CONTEXT?.trim() || undefined,
     });
 
@@ -162,11 +216,10 @@ app.post("/form", async (c) => {
 
   const summaryLines = [
     type === "init"
-      ? "We'll follow up shortly to confirm your demo slot."
+      ? "We'll follow up shortly to confirm."
       : "Thanks for the additional context.",
   ];
   if (name) summaryLines.push(`Name: ${name}`);
-  if (email) summaryLines.push(`Email: ${email}`);
 
   return c.json({
     success: true,

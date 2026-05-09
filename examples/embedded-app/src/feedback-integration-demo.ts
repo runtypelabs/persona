@@ -14,6 +14,7 @@
 import "@runtypelabs/persona/widget.css";
 import {
   createAgentExperience,
+  createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
   generateMessageId  // New utility for custom ID generation
@@ -116,6 +117,7 @@ const controller = createAgentExperience(mount, {
   // Use client token for direct API communication with feedback support
   clientToken: clientToken || undefined,
   apiUrl: apiUrl,
+  storageAdapter: createLocalStorageAdapter("persona-state-feedback-integration-demo"),
   launcher: {
     ...DEFAULT_WIDGET_CONFIG.launcher,
     enabled: false,

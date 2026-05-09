@@ -1,5 +1,9 @@
 import "@runtypelabs/persona/widget.css";
-import { initAgentWidget, DEFAULT_WIDGET_CONFIG } from "@runtypelabs/persona";
+import {
+  initAgentWidget,
+  createLocalStorageAdapter,
+  DEFAULT_WIDGET_CONFIG,
+} from "@runtypelabs/persona";
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
@@ -12,5 +16,6 @@ initAgentWidget({
   config: {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
+    storageAdapter: createLocalStorageAdapter("persona-state-launcher-demo"),
   },
 });

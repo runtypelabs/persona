@@ -3389,3 +3389,351 @@
     animation: none !important;
   }
 }
+
+/* ===========================================================================
+ * Composer-bar mode (`launcher.mountMode: "composer-bar"`)
+ *
+ * Geometry (position, width, height) is set per-state inline by
+ * `applyComposerBarGeometry()` in ui.ts. The pill composer
+ * (`pill-composer-builder.ts`) ships with its own clean className
+ * (`persona-pill-composer`, no `persona-flex-col` / `persona-rounded-2xl`
+ * baggage), so layout CSS does not need to fight utility classes — no
+ * !important. The pill is the visible element in both collapsed and
+ * expanded states; only the panel above it appears/disappears.
+ *
+ * Avoid `transform: scale(...)` on the wrapper — it breaks the textarea
+ * caret/IME.
+ * ======================================================================= */
+.persona-widget-wrapper[data-persona-composer-bar] {
+  /* Flex column so the inner panel (which has `flex-1`) fills the wrapper.
+   * Without this, the panel would shrink-wrap its children (chat container
+   * + pill) and a gap would appear between the pill and the wrapper's
+   * `bottom: 16px` edge. */
+  display: flex;
+  flex-direction: column;
+  transition:
+    max-width 220ms ease,
+    bottom 220ms ease,
+    top 220ms ease,
+    left 220ms ease,
+    right 220ms ease,
+    transform 220ms ease,
+    border-radius 220ms ease,
+    height 220ms ease,
+    width 220ms ease;
+}
+
+/* Modal and anchored: the wrapper goes from collapsed (no inline geometry,
+ * so `top/left/transform` resolve to their auto/none defaults) to its
+ * expanded position. The default `transform 220ms ease` transition would
+ * interpolate `none → translate(...)` and visibly slide the wrapper from
+ * its static-default origin toward its target — diagonally for modal,
+ * horizontally from the right for anchored. Neither mode is morphing
+ * something the user can see (the wrapper is invisible when collapsed
+ * because the pill lives in pillRoot, not the wrapper), so the slide
+ * is pure motion noise. Disable geometry transitions for both; the
+ * container's opacity fade-in keyframe is the reveal.
+ *
+ * Fullscreen intentionally keeps its geometry transition — that's the
+ * one mode where the wrapper genuinely morphs (empty → full viewport),
+ * and the staggered fade-in cascade below is built to mask the
+ * outer-edge/inner-content desync during that morph. */
+.persona-widget-wrapper[data-persona-composer-bar][data-expanded-size="modal"],
+.persona-widget-wrapper[data-persona-composer-bar][data-expanded-size="anchored"] {
+  transition: none;
+}
+
+/* --- Pill composer chrome (always visible in composer-bar mode) -------- */
+
+/* Pill is a single-row grid: paperclip · textarea · mic + send. */
+.persona-pill-composer {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: var(--persona-surface, #ffffff);
+  border: 1px solid var(--persona-border, #e5e7eb);
+  box-shadow:
+    0 6px 24px rgba(15, 23, 42, 0.10),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.persona-pill-composer .persona-composer-textarea {
+  /* Single line by default; the autoresize closure expands up to the
+   * max-height set inline by pill-composer-builder (100px). Width 100%
+   * fills the `1fr` middle grid cell so wrapping only happens once the
+   * pill itself can't grow any wider. */
+  min-height: 24px;
+  width: 100%;
+  padding: 4px 0;
+}
+
+/* Responsive default width for the collapsed pill — applied only when
+ * `applyComposerBarGeometry()` leaves the wrapper's inline width empty
+ * (i.e., the user did NOT set `composerBar.collapsedMaxWidth`). Inline
+ * width from a user config still wins via specificity (inline > class). */
+/* Pill responsive widths now live on the viewport-fixed pillRoot below;
+ * the wrapper no longer doubles as the pill container. */
+
+/* The action cells host inline-flex buttons; without explicit flex layout
+ * on the cell, the buttons sit on the inline baseline and the cell extends
+ * below them with descender space, making the buttons look top-aligned. */
+.persona-pill-composer__left,
+.persona-pill-composer__right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Footer wrapping the pill: transparent surface, vertical stack with
+ * room above the pill for the previews row. */
+.persona-widget-footer--pill {
+  background: transparent;
+  border-top: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Attachment previews row (above the pill). AttachmentManager toggles
+ * display:flex when items are added; default is display:none. */
+.persona-pill-composer__previews {
+  padding: 0 8px;
+}
+
+/* --- Container chrome ---------------------------------------------------
+ *
+ * Container chrome (background, border, border-radius, box-shadow) is
+ * applied inline by `applyFullHeightStyles()` in ui.ts so it can flow through
+ * the same `theme.components.panel.{shadow,border,borderRadius}` contract
+ * used by every other mount mode. Collapsed hides the container entirely
+ * (only the pill is visible); expanded re-applies the chrome. The
+ * `fullscreen` expanded variant intentionally stays chrome-less. */
+
+/* Composer overlay (interactive sheets like ask_user_question) hidden in
+ * collapsed; the pill has no room and the panel above is gone anyway. */
+[data-persona-composer-bar][data-state="collapsed"] .persona-composer-overlay {
+  display: none;
+}
+
+/* --- Pill root: viewport-fixed sibling of the wrapper ------------------
+ *
+ * In composer-bar mode the pill (`footer`) and peek banner live in a
+ * viewport-fixed sibling of the wrapper, NOT inside the wrapper. Reason:
+ * modal mode applies `transform: translate(-50%, -50%)` to the wrapper,
+ * which establishes a containing block for `position: fixed` descendants —
+ * a fixed pill inside a transformed wrapper would be positioned relative
+ * to the wrapper, not the viewport.
+ *
+ * Bottom offset and (optionally) width are written inline by ui.ts based
+ * on `launcher.composerBar.{bottomOffset, collapsedMaxWidth}`; otherwise
+ * the responsive defaults below apply. The pillRoot mirrors the wrapper's
+ * `[data-state]` and `[data-expanded-size]` attributes so peek/pill rules
+ * keyed off those attributes still cascade. */
+.persona-widget-pill-root {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90vw;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (min-width: 640px) {
+  .persona-widget-pill-root {
+    width: 70vw;
+  }
+}
+@media (min-width: 1024px) {
+  .persona-widget-pill-root {
+    width: 50vw;
+  }
+}
+
+/* Container hidden when the chat is collapsed — only the pill is visible. */
+[data-persona-composer-bar][data-state="collapsed"] .persona-widget-container {
+  display: none;
+}
+
+/* --- Peek banner ------------------------------------------------------- */
+/* The peek is the chrome-less row above the pill (composer-bar mode only)
+ * that previews the trailing 100 chars of the most recent assistant
+ * message. ui.ts toggles `--visible` based on streaming/hover/open state;
+ * pointer-events are gated so the faded-out peek never swallows clicks
+ * targeted at the pill below. */
+.persona-pill-peek {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  /* Frosted-glass chrome so the text stays readable over arbitrary host
+   * backgrounds (busy hero images, dark sections, brand colors). The
+   * translucent fill + backdrop blur turns the underlying area into a
+   * neutral surface; the hairline border + soft shadow define the edge
+   * without competing with the pill below. */
+  background: rgba(255, 255, 255, 0.78);
+  -webkit-backdrop-filter: blur(10px) saturate(1.5);
+  backdrop-filter: blur(10px) saturate(1.5);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  color: var(--persona-primary, #111827);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease,
+    background-color 150ms ease;
+  text-align: left;
+  /* Full-width row that matches the pill below — text takes the middle
+   * (flex: 1 1 auto) and the chevron pins to the right edge. */
+  width: 100%;
+  align-self: stretch;
+}
+
+/* Browsers without backdrop-filter support (older Firefox, some webviews)
+ * fall through to a slightly more opaque solid surface so the underlying
+ * page can't bleed through. The non-supports rule above already gives a
+ * usable look (78% opacity); this just hardens it for non-blur fallback. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .persona-pill-peek {
+    background: rgba(255, 255, 255, 0.95);
+  }
+}
+
+.persona-pill-peek--visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.persona-pill-peek:hover {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.persona-pill-peek__icon,
+.persona-pill-peek__caret {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.persona-pill-peek__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Per-char/per-word animated spans render as inline-block, which interacts
+ * with the peek's nowrap+ellipsis chrome. Setting `vertical-align: baseline`
+ * keeps the spans on the same baseline as surrounding text so reveal
+ * transforms (translateY, scale) don't bump the line height. */
+[data-persona-root] .persona-pill-peek__text .persona-stream-char,
+[data-persona-root] .persona-pill-peek__text .persona-stream-word {
+  vertical-align: baseline;
+}
+
+/* Peek-scaled skeleton: the bubble-sized 260×10 bar would dwarf a 14px-line
+ * pill. Inside the peek we shrink to a single, full-flex bar that hints at
+ * "more is coming" without dominating the chrome. Used when
+ * `streamAnimation.placeholder === "skeleton"` AND content trims to empty
+ * (e.g. `buffer: "line"` between line completions). */
+[data-persona-root] .persona-pill-peek__text .persona-pill-peek__skeleton {
+  display: inline-flex;
+  vertical-align: middle;
+  width: 100%;
+  max-width: 200px;
+  padding: 0;
+}
+[data-persona-root] .persona-pill-peek__text .persona-pill-peek__skeleton .persona-stream-skeleton-line {
+  height: 8px;
+}
+
+/* --- Expanded states: geometry safety nets ----------------------------- */
+
+/* `fullscreen`: ui.ts clears all inline geometry so this rule lights up. */
+.persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"][data-expanded-size="fullscreen"] {
+  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: none;
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+/* Fullscreen "panel behind pill": the chat body fills the full viewport
+ * (including the area behind the fixed pill) so messages scroll under the
+ * pill. The body itself drops its bottom padding so its background extends
+ * to the viewport edge; reachability for the last bubble comes from
+ * padding-bottom on the messages wrapper (body's last child) — that
+ * pushes the final message above the pill area rather than hiding it
+ * behind. */
+.persona-widget-wrapper[data-persona-composer-bar][data-expanded-size="fullscreen"] .persona-widget-body {
+  padding-bottom: 0;
+}
+.persona-widget-wrapper[data-persona-composer-bar][data-expanded-size="fullscreen"] .persona-widget-body > :last-child {
+  padding-bottom: calc(var(--persona-pill-bottom, 16px) + var(--persona-pill-area-height, 80px) + 16px);
+}
+
+/* `modal` and `anchored` get their geometry inline from ui.ts; nothing
+ * needed in CSS for those. */
+
+/* --- Expand fade-in cascade -------------------------------------------- */
+/*
+ * Two staggered fades that mask the visual desync between the wrapper's
+ * fast-traveling outer edges and the inner content (which is constrained
+ * by `contentMaxWidth` + `margin: auto` and therefore moves at a fraction
+ * of the wrapper's growth rate). Without this, the user perceives an
+ * empty "gap" inside the wrapper as it morphs to fullscreen.
+ *
+ * - Chrome (container background, border, shadow, and the absolute close +
+ *   clear buttons) fades in across the same 220ms as the geometry transition,
+ *   so the box appears to materialize as it grows rather than snap into
+ *   existence at frame 0.
+ * - Body content (intro card, messages, composer overlay) fades in AFTER
+ *   the geometry has settled — `animation-delay: 220ms` plus
+ *   `animation-fill-mode: both` keeps it at opacity 0 during the morph.
+ *
+ * Because `[data-state="collapsed"] .persona-widget-container { display:
+ * none }`, the container leaves and re-enters the rendering tree on each
+ * expand, which retriggers the keyframe animation cleanly without
+ * needing a JS class toggle.
+ */
+@keyframes persona-composer-bar-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] .persona-widget-container {
+  animation: persona-composer-bar-fade-in 220ms ease both;
+}
+
+.persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] .persona-widget-body {
+  animation: persona-composer-bar-fade-in 200ms ease 220ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-widget-wrapper[data-persona-composer-bar] {
+    transition: none !important;
+  }
+  .persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] .persona-widget-container,
+  .persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] .persona-widget-body {
+    animation: none !important;
+  }
+}

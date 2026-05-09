@@ -234,6 +234,7 @@
     <div class="controls-summary">
       <span class="summary-chip" data-summary="variant">Variant: Built-in</span>
       <span class="summary-chip" data-summary="autoadvance">Auto-advance: On</span>
+      <span class="summary-chip" data-summary="persist">Persist: Off</span>
       <button class="summary-edit" type="button" id="btn-controls-toggle">
         Edit settings
       </button>
@@ -261,6 +262,21 @@
             When on, picking a single-select pill or pressing Send on free-text
             jumps to the next question automatically. The final page always waits
             for an explicit "Submit all" click. Multi-select pages always require Next.
+          </p>
+        </div>
+
+        <div class="section">
+          <label>Persist state</label>
+          <div class="mode-group" id="persist-selector">
+            <button class="mode-btn active" data-persist="off">Off</button>
+            <button class="mode-btn" data-persist="on">On</button>
+          </div>
+          <p class="hint">
+            Off (default) passes <code>persistState: false</code> — nothing is
+            written to <code>localStorage</code>, so reloading wipes any injected
+            tool calls. On wires up a <code>storageAdapter</code> with a
+            demo-scoped key, so the active question survives a reload. "Reset
+            transcript" still clears either way.
           </p>
         </div>
 
@@ -298,8 +314,20 @@
     <script type="module">
       import "@runtypelabs/persona/widget.css";
       import "./src/index.css";
-      import { createAgentExperience } from "@runtypelabs/persona";
+      import { createAgentExperience, createLocalStorageAdapter } from "@runtypelabs/persona";
       import { horizontalPillsAskPlugin } from "./src/plugins/ask-horizontal-pills-plugin.js";
+
+      const PERSIST_KEY = "persona-state-ask-user-question-demo";
+      // The toggle itself is persisted so a reload of "Persist: On" actually
+      // rehydrates the widget — otherwise the page would always boot with
+      // persistOn=false and ignore the stored state.
+      const PERSIST_PREF_KEY = "persona-ask-user-question-demo:persistOn";
+      const readPersistPref = () => {
+        try { return localStorage.getItem(PERSIST_PREF_KEY) === "true"; } catch { return false; }
+      };
+      const writePersistPref = (on) => {
+        try { localStorage.setItem(PERSIST_PREF_KEY, on ? "true" : "false"); } catch {}
+      };
 
       const mount = document.getElementById("widget-mount");
       const logEl = document.getElementById("log");
@@ -313,6 +341,7 @@
 
       let variant = "builtin";
       let autoAdvance = true;
+      let persistOn = readPersistPref();
       let controller = null;
 
       const PRESETS = {
@@ -466,10 +495,13 @@
         if (controller) controller.destroy();
         mount.innerHTML = "";
         const plugins = variant === "plugin" ? [horizontalPillsAskPlugin] : [];
+        const persistConfig = persistOn
+          ? { storageAdapter: createLocalStorageAdapter(PERSIST_KEY) }
+          : { persistState: false };
         controller = createAgentExperience(mount, {
           apiUrl: "https://noop.test/chat",
           launcher: { enabled: false },
-          persistState: false,
+          ...persistConfig,
           plugins,
           features: {
             askUserQuestion: { groupedAutoAdvance: autoAdvance },
@@ -479,7 +511,7 @@
             welcomeSubtitle: "Trigger a preset question from the left panel.",
           },
         });
-        log(`Widget initialized — variant: ${variant}, autoAdvance: ${autoAdvance}`, "info");
+        log(`Widget initialized — variant: ${variant}, autoAdvance: ${autoAdvance}, persist: ${persistOn ? "on" : "off"}`, "info");
       }
 
       let askCounter = 0;
@@ -519,11 +551,13 @@
       const summaryChips = {
         variant: document.querySelector('[data-summary="variant"]'),
         autoadvance: document.querySelector('[data-summary="autoadvance"]'),
+        persist: document.querySelector('[data-summary="persist"]'),
       };
       const variantLabel = (v) => (v === "plugin" ? "Plugin (pills)" : "Built-in");
       const updateSummary = () => {
         if (summaryChips.variant) summaryChips.variant.textContent = `Variant: ${variantLabel(variant)}`;
         if (summaryChips.autoadvance) summaryChips.autoadvance.textContent = `Auto-advance: ${autoAdvance ? "On" : "Off"}`;
+        if (summaryChips.persist) summaryChips.persist.textContent = `Persist: ${persistOn ? "On" : "Off"}`;
       };
       const openDrawer = () => document.body.classList.add("controls-open");
       const closeDrawer = () => document.body.classList.remove("controls-open");
@@ -563,6 +597,31 @@
         createWidget();
       });
 
+      // Persist-state toggle. Switching from on → off clears the stored key
+      // so the next on-toggle starts clean rather than rehydrating stale state.
+      // The toggle itself is also persisted (PERSIST_PREF_KEY) so reloading the
+      // page in "On" mode actually rehydrates the widget instead of resetting
+      // back to off and orphaning the stored transcript.
+      const persistSelector = document.getElementById("persist-selector");
+      const syncPersistButtons = () => {
+        persistSelector.querySelectorAll(".mode-btn").forEach((b) => {
+          b.classList.toggle("active", (b.dataset.persist === "on") === persistOn);
+        });
+      };
+      persistSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        const nextPersist = btn.dataset.persist === "on";
+        if (persistOn && !nextPersist) {
+          try { localStorage.removeItem(PERSIST_KEY); } catch {}
+        }
+        persistOn = nextPersist;
+        writePersistPref(persistOn);
+        syncPersistButtons();
+        updateSummary();
+        createWidget();
+      });
+
       // Preset buttons. On mobile, auto-close the drawer right after a preset
       // is picked so the widget is immediately visible underneath.
       document.getElementById("preset-group").addEventListener("click", (e) => {
@@ -572,8 +631,12 @@
         if (mobileQuery.matches) closeDrawer();
       });
 
-      // Reset
+      // Reset. Clears the persisted key first so the freshly re-created widget
+      // doesn't rehydrate the just-cleared transcript when persistence is on.
       document.getElementById("btn-reset").addEventListener("click", () => {
+        if (persistOn) {
+          try { localStorage.removeItem(PERSIST_KEY); } catch {}
+        }
         createWidget();
         logEl.innerHTML = "";
         log("Reset", "info");
@@ -593,7 +656,10 @@
         log(`dismissed (toolCallId=${toolCallId})`, "dismissed");
       });
 
-      // Initial mount
+      // Initial mount. Sync the persist toggle to its stored preference before
+      // creating the widget so the active-button highlight and the storage
+      // adapter wiring agree on first paint.
+      syncPersistButtons();
       updateSummary();
       createWidget();
     </script>

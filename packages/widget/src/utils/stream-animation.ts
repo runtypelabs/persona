@@ -275,7 +275,7 @@ export const wrapStreamAnimation = (
   html: string,
   mode: "char" | "word",
   messageId: string,
-  options?: { skipTags?: string[] }
+  options?: { skipTags?: string[]; startIndex?: number }
 ): string => {
   if (!html) return html;
   if (typeof document === "undefined") return html;
@@ -294,7 +294,12 @@ export const wrapStreamAnimation = (
     node = walker.nextNode();
   }
 
-  const counterRef = { value: 0 };
+  // `startIndex` lets callers number spans by their absolute position in a
+  // larger string, even when only a slice is being wrapped. The peek banner
+  // uses this so per-char span IDs stay stable as the trailing-100-char
+  // window shifts each chunk — idiomorph then preserves animations on
+  // already-revealed chars instead of restarting them.
+  const counterRef = { value: options?.startIndex ?? 0 };
   const wrap = mode === "char" ? wrapTextNodeChars : wrapTextNodeWords;
   for (const textNode of textNodes) {
     wrap(textNode, messageId, counterRef);

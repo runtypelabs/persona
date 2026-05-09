@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" />
+  <title>Persistent Composer Bar — Persona</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: #fafaf7;
+      color: #1a1a1a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      border-bottom: 1px solid #e5e3dd;
+      background: #ffffff;
+    }
+    .topbar__brand {
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .topbar__nav {
+      display: flex;
+      gap: 24px;
+      font-size: 13px;
+      color: #555;
+    }
+    .topbar__nav a { color: inherit; text-decoration: none; }
+    .topbar__nav a:hover { color: #000; }
+
+    /* Product layout */
+    .product {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 24px 220px; /* leave room for the persistent composer pill */
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: 56px;
+    }
+    .product__media {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .product__thumbs {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .product__thumb {
+      width: 96px;
+      height: 120px;
+      background: linear-gradient(135deg, #efe9df 0%, #d8cdb6 100%);
+      border-radius: 8px;
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+    .product__thumb.is-active {
+      border-color: #1a1a1a;
+    }
+    .product__hero {
+      width: 100%;
+      aspect-ratio: 4 / 5;
+      background: linear-gradient(160deg, #d6c8ad 0%, #b69a72 60%, #8c6e44 100%);
+      border-radius: 12px;
+    }
+
+    .product__info h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .product__price {
+      font-size: 20px;
+      margin: 0 0 20px;
+    }
+    .product__color {
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 16px;
+    }
+    .product__swatches {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .swatch {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid #d4d2cc;
+      cursor: pointer;
+    }
+    .swatch.is-active { outline: 2px solid #1a1a1a; outline-offset: 2px; }
+    .swatch--camel { background: #b69a72; }
+    .swatch--charcoal { background: #2f2f2f; }
+    .swatch--cream { background: #efe7d4; }
+
+    .product__sizes {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .size {
+      padding: 12px 0;
+      text-align: center;
+      border: 1px solid #d4d2cc;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      background: #fff;
+    }
+    .size.is-active { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
+
+    .add-to-bag {
+      width: 100%;
+      padding: 16px 24px;
+      background: #1a1a1a;
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+    }
+
+    .product__sections {
+      margin-top: 32px;
+      border-top: 1px solid #e5e3dd;
+    }
+    .product__section {
+      border-bottom: 1px solid #e5e3dd;
+      padding: 18px 0;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    @media (max-width: 760px) {
+      .product { grid-template-columns: 1fr; gap: 32px; }
+      .product__media { grid-template-columns: 1fr; }
+      .product__thumbs { flex-direction: row; overflow-x: auto; }
+      .product__thumb { flex-shrink: 0; }
+    }
+
+    /* Toast — for add-to-cart confirmations from the agent */
+    .storefront-toast {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      max-width: 320px;
+      padding: 12px 16px;
+      background: #1a1a1a;
+      color: #fff;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.4;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+      z-index: 100003;
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: opacity 200ms ease, transform 200ms ease;
+      pointer-events: none;
+    }
+    .storefront-toast.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Mount target for the persona widget */
+    #persona-host {
+      /* Composer-bar is fixed-positioned so the host doesn't need any
+         special flow; this just gives us a stable element to mount to. */
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__brand">EVERSPUN.</div>
+    <nav class="topbar__nav">
+      <a href="#">Women</a>
+      <a href="#">Men</a>
+      <a href="#">Sale</a>
+      <a href="#">Bag (<span id="bag-count">0</span>)</a>
+    </nav>
+  </header>
+
+  <section class="product">
+    <div class="product__media">
+      <div class="product__thumbs">
+        <div class="product__thumb is-active"></div>
+        <div class="product__thumb"></div>
+        <div class="product__thumb"></div>
+        <div class="product__thumb"></div>
+      </div>
+      <div class="product__hero" aria-label="Mongolian Cashmere Button Down Sweater"></div>
+    </div>
+
+    <div class="product__info">
+      <h1>Mongolian Cashmere Button Down Sweater</h1>
+      <p class="product__price">$248</p>
+
+      <div class="product__color">Color: Camel</div>
+      <div class="product__swatches">
+        <button class="swatch swatch--camel is-active" aria-label="Camel"></button>
+        <button class="swatch swatch--charcoal" aria-label="Charcoal"></button>
+        <button class="swatch swatch--cream" aria-label="Cream"></button>
+      </div>
+
+      <div class="product__sizes">
+        <button class="size">XS</button>
+        <button class="size is-active">S</button>
+        <button class="size">M</button>
+        <button class="size">L</button>
+        <button class="size">XL</button>
+        <button class="size">XXL</button>
+      </div>
+
+      <button class="add-to-bag">Add to bag</button>
+
+      <div class="product__sections">
+        <div class="product__section">DETAILS<span>+</span></div>
+        <div class="product__section">SIZE &amp; FIT<span>+</span></div>
+        <div class="product__section">SHIPPING &amp; RETURNS<span>+</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div id="persona-host"></div>
+
+  <script type="module" src="/src/persistent-composer.ts"></script>
+</body>
+</html>

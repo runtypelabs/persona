@@ -1,6 +1,7 @@
 import "@runtypelabs/persona/widget.css";
 import {
   createAgentExperience,
+  createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
   createTypingIndicator
@@ -442,6 +443,7 @@ function buildLoadingIndicatorConfig() {
 const controller = createAgentExperience(mount, {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
+  storageAdapter: createLocalStorageAdapter("persona-state-custom-loading-indicator"),
   launcher: {
     ...DEFAULT_WIDGET_CONFIG.launcher,
     enabled: false,

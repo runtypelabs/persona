@@ -3,6 +3,7 @@ import "@runtypelabs/persona/widget.css";
 import {
   initAgentWidget,
   createAgentExperience,
+  createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
 } from "@runtypelabs/persona";
@@ -41,6 +42,7 @@ if (!inlineMount) throw new Error("Inline widget mount missing");
 const inlineController = createAgentExperience(inlineMount, {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
+  storageAdapter: createLocalStorageAdapter("persona-state-focus-input-inline"),
   autoFocusInput: savedAutoFocus,
   launcher: { ...DEFAULT_WIDGET_CONFIG.launcher, enabled: false, width: "100%" },
   copy: {
@@ -62,6 +64,7 @@ const launcherController = initAgentWidget({
   config: {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
+    storageAdapter: createLocalStorageAdapter("persona-state-focus-input-launcher"),
     autoFocusInput: savedAutoFocus,
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,

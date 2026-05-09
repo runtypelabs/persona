@@ -71,7 +71,7 @@
     <script type="module">
       import "@runtypelabs/persona/widget.css";
       import "./src/index.css";
-      import { initAgentWidget, DEFAULT_WIDGET_CONFIG } from "@runtypelabs/persona";
+      import { initAgentWidget, createLocalStorageAdapter, DEFAULT_WIDGET_CONFIG } from "@runtypelabs/persona";
 
       const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
       const proxyUrl =
@@ -89,6 +89,7 @@
         config: {
           ...DEFAULT_WIDGET_CONFIG,
           apiUrl: proxyUrl,
+          storageAdapter: createLocalStorageAdapter("persona-state-inline-scroll-500"),
           launcher: { enabled: false },
           theme: {
             ...DEFAULT_WIDGET_CONFIG.theme,
@@ -119,6 +120,7 @@
         config: {
           ...DEFAULT_WIDGET_CONFIG,
           apiUrl: proxyUrl,
+          storageAdapter: createLocalStorageAdapter("persona-state-inline-scroll-350"),
           launcher: { enabled: false },
           theme: {
             ...DEFAULT_WIDGET_CONFIG.theme,

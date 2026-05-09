@@ -1150,6 +1150,103 @@ export type AgentWidgetDockConfig = {
   reveal?: "resize" | "overlay" | "push" | "emerge";
 };
 
+/**
+ * Layout configuration for `mountMode: "composer-bar"`. Controls how the
+ * collapsed pill is positioned and sized, and how the panel expands when
+ * the user opens it.
+ */
+export type AgentWidgetComposerBarConfig = {
+  /**
+   * Max-width of the collapsed pill composer at the bottom of the viewport.
+   * @default "720px"
+   */
+  collapsedMaxWidth?: string;
+  /**
+   * Bottom offset (CSS length) from the viewport edge in the collapsed state.
+   * @default "16px"
+   */
+  bottomOffset?: string;
+  /**
+   * Auto-expand the panel when the user submits a message while the composer
+   * is collapsed. When false, the message still sends but the panel remains
+   * collapsed (the host can drive expansion programmatically).
+   * @default true
+   */
+  expandOnSubmit?: boolean;
+  /**
+   * Size of the expanded chat panel.
+   * - `"anchored"` (default): the pill stays at the bottom of the viewport
+   *   and the chat history grows upward into a centered column above it.
+   *   Width is driven by `expandedMaxWidth`; the panel's top edge sits at
+   *   `expandedTopOffset` from the viewport top.
+   * - `"fullscreen"`: covers the entire viewport (mobile-app style). Inner
+   *   content is centered horizontally via `contentMaxWidth`.
+   * - `"modal"`: centered sheet with margins; size driven by
+   *   `modalMaxWidth` / `modalMaxHeight`.
+   * @default "anchored"
+   */
+  expandedSize?: "anchored" | "fullscreen" | "modal";
+  /**
+   * When `expandedSize === "anchored"`, max-width of the expanded panel
+   * column. Capped at `calc(100vw - 32px)` on narrow viewports.
+   * @default "880px"
+   */
+  expandedMaxWidth?: string;
+  /**
+   * When `expandedSize === "anchored"`, distance from the viewport top to
+   * the panel's top edge. Accepts any CSS length.
+   * @default "5vh"
+   */
+  expandedTopOffset?: string;
+  /**
+   * Max-width applied to messages, composer form, suggestions, and
+   * attachment previews so they center horizontally inside the expanded
+   * panel. Falls back to `layout.contentMaxWidth` when set; otherwise
+   * defaults to this value.
+   * @default "720px"
+   */
+  contentMaxWidth?: string;
+  /**
+   * When `expandedSize === "modal"`, max-width of the expanded sheet.
+   * @default "880px"
+   */
+  modalMaxWidth?: string;
+  /**
+   * When `expandedSize === "modal"`, max-height of the expanded sheet.
+   * @default "min(90vh, 800px)"
+   */
+  modalMaxHeight?: string;
+  /**
+   * Configuration for the "peek" banner — the chrome-less row above the
+   * collapsed pill that previews the most recent assistant message.
+   */
+  peek?: AgentWidgetComposerBarPeekConfig;
+};
+
+/**
+ * Configuration for the composer-bar peek banner. Reuses the same
+ * `streamAnimation` shape developers already configure for the main message
+ * stream, so the surface for animations is identical across both contexts.
+ *
+ * Resolution order:
+ * - If `peek.streamAnimation` is set, those values apply to the peek.
+ * - Otherwise the peek inherits from `features.streamAnimation`.
+ *
+ * Per-surface carve-outs:
+ * - `bubbleClass` from a plugin (used by `pop-bubble`) is ignored — the peek
+ *   has no bubble analog.
+ * - `containerClass`, `wrap` ("char" | "word"), `useCaret`, `placeholder`
+ *   ("skeleton"), `buffer` ("word" | "line"), `speed`, `duration`, and
+ *   custom plugins all apply unchanged.
+ */
+export type AgentWidgetComposerBarPeekConfig = {
+  /**
+   * Reveal animation for the peek's trailing-message preview. Same shape as
+   * `features.streamAnimation`. Omit to inherit from the main stream config.
+   */
+  streamAnimation?: AgentWidgetStreamAnimationFeature;
+};
+
 export type AgentWidgetLauncherConfig = {
   enabled?: boolean;
   title?: string;
@@ -1164,14 +1261,22 @@ export type AgentWidgetLauncherConfig = {
    * Controls how the launcher panel is mounted relative to the host page.
    * - "floating": default floating launcher / panel behavior
    * - "docked": wraps the target container and renders as a sibling dock
+   * - "composer-bar": persistent rounded-pill composer fixed to the bottom of
+   *   the viewport that morphs into a fullscreen (or modal) chat panel on
+   *   submit and minimizes back to the pill on close.
    *
    * @default "floating"
    */
-  mountMode?: "floating" | "docked";
+  mountMode?: "floating" | "docked" | "composer-bar";
   /**
    * Layout configuration for docked mode.
    */
   dock?: AgentWidgetDockConfig;
+  /**
+   * Layout configuration for composer-bar mode.
+   * Only applies when `mountMode === "composer-bar"`.
+   */
+  composerBar?: AgentWidgetComposerBarConfig;
   autoExpand?: boolean;
   width?: string;
   /**
@@ -3357,6 +3462,13 @@ export type AgentWidgetConfig = {
    * When `true`, uses default settings with sessionStorage.
    * When an object, allows customizing storage type, key prefix, and what to persist.
    *
+   * Setting this to `false` is the explicit kill-switch: it disables UI-state
+   * persistence **and** message-history persistence. When `false`, any
+   * `storageAdapter` you configure is ignored and the default localStorage
+   * adapter is not created — no chat history is read or written. Pass `true`
+   * (or omit) to keep the default behavior of persisting messages via the
+   * configured `storageAdapter` (or the built-in localStorage adapter).
+   *
    * @example
    * ```typescript
    * // Simple usage - persist open state in sessionStorage
@@ -3377,6 +3489,14 @@ export type AgentWidgetConfig = {
    *       focusInput: true
    *     }
    *   }
+   * }
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Ephemeral widget — no message history written anywhere
+   * config: {
+   *   persistState: false
    * }
    * ```
    */

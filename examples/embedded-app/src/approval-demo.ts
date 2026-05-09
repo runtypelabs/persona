@@ -2,6 +2,7 @@ import "@runtypelabs/persona/widget.css";
 
 import {
   createAgentExperience,
+  createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetController,
@@ -22,6 +23,7 @@ function createWidget() {
 
   const handle = createAgentExperience(mount!, {
     ...DEFAULT_WIDGET_CONFIG,
+    storageAdapter: createLocalStorageAdapter("persona-state-approval-demo"),
 
     // Use customFetch to simulate the entire flow
     customFetch: async (_url, init, _payload) => {

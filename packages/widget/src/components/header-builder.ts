@@ -1,7 +1,7 @@
-import { createElement, createElementInDocument } from "../utils/dom";
+import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
-import { PORTALED_OVERLAY_Z_INDEX } from "../utils/constants";
+import { createCloseButton, createClearChatButton } from "./header-parts";
 
 /** CSS `color` values; variables are set on `[data-persona-root]` from `theme.components.header`. */
 export const HEADER_THEME_CSS = {
@@ -50,7 +50,6 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
 
   const launcher = config?.launcher ?? {};
   const headerIconSize = launcher.headerIconSize ?? "48px";
-  const closeButtonSize = launcher.closeButtonSize ?? "32px";
   const closeButtonPlacement = launcher.closeButtonPlacement ?? "inline";
   const headerIconHidden = launcher.headerIconHidden ?? false;
   const headerIconName = launcher.headerIconName;
@@ -119,157 +118,20 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   let clearChatButtonWrapper: HTMLElement | null = null;
 
   if (clearChatEnabled) {
-    const clearChatSize = clearChatConfig.size ?? "32px";
-    const clearChatIconName = clearChatConfig.iconName ?? "refresh-cw";
-    const clearChatIconColor = clearChatConfig.iconColor ?? "";
-    const clearChatBgColor = clearChatConfig.backgroundColor ?? "";
-    const clearChatBorderWidth = clearChatConfig.borderWidth ?? "";
-    const clearChatBorderColor = clearChatConfig.borderColor ?? "";
-    const clearChatBorderRadius = clearChatConfig.borderRadius ?? "";
-    const clearChatPaddingX = clearChatConfig.paddingX ?? "";
-    const clearChatPaddingY = clearChatConfig.paddingY ?? "";
-    const clearChatTooltipText = clearChatConfig.tooltipText ?? "Clear chat";
-    const clearChatShowTooltip = clearChatConfig.showTooltip ?? true;
-
-    // Create button wrapper for tooltip - positioned based on placement
-    // Note: Don't use persona-clear-chat-button-wrapper class for top-right mode as its
-    // display: inline-flex causes alignment issues with the close button
-    clearChatButtonWrapper = createElement(
-      "div",
+    // Top-right placement uses an absolute wrapper offset from the close
+    // button (which lives at right: 16px and is ~32px wide, leaving ~48px
+    // from the panel's right edge for the clear icon).
+    const wrapperClassName =
       clearChatPlacement === "top-right"
         ? "persona-absolute persona-top-4 persona-z-50"
-        : "persona-relative persona-ml-auto persona-clear-chat-button-wrapper"
-    );
+        : "persona-relative persona-ml-auto persona-clear-chat-button-wrapper";
 
-    // Position to the left of the close button (which is at right: 1rem/16px)
-    // Close button is ~32px wide, plus small gap = 48px from right
+    const parts = createClearChatButton(config, { wrapperClassName });
+    clearChatButton = parts.button;
+    clearChatButtonWrapper = parts.wrapper;
+
     if (clearChatPlacement === "top-right") {
       clearChatButtonWrapper.style.right = "48px";
-    }
-
-    clearChatButton = createElement(
-      "button",
-      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
-    ) as HTMLButtonElement;
-
-    clearChatButton.style.height = clearChatSize;
-    clearChatButton.style.width = clearChatSize;
-    clearChatButton.type = "button";
-    clearChatButton.setAttribute("aria-label", clearChatTooltipText);
-    clearChatButton.style.color =
-      clearChatIconColor || HEADER_THEME_CSS.actionIconColor;
-
-    // Add icon. display:block eliminates inline-baseline spacing that can
-    // push the icon a fractional pixel off-center inside the button.
-    const iconSvg = renderLucideIcon(clearChatIconName, "20px", "currentColor", 1);
-    if (iconSvg) {
-      iconSvg.style.display = "block";
-      clearChatButton.appendChild(iconSvg);
-    }
-
-    if (clearChatBgColor) {
-      clearChatButton.style.backgroundColor = clearChatBgColor;
-      clearChatButton.classList.remove("hover:persona-bg-gray-100");
-    }
-
-    if (clearChatBorderWidth || clearChatBorderColor) {
-      const borderWidth = clearChatBorderWidth || "0px";
-      const borderColor = clearChatBorderColor || "transparent";
-      clearChatButton.style.border = `${borderWidth} solid ${borderColor}`;
-      clearChatButton.classList.remove("persona-border-none");
-    }
-
-    if (clearChatBorderRadius) {
-      clearChatButton.style.borderRadius = clearChatBorderRadius;
-      clearChatButton.classList.remove("persona-rounded-full");
-    }
-
-    // Apply padding styling
-    if (clearChatPaddingX) {
-      clearChatButton.style.paddingLeft = clearChatPaddingX;
-      clearChatButton.style.paddingRight = clearChatPaddingX;
-    } else {
-      clearChatButton.style.paddingLeft = "";
-      clearChatButton.style.paddingRight = "";
-    }
-    if (clearChatPaddingY) {
-      clearChatButton.style.paddingTop = clearChatPaddingY;
-      clearChatButton.style.paddingBottom = clearChatPaddingY;
-    } else {
-      clearChatButton.style.paddingTop = "";
-      clearChatButton.style.paddingBottom = "";
-    }
-
-    clearChatButtonWrapper.appendChild(clearChatButton);
-
-    // Add tooltip with portaling to document.body to escape overflow clipping
-    if (
-      clearChatShowTooltip &&
-      clearChatTooltipText &&
-      clearChatButton &&
-      clearChatButtonWrapper
-    ) {
-      let portaledTooltip: HTMLElement | null = null;
-
-      const showTooltip = () => {
-        if (portaledTooltip || !clearChatButton) return; // Already showing or button doesn't exist
-
-        const tooltipDocument = clearChatButton.ownerDocument;
-        const tooltipContainer = tooltipDocument.body;
-        if (!tooltipContainer) return;
-
-        // Create tooltip element
-        portaledTooltip = createElementInDocument(
-          tooltipDocument,
-          "div",
-          "persona-clear-chat-tooltip"
-        );
-        portaledTooltip.textContent = clearChatTooltipText;
-
-        // Add arrow
-        const arrow = createElementInDocument(tooltipDocument, "div");
-        arrow.className = "persona-clear-chat-tooltip-arrow";
-        portaledTooltip.appendChild(arrow);
-
-        // Get button position
-        const buttonRect = clearChatButton.getBoundingClientRect();
-
-        // Position tooltip above button
-        portaledTooltip.style.position = "fixed";
-        portaledTooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
-        portaledTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
-        portaledTooltip.style.top = `${buttonRect.top - 8}px`;
-        portaledTooltip.style.transform = "translate(-50%, -100%)";
-
-        // Append to body
-        tooltipContainer.appendChild(portaledTooltip);
-      };
-
-      const hideTooltip = () => {
-        if (portaledTooltip && portaledTooltip.parentNode) {
-          portaledTooltip.parentNode.removeChild(portaledTooltip);
-          portaledTooltip = null;
-        }
-      };
-
-      // Add event listeners
-      clearChatButtonWrapper.addEventListener("mouseenter", showTooltip);
-      clearChatButtonWrapper.addEventListener("mouseleave", hideTooltip);
-      clearChatButton.addEventListener("focus", showTooltip);
-      clearChatButton.addEventListener("blur", hideTooltip);
-
-      // Store cleanup function on the button for later use
-      (clearChatButtonWrapper as any)._cleanupTooltip = () => {
-        hideTooltip();
-        if (clearChatButtonWrapper) {
-          clearChatButtonWrapper.removeEventListener("mouseenter", showTooltip);
-          clearChatButtonWrapper.removeEventListener("mouseleave", hideTooltip);
-        }
-        if (clearChatButton) {
-          clearChatButton.removeEventListener("focus", showTooltip);
-          clearChatButton.removeEventListener("blur", hideTooltip);
-        }
-      };
     }
 
     // Only append to header if inline placement
@@ -278,161 +140,22 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     }
   }
 
-  // Create close button wrapper for tooltip positioning.
-  // Mirrors the clear-chat wrapper's inline-flex centering so both
-  // header action buttons vertically align identically within the
-  // header's flex row.
-  const closeButtonWrapper = createElement(
-    "div",
+  // Build the close (×) button via the shared factory. The wrapper class
+  // mirrors the clear-chat wrapper's inline-flex centering so both header
+  // action buttons vertically align identically within the header's flex
+  // row. composer-bar mode uses the same factory directly with its own
+  // wrapper class to render a top-right-only close button.
+  const closeButtonWrapperClass =
     closeButtonPlacement === "top-right"
       ? "persona-absolute persona-top-4 persona-right-4 persona-z-50"
       : clearChatEnabled && clearChatPlacement === "inline"
         ? "persona-relative persona-inline-flex persona-items-center persona-justify-center"
-        : "persona-relative persona-ml-auto persona-inline-flex persona-items-center persona-justify-center"
+        : "persona-relative persona-ml-auto persona-inline-flex persona-items-center persona-justify-center";
+
+  const { button: closeButton, wrapper: closeButtonWrapper } = createCloseButton(
+    config,
+    { showClose, wrapperClassName: closeButtonWrapperClass }
   );
-
-  // Create close button with base classes
-  const closeButton = createElement(
-    "button",
-    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
-  ) as HTMLButtonElement;
-  closeButton.style.height = closeButtonSize;
-  closeButton.style.width = closeButtonSize;
-  closeButton.type = "button";
-
-  // Get tooltip config
-  const closeButtonTooltipText = launcher.closeButtonTooltipText ?? "Close chat";
-  const closeButtonShowTooltip = launcher.closeButtonShowTooltip ?? true;
-
-  closeButton.setAttribute("aria-label", closeButtonTooltipText);
-  closeButton.style.display = showClose ? "" : "none";
-
-  // Add icon or fallback text
-  const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-  const closeButtonIconText = launcher.closeButtonIconText ?? "×";
-  closeButton.style.color =
-    launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
-
-  // Try to render Lucide icon, fallback to text if not provided or fails.
-  // The X glyph's paths occupy only the middle 50% of its 24x24 viewBox
-  // (from 6,6 to 18,18), while other header icons (e.g. refresh-cw) span
-  // ~75% of the viewBox. Rendering X at a larger intrinsic size brings
-  // its visible extent into parity with sibling icons in the header.
-  // display:block eliminates inline-baseline spacing that can push the
-  // icon a fractional pixel off-center inside the button.
-  const closeIconSvg = renderLucideIcon(closeButtonIconName, "28px", "currentColor", 1);
-  if (closeIconSvg) {
-    closeIconSvg.style.display = "block";
-    closeButton.appendChild(closeIconSvg);
-  } else {
-    closeButton.textContent = closeButtonIconText;
-  }
-
-  if (launcher.closeButtonBackgroundColor) {
-    closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
-    closeButton.classList.remove("hover:persona-bg-gray-100");
-  } else {
-    closeButton.style.backgroundColor = "";
-    closeButton.classList.add("hover:persona-bg-gray-100");
-  }
-
-  // Apply border if width and/or color are provided
-  if (launcher.closeButtonBorderWidth || launcher.closeButtonBorderColor) {
-    const borderWidth = launcher.closeButtonBorderWidth || "0px";
-    const borderColor = launcher.closeButtonBorderColor || "transparent";
-    closeButton.style.border = `${borderWidth} solid ${borderColor}`;
-    closeButton.classList.remove("persona-border-none");
-  } else {
-    closeButton.style.border = "";
-    closeButton.classList.add("persona-border-none");
-  }
-
-  if (launcher.closeButtonBorderRadius) {
-    closeButton.style.borderRadius = launcher.closeButtonBorderRadius;
-    closeButton.classList.remove("persona-rounded-full");
-  } else {
-    closeButton.style.borderRadius = "";
-    closeButton.classList.add("persona-rounded-full");
-  }
-
-  // Apply padding styling
-  if (launcher.closeButtonPaddingX) {
-    closeButton.style.paddingLeft = launcher.closeButtonPaddingX;
-    closeButton.style.paddingRight = launcher.closeButtonPaddingX;
-  } else {
-    closeButton.style.paddingLeft = "";
-    closeButton.style.paddingRight = "";
-  }
-  if (launcher.closeButtonPaddingY) {
-    closeButton.style.paddingTop = launcher.closeButtonPaddingY;
-    closeButton.style.paddingBottom = launcher.closeButtonPaddingY;
-  } else {
-    closeButton.style.paddingTop = "";
-    closeButton.style.paddingBottom = "";
-  }
-
-  closeButtonWrapper.appendChild(closeButton);
-
-  // Add tooltip with portaling to document.body to escape overflow clipping
-  if (closeButtonShowTooltip && closeButtonTooltipText) {
-    let portaledTooltip: HTMLElement | null = null;
-
-    const showTooltip = () => {
-      if (portaledTooltip) return; // Already showing
-
-      const tooltipDocument = closeButton.ownerDocument;
-      const tooltipContainer = tooltipDocument.body;
-      if (!tooltipContainer) return;
-
-      // Create tooltip element
-      portaledTooltip = createElementInDocument(
-        tooltipDocument,
-        "div",
-        "persona-clear-chat-tooltip"
-      );
-      portaledTooltip.textContent = closeButtonTooltipText;
-
-      // Add arrow
-      const arrow = createElementInDocument(tooltipDocument, "div");
-      arrow.className = "persona-clear-chat-tooltip-arrow";
-      portaledTooltip.appendChild(arrow);
-
-      // Get button position
-      const buttonRect = closeButton.getBoundingClientRect();
-
-      // Position tooltip above button
-      portaledTooltip.style.position = "fixed";
-      portaledTooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
-      portaledTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
-      portaledTooltip.style.top = `${buttonRect.top - 8}px`;
-      portaledTooltip.style.transform = "translate(-50%, -100%)";
-
-      // Append to body
-      tooltipContainer.appendChild(portaledTooltip);
-    };
-
-    const hideTooltip = () => {
-      if (portaledTooltip && portaledTooltip.parentNode) {
-        portaledTooltip.parentNode.removeChild(portaledTooltip);
-        portaledTooltip = null;
-      }
-    };
-
-    // Add event listeners
-    closeButtonWrapper.addEventListener("mouseenter", showTooltip);
-    closeButtonWrapper.addEventListener("mouseleave", hideTooltip);
-    closeButton.addEventListener("focus", showTooltip);
-    closeButton.addEventListener("blur", hideTooltip);
-
-    // Store cleanup function on the wrapper for later use
-    (closeButtonWrapper as any)._cleanupTooltip = () => {
-      hideTooltip();
-      closeButtonWrapper.removeEventListener("mouseenter", showTooltip);
-      closeButtonWrapper.removeEventListener("mouseleave", hideTooltip);
-      closeButton.removeEventListener("focus", showTooltip);
-      closeButton.removeEventListener("blur", hideTooltip);
-    };
-  }
 
   // Inline placement: append close button to header
   if (closeButtonPlacement !== "top-right") {

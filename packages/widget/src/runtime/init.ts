@@ -1,6 +1,6 @@
 import { createAgentExperience, AgentWidgetController } from "../ui";
 import { AgentWidgetConfig as _AgentWidgetConfig, AgentWidgetInitOptions, AgentWidgetEvent as _AgentWidgetEvent } from "../types";
-import { isDockedMountMode } from "../utils/dock";
+import { isComposerBarMountMode, isDockedMountMode } from "../utils/dock";
 import { createWidgetHostLayout } from "./host-layout";
 
 const ensureTarget = (target: string | HTMLElement): HTMLElement => {
@@ -183,8 +183,10 @@ export const initAgentWidget = (
       } as _AgentWidgetConfig;
       const previousDocked = isDockedMountMode(config);
       const nextDocked = isDockedMountMode(mergedConfig);
+      const previousComposerBar = isComposerBarMountMode(config);
+      const nextComposerBar = isComposerBarMountMode(mergedConfig);
 
-      if (previousDocked !== nextDocked) {
+      if (previousDocked !== nextDocked || previousComposerBar !== nextComposerBar) {
         rebuildLayout(mergedConfig);
         return;
       }

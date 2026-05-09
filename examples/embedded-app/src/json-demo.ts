@@ -6,6 +6,7 @@ import {
   createAgentExperience,
   initAgentWidget,
   componentRegistry,
+  createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
@@ -29,8 +30,12 @@ if (!inlineMount) {
 createAgentExperience(inlineMount, {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
+  storageAdapter: createLocalStorageAdapter("persona-state-json-inline"),
   parserType: "json", // Use JSON parser for component directives
   enableComponentStreaming: true,
+  // The DynamicForm renders its own card chrome (border, padding, shadow),
+  // so disable Persona's default bubble wrap to avoid a card-on-card look.
+  wrapComponentDirectiveInBubble: false,
   launcher: { enabled: false, width: "100%" },
   formEndpoint: "/form",
   theme: {
@@ -65,8 +70,10 @@ initAgentWidget({
   config: {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
+    storageAdapter: createLocalStorageAdapter("persona-state-json-launcher"),
     parserType: "json",
     enableComponentStreaming: true,
+    wrapComponentDirectiveInBubble: false,
     formEndpoint: "/form",
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
@@ -94,6 +101,14 @@ initAgentWidget({
       "I have extra requirements",
       "What's next after the form?"
     ],
+    formStyles: {
+      borderRadius: "6px",
+      borderWidth: "1px",
+      borderColor: "#e5e7eb",
+      padding: "1.25rem",
+      titleFontSize: "1.25rem",
+      buttonBorderRadius: "6px"
+    },
     postprocessMessage: ({ text }) => markdownPostprocessor(text)
   }
 });

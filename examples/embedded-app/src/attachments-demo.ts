@@ -1,6 +1,7 @@
 import "@runtypelabs/persona/widget.css";
 import {
   createAgentExperience,
+  createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
 } from "@runtypelabs/persona";
@@ -95,6 +96,7 @@ function mountWidget() {
   controller = createAgentExperience(mount, {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
+    storageAdapter: createLocalStorageAdapter("persona-state-attachments-demo"),
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
       enabled: false,

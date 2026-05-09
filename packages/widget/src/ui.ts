@@ -42,13 +42,18 @@ import {
 } from "./utils/auto-follow";
 import { statusCopy, DEFAULT_OVERLAY_Z_INDEX, PORTALED_OVERLAY_Z_INDEX } from "./utils/constants";
 import {
+  applyStreamBuffer,
+  createSkeletonPlaceholder,
+  createStreamCaret,
   detachAllPlugins,
   ensurePluginActive,
+  resolveStreamAnimation,
   resolveStreamAnimationPlugin,
+  wrapStreamAnimation,
 } from "./utils/stream-animation";
 import { syncOverlayHostStacking } from "./utils/overlay-host-stacking";
 import { acquireScrollLock } from "./utils/scroll-lock";
-import { isDockedMountMode, resolveDockConfig } from "./utils/dock";
+import { isComposerBarMountMode, isDockedMountMode, resolveDockConfig } from "./utils/dock";
 import { createLauncherButton } from "./components/launcher";
 import { createWrapper, buildPanel, buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
 import { HEADER_THEME_CSS } from "./components/header-builder";
@@ -485,8 +490,14 @@ export const createAgentExperience = (
   }
   const eventBus = createEventBus<AgentWidgetControllerEventMap>();
 
-  const storageAdapter: AgentWidgetStorageAdapter =
-    config.storageAdapter ?? createLocalStorageAdapter();
+  // When persistState is explicitly false, message-history persistence is
+  // disabled — including any user-supplied storageAdapter. This is the strict
+  // kill-switch semantic; pass `persistState: true` (or omit it) to opt in.
+  const messagePersistenceDisabled = config.persistState === false;
+  const storageAdapter: AgentWidgetStorageAdapter | null =
+    messagePersistenceDisabled
+      ? null
+      : (config.storageAdapter ?? createLocalStorageAdapter());
   let persistentMetadata: Record<string, unknown> = {};
   let pendingStoredState: Promise<AgentWidgetStoredState | null> | null = null;
 
@@ -600,7 +611,15 @@ export const createAgentExperience = (
   let prevLauncherEnabled = launcherEnabled;
   let prevHeaderLayout = config.layout?.header?.layout;
   let wasMobileFullscreen = false;
-  let open = launcherEnabled ? autoExpand : true;
+  // Composer-bar mode behaves like a launcher-enabled panel for state/toggle
+  // purposes (open/close maps to expand/collapse) but does not render a
+  // launcher button. `isPanelToggleable()` covers both modes; checks that
+  // gate the launcher button itself stay on the raw `launcherEnabled` flag.
+  const isComposerBar = () => isComposerBarMountMode(config);
+  const isPanelToggleable = () => launcherEnabled || isComposerBar();
+  // Composer-bar starts collapsed (open=false). Inline embed (no launcher)
+  // is always open. Launcher mode honors `autoExpand`.
+  let open = isComposerBar() ? false : (launcherEnabled ? autoExpand : true);
 
   // Track pending resubmit state for injection-triggered resubmit
   // When a handler returns resubmit: true, we wait for injectAssistantMessage()
@@ -707,8 +726,8 @@ export const createAgentExperience = (
     }
   }
 
-  const { wrapper, panel } = createWrapper(config);
-  const panelElements = buildPanel(config, launcherEnabled);
+  const { wrapper, panel, pillRoot } = createWrapper(config);
+  const panelElements = buildPanel(config, isPanelToggleable());
   let {
     container,
     body,
@@ -798,7 +817,7 @@ export const createAgentExperience = (
     const customHeader = headerPlugin.renderHeader({
       config,
       defaultRenderer: () => {
-        const headerElements = buildHeader({ config, showClose: launcherEnabled });
+        const headerElements = buildHeader({ config, showClose: isPanelToggleable() });
         attachHeaderToContainer(container, headerElements, config);
         return headerElements.header;
       },
@@ -951,6 +970,9 @@ export const createAgentExperience = (
         const value = text.trim();
         const hasAttachments = attachmentManager?.hasAttachments() ?? false;
         if (!value && !hasAttachments) return;
+        // Mirror the default composer's auto-expand behavior so plugin
+        // composers do not silently submit while the panel stays collapsed.
+        maybeExpandComposerBar();
         let contentParts: ContentPart[] | undefined;
         if (hasAttachments) {
           contentParts = [];
@@ -1023,19 +1045,35 @@ export const createAgentExperience = (
   ensureComposerAttachmentSurface(footer);
   bindComposerRefsFromFooter(footer);
 
-  // Apply contentMaxWidth to composer form, suggestions, and attachment previews if configured
-  const contentMaxWidth = config.layout?.contentMaxWidth;
-  if (contentMaxWidth && composerForm) {
+  // Apply contentMaxWidth to composer form, suggestions, and attachment
+  // previews if configured. In composer-bar mode, fall back to
+  // `composerBar.contentMaxWidth` (default `720px`) when no explicit
+  // `layout.contentMaxWidth` is set, so the expanded panel's content
+  // centers horizontally without the host having to wire it up.
+  const contentMaxWidth =
+    config.layout?.contentMaxWidth ??
+    (isComposerBar() ? config.launcher?.composerBar?.contentMaxWidth ?? "720px" : undefined);
+  if (contentMaxWidth) {
+    messagesWrapper.style.maxWidth = contentMaxWidth;
+    messagesWrapper.style.marginLeft = "auto";
+    messagesWrapper.style.marginRight = "auto";
+    messagesWrapper.style.width = "100%";
+  }
+  // The pill IS the composer in composer-bar mode and should match the
+  // wrapper's responsive width (50vw / 70vw / 90vw), not be capped by
+  // contentMaxWidth (which is a centered-column convention for the
+  // expanded panel's body, not the pill input itself).
+  if (contentMaxWidth && composerForm && !isComposerBar()) {
     composerForm.style.maxWidth = contentMaxWidth;
     composerForm.style.marginLeft = "auto";
     composerForm.style.marginRight = "auto";
   }
-  if (contentMaxWidth && suggestions) {
+  if (contentMaxWidth && suggestions && !isComposerBar()) {
     suggestions.style.maxWidth = contentMaxWidth;
     suggestions.style.marginLeft = "auto";
     suggestions.style.marginRight = "auto";
   }
-  if (contentMaxWidth && attachmentPreviewsContainer) {
+  if (contentMaxWidth && attachmentPreviewsContainer && !isComposerBar()) {
     attachmentPreviewsContainer.style.maxWidth = contentMaxWidth;
     attachmentPreviewsContainer.style.marginLeft = "auto";
     attachmentPreviewsContainer.style.marginRight = "auto";
@@ -2029,12 +2067,74 @@ export const createAgentExperience = (
     }
   } else {
     panel.appendChild(container);
+    // Composer-bar mode: the pill (footer) and peek banner live in a
+    // viewport-fixed sibling of the wrapper (`pillRoot`) so they're
+    // independent of the wrapper's geometry transitions. Critical for
+    // modal mode — the wrapper there has `transform: translate(-50%, -50%)`
+    // which would establish a containing block trapping any `position: fixed`
+    // descendant. Order inside pillRoot: peekBanner (slim row above pill)
+    // → footer (pill). pillRoot's `gap` spaces them; the peek is hidden by
+    // default until ui.ts toggles `.persona-pill-peek--visible` based on
+    // streaming/hover/open state via syncComposerBarPeek().
+    if (isComposerBar() && pillRoot) {
+      if (panelElements.peekBanner) {
+        pillRoot.appendChild(panelElements.peekBanner);
+      }
+      pillRoot.appendChild(footer);
+    }
   }
   mount.appendChild(wrapper);
+  // pillRoot is mounted *after* wrapper so it naturally stacks on top
+  // when both share the same z-index (e.g. fullscreen mode where the
+  // pill should float above the chat panel chrome).
+  if (pillRoot) {
+    mount.appendChild(pillRoot);
+  }
 
   // Apply full-height and sidebar styles if enabled
   // This ensures the widget fills its container height with proper flex layout
   const applyFullHeightStyles = () => {
+    // Composer-bar mode owns its own sizing/chrome. Geometry comes from
+    // `applyComposerBarGeometry()` (per-state inline on the wrapper), the
+    // pill carries its own chrome via `.persona-pill-composer`, and the
+    // expanded chat panel chrome (border + radius + shadow + bg) is painted
+    // inline on the `container` (NOT the panel — the panel is a transparent
+    // flex column with a gap so the pill renders as a sibling below the
+    // chrome). Same theme contract as floating mode
+    // (`theme.components.panel.{shadow,border,borderRadius}`); collapsed
+    // clears it (container is hidden via display:none anyway), expanded
+    // re-applies it, with the `fullscreen` variant intentionally chrome-less.
+    if (isComposerBar()) {
+      panel.style.width = "100%";
+      panel.style.maxWidth = "100%";
+      const cb = config.launcher?.composerBar ?? {};
+      const isExpanded = wrapper.dataset.state === "expanded";
+      const expandedSize = cb.expandedSize ?? "anchored";
+      const wantsChrome = isExpanded && expandedSize !== "fullscreen";
+      if (!wantsChrome) {
+        container.style.background = "";
+        container.style.border = "";
+        container.style.borderRadius = "";
+        container.style.overflow = "";
+        container.style.boxShadow = "";
+        return;
+      }
+      const panelPartial = config.theme?.components?.panel;
+      const activeTheme = getActiveTheme(config);
+      const resolveCb = (raw: string | undefined, fallback: string): string => {
+        if (raw == null || raw === "") return fallback;
+        return resolveTokenValue(activeTheme, raw) ?? raw;
+      };
+      const defaultBorder = "1px solid var(--persona-border)";
+      const defaultShadow = "var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25))";
+      const defaultRadius = "var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))";
+      container.style.background = "var(--persona-surface, #ffffff)";
+      container.style.border = resolveCb(panelPartial?.border, defaultBorder);
+      container.style.borderRadius = resolveCb(panelPartial?.borderRadius, defaultRadius);
+      container.style.boxShadow = resolveCb(panelPartial?.shadow, defaultShadow);
+      container.style.overflow = "hidden";
+      return;
+    }
     const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
     const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
@@ -2468,6 +2568,12 @@ export const createAgentExperience = (
   // bubble for, per message id. Lets us skip unnecessary rebuilds across
   // re-renders so user state inside the plugin (typed text, focus) survives.
   const lastAskBubbleFingerprint = new Map<string, string>();
+  // Same idea for component-directive bubbles (registered custom components
+  // rendered from JSON directives). The renderer's element is injected into the
+  // live DOM post-morph so its event listeners survive; this map gates the
+  // expensive rebuild on fingerprint change so user state inside the rendered
+  // component (e.g. partially-filled form inputs) is not wiped on every pass.
+  const lastComponentDirectiveFingerprint = new Map<string, string>();
   let configVersion = 0;
   const autoFollow = createFollowStateController();
   let lastScrollTop = 0;
@@ -2832,10 +2938,39 @@ export const createAgentExperience = (
     };
     const askPluginHydrate: AskPluginHydrate[] = [];
 
+    // Component-directive bubbles use the same stub-and-hydrate pattern as
+    // ask_user_question plugins: the renderer's HTMLElement is built live and
+    // injected into the morphed wrapper afterward, so listeners attached via
+    // `addEventListener` (e.g. form `submit` handlers) survive transcript
+    // morphs. `bubble: null` means the fingerprint matched a previous pass and
+    // the live wrapper is reused as-is.
+    type ComponentDirectiveHydrate = {
+      messageId: string;
+      fingerprint: string;
+      bubble: HTMLElement | null;
+    };
+    const componentDirectiveHydrate: ComponentDirectiveHydrate[] = [];
+    const componentStreamingEnabled = config.enableComponentStreaming !== false;
+
     messages.forEach((message) => {
       activeMessageIds.add(message.id);
 
       const askWithPlugin = hasAskPlugin && isAskUserQuestionMessage(message);
+      const hasDirectiveBubble =
+        !askWithPlugin &&
+        message.role === "assistant" &&
+        !message.variant &&
+        componentStreamingEnabled &&
+        hasComponentDirective(message);
+
+      // If a message previously rendered as a directive bubble but no longer
+      // does (e.g. content was rewritten), strip `data-preserve-runtime` from
+      // the live wrapper so the next morph can replace it.
+      if (!hasDirectiveBubble && lastComponentDirectiveFingerprint.has(message.id)) {
+        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        existing?.removeAttribute("data-preserve-runtime");
+        lastComponentDirectiveFingerprint.delete(message.id);
+      }
 
       // Fingerprint cache: skip re-rendering unchanged messages. Append the
       // ask-user-question answered/answers state so flipping `askUserQuestionAnswered`
@@ -2849,7 +2984,7 @@ export const createAgentExperience = (
           }`
         : "";
       const fingerprint = computeMessageFingerprint(message, configVersion) + askMeta;
-      const cachedWrapper = askWithPlugin
+      const cachedWrapper = (askWithPlugin || hasDirectiveBubble)
         ? null
         : getCachedWrapper(messageCache, message.id, fingerprint);
       if (cachedWrapper) {
@@ -3046,19 +3181,26 @@ export const createAgentExperience = (
         }
       }
 
-      // Check for component directive if no plugin handled it
-      if (!bubble && message.role === "assistant" && !message.variant) {
-        const enableComponentStreaming = config.enableComponentStreaming !== false; // Default to true
-        if (enableComponentStreaming && hasComponentDirective(message)) {
-          const directive = extractComponentDirectiveFromMessage(message);
-          if (directive) {
+      // Check for component directive if no plugin handled it. We use the
+      // same stub-and-hydrate trick as ask_user_question plugins (see comment
+      // above `componentDirectiveHydrate`): build the live element with its
+      // listeners, append a stub for the morph pass, then inject the live
+      // element into the morphed wrapper afterward.
+      if (!bubble && hasDirectiveBubble) {
+        const directive = extractComponentDirectiveFromMessage(message);
+        if (directive) {
+          const lastFp = lastComponentDirectiveFingerprint.get(message.id);
+          const needsRebuild = lastFp !== fingerprint;
+          const wrapChrome = config.wrapComponentDirectiveInBubble !== false;
+          let liveBubble: HTMLElement | null = null;
+
+          if (needsRebuild) {
             const componentBubble = renderComponentDirective(directive, {
               config,
               message,
               transform
             });
             if (componentBubble) {
-              const wrapChrome = config.wrapComponentDirectiveInBubble !== false;
               if (wrapChrome) {
                 const componentWrapper = document.createElement("div");
                 componentWrapper.className = [
@@ -3086,7 +3228,7 @@ export const createAgentExperience = (
                 }
 
                 componentWrapper.appendChild(componentBubble);
-                bubble = componentWrapper;
+                liveBubble = componentWrapper;
               } else {
                 const stack = document.createElement("div");
                 stack.className =
@@ -3109,9 +3251,32 @@ export const createAgentExperience = (
                 }
 
                 stack.appendChild(componentBubble);
-                bubble = stack;
+                liveBubble = stack;
               }
             }
+          }
+
+          // If the directive is registered (live bubble built or already
+          // mounted from a previous pass), use the stub-and-hydrate path.
+          // Otherwise fall through to the standard render path so the message
+          // text is at least visible.
+          if (liveBubble || lastFp != null) {
+            const stub = document.createElement("div");
+            stub.className = "persona-flex";
+            stub.id = `wrapper-${message.id}`;
+            stub.setAttribute("data-wrapper-id", message.id);
+            stub.setAttribute("data-component-directive-stub", "true");
+            stub.setAttribute("data-preserve-runtime", "true");
+            if (!wrapChrome) {
+              stub.classList.add("persona-w-full");
+            }
+            tempContainer.appendChild(stub);
+            componentDirectiveHydrate.push({
+              messageId: message.id,
+              fingerprint,
+              bubble: liveBubble
+            });
+            return;
           }
         }
       }
@@ -3449,13 +3614,515 @@ export const createAgentExperience = (
         if (!activeMessageIds.has(id)) lastAskBubbleFingerprint.delete(id);
       }
     }
+
+    // Hydrate component-directive bubbles into their stub wrappers, mirroring
+    // the ask-question hydration above.
+    if (componentDirectiveHydrate.length > 0) {
+      for (const { messageId, fingerprint, bubble } of componentDirectiveHydrate) {
+        const wrapper = container.querySelector(`#wrapper-${messageId}`);
+        if (!wrapper) continue;
+        if (bubble === null) {
+          // Fingerprint matched the previous pass — the live wrapper (kept
+          // alive by `data-preserve-runtime`) still holds the listener-bearing
+          // bubble from a prior render. Leave it untouched.
+          continue;
+        }
+        wrapper.replaceChildren(bubble);
+        wrapper.setAttribute("data-bubble-fp", fingerprint);
+        lastComponentDirectiveFingerprint.set(messageId, fingerprint);
+      }
+    }
+
+    if (lastComponentDirectiveFingerprint.size > 0) {
+      for (const id of lastComponentDirectiveFingerprint.keys()) {
+        if (!activeMessageIds.has(id)) lastComponentDirectiveFingerprint.delete(id);
+      }
+    }
   };
 
   // Alias for clarity - the implementation handles flicker prevention via typing indicator logic
   const renderMessagesWithPlugins = renderMessagesWithPluginsImpl;
 
+  /**
+   * Composer-bar outside-click dismiss. While the chat is expanded, clicking
+   * anywhere outside the wrapper (i.e. NOT inside the chat panel chrome and
+   * NOT inside the pill) collapses back to just the pill. Uses `pointerdown`
+   * + capture so we run before host-page click handlers (and before any
+   * stop-propagation upstream); composedPath() includes the shadow DOM
+   * subtree, so clicks inside the wrapper (which lives in the shadow root)
+   * are correctly identified as inside.
+   */
+  let composerBarOutsideClickListener: ((e: PointerEvent) => void) | null = null;
+
+  const attachComposerBarOutsideClickDismiss = () => {
+    if (composerBarOutsideClickListener) return;
+    const listener: (e: PointerEvent) => void = (event) => {
+      const path = event.composedPath();
+      // pillRoot is a viewport-fixed sibling of the wrapper, so a click on
+      // the pill or peek wouldn't be in `wrapper`'s composedPath even
+      // though it's logically "inside" the widget.
+      if (path.includes(wrapper)) return;
+      if (pillRoot && path.includes(pillRoot)) return;
+      setOpenState(false, "user");
+    };
+    composerBarOutsideClickListener = listener;
+    const targetDoc = mount.ownerDocument ?? document;
+    targetDoc.addEventListener("pointerdown", listener, true);
+  };
+
+  const detachComposerBarOutsideClickDismiss = () => {
+    if (!composerBarOutsideClickListener) return;
+    const targetDoc = mount.ownerDocument ?? document;
+    targetDoc.removeEventListener(
+      "pointerdown",
+      composerBarOutsideClickListener,
+      true
+    );
+    composerBarOutsideClickListener = null;
+  };
+
+  destroyCallbacks.push(() => detachComposerBarOutsideClickDismiss());
+
+  /**
+   * Composer-bar ESC dismiss. While the chat is expanded, pressing Escape
+   * collapses back to just the pill — same end state as outside-click.
+   * Matches the WAI-ARIA dialog pattern (modal mode is literally a dialog)
+   * and the dominant chat-widget convention (Intercom, Drift, Crisp).
+   * Guards on `event.isComposing` so dismissing an IME suggestion doesn't
+   * also collapse the panel.
+   */
+  let composerBarEscapeListener: ((e: KeyboardEvent) => void) | null = null;
+
+  const attachComposerBarEscapeDismiss = () => {
+    if (composerBarEscapeListener) return;
+    const listener: (e: KeyboardEvent) => void = (event) => {
+      if (event.key !== "Escape") return;
+      if (event.isComposing) return;
+      setOpenState(false, "user");
+    };
+    composerBarEscapeListener = listener;
+    const targetDoc = mount.ownerDocument ?? document;
+    targetDoc.addEventListener("keydown", listener, true);
+  };
+
+  const detachComposerBarEscapeDismiss = () => {
+    if (!composerBarEscapeListener) return;
+    const targetDoc = mount.ownerDocument ?? document;
+    targetDoc.removeEventListener(
+      "keydown",
+      composerBarEscapeListener,
+      true
+    );
+    composerBarEscapeListener = null;
+  };
+
+  destroyCallbacks.push(() => detachComposerBarEscapeDismiss());
+
+  /**
+   * Composer-bar "peek" affordance — a chrome-less row above the pill that
+   * shows a chat-bubble icon, the trailing 100 chars of the most recent
+   * assistant message, and a chevron-up. It is the user's path back into the
+   * expanded chat from the collapsed pill.
+   *
+   * Visible when (collapsed) AND (there is an assistant message with content)
+   * AND (`isStreaming` OR `composerHovered`). Otherwise hidden. The hover
+   * zone is the whole `panel` (not just the pill) so the cursor moving
+   * between the pill and the peek doesn't trigger fade-out.
+   *
+   * Driven from a single `syncComposerBarPeek()` invoked from
+   * `onMessagesChanged`, `onStreamingChanged`, `updateOpenState`, the
+   * pointerenter/pointerleave on `panel`, and once at end-of-init.
+   */
+  let composerHovered = false;
+  // Track which peek-plugins we've already attached for this widget root.
+  // `ensurePluginActive` is idempotent, but the call is guarded behind a flag
+  // so we don't pay the lookup cost on every chunk.
+  const peekActivatedPlugins = new Set<string>();
+
+  /**
+   * Resolve the effective stream animation feature for the peek surface.
+   * `composerBar.peek.streamAnimation` overrides; otherwise the peek inherits
+   * `features.streamAnimation` so the surface for devs is consistent across
+   * the main bubble and the peek banner.
+   */
+  const resolvePeekStreamAnimationFeature = () => {
+    const peekFeature = config.launcher?.composerBar?.peek?.streamAnimation;
+    if (peekFeature) return peekFeature;
+    return config.features?.streamAnimation;
+  };
+
+  const syncComposerBarPeek = () => {
+    if (!isComposerBar()) return;
+    const peekBanner = panelElements.peekBanner;
+    const peekTextNode = panelElements.peekTextNode;
+    if (!peekBanner || !peekTextNode) return;
+
+    if (open) {
+      peekBanner.classList.remove("persona-pill-peek--visible");
+      return;
+    }
+
+    const messages = session?.getMessages() ?? [];
+    let lastAssistant: AgentWidgetMessage | undefined;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && m.content) {
+        lastAssistant = m;
+        break;
+      }
+    }
+    if (!lastAssistant) {
+      peekBanner.classList.remove("persona-pill-peek--visible");
+      return;
+    }
+
+    const text = lastAssistant.content;
+    const streaming = Boolean(lastAssistant.streaming);
+
+    // Resolve the same animation surface used by the main bubble. The peek
+    // ignores `bubbleClass` (carve-out: peek has no bubble) but honors
+    // `containerClass`, `wrap`, `useCaret`, `buffer`, `placeholder`,
+    // `speed`/`duration`, and custom plugins.
+    const feature = resolvePeekStreamAnimationFeature();
+    const streamAnimation = resolveStreamAnimation(feature);
+    const plugin =
+      streamAnimation.type !== "none"
+        ? resolveStreamAnimationPlugin(streamAnimation.type, feature?.plugins)
+        : null;
+    const pluginStillAnimating =
+      plugin?.isAnimating?.(lastAssistant) === true;
+    const animationActive =
+      plugin !== null && (streaming || pluginStillAnimating);
+
+    if (animationActive && plugin && !peekActivatedPlugins.has(plugin.name)) {
+      ensurePluginActive(plugin, mount);
+      peekActivatedPlugins.add(plugin.name);
+    }
+
+    // Manage `containerClass` on the peek text node. We track which class is
+    // currently applied so a config swap (or animation deactivating after
+    // stream completion) cleans up the previous class instead of stacking.
+    const desiredContainerClass =
+      animationActive && plugin?.containerClass ? plugin.containerClass : null;
+    const currentContainerClass =
+      peekTextNode.dataset.personaPeekStreamClass ?? null;
+    if (currentContainerClass && currentContainerClass !== desiredContainerClass) {
+      peekTextNode.classList.remove(currentContainerClass);
+      delete peekTextNode.dataset.personaPeekStreamClass;
+    }
+    if (desiredContainerClass && currentContainerClass !== desiredContainerClass) {
+      peekTextNode.classList.add(desiredContainerClass);
+      peekTextNode.dataset.personaPeekStreamClass = desiredContainerClass;
+    }
+
+    if (animationActive) {
+      peekTextNode.style.setProperty(
+        "--persona-stream-step",
+        `${streamAnimation.speed}ms`
+      );
+      peekTextNode.style.setProperty(
+        "--persona-stream-duration",
+        `${streamAnimation.duration}ms`
+      );
+    } else {
+      peekTextNode.style.removeProperty("--persona-stream-step");
+      peekTextNode.style.removeProperty("--persona-stream-duration");
+    }
+
+    // Apply buffering (word/line/plugin custom). If the buffer trims content
+    // to empty AND the placeholder is "skeleton", show the skeleton — that's
+    // the "line buffer between completions" affordance. Otherwise no
+    // pre-content placeholder on the peek (a typing-dots indicator inside a
+    // 1-line ticker would feel cramped).
+    const buffered = animationActive
+      ? applyStreamBuffer(text, streamAnimation.buffer, plugin, lastAssistant, streaming)
+      : text;
+
+    const skeletonEnabled =
+      animationActive && streamAnimation.placeholder === "skeleton";
+    const showSkeletonOnly =
+      skeletonEnabled && streaming && (!buffered || !buffered.trim());
+
+    if (showSkeletonOnly) {
+      // Replace text node contents with just a peek-sized skeleton bar. The
+      // bar carries `data-preserve-animation` so idiomorph keeps its shimmer
+      // running across morph passes.
+      const tempContainer = document.createElement("div");
+      const skeleton = createSkeletonPlaceholder();
+      skeleton.classList.add("persona-pill-peek__skeleton");
+      tempContainer.appendChild(skeleton);
+      morphMessages(peekTextNode, tempContainer);
+    } else {
+      // Trailing 100 chars; for animated modes we keep the slice but use
+      // ABSOLUTE indices so per-char/per-word span IDs stay stable as the
+      // window shifts each chunk — idiomorph then preserves animations on
+      // already-revealed units instead of restarting them. Plain "none" mode
+      // keeps the legacy `…` ellipsis prefix for visual continuity with the
+      // pre-animation behavior.
+      const sliceStart = Math.max(0, buffered.length - 100);
+      const slice = buffered.length > 100 ? buffered.slice(-100) : buffered;
+      const escaped = escapeHtml(slice);
+
+      if (!animationActive || !plugin) {
+        const preview = buffered.length > 100 ? `…${slice}` : slice;
+        if (peekTextNode.textContent !== preview) {
+          peekTextNode.textContent = preview;
+        }
+      } else {
+        let html = escaped;
+        if (plugin.wrap === "char" || plugin.wrap === "word") {
+          html = wrapStreamAnimation(
+            escaped,
+            plugin.wrap,
+            // Namespace span IDs to the peek surface so they don't collide
+            // with the main bubble's spans for the same message id.
+            `peek-${lastAssistant.id}`,
+            { skipTags: plugin.skipTags, startIndex: sliceStart }
+          );
+        }
+
+        const tempContainer = document.createElement("div");
+        tempContainer.innerHTML = html;
+
+        if (plugin.useCaret && slice.length > 0) {
+          const caret = createStreamCaret();
+          const spans = tempContainer.querySelectorAll(
+            ".persona-stream-char, .persona-stream-word"
+          );
+          const lastSpan = spans[spans.length - 1];
+          if (lastSpan?.parentNode) {
+            lastSpan.parentNode.insertBefore(caret, lastSpan.nextSibling);
+          } else {
+            tempContainer.appendChild(caret);
+          }
+        }
+
+        morphMessages(peekTextNode, tempContainer);
+
+        // Fire the plugin's per-render hook so glyph-cycle / wipe / custom
+        // plugins get a chance to mutate the peek's spans the same way they
+        // mutate the main bubble's. The carve-out: `bubble` here is the peek
+        // banner root, not a message bubble — plugins that target
+        // `bubbleClass` should no-op on that surface.
+        plugin.onAfterRender?.({
+          container: peekTextNode,
+          bubble: peekBanner,
+          messageId: lastAssistant.id,
+          message: lastAssistant,
+          speed: streamAnimation.speed,
+          duration: streamAnimation.duration,
+        });
+      }
+    }
+
+    const shouldShow = isStreaming || composerHovered;
+    peekBanner.classList.toggle("persona-pill-peek--visible", shouldShow);
+  };
+
+  if (isComposerBar()) {
+    const peekBanner = panelElements.peekBanner;
+    if (peekBanner) {
+      // pointerdown (not click) so this competes correctly with the
+      // outside-click listener (also pointerdown, capture phase). The
+      // outside-click composedPath check passes for events inside `wrapper`
+      // or `pillRoot` (peek's parent), so the peek can stop propagation
+      // here without breaking dismissal.
+      const onPeekPointerDown = (e: PointerEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpenState(true, "user");
+      };
+      peekBanner.addEventListener("pointerdown", onPeekPointerDown);
+      destroyCallbacks.push(() => {
+        peekBanner.removeEventListener("pointerdown", onPeekPointerDown);
+      });
+    }
+
+    const onPanelPointerEnter = () => {
+      if (composerHovered) return;
+      composerHovered = true;
+      syncComposerBarPeek();
+    };
+    const onPanelPointerLeave = () => {
+      if (!composerHovered) return;
+      composerHovered = false;
+      syncComposerBarPeek();
+    };
+    panel.addEventListener("pointerenter", onPanelPointerEnter);
+    panel.addEventListener("pointerleave", onPanelPointerLeave);
+    destroyCallbacks.push(() => {
+      panel.removeEventListener("pointerenter", onPanelPointerEnter);
+      panel.removeEventListener("pointerleave", onPanelPointerLeave);
+    });
+
+    // pillRoot now hosts the pill + peek as viewport-level siblings, so the
+    // panel's pointerenter/leave above no longer fires when the cursor is
+    // over the pill area. Mirror the handlers onto pillRoot so hovering
+    // either surface still drives `composerHovered`. Both handlers are
+    // idempotent against the shared flag, so cross-traffic between panel
+    // and pillRoot doesn't cause spurious flips.
+    if (pillRoot) {
+      pillRoot.addEventListener("pointerenter", onPanelPointerEnter);
+      pillRoot.addEventListener("pointerleave", onPanelPointerLeave);
+      destroyCallbacks.push(() => {
+        pillRoot.removeEventListener("pointerenter", onPanelPointerEnter);
+        pillRoot.removeEventListener("pointerleave", onPanelPointerLeave);
+      });
+    }
+  }
+
+  /**
+   * Composer-bar geometry, owned in one place so collapsed → expanded (and
+   * back) transitions don't leave stale inline styles from a previous state.
+   * `createWrapper` no longer sets any geometry; everything flows through
+   * here.
+   *
+   * Width is expressed as `width: <configured>; max-width: calc(100vw -
+   * 32px)`. The two combine such that `width` wins on wide viewports and
+   * `max-width` clamps on narrow ones — same effect as `min(...)` but
+   * jsdom-compatible. `100vw` is always the viewport, so the containing-
+   * block edge case (host with `transform`/`filter` causing `100%` to
+   * resolve against the host instead of the viewport) is neutralized.
+   */
+  const applyComposerBarGeometry = (isOpen: boolean) => {
+    const cb = config.launcher?.composerBar ?? {};
+    const expandedSize = cb.expandedSize ?? "anchored";
+    const bottomOffset = cb.bottomOffset ?? "16px";
+    // No hardcoded default — when undefined, CSS media queries provide the
+    // responsive width (90vw / 70vw / 50vw at <640 / <1024 / >=1024) on
+    // pillRoot.
+    const collapsedMaxWidth = cb.collapsedMaxWidth;
+    const expandedMaxWidth = cb.expandedMaxWidth ?? "880px";
+    const expandedTopOffset = cb.expandedTopOffset ?? "5vh";
+    const modalMaxWidth = cb.modalMaxWidth ?? "880px";
+    const modalMaxHeight = cb.modalMaxHeight ?? "min(90vh, 800px)";
+    const viewportClamp = "calc(100vw - 32px)";
+    // Static fallback for the pill area's height (pill + 8px gap + peek
+    // slack). Anchored mode uses this to compute the wrapper's bottom edge
+    // so the chat panel chrome doesn't overlap the pill below. Defer
+    // ResizeObserver-based dynamic sizing until we see a real misalignment.
+    const pillAreaClearance = "var(--persona-pill-area-height, 80px)";
+
+    // Reset everything geometry-related so each branch sets exactly what it
+    // needs. Using empty strings drops the inline declaration entirely so
+    // CSS rules can take over (relevant for fullscreen).
+    const s = wrapper.style;
+    s.left = "";
+    s.right = "";
+    s.top = "";
+    s.bottom = "";
+    s.transform = "";
+    s.width = "";
+    s.maxWidth = "";
+    s.height = "";
+    s.maxHeight = "";
+
+    // pillRoot owns its own geometry (bottom offset + collapsed width
+    // override). Reset and re-apply per-config every call so config edits
+    // (e.g. via the demo's mode-switch) propagate cleanly.
+    if (pillRoot) {
+      const ps = pillRoot.style;
+      ps.bottom = bottomOffset;
+      // CSS media queries handle responsive width when no override is set.
+      ps.width = collapsedMaxWidth ?? "";
+    }
+
+    if (!isOpen) {
+      // Collapsed: wrapper has nothing visible to render — the container
+      // inside is `display: none` (via CSS keyed on `[data-state="collapsed"]`)
+      // and the pill lives in pillRoot. Leave wrapper geometry empty so it
+      // collapses to a zero-size positioning frame at the default fixed
+      // origin. The container's fade-in keyframe handles the perceptible
+      // expand animation, so there's no chrome to lose during this state.
+      return;
+    }
+
+    if (expandedSize === "fullscreen") {
+      // Leave inline styles cleared so the CSS rule for fullscreen takes over.
+      return;
+    }
+
+    if (expandedSize === "modal") {
+      s.top = "50%";
+      s.left = "50%";
+      s.transform = "translate(-50%, -50%)";
+      s.bottom = "auto";
+      s.right = "auto";
+      s.width = modalMaxWidth;
+      s.maxWidth = viewportClamp;
+      s.maxHeight = modalMaxHeight;
+      s.height = modalMaxHeight;
+      return;
+    }
+
+    // Default: anchored — pill stays at the viewport bottom (in pillRoot);
+    // wrapper's bottom edge clears the pill area so the chrome doesn't
+    // overlap it.
+    s.left = "50%";
+    s.transform = "translateX(-50%)";
+    s.bottom = `calc(${bottomOffset} + ${pillAreaClearance})`;
+    s.top = expandedTopOffset;
+    s.width = expandedMaxWidth;
+    s.maxWidth = viewportClamp;
+  };
+
   const updateOpenState = () => {
-    if (!launcherEnabled) return;
+    if (!isPanelToggleable()) return;
+
+    // Composer-bar mode morphs the wrapper between collapsed pill and
+    // expanded panel via data-attrs + per-state inline geometry. The chat
+    // body and header are hidden in the collapsed state so only the
+    // composer footer remains visible in the pill.
+    if (isComposerBar()) {
+      const cb = config.launcher?.composerBar ?? {};
+      const expandedSize = cb.expandedSize ?? "anchored";
+      const nextState = open ? "expanded" : "collapsed";
+      wrapper.dataset.state = nextState;
+      wrapper.dataset.expandedSize = expandedSize;
+      // pillRoot mirrors wrapper's state attributes so CSS rules keyed off
+      // [data-state] / [data-expanded-size] cascade to pill + peek even
+      // though they live outside the wrapper subtree.
+      if (pillRoot) {
+        pillRoot.dataset.state = nextState;
+        pillRoot.dataset.expandedSize = expandedSize;
+      }
+      wrapper.style.removeProperty("display");
+      wrapper.classList.remove("persona-pointer-events-none", "persona-opacity-0");
+      panel.classList.remove(
+        "persona-scale-95",
+        "persona-opacity-0",
+        "persona-scale-100",
+        "persona-opacity-100"
+      );
+
+      applyComposerBarGeometry(open);
+
+      // Toggle the entire container (chat chrome + body + close button) so
+      // the collapsed pill only shows the footer (which lives as a SIBLING
+      // of the container in the panel — see panel.appendChild(footer) above).
+      // The footer is always visible / interactive.
+      container.style.display = open ? "flex" : "none";
+
+      // Re-run chrome application now that data-state has flipped: collapsed
+      // clears container chrome (pill stands alone), expanded paints it via
+      // the same theme.components.panel.* contract as floating mode.
+      applyFullHeightStyles();
+
+      // Outside-click dismiss: while expanded, clicking anywhere outside the
+      // wrapper (panel chrome + pill) collapses back to just the pill.
+      if (open) {
+        attachComposerBarOutsideClickDismiss();
+        attachComposerBarEscapeDismiss();
+      } else {
+        detachComposerBarOutsideClickDismiss();
+        detachComposerBarEscapeDismiss();
+      }
+      // Peek banner is hidden when expanded (`open === true` short-circuits
+      // visibility); re-sync so collapsing back re-evaluates immediately.
+      syncComposerBarPeek();
+      return;
+    }
+
     const dockedMode = isDockedMountMode(config);
     const ownerWindow = mount.ownerDocument.defaultView ?? window;
     const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
@@ -3510,7 +4177,7 @@ export const createAgentExperience = (
   };
 
   const setOpenState = (nextOpen: boolean, source: "user" | "auto" | "api" | "system" = "user") => {
-    if (!launcherEnabled) return;
+    if (!isPanelToggleable()) return;
     if (open === nextOpen) return;
     
     const prevOpen = open;
@@ -3525,7 +4192,13 @@ export const createAgentExperience = (
       const mb = config.launcher?.mobileBreakpoint ?? 640;
       const isMobile = ow.innerWidth <= mb;
       const dockedMF = isDockedMountMode(config) && mf && isMobile;
-      return sm || (mf && isMobile && launcherEnabled) || dockedMF;
+      // Composer-bar in expanded fullscreen mode covers the viewport — lock
+      // background scroll and elevate host stacking to match other
+      // viewport-covering modes (mobile fullscreen, sidebar).
+      const composerBarFS =
+        isComposerBar() &&
+        (config.launcher?.composerBar?.expandedSize ?? "fullscreen") === "fullscreen";
+      return sm || (mf && isMobile && launcherEnabled) || dockedMF || composerBarFS;
     })();
 
     if (open && isViewportCovering) {
@@ -3718,6 +4391,10 @@ export const createAgentExperience = (
 
       voiceState.lastUserMessageWasVoice = Boolean(lastUserMessage?.viaVoice);
       persistState(messages);
+      // Composer-bar peek: re-render the trailing-100-char preview and
+      // re-evaluate visibility (a new message may make it eligible to show
+      // during streaming, or update the preview text on each token).
+      syncComposerBarPeek();
     },
     onStatusChanged(status) {
       const currentStatusConfig = config.statusIndicator ?? {};
@@ -3740,6 +4417,9 @@ export const createAgentExperience = (
       if (!streaming) {
         scheduleAutoScroll(true);
       }
+      // Composer-bar peek: streaming state is one of the two visibility
+      // triggers (the other is composer hover), so re-evaluate now.
+      syncComposerBarPeek();
     },
     onVoiceStatusChanged(status: VoiceStatus) {
       if (config.voiceRecognition?.provider?.type !== 'runtype') return;
@@ -3843,6 +4523,18 @@ export const createAgentExperience = (
       });
   }
 
+  // Centralized so both the default composer (`handleSubmit`) and the plugin
+  // composer (`renderComposer.onSubmit`) auto-expand the composer-bar wrapper
+  // when a message is sent while the panel is collapsed. Without a single
+  // helper the two submit paths drift over time.
+  const maybeExpandComposerBar = () => {
+    if (!isComposerBar()) return;
+    if (open) return;
+    const expandOnSubmit = config.launcher?.composerBar?.expandOnSubmit ?? true;
+    if (!expandOnSubmit) return;
+    setOpenState(true, "auto");
+  };
+
   const handleSubmit = (event: Event) => {
     event.preventDefault();
 
@@ -3859,6 +4551,8 @@ export const createAgentExperience = (
 
     // Must have text or attachments to send
     if (!value && !hasAttachments) return;
+
+    maybeExpandComposerBar();
 
     // Build content parts if there are attachments
     let contentParts: ContentPart[] | undefined;
@@ -4447,7 +5141,9 @@ export const createAgentExperience = (
   let launcherButtonInstance: ReturnType<typeof createLauncherButton> | null = null;
   let customLauncherElement: HTMLElement | null = null;
   
-  if (launcherEnabled) {
+  // Composer-bar mode is launcher-less by design: the persistent pill IS the
+  // entry point, so skip creating any launcher button (default or plugin).
+  if (launcherEnabled && !isComposerBar()) {
     const launcherPlugin = plugins.find(p => p.renderLauncher);
     if (launcherPlugin?.renderLauncher) {
       const customLauncher = launcherPlugin.renderLauncher({
@@ -4462,7 +5158,7 @@ export const createAgentExperience = (
         customLauncherElement = customLauncher;
       }
     }
-    
+
     // Use custom launcher if provided, otherwise use default
     if (!customLauncherElement) {
       launcherButtonInstance = createLauncherButton(config, toggleOpen);
@@ -4482,7 +5178,9 @@ export const createAgentExperience = (
   maybeRestoreVoiceFromMetadata();
 
   if (autoFocusInput) {
-    if (!launcherEnabled) {
+    // Composer-bar's pill exposes the textarea immediately, so focus it on
+    // init like the inline embed does — even though the panel is collapsed.
+    if (!launcherEnabled || isComposerBar()) {
       setTimeout(() => maybeFocusInput(), 0);
     } else if (open) {
       setTimeout(() => maybeFocusInput(), 200);
@@ -4490,6 +5188,16 @@ export const createAgentExperience = (
   }
 
   const recalcPanelHeight = () => {
+    // Composer-bar mode lets CSS own all sizing — collapsed pill is auto-sized
+    // by the footer; expanded fullscreen/modal are driven by CSS attribute
+    // selectors plus inline maxWidth/maxHeight set in updateOpenState. JS
+    // sizing here would fight the morph transitions.
+    if (isComposerBar()) {
+      updateScrollToBottomButtonOffset();
+      updateOpenState();
+      return;
+    }
+
     const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
     const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
@@ -4661,7 +5369,7 @@ export const createAgentExperience = (
       closeButton.removeEventListener("click", closeHandler);
       closeHandler = null;
     }
-    if (launcherEnabled) {
+    if (isPanelToggleable()) {
       closeButton.style.display = "";
       closeHandler = () => {
         setOpenState(false, "user");
@@ -5008,12 +5716,12 @@ export const createAgentExperience = (
         // Rebuild header with new layout
         const newHeaderElements = headerLayoutConfig
           ? buildHeaderWithLayout(config, headerLayoutConfig, {
-              showClose: launcherEnabled,
+              showClose: isPanelToggleable(),
               onClose: () => setOpenState(false, "user")
             })
           : buildHeader({
               config,
-              showClose: launcherEnabled,
+              showClose: isPanelToggleable(),
               onClose: () => setOpenState(false, "user")
             });
 
@@ -5414,9 +6122,15 @@ export const createAgentExperience = (
         if (clearChatButtonWrapper) {
           clearChatButtonWrapper.style.display = shouldShowClearChat ? "" : "none";
 
-          // When clear chat is hidden, close button needs ml-auto to stay right-aligned
+          // When clear chat is hidden, close button needs ml-auto to stay right-aligned.
+          // Composer-bar mode positions the close button absolutely, so the
+          // ml-auto layout shim doesn't apply and is skipped below.
           const { closeButtonWrapper } = panelElements;
-          if (closeButtonWrapper && !closeButtonWrapper.classList.contains("persona-absolute")) {
+          if (
+            !isComposerBar() &&
+            closeButtonWrapper &&
+            !closeButtonWrapper.classList.contains("persona-absolute")
+          ) {
             if (shouldShowClearChat) {
               closeButtonWrapper.classList.remove("persona-ml-auto");
             } else {
@@ -5424,11 +6138,14 @@ export const createAgentExperience = (
             }
           }
 
-          // Update placement if changed
+          // Update placement if changed. Composer-bar mode owns the clear
+          // button's position via panel.ts (absolute, top-right next to ×)
+          // and must not get reshuffled into the floating launcher's
+          // header strip.
           const isTopRight = clearChatPlacement === "top-right";
           const currentlyTopRight = clearChatButtonWrapper.classList.contains("persona-absolute");
 
-          if (isTopRight !== currentlyTopRight && shouldShowClearChat) {
+          if (!isComposerBar() && isTopRight !== currentlyTopRight && shouldShowClearChat) {
             clearChatButtonWrapper.remove();
 
             if (isTopRight) {
@@ -5469,10 +6186,14 @@ export const createAgentExperience = (
         }
 
         if (shouldShowClearChat) {
-          // Update size
-          const clearChatSize = clearChatConfig.size ?? "32px";
-          clearChatButton.style.height = clearChatSize;
-          clearChatButton.style.width = clearChatSize;
+          // Update size — composer-bar mode owns its sizing (16px to match
+          // the close icon), so leave size alone there. Floating-launcher
+          // and other modes still honor `launcher.clearChat.size`.
+          if (!isComposerBar()) {
+            const clearChatSize = clearChatConfig.size ?? "32px";
+            clearChatButton.style.height = clearChatSize;
+            clearChatButton.style.width = clearChatSize;
+          }
 
           // Update icon
           const clearChatIconName = clearChatConfig.iconName ?? "refresh-cw";
@@ -5481,9 +6202,11 @@ export const createAgentExperience = (
           clearChatButton.style.color =
             clearChatIconColor || HEADER_THEME_CSS.actionIconColor;
 
-          // Clear existing icon and render new one
+          // Clear existing icon and render new one. Composer-bar shrinks
+          // the icon to match its 16px button.
           clearChatButton.innerHTML = "";
-          const iconSvg = renderLucideIcon(clearChatIconName, "20px", "currentColor", 2);
+          const clearChatIconSize = isComposerBar() ? "14px" : "20px";
+          const iconSvg = renderLucideIcon(clearChatIconName, clearChatIconSize, "currentColor", 2);
           if (iconSvg) {
             clearChatButton.appendChild(iconSvg);
           }
@@ -6046,8 +6769,13 @@ export const createAgentExperience = (
         tooltip.style.display = "none";
       }
       
-      // Update contentMaxWidth on messages wrapper and composer
-      const updatedContentMaxWidth = config.layout?.contentMaxWidth;
+      // Update contentMaxWidth on messages wrapper and composer. Same
+      // composer-bar fallback as the initial read above.
+      const updatedContentMaxWidth =
+        config.layout?.contentMaxWidth ??
+        (isComposerBar()
+          ? config.launcher?.composerBar?.contentMaxWidth ?? "720px"
+          : undefined);
       if (updatedContentMaxWidth) {
         messagesWrapper.style.maxWidth = updatedContentMaxWidth;
         messagesWrapper.style.marginLeft = "auto";
@@ -6106,15 +6834,15 @@ export const createAgentExperience = (
       statusText.classList.add(alignClass);
     },
     open() {
-      if (!launcherEnabled) return;
+      if (!isPanelToggleable()) return;
       setOpenState(true, "api");
     },
     close() {
-      if (!launcherEnabled) return;
+      if (!isPanelToggleable()) return;
       setOpenState(false, "api");
     },
     toggle() {
-      if (!launcherEnabled) return;
+      if (!isPanelToggleable()) return;
       setOpenState(!open, "api");
     },
     clearChat() {
@@ -6181,8 +6909,8 @@ export const createAgentExperience = (
       if (!textarea) return false;
       if (session.isStreaming()) return false;
       
-      // Auto-open widget if closed and launcher is enabled
-      if (!open && launcherEnabled) {
+      // Auto-open widget if closed and the panel is toggleable
+      if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
       
@@ -6197,8 +6925,8 @@ export const createAgentExperience = (
       const valueToSubmit = message?.trim() || textarea.value.trim();
       if (!valueToSubmit) return false;
       
-      // Auto-open widget if closed and launcher is enabled
-      if (!open && launcherEnabled) {
+      // Auto-open widget if closed and the panel is toggleable
+      if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
       
@@ -6211,7 +6939,7 @@ export const createAgentExperience = (
       if (session.isStreaming()) return false;
       if (config.voiceRecognition?.provider?.type === 'runtype') {
         if (session.isVoiceActive()) return true;
-        if (!open && launcherEnabled) setOpenState(true, "system");
+        if (!open && isPanelToggleable()) setOpenState(true, "system");
         voiceState.manuallyDeactivated = false;
         persistVoiceMetadata();
         session.toggleVoice().then(() => {
@@ -6224,7 +6952,7 @@ export const createAgentExperience = (
       if (isRecording) return true;
       const SpeechRecognitionClass = getSpeechRecognitionClass();
       if (!SpeechRecognitionClass) return false;
-      if (!open && launcherEnabled) setOpenState(true, "system");
+      if (!open && isPanelToggleable()) setOpenState(true, "system");
       voiceState.manuallyDeactivated = false;
       persistVoiceMetadata();
       startVoiceRecognition("user");
@@ -6250,15 +6978,15 @@ export const createAgentExperience = (
       return true;
     },
     injectMessage(options: InjectMessageOptions): AgentWidgetMessage {
-      // Auto-open widget if closed and launcher is enabled
-      if (!open && launcherEnabled) {
+      // Auto-open widget if closed and the panel is toggleable
+      if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
       return session.injectMessage(options);
     },
     injectAssistantMessage(options: InjectAssistantMessageOptions): AgentWidgetMessage {
-      // Auto-open widget if closed and launcher is enabled
-      if (!open && launcherEnabled) {
+      // Auto-open widget if closed and the panel is toggleable
+      if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
       const result = session.injectAssistantMessage(options);
@@ -6283,29 +7011,29 @@ export const createAgentExperience = (
       return result;
     },
     injectUserMessage(options: InjectUserMessageOptions): AgentWidgetMessage {
-      // Auto-open widget if closed and launcher is enabled
-      if (!open && launcherEnabled) {
+      // Auto-open widget if closed and the panel is toggleable
+      if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
       return session.injectUserMessage(options);
     },
     injectSystemMessage(options: InjectSystemMessageOptions): AgentWidgetMessage {
-      // Auto-open widget if closed and launcher is enabled
-      if (!open && launcherEnabled) {
+      // Auto-open widget if closed and the panel is toggleable
+      if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
       return session.injectSystemMessage(options);
     },
     injectMessageBatch(optionsList: InjectMessageOptions[]): AgentWidgetMessage[] {
-      if (!open && launcherEnabled) {
+      if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
       return session.injectMessageBatch(optionsList);
     },
     /** @deprecated Use injectMessage() instead */
     injectTestMessage(event: AgentWidgetEvent) {
-      // Auto-open widget if closed and launcher is enabled
-      if (!open && launcherEnabled) {
+      // Auto-open widget if closed and the panel is toggleable
+      if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
       session.injectTestEvent(event);
@@ -6370,7 +7098,9 @@ export const createAgentExperience = (
       return session?.getSelectedArtifactId() ?? null;
     },
     focusInput(): boolean {
-      if (launcherEnabled && !open) return false;
+      // Composer-bar's textarea is always reachable in the collapsed pill,
+      // so don't gate focus behind `open` for that mode.
+      if (launcherEnabled && !open && !isComposerBar()) return false;
       if (!textarea) return false;
       textarea.focus();
       return true;
@@ -6407,14 +7137,14 @@ export const createAgentExperience = (
     },
     // State query methods
     isOpen(): boolean {
-      return launcherEnabled && open;
+      return isPanelToggleable() && open;
     },
     isVoiceActive(): boolean {
       return voiceState.active;
     },
     getState(): AgentWidgetStateSnapshot {
       return {
-        open: launcherEnabled && open,
+        open: isPanelToggleable() && open,
         launcherEnabled,
         voiceActive: voiceState.active,
         streaming: session.isStreaming()
@@ -6422,8 +7152,8 @@ export const createAgentExperience = (
     },
     // Feedback methods (CSAT/NPS)
     showCSATFeedback(options?: Partial<CSATFeedbackOptions>) {
-      // Auto-open widget if closed and launcher is enabled
-      if (!open && launcherEnabled) {
+      // Auto-open widget if closed and the panel is toggleable
+      if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
       
@@ -6449,8 +7179,8 @@ export const createAgentExperience = (
       feedbackEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
     },
     showNPSFeedback(options?: Partial<NPSFeedbackOptions>) {
-      // Auto-open widget if closed and launcher is enabled
-      if (!open && launcherEnabled) {
+      // Auto-open widget if closed and the panel is toggleable
+      if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
       
@@ -6488,6 +7218,7 @@ export const createAgentExperience = (
       }
       destroyCallbacks.forEach((cb) => cb());
       wrapper.remove();
+      pillRoot?.remove();
       launcherButtonInstance?.destroy();
       customLauncherElement?.remove();
       if (closeHandler) {
@@ -6610,7 +7341,7 @@ export const createAgentExperience = (
   // ============================================================================
   const persistConfig = normalizePersistStateConfig(config.persistState);
   
-  if (persistConfig && launcherEnabled) {
+  if (persistConfig && isPanelToggleable()) {
     const storage = getPersistStorage(persistConfig.storage!);
     const openKey = `${persistConfig.keyPrefix}widget-open`;
     const voiceKey = `${persistConfig.keyPrefix}widget-voice`;
@@ -6689,9 +7420,15 @@ export const createAgentExperience = (
   // If onStateLoaded signalled open: true, open the panel after init.
   // Mirrors the same setTimeout(0) pattern used by persistState restore so both
   // can fire independently without interfering with each other.
-  if (shouldOpenAfterStateLoaded && launcherEnabled) {
+  if (shouldOpenAfterStateLoaded && isPanelToggleable()) {
     setTimeout(() => { controller.open(); }, 0);
   }
+
+  // Initial sync of the composer-bar peek banner so it reflects any
+  // restored history. Subsequent updates flow through `onMessagesChanged`,
+  // `onStreamingChanged`, `updateOpenState`, and pointerenter/leave on
+  // the panel.
+  syncComposerBarPeek();
 
   return controller;
 };
