@@ -19,7 +19,8 @@ import {
   ClientChatRequest,
   ClientFeedbackRequest,
   ClientFeedbackType,
-  PersonaArtifactKind
+  PersonaArtifactKind,
+  ContentPart
 } from "./types";
 import {
   extractTextFromJson,
@@ -43,6 +44,36 @@ type SSEHandler = (event: AgentWidgetEvent) => void;
 
 const DEFAULT_ENDPOINT = "https://api.runtype.com/v1/dispatch";
 const DEFAULT_CLIENT_API_BASE = "https://api.runtype.com";
+
+/**
+ * Derive a download filename for `agent_media` parts that are delivered
+ * without one. Maps a few well-known MIME types to friendly extensions and
+ * falls back to `attachment.<subtype>` (or just `attachment` for opaque
+ * types like `application/octet-stream`).
+ */
+function filenameFromMediaType(mediaType: string): string {
+  // MIME types are case-insensitive (RFC 7231); compare against a lowercased
+  // copy so callers that pass mixed casing still hit the friendly extensions.
+  const lower = mediaType.toLowerCase();
+  const knownExtensions: Record<string, string> = {
+    "application/pdf": "pdf",
+    "application/json": "json",
+    "application/zip": "zip",
+    "text/plain": "txt",
+    "text/csv": "csv",
+    "text/markdown": "md"
+  };
+  const ext = knownExtensions[lower];
+  if (ext) return `attachment.${ext}`;
+  const slash = lower.indexOf("/");
+  if (slash > 0) {
+    const subtype = lower.slice(slash + 1).split(";")[0]?.trim() ?? "";
+    if (subtype && subtype !== "octet-stream" && /^[a-z0-9.+-]+$/i.test(subtype)) {
+      return `attachment.${subtype}`;
+    }
+  }
+  return "attachment";
+}
 
 /**
  * Check if a message has valid (non-empty) content for sending to the API.
@@ -2562,6 +2593,124 @@ export class AgentWidgetClient {
                 toolContext.byCall.delete(callKey);
               }
             }
+          }
+        } else if (payloadType === "agent_media") {
+          // A tool produced media (image / audio / video / file). Render it
+          // as a synthetic assistant message inserted at the point the tool
+          // completed — between the tool bubble and the next text turn.
+          //
+          // Wire format is the AI SDK–aligned `MediaContentPart` from
+          // @runtypelabs/shared:
+          //   { type: 'media', data, mediaType }                // AI SDK v6: base64
+          //   { type: 'image-url', url, mediaType? }            // AI SDK v3/v4
+          //   { type: 'file-url', url, mediaType }              // AI SDK v3/v4
+          const rawMedia = Array.isArray(payload.media) ? payload.media : [];
+          const mediaContentParts: ContentPart[] = [];
+          for (const part of rawMedia) {
+            if (!part || typeof part !== "object") continue;
+            const rec = part as Record<string, unknown>;
+            const partType = typeof rec.type === "string" ? rec.type : undefined;
+
+            // Resolve `(src, mediaType)` for the part.
+            // RFC 7231 says MIME types are case-insensitive, so we canonicalize
+            // to lowercase once here. That makes the `startsWith("image/")` /
+            // `"audio/"` / `"video/"` bucket checks robust to upstream tools
+            // that emit non-canonical casing like `Image/PNG`.
+            const rawMediaType =
+              typeof rec.mediaType === "string" ? rec.mediaType.toLowerCase() : "";
+            let src: string | null = null;
+            let mediaType = "";
+            if (partType === "media") {
+              const data = typeof rec.data === "string" ? rec.data : undefined;
+              if (!data) continue;
+              // Empty/missing mediaType yields `data:;base64,...` which RFC 2397
+              // resolves to `text/plain` — stamp a default so the data URI is
+              // well-formed and the part lands in the file bucket.
+              mediaType = rawMediaType.length > 0 ? rawMediaType : "application/octet-stream";
+              src = `data:${mediaType};base64,${data}`;
+            } else if (partType === "image-url") {
+              const url = typeof rec.url === "string" ? rec.url : undefined;
+              if (!url) continue;
+              mediaType = rawMediaType;
+              src = url;
+            } else if (partType === "file-url") {
+              const url = typeof rec.url === "string" ? rec.url : undefined;
+              if (!url) continue;
+              mediaType = rawMediaType;
+              src = url;
+            } else {
+              continue;
+            }
+            if (!src) continue;
+
+            // Pick the right rendering bucket based on mediaType.
+            if (partType === "image-url" || mediaType.startsWith("image/")) {
+              mediaContentParts.push({
+                type: "image",
+                image: src,
+                ...(mediaType ? { mimeType: mediaType } : {}),
+              });
+            } else if (mediaType.startsWith("audio/")) {
+              mediaContentParts.push({
+                type: "audio",
+                audio: src,
+                mimeType: mediaType,
+              });
+            } else if (mediaType.startsWith("video/")) {
+              mediaContentParts.push({
+                type: "video",
+                video: src,
+                mimeType: mediaType,
+              });
+            } else {
+              const resolvedMediaType = mediaType || "application/octet-stream";
+              mediaContentParts.push({
+                type: "file",
+                data: src,
+                mimeType: resolvedMediaType,
+                filename: filenameFromMediaType(resolvedMediaType),
+              });
+            }
+          }
+
+          if (mediaContentParts.length > 0) {
+            // Uniquify per emission. A tool may emit multiple `agent_media`
+            // events for the same `toolCallId` (e.g. streamed/batched media);
+            // sharing an id would let `emitMessage` merge them by id and
+            // overwrite the prior `contentParts`.
+            const seq = nextSequence();
+            const toolCallIdRaw = payload.toolCallId;
+            const mediaIdSuffix =
+              typeof toolCallIdRaw === "string" && toolCallIdRaw.length > 0
+                ? `${toolCallIdRaw}-${seq}`
+                : String(seq);
+            const mediaMessage: AgentWidgetMessage = {
+              id: `agent-media-${mediaIdSuffix}`,
+              role: "assistant",
+              content: "",
+              contentParts: mediaContentParts,
+              createdAt: new Date().toISOString(),
+              streaming: false,
+              sequence: seq,
+              agentMetadata: {
+                executionId: payload.executionId,
+                iteration: payload.iteration,
+              },
+            };
+            emitMessage(mediaMessage);
+
+            // Seal any in-flight assistant text bubble before splitting the
+            // stream. Without this, an orphan bubble retains `streaming: true`
+            // forever — `agent_complete` only finalizes the latest
+            // `assistantMessage`, so the typing/caret indicator would stay on
+            // the prior bubble even though no more deltas will arrive.
+            const prevAssistant = assistantMessage as AgentWidgetMessage | null;
+            if (prevAssistant) {
+              prevAssistant.streaming = false;
+              emitMessage(prevAssistant);
+            }
+            assistantMessage = null;
+            assistantMessageRef.current = null;
           }
         } else if (payloadType === "agent_iteration_complete") {
           // Iteration complete - no special handling needed

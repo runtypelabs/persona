@@ -30,15 +30,40 @@ export type ImageContentPart = {
  */
 export type FileContentPart = {
   type: 'file';
-  data: string; // base64 data URI
+  data: string; // base64 data URI or URL
   mimeType: string;
   filename: string;
 };
 
 /**
+ * Audio content part for multi-modal messages
+ * Supports base64 data URIs or URLs
+ */
+export type AudioContentPart = {
+  type: 'audio';
+  audio: string; // base64 data URI or URL
+  mimeType?: string;
+};
+
+/**
+ * Video content part for multi-modal messages
+ * Supports base64 data URIs or URLs
+ */
+export type VideoContentPart = {
+  type: 'video';
+  video: string; // base64 data URI or URL
+  mimeType?: string;
+};
+
+/**
  * Union type for all content part types
  */
-export type ContentPart = TextContentPart | ImageContentPart | FileContentPart;
+export type ContentPart =
+  | TextContentPart
+  | ImageContentPart
+  | FileContentPart
+  | AudioContentPart
+  | VideoContentPart;
 
 /**
  * Message content can be a simple string or an array of content parts
