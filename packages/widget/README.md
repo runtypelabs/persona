@@ -1400,7 +1400,13 @@ The AI responds with JSON like:
 }
 ```
 
-See `examples/embedded-app/dynamic-form.html` for a full working example.
+**Demos and reference:**
+
+- [`examples/embedded-app/dynamic-form.html`](../../examples/embedded-app/dynamic-form.html) — primary demo with three layout variants (Compact / Spacious / Branded) showing how `formStyles` scales between visual languages.
+- [`examples/embedded-app/dynamic-form-fields.html`](../../examples/embedded-app/dynamic-form-fields.html) — every field type, layout width, helper-text, required marking, and sensitive-masking pattern in one page.
+- [`docs/DYNAMIC-FORMS.md`](./docs/DYNAMIC-FORMS.md) — full reference: field schema, `formStyles` tokens, layout patterns, recipes, and how to extend the example component (new field types, sections, conditional fields).
+
+The shipped `DynamicForm` is an **example** in [`examples/embedded-app/src/components.ts`](../../examples/embedded-app/src/components.ts) — copy it into your app and customize. It supports text/email/tel/url/number/date/time/textarea, half-width pairs, auto-grow textareas, required-asterisk marking, inline validation, a success recap card with sensitive-field masking, and edit-after-submit. See [DYNAMIC-FORMS.md](./docs/DYNAMIC-FORMS.md) for the full surface area.
 
 ### Directive postprocessor (Deprecated)
 

@@ -410,13 +410,13 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
   container.style.cssText = `
     box-sizing: border-box;
     border: ${borderShorthand};
-    border-radius: ${styles.borderRadius || "16px"};
-    padding: ${styles.padding || "1.75rem"};
+    border-radius: ${styles.borderRadius || "14px"};
+    padding: ${styles.padding || "0.875rem 1rem"};
     background: ${surfaceVar};
     color: ${textVar};
     box-shadow: ${styles.boxShadow || "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)"};
     max-width: ${styles.maxWidth || "460px"};
-    margin: ${styles.margin || "1rem 0"};
+    margin: ${styles.margin || "0.5rem 0"};
     font-family: var(--persona-font-family, inherit);
   `;
 
@@ -458,15 +458,15 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
   container.appendChild(formWrapper);
 
   const header = document.createElement("div");
-  header.style.cssText = "margin-bottom: 1.5rem;";
+  header.style.cssText = "margin-bottom: 0.625rem;";
 
   const titleEl = document.createElement("h3");
   titleEl.style.cssText = `
-    margin: 0 0 0.5rem 0;
+    margin: 0 0 0.125rem 0;
     color: ${textVar};
-    font-size: ${styles.titleFontSize || "1.425rem"};
+    font-size: ${styles.titleFontSize || "1rem"};
     font-weight: ${styles.titleFontWeight || "700"};
-    line-height: 1.2;
+    line-height: 1.25;
     letter-spacing: -0.01em;
   `;
   titleEl.textContent = title;
@@ -477,8 +477,8 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
     descEl.style.cssText = `
       margin: 0;
       color: ${mutedVar};
-      font-size: ${styles.descriptionFontSize || "1rem"};
-      line-height: 1.5;
+      font-size: ${styles.descriptionFontSize || "0.8125rem"};
+      line-height: 1.4;
     `;
     descEl.textContent = description;
     header.appendChild(descEl);
@@ -491,7 +491,7 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
   form.style.cssText = `
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.125rem 0.875rem;
+    gap: 0.625rem 0.625rem;
   `;
 
   type FieldHandle = {
@@ -513,7 +513,7 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
     group.style.cssText = `
       display: flex;
       flex-direction: column;
-      gap: 0.4375rem;
+      gap: 0.25rem;
       grid-column: ${isHalfWidth ? "span 1" : "1 / -1"};
       min-width: 0;
     `;
@@ -521,20 +521,20 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
     const label = document.createElement("label");
     label.htmlFor = fieldId;
     label.style.cssText = `
-      font-size: ${styles.labelFontSize || "0.875rem"};
-      font-weight: ${styles.labelFontWeight || "600"};
+      font-size: ${styles.labelFontSize || "0.8125rem"};
+      font-weight: ${styles.labelFontWeight || "500"};
       color: ${textVar};
     `;
     label.textContent = field.label;
-    if (!field.required) {
-      const optional = document.createElement("span");
-      optional.textContent = "Optional";
-      optional.style.cssText = `
-        color: ${mutedVar};
-        font-weight: 400;
-        margin-left: 0.4375rem;
-      `;
-      label.appendChild(optional);
+    // Modern convention: mark required fields with a red asterisk rather
+    // than tagging optional ones — quieter for forms with many optional
+    // fields and the asterisk is a near-universal "required" signal.
+    if (field.required) {
+      const star = document.createElement("span");
+      star.textContent = "*";
+      star.setAttribute("aria-hidden", "true");
+      star.style.cssText = `color: ${errorColor}; margin-left: 0.25rem;`;
+      label.appendChild(star);
     }
     group.appendChild(label);
 
@@ -542,9 +542,22 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
     let control: HTMLInputElement | HTMLTextAreaElement;
     if (inputType === "textarea") {
       control = document.createElement("textarea");
-      (control as HTMLTextAreaElement).rows = 3;
-      control.style.minHeight = "96px";
-      control.style.resize = "vertical";
+      const ta = control as HTMLTextAreaElement;
+      ta.rows = 1;
+      // Auto-grow pattern (Linear/Cron-style): start at single-input
+      // height so the form is compact at rest, expand up to maxHeight as
+      // the user types. Avoids reserving vertical space for content the
+      // user might never write.
+      control.style.minHeight = "34px";
+      control.style.maxHeight = "140px";
+      control.style.resize = "none";
+      control.style.overflow = "hidden";
+      const autosize = () => {
+        ta.style.height = "auto";
+        ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`;
+      };
+      ta.addEventListener("input", autosize);
+      queueMicrotask(autosize);
     } else {
       control = document.createElement("input");
       (control as HTMLInputElement).type = inputType;
@@ -570,12 +583,12 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
     control.style.cssText += `
       box-sizing: border-box;
       width: 100%;
-      min-height: 48px;
-      padding: ${styles.inputPadding || "0.875rem 1rem"};
+      min-height: 34px;
+      padding: ${styles.inputPadding || "0.4375rem 0.625rem"};
       border: ${inputBorderResting};
       background: ${inputFillVar};
-      border-radius: ${styles.inputBorderRadius || "var(--persona-input-radius, 0.625rem)"};
-      font-size: ${styles.inputFontSize || "0.9375rem"};
+      border-radius: ${styles.inputBorderRadius || "var(--persona-input-radius, 0.5rem)"};
+      font-size: ${styles.inputFontSize || "0.8125rem"};
       font-family: inherit;
       color: ${textVar};
       outline: none;
@@ -672,8 +685,8 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
+    gap: 0.375rem;
+    margin-top: 0.125rem;
     grid-column: 1 / -1;
   `;
 
@@ -685,13 +698,13 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
     justify-content: center;
     gap: 0.5rem;
     width: 100%;
-    padding: ${styles.buttonPadding || "0.875rem 1.5rem"};
-    min-height: 48px;
+    padding: ${styles.buttonPadding || "0.5rem 1rem"};
+    min-height: 34px;
     background: ${buttonBgVar};
     color: ${buttonFgVar};
     border: none;
-    border-radius: ${styles.buttonBorderRadius || "0.625rem"};
-    font-size: ${styles.buttonFontSize || "0.9375rem"};
+    border-radius: ${styles.buttonBorderRadius || "0.5rem"};
+    font-size: ${styles.buttonFontSize || "0.8125rem"};
     font-weight: ${styles.buttonFontWeight || "600"};
     font-family: inherit;
     cursor: pointer;
@@ -722,10 +735,10 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: ${styles.helperFontSize || "0.8125rem"};
+    font-size: ${styles.helperFontSize || "0.75rem"};
     color: ${mutedVar};
     line-height: 1.4;
-    min-height: 1.25rem;
+    min-height: 1rem;
   `;
 
   const helperContent = document.createElement("div");
@@ -1104,11 +1117,12 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
     handles.forEach(({ control, name, setError }) => {
       const value = lastPayload[name];
       if (typeof value === "string") {
-        if (control instanceof HTMLTextAreaElement) {
-          control.value = value;
-        } else {
-          control.value = value;
-        }
+        control.value = value;
+      }
+      // Re-trigger the autogrow listener so restored textarea content
+      // resizes to fit instead of staying at minHeight.
+      if (control instanceof HTMLTextAreaElement) {
+        control.dispatchEvent(new Event("input", { bubbles: true }));
       }
       setError(null);
     });

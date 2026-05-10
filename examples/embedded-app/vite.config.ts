@@ -273,6 +273,7 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
         'action-middleware': path.resolve(__dirname, 'action-middleware.html'),
         'dynamic-form': path.resolve(__dirname, 'dynamic-form.html'),
+        'dynamic-form-fields': path.resolve(__dirname, 'dynamic-form-fields.html'),
         theme: path.resolve(__dirname, 'theme.html'),
         products: path.resolve(__dirname, 'products.html'),
         'custom-components': path.resolve(__dirname, 'custom-components.html'),

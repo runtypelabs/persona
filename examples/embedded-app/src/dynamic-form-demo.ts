@@ -8,10 +8,11 @@ import {
   componentRegistry,
   createLocalStorageAdapter,
   markdownPostprocessor,
-  DEFAULT_WIDGET_CONFIG
+  DEFAULT_WIDGET_CONFIG,
+  type AgentWidgetConfig
 } from "@runtypelabs/persona";
 
-import { DynamicForm } from "./components";
+import { DynamicForm, type DynamicFormStyles } from "./components";
 
 // Register the DynamicForm component
 componentRegistry.register("DynamicForm", DynamicForm);
@@ -148,3 +149,205 @@ initAgentWidget({
     postprocessMessage: ({ text }) => markdownPostprocessor(text)
   }
 });
+
+// ---------------------------------------------------------------------------
+// Layout variants — same form, three formStyles presets. Each variant is a
+// fresh widget with `injectComponentDirective` to render the form on mount,
+// no LLM round-trip required. The page wraps the three previews in a tabbed
+// panel so each form gets full vertical space and is shown alongside the
+// `formStyles` config that produced it.
+// ---------------------------------------------------------------------------
+
+const VARIANT_FIELDS = [
+  { label: "First Name", type: "text", required: true, width: "half" },
+  { label: "Last Name", type: "text", required: true, width: "half" },
+  { label: "Email", type: "email", required: true },
+  { label: "Phone", type: "tel", width: "half" },
+  { label: "Company", type: "text", width: "half" },
+  {
+    label: "Notes",
+    type: "textarea",
+    placeholder: "Anything we should know?"
+  }
+];
+
+type VariantTheme = {
+  primary?: string;
+  accent?: string;
+  surface?: string;
+  muted?: string;
+};
+
+const VARIANTS: Array<{
+  id: string;
+  formStyles: DynamicFormStyles;
+  themeOverrides: VariantTheme;
+}> = [
+  // Compact — the new defaults straight out of the component (no overrides
+  // needed). Showcases the densified Linear/Vercel-style baseline.
+  { id: "compact", formStyles: {}, themeOverrides: {} },
+  // Spacious — Stripe / Material 3-style. Larger inputs, more breathing room.
+  {
+    id: "spacious",
+    formStyles: {
+      padding: "1.5rem",
+      borderRadius: "16px",
+      titleFontSize: "1.25rem",
+      descriptionFontSize: "0.9375rem",
+      labelFontSize: "0.875rem",
+      labelFontWeight: "500",
+      inputFontSize: "0.9375rem",
+      inputPadding: "0.75rem 0.875rem",
+      inputBorderRadius: "0.625rem",
+      buttonPadding: "0.75rem 1.25rem",
+      buttonBorderRadius: "0.625rem",
+      buttonFontSize: "0.9375rem"
+    },
+    themeOverrides: {}
+  },
+  // Branded — custom accent, fully rounded chrome. For marketing-feel
+  // landing-page forms where the form is the hero.
+  {
+    id: "branded",
+    formStyles: {
+      padding: "1.25rem",
+      borderRadius: "20px",
+      borderColor: "#fde68a",
+      titleFontSize: "1.125rem",
+      inputBorderRadius: "9999px",
+      inputPadding: "0.5rem 0.875rem",
+      buttonBorderRadius: "9999px",
+      buttonPadding: "0.625rem 1.25rem"
+    },
+    themeOverrides: {
+      primary: "#7c2d12",
+      accent: "#ea580c",
+      muted: "#a16207"
+    }
+  }
+];
+
+function mountVariant(
+  variant: (typeof VARIANTS)[number]
+): void {
+  const mount = document.getElementById(`dynamic-form-variant-${variant.id}`);
+  if (!mount) return;
+
+  const config: AgentWidgetConfig = {
+    ...DEFAULT_WIDGET_CONFIG,
+    apiUrl: proxyUrl,
+    storageAdapter: createLocalStorageAdapter(
+      `persona-state-dynamic-form-variant-${variant.id}`
+    ),
+    parserType: "json",
+    enableComponentStreaming: true,
+    wrapComponentDirectiveInBubble: false,
+    launcher: { enabled: false, width: "100%" },
+    formEndpoint: "/form",
+    theme: {
+      ...DEFAULT_WIDGET_CONFIG.theme,
+      primary: "#111827",
+      accent: "#6366f1",
+      surface: "#ffffff",
+      muted: "#64748b",
+      ...variant.themeOverrides
+    },
+    formStyles: variant.formStyles,
+    layout: {
+      ...DEFAULT_WIDGET_CONFIG.layout,
+      header: { layout: "minimal", showCloseButton: false }
+    },
+    suggestionChips: [],
+    statusIndicator: { visible: false },
+    postprocessMessage: ({ text }) => markdownPostprocessor(text)
+  };
+
+  const variantController = createAgentExperience(mount, config);
+
+  variantController.injectComponentDirective({
+    id: `variant-${variant.id}`,
+    component: "DynamicForm",
+    text: "",
+    props: {
+      title: "Book a demo",
+      description: "Share your details and we'll follow up to confirm.",
+      fields: VARIANT_FIELDS,
+      submit_text: "Request meeting"
+    }
+  });
+}
+
+/**
+ * Render the variant config as a syntax-friendly snippet next to the
+ * preview. Kept human-readable rather than running through a real
+ * formatter so the demo has zero deps.
+ */
+function renderVariantDef(variant: (typeof VARIANTS)[number]): string {
+  const blocks: string[] = [];
+  if (Object.keys(variant.themeOverrides).length > 0) {
+    blocks.push(`theme: ${JSON.stringify(variant.themeOverrides, null, 2)}`);
+  }
+  blocks.push(`formStyles: ${JSON.stringify(variant.formStyles, null, 2)}`);
+  return blocks.join(",\n\n");
+}
+
+VARIANTS.forEach((variant) => {
+  mountVariant(variant);
+  const defEl = document.getElementById(`variants-def-${variant.id}`);
+  if (defEl) defEl.textContent = renderVariantDef(variant);
+});
+
+setupTabs("variants-tabs");
+
+/**
+ * Minimal accessible tabs. Click or arrow-key to switch; Home/End jump to
+ * first/last. All panels stay mounted (so widget state survives tab swaps);
+ * we only toggle `hidden` and `aria-selected`.
+ */
+function setupTabs(rootId: string): void {
+  const root = document.getElementById(rootId);
+  if (!root) return;
+
+  const tabs = Array.from(
+    root.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+  );
+  const panels = Array.from(
+    root.querySelectorAll<HTMLElement>('[role="tabpanel"]')
+  );
+
+  function activate(tabId: string): void {
+    tabs.forEach((tab) => {
+      const isActive = tab.dataset.tabId === tabId;
+      tab.setAttribute("aria-selected", String(isActive));
+      tab.tabIndex = isActive ? 0 : -1;
+    });
+    panels.forEach((panel) => {
+      const isActive = panel.dataset.tabPanel === tabId;
+      panel.hidden = !isActive;
+    });
+  }
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const id = tab.dataset.tabId;
+      if (id) activate(id);
+    });
+
+    tab.addEventListener("keydown", (event) => {
+      const idx = tabs.indexOf(tab);
+      let nextIdx: number | null = null;
+      if (event.key === "ArrowRight") nextIdx = (idx + 1) % tabs.length;
+      else if (event.key === "ArrowLeft") nextIdx = (idx - 1 + tabs.length) % tabs.length;
+      else if (event.key === "Home") nextIdx = 0;
+      else if (event.key === "End") nextIdx = tabs.length - 1;
+      if (nextIdx === null) return;
+      event.preventDefault();
+      const next = tabs[nextIdx];
+      const id = next.dataset.tabId;
+      if (id) {
+        activate(id);
+        next.focus();
+      }
+    });
+  });
+}
