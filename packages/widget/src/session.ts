@@ -11,6 +11,7 @@ import {
   InjectAssistantMessageOptions,
   InjectUserMessageOptions,
   InjectSystemMessageOptions,
+  InjectComponentDirectiveOptions,
   PersonaArtifactRecord,
   PersonaArtifactManualUpsert
 } from "./types";
@@ -572,7 +573,8 @@ export class AgentWidgetSession {
       createdAt,
       sequence,
       streaming = false,
-      voiceProcessing
+      voiceProcessing,
+      rawContent
     } = options;
 
     // Generate appropriate ID based on role
@@ -594,7 +596,8 @@ export class AgentWidgetSession {
       // Only include optional fields if provided
       ...(llmContent !== undefined && { llmContent }),
       ...(contentParts !== undefined && { contentParts }),
-      ...(voiceProcessing !== undefined && { voiceProcessing })
+      ...(voiceProcessing !== undefined && { voiceProcessing }),
+      ...(rawContent !== undefined && { rawContent })
     };
 
     // Use upsert to handle both new messages and updates (streaming)
@@ -673,7 +676,9 @@ export class AgentWidgetSession {
         id,
         createdAt,
         sequence,
-        streaming = false
+        streaming = false,
+        voiceProcessing,
+        rawContent
       } = options;
 
       const messageId =
@@ -692,7 +697,9 @@ export class AgentWidgetSession {
         sequence: sequence ?? this.nextSequence(),
         streaming,
         ...(llmContent !== undefined && { llmContent }),
-        ...(contentParts !== undefined && { contentParts })
+        ...(contentParts !== undefined && { contentParts }),
+        ...(voiceProcessing !== undefined && { voiceProcessing }),
+        ...(rawContent !== undefined && { rawContent })
       };
 
       results.push(message);
@@ -703,6 +710,53 @@ export class AgentWidgetSession {
     this.callbacks.onMessagesChanged([...this.messages]);
 
     return results;
+  }
+
+  /**
+   * Convenience method for injecting a registered component directive as
+   * an assistant message — the same shape Persona produces from a streamed
+   * `{ "text": "...", "component": "...", "props": {...} }` payload.
+   *
+   * Sets `content` to `text`, `rawContent` to the JSON directive (so
+   * `extractComponentDirectiveFromMessage` can find it), and forwards
+   * `llmContent` / `id` / `createdAt` / `sequence`.
+   *
+   * @example
+   * session.injectComponentDirective({
+   *   component: "DynamicForm",
+   *   props: { title: "Book a demo", fields: [...] },
+   *   text: "Share your details to book a demo.",
+   *   llmContent: "[Showed booking form]"
+   * });
+   */
+  public injectComponentDirective(
+    options: InjectComponentDirectiveOptions
+  ): AgentWidgetMessage {
+    const {
+      component,
+      props = {},
+      text = "",
+      llmContent,
+      id,
+      createdAt,
+      sequence
+    } = options;
+
+    const directive: { text: string; component: string; props: Record<string, unknown> } = {
+      text,
+      component,
+      props
+    };
+
+    return this.injectMessage({
+      role: "assistant",
+      content: text,
+      rawContent: JSON.stringify(directive),
+      ...(llmContent !== undefined && { llmContent }),
+      ...(id !== undefined && { id }),
+      ...(createdAt !== undefined && { createdAt }),
+      ...(sequence !== undefined && { sequence })
+    });
   }
 
   public async sendMessage(

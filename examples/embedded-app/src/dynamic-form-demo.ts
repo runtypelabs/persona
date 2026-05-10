@@ -22,15 +22,15 @@ const proxyUrl =
     `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-directive` :
     `http://localhost:${proxyPort}/api/chat/dispatch-directive`;
 
-const inlineMount = document.getElementById("json-inline");
+const inlineMount = document.getElementById("dynamic-form-inline");
 if (!inlineMount) {
-  throw new Error("JSON demo mount node missing");
+  throw new Error("Dynamic form demo mount node missing");
 }
 
-createAgentExperience(inlineMount, {
+const inlineController = createAgentExperience(inlineMount, {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
-  storageAdapter: createLocalStorageAdapter("persona-state-json-inline"),
+  storageAdapter: createLocalStorageAdapter("persona-state-dynamic-form-inline"),
   parserType: "json", // Use JSON parser for component directives
   enableComponentStreaming: true,
   // The DynamicForm renders its own card chrome (border, padding, shadow),
@@ -64,13 +64,49 @@ createAgentExperience(inlineMount, {
   postprocessMessage: ({ text }) => markdownPostprocessor(text)
 });
 
+// `injectComponentDirective` renders a registered component as if the LLM had
+// streamed `{ "text": "...", "component": "DynamicForm", "props": {...} }`.
+// Same path, no API round-trip — useful for QA, design previews, debug
+// toggles, and local tools that want to render a component inline.
+const previewBtn = document.getElementById("dynamic-form-preview");
+if (previewBtn) {
+  let previewIndex = 0;
+  previewBtn.addEventListener("click", () => {
+    previewIndex += 1;
+    inlineController.injectComponentDirective({
+      id: `preview-form-${previewIndex}`,
+      component: "DynamicForm",
+      text: "Preview: this is the same DynamicForm the AI would emit.",
+      props: {
+        title: "Schedule a demo",
+        description: "Share your details — we'll follow up to confirm.",
+        fields: [
+          { label: "First Name", type: "text", required: true, width: "half" },
+          { label: "Last Name", type: "text", required: true, width: "half" },
+          { label: "Email", type: "email", required: true },
+          { label: "Phone", type: "tel", width: "half" },
+          { label: "Company", type: "text", width: "half" },
+          {
+            label: "Notes",
+            type: "textarea",
+            placeholder: "Anything we should know?"
+          }
+        ],
+        submit_text: "Request meeting"
+      },
+      llmContent:
+        "[Demo: previewed booking form via injectComponentDirective. Not a user request.]"
+    });
+  });
+}
+
 initAgentWidget({
-  target: "#json-launcher",
+  target: "#dynamic-form-launcher",
   useShadowDom: false,
   config: {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
-    storageAdapter: createLocalStorageAdapter("persona-state-json-launcher"),
+    storageAdapter: createLocalStorageAdapter("persona-state-dynamic-form-launcher"),
     parserType: "json",
     enableComponentStreaming: true,
     wrapComponentDirectiveInBubble: false,

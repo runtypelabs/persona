@@ -22,6 +22,7 @@ interface InjectMessageOptions {
   content: string;              // User-facing (UI display)
   llmContent?: string;          // LLM-facing (defaults to content)
   contentParts?: ContentPart[]; // Multi-modal (highest priority for LLM)
+  rawContent?: string;          // Raw structured payload (e.g. directive JSON)
   id?: string;                  // Custom message ID
   createdAt?: string;           // ISO timestamp
   sequence?: number;            // Sort order
@@ -40,6 +41,14 @@ widgetHandle.injectUserMessage(options);
 
 // System messages (role: 'system')
 widgetHandle.injectSystemMessage(options);
+
+// Component directives (assistant message that renders a registered component)
+widgetHandle.injectComponentDirective({
+  component: 'DynamicForm',
+  props: { title: 'Book a demo', fields: [/* ... */] },
+  text: 'Share your details to book a demo.',
+  llmContent: '[Showed booking form]'   // optional, redacted version for the LLM
+});
 ```
 
 ## Content Priority
@@ -140,6 +149,82 @@ widgetHandle.injectAssistantMessage({
   streaming: false
 });
 ```
+
+## Component Directive Injection
+
+When you have a renderer registered via `componentRegistry.register(...)`, you can inject an assistant message that renders that component — exactly the same path Persona uses for streamed `{ "text": "...", "component": "...", "props": {...} }` directives.
+
+This is useful for:
+
+- **Previews and replays**: render a component without round-tripping to the LLM
+- **Debug toggles**: add a button that injects the form/widget you want to QA
+- **Local tools**: have a tool callback render a registered component instead of plain text
+- **Restoring state**: rehydrate a directive after a user action without re-streaming
+
+### Using `injectComponentDirective` (recommended)
+
+```javascript
+import { initAgentWidget, componentRegistry } from '@runtypelabs/persona';
+import { DynamicForm } from './components';
+
+componentRegistry.register('DynamicForm', DynamicForm);
+
+const widget = initAgentWidget({
+  target: 'body',
+  config: { apiUrl: '/api/chat/dispatch', parserType: 'json' }
+});
+
+widget.injectComponentDirective({
+  component: 'DynamicForm',
+  props: {
+    title: 'Book a demo',
+    fields: [
+      { label: 'Name', type: 'text', required: true },
+      { label: 'Email', type: 'email', required: true }
+    ],
+    submit_text: 'Request meeting'
+  },
+  text: 'Share your details to book a demo.',
+  llmContent: '[Showed booking form]'
+});
+```
+
+The helper builds the canonical directive JSON (`{ text, component, props }`), sets `content` to `text`, sets `rawContent` to the JSON, and forwards `llmContent` so the LLM sees a redacted summary on subsequent turns instead of the full directive.
+
+### Using `rawContent` directly
+
+If you already have a serialized directive (e.g. cached from a previous response), set it on `rawContent` and the directive renderer will pick it up:
+
+```javascript
+const directive = JSON.stringify({
+  text: 'Booking form',
+  component: 'DynamicForm',
+  props: { /* ... */ }
+});
+
+widget.injectAssistantMessage({
+  content: 'Booking form',          // bubble copy
+  rawContent: directive,            // makes the directive renderable
+  llmContent: '[Showed booking form]'
+});
+```
+
+`hasComponentDirective` and `extractComponentDirectiveFromMessage` look at `rawContent` first; if it's missing, they fall back to parsing `content` when it looks like JSON. So either of these forms also works:
+
+```javascript
+// Pass the directive JSON via rawContent (preferred — keeps `content` clean)
+widget.injectAssistantMessage({
+  content: 'Booking form',
+  rawContent: JSON.stringify({ text: 'Booking form', component: 'DynamicForm', props: {} })
+});
+
+// Or pass the directive JSON via content alone (the fallback path)
+widget.injectAssistantMessage({
+  content: JSON.stringify({ text: 'Booking form', component: 'DynamicForm', props: {} })
+});
+```
+
+The first form is preferred because `content` stays human-readable for plain-text renderers, accessibility tools, and copy actions.
 
 ## Migration from `injectTestMessage`
 

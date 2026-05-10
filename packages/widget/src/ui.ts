@@ -19,6 +19,7 @@ import {
   InjectAssistantMessageOptions,
   InjectUserMessageOptions,
   InjectSystemMessageOptions,
+  InjectComponentDirectiveOptions,
   LoadingIndicatorRenderContext,
   IdleIndicatorRenderContext,
   VoiceStatus,
@@ -296,6 +297,14 @@ type Controller = {
    * Inject multiple messages in a single batch with one sort and one render pass.
    */
   injectMessageBatch: (optionsList: InjectMessageOptions[]) => AgentWidgetMessage[];
+  /**
+   * Convenience method for injecting an assistant message that renders as a
+   * registered component — same shape Persona produces from a streamed
+   * `{ "text": "...", "component": "...", "props": {...} }` payload.
+   */
+  injectComponentDirective: (
+    options: InjectComponentDirectiveOptions
+  ) => AgentWidgetMessage;
   /**
    * @deprecated Use injectMessage() instead.
    */
@@ -7029,6 +7038,15 @@ export const createAgentExperience = (
         setOpenState(true, "system");
       }
       return session.injectMessageBatch(optionsList);
+    },
+    injectComponentDirective(
+      options: InjectComponentDirectiveOptions
+    ): AgentWidgetMessage {
+      // Auto-open widget if closed and the panel is toggleable
+      if (!open && isPanelToggleable()) {
+        setOpenState(true, "system");
+      }
+      return session.injectComponentDirective(options);
     },
     /** @deprecated Use injectMessage() instead */
     injectTestMessage(event: AgentWidgetEvent) {

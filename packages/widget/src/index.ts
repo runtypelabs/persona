@@ -61,6 +61,7 @@ export type {
   InjectAssistantMessageOptions,
   InjectUserMessageOptions,
   InjectSystemMessageOptions,
+  InjectComponentDirectiveOptions,
   // Loading indicator types
   LoadingIndicatorRenderContext,
   AgentWidgetLoadingIndicatorConfig,

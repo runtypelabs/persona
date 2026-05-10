@@ -244,6 +244,129 @@ describe('AgentWidgetSession - Message Injection', () => {
       expect(messages[0].content).toBe('Legacy message');
     });
   });
+
+  describe('rawContent forwarding', () => {
+    it('preserves rawContent on injected messages', () => {
+      const directive = JSON.stringify({
+        text: 'Booking form',
+        component: 'BookingForm',
+        props: { title: 'Schedule' }
+      });
+
+      const result = session.injectMessage({
+        role: 'assistant',
+        content: 'Booking form',
+        rawContent: directive
+      });
+
+      expect(result.rawContent).toBe(directive);
+      expect(messages[0].rawContent).toBe(directive);
+    });
+
+    it('forwards rawContent through injectAssistantMessage', () => {
+      const directive = JSON.stringify({ text: 'Form', component: 'Form', props: {} });
+
+      const result = session.injectAssistantMessage({
+        content: 'Form',
+        rawContent: directive
+      });
+
+      expect(result.rawContent).toBe(directive);
+    });
+
+    it('forwards rawContent through injectMessageBatch', () => {
+      const directiveA = JSON.stringify({ text: 'A', component: 'CompA', props: {} });
+      const directiveB = JSON.stringify({ text: 'B', component: 'CompB', props: {} });
+
+      const results = session.injectMessageBatch([
+        { role: 'assistant', content: 'A', rawContent: directiveA },
+        { role: 'assistant', content: 'B', rawContent: directiveB }
+      ]);
+
+      expect(results[0].rawContent).toBe(directiveA);
+      expect(results[1].rawContent).toBe(directiveB);
+    });
+
+    it('omits rawContent when not provided', () => {
+      const result = session.injectMessage({
+        role: 'assistant',
+        content: 'plain'
+      });
+
+      expect(result.rawContent).toBeUndefined();
+    });
+  });
+
+  describe('injectComponentDirective', () => {
+    it('builds rawContent from component + props + text', () => {
+      const result = session.injectComponentDirective({
+        component: 'DynamicForm',
+        props: { title: 'Book a demo', fields: [{ label: 'Email' }] },
+        text: 'Share your details to book a demo.'
+      });
+
+      expect(result.role).toBe('assistant');
+      expect(result.content).toBe('Share your details to book a demo.');
+      expect(result.id).toMatch(/^ast_/);
+      expect(result.rawContent).toBeDefined();
+
+      const parsed = JSON.parse(result.rawContent as string);
+      expect(parsed).toEqual({
+        text: 'Share your details to book a demo.',
+        component: 'DynamicForm',
+        props: { title: 'Book a demo', fields: [{ label: 'Email' }] }
+      });
+    });
+
+    it('defaults text to empty string and props to {}', () => {
+      const result = session.injectComponentDirective({ component: 'DynamicForm' });
+
+      expect(result.content).toBe('');
+      const parsed = JSON.parse(result.rawContent as string);
+      expect(parsed).toEqual({ text: '', component: 'DynamicForm', props: {} });
+    });
+
+    it('forwards llmContent for redacted LLM context', () => {
+      const result = session.injectComponentDirective({
+        component: 'DynamicForm',
+        props: { title: 'Book a demo' },
+        text: 'Booking form below.',
+        llmContent: '[Showed booking form]'
+      });
+
+      expect(result.llmContent).toBe('[Showed booking form]');
+    });
+
+    it('honors custom id, createdAt, sequence', () => {
+      const result = session.injectComponentDirective({
+        component: 'DynamicForm',
+        id: 'my-form-1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        sequence: 999
+      });
+
+      expect(result.id).toBe('my-form-1');
+      expect(result.createdAt).toBe('2026-01-01T00:00:00.000Z');
+      expect(result.sequence).toBe(999);
+    });
+
+    it('upserts an existing directive by id', () => {
+      session.injectComponentDirective({
+        component: 'DynamicForm',
+        props: { title: 'v1' },
+        id: 'reuse-me'
+      });
+      session.injectComponentDirective({
+        component: 'DynamicForm',
+        props: { title: 'v2' },
+        id: 'reuse-me'
+      });
+
+      expect(messages).toHaveLength(1);
+      const parsed = JSON.parse(messages[0].rawContent as string);
+      expect(parsed.props.title).toBe('v2');
+    });
+  });
 });
 
 describe('AgentWidgetSession - cancel()', () => {
