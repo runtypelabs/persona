@@ -3768,6 +3768,23 @@ export type InjectMessageOptions = {
    * Consumers can detect this in `messageTransform` to render custom UI.
    */
   voiceProcessing?: boolean;
+
+  /**
+   * Raw structured payload (typically a JSON string) representing the
+   * full directive that produced this message — e.g. `{ "text": "...",
+   * "component": "Foo", "props": {...} }`.
+   *
+   * Mirrors the field populated by stream parsers during normal LLM
+   * responses. Set this when injecting a message that should render as a
+   * component directive (`hasComponentDirective` /
+   * `extractComponentDirectiveFromMessage` look at `rawContent` first).
+   *
+   * Priority for the API payload remains:
+   * `contentParts > llmContent > rawContent > content`. Pass `llmContent`
+   * alongside `rawContent` if the LLM should see something other than the
+   * raw directive.
+   */
+  rawContent?: string;
 };
 
 /**
@@ -3787,6 +3804,64 @@ export type InjectUserMessageOptions = Omit<InjectMessageOptions, "role">;
  * Role defaults to 'system'.
  */
 export type InjectSystemMessageOptions = Omit<InjectMessageOptions, "role">;
+
+/**
+ * Options for injecting an assistant message that renders as a component
+ * directive — sugar over `injectAssistantMessage` for the common case of
+ * "render this registered component, same as if the LLM had emitted it".
+ *
+ * Equivalent to calling `injectAssistantMessage({ content: text, rawContent:
+ * JSON.stringify({ text, component, props }), llmContent })`.
+ *
+ * @example
+ * widget.injectComponentDirective({
+ *   component: "DynamicForm",
+ *   props: { title: "Book a demo", fields: [...] },
+ *   text: "Share your details to book a demo.",
+ *   llmContent: "[Showed booking form]"
+ * });
+ */
+export type InjectComponentDirectiveOptions = {
+  /**
+   * Name of a renderer registered via `componentRegistry.register(...)`.
+   */
+  component: string;
+
+  /**
+   * Props passed to the component renderer.
+   */
+  props?: Record<string, unknown>;
+
+  /**
+   * Bubble copy displayed above (or with) the rendered component.
+   * Mirrors the `text` field in a streamed JSON directive.
+   * @default ""
+   */
+  text?: string;
+
+  /**
+   * Content sent to the LLM in API requests. When omitted, the raw
+   * directive JSON is what the LLM would see (per the standard
+   * priority chain). Provide a redacted/short version to avoid sending
+   * the full directive in subsequent turns.
+   */
+  llmContent?: string;
+
+  /**
+   * Optional message ID. If omitted, an assistant id is auto-generated.
+   */
+  id?: string;
+
+  /**
+   * Optional creation timestamp (ISO string). If omitted, uses current time.
+   */
+  createdAt?: string;
+
+  /**
+   * Optional sequence number for ordering.
+   */
+  sequence?: number;
+};
 
 export type PersonaArtifactRecord = {
   id: string;

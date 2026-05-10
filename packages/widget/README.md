@@ -253,6 +253,49 @@ chat.injectAssistantMessage({
 });
 ```
 
+**Component Directives (`injectComponentDirective`)**
+
+When you've registered a custom component via `componentRegistry.register(...)`, inject an assistant message that renders that component using the same path Persona uses for streamed JSON directives:
+
+```ts
+import { componentRegistry } from '@runtypelabs/persona';
+import { DynamicForm } from './components';
+
+componentRegistry.register('DynamicForm', DynamicForm);
+
+chat.injectComponentDirective({
+  component: 'DynamicForm',
+  props: {
+    title: 'Book a demo',
+    fields: [
+      { label: 'Name', type: 'text', required: true },
+      { label: 'Email', type: 'email', required: true }
+    ],
+    submit_text: 'Request meeting'
+  },
+  text: 'Share your details to book a demo.',
+  llmContent: '[Showed booking form]'   // optional, redacted version for the LLM
+});
+```
+
+The helper sets `content` to `text`, `rawContent` to the canonical directive JSON, and forwards `llmContent`. Useful for previews, replays, debug buttons, and local tools that should render a component instead of plain text.
+
+If you already have a serialized directive, you can pass it through `rawContent` directly on any inject method:
+
+```ts
+chat.injectAssistantMessage({
+  content: 'Booking form',
+  rawContent: JSON.stringify({
+    text: 'Booking form',
+    component: 'DynamicForm',
+    props: { /* ... */ }
+  }),
+  llmContent: '[Showed booking form]'
+});
+```
+
+See [docs/MESSAGE-INJECTION.md](./docs/MESSAGE-INJECTION.md#component-directive-injection) for the full reference.
+
 #### Event Stream Control
 
 When the `showEventStreamToggle` feature flag is enabled, you can programmatically control the event stream inspector panel:
@@ -1357,7 +1400,7 @@ The AI responds with JSON like:
 }
 ```
 
-See `examples/embedded-app/json.html` for a full working example.
+See `examples/embedded-app/dynamic-form.html` for a full working example.
 
 ### Directive postprocessor (Deprecated)
 

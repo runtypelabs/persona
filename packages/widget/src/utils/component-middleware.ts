@@ -87,18 +87,42 @@ export function createComponentMiddleware() {
 }
 
 /**
- * Checks if a message contains a component directive in its raw content
+ * Picks the field that may carry a JSON directive payload. Streamed messages
+ * populate `rawContent`; manually injected messages may pass the JSON via
+ * `content` directly. We try `rawContent` first, then fall back to `content`
+ * when it looks like JSON, so both code paths render the same way.
+ */
+function selectDirectiveSource(message: AgentWidgetMessage): string | null {
+  if (typeof message.rawContent === "string" && message.rawContent.length > 0) {
+    return message.rawContent;
+  }
+  if (typeof message.content === "string") {
+    const trimmed = message.content.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      return message.content;
+    }
+  }
+  return null;
+}
+
+/**
+ * Checks if a message contains a component directive.
+ *
+ * Looks at `rawContent` first (the field set by stream parsers); falls back
+ * to `content` when it looks like JSON, so injected messages that pass the
+ * directive via `content` (or have no `rawContent`) are still recognized.
  */
 export function hasComponentDirective(message: AgentWidgetMessage): boolean {
-  if (!message.rawContent) return false;
-  
+  const source = selectDirectiveSource(message);
+  if (!source) return false;
+
   try {
-    const parsed = JSON.parse(message.rawContent);
+    const parsed = JSON.parse(source);
     return (
       typeof parsed === "object" &&
       parsed !== null &&
       "component" in parsed &&
-      typeof parsed.component === "string"
+      typeof (parsed as { component: unknown }).component === "string"
     );
   } catch {
     return false;
@@ -106,27 +130,34 @@ export function hasComponentDirective(message: AgentWidgetMessage): boolean {
 }
 
 /**
- * Extracts component directive from a complete message
+ * Extracts component directive from a complete message.
+ *
+ * Looks at `rawContent` first (the field set by stream parsers); falls back
+ * to `content` when it looks like JSON, so injected messages that pass the
+ * directive via `content` (or have no `rawContent`) render the same as
+ * streamed ones.
  */
 export function extractComponentDirectiveFromMessage(
   message: AgentWidgetMessage
 ): ComponentDirective | null {
-  if (!message.rawContent) return null;
+  const source = selectDirectiveSource(message);
+  if (!source) return null;
 
   try {
-    const parsed = JSON.parse(message.rawContent);
+    const parsed = JSON.parse(source);
     if (
       typeof parsed === "object" &&
       parsed !== null &&
       "component" in parsed &&
-      typeof parsed.component === "string"
+      typeof (parsed as { component: unknown }).component === "string"
     ) {
+      const directive = parsed as { component: string; props?: unknown };
       return {
-        component: parsed.component,
-        props: (parsed.props && typeof parsed.props === "object" && parsed.props !== null
-          ? parsed.props
+        component: directive.component,
+        props: (directive.props && typeof directive.props === "object" && directive.props !== null
+          ? directive.props
           : {}) as Record<string, unknown>,
-        raw: message.rawContent
+        raw: source
       };
     }
   } catch {

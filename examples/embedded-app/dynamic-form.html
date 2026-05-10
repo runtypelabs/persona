@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" />
+    <title>Streaming Chat Widget – Dynamic Form Demo</title>
+    <style>
+      .dynamic-form-demo-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 0.75rem 0;
+        flex-wrap: wrap;
+      }
+      .dynamic-form-demo-button {
+        appearance: none;
+        background: #111827;
+        color: #ffffff;
+        border: 1px solid #111827;
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.875rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
+      }
+      .dynamic-form-demo-button:hover {
+        background: #1f2937;
+      }
+      .dynamic-form-demo-button:focus-visible {
+        outline: 2px solid #6366f1;
+        outline-offset: 2px;
+      }
+      .dynamic-form-demo-toolbar-hint {
+        color: #64748b;
+        font-size: 0.8125rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="demo-container">
+      <section>
+        <h1>Dynamic Form Demo</h1>
+        <p>
+          This page demonstrates the component middleware system. When your
+          backend streams a JSON component directive (e.g., 
+          <code>{"component": "DynamicForm", "props": {...}}</code>), the widget
+          renders an interactive form with dynamically generated fields. The AI
+          creates contextually appropriate forms based on what you ask.
+        </p>
+        <p>
+          The <strong>Preview form (no LLM)</strong> button below uses
+          <code>controller.injectComponentDirective(...)</code> to render the
+          form directly from host code — same path the LLM uses, but instant.
+          Useful for QA, design previews, debug toggles, and local tools that
+          want to render a registered component instead of plain text.
+        </p>
+      </section>
+
+      <section>
+        <h2>Inline Form Embed</h2>
+        <div class="dynamic-form-demo-toolbar">
+          <button type="button" id="dynamic-form-preview" class="dynamic-form-demo-button">
+            Preview form (no LLM)
+          </button>
+          <span class="dynamic-form-demo-toolbar-hint">
+            Renders the same DynamicForm bubble the AI would emit.
+          </span>
+        </div>
+        <div class="embedded-target" id="dynamic-form-inline"></div>
+      </section>
+    </main>
+
+    <div id="dynamic-form-launcher"></div>
+    <script type="module" src="/src/dynamic-form-demo.ts"></script>
+  </body>
+</html>

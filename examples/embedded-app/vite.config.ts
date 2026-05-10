@@ -272,7 +272,7 @@ export default defineConfig({
         Object.entries({
         main: path.resolve(__dirname, 'index.html'),
         'action-middleware': path.resolve(__dirname, 'action-middleware.html'),
-        json: path.resolve(__dirname, 'json.html'),
+        'dynamic-form': path.resolve(__dirname, 'dynamic-form.html'),
         theme: path.resolve(__dirname, 'theme.html'),
         products: path.resolve(__dirname, 'products.html'),
         'custom-components': path.resolve(__dirname, 'custom-components.html'),

@@ -30,7 +30,7 @@ Tweak `src/main.ts` to experiment with different configuration presets, launcher
   - Basic chat functionality
 
 ### Dynamic Forms Demo
-- **Dynamic Forms page**: `http://localhost:5173/json.html`
+- **Dynamic Forms page**: `http://localhost:5173/dynamic-form.html`
   - Demonstrates AI-generated dynamic forms using the component middleware
   - The AI generates form definitions with custom fields, and the `DynamicForm` component renders them
   - Forms are fully themeable via `config.formStyles`
