@@ -118,8 +118,23 @@ const code = generateCodeSnippet(config, 'esm', {
 | `actionHandlers` | `Array<(action, ctx) => result>` | Custom action handlers for structured responses |
 | `actionParsers` | `Array<(ctx) => action>` | Custom parsers to extract actions from messages |
 | `postprocessMessage` | `(ctx) => string` | Custom message postprocessor (overrides default) |
-| `contextProviders` | `Array<() => context>` | Additional context providers for requests |
+| `contextProviders` | `Array<() => context>` | Per-request input providers. Each provider returns an object that is merged onto `payload.inputs`, where Runtype's dispatch API consumes it as `{{inputs.X}}` template variables in agent system prompts and flow steps. The merged object is also mirrored to `payload.context` for back-compat with older middleware; the alias will be removed after one release. |
 | `streamParser` | `() => StreamParser` | Custom stream parser factory |
+
+## How `contextProviders` reaches the agent / flow
+
+Each provider receives `{ messages, config }` and returns an object. The widget
+aggregates the returned objects (later providers override earlier keys on
+collision) and sends them on `payload.inputs`. Runtype's dispatch API
+substitutes `{{inputs.X}}` into the agent's `systemPrompt` (and into flow
+prompt-step templates), and the runtime additionally emits the resolved
+`inputs` to the model in a separate, non-cached `<runtime_state>` system
+block so the static system prompt stays cacheable for Anthropic prompt
+caching.
+
+If you need to *transform* the payload right before it leaves the browser
+(redact PII, add user-visible message bubbles, etc.), use `requestMiddleware`
+instead — it runs after `contextProviders` and can rewrite any field.
 
 ## Hook Format Notes
 
