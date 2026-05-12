@@ -33,7 +33,6 @@ import {
 import type {
   AgentWidgetStorageAdapter,
   AgentWidgetStoredState,
-  AgentWidgetRequestPayload,
   AgentWidgetActionHandler
 } from "@runtypelabs/persona";
 
@@ -1130,17 +1129,10 @@ const config: AgentWidgetConfig = {
   ],
   storageAdapter: createBakeryStorageAdapter(),
   contextProviders: [pageContextProvider],
-  // Bakery flow substitutes only **inputs** (see BAKERY_ASSISTANT_FLOW) — no duplicate metadata.
-  requestMiddleware: ({ payload }) => {
-    if (!payload.context) {
-      return payload;
-    }
-    return {
-      ...payload,
-      inputs: payload.context,
-      context: undefined
-    } as AgentWidgetRequestPayload & { inputs?: Record<string, unknown> };
-  },
+  // The widget now writes contextProviders output directly to
+  // `payload.inputs` (see packages/widget/src/client.ts), so no
+  // remap middleware is needed. Runtype substitutes `{{inputs.X}}`
+  // from this payload into the bakery flow.
   launcher: {
     ...DEFAULT_WIDGET_CONFIG.launcher,
     enabled: true,
