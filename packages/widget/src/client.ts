@@ -906,6 +906,13 @@ export class AgentWidgetClient {
       );
 
       if (Object.keys(contextAggregate).length) {
+        // Primary destination: Runtype's API consumes `inputs` and substitutes
+        // `{{inputs.X}}` into agent/flow templates. `context` is kept as a
+        // back-compat alias for existing `requestMiddleware` implementations
+        // that read `payload.context` directly (e.g. older bakery demos).
+        // Both fields carry the same value for one release; `context` will
+        // be removed after deprecation.
+        payload.inputs = contextAggregate;
         payload.context = contextAggregate;
       }
     }
@@ -959,6 +966,12 @@ export class AgentWidgetClient {
       );
 
       if (Object.keys(contextAggregate).length) {
+        // Primary destination: Runtype's API consumes `inputs` and substitutes
+        // `{{inputs.X}}` into agent/flow templates. `context` is kept as a
+        // back-compat alias for existing `requestMiddleware` implementations
+        // that read `payload.context` directly. Both fields carry the same
+        // value for one release; `context` will be removed after deprecation.
+        payload.inputs = contextAggregate;
         payload.context = contextAggregate;
       }
     }
