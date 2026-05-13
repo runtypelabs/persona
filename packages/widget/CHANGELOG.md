@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 3.21.1
+
+### Patch Changes
+
+- dcb2c8a: Show the typing indicator immediately after answering an `ask_user_question` (and after approving/denying a tool), so the gap between the user's click and the next streamed token no longer feels broken.
+
 ## 3.21.0
 
 ### Minor Changes
