@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" />
+  <title>Advanced Examples — Persona</title>
+</head>
+<body>
+  <main class="shell-main">
+    <header class="title-strip">
+      <h1>Advanced Examples</h1>
+      <p>Configuration patterns, plugin hooks, and integration recipes. Start with the highlighted demos, then explore patterns as you need them.</p>
+    </header>
+
+    <div id="advanced-tiers"></div>
+  </main>
+
+  <script type="module">
+    import {
+      ADVANCED_EXAMPLES,
+      TIER_LABELS,
+      TIER_ORDER,
+      renderExamplesShell,
+    } from "/src/examples-nav.ts";
+
+    renderExamplesShell();
+
+    const TIER_BLURBS = {
+      start: "Evaluate Persona's biggest features first. Each runs without configuration.",
+      patterns: "Drop-in recipes for specific behaviors — approval gates, attachments, focus control, theming, and more.",
+      reference: "Catalogs and debugging surfaces. Useful when wiring up the widget against your own backend.",
+    };
+
+    const root = document.getElementById("advanced-tiers");
+    if (root) {
+      root.innerHTML = TIER_ORDER.map((tier) => {
+        const entries = ADVANCED_EXAMPLES.filter((e) => e.tier === tier);
+        if (entries.length === 0) return "";
+
+        const cards = entries.map((entry) => {
+          const badge = entry.badge
+            ? `<span class="nav-badge">${entry.badge}</span>`
+            : "";
+          const tags = entry.tags
+            .map((t) => `<span class="demo-card-tag">${t}</span>`)
+            .join("");
+          const modes = entry.modes
+            .map((m) => `<span class="demo-card-mode">${m}</span>`)
+            .join("");
+          return `<a class="demo-card" href="${entry.href}">
+            <h3 class="demo-card-title">${entry.title}${badge}</h3>
+            <p class="demo-card-subtitle">${entry.blurb}</p>
+            <div class="demo-card-foot">
+              <div class="demo-card-tags">${tags}</div>
+              <div class="demo-card-modes" title="Supported mount modes">${modes}</div>
+            </div>
+          </a>`;
+        }).join("");
+
+        return `<section class="gallery-tier">
+          <h2 class="gallery-tier-heading">
+            <span>${TIER_LABELS[tier]}</span>
+            <span class="gallery-tier-heading-count">${entries.length} demo${entries.length === 1 ? "" : "s"}</span>
+          </h2>
+          <p class="gallery-tier-blurb">${TIER_BLURBS[tier]}</p>
+          <div class="gallery-tier-grid">${cards}</div>
+        </section>`;
+      }).join("");
+    }
+  </script>
+</body>
+</html>

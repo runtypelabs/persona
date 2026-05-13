@@ -5,11 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
-  <title>Event Stream Testing</title>
+  <title>Event Inspector</title>
   <style>
-    .section {
-      margin-bottom: 1.25rem;
-    }
+    .section { margin-bottom: 1.25rem; }
     .section h3 {
       margin: 0 0 0.5rem 0;
       font-size: 0.9rem;
@@ -21,24 +19,6 @@
       gap: 0.5rem;
       margin-bottom: 0.5rem;
       align-items: center;
-    }
-    .field-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      align-items: center;
-      margin-bottom: 0.75rem;
-    }
-    .field-row label {
-      font-size: 0.85rem;
-      color: var(--muted);
-    }
-    .field-row select {
-      padding: 0.35rem 0.5rem;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--text);
     }
     .log-panel {
       background: var(--accent);
@@ -52,103 +32,78 @@
       margin-top: 0.5rem;
       display: none;
     }
-    .widget-frame {
-      overflow: hidden;
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-    }
-    #es-inline-widget {
-      height: 100%;
-    }
   </style>
 </head>
 <body>
-  <a href="/" class="back-link">&larr; Back to examples</a>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Event Inspector</h1>
+          <p>
+            Exercise <code>showEventStream</code>, <code>hideEventStream</code>, <code>isEventStreamVisible</code>,
+            and the <code>persona:showEventStream</code> / <code>persona:hideEventStream</code> window events.
+            Use the toggle below to test against an inline mount or a floating launcher.
+          </p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
 
-  <div class="layout">
-    <div class="info-panel">
-      <h1>Event Stream Testing</h1>
-      <p>
-        Exercise <code>showEventStream</code>, <code>hideEventStream</code>, <code>isEventStreamVisible</code>,
-        <code>persona:showEventStream</code> / <code>persona:hideEventStream</code> window events, and
-        <code>instanceId</code> scoping. The page mounts an <strong>inline</strong> widget and a <strong>launcher</strong>
-        so you can compare behavior side by side.
-      </p>
+        <div class="section">
+          <h3>Launcher panel</h3>
+          <p style="font-size: 0.78rem; color: var(--muted); margin: 0 0 0.5rem 0;">Only effective when mounted as a launcher.</p>
+          <div class="btn-row">
+            <button class="btn btn-primary" type="button" id="es-open-launcher">Open launcher</button>
+            <button class="btn" type="button" id="es-toggle-launcher">Toggle launcher</button>
+          </div>
+        </div>
 
-      <div class="section">
-        <h3>Target</h3>
-        <div class="field-row">
-          <label for="es-target-widget">Applies to controller methods &amp; load messages</label>
-          <select id="es-target-widget">
-            <option value="inline">Inline widget</option>
-            <option value="launcher">Launcher widget</option>
-          </select>
+        <div class="section">
+          <h3>Controller methods</h3>
+          <div class="btn-row">
+            <button class="btn btn-primary" type="button" id="es-show">Show event stream</button>
+            <button class="btn" type="button" id="es-hide">Hide event stream</button>
+            <button class="btn" type="button" id="es-check">Check visibility</button>
+          </div>
         </div>
-      </div>
 
-      <div class="section">
-        <h3>Launcher panel</h3>
-        <div class="btn-row">
-          <button class="btn btn-primary" type="button" id="es-open-launcher">Open launcher</button>
-          <button class="btn" type="button" id="es-toggle-launcher">Toggle launcher</button>
+        <div class="section">
+          <h3>Window events</h3>
+          <div class="btn-row">
+            <button class="btn" type="button" id="es-win-show-all">Show all</button>
+            <button class="btn" type="button" id="es-win-hide-all">Hide all</button>
+            <button class="btn" type="button" id="es-win-show-wrong">Show wrong ID</button>
+          </div>
         </div>
-      </div>
 
-      <div class="section">
-        <h3>Controller methods</h3>
-        <div class="btn-row">
-          <button class="btn btn-primary" type="button" id="es-show">Show event stream</button>
-          <button class="btn" type="button" id="es-hide">Hide event stream</button>
-          <button class="btn" type="button" id="es-check">Check visibility</button>
+        <div class="section">
+          <h3>Event listeners</h3>
+          <div class="btn-row">
+            <button class="btn" type="button" id="es-listen">Register listeners</button>
+          </div>
+          <div id="es-log" class="log-panel">
+            <pre id="es-log-pre" style="margin:0; white-space: pre-wrap;"></pre>
+          </div>
         </div>
-      </div>
 
-      <div class="section">
-        <h3>Window events</h3>
-        <div class="btn-row">
-          <button class="btn" type="button" id="es-win-show-all">Show all (window)</button>
-          <button class="btn" type="button" id="es-win-hide-all">Hide all (window)</button>
-          <button class="btn" type="button" id="es-win-show-inline">Show inline only</button>
-          <button class="btn" type="button" id="es-win-show-launcher">Show launcher only</button>
-          <button class="btn" type="button" id="es-win-show-wrong">Show wrong ID</button>
+        <div class="section">
+          <h3>Synthetic load</h3>
+          <p style="font-size: 0.85rem; color: var(--muted); margin: 0 0 0.5rem 0;">
+            Injects 1000 alternating messages into the active widget.
+          </p>
+          <div class="btn-row">
+            <button class="btn" type="button" id="es-load-messages">Load 1000 messages</button>
+          </div>
         </div>
-      </div>
+      </aside>
 
-      <div class="section">
-        <h3>Event listeners</h3>
-        <div class="btn-row">
-          <button class="btn" type="button" id="es-listen">Register listeners</button>
-        </div>
-        <div id="es-log" class="log-panel">
-          <pre id="es-log-pre" style="margin:0; white-space: pre-wrap;"></pre>
-        </div>
-      </div>
-
-      <div class="section">
-        <h3>Synthetic load</h3>
-        <p style="font-size: 0.85rem; color: var(--muted); margin: 0 0 0.5rem 0;">
-          Injects 1000 alternating messages and simulated stream events into the selected widget (opens the launcher first if that target is selected).
-        </p>
-        <div class="btn-row">
-          <button class="btn" type="button" id="es-load-messages">Load 1000 messages</button>
-        </div>
-      </div>
+      <div class="stage-widget"></div>
     </div>
-
-    <div class="panel" style="display: flex; flex-direction: column;">
-      <div style="position: relative; flex: 1 1 0%; min-height: 0;">
-        <div class="widget-frame">
-          <div id="es-inline-widget"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="launcher-root" style="position: fixed; bottom: 1rem; right: 1rem; z-index: 50;"></div>
+  </main>
 
   <script type="module" src="/src/event-stream-testing.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("event-stream-testing");
+  </script>
 </body>
 </html>

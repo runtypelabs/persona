@@ -908,10 +908,12 @@ export class AgentWidgetSession {
    */
   public async connectStream(
     stream: ReadableStream<Uint8Array>,
-    options?: { assistantMessageId?: string }
+    options?: { assistantMessageId?: string; allowReentry?: boolean }
   ): Promise<void> {
-    if (this.streaming) return;
-    this.abortController?.abort();
+    if (this.streaming && !options?.allowReentry) return;
+    if (!options?.allowReentry) {
+      this.abortController?.abort();
+    }
 
     // Finalize any stale streaming messages from the previous stream
     // (e.g., tool messages interrupted by approval pause)
@@ -971,6 +973,13 @@ export class AgentWidgetSession {
     };
     this.upsertMessage(updatedMessage);
 
+    // Show the standalone typing indicator immediately while we wait for the
+    // approval round-trip. Install an abortController so cancel() works during
+    // the silent gap. See `resolveAskUserQuestion` for the same pattern.
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    this.setStreaming(true);
+
     // 2. Call onDecision callback if provided, otherwise use client.resolveApproval()
     const approvalConfig = this.config.approval;
     const onDecision = approvalConfig && typeof approvalConfig === 'object' ? approvalConfig.onDecision : undefined;
@@ -1015,23 +1024,44 @@ export class AgentWidgetSession {
         }
 
         if (stream) {
-          await this.connectStream(stream);
-        } else if (decision === 'denied') {
-          // No stream body for denied — inject a denial message
-          this.appendMessage({
-            id: `denial-${approval.id}`,
-            role: "assistant",
-            content: "Tool execution was denied by user.",
-            createdAt: new Date().toISOString(),
-            streaming: false,
-            sequence: this.nextSequence(),
-          });
+          await this.connectStream(stream, { allowReentry: true });
+        } else {
+          if (decision === 'denied') {
+            // No stream body for denied — inject a denial message
+            this.appendMessage({
+              id: `denial-${approval.id}`,
+              role: "assistant",
+              content: "Tool execution was denied by user.",
+              createdAt: new Date().toISOString(),
+              streaming: false,
+              sequence: this.nextSequence(),
+            });
+          }
+          // No body to pipe — drop the pre-set streaming flag so the indicator
+          // doesn't linger forever.
+          this.setStreaming(false);
+          this.abortController = null;
         }
+      } else {
+        // onDecision returned void / no response — drop the pre-set flag.
+        this.setStreaming(false);
+        this.abortController = null;
       }
     } catch (error) {
-      this.callbacks.onError?.(
-        error instanceof Error ? error : new Error(String(error))
-      );
+      const isAbortError =
+        error instanceof Error &&
+        (error.name === 'AbortError' ||
+         error.message.includes('aborted') ||
+         error.message.includes('abort'));
+
+      this.setStreaming(false);
+      this.abortController = null;
+
+      if (!isAbortError) {
+        this.callbacks.onError?.(
+          error instanceof Error ? error : new Error(String(error))
+        );
+      }
     }
   }
 
@@ -1143,6 +1173,15 @@ export class AgentWidgetSession {
     }
     this.markAskUserQuestionResolved(toolMessage, structuredAnswers);
 
+    // Show the standalone typing indicator immediately — the network round-trip
+    // to /resume is otherwise silent, which reads as broken. The render
+    // condition in ui.ts already shows the indicator once streaming flips true
+    // and the last message is a user bubble (the answer we inject below).
+    // Install an abortController so cancel() works during this silent gap.
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    this.setStreaming(true);
+
     // Inject Q→A pair messages — one assistant bubble per question, one user
     // bubble per answer — so the transcript reads like a normal conversation.
     // The original ask_user_question tool message is suppressed by the
@@ -1214,12 +1253,30 @@ export class AgentWidgetSession {
       }
 
       if (response.body) {
-        await this.connectStream(response.body);
+        await this.connectStream(response.body, { allowReentry: true });
+      } else {
+        // No body to pipe — drop the pre-set streaming flag so the indicator
+        // doesn't linger forever.
+        this.setStreaming(false);
+        this.abortController = null;
       }
     } catch (error) {
-      this.callbacks.onError?.(
-        error instanceof Error ? error : new Error(String(error))
-      );
+      // Mirror sendMessage: a cancel() during the await aborts the controller
+      // and surfaces an AbortError — don't treat that as a real failure.
+      const isAbortError =
+        error instanceof Error &&
+        (error.name === 'AbortError' ||
+         error.message.includes('aborted') ||
+         error.message.includes('abort'));
+
+      this.setStreaming(false);
+      this.abortController = null;
+
+      if (!isAbortError) {
+        this.callbacks.onError?.(
+          error instanceof Error ? error : new Error(String(error))
+        );
+      }
     }
   }
 

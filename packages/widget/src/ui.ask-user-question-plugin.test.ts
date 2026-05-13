@@ -598,6 +598,48 @@ describe("renderAskUserQuestion plugin hook", () => {
     controller.destroy();
   });
 
+  it("shows the standalone typing indicator immediately after picking an option (resumeFlow pending)", async () => {
+    // Defer the fetch response so we observe the DOM during the silent gap
+    // between the user's pick and the next streamed token.
+    let resolveFetch!: (value: unknown) => void;
+    const fetchPromise = new Promise((res) => { resolveFetch = res; });
+    global.fetch = vi.fn().mockImplementation(() => fetchPromise) as unknown as typeof fetch;
+
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+
+    injectAskUserQuestion(controller);
+
+    // Pre-condition: no typing indicator before the user picks.
+    expect(mount.querySelector('[data-typing-indicator="true"]')).toBeNull();
+
+    const sheet = mount.querySelector<HTMLElement>("[data-persona-ask-sheet-for]")!;
+    (sheet.querySelector('[data-option-label="Hobbyists"]') as HTMLElement).click();
+
+    // Let the synchronous setStreaming(true) + injectMessage path run through.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // The typing indicator should be visible while resumeFlow is pending.
+    expect(mount.querySelector('[data-typing-indicator="true"]')).not.toBeNull();
+
+    // Drain the pending fetch so the test doesn't leak.
+    resolveFetch({
+      ok: true,
+      body: new ReadableStream({
+        start(c) {
+          c.enqueue(new TextEncoder().encode('data: {"type":"flow_complete","success":true}\n\n'));
+          c.close();
+        },
+      }),
+    });
+
+    controller.destroy();
+  });
+
   it("wires resolve(answer) to session.resolveAskUserQuestion via /resume", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

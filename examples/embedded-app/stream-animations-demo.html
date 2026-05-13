@@ -7,24 +7,24 @@
     <link rel="icon" href="/favicon.ico" />
     <title>Stream Animations — Persona</title>
     <style>
-      body {
-        padding: 1.5rem;
-        max-width: 1200px;
-        margin: 0 auto;
-      }
-      h1 { margin: 0 0 0.25rem 0; }
-      .subtitle { color: var(--muted); margin: 0 0 1.5rem 0; font-size: 0.875rem; }
-
       .controls {
-        background: var(--card);
-        border-radius: var(--radius-lg);
-        padding: 1.25rem;
-        box-shadow: var(--shadow-md);
         display: flex;
         flex-direction: column;
         gap: 1rem;
-        position: sticky;
-        top: 1.5rem;
+      }
+      .preview-hint {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        background: var(--card);
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        color: var(--muted);
+        text-align: center;
+        font-size: 0.9rem;
+        line-height: 1.5;
       }
       .section { display: flex; flex-direction: column; gap: 0.5rem; }
       .section label {
@@ -112,15 +112,17 @@
   <body>
     <div id="stream-anim-launcher-root" aria-hidden="true"></div>
 
-    <h1>Stream Animations</h1>
-    <p class="subtitle">
-      Switch <code>features.streamAnimation.type</code> on the widget, then replay a canned streamed reply to
-      see the effect. Re-applies config each time so the widget is reset.
-    </p>
+    <main class="shell-main">
+      <div class="stage">
+        <aside class="stage-controls">
+          <header class="demo-meta">
+            <h1>Stream Animations</h1>
+            <p>Switch <code>features.streamAnimation.type</code> on the widget, then replay a canned streamed reply. Config re-applies each time so the widget resets.</p>
+          </header>
 
-    <div class="controls">
-      <div class="section">
-        <label>Animation type</label>
+          <div class="controls">
+          <div class="section">
+            <label>Animation type</label>
         <div class="mode-group" id="type-selector">
           <button class="mode-btn active" data-type="none">None</button>
           <button class="mode-btn" data-type="typewriter">Typewriter</button>
@@ -180,11 +182,21 @@
         </div>
       </div>
 
-      <div class="section">
-        <label>Log</label>
-        <div id="log"></div>
+          <div class="section">
+            <label>Log</label>
+            <div id="log"></div>
+          </div>
+          </div>
+        </aside>
+
+        <div class="stage-widget">
+          <div class="preview-hint">
+            The widget mounts as a floating launcher in the bottom-right corner.<br>
+            Pick an animation type and click "Replay stream" to preview.
+          </div>
+        </div>
       </div>
-    </div>
+    </main>
 
     <script type="module">
       import "@runtypelabs/persona/widget.css";
@@ -413,6 +425,10 @@ Both were captured at *golden hour*.`,
       replyTextarea.value = PRESETS.default;
       createWidget();
       log("Ready — pick a type and click Replay.");
+    </script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("stream-animations-demo");
     </script>
   </body>
 </html>

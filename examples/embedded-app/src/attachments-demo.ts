@@ -1,11 +1,14 @@
 import "@runtypelabs/persona/widget.css";
 import {
-  createAgentExperience,
   createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
+  type AgentWidgetConfig,
+  type AgentWidgetController,
+  type AgentWidgetAttachmentsConfig,
 } from "@runtypelabs/persona";
-import type { AgentWidgetController, AgentWidgetAttachmentsConfig } from "@runtypelabs/persona";
+import { setupMountMode, runWidgetMount } from "./mount-mode";
+import type { Mode } from "./examples-nav";
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl = import.meta.env.VITE_PROXY_URL
@@ -24,11 +27,7 @@ const ALLOWED_TYPE_PRESETS: Record<string, string[]> = {
   ],
 };
 
-// ---------------------------------------------------------------------------
-// Log helper
-// ---------------------------------------------------------------------------
 const logEl = document.getElementById("log");
-
 function log(msg: string) {
   if (!logEl) return;
   const ts = new Date().toLocaleTimeString("en-US", { hour12: false });
@@ -38,12 +37,9 @@ function log(msg: string) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-// ---------------------------------------------------------------------------
-// Read config from the UI controls
-// ---------------------------------------------------------------------------
 function readAttachmentsConfig(): AgentWidgetAttachmentsConfig {
   const maxFiles = Number(
-    (document.getElementById("cfg-max-files") as HTMLSelectElement).value
+    (document.getElementById("cfg-max-files") as HTMLSelectElement).value,
   );
   const maxFileSize =
     Number((document.getElementById("cfg-max-size") as HTMLSelectElement).value) * MB;
@@ -79,28 +75,23 @@ function readAttachmentsConfig(): AgentWidgetAttachmentsConfig {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Widget lifecycle
-// ---------------------------------------------------------------------------
-let controller: AgentWidgetController | null = null;
+let activeController: AgentWidgetController | null = null;
+let currentMode: Mode = "inline";
 
-function mountWidget() {
-  const mount = document.getElementById("attachments-widget");
-  if (!mount) throw new Error("Widget mount not found");
-
-  mount.innerHTML = "";
-
+const buildConfig = (mode: Mode): AgentWidgetConfig => {
+  const isLauncher = mode === "launcher";
   const attachments = readAttachmentsConfig();
-  log(`Mounted — maxFiles=${attachments.maxFiles}, maxSize=${(attachments.maxFileSize ?? 0) / MB}MB, icon=${attachments.buttonIconName}`);
-
-  controller = createAgentExperience(mount, {
+  log(`Mounted (${mode}) — maxFiles=${attachments.maxFiles}, maxSize=${(attachments.maxFileSize ?? 0) / MB}MB, icon=${attachments.buttonIconName}`);
+  return {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
-    storageAdapter: createLocalStorageAdapter("persona-state-attachments-demo"),
+    storageAdapter: createLocalStorageAdapter(
+      `persona-state-attachments-demo-${mode}`,
+    ),
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
-      enabled: false,
-      width: "100%",
+      enabled: isLauncher,
+      width: isLauncher ? "min(420px, 95vw)" : "100%",
     },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
@@ -114,17 +105,23 @@ function mountWidget() {
     ],
     attachments,
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
-  });
+  };
+};
 
-  (window as unknown as { attachmentsController: typeof controller }).attachmentsController =
-    controller;
-}
+setupMountMode({
+  slug: "attachments-demo",
+  modes: ["inline", "launcher"],
+  mount: (mode, { stage }) => {
+    currentMode = mode;
+    const { controller, teardown } = runWidgetMount(mode, stage, buildConfig(mode));
+    activeController = controller;
+    return () => {
+      teardown();
+      activeController = null;
+    };
+  },
+});
 
-mountWidget();
-
-// ---------------------------------------------------------------------------
-// Sync blur dropdown when a "no blur" background preset is picked
-// ---------------------------------------------------------------------------
 const bgSelect = document.getElementById("cfg-drop-bg") as HTMLSelectElement | null;
 const blurSelect = document.getElementById("cfg-drop-blur") as HTMLSelectElement | null;
 bgSelect?.addEventListener("change", () => {
@@ -134,13 +131,8 @@ bgSelect?.addEventListener("change", () => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Apply button — destroy and re-create with new config
-// ---------------------------------------------------------------------------
 document.getElementById("apply-config")?.addEventListener("click", () => {
-  if (controller) {
-    controller.destroy();
-    controller = null;
-  }
-  mountWidget();
+  // Rebuild the active mode's widget with the latest attachment config.
+  activeController?.update({ attachments: readAttachmentsConfig() } as Partial<AgentWidgetConfig>);
+  log(`Applied new config to ${currentMode} widget`);
 });

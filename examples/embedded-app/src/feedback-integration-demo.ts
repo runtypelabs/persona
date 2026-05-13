@@ -1,35 +1,20 @@
-/**
- * Feedback Integration Demo
- *
- * This demo shows how the persona widget now supports client-provided
- * message IDs for feedback tracking with the Runtype API.
- *
- * Key changes:
- * 1. Message IDs are generated on the client before sending
- * 2. Both user and assistant messages have trackable IDs
- * 3. Feedback (upvote/downvote/copy) is automatically sent to the API in client token mode
- * 4. CSAT (1-5) and NPS (0-10) feedback can be collected programmatically
- */
-
 import "@runtypelabs/persona/widget.css";
 import {
-  createAgentExperience,
   createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
-  generateMessageId  // New utility for custom ID generation
+  generateMessageId,
+  type AgentWidgetConfig,
+  type AgentWidgetController,
+  type AgentWidgetMessage,
+  type AgentWidgetMessageFeedback,
 } from "@runtypelabs/persona";
-import type {
-  AgentWidgetMessage,
-  AgentWidgetMessageFeedback,
-  ClientFeedbackRequest  // New type for feedback requests
-} from "@runtypelabs/persona";
+import { setupMountMode, runWidgetMount } from "./mount-mode";
+import type { Mode } from "./examples-nav";
 
-// Configuration
-const clientToken = import.meta.env.VITE_CLIENT_TOKEN || '';
-const apiUrl = import.meta.env.VITE_API_URL || 'https://api.runtype.com';
+const clientToken = import.meta.env.VITE_CLIENT_TOKEN || "";
+const apiUrl = import.meta.env.VITE_API_URL || "https://api.runtype.com";
 
-// Message actions config controls
 const cfgCopy = document.getElementById("cfg-copy") as HTMLInputElement;
 const cfgUpvote = document.getElementById("cfg-upvote") as HTMLInputElement;
 const cfgDownvote = document.getElementById("cfg-downvote") as HTMLInputElement;
@@ -37,7 +22,6 @@ const cfgVisibility = document.getElementById("cfg-visibility") as HTMLSelectEle
 const cfgLayout = document.getElementById("cfg-layout") as HTMLSelectElement;
 const cfgAlign = document.getElementById("cfg-align") as HTMLSelectElement;
 
-// Stats tracking
 const stats = { upvotes: 0, downvotes: 0, copies: 0, csat: null as number | null, nps: null as number | null };
 
 function updateStats() {
@@ -46,12 +30,11 @@ function updateStats() {
   const copyEl = document.getElementById("copy-count");
   const csatEl = document.getElementById("csat-rating");
   const npsEl = document.getElementById("nps-rating");
-  
   if (upvoteEl) upvoteEl.textContent = String(stats.upvotes);
   if (downvoteEl) downvoteEl.textContent = String(stats.downvotes);
   if (copyEl) copyEl.textContent = String(stats.copies);
-  if (csatEl) csatEl.textContent = stats.csat !== null ? `${stats.csat}/5` : '-';
-  if (npsEl) npsEl.textContent = stats.nps !== null ? `${stats.nps}/10` : '-';
+  if (csatEl) csatEl.textContent = stats.csat !== null ? `${stats.csat}/5` : "-";
+  if (npsEl) npsEl.textContent = stats.nps !== null ? `${stats.nps}/10` : "-";
 }
 
 function formatTime(): string {
@@ -61,10 +44,8 @@ function formatTime(): string {
 function addLogEntry(type: string, details: string) {
   const container = document.getElementById("log-container");
   if (!container) return;
-  
   const emptyState = container.querySelector(".empty-state");
   if (emptyState) emptyState.remove();
-
   const entry = document.createElement("div");
   entry.className = `log-entry ${type}`;
   entry.innerHTML = `
@@ -72,9 +53,7 @@ function addLogEntry(type: string, details: string) {
     <div style="margin-top: 0.25rem; opacity: 0.7;">${details}</div>
     <div class="log-time">${formatTime()}</div>
   `;
-  
   container.insertBefore(entry, container.firstChild);
-
   while (container.children.length > 50) {
     container.removeChild(container.lastChild!);
   }
@@ -93,125 +72,116 @@ function getMessageActionsConfig() {
       stats.copies++;
       updateStats();
       addLogEntry("copy", `Message ID: ${message.id}`);
-      console.log("[Feedback Demo] Message copied:", message.id);
     },
     onFeedback: (feedback: AgentWidgetMessageFeedback) => {
-      if (feedback.type === "upvote") {
-        stats.upvotes++;
-      } else {
-        stats.downvotes++;
-      }
+      if (feedback.type === "upvote") stats.upvotes++;
+      else stats.downvotes++;
       updateStats();
       addLogEntry(feedback.type, `Message ID: ${feedback.messageId}`);
-      console.log("[Feedback Demo] Feedback received:", feedback.type, feedback.messageId);
-    }
+    },
   };
 }
 
-// Initialize widget
-const mount = document.getElementById("feedback-widget");
-if (!mount) throw new Error("Widget mount not found");
+let activeController: AgentWidgetController | null = null;
 
-const controller = createAgentExperience(mount, {
-  ...DEFAULT_WIDGET_CONFIG,
-  // Use client token for direct API communication with feedback support
-  clientToken: clientToken || undefined,
-  apiUrl: apiUrl,
-  storageAdapter: createLocalStorageAdapter("persona-state-feedback-integration-demo"),
-  launcher: {
-    ...DEFAULT_WIDGET_CONFIG.launcher,
-    enabled: false,
-    width: "100%"
+const buildConfig = (mode: Mode): AgentWidgetConfig => {
+  const isLauncher = mode === "launcher";
+  return {
+    ...DEFAULT_WIDGET_CONFIG,
+    clientToken: clientToken || undefined,
+    apiUrl,
+    storageAdapter: createLocalStorageAdapter(
+      `persona-state-feedback-integration-demo-${mode}`,
+    ),
+    launcher: {
+      ...DEFAULT_WIDGET_CONFIG.launcher,
+      enabled: isLauncher,
+      width: isLauncher ? "min(420px, 95vw)" : "100%",
+    },
+    theme: {
+      ...DEFAULT_WIDGET_CONFIG.theme,
+      primary: "#0f172a",
+      accent: "#6366f1",
+      surface: "#ffffff",
+    },
+    copy: {
+      ...DEFAULT_WIDGET_CONFIG.copy,
+      welcomeTitle: "Feedback Integration Demo",
+      welcomeSubtitle: "Test message feedback with client-generated IDs!",
+      inputPlaceholder: "Type a message...",
+    },
+    suggestionChips: [
+      "Tell me a joke",
+      "Explain quantum computing",
+      "Write a haiku about coding",
+    ],
+    messageActions: getMessageActionsConfig(),
+    onSessionInit: (session) => {
+      addLogEntry("session", `Session ID: ${session.sessionId.substring(0, 20)}...`);
+    },
+    onSessionExpired: () => {
+      addLogEntry("session", "Session expired - please refresh");
+    },
+    postprocessMessage: ({ text }) => markdownPostprocessor(text),
+    debug: true,
+  };
+};
+
+setupMountMode({
+  slug: "feedback-integration-demo",
+  modes: ["inline", "launcher"],
+  mount: (mode, { stage }) => {
+    const { controller, teardown } = runWidgetMount(mode, stage, buildConfig(mode));
+    activeController = controller;
+    controller.on("message:copy", (message) => {
+      console.log("[Event] message:copy - ID:", message.id);
+    });
+    controller.on("message:feedback", (feedback) => {
+      console.log("[Event] message:feedback -", feedback.type, "for", feedback.messageId);
+    });
+    return () => {
+      teardown();
+      activeController = null;
+    };
   },
-  theme: {
-    ...DEFAULT_WIDGET_CONFIG.theme,
-    primary: "#0f172a",
-    accent: "#6366f1",
-    surface: "#ffffff"
-  },
-  copy: {
-    ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle: "Feedback Integration Demo",
-    welcomeSubtitle: "Test message feedback with client-generated IDs!",
-    inputPlaceholder: "Type a message..."
-  },
-  suggestionChips: [
-    "Tell me a joke",
-    "Explain quantum computing",
-    "Write a haiku about coding"
-  ],
-  
-  messageActions: getMessageActionsConfig(),
-  
-  // Session callbacks
-  onSessionInit: (session) => {
-    console.log("[Feedback Demo] Session initialized:", session.sessionId);
-    addLogEntry("session", `Session ID: ${session.sessionId.substring(0, 20)}...`);
-  },
-  
-  onSessionExpired: () => {
-    console.log("[Feedback Demo] Session expired");
-    addLogEntry("session", "Session expired - please refresh");
-  },
-  
-  postprocessMessage: ({ text }) => markdownPostprocessor(text),
-  debug: true
 });
 
-// Update widget when message actions config controls change
 for (const el of [cfgCopy, cfgUpvote, cfgDownvote, cfgVisibility, cfgLayout, cfgAlign]) {
   el.addEventListener("change", () => {
-    controller.update({ messageActions: getMessageActionsConfig() });
+    activeController?.update({ messageActions: getMessageActionsConfig() });
   });
 }
 
-// Event listeners for additional logging
-controller.on("message:copy", (message) => {
-  console.log("[Event] message:copy - ID:", message.id);
-});
-
-controller.on("message:feedback", (feedback) => {
-  console.log("[Event] message:feedback -", feedback.type, "for message:", feedback.messageId);
-});
-
-// CSAT/NPS button handlers
 document.getElementById("show-csat")?.addEventListener("click", () => {
-  controller.showCSATFeedback({
+  activeController?.showCSATFeedback({
     title: "How was your experience?",
     subtitle: "Rate your conversation",
     onSubmit: (rating, comment) => {
       stats.csat = rating;
       updateStats();
-      addLogEntry("csat", `Rating: ${rating}/5${comment ? ` - "${comment}"` : ''}`);
-      console.log("[CSAT] Submitted:", rating, comment);
+      addLogEntry("csat", `Rating: ${rating}/5${comment ? ` - "${comment}"` : ""}`);
     },
-    onDismiss: () => {
-      addLogEntry("csat", "Dismissed by user");
-    }
+    onDismiss: () => addLogEntry("csat", "Dismissed by user"),
   });
 });
 
 document.getElementById("show-nps")?.addEventListener("click", () => {
-  controller.showNPSFeedback({
+  activeController?.showNPSFeedback({
     title: "How likely are you to recommend us?",
     subtitle: "On a scale of 0 to 10",
     onSubmit: (rating, comment) => {
       stats.nps = rating;
       updateStats();
-      const category = rating >= 9 ? 'Promoter' : rating >= 7 ? 'Passive' : 'Detractor';
-      addLogEntry("nps", `Rating: ${rating}/10 (${category})${comment ? ` - "${comment}"` : ''}`);
-      console.log("[NPS] Submitted:", rating, comment);
+      const category = rating >= 9 ? "Promoter" : rating >= 7 ? "Passive" : "Detractor";
+      addLogEntry("nps", `Rating: ${rating}/10 (${category})${comment ? ` - "${comment}"` : ""}`);
     },
-    onDismiss: () => {
-      addLogEntry("nps", "Dismissed by user");
-    }
+    onDismiss: () => addLogEntry("nps", "Dismissed by user"),
   });
 });
 
-// Example: Programmatically submit feedback (useful for custom UI)
 document.getElementById("submit-csat-programmatic")?.addEventListener("click", async () => {
   try {
-    await controller.submitCSATFeedback(5, "Great experience!");
+    await activeController?.submitCSATFeedback(5, "Great experience!");
     stats.csat = 5;
     updateStats();
     addLogEntry("csat", "Programmatic: 5/5 - Great experience!");
@@ -222,7 +192,7 @@ document.getElementById("submit-csat-programmatic")?.addEventListener("click", a
 
 document.getElementById("submit-nps-programmatic")?.addEventListener("click", async () => {
   try {
-    await controller.submitNPSFeedback(9, "Highly recommend!");
+    await activeController?.submitNPSFeedback(9, "Highly recommend!");
     stats.nps = 9;
     updateStats();
     addLogEntry("nps", "Programmatic: 9/10 - Highly recommend!");
@@ -231,16 +201,8 @@ document.getElementById("submit-nps-programmatic")?.addEventListener("click", as
   }
 });
 
-// Example: Using the generateMessageId utility for custom tracking
 console.log("Example generated message IDs:");
 console.log("  User message ID:", generateMessageId());
 console.log("  User message ID:", generateMessageId());
 
-// Make controller available for debugging
-(window as unknown as { feedbackController: typeof controller }).feedbackController = controller;
-
-console.log("[Feedback Integration Demo] Ready");
-console.log("Client token mode:", !!clientToken);
-
-
-
+console.log("[Feedback Integration Demo] Ready. Client token mode:", !!clientToken);

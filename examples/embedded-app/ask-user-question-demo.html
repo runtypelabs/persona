@@ -7,35 +7,10 @@
     <link rel="icon" href="/favicon.ico" />
     <title>Ask User Question - Persona</title>
     <style>
-      body {
-        padding: 1.5rem;
-        max-width: 1400px;
-        margin: 0 auto;
-      }
-      h1 { margin: 0 0 0.25rem 0; }
-      .subtitle { color: var(--muted); margin: 0 0 1.5rem 0; font-size: 0.875rem; }
-
-      .layout {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        gap: 1.5rem;
-        align-items: start;
-      }
-
       .controls {
-        background: var(--card);
-        border-radius: var(--radius-lg);
-        padding: 1.25rem;
-        box-shadow: var(--shadow-md);
         display: flex;
         flex-direction: column;
         gap: 1rem;
-        align-self: start;
-      }
-      .controls h2 {
-        font-size: 0.9375rem;
-        margin: 0;
-        color: var(--foreground);
       }
       .section { display: flex; flex-direction: column; gap: 0.5rem; }
       .section label {
@@ -106,221 +81,118 @@
       #log .dismissed { color: #f87171; }
       #log .info { color: #60a5fa; }
 
-      /* Right column — bare container so the widget sits directly on the
-         page background. The widget brings its own surface, header, and
-         shadow, so wrapping it in another card was redundant chrome. */
-      .widget-shell {
-        height: 680px;
-      }
-      #widget-mount {
-        height: 100%;
-        width: 100%;
-      }
-
-      /* Mobile-only summary bar — hidden on desktop. */
-      .controls-summary { display: none; }
-      .controls-close { display: none; }
-      .controls-backdrop { display: none; }
-
-      @media (max-width: 768px) {
-        body { padding: 0.75rem; }
-        .subtitle { margin-bottom: 1rem; }
-
-        .layout {
-          grid-template-columns: 1fr;
-          gap: 0.75rem;
-        }
-
-        /* Compact summary bar visible above the widget on mobile. */
-        .controls-summary {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-          padding: 0.6rem 0.75rem;
-          background: var(--card);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-lg);
-          box-shadow: var(--shadow-md);
-        }
-        .summary-chip {
-          font-size: 0.7rem;
-          font-weight: 600;
-          letter-spacing: 0.03em;
-          color: var(--muted);
-          background: transparent;
-          padding: 0.25rem 0.55rem;
-          border: 1px solid var(--border);
-          border-radius: 999px;
-          white-space: nowrap;
-        }
-        .summary-edit {
-          margin-left: auto;
-          padding: 0.4rem 0.85rem;
-          font-size: 0.8125rem;
-          font-weight: 600;
-          border-radius: var(--radius-sm);
-          border: 1px solid #7c3aed;
-          background: #7c3aed;
-          color: #fafafa;
-          cursor: pointer;
-        }
-        .summary-edit:hover { filter: brightness(0.95); }
-
-        /* Controls become a left-side drawer over the widget. */
-        .controls {
-          position: fixed;
-          top: 0;
-          left: 0;
-          bottom: 0;
-          width: min(420px, 92vw);
-          margin: 0;
-          border-radius: 0;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-          padding: 1rem 1rem 1.25rem;
-          overflow-y: auto;
-          transform: translateX(-100%);
-          transition: transform 240ms ease;
-          z-index: 50;
-        }
-        body.controls-open .controls { transform: translateX(0); }
-
-        .controls-close {
-          display: inline-flex;
-          align-self: flex-end;
-          width: 2rem;
-          height: 2rem;
-          align-items: center;
-          justify-content: center;
-          border: none;
-          background: transparent;
-          color: var(--foreground);
-          font-size: 1.4rem;
-          line-height: 1;
-          border-radius: 999px;
-          cursor: pointer;
-        }
-        .controls-close:hover { background: var(--border); }
-
-        .controls-backdrop {
-          display: block;
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.4);
-          opacity: 0;
-          pointer-events: none;
-          transition: opacity 200ms ease;
-          z-index: 40;
-        }
-        body.controls-open .controls-backdrop {
-          opacity: 1;
-          pointer-events: auto;
-        }
-
-        /* Let the widget fill the remaining viewport on mobile. */
-        .widget-shell {
-          height: calc(100dvh - 8rem);
-          min-height: 420px;
-        }
-      }
     </style>
   </head>
   <body>
-    <h1>Ask User Question</h1>
-    <p class="subtitle">
-      The <code>ask_user_question</code> local-tool sheet — built-in stacked layout vs. the horizontal-pill layout shipped as a plugin example. Pick a preset and click Trigger to inject a simulated tool call.
-    </p>
+    <main class="shell-main">
+      <div class="stage">
+        <aside class="stage-controls">
+          <header class="demo-meta">
+            <h1>Ask User Question</h1>
+            <p>The <code>ask_user_question</code> local-tool sheet — built-in stacked layout vs. horizontal-pill plugin. Pick a preset to inject a simulated tool call.</p>
+            <div class="mount-toolbar" data-mount-toolbar></div>
+          </header>
 
-    <div class="controls-summary">
-      <span class="summary-chip" data-summary="variant">Variant: Built-in</span>
-      <span class="summary-chip" data-summary="autoadvance">Auto-advance: On</span>
-      <span class="summary-chip" data-summary="persist">Persist: Off</span>
-      <button class="summary-edit" type="button" id="btn-controls-toggle">
-        Edit settings
-      </button>
-    </div>
-    <div class="controls-backdrop" id="controls-backdrop"></div>
+          <div class="controls">
+            <div class="section">
+              <label>Variant</label>
+              <div class="mode-group" id="variant-selector">
+                <button class="mode-btn active" data-variant="builtin">Built-in (stacked)</button>
+                <button class="mode-btn" data-variant="plugin">Plugin (pills)</button>
+              </div>
+            </div>
 
-    <div class="layout">
-      <div class="controls">
-        <button class="controls-close" type="button" id="btn-controls-close" aria-label="Close settings">×</button>
-        <div class="section">
-          <label>Variant</label>
-          <div class="mode-group" id="variant-selector">
-            <button class="mode-btn active" data-variant="builtin">Built-in (stacked)</button>
-            <button class="mode-btn" data-variant="plugin">Plugin (horizontal pills)</button>
+            <div class="section">
+              <label>Auto-advance (grouped)</label>
+              <div class="mode-group" id="autoadvance-selector">
+                <button class="mode-btn active" data-autoadvance="on">On</button>
+                <button class="mode-btn" data-autoadvance="off">Off</button>
+              </div>
+            </div>
+
+            <div class="section">
+              <label>Persist state</label>
+              <div class="mode-group" id="persist-selector">
+                <button class="mode-btn active" data-persist="off">Off</button>
+                <button class="mode-btn" data-persist="on">On</button>
+              </div>
+            </div>
+
+            <div class="section">
+              <label>Resume mock (after answer)</label>
+              <div class="mode-group" id="resume-mock-selector">
+                <button class="mode-btn" data-resume="off">Off</button>
+                <button class="mode-btn active" data-resume="fast">Fast (300ms)</button>
+                <button class="mode-btn" data-resume="slow">Slow (2s)</button>
+                <button class="mode-btn" data-resume="hang">Hang</button>
+              </div>
+              <p class="hint">Intercepts the <code>/resume</code> POST that fires after you answer so the typing indicator is observable. <em>Hang</em> never resolves — use Reset transcript to recover.</p>
+            </div>
+
+            <div class="section">
+              <label>Question presets</label>
+              <div class="btn-group" id="preset-group">
+                <button data-preset="single5">Single-select (5 short)</button>
+                <button data-preset="longLabels">Single-select (long labels)</button>
+                <button data-preset="multi">Multi-select</button>
+                <button data-preset="freeText">Free-text only</button>
+                <button data-preset="grouped3">Grouped (3 mixed)</button>
+                <button data-preset="grouped5">Grouped (5 short)</button>
+                <button data-preset="grouped8">Grouped (8 — cap)</button>
+              </div>
+            </div>
+
+            <div class="section">
+              <label>Actions</label>
+              <div class="btn-row">
+                <button id="btn-reset">Reset transcript</button>
+              </div>
+            </div>
+
+            <div class="section">
+              <label>Events</label>
+              <div id="log"></div>
+            </div>
           </div>
-        </div>
+        </aside>
 
-        <div class="section">
-          <label>Auto-advance (grouped)</label>
-          <div class="mode-group" id="autoadvance-selector">
-            <button class="mode-btn active" data-autoadvance="on">On</button>
-            <button class="mode-btn" data-autoadvance="off">Off</button>
-          </div>
-          <p class="hint">
-            When on, picking a single-select pill or pressing Send on free-text
-            jumps to the next question automatically. The final page always waits
-            for an explicit "Submit all" click. Multi-select pages always require Next.
-          </p>
-        </div>
-
-        <div class="section">
-          <label>Persist state</label>
-          <div class="mode-group" id="persist-selector">
-            <button class="mode-btn active" data-persist="off">Off</button>
-            <button class="mode-btn" data-persist="on">On</button>
-          </div>
-          <p class="hint">
-            Off (default) passes <code>persistState: false</code> — nothing is
-            written to <code>localStorage</code>, so reloading wipes any injected
-            tool calls. On wires up a <code>storageAdapter</code> with a
-            demo-scoped key, so the active question survives a reload. "Reset
-            transcript" still clears either way.
-          </p>
-        </div>
-
-        <div class="section">
-          <label>Question Presets</label>
-          <div class="btn-group" id="preset-group">
-            <button data-preset="single5">Single-select (5 short options)</button>
-            <button data-preset="longLabels">Single-select (long labels)</button>
-            <button data-preset="multi">Multi-select</button>
-            <button data-preset="freeText">Free-text only</button>
-            <button data-preset="grouped3">Grouped (3 mixed)</button>
-            <button data-preset="grouped5">Grouped (5 short)</button>
-            <button data-preset="grouped8">Grouped (8 — cap)</button>
-          </div>
-        </div>
-
-        <div class="section">
-          <label>Actions</label>
-          <div class="btn-row">
-            <button id="btn-reset">Reset transcript</button>
-          </div>
-        </div>
-
-        <div class="section">
-          <label>Events</label>
-          <div id="log"></div>
-        </div>
+        <div class="stage-widget"></div>
       </div>
 
-      <div class="widget-shell">
-        <div id="widget-mount"></div>
-      </div>
-    </div>
+      <section class="notes">
+        <h2 class="notes-heading">Notes</h2>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Auto-advance behavior</h3>
+          <p>When on, picking a single-select pill or pressing Send on free-text jumps to the next question automatically. The final page always waits for an explicit "Submit all" click. Multi-select pages always require Next.</p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Persistence</h3>
+          <p>Off (default) passes <code>persistState: false</code> — nothing is written to <code>localStorage</code>, so reloading wipes any injected tool calls. On wires up a <code>storageAdapter</code> with a demo-scoped key, so the active question survives a reload. "Reset transcript" still clears either way.</p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Resume mock — verifying the typing indicator</h3>
+          <p>The widget shows a three-dot typing bubble during the silent gap between the user answering a question and the agent's next streamed token. Pick a preset, answer it, and watch the indicator render below the answer bubble until the simulated <code>/resume</code> response lands.</p>
+          <ul>
+            <li><strong>Fast (300ms)</strong> — close to a real low-latency backend; the indicator briefly appears then completes.</li>
+            <li><strong>Slow (2s)</strong> — easy to inspect; the indicator should remain mounted for ~2 seconds, then a simulated assistant reply appears.</li>
+            <li><strong>Hang</strong> — indicator stays mounted indefinitely. Click <em>Reset transcript</em> to recover.</li>
+            <li><strong>Off</strong> — falls through to the real (no-op) host; the answer click resolves into a fetch error and the indicator clears via the error path.</li>
+          </ul>
+        </div>
+      </section>
+    </main>
 
     <script type="module">
       import "@runtypelabs/persona/widget.css";
       import "./src/index.css";
-      import { createAgentExperience, createLocalStorageAdapter } from "@runtypelabs/persona";
+      import { createLocalStorageAdapter } from "@runtypelabs/persona";
       import { horizontalPillsAskPlugin } from "./src/plugins/ask-horizontal-pills-plugin.js";
+      import { runWidgetMount } from "./src/mount-mode.ts";
 
       const PERSIST_KEY = "persona-state-ask-user-question-demo";
-      // The toggle itself is persisted so a reload of "Persist: On" actually
-      // rehydrates the widget — otherwise the page would always boot with
-      // persistOn=false and ignore the stored state.
       const PERSIST_PREF_KEY = "persona-ask-user-question-demo:persistOn";
       const readPersistPref = () => {
         try { return localStorage.getItem(PERSIST_PREF_KEY) === "true"; } catch { return false; }
@@ -329,7 +201,6 @@
         try { localStorage.setItem(PERSIST_PREF_KEY, on ? "true" : "false"); } catch {}
       };
 
-      const mount = document.getElementById("widget-mount");
       const logEl = document.getElementById("log");
       const log = (msg, cls = "info") => {
         const line = document.createElement("div");
@@ -343,6 +214,83 @@
       let autoAdvance = true;
       let persistOn = readPersistPref();
       let controller = null;
+
+      // Resume-mock state. The demo's apiUrl is a no-op host, so without this
+      // mock the POST that fires after answering a question rejects immediately
+      // and the typing indicator we want to show off only flashes for ~1 frame.
+      // The mock intercepts `/resume` POSTs and returns a synthetic SSE stream
+      // after a configurable delay, so the gap between answer-click and the
+      // next streamed token is visible. Default is "fast" — flip to "slow" or
+      // "hang" to study the indicator in detail; flip to "off" to confirm the
+      // un-intercepted behavior (indicator flashes then errors).
+      let resumeMockMode = "fast"; // "off" | "fast" | "slow" | "hang"
+      const RESUME_MOCK_DELAYS = { off: 0, fast: 300, slow: 2000, hang: Infinity };
+
+      // Wrap fetch once. We intercept any POST whose URL ends with `/resume`
+      // (matches both the demo's noop apiUrl and any real proxy) when the mock
+      // is on; otherwise we pass straight through to the original implementation.
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        try {
+          const url = typeof input === "string" ? input : (input?.url ?? "");
+          const method = (init?.method ?? (input && typeof input !== "string" ? input.method : "GET") ?? "GET").toUpperCase();
+          if (resumeMockMode !== "off" && method === "POST" && /\/resume(?:\?|$)/.test(url)) {
+            return mockResumeResponse(init?.body);
+          }
+        } catch {
+          // Any detection error → fall through to real fetch.
+        }
+        return originalFetch(input, init);
+      };
+
+      function mockResumeResponse(body) {
+        const delay = RESUME_MOCK_DELAYS[resumeMockMode] ?? 0;
+        let parsedBody = null;
+        try {
+          parsedBody = typeof body === "string" ? JSON.parse(body) : null;
+        } catch {}
+        const toolOutputs = parsedBody?.toolOutputs ?? {};
+        const answer = toolOutputs.ask_user_question;
+        const answerText = typeof answer === "object" && answer !== null
+          ? Object.entries(answer).map(([q, v]) => `${q}: ${Array.isArray(v) ? v.join(", ") : v}`).join(" • ")
+          : String(answer ?? "(no answer)");
+
+        log(`mock /resume → delay=${delay === Infinity ? "∞" : delay + "ms"}, answer=${answerText}`, "info");
+
+        if (delay === Infinity) {
+          // Hang: a stream that never produces a chunk and never closes.
+          const stream = new ReadableStream({ start() { /* intentionally idle */ } });
+          return Promise.resolve(new Response(stream, {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          }));
+        }
+
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            const encoder = new TextEncoder();
+            const replyText = `Thanks — got "${answerText}". (simulated response)`;
+            const sse = [
+              `data: {"type":"step_chunk","id":"sim-step","name":"sim","executionType":"prompt","index":0,"text":${JSON.stringify(replyText)}}`,
+              ``,
+              `data: {"type":"step_complete","id":"sim-step","name":"sim","executionType":"prompt","index":0,"success":true,"result":{"promptId":"sim","promptName":"sim","response":${JSON.stringify(replyText)},"tokens":{"input":0,"output":0,"total":0},"cost":0,"executionTime":${delay},"order":0},"executionTime":${delay}}`,
+              ``,
+              `data: {"type":"flow_complete","flowId":"sim-flow","success":true,"duration":${delay},"completedAt":${JSON.stringify(new Date().toISOString())},"totalTokensUsed":0}`,
+              ``,
+            ].join("\n");
+            const stream = new ReadableStream({
+              start(c) {
+                c.enqueue(encoder.encode(sse));
+                c.close();
+              },
+            });
+            resolve(new Response(stream, {
+              status: 200,
+              headers: { "Content-Type": "text/event-stream" },
+            }));
+          }, delay);
+        });
+      }
 
       const PRESETS = {
         single5: {
@@ -491,16 +439,14 @@
         },
       };
 
-      function createWidget() {
-        if (controller) controller.destroy();
-        mount.innerHTML = "";
+      function buildConfig() {
         const plugins = variant === "plugin" ? [horizontalPillsAskPlugin] : [];
         const persistConfig = persistOn
           ? { storageAdapter: createLocalStorageAdapter(PERSIST_KEY) }
           : { persistState: false };
-        controller = createAgentExperience(mount, {
+        return {
           apiUrl: "https://noop.test/chat",
-          launcher: { enabled: false },
+          launcher: { enabled: false, width: "100%" },
           ...persistConfig,
           plugins,
           features: {
@@ -510,7 +456,20 @@
             welcomeTitle: "Ask User Question Demo",
             welcomeSubtitle: "Trigger a preset question from the left panel.",
           },
-        });
+        };
+      }
+
+      let teardownActive = null;
+      function createWidget() {
+        if (teardownActive) {
+          teardownActive();
+          teardownActive = null;
+        }
+        const stage = document.querySelector(".stage-widget");
+        if (!stage) return;
+        const { controller: c, teardown } = runWidgetMount("inline", stage, buildConfig());
+        controller = c;
+        teardownActive = teardown;
         log(`Widget initialized — variant: ${variant}, autoAdvance: ${autoAdvance}, persist: ${persistOn ? "on" : "off"}`, "info");
       }
 
@@ -544,34 +503,10 @@
         log(`Injected preset: ${key} (toolCallId=${id})`, "info");
       }
 
-      // Mobile drawer + summary chip handling. The drawer is css-driven via
-      // `body.controls-open`; this just toggles that class and keeps the
-      // summary chips in sync with the live state.
-      const mobileQuery = window.matchMedia("(max-width: 768px)");
-      const summaryChips = {
-        variant: document.querySelector('[data-summary="variant"]'),
-        autoadvance: document.querySelector('[data-summary="autoadvance"]'),
-        persist: document.querySelector('[data-summary="persist"]'),
-      };
-      const variantLabel = (v) => (v === "plugin" ? "Plugin (pills)" : "Built-in");
-      const updateSummary = () => {
-        if (summaryChips.variant) summaryChips.variant.textContent = `Variant: ${variantLabel(variant)}`;
-        if (summaryChips.autoadvance) summaryChips.autoadvance.textContent = `Auto-advance: ${autoAdvance ? "On" : "Off"}`;
-        if (summaryChips.persist) summaryChips.persist.textContent = `Persist: ${persistOn ? "On" : "Off"}`;
-      };
-      const openDrawer = () => document.body.classList.add("controls-open");
-      const closeDrawer = () => document.body.classList.remove("controls-open");
-      document.getElementById("btn-controls-toggle").addEventListener("click", openDrawer);
-      document.getElementById("btn-controls-close").addEventListener("click", closeDrawer);
-      document.getElementById("controls-backdrop").addEventListener("click", closeDrawer);
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closeDrawer();
-      });
-      // If the user resizes back to desktop while the drawer is open, drop
-      // the body class so reopening on desktop doesn't start in drawer state.
-      mobileQuery.addEventListener("change", (e) => {
-        if (!e.matches) closeDrawer();
-      });
+      // No-op kept so existing call sites don't need to change. The summary
+      // chips and mobile drawer were removed when the page moved to the
+      // shared three-pane shell.
+      const updateSummary = () => {};
 
       // Variant selector
       const variantSelector = document.getElementById("variant-selector");
@@ -622,13 +557,24 @@
         createWidget();
       });
 
-      // Preset buttons. On mobile, auto-close the drawer right after a preset
-      // is picked so the widget is immediately visible underneath.
+      // Resume-mock toggle. Switching modes doesn't re-mount the widget — the
+      // wrapped fetch reads `resumeMockMode` on every call, so the next
+      // /resume POST picks up the new delay.
+      const resumeMockSelector = document.getElementById("resume-mock-selector");
+      resumeMockSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        resumeMockSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        resumeMockMode = btn.dataset.resume;
+        log(`Resume mock mode → ${resumeMockMode}`, "info");
+      });
+
+      // Preset buttons.
       document.getElementById("preset-group").addEventListener("click", (e) => {
         const btn = e.target.closest("button[data-preset]");
         if (!btn) return;
         triggerQuestion(btn.dataset.preset);
-        if (mobileQuery.matches) closeDrawer();
       });
 
       // Reset. Clears the persisted key first so the freshly re-created widget
@@ -662,6 +608,10 @@
       syncPersistButtons();
       updateSummary();
       createWidget();
+    </script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("ask-user-question-demo");
     </script>
   </body>
 </html>

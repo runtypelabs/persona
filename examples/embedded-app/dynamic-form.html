@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/src/demo-shared.css">
+    <link rel="icon" href="/favicon.ico" />
     <title>Streaming Chat Widget – Dynamic Form Demo</title>
     <style>
       .dynamic-form-demo-toolbar {
@@ -37,43 +38,252 @@
         color: #64748b;
         font-size: 0.8125rem;
       }
+      /* ---- Tabbed variant explorer ---- */
+      .form-tabs {
+        margin-top: 1rem;
+      }
+      .form-tabs-tablist {
+        display: flex;
+        gap: 0.25rem;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 0;
+        margin: 0 0 1rem 0;
+        flex-wrap: wrap;
+      }
+      .form-tabs-tab {
+        appearance: none;
+        background: transparent;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        padding: 0.5rem 0.875rem;
+        margin-bottom: -1px;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: #64748b;
+        cursor: pointer;
+        font-family: inherit;
+        transition: color 0.15s ease, border-color 0.15s ease;
+      }
+      .form-tabs-tab:hover {
+        color: #1f2937;
+      }
+      .form-tabs-tab[aria-selected="true"] {
+        color: #111827;
+        border-bottom-color: #111827;
+        font-weight: 600;
+      }
+      .form-tabs-tab small {
+        display: block;
+        font-size: 0.6875rem;
+        font-weight: 400;
+        color: #94a3b8;
+        margin-top: 0.0625rem;
+      }
+      .form-tabs-tab[aria-selected="true"] small {
+        color: #64748b;
+      }
+      .form-tabs-panel {
+        display: grid;
+        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+        gap: 1.25rem;
+        align-items: stretch;
+      }
+      .form-tabs-panel[hidden] {
+        display: none;
+      }
+      @media (max-width: 920px) {
+        .form-tabs-panel {
+          grid-template-columns: 1fr;
+        }
+      }
+      .form-tabs-def {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: #0f172a;
+        color: #e2e8f0;
+        border-radius: 0.625rem;
+        padding: 1rem;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 0.75rem;
+        line-height: 1.55;
+        overflow: auto;
+        max-height: 760px;
+      }
+      .form-tabs-def pre {
+        margin: 0;
+        white-space: pre;
+        word-break: normal;
+      }
+      .form-tabs-def-caption {
+        font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #94a3b8;
+        margin-bottom: 0.625rem;
+      }
+      .form-tabs-preview {
+        min-width: 0;
+      }
+      .form-tabs-preview .embedded-target {
+        height: 760px;
+        min-height: 760px;
+      }
+      .dynamic-form-variants-wrap {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 1.25rem 2rem;
+      }
+      #dynamic-form-inline {
+        height: 100%;
+        min-height: 100%;
+      }
     </style>
   </head>
   <body>
-    <main class="demo-container">
-      <section>
-        <h1>Dynamic Form Demo</h1>
-        <p>
-          This page demonstrates the component middleware system. When your
-          backend streams a JSON component directive (e.g., 
-          <code>{"component": "DynamicForm", "props": {...}}</code>), the widget
-          renders an interactive form with dynamically generated fields. The AI
-          creates contextually appropriate forms based on what you ask.
-        </p>
-        <p>
-          The <strong>Preview form (no LLM)</strong> button below uses
-          <code>controller.injectComponentDirective(...)</code> to render the
-          form directly from host code — same path the LLM uses, but instant.
-          Useful for QA, design previews, debug toggles, and local tools that
-          want to render a registered component instead of plain text.
-        </p>
-      </section>
+    <main class="shell-main">
+      <div class="stage">
+        <aside class="stage-controls">
+          <header class="demo-meta">
+            <h1>Dynamic Forms</h1>
+            <p>AI-generated forms via component middleware. When your backend streams a JSON component directive (e.g., <code>{"component": "DynamicForm", "props": {...}}</code>), the widget renders an interactive form.</p>
+            <div class="mount-toolbar" data-mount-toolbar></div>
+          </header>
 
-      <section>
-        <h2>Inline Form Embed</h2>
-        <div class="dynamic-form-demo-toolbar">
-          <button type="button" id="dynamic-form-preview" class="dynamic-form-demo-button">
-            Preview form (no LLM)
-          </button>
-          <span class="dynamic-form-demo-toolbar-hint">
-            Renders the same DynamicForm bubble the AI would emit.
-          </span>
+          <div class="info-section">
+            <h3>Preview</h3>
+            <p style="margin-bottom: 0.75rem;">Render the same DynamicForm bubble the AI would emit — no LLM round-trip.</p>
+            <button type="button" id="dynamic-form-preview" class="btn btn-primary">
+              Preview form
+            </button>
+          </div>
+        </aside>
+
+        <div class="stage-widget"></div>
+      </div>
+
+      <section class="notes">
+        <h2 class="notes-heading">Notes</h2>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">How it works</h3>
+          <p>The <strong>Preview form</strong> button uses <code>controller.injectComponentDirective(...)</code> to render the form directly from host code — the same path the LLM uses, but instant. Useful for QA, design previews, debug toggles, and local tools.</p>
         </div>
-        <div class="embedded-target" id="dynamic-form-inline"></div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Layout variants</h3>
+          <p>Same fields, three <code>formStyles</code> presets. The form component is unchanged — only its visual tokens vary. Each tab shows the <code>formStyles</code> config that produced the form on the right.</p>
+        </div>
       </section>
     </main>
 
-    <div id="dynamic-form-launcher"></div>
+    <section class="dynamic-form-variants-wrap">
+      <header class="title-strip">
+        <h1>Layout variants</h1>
+        <p>Same fields, three <code>formStyles</code> presets. The form component is unchanged — only its visual tokens vary.</p>
+      </header>
+      <section>
+        <div class="form-tabs" id="variants-tabs">
+          <div class="form-tabs-tablist" role="tablist" aria-label="Layout variants">
+            <button
+              type="button"
+              class="form-tabs-tab"
+              role="tab"
+              id="variants-tab-compact"
+              aria-controls="variants-panel-compact"
+              aria-selected="true"
+              data-tab-id="compact"
+            >
+              Compact
+              <small>Default density</small>
+            </button>
+            <button
+              type="button"
+              class="form-tabs-tab"
+              role="tab"
+              id="variants-tab-spacious"
+              aria-controls="variants-panel-spacious"
+              aria-selected="false"
+              tabindex="-1"
+              data-tab-id="spacious"
+            >
+              Spacious
+              <small>Stripe / Material 3</small>
+            </button>
+            <button
+              type="button"
+              class="form-tabs-tab"
+              role="tab"
+              id="variants-tab-branded"
+              aria-controls="variants-panel-branded"
+              aria-selected="false"
+              tabindex="-1"
+              data-tab-id="branded"
+            >
+              Branded
+              <small>Custom accent + chrome</small>
+            </button>
+          </div>
+
+          <div
+            class="form-tabs-panel"
+            role="tabpanel"
+            id="variants-panel-compact"
+            aria-labelledby="variants-tab-compact"
+            data-tab-panel="compact"
+          >
+            <div class="form-tabs-def">
+              <div class="form-tabs-def-caption">formStyles</div>
+              <pre id="variants-def-compact"></pre>
+            </div>
+            <div class="form-tabs-preview">
+              <div class="embedded-target" id="dynamic-form-variant-compact"></div>
+            </div>
+          </div>
+
+          <div
+            class="form-tabs-panel"
+            role="tabpanel"
+            id="variants-panel-spacious"
+            aria-labelledby="variants-tab-spacious"
+            data-tab-panel="spacious"
+            hidden
+          >
+            <div class="form-tabs-def">
+              <div class="form-tabs-def-caption">formStyles</div>
+              <pre id="variants-def-spacious"></pre>
+            </div>
+            <div class="form-tabs-preview">
+              <div class="embedded-target" id="dynamic-form-variant-spacious"></div>
+            </div>
+          </div>
+
+          <div
+            class="form-tabs-panel"
+            role="tabpanel"
+            id="variants-panel-branded"
+            aria-labelledby="variants-tab-branded"
+            data-tab-panel="branded"
+            hidden
+          >
+            <div class="form-tabs-def">
+              <div class="form-tabs-def-caption">formStyles + theme</div>
+              <pre id="variants-def-branded"></pre>
+            </div>
+            <div class="form-tabs-preview">
+              <div class="embedded-target" id="dynamic-form-variant-branded"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
     <script type="module" src="/src/dynamic-form-demo.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("dynamic-form");
+    </script>
   </body>
 </html>

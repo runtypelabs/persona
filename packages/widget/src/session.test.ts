@@ -642,4 +642,155 @@ describe('AgentWidgetSession.resolveAskUserQuestion', () => {
     expect(errors.length).toBe(1);
     expect(errors[0].message).toMatch(/executionId/);
   });
+
+  it('flips streaming=true BEFORE the resumeFlow fetch resolves (so the typing indicator shows during the silent gap)', async () => {
+    const awaiting = makeAwaitingMessage();
+
+    // Defer fetch resolution so we can observe state mid-await.
+    let resolveFetch!: (value: unknown) => void;
+    const fetchPromise = new Promise((res) => { resolveFetch = res; });
+    global.fetch = vi.fn().mockImplementation(() => fetchPromise);
+
+    const streamingEvents: boolean[] = [];
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://localhost:43111/api/chat/dispatch',
+        initialMessages: [awaiting],
+      },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: (s) => { streamingEvents.push(s); },
+      }
+    );
+
+    vi.spyOn(session, 'connectStream').mockResolvedValue(undefined);
+
+    // Kick off — don't await.
+    const resolvePromise = session.resolveAskUserQuestion(awaiting, 'Hobbyists');
+
+    // Yield a microtask so synchronous setup (markResolved → setStreaming(true)
+    // → message injection) runs before we observe.
+    await Promise.resolve();
+
+    expect(session.isStreaming()).toBe(true);
+    expect(streamingEvents).toEqual([true]);
+
+    // Now resolve the fetch with a body so the rest of the flow runs.
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+        controller.close();
+      },
+    });
+    resolveFetch({ ok: true, body: stream });
+
+    await resolvePromise;
+  });
+
+  it('flips streaming=false on the error path when resume rejects', async () => {
+    const awaiting = makeAwaitingMessage();
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: 'boom' }),
+    });
+
+    const streamingEvents: boolean[] = [];
+    const errors: Error[] = [];
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://localhost:43111/api/chat/dispatch',
+        initialMessages: [awaiting],
+      },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: (s) => { streamingEvents.push(s); },
+        onError: (e) => errors.push(e),
+      }
+    );
+
+    await session.resolveAskUserQuestion(awaiting, 'Hobbyists');
+
+    expect(streamingEvents[0]).toBe(true);
+    expect(streamingEvents[streamingEvents.length - 1]).toBe(false);
+    expect(session.isStreaming()).toBe(false);
+    expect(errors.length).toBe(1);
+  });
+});
+
+describe('AgentWidgetSession.resolveApproval', () => {
+  const makeApproval = () => ({
+    id: 'approval-1',
+    status: 'pending' as const,
+    agentId: 'agent_abc',
+    executionId: 'exec_abc',
+    toolName: 'send_email',
+    description: 'Send an email',
+  });
+
+  it('flips streaming=true BEFORE the approval fetch resolves', async () => {
+    let resolveFetch!: (value: unknown) => void;
+    const fetchPromise = new Promise((res) => { resolveFetch = res; });
+    global.fetch = vi.fn().mockImplementation(() => fetchPromise);
+
+    const streamingEvents: boolean[] = [];
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://localhost:43111/api/chat/dispatch' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: (s) => { streamingEvents.push(s); },
+      }
+    );
+
+    vi.spyOn(session, 'connectStream').mockResolvedValue(undefined);
+
+    const resolvePromise = session.resolveApproval(makeApproval(), 'approved');
+
+    await Promise.resolve();
+
+    expect(session.isStreaming()).toBe(true);
+    expect(streamingEvents).toEqual([true]);
+
+    // Resolve with a body so the rest of the flow runs through connectStream.
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+        controller.close();
+      },
+    });
+    resolveFetch({ ok: true, body: stream });
+
+    await resolvePromise;
+  });
+
+  it('flips streaming=false on the error path when approval rejects', async () => {
+    // The approval response goes through `instanceof Response` checks, so
+    // a non-Response mock that "errors" needs to be modeled as a thrown fetch.
+    global.fetch = vi.fn().mockRejectedValue(new Error('network boom'));
+
+    const streamingEvents: boolean[] = [];
+    const errors: Error[] = [];
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://localhost:43111/api/chat/dispatch' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: (s) => { streamingEvents.push(s); },
+        onError: (e) => errors.push(e),
+      }
+    );
+
+    await session.resolveApproval(makeApproval(), 'approved');
+
+    expect(streamingEvents[0]).toBe(true);
+    expect(streamingEvents[streamingEvents.length - 1]).toBe(false);
+    expect(session.isStreaming()).toBe(false);
+    expect(errors.length).toBe(1);
+  });
 });

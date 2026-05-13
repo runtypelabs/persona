@@ -144,6 +144,7 @@
       color: #1e3a8a;
     }
   </style>
+  <style>body { margin-top: 44px !important; }</style>
 </head>
 <body>
   <header>
@@ -557,5 +558,9 @@
     })();
   </script>
 
+  <script type="module">
+    import { renderStandaloneNav } from "/src/standalone-nav.ts";
+    renderStandaloneNav("example-shop-installer-voice-metadata");
+  </script>
 </body>
 </html>

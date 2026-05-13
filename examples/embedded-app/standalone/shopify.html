@@ -1,4 +1,5 @@
 <link rel="icon" href="/favicon.ico" />
+<style>body { margin-top: 44px !important; }</style>
 <!-- Local dev: load from local build; production: load from CDN -->
 <!-- Run `pnpm build:widget` to update the local build -->
 <script>
@@ -928,4 +929,9 @@
 
   console.log('[Shopping Assistant Browser] Ready - use window.ShoppingAssistantBrowser');
 })();
+</script>
+
+<script type="module">
+  import { renderStandaloneNav } from "/src/standalone-nav.ts";
+  renderStandaloneNav("shopify");
 </script>
