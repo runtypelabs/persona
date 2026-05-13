@@ -66,20 +66,35 @@
         color: white;
         animation: pulse 1.5s infinite;
       }
+      /* The demo's original inline styles assumed a dark page background.
+         Once the page moved to the shared light shell, the hard-coded
+         dark input/label colors became hard to read. Re-skin them to the
+         shell's neutral tokens. */
+      .stage-controls input[type="text"],
+      .stage-controls input[type="number"],
+      .stage-controls select {
+        background: var(--card) !important;
+        color: var(--foreground) !important;
+        border-color: var(--border) !important;
+      }
+      .stage-controls label,
+      .stage-controls h3,
+      .stage-controls h4 {
+        color: var(--foreground) !important;
+      }
+      .stage-controls .info-section {
+        background: color-mix(in srgb, var(--foreground) 4%, transparent);
+      }
     </style>
   </head>
-  <body class="theme-dark">
-    <a href="./index.html" class="back-link">← Back to Examples</a>
-
-    <div class="layout">
-      <div class="info-panel">
-        <h1>Voice Integration Demo</h1>
-         <p>
-           This demo showcases the ElevenLabs voice integration with the Persona
-           widget. It demonstrates real-time voice input and output using
-           WebSocket technology. The WebSocket stream connects to the Runtype
-           backend for server-side voice processing.
-         </p>
+  <body>
+    <main class="shell-main">
+      <div class="stage">
+        <aside class="stage-controls">
+          <header class="demo-meta">
+            <h1>Voice Integration</h1>
+            <p>Real-time speech-to-text and text-to-speech via the Persona widget over WebSocket, with server-side voice processing through the Runtype backend.</p>
+          </header>
 
         <div class="info-section">
           <h3>🔧 Configuration</h3>
@@ -494,19 +509,27 @@
           ></div>
         </div>
 
-        <div class="info-section">
-          <h3>💡 Tips</h3>
-          <p>• Use Chrome or Edge for best voice support</p>
-          <p>• Grant microphone permissions when prompted</p>
-          <p>• Speak clearly for best transcription accuracy</p>
-          <p>• Check console for detailed logs and errors</p>
+        </aside>
+
+        <div class="stage-widget">
+          <div id="agent-widget"></div>
         </div>
       </div>
 
-      <div class="panel widget-container">
-        <div id="agent-widget"></div>
-      </div>
-    </div>
+      <section class="notes">
+        <h2 class="notes-heading">Notes</h2>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Tips</h3>
+          <ul>
+            <li>Use Chrome or Edge for best voice support</li>
+            <li>Grant microphone permissions when prompted</li>
+            <li>Speak clearly for best transcription accuracy</li>
+            <li>Check console for detailed logs and errors</li>
+          </ul>
+        </div>
+      </section>
+    </main>
 
     <script type="module">
       import {
@@ -1368,6 +1391,10 @@
       console.log(
         "Replace clientToken and agentId in the config to test with your agent",
       );
+    </script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("voice-integration-demo");
     </script>
   </body>
 </html>

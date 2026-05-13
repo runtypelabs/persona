@@ -7,40 +7,72 @@
   <link rel="icon" href="/favicon.ico" />
   <title>Tool Approval Demo</title>
   <style>
-    #approval-widget {
-      height: 100%;
-    }
     .btn-approve {
       background: rgba(200, 200, 200, 0.1);
       border-color: rgba(200, 200, 200, 0.3);
     }
-    .btn-approve:hover {
-      background: rgba(200, 200, 200, 0.2);
-    }
+    .btn-approve:hover { background: rgba(200, 200, 200, 0.2); }
     .btn-deny {
       background: rgba(200, 50, 50, 0.2);
       border-color: rgba(200, 50, 50, 0.4);
     }
-    .btn-deny:hover {
-      background: rgba(200, 50, 50, 0.3);
-    }
+    .btn-deny:hover { background: rgba(200, 50, 50, 0.3); }
   </style>
 </head>
-<body class="theme-dark">
-  <a href="/" class="back-link">&larr; Back to examples</a>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Tool Approval</h1>
+          <p>Native tool approval system. When an agent needs to execute a tool that requires human approval, an inline approval bubble appears in the chat with Approve/Deny buttons.</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
 
-  <div class="layout">
-    <!-- Left: Info Panel -->
-    <div class="info-panel">
-      <h1>Tool Approval <span class="badge badge-new">New</span></h1>
-      <p>This demo shows the native tool approval system. When an agent needs to execute a tool that requires human approval, an inline approval bubble appears in the chat with Approve/Deny buttons.</p>
+        <div class="info-section">
+          <h3>Programmatic API</h3>
+          <p>Resolve approvals from outside the chat.</p>
+          <div class="btn-group" style="margin-top: 0.5rem; margin-bottom: 0;">
+            <button class="btn btn-approve" id="btn-approve">Approve</button>
+            <button class="btn btn-deny" id="btn-deny">Deny</button>
+          </div>
+        </div>
 
-      <div class="info-section">
-        <h3>How it works</h3>
+        <div class="info-section">
+          <h3>Event log</h3>
+          <div class="event-log" id="event-log"></div>
+        </div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">How it works</h3>
         <p>The SDK natively handles <code>agent_approval_start</code> and <code>step_await</code> (with <code>approval_required</code>) SSE events. It creates an approval bubble inline in the chat. When the user clicks Approve or Deny, the SDK calls the approval API and pipes the response stream back through the chat.</p>
       </div>
 
-      <div class="code-block">
+      <div class="notes-section">
+        <h3 class="notes-section-title">Programmatic control</h3>
+        <p>Use <code>controller.resolveApproval(approvalId, decision)</code> to resolve approvals programmatically from your application code.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Controller events</h3>
+        <p>Listen for <code>approval:requested</code> and <code>approval:resolved</code> events on the controller to react to the approval lifecycle in your app.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Customization</h3>
+        <p>Style the approval bubble via <code>config.approval</code> (colors, labels), override rendering with the <code>renderApproval</code> plugin hook, or disable entirely with <code>approval: false</code>.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Config snippet</h3>
+        <div class="code-block">
 <span class="comment">// Approval config</span>
 {
   <span class="prop">approval</span>: {
@@ -54,40 +86,15 @@
     }
   }
 }
+        </div>
       </div>
-
-      <div class="info-section">
-        <h3>Programmatic Control</h3>
-        <p>Use <code>controller.resolveApproval(approvalId, decision)</code> to resolve approvals programmatically from your application code.</p>
-      </div>
-
-      <div class="btn-group">
-        <button class="btn btn-approve" id="btn-approve">Approve (API)</button>
-        <button class="btn btn-deny" id="btn-deny">Deny (API)</button>
-      </div>
-
-      <div class="info-section">
-        <h3>Controller Events</h3>
-        <p>Listen for <code>approval:requested</code> and <code>approval:resolved</code> events on the controller to react to the approval lifecycle in your app.</p>
-      </div>
-
-      <div class="info-section">
-        <h3>Customization</h3>
-        <p>Style the approval bubble via <code>config.approval</code> (colors, labels), override rendering with the <code>renderApproval</code> plugin hook, or disable entirely with <code>approval: false</code>.</p>
-      </div>
-
-      <div class="info-section">
-        <h3>Event Log</h3>
-        <div class="event-log" id="event-log"></div>
-      </div>
-    </div>
-
-    <!-- Right: Widget -->
-    <div class="panel widget-container">
-      <div id="approval-widget"></div>
-    </div>
-  </div>
+    </section>
+  </main>
 
   <script type="module" src="/src/approval-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("approval-demo");
+  </script>
 </body>
 </html>

@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/src/demo-shared.css">
+    <link rel="icon" href="/favicon.ico" />
     <title>Streaming Chat Widget – Dynamic Form Demo</title>
     <style>
       .dynamic-form-demo-toolbar {
@@ -130,49 +131,60 @@
         height: 760px;
         min-height: 760px;
       }
+      .dynamic-form-variants-wrap {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 1.25rem 2rem;
+      }
+      #dynamic-form-inline {
+        height: 100%;
+        min-height: 100%;
+      }
     </style>
   </head>
   <body>
-    <main class="demo-container">
-      <section>
-        <h1>Dynamic Form Demo</h1>
-        <p>
-          This page demonstrates the component middleware system. When your
-          backend streams a JSON component directive (e.g., 
-          <code>{"component": "DynamicForm", "props": {...}}</code>), the widget
-          renders an interactive form with dynamically generated fields. The AI
-          creates contextually appropriate forms based on what you ask.
-        </p>
-        <p>
-          The <strong>Preview form (no LLM)</strong> button below uses
-          <code>controller.injectComponentDirective(...)</code> to render the
-          form directly from host code — same path the LLM uses, but instant.
-          Useful for QA, design previews, debug toggles, and local tools that
-          want to render a registered component instead of plain text.
-        </p>
-      </section>
+    <main class="shell-main">
+      <div class="stage">
+        <aside class="stage-controls">
+          <header class="demo-meta">
+            <h1>Dynamic Forms</h1>
+            <p>AI-generated forms via component middleware. When your backend streams a JSON component directive (e.g., <code>{"component": "DynamicForm", "props": {...}}</code>), the widget renders an interactive form.</p>
+            <div class="mount-toolbar" data-mount-toolbar></div>
+          </header>
 
-      <section>
-        <h2>Inline Form Embed</h2>
-        <div class="dynamic-form-demo-toolbar">
-          <button type="button" id="dynamic-form-preview" class="dynamic-form-demo-button">
-            Preview form (no LLM)
-          </button>
-          <span class="dynamic-form-demo-toolbar-hint">
-            Renders the same DynamicForm bubble the AI would emit.
-          </span>
+          <div class="info-section">
+            <h3>Preview</h3>
+            <p style="margin-bottom: 0.75rem;">Render the same DynamicForm bubble the AI would emit — no LLM round-trip.</p>
+            <button type="button" id="dynamic-form-preview" class="btn btn-primary">
+              Preview form
+            </button>
+          </div>
+        </aside>
+
+        <div class="stage-widget"></div>
+      </div>
+
+      <section class="notes">
+        <h2 class="notes-heading">Notes</h2>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">How it works</h3>
+          <p>The <strong>Preview form</strong> button uses <code>controller.injectComponentDirective(...)</code> to render the form directly from host code — the same path the LLM uses, but instant. Useful for QA, design previews, debug toggles, and local tools.</p>
         </div>
-        <div class="embedded-target" id="dynamic-form-inline"></div>
-      </section>
 
+        <div class="notes-section">
+          <h3 class="notes-section-title">Layout variants</h3>
+          <p>Same fields, three <code>formStyles</code> presets. The form component is unchanged — only its visual tokens vary. Each tab shows the <code>formStyles</code> config that produced the form on the right.</p>
+        </div>
+      </section>
+    </main>
+
+    <section class="dynamic-form-variants-wrap">
+      <header class="title-strip">
+        <h1>Layout variants</h1>
+        <p>Same fields, three <code>formStyles</code> presets. The form component is unchanged — only its visual tokens vary.</p>
+      </header>
       <section>
-        <h2>Layout variants</h2>
-        <p>
-          Same fields, three <code>formStyles</code> presets. The form
-          component is unchanged — only its visual tokens vary. Each tab
-          shows the <code>formStyles</code> config that produced the form
-          on the right.
-        </p>
         <div class="form-tabs" id="variants-tabs">
           <div class="form-tabs-tablist" role="tablist" aria-label="Layout variants">
             <button
@@ -266,9 +278,12 @@
           </div>
         </div>
       </section>
-    </main>
+    </section>
 
-    <div id="dynamic-form-launcher"></div>
     <script type="module" src="/src/dynamic-form-demo.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("dynamic-form");
+    </script>
   </body>
 </html>

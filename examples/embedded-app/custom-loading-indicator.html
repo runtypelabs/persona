@@ -6,45 +6,76 @@
   <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Custom Loading Indicator Demo</title>
-  <style>
-    #loading-widget {
-      height: 100%;
-    }
-    .preview-box {
-      background: #fff;
-      border-radius: 8px;
-      padding: 1rem 1.5rem;
-      display: inline-flex;
-      align-items: center;
-      gap: 1rem;
-      margin-bottom: 1rem;
-    }
-    .preview-label {
-      font-size: 0.875rem;
-      color: #666;
-    }
-  </style>
 </head>
-<body class="theme-dark">
-  <a href="/" class="back-link">&larr; Back to examples</a>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Custom Loading Indicator</h1>
+          <p>Replace the default bouncing dots with a custom animated SVG, or hide the indicator entirely.</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
 
-  <div class="layout">
-    <!-- Left: Info Panel -->
-    <div class="info-panel">
-      <h1>Custom Loading Indicator</h1>
-      <p>This example demonstrates how to replace the default bouncing dots loading indicator with a custom animated SVG.</p>
+        <div class="toggle-section">
+          <label for="bubble-toggle">Show bubble</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="bubble-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-status" id="toggle-status">Bubble: hidden (showBubble: false)</div>
 
-      <div class="info-section">
-        <h3>How it works</h3>
+        <div class="toggle-section">
+          <label for="idle-toggle">Show idle indicator</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="idle-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-status" id="idle-toggle-status">Idle indicator: disabled</div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">How it works</h3>
         <p>The <code>loadingIndicator.render</code> config option lets you provide a custom function that returns an HTMLElement. The function receives a context with the <code>location</code> ('standalone' or 'inline') so you can use different indicators in different places.</p>
       </div>
 
-      <div class="info-section">
-        <h3>Animation Preservation</h3>
+      <div class="notes-section">
+        <h3 class="notes-section-title">Animation preservation</h3>
         <p>Add <code>data-preserve-animation="true"</code> to your custom element to prevent the DOM morpher from interrupting CSS animations during updates.</p>
       </div>
 
-      <div class="code-block">
+      <div class="notes-section">
+        <h3 class="notes-section-title">Location types</h3>
+        <p><strong>standalone:</strong> Shown in its own bubble while waiting for the stream to start.<br>
+        <strong>inline:</strong> Shown inside the assistant message bubble when content is empty.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Bubble visibility</h3>
+        <p>Set <code>showBubble: false</code> to hide the background, border, and shadow from the standalone indicator wrapper. This lets custom animated icons render without the default bubble styling.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Idle state indicator</h3>
+        <p>Show a custom indicator when the assistant is waiting for the next user message. Use <code>loadingIndicator.renderIdle</code> to customize what appears after a response completes.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Other options</h3>
+        <p>Return <code>null</code> to hide the indicator entirely. You can also use a plugin's <code>renderLoadingIndicator</code> or <code>renderIdleIndicator</code> hooks for the same functionality.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Config snippet</h3>
+        <div class="code-block">
 <span class="comment">// Custom loading indicator configuration</span>
 loadingIndicator: {
   <span class="comment">// Hide bubble background/border for cleaner custom indicators</span>
@@ -58,54 +89,15 @@ loadingIndicator: {
     <span class="keyword">return</span> <span class="function">defaultRenderer</span>();
   }
 }
+        </div>
       </div>
-
-      <div class="info-section">
-        <h3>Location Types</h3>
-        <p><strong>standalone:</strong> Shown in its own bubble while waiting for the stream to start.<br>
-        <strong>inline:</strong> Shown inside the assistant message bubble when content is empty.</p>
-      </div>
-
-      <div class="info-section">
-        <h3>Bubble Visibility</h3>
-        <p>Set <code>showBubble: false</code> to hide the background, border, and shadow from the standalone indicator wrapper. This lets custom animated icons render without the default bubble styling.</p>
-      </div>
-
-      <div class="toggle-section">
-        <label for="bubble-toggle">Show Bubble</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="bubble-toggle">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="toggle-status" id="toggle-status">Bubble: hidden (showBubble: false)</div>
-
-      <div class="info-section">
-        <h3>Idle State Indicator</h3>
-        <p>Show a custom indicator when the assistant is waiting for the next user message. Use <code>loadingIndicator.renderIdle</code> to customize what appears after a response completes.</p>
-      </div>
-
-      <div class="toggle-section">
-        <label for="idle-toggle">Show Idle Indicator</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="idle-toggle">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="toggle-status" id="idle-toggle-status">Idle indicator: disabled</div>
-
-      <div class="info-section">
-        <h3>Other Options</h3>
-        <p>Return <code>null</code> to hide the indicator entirely. You can also use a plugin's <code>renderLoadingIndicator</code> or <code>renderIdleIndicator</code> hooks for the same functionality.</p>
-      </div>
-    </div>
-
-    <!-- Right: Widget -->
-    <div class="panel widget-container">
-      <div id="loading-widget"></div>
-    </div>
-  </div>
+    </section>
+  </main>
 
   <script type="module" src="/src/custom-loading-indicator.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("custom-loading-indicator");
+  </script>
 </body>
 </html>

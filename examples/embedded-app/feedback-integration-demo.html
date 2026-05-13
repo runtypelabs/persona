@@ -5,14 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
-  <title>Feedback Integration Demo - Client Message IDs</title>
+  <title>Feedback Integration Demo</title>
   <style>
-    #feedback-widget {
-      height: 100%;
-    }
-    .feedback-log {
-      max-height: 300px;
-    }
+    .feedback-log { max-height: 300px; }
     .stat-card.upvotes .stat-value { color: #22c55e; }
     .stat-card.downvotes .stat-value { color: #ef4444; }
     .stat-card.copies .stat-value { color: #3b82f6; }
@@ -40,26 +35,17 @@
       border-color: #f59e0b;
       color: #92400e;
     }
-    .action-btn.csat:hover {
-      background: #fde68a;
-    }
+    .action-btn.csat:hover { background: #fde68a; }
     .action-btn.nps {
       background: #f3e8ff;
       border-color: #a855f7;
       color: #6b21a8;
     }
-    .action-btn.nps:hover {
-      background: #e9d5ff;
-    }
+    .action-btn.nps:hover { background: #e9d5ff; }
     .section-title {
       margin: 0 0 0.75rem 0;
       font-size: 0.9rem;
       color: var(--muted);
-    }
-    .divider {
-      border: 0;
-      border-top: 1px solid var(--border);
-      margin: 1rem 0;
     }
     .satisfaction-stats {
       display: grid;
@@ -72,123 +58,124 @@
   </style>
 </head>
 <body>
-  <a href="/" class="back-link">&larr; Back to examples</a>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Feedback Integration</h1>
+          <p>Client-generated message IDs for API tracking. In client token mode, feedback is automatically sent to the Runtype API.</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
 
-  <div class="layout">
-    <!-- Left: Widget -->
-    <div class="panel widget-container">
-      <div id="feedback-widget"></div>
-    </div>
-
-    <!-- Right: Feedback Panel -->
-    <div class="panel">
-      <div class="panel-header">
-        <h2>Feedback Integration Demo</h2>
-        <p>Client-generated message IDs for API tracking</p>
-      </div>
-      <div class="panel-content">
         <div class="info-section">
-          <h3>How it works</h3>
-          <p>
-            Message IDs are generated on the client using <code>generateMessageId()</code>.
-            In client token mode, feedback is automatically sent to the Runtype API.
-            Use the controls below to configure which action buttons appear on messages.
-          </p>
-        </div>
-
-        <!-- Message Actions Config -->
-        <h3 class="section-title">Message Actions</h3>
-        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
-          <div style="display: flex; gap: 1.25rem;">
-            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
-              <input type="checkbox" id="cfg-copy" checked> Copy
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
-              <input type="checkbox" id="cfg-upvote" checked> Upvote
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
-              <input type="checkbox" id="cfg-downvote" checked> Downvote
-            </label>
-          </div>
-          <div style="display: flex; gap: 1rem;">
-            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
-              Visibility
-              <select id="cfg-visibility" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
-                <option value="always" selected>Always</option>
-                <option value="hover">Hover</option>
-              </select>
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
-              Layout
-              <select id="cfg-layout" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
-                <option value="pill-inside" selected>Pill</option>
-                <option value="row-inside">Row</option>
-              </select>
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
-              Align
-              <select id="cfg-align" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
-                <option value="left">Left</option>
-                <option value="center">Center</option>
-                <option value="right" selected>Right</option>
-              </select>
-            </label>
+          <h3>Message actions</h3>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="display: flex; gap: 1.25rem; flex-wrap: wrap;">
+              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+                <input type="checkbox" id="cfg-copy" checked> Copy
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+                <input type="checkbox" id="cfg-upvote" checked> Upvote
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+                <input type="checkbox" id="cfg-downvote" checked> Downvote
+              </label>
+            </div>
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
+                Visibility
+                <select id="cfg-visibility" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
+                  <option value="always" selected>Always</option>
+                  <option value="hover">Hover</option>
+                </select>
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
+                Layout
+                <select id="cfg-layout" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
+                  <option value="pill-inside" selected>Pill</option>
+                  <option value="row-inside">Row</option>
+                </select>
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
+                Align
+                <select id="cfg-align" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
+                  <option value="left">Left</option>
+                  <option value="center">Center</option>
+                  <option value="right" selected>Right</option>
+                </select>
+              </label>
+            </div>
           </div>
         </div>
 
-        <hr class="divider">
-
-        <!-- Message Stats -->
-        <h3 class="section-title">Message Feedback Stats</h3>
-        <div class="stats">
-          <div class="stat-card upvotes">
-            <div class="stat-value" id="upvote-count">0</div>
-            <div class="stat-label">Upvotes</div>
-          </div>
-          <div class="stat-card downvotes">
-            <div class="stat-value" id="downvote-count">0</div>
-            <div class="stat-label">Downvotes</div>
-          </div>
-          <div class="stat-card copies">
-            <div class="stat-value" id="copy-count">0</div>
-            <div class="stat-label">Copies</div>
-          </div>
-        </div>
-
-        <hr class="divider">
-
-        <!-- CSAT/NPS Section -->
-        <h3 class="section-title">Satisfaction Feedback</h3>
-        <div class="satisfaction-stats">
-          <div class="stat-card csat">
-            <div class="stat-value" id="csat-rating">-</div>
-            <div class="stat-label">CSAT (1-5)</div>
-          </div>
-          <div class="stat-card nps">
-            <div class="stat-value" id="nps-rating">-</div>
-            <div class="stat-label">NPS (0-10)</div>
+        <div class="info-section">
+          <h3>Message feedback</h3>
+          <div class="stats">
+            <div class="stat-card upvotes">
+              <div class="stat-value" id="upvote-count">0</div>
+              <div class="stat-label">Upvotes</div>
+            </div>
+            <div class="stat-card downvotes">
+              <div class="stat-value" id="downvote-count">0</div>
+              <div class="stat-label">Downvotes</div>
+            </div>
+            <div class="stat-card copies">
+              <div class="stat-value" id="copy-count">0</div>
+              <div class="stat-label">Copies</div>
+            </div>
           </div>
         </div>
 
-        <div class="button-group">
-          <button class="action-btn csat" id="show-csat">Show CSAT Form</button>
-          <button class="action-btn nps" id="show-nps">Show NPS Form</button>
-        </div>
-
-        <hr class="divider">
-
-        <!-- Event Log -->
-        <h3 class="section-title">Event Log</h3>
-        <div class="feedback-log" id="log-container">
-          <div class="empty-state">
-            <p>No events yet</p>
-            <p style="font-size: 0.75rem;">Send a message or interact with feedback buttons</p>
+        <div class="info-section">
+          <h3>Satisfaction</h3>
+          <div class="satisfaction-stats">
+            <div class="stat-card csat">
+              <div class="stat-value" id="csat-rating">-</div>
+              <div class="stat-label">CSAT (1-5)</div>
+            </div>
+            <div class="stat-card nps">
+              <div class="stat-value" id="nps-rating">-</div>
+              <div class="stat-label">NPS (0-10)</div>
+            </div>
+          </div>
+          <div class="button-group" style="margin-bottom: 0;">
+            <button class="action-btn csat" id="show-csat">Show CSAT Form</button>
+            <button class="action-btn nps" id="show-nps">Show NPS Form</button>
           </div>
         </div>
-      </div>
+
+        <div class="info-section">
+          <h3>Event log</h3>
+          <div class="feedback-log" id="log-container">
+            <div class="empty-state">
+              <p>No events yet</p>
+              <p style="font-size: 0.75rem;">Send a message or interact with feedback buttons</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div class="stage-widget"></div>
     </div>
-  </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">How it works</h3>
+        <p>
+          Message IDs are generated on the client using <code>generateMessageId()</code>.
+          In client token mode, feedback is automatically sent to the Runtype API.
+          Use the controls in the rail to configure which action buttons appear on messages.
+        </p>
+      </div>
+    </section>
+  </main>
 
   <script type="module" src="/src/feedback-integration-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("feedback-integration-demo");
+  </script>
 </body>
 </html>

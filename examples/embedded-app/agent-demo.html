@@ -6,27 +6,66 @@
   <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Agent Loop Execution Demo</title>
-  <style>
-    #agent-widget {
-      height: 100%;
-    }
-  </style>
 </head>
-<body class="theme-dark">
-  <a href="/" class="back-link">&larr; Back to examples</a>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Agent Loop</h1>
+          <p>Multi-turn agent execution with tool calling. The agent uses Exa web search to build a travel itinerary across staged iterations.</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
 
-  <div class="layout">
-    <!-- Left: Info Panel -->
-    <div class="info-panel">
-      <h1>Agent Loop Execution <span class="badge badge-new">New</span></h1>
-      <p>This demo shows agent execution mode with multi-turn loops and tool calling. The agent uses Exa web search to build a travel itinerary across staged iterations.</p>
+        <div class="toggle-section">
+          <label for="iteration-toggle">Separate Messages Per Iteration</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="iteration-toggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-status" id="iteration-status">iterationDisplay: 'separate'</div>
+      </aside>
 
-      <div class="info-section">
-        <h3>How it works</h3>
+      <div class="stage-widget"></div>
+    </div>
+    <a class="fullscreen-exit" href="#mount=inline" data-fullscreen-exit>Exit fullscreen</a>
+
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">How it works</h3>
         <p>Set <code>config.agent</code> with a model, system prompt, and loop config. The widget sends this to the dispatch API and handles agent-specific SSE events: <code>agent_start</code>, <code>agent_turn_delta</code>, <code>tool_*</code> (with optional <code>agentContext</code>), <code>agent_iteration_*</code>, and <code>agent_complete</code>.</p>
       </div>
 
-      <div class="code-block">
+      <div class="notes-section">
+        <h3 class="notes-section-title">Iteration display</h3>
+        <p><strong>separate:</strong> Each iteration creates its own message bubble.<br>
+        <strong>merged:</strong> All iterations stream into a single message.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Agent events</h3>
+        <p>The widget handles these agent-specific SSE events:</p>
+        <p style="margin-top: 0.5rem; font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.8;">
+          agent_start &rarr; agent_iteration_start &rarr; agent_turn_start &rarr; agent_turn_delta (text/thinking) &rarr; agent_turn_complete &rarr; tool_start/tool_delta/tool_complete (with agentContext) &rarr; agent_iteration_complete &rarr; agent_complete
+        </p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Thinking content</h3>
+        <p>When <code>contentType: 'thinking'</code> is received in <code>agent_turn_delta</code>, it appears as a reasoning bubble (same as extended thinking in flow mode).</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Backward compatible</h3>
+        <p>Agent mode is opt-in. Without <code>config.agent</code>, the widget uses flow dispatch as before. Both modes share the same SSE streaming infrastructure.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Config snippet</h3>
+        <div class="code-block">
 <span class="comment">// Agent execution configuration</span>
 {
   <span class="prop">agent</span>: {
@@ -45,49 +84,15 @@
     <span class="prop">recordMode</span>: <span class="string">'virtual'</span>
   }
 }
+        </div>
       </div>
-
-      <div class="info-section">
-        <h3>Iteration Display</h3>
-        <p>Control how multiple iterations appear in the chat with <code>iterationDisplay</code>:<br>
-        <strong>separate:</strong> Each iteration creates its own message bubble.<br>
-        <strong>merged:</strong> All iterations stream into a single message.</p>
-      </div>
-
-      <div class="toggle-section">
-        <label for="iteration-toggle">Separate Messages Per Iteration</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="iteration-toggle" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="toggle-status" id="iteration-status">iterationDisplay: 'separate'</div>
-
-      <div class="info-section">
-        <h3>Agent Events</h3>
-        <p>The widget handles these agent-specific SSE events:</p>
-        <p style="margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; line-height: 1.8;">
-          agent_start &rarr; agent_iteration_start &rarr; agent_turn_start &rarr; agent_turn_delta (text/thinking) &rarr; agent_turn_complete &rarr; tool_start/tool_delta/tool_complete (with agentContext) &rarr; agent_iteration_complete &rarr; agent_complete
-        </p>
-      </div>
-
-      <div class="info-section">
-        <h3>Thinking Content</h3>
-        <p>When <code>contentType: 'thinking'</code> is received in <code>agent_turn_delta</code>, it appears as a reasoning bubble (same as extended thinking in flow mode).</p>
-      </div>
-
-      <div class="info-section">
-        <h3>Backward Compatible</h3>
-        <p>Agent mode is opt-in. Without <code>config.agent</code>, the widget uses flow dispatch as before. Both modes share the same SSE streaming infrastructure.</p>
-      </div>
-    </div>
-
-    <!-- Right: Widget -->
-    <div class="panel widget-container">
-      <div id="agent-widget"></div>
-    </div>
-  </div>
+    </section>
+  </main>
 
   <script type="module" src="/src/agent-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("agent-demo");
+  </script>
 </body>
 </html>

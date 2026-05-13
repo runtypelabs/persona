@@ -59,6 +59,7 @@
       color: #0ea5e9;
     }
   </style>
+  <style>body { margin-top: 44px !important; }</style>
 </head>
 <body>
   <h1>Widget Preview Mode Demo</h1>
@@ -145,6 +146,11 @@ if (widget) {
       s.setAttribute('data-preview-param', 'preview-agent');
       document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
     })();
+  </script>
+
+  <script type="module">
+    import { renderStandaloneNav } from "/src/standalone-nav.ts";
+    renderStandaloneNav("preview-mode");
   </script>
 </body>
 </html>

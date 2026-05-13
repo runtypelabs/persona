@@ -3,19 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css">
     <link rel="icon" href="/favicon.ico" />
     <title>Streaming Chat Widget – Dynamic Form Fields Reference</title>
     <style>
-      .demo-container code {
-        background: #f1f5f9;
-        border-radius: 4px;
-        padding: 1px 4px;
-        font-size: 0.8125rem;
+
+      /* The preview pane needs to scroll because the tabbed panels are tall. */
+      .fields-pane {
+        padding: 1.5rem;
+        overflow-y: auto;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
       }
 
       /* ---- Tabbed field reference ---- */
       .form-tabs {
-        margin-top: 1rem;
+        margin-top: 0;
       }
       .form-tabs-tablist {
         display: flex;
@@ -110,25 +114,14 @@
     </style>
   </head>
   <body>
-    <main class="demo-container">
-      <section>
-        <h1>Dynamic Form Fields Reference</h1>
-        <p>
-          A side-by-side reference of every field type, layout option, and
-          helper-state the bundled <code>DynamicForm</code> component
-          supports. Each tab mounts a fresh widget and uses
-          <code>injectComponentDirective(...)</code> to render the form on
-          load — no LLM round-trip — and shows the directive
-          <code>props</code> on the left.
-        </p>
-        <p>
-          Use these as a copy-paste template when authoring prompts that
-          tell the model what <code>fields</code> to emit, or as a smoke
-          test for theme tweaks.
-        </p>
-      </section>
+    <main class="shell-main">
+      <header class="title-strip">
+        <h1>Dynamic Form Fields</h1>
+        <p>Reference for every field type, layout option, and helper state the bundled <code>DynamicForm</code> component supports.</p>
+      </header>
 
-      <section>
+      <div class="stage stage--full">
+        <div class="fields-pane">
         <div class="form-tabs" id="fields-tabs">
           <div class="form-tabs-tablist" role="tablist" aria-label="Form field reference">
             <button
@@ -221,9 +214,37 @@
             </div>
           </div>
         </div>
+        </div>
+      </div>
+
+      <section class="notes">
+        <h2 class="notes-heading">Notes</h2>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">How it works</h3>
+          <p>Each tab mounts a fresh widget and uses <code>injectComponentDirective(...)</code> to render the form on load — no LLM round-trip — and shows the directive <code>props</code> JSON beside it.</p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Use these as</h3>
+          <p>A copy-paste template when authoring prompts that tell the model what <code>fields</code> to emit, or a smoke test for theme tweaks.</p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Tabs</h3>
+          <p>
+            <strong>Field types</strong> — text, email, tel, url, number, date, time, textarea<br>
+            <strong>Layout widths</strong> — full vs half (paired half fields share a row)<br>
+            <strong>Helpers + required</strong> — <code>helper_text</code>, red asterisk on required fields
+          </p>
+        </div>
       </section>
     </main>
 
     <script type="module" src="/src/dynamic-form-fields-demo.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("dynamic-form-fields");
+    </script>
   </body>
 </html>

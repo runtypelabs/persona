@@ -3,19 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" href="/favicon.ico" />
-    <title>Shopping Agent Demo</title>
+    <link rel="stylesheet" href="/src/demo-shared.css">
+    <link rel="icon" href="/favicon.ico" />
+    <title>Action Middleware — Persona</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <style>
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        color: #1e293b;
-        line-height: 1.6;
+      /* Scope shop styles to the preview pane so Tailwind + custom rules
+         don't leak into the shared rail. */
+      .shop-pane {
+        padding: 0;
+        overflow-y: auto;
       }
       .container {
         max-width: 1200px;
@@ -183,9 +181,21 @@
       }
     </style>
   </head>
-  <body class="bg-white">
-    <div class="bg-white">
-      <header class="bg-white">
+  <body>
+    <main class="shell-main">
+      <header class="title-strip">
+        <h1>Action Middleware</h1>
+        <p>Live DOM context on every message; structured actions for navigation, cart, and checkout. Open the launcher (bottom-right) and ask the agent to add items, navigate, or check out.</p>
+      </header>
+
+      <div class="stage-toolbar">
+        <button class="btn" id="clear-storage-btn">Clear chat history &amp; reset</button>
+        <span style="font-size: 0.8rem; color: var(--muted); margin-left: auto;">Live shop · launcher in bottom-right</span>
+      </div>
+
+      <div class="stage stage--full">
+        <div class="stage-widget shop-pane">
+        <header class="bg-white">
         <nav aria-label="Top" class="mx-auto max-w-2xl px-4 sm:px-6 lg:max-w-7xl lg:px-8">
           <div class="border-b border-gray-200">
             <div class="flex h-16 items-center">
@@ -231,10 +241,9 @@
             </div>
           </div>
         </nav>
-        
-        
+
+
       </header>
-    </div>
 
     <!-- <div class="relative isolate px-6 pt-14 lg:px-8">
       <div aria-hidden="true" class="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80">
@@ -256,7 +265,6 @@
       </div>
     </div> -->
 
-    <div class="bg-white">
       <div class="mx-auto max-w-2xl px-4 lg:max-w-7xl lg:px-8">
         <!-- <h2 class="text-2xl font-bold tracking-tight text-gray-900">Popular Products</h2> -->
 
@@ -446,22 +454,24 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <div class="container">
-      <div class="cart-section" style="margin-top: 2rem;">
-        <h2>Debug Tools</h2>
-        <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1rem;">
-          Clear chat history and navigation flags to start fresh
-        </p>
-        <button class="ClearStorageButton-button" id="clear-storage-btn">
-          Clear Chat History & Reset
-        </button>
       </div>
-    </div>
+
+      <section class="notes">
+        <h2 class="notes-heading">Notes</h2>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">How it works</h3>
+          <p>Per-message middleware enriches the request with the live DOM. The agent emits structured action JSON (<code>NAVIGATE</code>, <code>ADD_TO_CART</code>, <code>CHECKOUT</code>) that <code>parseActionResponse</code> extracts and the host executes — with persisted ID tracking so an action runs at most once.</p>
+        </div>
+      </section>
+    </main>
 
     <div id="launcher-root"></div>
     <script type="module" src="/src/action-middleware-demo.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("action-middleware");
+    </script>
     <script>
       // Cart functionality
       let cart = [];

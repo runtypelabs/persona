@@ -7,9 +7,7 @@
   <link rel="icon" href="/favicon.ico" />
   <title>Focus Input Demo</title>
   <style>
-    .section {
-      margin-bottom: 1.5rem;
-    }
+    .section { margin-bottom: 1.5rem; }
     .section h3 {
       margin: 0 0 0.5rem 0;
       font-size: 0.9rem;
@@ -38,63 +36,66 @@
       font-size: 0.75rem;
       color: var(--muted);
     }
-    .widget-container { height: 500px; }
-    #inline-widget { height: 100%; }
-    #launcher-root { height: 100%; }
   </style>
 </head>
 <body>
-  <a href="/" class="back-link">&larr; Back to examples</a>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Focus Input</h1>
+          <p>Three ways to control chat input focus: <code>autoFocusInput</code> config, <code>controller.focusInput()</code>, and the <code>persona:focusInput</code> DOM event.</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
 
-  <div class="layout">
-    <div class="info-panel">
-      <h1>Focus Input Demo</h1>
-      <p>Test the three ways to control chat input focus: <code>autoFocusInput</code> config, <code>controller.focusInput()</code>, and <code>persona:focusInput</code> DOM event.</p>
-
-      <div class="section">
-        <h3>1. autoFocusInput (init parameter)</h3>
-        <p>When enabled, the input focuses after the panel opens and the open animation completes (~200ms).</p>
-        <div class="checkbox-row">
-          <input type="checkbox" id="auto-focus-toggle" />
-          <label for="auto-focus-toggle">Enable autoFocusInput</label>
+        <div class="section">
+          <h3>1. autoFocusInput</h3>
+          <div class="checkbox-row">
+            <input type="checkbox" id="auto-focus-toggle" />
+            <label for="auto-focus-toggle">Enable autoFocusInput</label>
+          </div>
+          <p style="font-size: 0.8rem; margin-top: 0.25rem;">For launcher mode, open the launcher to see auto-focus. For inline mode, the change takes effect on next message.</p>
         </div>
-        <p style="font-size: 0.85rem; margin-top: 0.25rem;">Toggle on, then open the launcher (click the floating button) — the input should auto-focus. For inline, reload the page with the checkbox on.</p>
-      </div>
 
-      <div class="section">
-        <h3>2. controller.focusInput()</h3>
-        <p>Programmatically focus the input. Returns <code>false</code> if the launcher panel is closed.</p>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="focus-inline">Focus Inline</button>
-          <button class="btn btn-primary" id="focus-launcher">Focus Launcher</button>
+        <div class="section">
+          <h3>2. controller.focusInput()</h3>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="focus-active">Focus active widget</button>
+          </div>
         </div>
-      </div>
 
-      <div class="section">
-        <h3>3. persona:focusInput (DOM event)</h3>
-        <p>Dispatch a window event to focus a specific instance or all instances.</p>
-        <div class="btn-row">
-          <button class="btn" id="focus-win-all">Focus All</button>
-          <button class="btn" id="focus-win-inline">Focus Inline Only</button>
-          <button class="btn" id="focus-win-launcher">Focus Launcher Only</button>
-          <button class="btn" id="focus-win-wrong">Focus Wrong ID</button>
+        <div class="section">
+          <h3>3. persona:focusInput (DOM event)</h3>
+          <div class="btn-row">
+            <button class="btn" id="focus-win-all">Focus All</button>
+            <button class="btn" id="focus-win-wrong">Focus Wrong ID</button>
+          </div>
         </div>
-      </div>
 
-      <div class="section">
-        <h3>Log</h3>
-        <div class="log" id="log"></div>
-      </div>
+        <div class="section">
+          <h3>Log</h3>
+          <div class="log" id="log"></div>
+        </div>
+      </aside>
+
+      <div class="stage-widget"></div>
     </div>
 
-    <div class="panel widget-container">
-      <p style="padding: 1rem; margin: 0; font-size: 0.9rem; color: var(--muted);">Inline widget (always visible). Launcher floats bottom-right.</p>
-      <div id="inline-widget" style="height: 400px;"></div>
-    </div>
-  </div>
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
 
-  <div id="launcher-root" style="position: fixed; bottom: 1rem; right: 1rem; z-index: 50;"></div>
+      <div class="notes-section">
+        <h3 class="notes-section-title">How it works</h3>
+        <p>The <code>autoFocusInput</code> config focuses the input after the panel opens (~200ms). <code>focusInput()</code> programmatically focuses and returns <code>false</code> if the launcher panel is closed. The window event accepts a target <code>instanceId</code>.</p>
+        <p>Use the toggle above to compare inline vs. launcher behavior.</p>
+      </div>
+    </section>
+  </main>
 
   <script type="module" src="/src/focus-input-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("focus-input-demo");
+  </script>
 </body>
 </html>

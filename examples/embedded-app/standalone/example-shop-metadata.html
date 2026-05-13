@@ -147,6 +147,7 @@
       color: #78350f;
     }
   </style>
+  <style>body { margin-top: 44px !important; }</style>
 </head>
 <body>
   <header>
@@ -780,5 +781,9 @@
        END OF SHOPPING ASSISTANT WIDGET
        ══════════════════════════════════════════════════════════════════════ -->
 
+  <script type="module">
+    import { renderStandaloneNav } from "/src/standalone-nav.ts";
+    renderStandaloneNav("example-shop-metadata");
+  </script>
 </body>
 </html>
