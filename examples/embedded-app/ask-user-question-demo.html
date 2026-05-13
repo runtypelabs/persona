@@ -119,6 +119,17 @@
             </div>
 
             <div class="section">
+              <label>Resume mock (after answer)</label>
+              <div class="mode-group" id="resume-mock-selector">
+                <button class="mode-btn" data-resume="off">Off</button>
+                <button class="mode-btn active" data-resume="fast">Fast (300ms)</button>
+                <button class="mode-btn" data-resume="slow">Slow (2s)</button>
+                <button class="mode-btn" data-resume="hang">Hang</button>
+              </div>
+              <p class="hint">Intercepts the <code>/resume</code> POST that fires after you answer so the typing indicator is observable. <em>Hang</em> never resolves — use Reset transcript to recover.</p>
+            </div>
+
+            <div class="section">
               <label>Question presets</label>
               <div class="btn-group" id="preset-group">
                 <button data-preset="single5">Single-select (5 short)</button>
@@ -160,6 +171,17 @@
           <h3 class="notes-section-title">Persistence</h3>
           <p>Off (default) passes <code>persistState: false</code> — nothing is written to <code>localStorage</code>, so reloading wipes any injected tool calls. On wires up a <code>storageAdapter</code> with a demo-scoped key, so the active question survives a reload. "Reset transcript" still clears either way.</p>
         </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Resume mock — verifying the typing indicator</h3>
+          <p>The widget shows a three-dot typing bubble during the silent gap between the user answering a question and the agent's next streamed token. Pick a preset, answer it, and watch the indicator render below the answer bubble until the simulated <code>/resume</code> response lands.</p>
+          <ul>
+            <li><strong>Fast (300ms)</strong> — close to a real low-latency backend; the indicator briefly appears then completes.</li>
+            <li><strong>Slow (2s)</strong> — easy to inspect; the indicator should remain mounted for ~2 seconds, then a simulated assistant reply appears.</li>
+            <li><strong>Hang</strong> — indicator stays mounted indefinitely. Click <em>Reset transcript</em> to recover.</li>
+            <li><strong>Off</strong> — falls through to the real (no-op) host; the answer click resolves into a fetch error and the indicator clears via the error path.</li>
+          </ul>
+        </div>
       </section>
     </main>
 
@@ -192,6 +214,83 @@
       let autoAdvance = true;
       let persistOn = readPersistPref();
       let controller = null;
+
+      // Resume-mock state. The demo's apiUrl is a no-op host, so without this
+      // mock the POST that fires after answering a question rejects immediately
+      // and the typing indicator we want to show off only flashes for ~1 frame.
+      // The mock intercepts `/resume` POSTs and returns a synthetic SSE stream
+      // after a configurable delay, so the gap between answer-click and the
+      // next streamed token is visible. Default is "fast" — flip to "slow" or
+      // "hang" to study the indicator in detail; flip to "off" to confirm the
+      // un-intercepted behavior (indicator flashes then errors).
+      let resumeMockMode = "fast"; // "off" | "fast" | "slow" | "hang"
+      const RESUME_MOCK_DELAYS = { off: 0, fast: 300, slow: 2000, hang: Infinity };
+
+      // Wrap fetch once. We intercept any POST whose URL ends with `/resume`
+      // (matches both the demo's noop apiUrl and any real proxy) when the mock
+      // is on; otherwise we pass straight through to the original implementation.
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        try {
+          const url = typeof input === "string" ? input : (input?.url ?? "");
+          const method = (init?.method ?? (input && typeof input !== "string" ? input.method : "GET") ?? "GET").toUpperCase();
+          if (resumeMockMode !== "off" && method === "POST" && /\/resume(?:\?|$)/.test(url)) {
+            return mockResumeResponse(init?.body);
+          }
+        } catch {
+          // Any detection error → fall through to real fetch.
+        }
+        return originalFetch(input, init);
+      };
+
+      function mockResumeResponse(body) {
+        const delay = RESUME_MOCK_DELAYS[resumeMockMode] ?? 0;
+        let parsedBody = null;
+        try {
+          parsedBody = typeof body === "string" ? JSON.parse(body) : null;
+        } catch {}
+        const toolOutputs = parsedBody?.toolOutputs ?? {};
+        const answer = toolOutputs.ask_user_question;
+        const answerText = typeof answer === "object" && answer !== null
+          ? Object.entries(answer).map(([q, v]) => `${q}: ${Array.isArray(v) ? v.join(", ") : v}`).join(" • ")
+          : String(answer ?? "(no answer)");
+
+        log(`mock /resume → delay=${delay === Infinity ? "∞" : delay + "ms"}, answer=${answerText}`, "info");
+
+        if (delay === Infinity) {
+          // Hang: a stream that never produces a chunk and never closes.
+          const stream = new ReadableStream({ start() { /* intentionally idle */ } });
+          return Promise.resolve(new Response(stream, {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          }));
+        }
+
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            const encoder = new TextEncoder();
+            const replyText = `Thanks — got "${answerText}". (simulated response)`;
+            const sse = [
+              `data: {"type":"step_chunk","id":"sim-step","name":"sim","executionType":"prompt","index":0,"text":${JSON.stringify(replyText)}}`,
+              ``,
+              `data: {"type":"step_complete","id":"sim-step","name":"sim","executionType":"prompt","index":0,"success":true,"result":{"promptId":"sim","promptName":"sim","response":${JSON.stringify(replyText)},"tokens":{"input":0,"output":0,"total":0},"cost":0,"executionTime":${delay},"order":0},"executionTime":${delay}}`,
+              ``,
+              `data: {"type":"flow_complete","flowId":"sim-flow","success":true,"duration":${delay},"completedAt":${JSON.stringify(new Date().toISOString())},"totalTokensUsed":0}`,
+              ``,
+            ].join("\n");
+            const stream = new ReadableStream({
+              start(c) {
+                c.enqueue(encoder.encode(sse));
+                c.close();
+              },
+            });
+            resolve(new Response(stream, {
+              status: 200,
+              headers: { "Content-Type": "text/event-stream" },
+            }));
+          }, delay);
+        });
+      }
 
       const PRESETS = {
         single5: {
@@ -456,6 +555,19 @@
         syncPersistButtons();
         updateSummary();
         createWidget();
+      });
+
+      // Resume-mock toggle. Switching modes doesn't re-mount the widget — the
+      // wrapped fetch reads `resumeMockMode` on every call, so the next
+      // /resume POST picks up the new delay.
+      const resumeMockSelector = document.getElementById("resume-mock-selector");
+      resumeMockSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        resumeMockSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        resumeMockMode = btn.dataset.resume;
+        log(`Resume mock mode → ${resumeMockMode}`, "info");
       });
 
       // Preset buttons.
