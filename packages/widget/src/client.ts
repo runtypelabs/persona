@@ -1125,6 +1125,11 @@ export class AgentWidgetClient {
     };
 
     let assistantMessage: AgentWidgetMessage | null = null;
+    // Tracks the most recently touched assistant text message for the
+    // current agent turn so `agent_turn_complete.stopReason` can attach
+    // to the final visible text segment even after `assistantMessage`
+    // has been finalized at a tool-call boundary within the turn.
+    let lastAssistantInTurn: AgentWidgetMessage | null = null;
     // Reference to track assistant message for custom event handler
     const assistantMessageRef = { current: null as AgentWidgetMessage | null };
     // Track current partId for message segmentation at tool boundaries
@@ -2464,7 +2469,11 @@ export class AgentWidgetClient {
             }
           }
         } else if (payloadType === "agent_turn_start") {
-          // Nothing to do - turn tracking is handled by deltas
+          // Reset the per-turn assistant tracker. lastAssistantInTurn is
+          // used by agent_turn_complete to attach stopReason to the final
+          // text segment of the turn even if that segment was sealed by an
+          // intervening tool-call boundary.
+          lastAssistantInTurn = null;
         } else if (payloadType === "agent_turn_delta") {
           if (payload.contentType === 'text') {
             // Stream text to assistant message
@@ -2476,6 +2485,7 @@ export class AgentWidgetClient {
               turnId: payload.turnId,
               agentName: agentExecution?.agentName
             };
+            lastAssistantInTurn = assistant;
             emitMessage(assistant);
           } else if (payload.contentType === 'thinking') {
             // Stream thinking content to a reasoning message
@@ -2526,19 +2536,33 @@ export class AgentWidgetClient {
           // Attach the turn-level stopReason to the assistant message
           // produced by this turn. Only overwrite the current message —
           // prior turns already sealed their own stopReason via step_complete.
+          // Falls back to lastAssistantInTurn when the current bubble was
+          // sealed at a tool-call boundary mid-turn, so the notice still
+          // attaches to the final visible text segment.
           const turnStopReason = (payload as any).stopReason as
             | StopReasonKind
             | undefined;
-          if (turnStopReason && assistantMessage !== null) {
+          const stopReasonTarget = assistantMessage ?? lastAssistantInTurn;
+          if (turnStopReason && stopReasonTarget !== null) {
             const turnId = payload.turnId;
             const matchesTurn =
-              !turnId || assistantMessage.agentMetadata?.turnId === turnId;
+              !turnId || stopReasonTarget.agentMetadata?.turnId === turnId;
             if (matchesTurn) {
-              assistantMessage.stopReason = turnStopReason;
-              emitMessage(assistantMessage);
+              stopReasonTarget.stopReason = turnStopReason;
+              emitMessage(stopReasonTarget);
             }
           }
         } else if (payloadType === "agent_tool_start") {
+          // Finalize any in-flight assistant text bubble so subsequent text
+          // deltas in this turn create a NEW bubble. Without this, text
+          // emitted before AND after a tool call accumulates into one
+          // message that renders below all the tool bubbles, losing the
+          // chronological text→tool→text→tool interleaving.
+          if (assistantMessage) {
+            assistantMessage.streaming = false;
+            emitMessage(assistantMessage);
+            assistantMessage = null;
+          }
           const toolId = payload.toolCallId ?? `agent-tool-${nextSequence()}`;
           trackToolId(getToolCallKey(payload), toolId);
           const toolMessage = ensureToolMessage(toolId);

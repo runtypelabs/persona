@@ -2718,6 +2718,240 @@ describe('AgentWidgetClient - stopReason propagation', () => {
 });
 
 // ============================================================================
+// Within-turn text/tool interleaving — assistant text bubbles must seal at
+// each agent_tool_start so the chronological text→tool→text→tool sequence
+// renders as distinct timeline entries instead of one merged bubble that
+// appears below all the tool cards.
+// ============================================================================
+
+describe('AgentWidgetClient - agent_turn text/tool interleaving', () => {
+  const collectMessages = (events: AgentWidgetEvent[]): AgentWidgetMessage[] => {
+    const byId = new Map<string, AgentWidgetMessage>();
+    const order: string[] = [];
+    for (const e of events) {
+      if (e.type !== 'message') continue;
+      if (!byId.has(e.message.id)) order.push(e.message.id);
+      byId.set(e.message.id, e.message);
+    }
+    return order.map((id) => byId.get(id)!);
+  };
+
+  it('seals the assistant text bubble at each agent_tool_start so subsequent text creates a new bubble', async () => {
+    const execId = 'exec_interleave';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxTurns: 1,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_turn_start', {
+        executionId: execId, iteration: 1, turnIndex: 0,
+        role: 'assistant', turnId: 'turn_1', seq: 3,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'before tool 1',
+        contentType: 'text', turnId: 'turn_1', seq: 4,
+      }),
+      sseEvent('agent_tool_start', {
+        executionId: execId, iteration: 1,
+        toolCallId: 'call_1', toolName: 'search', toolType: 'builtin', seq: 5,
+      }),
+      sseEvent('agent_tool_complete', {
+        executionId: execId, iteration: 1,
+        toolCallId: 'call_1', toolName: 'search', success: true,
+        executionTime: 10, seq: 6,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'between tools',
+        contentType: 'text', turnId: 'turn_1', seq: 7,
+      }),
+      sseEvent('agent_tool_start', {
+        executionId: execId, iteration: 1,
+        toolCallId: 'call_2', toolName: 'fetch', toolType: 'builtin', seq: 8,
+      }),
+      sseEvent('agent_tool_complete', {
+        executionId: execId, iteration: 1,
+        toolCallId: 'call_2', toolName: 'fetch', success: true,
+        executionTime: 10, seq: 9,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'after tool 2',
+        contentType: 'text', turnId: 'turn_1', seq: 10,
+      }),
+      sseEvent('agent_turn_complete', {
+        executionId: execId, iteration: 1, role: 'assistant',
+        turnId: 'turn_1', completedAt: new Date().toISOString(),
+        stopReason: 'end_turn', seq: 11,
+      }),
+      sseEvent('agent_iteration_complete', {
+        executionId: execId, iteration: 1, toolCallsMade: 2,
+        stopConditionMet: true, completedAt: new Date().toISOString(), seq: 12,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'complete',
+        completedAt: new Date().toISOString(), seq: 13,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const messages = collectMessages(events);
+    const assistants = messages.filter((m) => m.role === 'assistant' && m.variant !== 'tool');
+    const tools = messages.filter((m) => m.variant === 'tool');
+
+    expect(assistants.map((m) => m.content)).toEqual([
+      'before tool 1',
+      'between tools',
+      'after tool 2',
+    ]);
+    expect(tools.map((m) => m.toolCall?.name)).toEqual(['search', 'fetch']);
+    expect(new Set(assistants.map((m) => m.id)).size).toBe(3);
+  });
+
+  it('attaches agent_turn_complete.stopReason to the final assistant text segment when the turn ends with text', async () => {
+    const execId = 'exec_stopreason_tail_text';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxTurns: 1,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_turn_start', {
+        executionId: execId, iteration: 1, turnIndex: 0,
+        role: 'assistant', turnId: 'turn_1', seq: 3,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'first segment',
+        contentType: 'text', turnId: 'turn_1', seq: 4,
+      }),
+      sseEvent('agent_tool_start', {
+        executionId: execId, iteration: 1,
+        toolCallId: 'call_1', toolName: 'search', toolType: 'builtin', seq: 5,
+      }),
+      sseEvent('agent_tool_complete', {
+        executionId: execId, iteration: 1,
+        toolCallId: 'call_1', toolName: 'search', success: true,
+        executionTime: 10, seq: 6,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'final segment',
+        contentType: 'text', turnId: 'turn_1', seq: 7,
+      }),
+      sseEvent('agent_turn_complete', {
+        executionId: execId, iteration: 1, role: 'assistant',
+        turnId: 'turn_1', completedAt: new Date().toISOString(),
+        stopReason: 'length', seq: 8,
+      }),
+      sseEvent('agent_iteration_complete', {
+        executionId: execId, iteration: 1, toolCallsMade: 1,
+        stopConditionMet: true, completedAt: new Date().toISOString(), seq: 9,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'complete',
+        completedAt: new Date().toISOString(), seq: 10,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const assistants = collectMessages(events).filter(
+      (m) => m.role === 'assistant' && m.variant !== 'tool'
+    );
+    expect(assistants).toHaveLength(2);
+    expect(assistants[0].content).toBe('first segment');
+    expect(assistants[0].stopReason).toBeUndefined();
+    expect(assistants[1].content).toBe('final segment');
+    expect(assistants[1].stopReason).toBe('length');
+  });
+
+  it('attaches agent_turn_complete.stopReason to the preceding text segment when the turn ends with a tool call', async () => {
+    const execId = 'exec_stopreason_tail_tool';
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxTurns: 1,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_turn_start', {
+        executionId: execId, iteration: 1, turnIndex: 0,
+        role: 'assistant', turnId: 'turn_1', seq: 3,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'about to call tool',
+        contentType: 'text', turnId: 'turn_1', seq: 4,
+      }),
+      sseEvent('agent_tool_start', {
+        executionId: execId, iteration: 1,
+        toolCallId: 'call_1', toolName: 'search', toolType: 'builtin', seq: 5,
+      }),
+      sseEvent('agent_tool_complete', {
+        executionId: execId, iteration: 1,
+        toolCallId: 'call_1', toolName: 'search', success: true,
+        executionTime: 10, seq: 6,
+      }),
+      sseEvent('agent_turn_complete', {
+        executionId: execId, iteration: 1, role: 'assistant',
+        turnId: 'turn_1', completedAt: new Date().toISOString(),
+        stopReason: 'max_tool_calls', seq: 7,
+      }),
+      sseEvent('agent_iteration_complete', {
+        executionId: execId, iteration: 1, toolCallsMade: 1,
+        stopConditionMet: true, completedAt: new Date().toISOString(), seq: 8,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'max_tool_calls',
+        completedAt: new Date().toISOString(), seq: 9,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const assistants = collectMessages(events).filter(
+      (m) => m.role === 'assistant' && m.variant !== 'tool'
+    );
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0].content).toBe('about to call tool');
+    expect(assistants[0].stopReason).toBe('max_tool_calls');
+  });
+});
+
+// ============================================================================
 // step_await (LOCAL tool pause) + resumeFlow
 // ============================================================================
 
