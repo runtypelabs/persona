@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" />
+  <title>WebMCP Consumption Demo</title>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>WebMCP — Page tools</h1>
+          <p>
+            This page registers two tools through
+            <code>navigator.modelContext.registerTool()</code> (via
+            <code>@runtypelabs/webmcp-polyfill</code>). Persona snapshots them on
+            every dispatch and ships them as <code>clientTools[]</code>. When the
+            agent calls one, the widget executes it on the page and posts the
+            result back via <code>/resume</code>.
+          </p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
+
+        <section class="notes-section">
+          <h3 class="notes-section-title">Registered tools</h3>
+          <ul>
+            <li>
+              <code>search_products</code> — annotated
+              <code>readOnlyHint: true</code>. Returns mock catalog hits.
+            </li>
+            <li>
+              <code>add_to_cart</code> — sensitive operation. Calls
+              <code>client.requestUserInteraction</code> for a per-call confirm.
+            </li>
+          </ul>
+        </section>
+
+        <section class="notes-section">
+          <h3 class="notes-section-title">Live state</h3>
+          <pre id="webmcp-log" class="webmcp-log"></pre>
+        </section>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Try it</h2>
+      <ol>
+        <li>Ask <em>"search for blue running shoes"</em> — the agent calls <code>search_products</code>; Persona's confirm bubble opens (Phase 3 confirms every <code>webmcp:*</code> call, even <code>readOnlyHint: true</code> ones — that lifts in Phase 4).</li>
+        <li>Ask <em>"add SKU SHOE-001 to my cart"</em> — the agent calls <code>add_to_cart</code>; Persona's outer confirm fires, and then the tool's <code>client.requestUserInteraction(...)</code> fires a second confirm.</li>
+        <li>Open DevTools → Network → look for <code>/dispatch</code> requests and confirm the body has a <code>clientTools[]</code> array with the two tools, including <code>origin: "webmcp"</code> and <code>pageOrigin</code>.</li>
+      </ol>
+      <p>
+        Server-side, the Runtype surface must have
+        <code>behavior.webmcp.enabled = true</code> for the agent to see these
+        tools (Phase 1).
+      </p>
+    </section>
+  </main>
+
+  <script type="module" src="/src/webmcp-demo.ts"></script>
+</body>
+</html>

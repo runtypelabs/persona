@@ -20,8 +20,10 @@ import {
   ClientFeedbackRequest,
   ClientFeedbackType,
   PersonaArtifactKind,
-  ContentPart
+  ContentPart,
+  WebMcpConfirmHandler
 } from "./types";
+import { WebMcpBridge } from "./webmcp-bridge";
 import {
   extractTextFromJson,
   createPlainTextParser,
@@ -169,6 +171,10 @@ export class AgentWidgetClient {
   private clientSession: ClientSession | null = null;
   private sessionInitPromise: Promise<ClientSession> | null = null;
 
+  // WebMCP — page-discovered tool consumption (see ./webmcp-bridge).
+  // Constructed lazily: null when `config.webmcp?.enabled !== true`.
+  private readonly webMcpBridge: WebMcpBridge | null;
+
   constructor(private config: AgentWidgetConfig = {}) {
     this.apiUrl = config.apiUrl ?? DEFAULT_ENDPOINT;
     this.headers = {
@@ -183,6 +189,7 @@ export class AgentWidgetClient {
     this.customFetch = config.customFetch;
     this.parseSSEEvent = config.parseSSEEvent;
     this.getHeaders = config.getHeaders;
+    this.webMcpBridge = config.webmcp ? new WebMcpBridge(config.webmcp) : null;
   }
 
   /**
@@ -190,6 +197,43 @@ export class AgentWidgetClient {
    */
   public setSSEEventCallback(callback: SSEEventCallback): void {
     this.onSSEEvent = callback;
+  }
+
+  /**
+   * WebMCP: wire (or replace) the confirm-bubble handler. Called from
+   * `ui.ts` once the widget panel is built and the approval-bubble
+   * chrome is ready to render.
+   */
+  public setWebMcpConfirmHandler(handler: WebMcpConfirmHandler | null): void {
+    this.webMcpBridge?.setConfirmHandler(handler);
+  }
+
+  /**
+   * WebMCP: `true` when the bridge installed the polyfill and can both
+   * snapshot the page registry and execute returned `webmcp:*` tool calls.
+   * `false` for any guard miss (iframe, insecure context, native-deferred,
+   * or `config.webmcp.enabled` not set).
+   */
+  public isWebMcpOperational(): boolean {
+    return this.webMcpBridge?.isOperational() === true;
+  }
+
+  /**
+   * WebMCP: execute a returned `webmcp:<name>` tool call against the page's
+   * registry and return the normalized MCP-shaped result for `/resume`. The
+   * bridge handles confirm-bubble gating, `requestUserInteraction` shimming,
+   * the 30s timeout, and error normalization — callers never see throws.
+   *
+   * Returns `null` when WebMCP is not enabled on this client (signal to the
+   * session that it should fall back to the legacy local-tool resume path,
+   * if any).
+   */
+  public executeWebMcpToolCall(
+    wireToolName: string,
+    args: unknown,
+  ): Promise<import("./types").WebMcpToolResult> | null {
+    if (!this.webMcpBridge) return null;
+    return this.webMcpBridge.executeToolCall(wireToolName, args);
   }
 
   /**
@@ -883,6 +927,13 @@ export class AgentWidgetClient {
       }
     };
 
+    // WebMCP: snapshot the page tool registry per turn and ship as
+    // `clientTools[]`. The server merges these under the `webmcp:` namespace.
+    const webMcpSnapshot = this.webMcpBridge?.snapshotForDispatch();
+    if (webMcpSnapshot && webMcpSnapshot.length > 0) {
+      payload.clientTools = webMcpSnapshot;
+    }
+
     // Add context from providers
     if (this.contextProviders.length) {
       const contextAggregate: Record<string, unknown> = {};
@@ -936,6 +987,12 @@ export class AgentWidgetClient {
       messages: normalizedMessages,
       ...(this.config.flowId && { flowId: this.config.flowId })
     };
+
+    // WebMCP: same per-turn snapshot as buildAgentPayload (flow-dispatch path).
+    const webMcpSnapshot = this.webMcpBridge?.snapshotForDispatch();
+    if (webMcpSnapshot && webMcpSnapshot.length > 0) {
+      payload.clientTools = webMcpSnapshot;
+    }
 
     if (this.contextProviders.length) {
       const contextAggregate: Record<string, unknown> = {};

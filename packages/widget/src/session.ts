@@ -1,4 +1,5 @@
 import { AgentWidgetClient, type SSEEventCallback } from "./client";
+import { isWebMcpToolName } from "./webmcp-bridge";
 import {
   AgentWidgetConfig,
   AgentWidgetEvent,
@@ -65,6 +66,10 @@ export class AgentWidgetSession {
 
   private artifacts = new Map<string, PersonaArtifactRecord>();
   private selectedArtifactId: string | null = null;
+
+  // WebMCP — toolCall.ids that are already executing via the bridge. Guards
+  // against double-trigger when step_await re-emits the same message snapshot.
+  private webMcpInflight: Set<string> = new Set();
 
   // Voice support
   private voiceProvider: VoiceProvider | null = null;
@@ -1280,6 +1285,116 @@ export class AgentWidgetSession {
     }
   }
 
+  /**
+   * Resolve a paused `webmcp:*` LOCAL tool call by executing it against the
+   * host page's tool registry and posting the result to `/resume`.
+   *
+   * Triggered automatically from `handleEvent` when a `step_await`-derived
+   * message arrives with a `webmcp:` prefix — the user does not click a
+   * pill; the bridge's confirm-bubble gate is the only interactive surface.
+   *
+   * Idempotent on the message's `toolCall.id`: re-emits of the same step_await
+   * (e.g. from message coalescing) won't double-fire `tool.execute`. Failure
+   * modes — declined, timed out, throw, unknown tool — all resolve into a
+   * `{ isError: true, content: [...] }` payload that resumes the dispatch
+   * cleanly so the agent can recover.
+   */
+  public async resolveWebMcpToolCall(
+    toolMessage: AgentWidgetMessage,
+  ): Promise<void> {
+    const executionId = toolMessage.agentMetadata?.executionId;
+    const wireToolName = toolMessage.toolCall?.name;
+    const toolCallId = toolMessage.toolCall?.id;
+    if (!executionId || !wireToolName || !toolCallId) return;
+
+    // Dedupe: a single step_await may emit multiple message snapshots; only
+    // one should drive the resume round-trip.
+    if (this.webMcpInflight.has(toolCallId)) return;
+    this.webMcpInflight.add(toolCallId);
+
+    // Mark resolved on the message so the UI's local-tool sheet (if any
+    // generic one ever lands) does not show — this is a fully-automatic
+    // tool from the user's perspective, modulo the confirm bubble.
+    this.upsertMessage({
+      ...toolMessage,
+      agentMetadata: {
+        ...toolMessage.agentMetadata,
+        awaitingLocalTool: false,
+      },
+    });
+
+    // Show the streaming indicator across the network round-trip. /resume
+    // is otherwise silent until the new SSE stream arrives.
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    this.setStreaming(true);
+
+    const args = toolMessage.toolCall?.args;
+    const execPromise = this.client.executeWebMcpToolCall(wireToolName, args);
+    if (!execPromise) {
+      // Client has no bridge (config.webmcp not set). Resume with an error so
+      // the dispatch can advance instead of hanging.
+      await this.resumeWithToolOutput(executionId, wireToolName, {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: "WebMCP not enabled on this widget.",
+          },
+        ],
+      });
+      this.webMcpInflight.delete(toolCallId);
+      return;
+    }
+
+    try {
+      const result = await execPromise;
+      await this.resumeWithToolOutput(executionId, wireToolName, result);
+    } catch (error) {
+      // The bridge normalizes errors into result objects, so reaching this
+      // catch means a network failure during /resume. Surface to onError.
+      const isAbortError =
+        error instanceof Error &&
+        (error.name === "AbortError" ||
+          error.message.includes("aborted") ||
+          error.message.includes("abort"));
+      this.setStreaming(false);
+      this.abortController = null;
+      if (!isAbortError) {
+        this.callbacks.onError?.(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+    } finally {
+      this.webMcpInflight.delete(toolCallId);
+    }
+  }
+
+  /**
+   * POST `/resume` with a single tool's output and pipe the resulting SSE
+   * stream back through `connectStream`. Shared by every local-tool resolve
+   * path (ask_user_question and WebMCP).
+   */
+  private async resumeWithToolOutput(
+    executionId: string,
+    toolName: string,
+    output: unknown,
+  ): Promise<void> {
+    const response = await this.client.resumeFlow(executionId, {
+      [toolName]: output,
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error ?? `Resume failed: ${response.status}`);
+    }
+    if (response.body) {
+      await this.connectStream(response.body, { allowReentry: true });
+    } else {
+      this.setStreaming(false);
+      this.abortController = null;
+    }
+  }
+
   public cancel() {
     this.abortController?.abort();
     this.abortController = null;
@@ -1450,6 +1565,22 @@ export class AgentWidgetSession {
   private handleEvent = (event: AgentWidgetEvent) => {
     if (event.type === "message") {
       this.upsertMessage(event.message);
+
+      // WebMCP auto-resolve: when a step_await emits a tool-variant message
+      // for a `webmcp:*` tool, drive the bridge to execute it and post the
+      // result to /resume. Unlike ask_user_question, no user pill click is
+      // required — the bridge's confirm bubble is the only interactive surface.
+      const tc = event.message.toolCall;
+      if (
+        event.message.agentMetadata?.awaitingLocalTool === true &&
+        tc?.name &&
+        isWebMcpToolName(tc.name) &&
+        this.client.isWebMcpOperational()
+      ) {
+        // Fire-and-forget — `resolveWebMcpToolCall` owns its own error path
+        // (translates failures into MCP isError results so /resume succeeds).
+        void this.resolveWebMcpToolCall(event.message);
+      }
 
       // Track agent execution state from message metadata
       if (event.message.agentMetadata?.executionId) {

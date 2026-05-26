@@ -78,6 +78,12 @@ export type {
   // Approval types
   AgentWidgetApproval,
   AgentWidgetApprovalConfig,
+  // WebMCP — page-discovered tool consumption
+  AgentWidgetWebMcpConfig,
+  ClientToolDefinition,
+  WebMcpConfirmHandler,
+  WebMcpConfirmInfo,
+  WebMcpToolResult,
   // Event stream types
   SSEEventRecord,
   EventStreamConfig,
@@ -121,6 +127,12 @@ export {
 } from "./session";
 export { AgentWidgetClient } from "./client";
 export type { SSEEventCallback } from "./client";
+export {
+  WebMcpBridge,
+  WEBMCP_TOOL_PREFIX,
+  isWebMcpToolName,
+  stripWebMcpPrefix
+} from "./webmcp-bridge";
 export { createLocalStorageAdapter } from "./utils/storage";
 export {
   createActionManager,
