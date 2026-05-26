@@ -1,0 +1,229 @@
+# Persona
+
+> Themeable, pluggable AI chat widget for websites. Zero framework dependencies.
+> Source: https://github.com/runtypelabs/persona
+> npm: https://www.npmjs.com/package/@runtypelabs/persona
+> Docs & demos: https://persona-chat.dev
+> Full reference (config + theming): https://persona-chat.dev/llms-full.txt
+> Agent skills: https://github.com/runtypelabs/skills
+
+Persona is a drop-in streaming chat UI for AI assistants that works on any website. It's built in TypeScript with vanilla JS — no React, Vue, or framework dependency. It renders inside a Shadow DOM for style isolation and ships as ESM, CJS, and IIFE (script tag).
+
+The fastest way to deploy an AI chat experience is with [Runtype](https://runtype.com) — Persona is pre-integrated, so you get streaming chat with tools, voice, theming, and analytics out of the box with zero backend code. Just set a `clientToken` and go. It also works with any SSE-capable backend if you want to bring your own.
+
+## Agent Skills
+
+If you're an AI coding agent, install the Runtype skills for guided help with Persona integration, Runtype product building, and more:
+
+```bash
+npx skills add runtypelabs/skills
+```
+
+This registers skills that activate contextually in Claude Code, Cursor, Copilot, Codex, Windsurf, and 30+ other agents. Key skills:
+
+- **`runtype-persona`** — Embedding, configuring, theming, and debugging Persona widgets. Prefers MCP-generated embed code over hand-written snippets.
+- **`runtype`** — Umbrella skill for all Runtype platform questions. Routes to focused skills and includes detailed reference material.
+- **`runtype-build-product`** — Building and deploying Runtype products (agents, flows, tools, surfaces).
+- **`runtype-admin`** — Operating and debugging live Runtype accounts (traces, logs, evals).
+- **`runtype-templates`** — Packaging products as distributable FPO templates.
+- **`runtype-sdk-marathon`** — Code-first workflows with the TypeScript/Python SDK and Marathon task harness.
+
+Browse and discover skills at [skills.sh](https://skills.sh).
+
+## Install
+
+```bash
+npm install @runtypelabs/persona
+```
+
+## Quick Start — ES Modules
+
+```ts
+import '@runtypelabs/persona/widget.css';
+import { initAgentWidget, markdownPostprocessor } from '@runtypelabs/persona';
+
+const chat = initAgentWidget({
+  target: 'body',
+  config: {
+    apiUrl: '/api/chat/dispatch',
+    launcher: { enabled: true, title: 'AI Assistant' },
+    theme: { accent: '#2563eb' },
+    postprocessMessage: ({ text }) => markdownPostprocessor(text),
+  },
+});
+
+chat.open();
+chat.submitMessage('Hello!');
+chat.on('assistant:complete', (msg) => console.log(msg.content));
+```
+
+## Quick Start — Script Tag (CDN)
+
+```html
+<script>
+  window.siteAgentConfig = {
+    target: 'body',
+    config: {
+      apiUrl: 'https://your-proxy.com/api/chat/dispatch',
+      launcher: { enabled: true, title: 'AI Assistant' },
+    },
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
+```
+
+## Quick Start — Client Token (No Proxy)
+
+```ts
+initAgentWidget({
+  target: 'body',
+  config: {
+    clientToken: 'ct_live_flow01k7_...',
+    launcher: { enabled: true },
+  },
+});
+```
+
+## Initialization
+
+Two entry points:
+
+- `initAgentWidget({ target, config, useShadowDom?, onReady?, windowKey? })` — floating launcher or docked panel. Returns a controller.
+- `createAgentExperience(element, config)` — inline embed with no launcher. Returns a controller.
+
+### Controller API
+
+| Method | Description |
+|---|---|
+| `open()` / `close()` / `toggle()` | Panel visibility |
+| `setMessage(text)` | Set input text without submitting |
+| `submitMessage(text?)` | Send a message |
+| `clearChat()` | Clear conversation |
+| `update(config)` | Merge new config at runtime |
+| `destroy()` | Remove widget and clean up |
+| `on(event, callback)` / `off(event, callback)` | Subscribe to events |
+| `injectAssistantMessage({ content, llmContent? })` | Inject a message programmatically |
+| `injectUserMessage(...)` / `injectSystemMessage(...)` | Inject user/system messages |
+| `injectComponentDirective({ component, props })` | Render a registered component |
+| `startVoiceRecognition()` / `stopVoiceRecognition()` | Voice control |
+| `focusInput()` | Focus the composer |
+| `showEventStream()` / `hideEventStream()` | Event inspector panel |
+
+### Controller Events
+
+| Event | Payload |
+|---|---|
+| `user:message` | `AgentWidgetMessage` (includes `viaVoice`) |
+| `assistant:message` | `AgentWidgetMessage` (stream start) |
+| `assistant:complete` | `AgentWidgetMessage` (stream end) |
+| `voice:state` | `{ active, source, timestamp }` |
+| `widget:opened` / `widget:closed` | `{ open, source, timestamp }` |
+| `widget:state` | `{ open, launcherEnabled, voiceActive, streaming }` |
+| `action:detected` | `{ action, message }` |
+| `message:feedback` | `{ type: 'upvote'|'downvote', messageId, message }` |
+| `message:copy` | `AgentWidgetMessage` |
+
+## Core Config Sections
+
+The full config is passed as `config` to `initAgentWidget()`. Key sections:
+
+- **`apiUrl`** — Your proxy endpoint (or use `clientToken` for direct browser-to-API)
+- **`flowId`** — Runtype flow ID for server-side flow selection
+- **`agent`** — Agent loop config (model, systemPrompt, tools, loopConfig) — mutually exclusive with `flowId`
+- **`theme` / `darkTheme`** — Design tokens (palette, semantic, component-level). See `llms-full.txt` for the full token reference.
+- **`colorScheme`** — `'light'`, `'dark'`, or `'auto'`
+- **`launcher`** — Button/panel config (enabled, title, subtitle, position, mountMode, dock)
+- **`layout`** — Header, messages, and slot configuration
+- **`voiceRecognition`** — Speech-to-text (browser Web Speech API or Runtype WebSocket)
+- **`textToSpeech`** — TTS for assistant responses
+- **`features`** — Feature flags (showReasoning, showToolCalls, artifacts, showEventStreamToggle)
+- **`plugins`** — Array of plugin objects with render hooks
+- **`parserType`** — `'plain'`, `'json'`, `'regex-json'`, or `'xml'` for structured streaming
+- **`attachments`** — File upload config (types, size limits)
+- **`messageActions`** — Copy/upvote/downvote buttons
+- **`suggestionChips`** — Quick-reply buttons above the composer
+- **`persistState`** — Save widget state across page navigations
+- **`postprocessMessage`** — Transform message text before rendering (return HTML)
+
+## Launcher Modes
+
+- **Floating** (default): `launcher.mountMode: 'floating'` — corner-anchored button + popup panel
+- **Docked**: `launcher.mountMode: 'docked'` — side panel that wraps a content container. `dock.reveal` controls the animation: `'resize'` (default), `'emerge'`, `'overlay'`, `'push'`
+
+## Message Injection
+
+Inject messages from external code (tool callbacks, navigation events, etc.):
+
+```ts
+chat.injectAssistantMessage({
+  content: 'Displayed to user',
+  llmContent: 'Sent to the LLM instead',
+});
+```
+
+Content priority: `contentParts > llmContent > content`.
+
+## Plugin System
+
+14 render hooks for customizing any part of the UI:
+
+```ts
+const plugin = {
+  id: 'my-plugin',
+  renderLauncher: (ctx) => { /* return HTMLElement or null */ },
+  renderHeader: (ctx) => { /* ... */ },
+  renderMessage: (ctx) => { /* ... */ },
+  renderToolCall: (ctx) => { /* ... */ },
+  renderReasoning: (ctx) => { /* ... */ },
+  renderLoadingIndicator: (ctx) => { /* ... */ },
+  renderIdleIndicator: (ctx) => { /* ... */ },
+  renderAskUserQuestion: (ctx) => { /* ... */ },
+  // ... and more
+};
+initAgentWidget({ target: 'body', config: { plugins: [plugin] } });
+```
+
+Plugins are priority-ordered. Return `null` from a hook to fall through to the next plugin or the default renderer.
+
+## Proxy Server
+
+Optional `@runtypelabs/persona-proxy` package for server-side API key management:
+
+```ts
+import { createChatProxyApp } from '@runtypelabs/persona-proxy';
+
+export default createChatProxyApp({
+  path: '/api/chat/dispatch',
+  allowedOrigins: ['https://example.com'],
+  flowId: 'flow_abc123', // or flowConfig: { ... }
+});
+```
+
+Set `RUNTYPE_API_KEY` in the environment.
+
+## Framework Integration
+
+Works with any framework. In React/Next.js/Remix/etc., initialize in a `useEffect` and call `handle.destroy()` on cleanup. Next.js App Router needs `'use client'`. For SSR frameworks, use dynamic import or `typeof window` guard.
+
+## Key Exports
+
+| Export | Purpose |
+|---|---|
+| `initAgentWidget` | Mount floating/docked widget, returns controller |
+| `createAgentExperience` | Mount inline widget, returns controller |
+| `DEFAULT_WIDGET_CONFIG` | Sensible default config to spread over |
+| `mergeWithDefaults` | Deep-merge your overrides with defaults |
+| `markdownPostprocessor` | Render markdown in messages |
+| `createJsonStreamParser` | JSON stream parser factory |
+| `createXmlParser` | XML stream parser factory |
+| `createPlainTextParser` | Plain text parser (default) |
+| `componentRegistry` | Register custom components for directive rendering |
+| `createTheme` | Build a theme from token overrides |
+| `brandPlugin` / `accessibilityPlugin` | Built-in theme plugins |
+| `createDropdownMenu` | Dropdown menu utility |
+| `createIconButton` / `createLabelButton` / `createToggleGroup` | Button utilities |
+| `collectEnrichedPageContext` / `formatEnrichedContext` | DOM context collection for tool use |
+
+## License
+
+MIT
