@@ -2193,6 +2193,8 @@ export type ClientChatRequest = {
   /** Per-turn inputs for Runtype prompt templates (e.g. {{page_url}}). */
   inputs?: Record<string, unknown>;
   context?: Record<string, unknown>;
+  /** WebMCP page-discovered tools — same shape as `dispatch.clientTools[]`. */
+  clientTools?: ClientToolDefinition[];
 };
 
 /**

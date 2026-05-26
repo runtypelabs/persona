@@ -67,9 +67,11 @@ export class AgentWidgetSession {
   private artifacts = new Map<string, PersonaArtifactRecord>();
   private selectedArtifactId: string | null = null;
 
-  // WebMCP — toolCall.ids that are already executing via the bridge. Guards
-  // against double-trigger when step_await re-emits the same message snapshot.
-  private webMcpInflight: Set<string> = new Set();
+  // WebMCP — toolCall.ids the bridge has already started handling. Permanent
+  // for the lifetime of the session: a step_await re-emit (server retry, late
+  // event flush) can re-set `awaitingLocalTool: true` even after we've cleared
+  // it locally, so the dedupe key has to outlive the resolve round-trip.
+  private webMcpHandledToolCallIds: Set<string> = new Set();
 
   // Voice support
   private voiceProvider: VoiceProvider | null = null;
@@ -1308,9 +1310,10 @@ export class AgentWidgetSession {
     if (!executionId || !wireToolName || !toolCallId) return;
 
     // Dedupe: a single step_await may emit multiple message snapshots; only
-    // one should drive the resume round-trip.
-    if (this.webMcpInflight.has(toolCallId)) return;
-    this.webMcpInflight.add(toolCallId);
+    // one should drive the resume round-trip. The set is NEVER cleared — see
+    // `webMcpHandledToolCallIds` doc comment.
+    if (this.webMcpHandledToolCallIds.has(toolCallId)) return;
+    this.webMcpHandledToolCallIds.add(toolCallId);
 
     // Mark resolved on the message so the UI's local-tool sheet (if any
     // generic one ever lands) does not show — this is a fully-automatic
@@ -1343,7 +1346,6 @@ export class AgentWidgetSession {
           },
         ],
       });
-      this.webMcpInflight.delete(toolCallId);
       return;
     }
 
@@ -1365,9 +1367,9 @@ export class AgentWidgetSession {
           error instanceof Error ? error : new Error(String(error)),
         );
       }
-    } finally {
-      this.webMcpInflight.delete(toolCallId);
     }
+    // No `finally` cleanup — `webMcpHandledToolCallIds` is intentionally
+    // permanent for the lifetime of the session.
   }
 
   /**
@@ -1570,12 +1572,17 @@ export class AgentWidgetSession {
       // for a `webmcp:*` tool, drive the bridge to execute it and post the
       // result to /resume. Unlike ask_user_question, no user pill click is
       // required — the bridge's confirm bubble is the only interactive surface.
+      //
+      // ALWAYS resolve when the wire name carries the `webmcp:` prefix, even
+      // if the bridge is non-operational (e.g. surface-side config enabled it
+      // but this embed didn't). Otherwise the dispatch stays paused
+      // indefinitely — `resolveWebMcpToolCall` translates the missing-bridge
+      // case into an isError result that resumes the flow cleanly.
       const tc = event.message.toolCall;
       if (
         event.message.agentMetadata?.awaitingLocalTool === true &&
         tc?.name &&
-        isWebMcpToolName(tc.name) &&
-        this.client.isWebMcpOperational()
+        isWebMcpToolName(tc.name)
       ) {
         // Fire-and-forget — `resolveWebMcpToolCall` owns its own error path
         // (translates failures into MCP isError results so /resume succeeds).

@@ -584,6 +584,9 @@ export class AgentWidgetClient {
         ...(sanitizedMetadata && Object.keys(sanitizedMetadata).length > 0 && { metadata: sanitizedMetadata }),
         ...(basePayload.inputs && Object.keys(basePayload.inputs).length > 0 && { inputs: basePayload.inputs }),
         ...(basePayload.context && { context: basePayload.context }),
+        // Forward per-turn WebMCP tools snapshotted by buildPayload(). The
+        // client-token chat endpoint accepts the same shape as /v1/dispatch.
+        ...(basePayload.clientTools && basePayload.clientTools.length > 0 && { clientTools: basePayload.clientTools }),
       };
 
       if (this.debug) {
