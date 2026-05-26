@@ -37,6 +37,7 @@ import {
   normalizePreviewBackgroundUrl,
 } from './preview-manager';
 import { ZOOM_MIN, ZOOM_MAX } from '@runtypelabs/persona/theme-editor';
+import { initWebMcpTools } from './webmcp';
 
 // Re-export test helpers from preview manager
 export {
@@ -203,6 +204,7 @@ function init(): void {
   });
 
   initMobileConfigDrawer();
+  initWebMcpTools();
 
   state.onChange(() => {
     syncEditorUi();
