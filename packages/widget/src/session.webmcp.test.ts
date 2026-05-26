@@ -119,6 +119,35 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("allows retry on the same toolCall.id when /resume fails", async () => {
+    // BugBot finding #4: a permanent handled-set would block the only retry
+    // path when `/resume` itself fails (network / server). The dedupe should
+    // promote to "resolved" only AFTER /resume succeeds; failures stay
+    // retryable on the next step_await re-emit.
+    const { session, executeSpy, resumeSpy, client } = makeSession();
+    // First attempt: resume throws.
+    (client.resumeFlow as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      async () => {
+        throw new Error("network down");
+      },
+    );
+    // Second attempt: resume succeeds.
+    (client.resumeFlow as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      async () =>
+        new Response(new Blob([""]), {
+          status: 200,
+        }),
+    );
+
+    const msg = awaitingMessage("tool-1", "webmcp:search");
+    await session.resolveWebMcpToolCall(msg);
+    await session.resolveWebMcpToolCall(msg); // retry — must be allowed
+    await session.resolveWebMcpToolCall(msg); // post-success — must be blocked
+
+    expect(executeSpy).toHaveBeenCalledTimes(2);
+    expect(resumeSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("returns silently for a malformed message (missing executionId)", async () => {
     const { session, executeSpy, resumeSpy } = makeSession();
     const broken: AgentWidgetMessage = {

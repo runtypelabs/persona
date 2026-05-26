@@ -213,6 +213,15 @@ export class WebMcpBridge {
       },
     };
 
+    // The 30s budget bounds how long Persona waits before telling the agent
+    // the tool failed — it does NOT cancel the page's `execute()` promise.
+    // The WebMCP spec (WebML CG Draft Report, 20 May 2026) does not pass an
+    // `AbortSignal` to `execute(input, client)`, so we cannot cooperatively
+    // abort the host page's work. Side-effectful tools (e.g. add_to_cart) may
+    // therefore still complete on the page after the agent receives an
+    // `isError` timeout result. Tool authors should bound their own work and
+    // handle the race; surface this in the docs alongside the
+    // `readOnlyHint` / annotations guidance.
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const raw = await Promise.race<unknown>([

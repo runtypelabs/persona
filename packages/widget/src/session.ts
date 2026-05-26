@@ -67,11 +67,22 @@ export class AgentWidgetSession {
   private artifacts = new Map<string, PersonaArtifactRecord>();
   private selectedArtifactId: string | null = null;
 
-  // WebMCP — toolCall.ids the bridge has already started handling. Permanent
-  // for the lifetime of the session: a step_await re-emit (server retry, late
-  // event flush) can re-set `awaitingLocalTool: true` even after we've cleared
-  // it locally, so the dedupe key has to outlive the resolve round-trip.
-  private webMcpHandledToolCallIds: Set<string> = new Set();
+  // WebMCP dedupe — split into two sets so re-emits don't double-fire AND
+  // post-failure retries still work:
+  //
+  //   webMcpInflightToolCallIds  — currently executing; cleared on completion
+  //                                of EITHER /resume success OR /resume throw.
+  //                                Blocks concurrent re-fire during the
+  //                                resolve round-trip.
+  //   webMcpResolvedToolCallIds  — `/resume` succeeded; never cleared. Blocks
+  //                                re-fire on stale step_await re-emits after
+  //                                a successful handoff.
+  //
+  // If `/resume` throws (network error, server 5xx), we DO want a retry path:
+  // the dispatch is recoverable. Such a tool stays in neither set, so a
+  // subsequent re-emit will re-trigger.
+  private webMcpInflightToolCallIds: Set<string> = new Set();
+  private webMcpResolvedToolCallIds: Set<string> = new Set();
 
   // Voice support
   private voiceProvider: VoiceProvider | null = null;
@@ -1309,11 +1320,15 @@ export class AgentWidgetSession {
     const toolCallId = toolMessage.toolCall?.id;
     if (!executionId || !wireToolName || !toolCallId) return;
 
-    // Dedupe: a single step_await may emit multiple message snapshots; only
-    // one should drive the resume round-trip. The set is NEVER cleared — see
-    // `webMcpHandledToolCallIds` doc comment.
-    if (this.webMcpHandledToolCallIds.has(toolCallId)) return;
-    this.webMcpHandledToolCallIds.add(toolCallId);
+    // Two-stage dedupe — see `webMcpInflightToolCallIds` doc comment for the
+    // failure-recovery rationale.
+    if (
+      this.webMcpInflightToolCallIds.has(toolCallId) ||
+      this.webMcpResolvedToolCallIds.has(toolCallId)
+    ) {
+      return;
+    }
+    this.webMcpInflightToolCallIds.add(toolCallId);
 
     // Mark resolved on the message so the UI's local-tool sheet (if any
     // generic one ever lands) does not show — this is a fully-automatic
@@ -1337,24 +1352,31 @@ export class AgentWidgetSession {
     if (!execPromise) {
       // Client has no bridge (config.webmcp not set). Resume with an error so
       // the dispatch can advance instead of hanging.
-      await this.resumeWithToolOutput(executionId, wireToolName, {
-        isError: true,
-        content: [
-          {
-            type: "text",
-            text: "WebMCP not enabled on this widget.",
-          },
-        ],
-      });
+      try {
+        await this.resumeWithToolOutput(executionId, wireToolName, {
+          isError: true,
+          content: [
+            { type: "text", text: "WebMCP not enabled on this widget." },
+          ],
+        });
+        this.webMcpResolvedToolCallIds.add(toolCallId);
+      } finally {
+        this.webMcpInflightToolCallIds.delete(toolCallId);
+      }
       return;
     }
 
     try {
       const result = await execPromise;
       await this.resumeWithToolOutput(executionId, wireToolName, result);
+      // Resume succeeded — promote to resolved so subsequent step_await
+      // re-emits for this toolCall.id don't re-fire `execute()` or `/resume`.
+      this.webMcpResolvedToolCallIds.add(toolCallId);
     } catch (error) {
-      // The bridge normalizes errors into result objects, so reaching this
-      // catch means a network failure during /resume. Surface to onError.
+      // The bridge normalizes tool errors into result objects, so reaching
+      // this catch means a network failure during `/resume` itself. Surface
+      // to onError, but DO NOT mark resolved — a later step_await re-emit
+      // should be allowed to retry the resume.
       const isAbortError =
         error instanceof Error &&
         (error.name === "AbortError" ||
@@ -1367,9 +1389,9 @@ export class AgentWidgetSession {
           error instanceof Error ? error : new Error(String(error)),
         );
       }
+    } finally {
+      this.webMcpInflightToolCallIds.delete(toolCallId);
     }
-    // No `finally` cleanup — `webMcpHandledToolCallIds` is intentionally
-    // permanent for the lifetime of the session.
   }
 
   /**
