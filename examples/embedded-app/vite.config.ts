@@ -231,6 +231,68 @@ function serveWidgetDist(): Plugin {
   };
 }
 
+function llmsTxt(): Plugin {
+  const llmsTxtPath = path.resolve(__dirname, "llms.txt");
+  const widgetReadmePath = path.resolve(__dirname, "../../packages/widget/README.md");
+  const themeConfigPath = path.resolve(__dirname, "../../packages/widget/THEME-CONFIG.md");
+
+  function buildLlmsTxt(): string {
+    return fs.readFileSync(llmsTxtPath, "utf-8");
+  }
+
+  function buildLlmsFullTxt(): string {
+    const overview = fs.readFileSync(llmsTxtPath, "utf-8");
+    const widgetReadme = fs.readFileSync(widgetReadmePath, "utf-8");
+    const themeConfig = fs.readFileSync(themeConfigPath, "utf-8");
+    return [
+      overview.replace(
+        /^(> Full reference .*)$/m,
+        "> This is the full reference. For the overview only, see https://persona-chat.dev/llms.txt"
+      ),
+      "",
+      "---",
+      "",
+      "# Widget Configuration Reference",
+      "",
+      "The sections below are the complete widget README (initialization, programmatic control, config tables, parsers, proxy setup, framework guides) and the theme/token reference.",
+      "",
+      widgetReadme,
+      "",
+      "---",
+      "",
+      themeConfig,
+    ].join("\n");
+  }
+
+  function serveMiddleware(middlewares: {
+    use: (path: string, handler: (req: any, res: any) => void) => void;
+  }): void {
+    middlewares.use("/llms.txt", (_req, res) => {
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end(buildLlmsTxt());
+    });
+    middlewares.use("/llms-full.txt", (_req, res) => {
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end(buildLlmsFullTxt());
+    });
+  }
+
+  return {
+    name: "llms-txt",
+    configureServer(server) {
+      serveMiddleware(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      serveMiddleware(server.middlewares);
+    },
+    writeBundle(options) {
+      const outDir = options.dir ?? path.resolve(__dirname, "dist");
+      fs.writeFileSync(path.join(outDir, "llms.txt"), buildLlmsTxt());
+      fs.writeFileSync(path.join(outDir, "llms-full.txt"), buildLlmsFullTxt());
+    },
+  };
+}
+
 function previewEmbedCheck(): Plugin {
   return {
     name: "preview-embed-check",
@@ -245,7 +307,7 @@ function previewEmbedCheck(): Plugin {
 
 export default defineConfig({
   base: './',
-  plugins: [serveWidgetDist(), previewEmbedCheck()],
+  plugins: [serveWidgetDist(), llmsTxt(), previewEmbedCheck()],
   resolve: {
     alias: {
       "@runtypelabs/persona/theme-editor": path.resolve(
