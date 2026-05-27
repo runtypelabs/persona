@@ -187,11 +187,11 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(resumeSpy).not.toHaveBeenCalled();
   });
 
-  it("aborts an existing controller before installing the resolve controller", async () => {
-    // Parity with resolveAskUserQuestion / resolveApproval / sendMessage —
-    // a host that re-enters via onMessagesChanged before our microtask
-    // runs can leave its own controller installed; we must abort it so two
-    // server conversations don't overlap.
+  it("does not touch the shared session abortController", async () => {
+    // Iter-10: parallel `webmcp:*` resolves used to abort each other via the
+    // shared `this.abortController`. Each resolve now owns its own controller
+    // and leaves the session-level one alone, so a concurrent sendMessage's
+    // controller (or a sibling resolve's) is not collateral damage.
     const { session } = makeSession();
     const existing = new AbortController();
     (session as unknown as { abortController: AbortController | null })
@@ -199,7 +199,36 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     await session.resolveWebMcpToolCall(
       awaitingMessage("tool-1", "webmcp:search"),
     );
-    expect(existing.signal.aborted).toBe(true);
+    expect(existing.signal.aborted).toBe(false);
+  });
+
+  it("parallel resolves do not abort each other", async () => {
+    // Iter-10 HIGH: two `webmcp:*` step_await messages in one turn must
+    // resolve independently. Previously the second resolve would abort the
+    // shared AbortController mid-execute of the first, stranding the first
+    // tool's /resume.
+    let release1: () => void = () => undefined;
+    let release2: () => void = () => undefined;
+    const stuck1 = new Promise<WebMcpToolResult>((resolve) => {
+      release1 = () => resolve({ content: [{ type: "text", text: "one" }] });
+    });
+    const stuck2 = new Promise<WebMcpToolResult>((resolve) => {
+      release2 = () => resolve({ content: [{ type: "text", text: "two" }] });
+    });
+    const queue = [stuck1, stuck2];
+    const { session, resumeSpy } = makeSession({
+      executeImpl: () => queue.shift() ?? Promise.resolve({ content: [] }),
+    });
+    const r1 = session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:search"),
+    );
+    const r2 = session.resolveWebMcpToolCall(
+      awaitingMessage("tool-2", "webmcp:search"),
+    );
+    release1();
+    release2();
+    await Promise.all([r1, r2]);
+    expect(resumeSpy).toHaveBeenCalledTimes(2);
   });
 
   it("forwards the abort signal into client.executeWebMcpToolCall", async () => {

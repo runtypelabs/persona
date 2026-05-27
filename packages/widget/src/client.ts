@@ -1034,7 +1034,22 @@ export class AgentWidgetClient {
           config: this.config
         });
         if (result && typeof result === "object") {
-          return result as AgentWidgetRequestPayload;
+          const next = result as AgentWidgetRequestPayload;
+          // Preserve `clientTools` if the middleware returned a fresh
+          // payload object without it. Naive middlewares often rebuild
+          // the payload by listing the fields they care about and
+          // dropping `clientTools` accidentally; the WebMCP wire surface
+          // is invisible to them. The integrator can still set
+          // `clientTools: []` or `clientTools: undefined` explicitly to
+          // strip them on purpose — we only fall back when the field is
+          // entirely absent from the returned object.
+          if (
+            payload.clientTools !== undefined &&
+            !("clientTools" in next)
+          ) {
+            next.clientTools = payload.clientTools;
+          }
+          return next;
         }
       } catch (error) {
         if (typeof console !== "undefined") {

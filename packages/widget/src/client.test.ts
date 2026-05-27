@@ -3606,3 +3606,82 @@ describe('AgentWidgetClient - agent_media events', () => {
   });
 });
 
+describe('AgentWidgetClient - requestMiddleware preserves clientTools', () => {
+  it('preserves clientTools when middleware returns a payload that omits it', async () => {
+    // Iter-10 MED: naive middleware that rebuilds the payload by listing
+    // only the fields it cares about used to drop the WebMCP clientTools
+    // snapshot. Preserve them as a fallback when the middleware-returned
+    // object doesn't mention clientTools at all.
+    let capturedBody: string | null = null;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: { body: string }) => {
+      capturedBody = options.body;
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+          controller.close();
+        },
+      });
+      return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
+    });
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      requestMiddleware: ({ payload }) => ({
+        // Naive middleware: rebuild without acknowledging clientTools.
+        messages: payload.messages,
+      }),
+    });
+    // Force a populated clientTools snapshot by stubbing the bridge spot.
+    (client as unknown as { webMcpBridge: { snapshotForDispatch: () => unknown[] } | null })
+      .webMcpBridge = {
+        snapshotForDispatch: () => [
+          { name: 'search', description: 's', origin: 'webmcp' },
+        ],
+      };
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+      () => undefined,
+    );
+    expect(capturedBody).not.toBeNull();
+    const parsed = JSON.parse(capturedBody!);
+    expect(parsed.clientTools).toEqual([
+      { name: 'search', description: 's', origin: 'webmcp' },
+    ]);
+  });
+
+  it("respects middleware that explicitly sets clientTools (even to undefined)", async () => {
+    // The fallback only triggers when `clientTools` is entirely absent from
+    // the middleware result. An integrator who sets `clientTools: undefined`
+    // explicitly is opting out and must be respected.
+    let capturedBody: string | null = null;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: { body: string }) => {
+      capturedBody = options.body;
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+          controller.close();
+        },
+      });
+      return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
+    });
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      requestMiddleware: ({ payload }) => ({
+        messages: payload.messages,
+        clientTools: undefined,
+      }),
+    });
+    (client as unknown as { webMcpBridge: { snapshotForDispatch: () => unknown[] } | null })
+      .webMcpBridge = {
+        snapshotForDispatch: () => [{ name: 'search', description: 's', origin: 'webmcp' }],
+      };
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+      () => undefined,
+    );
+    const parsed = JSON.parse(capturedBody!);
+    expect(parsed.clientTools).toBeUndefined();
+  });
+});
+
