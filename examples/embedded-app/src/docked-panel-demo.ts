@@ -193,7 +193,45 @@ function applyDockSettings(): void {
   updateStatus("Layout updated.");
 }
 
+/**
+ * Compute when the coachmark shimmer would physically arrive at the button,
+ * accounting for the gap between the two elements and the shimmer's exit velocity.
+ *
+ * Sweep: translateX(-110%) → +110% over SWEEP_DUR with cubic-bezier(0.76,0,0.24,1).
+ * The shimmer center exits the coachmark right edge at ~56.5% of the sweep time
+ * (inverse of the easing curve at 72.7% linear progress).  At that point the
+ * instantaneous velocity is ~2.49× the average sweep speed.  We project that
+ * velocity across the measured gap to get the button-arrive delay.
+ */
+function syncCoachmarkTiming(): void {
+  const coachmark = document.getElementById("assistant-coachmark");
+  if (!coachmark) return;
+
+  const coachRect = coachmark.getBoundingClientRect();
+  const btnRect = assistantToggle.getBoundingClientRect();
+
+  const ENTRANCE_TOTAL = 2.5;
+  const SWEEP_START = ENTRANCE_TOTAL + 0.2;
+  const SWEEP_DUR = 1.4;
+  const EXIT_FRAC = 0.565;
+  const exitTime = SWEEP_START + SWEEP_DUR * EXIT_FRAC;
+
+  const totalDist = 2.2 * coachRect.width;
+  const exitVelocity = 2.493 * totalDist / SWEEP_DUR;
+
+  const gap = btnRect.left + btnRect.width / 2 - coachRect.right;
+  const transit = Math.max(0, gap / exitVelocity);
+
+  const ARRIVE_DUR = 0.7;
+  const arriveDelay = exitTime + transit;
+  const pulseDelay = arriveDelay + ARRIVE_DUR;
+
+  assistantToggle.style.setProperty("--arrive-delay", `${arriveDelay.toFixed(3)}s`);
+  assistantToggle.style.setProperty("--pulse-delay", `${pulseDelay.toFixed(3)}s`);
+}
+
 syncWorkspaceMainDockSide();
+syncCoachmarkTiming();
 controller = createController();
 bindControllerEvents();
 syncToggleUi();
@@ -214,5 +252,7 @@ assistantToggle.addEventListener("mousedown", (e) => {
 });
 
 assistantToggle.addEventListener("click", () => {
+  assistantToggle.classList.remove("assistant-toggle--persist-highlight");
+  document.getElementById("assistant-coachmark")?.remove();
   controller.toggle();
 });
