@@ -1341,42 +1341,74 @@ export class AgentWidgetSession {
       },
     });
 
-    // Show the streaming indicator across the network round-trip. /resume
-    // is otherwise silent until the new SSE stream arrives.
-    this.abortController?.abort();
+    // Install a fresh AbortController so `cancel()` propagates into our
+    // /resume fetch AND the bridge's execute promise. We're here via a
+    // microtask scheduled from handleEvent — the original dispatch's
+    // `connectStream` has already completed (server closes SSE at step_await),
+    // so the previous abort controller is already null. Don't re-abort it.
     this.abortController = new AbortController();
+    const { signal } = this.abortController;
     this.setStreaming(true);
 
     const args = toolMessage.toolCall?.args;
     const execPromise = this.client.executeWebMcpToolCall(wireToolName, args);
-    if (!execPromise) {
-      // Client has no bridge (config.webmcp not set). Resume with an error so
-      // the dispatch can advance instead of hanging.
-      try {
-        await this.resumeWithToolOutput(executionId, wireToolName, {
+
+    // Hook the abort signal so cancel() propagates into the execute race
+    // (Promise.race against an abort-rejecting promise). We can't actually
+    // cancel the page's `execute()` — WebMCP gives no AbortSignal — but we
+    // can stop awaiting it and short-circuit the resume call.
+    const awaitWithAbort = async <T>(
+      promise: Promise<T>,
+    ): Promise<T> => {
+      return await new Promise<T>((resolve, reject) => {
+        const onAbort = () =>
+          reject(new DOMException("Aborted by cancel()", "AbortError"));
+        if (signal.aborted) {
+          onAbort();
+          return;
+        }
+        signal.addEventListener("abort", onAbort, { once: true });
+        promise.then(
+          (v) => {
+            signal.removeEventListener("abort", onAbort);
+            resolve(v);
+          },
+          (e) => {
+            signal.removeEventListener("abort", onAbort);
+            reject(e);
+          },
+        );
+      });
+    };
+
+    try {
+      let resumeOutput: unknown;
+      if (!execPromise) {
+        // Client has no bridge (config.webmcp not set). Resume with an error
+        // so the dispatch can advance instead of hanging.
+        resumeOutput = {
           isError: true,
           content: [
             { type: "text", text: "WebMCP not enabled on this widget." },
           ],
-        });
-        this.webMcpResolvedToolCallIds.add(toolCallId);
-      } finally {
-        this.webMcpInflightToolCallIds.delete(toolCallId);
+        };
+      } else {
+        resumeOutput = await awaitWithAbort(execPromise);
       }
-      return;
-    }
-
-    try {
-      const result = await execPromise;
-      await this.resumeWithToolOutput(executionId, wireToolName, result);
-      // Resume succeeded — promote to resolved so subsequent step_await
-      // re-emits for this toolCall.id don't re-fire `execute()` or `/resume`.
-      this.webMcpResolvedToolCallIds.add(toolCallId);
+      // Mark resolved as soon as the HTTP /resume returns OK — not after the
+      // SSE stream finishes. `connectStream` swallows downstream SSE errors
+      // (they surface via onError, not by rethrowing), so awaiting it doesn't
+      // tell us whether the server actually processed the resume. Marking
+      // here pairs with the dedupe semantics: a successful POST means the
+      // server got the answer; later step_await re-emits for the same
+      // toolCall.id are stale and must not re-execute the page tool.
+      await this.resumeWithToolOutput(executionId, wireToolName, resumeOutput, {
+        onHttpOk: () => {
+          this.webMcpResolvedToolCallIds.add(toolCallId);
+        },
+        signal,
+      });
     } catch (error) {
-      // The bridge normalizes tool errors into result objects, so reaching
-      // this catch means a network failure during `/resume` itself. Surface
-      // to onError, but DO NOT mark resolved — a later step_await re-emit
-      // should be allowed to retry the resume.
       const isAbortError =
         error instanceof Error &&
         (error.name === "AbortError" ||
@@ -1385,6 +1417,10 @@ export class AgentWidgetSession {
       this.setStreaming(false);
       this.abortController = null;
       if (!isAbortError) {
+        // The bridge normalizes tool errors into result objects, so reaching
+        // here means a network failure during `/resume` itself, OR a stream
+        // hookup error. Surface to onError, but DO NOT mark resolved — a
+        // later step_await re-emit should be allowed to retry the resume.
         this.callbacks.onError?.(
           error instanceof Error ? error : new Error(String(error)),
         );
@@ -1398,19 +1434,27 @@ export class AgentWidgetSession {
    * POST `/resume` with a single tool's output and pipe the resulting SSE
    * stream back through `connectStream`. Shared by every local-tool resolve
    * path (ask_user_question and WebMCP).
+   *
+   * `onHttpOk` runs synchronously between the HTTP-status check and the
+   * stream pipe; it lets the WebMCP resolve path commit the dedupe flag at
+   * "server accepted the answer" rather than "stream finished cleanly".
    */
   private async resumeWithToolOutput(
     executionId: string,
     toolName: string,
     output: unknown,
+    options?: { onHttpOk?: () => void; signal?: AbortSignal },
   ): Promise<void> {
-    const response = await this.client.resumeFlow(executionId, {
-      [toolName]: output,
-    });
+    const response = await this.client.resumeFlow(
+      executionId,
+      { [toolName]: output },
+      { signal: options?.signal },
+    );
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.error ?? `Resume failed: ${response.status}`);
     }
+    options?.onHttpOk?.();
     if (response.body) {
       await this.connectStream(response.body, { allowReentry: true });
     } else {
@@ -1422,6 +1466,11 @@ export class AgentWidgetSession {
   public cancel() {
     this.abortController?.abort();
     this.abortController = null;
+    // Cancel also tears down any in-flight WebMCP resolve: the abort
+    // propagates into `awaitWithAbort` (rejects the bridge race) and into
+    // `/resume`'s fetch signal. Clear the inflight set so retries are
+    // possible if the user re-issues the same step_await context.
+    this.webMcpInflightToolCallIds.clear();
     // Stop any in-progress audio too — when the user hits "stop", they want
     // the assistant to actually stop talking, not just stop generating tokens.
     // Both helpers are safe no-ops when audio isn't configured.
@@ -1438,6 +1487,11 @@ export class AgentWidgetSession {
     this.messages = [];
     this.agentExecution = null;
     this.clearArtifactState();
+    // Clearing messages also wipes the WebMCP dedupe state — a fresh
+    // conversation should not refuse to call a webmcp:* tool just because
+    // a tool with the same id resolved in the prior conversation.
+    this.webMcpInflightToolCallIds.clear();
+    this.webMcpResolvedToolCallIds.clear();
     this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);
@@ -1595,9 +1649,16 @@ export class AgentWidgetSession {
       // result to /resume. Unlike ask_user_question, no user pill click is
       // required — the bridge's confirm bubble is the only interactive surface.
       //
+      // Defer via `queueMicrotask` so handleEvent returns FIRST. The current
+      // SSE consumer is still mid-loop; once we return, the dispatch's
+      // `connectStream` sees end-of-stream (server closes the SSE at
+      // step_await), flips status to "idle", and clears `abortController`
+      // before our resolve grabs them. Without this, the original dispatch's
+      // finalizer would clobber the new abort controller and `streaming=true`
+      // set inside `resolveWebMcpToolCall`.
+      //
       // ALWAYS resolve when the wire name carries the `webmcp:` prefix, even
-      // if the bridge is non-operational (e.g. surface-side config enabled it
-      // but this embed didn't). Otherwise the dispatch stays paused
+      // if the bridge is non-operational. Otherwise the dispatch stays paused
       // indefinitely — `resolveWebMcpToolCall` translates the missing-bridge
       // case into an isError result that resumes the flow cleanly.
       const tc = event.message.toolCall;
@@ -1606,9 +1667,10 @@ export class AgentWidgetSession {
         tc?.name &&
         isWebMcpToolName(tc.name)
       ) {
-        // Fire-and-forget — `resolveWebMcpToolCall` owns its own error path
-        // (translates failures into MCP isError results so /resume succeeds).
-        void this.resolveWebMcpToolCall(event.message);
+        const snapshot = event.message;
+        queueMicrotask(() => {
+          void this.resolveWebMcpToolCall(snapshot);
+        });
       }
 
       // Track agent execution state from message metadata

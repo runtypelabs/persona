@@ -869,7 +869,7 @@ export class AgentWidgetClient {
   public async resumeFlow(
     executionId: string,
     toolOutputs: Record<string, unknown>,
-    options?: { streamResponse?: boolean }
+    options?: { streamResponse?: boolean; signal?: AbortSignal }
   ): Promise<Response> {
     const trimmed = this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE;
     // Runtype mounts POST /resume as a child route of /v1/dispatch, so the
@@ -893,6 +893,7 @@ export class AgentWidgetClient {
         toolOutputs,
         streamResponse: options?.streamResponse ?? true,
       }),
+      signal: options?.signal,
     });
   }
 

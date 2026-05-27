@@ -8,6 +8,7 @@ const makeSession = (overrides?: {
   executeReturn?: WebMcpToolResult;
   resumeOk?: boolean;
   isOperational?: boolean;
+  executeImpl?: () => Promise<WebMcpToolResult>;
 }) => {
   const session = new AgentWidgetSession(
     { apiUrl: "http://test", webmcp: { enabled: true } },
@@ -22,10 +23,11 @@ const makeSession = (overrides?: {
     .client;
 
   const executeSpy = vi.fn(
-    async (): Promise<WebMcpToolResult> =>
-      overrides?.executeReturn ?? {
-        content: [{ type: "text", text: "ok" }],
-      },
+    overrides?.executeImpl ??
+      (async (): Promise<WebMcpToolResult> =>
+        overrides?.executeReturn ?? {
+          content: [{ type: "text", text: "ok" }],
+        }),
   );
   // Mimic AgentWidgetClient.executeWebMcpToolCall — returns null when bridge
   // not configured. We toggle via isOperational below.
@@ -39,10 +41,9 @@ const makeSession = (overrides?: {
     () => overrides?.isOperational !== false,
   );
 
-  const resumeBody = new Response(new Blob([""]), {
+  const resumeSpy = vi.fn(async () => new Response(new Blob([""]), {
     status: overrides?.resumeOk === false ? 500 : 200,
-  });
-  const resumeSpy = vi.fn(async () => resumeBody);
+  }));
   client.resumeFlow = resumeSpy;
 
   // Stub `connectStream` so we don't try to parse the empty body.
@@ -81,9 +82,11 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
       awaitingMessage("tool-1", "webmcp:search"),
     );
     expect(executeSpy).toHaveBeenCalledTimes(1);
-    expect(resumeSpy).toHaveBeenCalledWith("exec-1", {
-      "webmcp:search": { content: [{ type: "text", text: "hi" }] },
-    });
+    expect(resumeSpy).toHaveBeenCalledWith(
+      "exec-1",
+      { "webmcp:search": { content: [{ type: "text", text: "hi" }] } },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("still resumes (with isError) when the bridge is not operational", async () => {
@@ -146,6 +149,57 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
 
     expect(executeSpy).toHaveBeenCalledTimes(2);
     expect(resumeSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("threads an AbortSignal into resumeFlow", async () => {
+    // BugBot finding #6: cancel() needs to propagate into /resume.
+    const { session, resumeSpy } = makeSession();
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:search"),
+    );
+    const call = resumeSpy.mock.calls[0]!;
+    const opts = (call as unknown[])[2] as { signal?: AbortSignal } | undefined;
+    expect(opts?.signal).toBeInstanceOf(AbortSignal);
+    expect(opts!.signal!.aborted).toBe(false);
+  });
+
+  it("aborts an in-flight resolve when cancel() is called", async () => {
+    // BugBot finding #6 (cont.) — the bridge execute race should reject on
+    // cancel so the dispatch doesn't fire a stale /resume after the user
+    // stops.
+    let release: () => void = () => undefined;
+    const stuck = new Promise<WebMcpToolResult>((resolve) => {
+      release = () =>
+        resolve({ content: [{ type: "text", text: "late" }] });
+    });
+    const { session, resumeSpy } = makeSession({ executeImpl: () => stuck });
+    const inflight = session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:slow"),
+    );
+    session.cancel();
+    // Allow the rejected race + catch to settle.
+    release();
+    await inflight;
+    expect(resumeSpy).not.toHaveBeenCalled();
+  });
+
+  it("marks resolved on HTTP /resume success, not on stream completion", async () => {
+    // BugBot finding #8: if the resume HTTP response is OK but the downstream
+    // SSE stream errors, we still want dedupe to block re-emits — the server
+    // has already accepted the answer.
+    const { session, resumeSpy, executeSpy } = makeSession();
+    // Make connectStream throw to simulate a broken downstream SSE.
+    (session as unknown as { connectStream: () => Promise<void> })
+      .connectStream = vi.fn(async () => {
+        throw new Error("stream broken");
+      });
+
+    const msg = awaitingMessage("tool-1", "webmcp:search");
+    await session.resolveWebMcpToolCall(msg);
+    await session.resolveWebMcpToolCall(msg); // re-emit — must be blocked
+
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
 
   it("returns silently for a malformed message (missing executionId)", async () => {
