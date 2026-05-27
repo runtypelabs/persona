@@ -1383,11 +1383,16 @@ export class AgentWidgetSession {
       },
     });
 
-    // Install a fresh AbortController so `cancel()` propagates into our
-    // /resume fetch AND the bridge's execute promise. We're here via a
-    // microtask scheduled from handleEvent — the original dispatch's
-    // `connectStream` has already completed (server closes SSE at step_await),
-    // so the previous abort controller is already null. Don't re-abort it.
+    // Abort any controller still in flight before installing a fresh one.
+    // The original dispatch's `connectStream` usually completes before we
+    // get here (server closes SSE at step_await), so this is typically a
+    // no-op — but a host that calls `sendMessage` synchronously from
+    // `onMessagesChanged` (which fires when handleEvent upserts the
+    // awaiting message) can race ahead of our queued microtask and leave
+    // its own controller installed. Pre-aborting matches the pattern in
+    // `resolveAskUserQuestion` / `resolveApproval` / `continueConversation`
+    // / `sendMessage` and prevents two server conversations from overlapping.
+    this.abortController?.abort();
     this.abortController = new AbortController();
     const { signal } = this.abortController;
     this.setStreaming(true);

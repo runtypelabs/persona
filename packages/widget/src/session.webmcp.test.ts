@@ -187,6 +187,21 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(resumeSpy).not.toHaveBeenCalled();
   });
 
+  it("aborts an existing controller before installing the resolve controller", async () => {
+    // Parity with resolveAskUserQuestion / resolveApproval / sendMessage —
+    // a host that re-enters via onMessagesChanged before our microtask
+    // runs can leave its own controller installed; we must abort it so two
+    // server conversations don't overlap.
+    const { session } = makeSession();
+    const existing = new AbortController();
+    (session as unknown as { abortController: AbortController | null })
+      .abortController = existing;
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:search"),
+    );
+    expect(existing.signal.aborted).toBe(true);
+  });
+
   it("forwards the abort signal into client.executeWebMcpToolCall", async () => {
     // BugBot finding #12: the session must thread its signal INTO the
     // bridge so cancel() can short-circuit the confirm bubble AND the
