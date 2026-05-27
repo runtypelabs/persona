@@ -15,7 +15,7 @@
           <h1>WebMCP — Page tools</h1>
           <p>
             This page registers two tools through
-            <code>navigator.modelContext.registerTool()</code> (via
+            <code>document.modelContext.registerTool()</code> (via
             <code>@runtypelabs/webmcp-polyfill</code>). Persona snapshots them on
             every dispatch and ships them as <code>clientTools[]</code>. When the
             agent calls one, the widget executes it on the page and posts the

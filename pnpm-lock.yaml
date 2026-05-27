@@ -40,8 +40,8 @@ importers:
         specifier: workspace:^
         version: link:../../packages/widget
       '@runtypelabs/webmcp-polyfill':
-        specifier: ^0.2.0
-        version: 0.2.0
+        specifier: ^0.3.0
+        version: 0.3.0
       handlebars:
         specifier: ^4.7.8
         version: 4.7.9
@@ -133,8 +133,8 @@ importers:
   packages/widget:
     dependencies:
       '@runtypelabs/webmcp-polyfill':
-        specifier: ^0.2.0
-        version: 0.2.0
+        specifier: ^0.3.0
+        version: 0.3.0
       dompurify:
         specifier: ^3.3.3
         version: 3.3.3
@@ -1044,8 +1044,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@runtypelabs/webmcp-polyfill@0.2.0':
-    resolution: {integrity: sha512-kDdztRvAhTFDQNcbd/QUvCApQQBxzloUL7r2lsS51cZ2eOiUJxeezkNnGyIKg92UpuhWVlI8tJ1jMZGioBFgOQ==}
+  '@runtypelabs/webmcp-polyfill@0.3.0':
+    resolution: {integrity: sha512-jIhhVRQMd0iSSKN5FsDpN+0somNVFuhdp/NkwBubx/M8MJLXqwQSyzpqiPLnroJUTl0efh4ho0ufBm0O+zR30g==}
 
   '@sindresorhus/is@7.2.0':
     resolution: {integrity: sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw==}
@@ -3232,7 +3232,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.59.0':
     optional: true
 
-  '@runtypelabs/webmcp-polyfill@0.2.0': {}
+  '@runtypelabs/webmcp-polyfill@0.3.0': {}
 
   '@sindresorhus/is@7.2.0': {}
 

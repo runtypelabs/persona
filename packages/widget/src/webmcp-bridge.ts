@@ -86,7 +86,7 @@ export class WebMcpBridge {
   /**
    * `true` when the bridge can both snapshot the registry AND execute
    * returned tool calls. `false` for any guard miss — including a native
-   * `navigator.modelContext` that arrived without the polyfill's read API
+   * `document.modelContext` that arrived without the polyfill's read API
    * (Phase 3 degrades gracefully; Phase 7 stretch may swap in a native
    * read API once one exists).
    */

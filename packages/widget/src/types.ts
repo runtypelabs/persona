@@ -102,7 +102,7 @@ export type AgentWidgetRequestPayload = {
   /**
    * Per-turn page-discovered tools (WebMCP). Sent to Runtype's dispatch so the
    * agent can call them as `webmcp:<name>`. The widget snapshots
-   * `navigator.modelContext.__getRegisteredTools()` each turn and ships only
+   * `document.modelContext.__getRegisteredTools()` each turn and ships only
    * the JSON-serializable surface (no `execute`).
    */
   clientTools?: ClientToolDefinition[];
@@ -3260,7 +3260,7 @@ export type AgentWidgetConfig = {
    */
   approval?: AgentWidgetApprovalConfig | false;
   /**
-   * WebMCP — consume page-registered tools (`navigator.modelContext.registerTool`).
+   * WebMCP — consume page-registered tools (`document.modelContext.registerTool`).
    * When `enabled`, the widget installs `@runtypelabs/webmcp-polyfill`, snapshots
    * the registry on every dispatch, ships it as `clientTools[]`, and executes
    * returned `webmcp:*` tool calls with confirm-by-default gating.
