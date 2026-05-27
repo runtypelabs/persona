@@ -53,12 +53,16 @@ const makeSession = (overrides?: {
   return { session, executeSpy, resumeSpy, client };
 };
 
-const awaitingMessage = (id: string, name: string): AgentWidgetMessage => ({
-  id: `msg-${id}`,
+const awaitingMessage = (
+  id: string,
+  name: string,
+  executionId: string = "exec-1",
+): AgentWidgetMessage => ({
+  id: `msg-${id}-${executionId}`,
   role: "assistant",
   content: "",
   createdAt: new Date().toISOString(),
-  agentMetadata: { executionId: "exec-1", awaitingLocalTool: true },
+  agentMetadata: { executionId, awaitingLocalTool: true },
   toolCall: {
     id,
     name,
@@ -202,31 +206,38 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("resets the resolved set on sendMessage so recycled toolCall.ids don't get blocked", async () => {
-    // BugBot finding #9: webMcpResolvedToolCallIds is per-dispatch state, not
-    // per-session. A later dispatch that happens to emit the same toolCall.id
-    // must not be silently blocked.
-    const { session, executeSpy, resumeSpy, client } = makeSession();
+  it("scopes dedupe by executionId so a different dispatch with the same toolCall.id is not blocked", async () => {
+    // BugBot finding #9: a later dispatch (different executionId) that
+    // happens to emit a colliding `toolCall.id` must NOT be silently
+    // blocked. Dedupe keys are `${executionId}:${toolCallId}` so they
+    // naturally segregate.
+    const { session, executeSpy, resumeSpy } = makeSession();
     await session.resolveWebMcpToolCall(
-      awaitingMessage("tool-1", "webmcp:search"),
+      awaitingMessage("tool-1", "webmcp:search", "exec-1"),
     );
-    expect(executeSpy).toHaveBeenCalledTimes(1);
-    expect(resumeSpy).toHaveBeenCalledTimes(1);
-
-    // Simulate a new dispatch — stub the dispatch path so sendMessage doesn't
-    // make a real network call.
-    (client.dispatch as ReturnType<typeof vi.fn> | undefined) = vi.fn(
-      async () => undefined,
-    );
-    client.dispatch = vi.fn(async () => undefined);
-    await session.sendMessage("a second turn");
-
-    // Same toolCall.id, new dispatch — must be allowed through.
+    // Different execution, same toolCall.id — must be allowed.
     await session.resolveWebMcpToolCall(
-      awaitingMessage("tool-1", "webmcp:search"),
+      awaitingMessage("tool-1", "webmcp:search", "exec-2"),
     );
     expect(executeSpy).toHaveBeenCalledTimes(2);
     expect(resumeSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("blocks stale re-emits of an old executionId even after a new dispatch starts", async () => {
+    // BugBot finding #11: clearing the resolved set on sendMessage would
+    // let a stale step_await from the prior /resume's still-active SSE
+    // re-trigger execute(). With executionId-scoped keys, the prior
+    // execution's resolved entries persist — so stale re-emits stay blocked.
+    const { session, executeSpy, resumeSpy } = makeSession();
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:search", "exec-1"),
+    );
+    // Stale re-emit from exec-1 after a new turn started — still blocked.
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:search", "exec-1"),
+    );
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
 
   it("returns silently for a malformed message (missing executionId)", async () => {

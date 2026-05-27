@@ -67,22 +67,25 @@ export class AgentWidgetSession {
   private artifacts = new Map<string, PersonaArtifactRecord>();
   private selectedArtifactId: string | null = null;
 
-  // WebMCP dedupe — split into two sets so re-emits don't double-fire AND
-  // post-failure retries still work:
+  // WebMCP dedupe — keys are `${executionId}:${toolCallId}` so they're
+  // naturally scoped to a single dispatch. A later dispatch (new executionId)
+  // that happens to recycle a `toolCall.id` never collides with prior entries,
+  // and a stale re-emit from an in-flight prior dispatch stays blocked because
+  // its executionId is still in the set.
   //
-  //   webMcpInflightToolCallIds  — currently executing; cleared on completion
-  //                                of EITHER /resume success OR /resume throw.
-  //                                Blocks concurrent re-fire during the
-  //                                resolve round-trip.
-  //   webMcpResolvedToolCallIds  — `/resume` succeeded; never cleared. Blocks
-  //                                re-fire on stale step_await re-emits after
-  //                                a successful handoff.
+  //   webMcpInflightKeys  — currently executing; cleared on completion of
+  //                         EITHER /resume success OR /resume throw. Blocks
+  //                         concurrent re-fire during the resolve round-trip.
+  //   webMcpResolvedKeys  — /resume HTTP returned 2xx; not cleared on a new
+  //                         dispatch (executionId scoping makes that
+  //                         unnecessary). Blocks stale step_await re-emits
+  //                         for the same execution.
   //
   // If `/resume` throws (network error, server 5xx), we DO want a retry path:
   // the dispatch is recoverable. Such a tool stays in neither set, so a
   // subsequent re-emit will re-trigger.
-  private webMcpInflightToolCallIds: Set<string> = new Set();
-  private webMcpResolvedToolCallIds: Set<string> = new Set();
+  private webMcpInflightKeys: Set<string> = new Set();
+  private webMcpResolvedKeys: Set<string> = new Set();
 
   // Voice support
   private voiceProvider: VoiceProvider | null = null;
@@ -792,14 +795,6 @@ export class AgentWidgetSession {
     this.stopSpeaking();
     this.abortController?.abort();
 
-    // WebMCP dedupe is scoped to a single dispatch (one user → assistant turn).
-    // Across turns, `toolCall.id` can collide — agent state, retries, or
-    // a fresh execution that happens to reuse an id all need a clean slate.
-    // Clear here at the start of every new send so a later step_await with a
-    // recycled id is not silently blocked by a prior resolve.
-    this.webMcpInflightToolCallIds.clear();
-    this.webMcpResolvedToolCallIds.clear();
-
     // Generate IDs for both user message and expected assistant response
     const userMessageId = generateUserMessageId();
     const assistantMessageId = generateAssistantMessageId();
@@ -887,11 +882,6 @@ export class AgentWidgetSession {
     if (this.streaming) return;
 
     this.abortController?.abort();
-
-    // Same WebMCP dedupe reset as sendMessage — a new dispatch may reuse
-    // toolCall.ids and we don't want the prior turn's resolved set to block.
-    this.webMcpInflightToolCallIds.clear();
-    this.webMcpResolvedToolCallIds.clear();
 
     const assistantMessageId = generateAssistantMessageId();
 
@@ -1333,15 +1323,16 @@ export class AgentWidgetSession {
     const toolCallId = toolMessage.toolCall?.id;
     if (!executionId || !wireToolName || !toolCallId) return;
 
-    // Two-stage dedupe — see `webMcpInflightToolCallIds` doc comment for the
-    // failure-recovery rationale.
+    // Dedupe key scoped by executionId — see `webMcpInflightKeys` doc comment
+    // for the failure-recovery + cross-dispatch rationale.
+    const dedupeKey = `${executionId}:${toolCallId}`;
     if (
-      this.webMcpInflightToolCallIds.has(toolCallId) ||
-      this.webMcpResolvedToolCallIds.has(toolCallId)
+      this.webMcpInflightKeys.has(dedupeKey) ||
+      this.webMcpResolvedKeys.has(dedupeKey)
     ) {
       return;
     }
-    this.webMcpInflightToolCallIds.add(toolCallId);
+    this.webMcpInflightKeys.add(dedupeKey);
 
     // Mark resolved on the message so the UI's local-tool sheet (if any
     // generic one ever lands) does not show — this is a fully-automatic
@@ -1417,7 +1408,7 @@ export class AgentWidgetSession {
       // toolCall.id are stale and must not re-execute the page tool.
       await this.resumeWithToolOutput(executionId, wireToolName, resumeOutput, {
         onHttpOk: () => {
-          this.webMcpResolvedToolCallIds.add(toolCallId);
+          this.webMcpResolvedKeys.add(dedupeKey);
         },
         signal,
       });
@@ -1439,7 +1430,7 @@ export class AgentWidgetSession {
         );
       }
     } finally {
-      this.webMcpInflightToolCallIds.delete(toolCallId);
+      this.webMcpInflightKeys.delete(dedupeKey);
     }
   }
 
@@ -1483,7 +1474,7 @@ export class AgentWidgetSession {
     // propagates into `awaitWithAbort` (rejects the bridge race) and into
     // `/resume`'s fetch signal. Clear the inflight set so retries are
     // possible if the user re-issues the same step_await context.
-    this.webMcpInflightToolCallIds.clear();
+    this.webMcpInflightKeys.clear();
     // Stop any in-progress audio too — when the user hits "stop", they want
     // the assistant to actually stop talking, not just stop generating tokens.
     // Both helpers are safe no-ops when audio isn't configured.
@@ -1502,9 +1493,9 @@ export class AgentWidgetSession {
     this.clearArtifactState();
     // Clearing messages also wipes the WebMCP dedupe state — a fresh
     // conversation should not refuse to call a webmcp:* tool just because
-    // a tool with the same id resolved in the prior conversation.
-    this.webMcpInflightToolCallIds.clear();
-    this.webMcpResolvedToolCallIds.clear();
+    // a tool with the same key resolved in the prior conversation.
+    this.webMcpInflightKeys.clear();
+    this.webMcpResolvedKeys.clear();
     this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);
@@ -1629,6 +1620,10 @@ export class AgentWidgetSession {
   public hydrateMessages(messages: AgentWidgetMessage[]) {
     this.abortController?.abort();
     this.abortController = null;
+    // Wipe the WebMCP dedupe state alongside the message restore — the
+    // incoming snapshot is treated as a fresh conversation context.
+    this.webMcpInflightKeys.clear();
+    this.webMcpResolvedKeys.clear();
     this.messages = this.sortMessages(
       messages.map((message) => ({
         ...message,
