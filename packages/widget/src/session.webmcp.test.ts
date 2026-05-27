@@ -202,6 +202,33 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("resets the resolved set on sendMessage so recycled toolCall.ids don't get blocked", async () => {
+    // BugBot finding #9: webMcpResolvedToolCallIds is per-dispatch state, not
+    // per-session. A later dispatch that happens to emit the same toolCall.id
+    // must not be silently blocked.
+    const { session, executeSpy, resumeSpy, client } = makeSession();
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:search"),
+    );
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+
+    // Simulate a new dispatch — stub the dispatch path so sendMessage doesn't
+    // make a real network call.
+    (client.dispatch as ReturnType<typeof vi.fn> | undefined) = vi.fn(
+      async () => undefined,
+    );
+    client.dispatch = vi.fn(async () => undefined);
+    await session.sendMessage("a second turn");
+
+    // Same toolCall.id, new dispatch — must be allowed through.
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:search"),
+    );
+    expect(executeSpy).toHaveBeenCalledTimes(2);
+    expect(resumeSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("returns silently for a malformed message (missing executionId)", async () => {
     const { session, executeSpy, resumeSpy } = makeSession();
     const broken: AgentWidgetMessage = {

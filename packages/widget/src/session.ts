@@ -792,6 +792,14 @@ export class AgentWidgetSession {
     this.stopSpeaking();
     this.abortController?.abort();
 
+    // WebMCP dedupe is scoped to a single dispatch (one user → assistant turn).
+    // Across turns, `toolCall.id` can collide — agent state, retries, or
+    // a fresh execution that happens to reuse an id all need a clean slate.
+    // Clear here at the start of every new send so a later step_await with a
+    // recycled id is not silently blocked by a prior resolve.
+    this.webMcpInflightToolCallIds.clear();
+    this.webMcpResolvedToolCallIds.clear();
+
     // Generate IDs for both user message and expected assistant response
     const userMessageId = generateUserMessageId();
     const assistantMessageId = generateAssistantMessageId();
@@ -879,6 +887,11 @@ export class AgentWidgetSession {
     if (this.streaming) return;
 
     this.abortController?.abort();
+
+    // Same WebMCP dedupe reset as sendMessage — a new dispatch may reuse
+    // toolCall.ids and we don't want the prior turn's resolved set to block.
+    this.webMcpInflightToolCallIds.clear();
+    this.webMcpResolvedToolCallIds.clear();
 
     const assistantMessageId = generateAssistantMessageId();
 
