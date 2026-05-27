@@ -187,6 +187,18 @@ export class WebMcpBridge {
       );
     }
 
+    // Re-apply the client-side allowlist at execute time. `snapshotForDispatch`
+    // already filters it for `clientTools[]`, but the agent could request a
+    // tool that the integrator excluded — e.g. a `webmcp:` call replayed from
+    // history, a server bug, or a page that re-registered a previously-hidden
+    // tool. The server is the trust boundary; this is a defense-in-depth
+    // convenience check to keep us symmetric with the snapshot.
+    if (!this.passesClientAllowlist(bareName)) {
+      return errorResult(
+        `WebMCP tool not allowed by client allowlist: ${bareName}`,
+      );
+    }
+
     // Bail before the confirm renders — a late approval after cancel() would
     // otherwise fire a host-page side effect with no matching /resume.
     if (signal?.aborted) {
@@ -220,6 +232,13 @@ export class WebMcpBridge {
         // Tool itself asked for an explicit user confirmation step (e.g. an
         // in-tool "Are you sure?"). Render Persona's bubble in addition to
         // the gate above; only invoke the callback on approve.
+        //
+        // Honor `signal` at both edges so a cancel() during the in-tool
+        // confirm cannot fire `callback()` after the session gave up — same
+        // class of bug as the outer gate guarded against above.
+        if (signal?.aborted) {
+          throw new Error("Aborted by cancel()");
+        }
         const approved = await this.requestConfirm({
           toolName: bareName,
           args,
@@ -229,6 +248,9 @@ export class WebMcpBridge {
         });
         if (!approved) {
           throw new Error("User declined interaction.");
+        }
+        if (signal?.aborted) {
+          throw new Error("Aborted by cancel()");
         }
         return Promise.resolve(callback());
       },

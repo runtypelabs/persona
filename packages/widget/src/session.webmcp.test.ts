@@ -307,8 +307,21 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("returns silently for a malformed message (missing executionId)", async () => {
-    const { session, executeSpy, resumeSpy } = makeSession();
+  it("surfaces onError when a step_await is missing executionId", async () => {
+    // BugBot finding #17: silently returning here strands the server-side
+    // dispatch with no recovery path. Persona can't /resume without an
+    // executionId, but it CAN surface the failure to the host so an
+    // operator notices.
+    const onError = vi.fn();
+    const session = new AgentWidgetSession(
+      { apiUrl: "http://test", webmcp: { enabled: true } },
+      {
+        onMessagesChanged: () => undefined,
+        onStatusChanged: () => undefined,
+        onStreamingChanged: () => undefined,
+        onError,
+      },
+    );
     const broken: AgentWidgetMessage = {
       id: "msg-broken",
       role: "assistant",
@@ -318,7 +331,35 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
       // executionId missing
     };
     await session.resolveWebMcpToolCall(broken);
-    expect(executeSpy).not.toHaveBeenCalled();
-    expect(resumeSpy).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect((onError.mock.calls[0]![0] as Error).message).toMatch(
+      /executionId/i,
+    );
+  });
+
+  it("posts isError /resume when a step_await is missing toolCall.id", async () => {
+    // BugBot finding #17 (cont.): when executionId is present but toolCall.id
+    // is missing, we can still advance the server-side dispatch by posting
+    // an isError /resume for the tool name. Dedupe falls apart but the
+    // dispatch doesn't hang.
+    const { session, resumeSpy } = makeSession();
+    const partial: AgentWidgetMessage = {
+      id: "msg-no-toolid",
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+      agentMetadata: { executionId: "exec-x", awaitingLocalTool: true },
+      toolCall: {
+        id: "",
+        name: "webmcp:search",
+        status: "complete",
+      },
+    };
+    await session.resolveWebMcpToolCall(partial);
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    const payload = (resumeSpy.mock.calls[0]! as unknown[])[1] as {
+      "webmcp:search": WebMcpToolResult;
+    };
+    expect(payload["webmcp:search"].isError).toBe(true);
   });
 });

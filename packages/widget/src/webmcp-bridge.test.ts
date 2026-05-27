@@ -435,6 +435,68 @@ describe("WebMcpBridge.executeToolCall", () => {
     resolveStuck?.("late");
   });
 
+  it("rejects a webmcp call for a tool excluded by the client allowlist", async () => {
+    // BugBot finding #16: snapshotForDispatch filters by allowlist for the
+    // wire surface, but executeToolCall must also re-check it — otherwise a
+    // tool the integrator hid from the snapshot can still be invoked if the
+    // agent happens to request it (replayed history, server bug, late
+    // registration). Defense-in-depth alongside the server-side check.
+    const executeSpy = vi.fn(() => "should not run");
+    resetPolyfillState({
+      entries: [
+        fakeTool({ name: "secret_admin_action", execute: executeSpy }),
+      ],
+    });
+    const bridge = new WebMcpBridge({
+      enabled: true,
+      onConfirm: allowAll,
+      allowlist: ["search_*"],
+    });
+    const r = await bridge.executeToolCall("webmcp:secret_admin_action", {});
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/allowlist/i);
+    expect(executeSpy).not.toHaveBeenCalled();
+  });
+
+  it("aborts a nested requestUserInteraction when signal fires", async () => {
+    // BugBot finding #15: the requestUserInteraction shim must honor the
+    // session's signal — otherwise a late approval after cancel() can fire
+    // `callback()` (the host page side effect) with no matching /resume.
+    let firstCall = true;
+    const handler: WebMcpConfirmHandler = vi.fn(async () => {
+      // Approve the outer gate so we reach requestUserInteraction. Abort
+      // the controller AFTER the outer confirm but BEFORE the in-tool
+      // confirm so the shim's pre-await check fires.
+      if (firstCall) {
+        firstCall = false;
+        controller.abort();
+        return true;
+      }
+      return true;
+    });
+    const callbackSpy = vi.fn(() => "should not run");
+    resetPolyfillState({
+      entries: [
+        fakeTool({
+          name: "sensitive",
+          execute: async (_args, client) => {
+            await client.requestUserInteraction(callbackSpy);
+            return "ok";
+          },
+        }),
+      ],
+    });
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: handler });
+    const controller = new AbortController();
+    const r = await bridge.executeToolCall(
+      "webmcp:sensitive",
+      {},
+      controller.signal,
+    );
+    expect(r.isError).toBe(true);
+    expect(callbackSpy).not.toHaveBeenCalled();
+  });
+
   it("translates a declined requestUserInteraction into a tool throw → isError", async () => {
     let firstCall = true;
     const handler: WebMcpConfirmHandler = vi.fn(async () => {

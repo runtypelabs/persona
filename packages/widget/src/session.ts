@@ -1321,7 +1321,45 @@ export class AgentWidgetSession {
     const executionId = toolMessage.agentMetadata?.executionId;
     const wireToolName = toolMessage.toolCall?.name;
     const toolCallId = toolMessage.toolCall?.id;
-    if (!executionId || !wireToolName || !toolCallId) return;
+
+    // Malformed step_await wire shapes shouldn't silently strand the
+    // server-side dispatch. Three failure modes:
+    //   - no executionId: no /resume target exists; surface to the host
+    //     via onError so an operator can react. This is a server-side
+    //     wire-shape bug — Persona can't recover it from the client.
+    //   - no wireToolName: defensive guard — handleEvent only calls us
+    //     when tc.name is a `webmcp:` prefix, so this path indicates a
+    //     direct caller misuse. Silent return.
+    //   - no toolCallId: dedupe key falls apart, but the server can still
+    //     advance if we post an isError for the wireToolName. Do that
+    //     and bail before the dedupe path.
+    if (!executionId) {
+      this.callbacks.onError?.(
+        new Error(
+          "WebMCP step_await missing executionId — dispatch left paused.",
+        ),
+      );
+      return;
+    }
+    if (!wireToolName) return;
+    if (!toolCallId) {
+      try {
+        await this.resumeWithToolOutput(executionId, wireToolName, {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: "WebMCP step_await missing toolCall.id — cannot execute the page tool.",
+            },
+          ],
+        });
+      } catch (error) {
+        this.callbacks.onError?.(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+      return;
+    }
 
     // Dedupe key scoped by executionId — see `webMcpInflightKeys` doc comment
     // for the failure-recovery + cross-dispatch rationale.
