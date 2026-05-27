@@ -378,6 +378,63 @@ describe("WebMcpBridge.executeToolCall", () => {
     });
   });
 
+  it("bails before rendering the confirm bubble when signal is already aborted", async () => {
+    // BugBot finding #12: a late approval after cancel() must not fire a
+    // host-page side effect. The bridge checks signal BEFORE rendering the
+    // confirm, so the user can't approve a tool call that the session has
+    // already given up on.
+    const confirmSpy = vi.fn(async () => true);
+    const executeSpy = vi.fn(() => "should not run");
+    resetPolyfillState({
+      entries: [
+        fakeTool({ name: "checkout", execute: executeSpy }),
+      ],
+    });
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: confirmSpy });
+    const controller = new AbortController();
+    controller.abort();
+    const r = await bridge.executeToolCall(
+      "webmcp:checkout",
+      {},
+      controller.signal,
+    );
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/abort/i);
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(executeSpy).not.toHaveBeenCalled();
+  });
+
+  it("aborts a stuck execute() when the signal fires mid-flight", async () => {
+    // BugBot finding #12 (cont.): if the tool's execute() never resolves, the
+    // signal must still let the bridge return promptly so the session can
+    // stop awaiting and skip /resume.
+    let resolveStuck: ((v: string) => void) | undefined;
+    const stuck = new Promise<string>((resolve) => {
+      resolveStuck = resolve;
+    });
+    const executeSpy = vi.fn(() => stuck);
+    resetPolyfillState({
+      entries: [fakeTool({ name: "slow", execute: executeSpy })],
+    });
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const controller = new AbortController();
+    const pending = bridge.executeToolCall(
+      "webmcp:slow",
+      {},
+      controller.signal,
+    );
+    // Let the gate's await resolve so execute() actually runs.
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort();
+    const r = await pending;
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/abort/i);
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+    // Late resolve from the page side — must not poison anything.
+    resolveStuck?.("late");
+  });
+
   it("translates a declined requestUserInteraction into a tool throw → isError", async () => {
     let firstCall = true;
     const handler: WebMcpConfirmHandler = vi.fn(async () => {

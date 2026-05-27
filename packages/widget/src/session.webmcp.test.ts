@@ -187,6 +187,73 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(resumeSpy).not.toHaveBeenCalled();
   });
 
+  it("forwards the abort signal into client.executeWebMcpToolCall", async () => {
+    // BugBot finding #12: the session must thread its signal INTO the
+    // bridge so cancel() can short-circuit the confirm bubble AND the
+    // execute() race, not just abort the await on the session side.
+    const { session, client } = makeSession();
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:search"),
+    );
+    const spy = client.executeWebMcpToolCall as ReturnType<typeof vi.fn>;
+    expect(spy).toHaveBeenCalledTimes(1);
+    const call = spy.mock.calls[0]!;
+    // Args: (wireToolName, args, signal?)
+    expect(call[0]).toBe("webmcp:search");
+    expect(call[2]).toBeInstanceOf(AbortSignal);
+  });
+
+  it("does not construct the bridge when config.webmcp.enabled is false", () => {
+    // BugBot finding #14: previously the bridge was constructed whenever a
+    // `webmcp` block existed, regardless of `enabled`. That left
+    // `executeWebMcpToolCall` returning a non-null promise even when WebMCP
+    // was explicitly disabled — making the session's "WebMCP not enabled"
+    // resume branch dead code. Constructor now gates on `enabled === true`.
+    const session = new AgentWidgetSession(
+      { apiUrl: "http://test", webmcp: { enabled: false } },
+      {
+        onMessagesChanged: () => undefined,
+        onStatusChanged: () => undefined,
+        onStreamingChanged: () => undefined,
+      },
+    );
+    const client = (
+      session as unknown as {
+        client: {
+          executeWebMcpToolCall: (
+            n: string,
+            a: unknown,
+            s?: AbortSignal,
+          ) => unknown;
+        };
+      }
+    ).client;
+    expect(client.executeWebMcpToolCall("webmcp:x", {})).toBeNull();
+  });
+
+  it("does not construct the bridge when config.webmcp is omitted", () => {
+    const session = new AgentWidgetSession(
+      { apiUrl: "http://test" },
+      {
+        onMessagesChanged: () => undefined,
+        onStatusChanged: () => undefined,
+        onStreamingChanged: () => undefined,
+      },
+    );
+    const client = (
+      session as unknown as {
+        client: {
+          executeWebMcpToolCall: (
+            n: string,
+            a: unknown,
+            s?: AbortSignal,
+          ) => unknown;
+        };
+      }
+    ).client;
+    expect(client.executeWebMcpToolCall("webmcp:x", {})).toBeNull();
+  });
+
   it("marks resolved on HTTP /resume success, not on stream completion", async () => {
     // BugBot finding #8: if the resume HTTP response is OK but the downstream
     // SSE stream errors, we still want dedupe to block re-emits — the server

@@ -156,10 +156,18 @@ export class WebMcpBridge {
    *   - user declined the confirm gate
    *   - `execute()` threw
    *   - `execute()` exceeded the 30s timeout
+   *   - `signal` fired (session-level `cancel()`)
+   *
+   * When `signal` is provided, abort is honored at three points: before the
+   * confirm bubble renders, after the user approves but before `execute()`
+   * runs, and as a race entry alongside the timeout. Honoring abort BEFORE
+   * the confirm prevents a late-approval after cancel() from firing a
+   * host-page side effect with no matching `/resume` on the server.
    */
   public async executeToolCall(
     wireToolName: string,
     args: unknown,
+    signal?: AbortSignal,
   ): Promise<WebMcpToolResult> {
     if (!this.isOperational()) {
       return errorResult(
@@ -179,6 +187,12 @@ export class WebMcpBridge {
       );
     }
 
+    // Bail before the confirm renders — a late approval after cancel() would
+    // otherwise fire a host-page side effect with no matching /resume.
+    if (signal?.aborted) {
+      return errorResult("Aborted by cancel()");
+    }
+
     // Phase 3 confirm-by-default gate. Phase 4 will branch on
     // `annotations.readOnlyHint` and `requireConfirmFor` here.
     const gateInfo: WebMcpConfirmInfo = {
@@ -190,6 +204,13 @@ export class WebMcpBridge {
     };
     if (!(await this.requestConfirm(gateInfo))) {
       return errorResult("User declined the tool call.");
+    }
+
+    // The await above may have parked us long enough for cancel() to fire.
+    // Bail before invoking `execute()` so we don't fire a side effect that
+    // the server can no longer accept a `/resume` for.
+    if (signal?.aborted) {
+      return errorResult("Aborted by cancel()");
     }
 
     const modelContextClient: ModelContextClient = {
@@ -219,10 +240,11 @@ export class WebMcpBridge {
     // `AbortSignal` to `execute(input, client)`, so we cannot cooperatively
     // abort the host page's work. Side-effectful tools (e.g. add_to_cart) may
     // therefore still complete on the page after the agent receives an
-    // `isError` timeout result. Tool authors should bound their own work and
-    // handle the race; surface this in the docs alongside the
+    // `isError` timeout/abort result. Tool authors should bound their own
+    // work and handle the race; surface this in the docs alongside the
     // `readOnlyHint` / annotations guidance.
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
     try {
       const raw = await Promise.race<unknown>([
         Promise.resolve(entry.tool.execute(args, modelContextClient)),
@@ -237,6 +259,15 @@ export class WebMcpBridge {
             this.timeoutMs,
           );
         }),
+        new Promise<never>((_, reject) => {
+          if (!signal) return;
+          if (signal.aborted) {
+            reject(new Error("Aborted by cancel()"));
+            return;
+          }
+          onAbort = () => reject(new Error("Aborted by cancel()"));
+          signal.addEventListener("abort", onAbort, { once: true });
+        }),
       ]);
       return normalizeResult(raw, entry.tool.annotations);
     } catch (err) {
@@ -244,6 +275,7 @@ export class WebMcpBridge {
       return errorResult(message);
     } finally {
       if (timer !== undefined) clearTimeout(timer);
+      if (signal && onAbort) signal.removeEventListener("abort", onAbort);
     }
   }
 

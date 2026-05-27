@@ -189,7 +189,8 @@ export class AgentWidgetClient {
     this.customFetch = config.customFetch;
     this.parseSSEEvent = config.parseSSEEvent;
     this.getHeaders = config.getHeaders;
-    this.webMcpBridge = config.webmcp ? new WebMcpBridge(config.webmcp) : null;
+    this.webMcpBridge =
+      config.webmcp?.enabled === true ? new WebMcpBridge(config.webmcp) : null;
   }
 
   /**
@@ -222,7 +223,8 @@ export class AgentWidgetClient {
    * WebMCP: execute a returned `webmcp:<name>` tool call against the page's
    * registry and return the normalized MCP-shaped result for `/resume`. The
    * bridge handles confirm-bubble gating, `requestUserInteraction` shimming,
-   * the 30s timeout, and error normalization — callers never see throws.
+   * the 30s timeout, error normalization, and `signal`-driven abort — callers
+   * never see throws.
    *
    * Returns `null` when WebMCP is not enabled on this client (signal to the
    * session that it should fall back to the legacy local-tool resume path,
@@ -231,9 +233,10 @@ export class AgentWidgetClient {
   public executeWebMcpToolCall(
     wireToolName: string,
     args: unknown,
+    signal?: AbortSignal,
   ): Promise<import("./types").WebMcpToolResult> | null {
     if (!this.webMcpBridge) return null;
-    return this.webMcpBridge.executeToolCall(wireToolName, args);
+    return this.webMcpBridge.executeToolCall(wireToolName, args, signal);
   }
 
   /**

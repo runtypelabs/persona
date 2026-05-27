@@ -1355,41 +1355,20 @@ export class AgentWidgetSession {
     this.setStreaming(true);
 
     const args = toolMessage.toolCall?.args;
-    const execPromise = this.client.executeWebMcpToolCall(wireToolName, args);
-
-    // Hook the abort signal so cancel() propagates into the execute race
-    // (Promise.race against an abort-rejecting promise). We can't actually
-    // cancel the page's `execute()` — WebMCP gives no AbortSignal — but we
-    // can stop awaiting it and short-circuit the resume call.
-    const awaitWithAbort = async <T>(
-      promise: Promise<T>,
-    ): Promise<T> => {
-      return await new Promise<T>((resolve, reject) => {
-        const onAbort = () =>
-          reject(new DOMException("Aborted by cancel()", "AbortError"));
-        if (signal.aborted) {
-          onAbort();
-          return;
-        }
-        signal.addEventListener("abort", onAbort, { once: true });
-        promise.then(
-          (v) => {
-            signal.removeEventListener("abort", onAbort);
-            resolve(v);
-          },
-          (e) => {
-            signal.removeEventListener("abort", onAbort);
-            reject(e);
-          },
-        );
-      });
-    };
+    // Thread the signal INTO the bridge — short-circuits the confirm bubble
+    // and the execute() race on cancel(), so a late confirm-approval after
+    // cancel() cannot fire a host-page side effect with no matching /resume.
+    const execPromise = this.client.executeWebMcpToolCall(
+      wireToolName,
+      args,
+      signal,
+    );
 
     try {
       let resumeOutput: unknown;
       if (!execPromise) {
-        // Client has no bridge (config.webmcp not set). Resume with an error
-        // so the dispatch can advance instead of hanging.
+        // Client has no bridge (config.webmcp.enabled !== true). Resume with
+        // an error so the dispatch can advance instead of hanging.
         resumeOutput = {
           isError: true,
           content: [
@@ -1397,7 +1376,15 @@ export class AgentWidgetSession {
           ],
         };
       } else {
-        resumeOutput = await awaitWithAbort(execPromise);
+        resumeOutput = await execPromise;
+      }
+      // If cancel() fired during execute, the bridge returned an aborted
+      // result — don't post it. The server's SSE has been torn down; a
+      // /resume now would just produce an orphan dispatch on the server.
+      if (signal.aborted) {
+        this.setStreaming(false);
+        this.abortController = null;
+        return;
       }
       // Mark resolved as soon as the HTTP /resume returns OK — not after the
       // SSE stream finishes. `connectStream` swallows downstream SSE errors
