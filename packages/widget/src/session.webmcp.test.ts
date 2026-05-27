@@ -377,4 +377,24 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     };
     expect(payload["webmcp:search"].isError).toBe(true);
   });
+
+  it("dedupes repeated malformed (missing toolCall.id) re-emits", async () => {
+    // BugBot iter 9: posting an isError /resume for a no-toolCallId message
+    // is recovery, not a license to repeat. Identical re-emits of the same
+    // malformed step_await (same executionId + wireToolName) must collapse
+    // to a single POST.
+    const { session, resumeSpy } = makeSession();
+    const partial = (): AgentWidgetMessage => ({
+      id: `msg-${Math.random()}`,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+      agentMetadata: { executionId: "exec-x", awaitingLocalTool: true },
+      toolCall: { id: "", name: "webmcp:search", status: "complete" },
+    });
+    await session.resolveWebMcpToolCall(partial());
+    await session.resolveWebMcpToolCall(partial());
+    await session.resolveWebMcpToolCall(partial());
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1343,6 +1343,17 @@ export class AgentWidgetSession {
     }
     if (!wireToolName) return;
     if (!toolCallId) {
+      // No toolCall.id → no per-call dedupe key. Fall back to a synthetic
+      // `(executionId):(wireToolName)` so identical malformed re-emits don't
+      // re-POST /resume. Idempotent on duplicate bad payloads.
+      const malformedKey = `${executionId}:__no_tool_id__:${wireToolName}`;
+      if (
+        this.webMcpInflightKeys.has(malformedKey) ||
+        this.webMcpResolvedKeys.has(malformedKey)
+      ) {
+        return;
+      }
+      this.webMcpInflightKeys.add(malformedKey);
       try {
         await this.resumeWithToolOutput(executionId, wireToolName, {
           isError: true,
@@ -1353,10 +1364,13 @@ export class AgentWidgetSession {
             },
           ],
         });
+        this.webMcpResolvedKeys.add(malformedKey);
       } catch (error) {
         this.callbacks.onError?.(
           error instanceof Error ? error : new Error(String(error)),
         );
+      } finally {
+        this.webMcpInflightKeys.delete(malformedKey);
       }
       return;
     }
