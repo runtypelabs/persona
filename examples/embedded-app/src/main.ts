@@ -302,6 +302,7 @@ if (carouselMount) {
   createDemoCarousel(carouselMount, {
     items: [
       { url: "/launcher-demo.html", title: "Default Launcher", description: "Out-of-the-box chat widget experience" },
+      { url: "/healthcare.html", title: "Accessible Healthcare", description: "High-accessibility patient front door — large type, high contrast, plain language" },
       { url: "/bakery.html", title: "Site Nav, Checkout", description: "Full business site with context-aware chat" },
       { url: "/fullscreen-assistant-demo.html", title: "Fullscreen", description: "Full-viewport dark layout with artifacts" },
       { url: "/docked-panel-demo.html", title: "Docked Assistant", description: "Side-docked assistant layout" },

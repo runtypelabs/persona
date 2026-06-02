@@ -6,6 +6,7 @@ import {
   COMPONENT_FLOW,
   BAKERY_ASSISTANT_FLOW,
   STOREFRONT_ASSISTANT_FLOW,
+  HEALTHCARE_ASSISTANT_FLOW,
   createCheckoutSession,
 } from "@runtypelabs/persona-proxy";
 
@@ -61,11 +62,20 @@ const storefrontApp = createChatProxyApp({
   upstreamUrl,
 });
 
+const healthcareApp = createChatProxyApp({
+  path: "/api/chat/dispatch-healthcare",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_HEALTHCARE || undefined,
+  flowConfig: process.env.FLOW_ID_HEALTHCARE ? undefined : HEALTHCARE_ASSISTANT_FLOW,
+  upstreamUrl,
+});
+
 app.route("/", directiveApp);
 app.route("/", actionApp);
 app.route("/", componentApp);
 app.route("/", bakeryApp);
 app.route("/", storefrontApp);
+app.route("/", healthcareApp);
 
 app.post("/api/checkout", async (c) => {
   const origin = c.req.header("origin");

@@ -3,6 +3,7 @@ import {
   FORM_DIRECTIVE_FLOW,
   SHOPPING_ASSISTANT_FLOW,
   SHOPPING_ASSISTANT_METADATA_FLOW,
+  HEALTHCARE_ASSISTANT_FLOW,
   createCheckoutSession
 } from "@runtypelabs/persona-proxy";
 import { Hono } from "hono";
@@ -13,6 +14,7 @@ interface Env {
   FLOW_ID_FORM_DIRECTIVE?: string;
   FLOW_ID_SHOPPING_ASSISTANT?: string;
   FLOW_ID_SHOPPING_ASSISTANT_METADATA?: string;
+  FLOW_ID_HEALTHCARE?: string;
   STRIPE_SECRET_KEY?: string;
   /** Target `acct_…` (or path) when using a Stripe organization secret key (`sk_org_…`). */
   STRIPE_CONTEXT?: string;
@@ -88,6 +90,19 @@ app.all("/api/chat/dispatch-metadata", async (c) => {
     apiKey: getApiKey(c.env),
     flowId: c.env.FLOW_ID_SHOPPING_ASSISTANT_METADATA || undefined,
     flowConfig: c.env.FLOW_ID_SHOPPING_ASSISTANT_METADATA ? undefined : SHOPPING_ASSISTANT_METADATA_FLOW,
+    allowedOrigins: getAllowedOrigins(c.env),
+  });
+  return proxyApp.fetch(c.req.raw, c.env);
+});
+
+// 5. Accessible healthcare assistant proxy
+// Plain-language patient front door that returns text or accessible form directives
+app.all("/api/chat/dispatch-healthcare", async (c) => {
+  const proxyApp = createChatProxyApp({
+    path: "/api/chat/dispatch-healthcare",
+    apiKey: getApiKey(c.env),
+    flowId: c.env.FLOW_ID_HEALTHCARE || undefined,
+    flowConfig: c.env.FLOW_ID_HEALTHCARE ? undefined : HEALTHCARE_ASSISTANT_FLOW,
     allowedOrigins: getAllowedOrigins(c.env),
   });
   return proxyApp.fetch(c.req.raw, c.env);
@@ -170,6 +185,7 @@ app.get("/health", (c) => {
       directive: "/api/chat/dispatch-directive",
       action: "/api/chat/dispatch-action",
       metadata: "/api/chat/dispatch-metadata",
+      healthcare: "/api/chat/dispatch-healthcare",
       checkout: "/api/checkout",
       form: "/api/form",
     },
@@ -186,6 +202,7 @@ app.get("/", (c) => {
       "/api/chat/dispatch-directive": "Directive-enabled flow (requires RUNTYPE_FLOW_ID)",
       "/api/chat/dispatch-action": "Shopping assistant with JSON action responses (message, nav_then_click, message_and_click, checkout)",
       "/api/chat/dispatch-metadata": "Metadata-based shopping assistant (DOM sent as record metadata, not appended to messages)",
+      "/api/chat/dispatch-healthcare": "Accessible healthcare patient assistant (plain language, returns text or accessible form directives)",
       "/api/checkout": "Stripe checkout session creation (POST, requires STRIPE_SECRET_KEY)",
       "/api/form": "Form submission handler (POST)",
       "/health": "Health check endpoint",

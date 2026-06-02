@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" />
+  <title>Riverside Community Health — Patient Portal</title>
+  <meta
+    name="description"
+    content="Accessible patient portal demo: book appointments, refill prescriptions, and message your care team with a high-accessibility Persona assistant."
+  />
+  <style>
+    /*
+      The host page is intentionally high-accessibility too: a skip link,
+      semantic landmarks, large rem-based type, 4.5:1+ contrast, generous
+      spacing, and a strong visible focus ring on every interactive element.
+      All page styling is plain HTML/CSS — no widget code lives here.
+    */
+    :root {
+      --ink: #11201f;        /* near-black with a warm teal cast */
+      --ink-soft: #3a4a49;
+      --teal: #0b6360;       /* matches the widget primary 500 */
+      --teal-dark: #073b3a;
+      --line: #b9c6c5;
+      --bg: #f3f6f6;
+      --card: #ffffff;
+      --focus: #0a4f4d;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { font-size: 100%; }       /* honor browser/OS text-size settings */
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 1.0625rem;          /* ~17px base */
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Skip link — first tab stop, visible on focus */
+    .skip-link {
+      position: absolute;
+      left: 8px;
+      top: -48px;
+      z-index: 1000;
+      background: var(--teal-dark);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: top 0.15s ease;
+    }
+    .skip-link:focus { top: 8px; }
+
+    /* Strong, consistent focus indicator everywhere */
+    a:focus-visible,
+    button:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+      border-radius: 6px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+
+    header.site {
+      background: var(--card);
+      border-bottom: 2px solid var(--line);
+    }
+    .bar {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 1.25rem;
+      color: var(--teal-dark);
+    }
+    .brand .mark {
+      width: 40px; height: 40px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      background: var(--teal);
+      color: #fff;
+      border-radius: 10px;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    nav.primary ul {
+      list-style: none;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    nav.primary a {
+      display: inline-block;
+      padding: 10px 14px;
+      color: var(--ink);
+      text-decoration: none;
+      font-weight: 600;
+      border-radius: 8px;
+    }
+    nav.primary a:hover { background: #e3eeed; }
+
+    main { max-width: 960px; margin: 0 auto; padding: 32px 24px 96px; }
+
+    .hero {
+      background: var(--card);
+      border: 2px solid var(--line);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+    .hero h1 {
+      font-size: 2rem;
+      line-height: 1.25;
+      color: var(--ink);
+      margin-bottom: 12px;
+    }
+    .hero p {
+      font-size: 1.1875rem;
+      color: var(--ink-soft);
+      max-width: 60ch;
+    }
+
+    h2.section-title {
+      font-size: 1.5rem;
+      margin-bottom: 6px;
+    }
+    .section-lead {
+      color: var(--ink-soft);
+      margin-bottom: 20px;
+      max-width: 60ch;
+    }
+
+    /* Quick actions — large tap targets, each opens the assistant on the same
+       task (one more way to complete it, alongside chat and voice). */
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .action {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      text-align: left;
+      padding: 20px;
+      background: var(--card);
+      border: 2px solid var(--line);
+      border-radius: 14px;
+      cursor: pointer;
+      font: inherit;
+      color: var(--ink);
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+    .action:hover { border-color: var(--teal); transform: translateY(-2px); }
+    .action .ico {
+      flex: none;
+      width: 44px; height: 44px;
+      display: grid; place-items: center;
+      background: #e3eeed;
+      color: var(--teal-dark);
+      border-radius: 10px;
+    }
+    .action .label { font-weight: 700; font-size: 1.125rem; margin-bottom: 2px; }
+    .action .desc { color: var(--ink-soft); font-size: 1rem; }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .info {
+      background: var(--card);
+      border: 2px solid var(--line);
+      border-radius: 14px;
+      padding: 22px;
+    }
+    .info h3 { font-size: 1.1875rem; margin-bottom: 8px; }
+    .info p, .info li { color: var(--ink-soft); }
+    .info ul { padding-left: 1.2em; }
+
+    .emergency {
+      margin-top: 32px;
+      border: 2px solid #9a1d1d;
+      background: #fbeaea;
+      color: #5e0d0d;
+      border-radius: 14px;
+      padding: 18px 22px;
+      font-weight: 600;
+    }
+    .emergency strong { font-weight: 800; }
+
+    footer.site {
+      border-top: 2px solid var(--line);
+      background: var(--card);
+    }
+    .foot {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px;
+      color: var(--ink-soft);
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site">
+    <div class="bar">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">✚</span>
+        <span>Riverside Community Health</span>
+      </div>
+      <nav class="primary" aria-label="Primary">
+        <ul>
+          <li><a href="#services">Services</a></li>
+          <li><a href="#visit">Hours &amp; location</a></li>
+          <li><a href="#help">Get help</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <h1 id="hero-title">Welcome to your patient portal</h1>
+      <p>
+        Take care of common tasks in a few simple steps. You can use the buttons
+        below, or open the assistant in the corner and type or speak your
+        request. Whatever works best for you.
+      </p>
+    </section>
+
+    <section id="services" aria-labelledby="services-title">
+      <h2 class="section-title" id="services-title">What would you like to do?</h2>
+      <p class="section-lead">
+        Choose an option. The assistant will guide you through clear, labeled
+        forms — nothing is final until the clinic confirms it.
+      </p>
+
+      <div class="actions">
+        <button type="button" class="action" data-assistant-prompt="I would like to book an appointment.">
+          <span class="ico" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          </span>
+          <span>
+            <span class="label">Book an appointment</span>
+            <span class="desc">Request a time to see your care team.</span>
+          </span>
+        </button>
+
+        <button type="button" class="action" data-assistant-prompt="I need to refill a prescription.">
+          <span class="ico" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
+          </span>
+          <span>
+            <span class="label">Refill a prescription</span>
+            <span class="desc">Send a refill request to your care team.</span>
+          </span>
+        </button>
+
+        <button type="button" class="action" data-assistant-prompt="I want to send a message to my care team.">
+          <span class="ico" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </span>
+          <span>
+            <span class="label">Message my care team</span>
+            <span class="desc">Ask a non-urgent question and get a reply.</span>
+          </span>
+        </button>
+
+        <button type="button" class="action" data-assistant-prompt="What are your clinic hours and where are you located?">
+          <span class="ico" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+          </span>
+          <span>
+            <span class="label">Hours &amp; location</span>
+            <span class="desc">Find clinic hours, address, and parking.</span>
+          </span>
+        </button>
+      </div>
+    </section>
+
+    <section id="visit" aria-labelledby="visit-title">
+      <h2 class="section-title" id="visit-title">Visiting Riverside</h2>
+      <p class="section-lead">Plain details, easy to scan.</p>
+      <div class="info-grid">
+        <div class="info">
+          <h3>Hours</h3>
+          <ul>
+            <li>Monday–Friday: 8:00 AM – 6:00 PM</li>
+            <li>Saturday: 9:00 AM – 1:00 PM</li>
+            <li>Sunday: Closed</li>
+          </ul>
+        </div>
+        <div class="info">
+          <h3>Location</h3>
+          <p>120 Riverside Avenue<br />Springfield, ST 00000</p>
+          <p>Free parking and step-free entrance.</p>
+        </div>
+        <div class="info">
+          <h3>Nurse line</h3>
+          <p>Open 24 hours for health questions:</p>
+          <p><strong>(555) 010-2400</strong></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="help" aria-labelledby="help-title">
+      <p class="emergency" id="help-title" role="note">
+        <strong>In an emergency, call 911.</strong> This assistant cannot give
+        medical advice or diagnoses. For urgent questions, call the nurse line at
+        (555) 010-2400.
+      </p>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="foot">
+      <p>
+        Demo only — Riverside Community Health is fictional. This page shows a
+        high-accessibility configuration of the Persona assistant.
+      </p>
+    </div>
+  </footer>
+
+  <div id="launcher-root"></div>
+  <script type="module" src="/src/healthcare-demo.ts"></script>
+</body>
+</html>

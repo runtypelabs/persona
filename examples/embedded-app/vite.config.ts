@@ -368,6 +368,8 @@ export default defineConfig({
         'ask-user-question-demo': path.resolve(__dirname, 'ask-user-question-demo.html'),
         'voice-integration-demo': path.resolve(__dirname, 'voice-integration-demo.html'),
         'autoscroll-stress-test': path.resolve(__dirname, 'autoscroll-stress-test.html'),
+        // Accessible healthcare patient front door
+        'healthcare': path.resolve(__dirname, 'healthcare.html'),
         // Standalone (CDN / Copy-Paste) pages
         'standalone/shopify': path.resolve(__dirname, 'standalone/shopify.html'),
         'standalone/example-shop': path.resolve(__dirname, 'standalone/example-shop.html'),
@@ -388,6 +390,7 @@ export default defineConfig({
       "/api/chat/dispatch-component": `http://localhost:${proxyPort}`,
       "/api/chat/dispatch-bakery": `http://localhost:${proxyPort}`,
       "/api/chat/dispatch-storefront": `http://localhost:${proxyPort}`,
+      "/api/chat/dispatch-healthcare": `http://localhost:${proxyPort}`,
       "/api/checkout": `http://localhost:${proxyPort}`,
       "/form": `http://localhost:${proxyPort}`
     }

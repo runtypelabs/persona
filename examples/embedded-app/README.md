@@ -29,6 +29,15 @@ Tweak `src/main.ts` to experiment with different configuration presets, launcher
   - Shows inline widget and launcher widget examples
   - Basic chat functionality
 
+### Accessible Healthcare Demo
+- **Healthcare page**: `http://localhost:5173/healthcare.html`
+  - A "high-accessibility" patient front door for a fictional clinic, built almost entirely from config
+  - Demonstrates the accessibility heuristics healthcare teams optimize for (WCAG 2.1 AA): large scalable type (~17px base), high contrast, plain-language copy, predictable layout, and full keyboard / screen-reader support
+  - Uses the built-in `accessibilityPlugin()` and `highContrastPlugin()` via `createTheme(...)`; honors `prefers-reduced-motion` with `reducedMotionPlugin()` and the OS light/dark setting with `colorScheme: "auto"`
+  - Offers **multiple ways to complete the same task** — large page buttons (`data-assistant-prompt`), suggestion chips, free-text chat, and voice input — rather than a chat-only interface
+  - Renders common tasks (booking, refills, messaging a care team) as accessible, labeled `DynamicForm` controls
+  - Backed by `HEALTHCARE_ASSISTANT_FLOW` (`@runtypelabs/persona-proxy`) at `/api/chat/dispatch-healthcare`: plain language, inline term definitions, emergency-safety guidance, and no medical advice
+
 ### Dynamic Forms Demo
 - **Dynamic Forms page**: `http://localhost:5173/dynamic-form.html`
   - Demonstrates AI-generated dynamic forms using the component middleware
