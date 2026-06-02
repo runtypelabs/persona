@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mcp-b/webmcp-polyfill": "^3.0.0",
     "@runtypelabs/persona": "workspace:^",
     "handlebars": "^4.7.8",
     "idiomorph": "^0.7.4",
