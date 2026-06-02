@@ -151,6 +151,27 @@ describe('createThemeEditorTools', () => {
     expect(reports.find((r: any) => r.field === 'totally-unknown').ok).toBe(false);
   });
 
+  it('set_theme_fields field-ids honor the edit target (both → light + dark)', async () => {
+    await call(tools.get('set_theme_fields')!, {
+      updates: [{ field: 'brand-primary', value: '#123456' }],
+    });
+    // 'brand-primary' resolves to theme.palette.colors.primary.500; default
+    // editTarget is 'both', so it must scope to dark as well.
+    expect(state.get('theme.palette.colors.primary.500')).toBe('#123456');
+    expect(state.get('darkTheme.palette.colors.primary.500')).toBe('#123456');
+  });
+
+  it('assign_color_role on input is covered by contrast checks (no silent no-op)', async () => {
+    // ROLE_INPUT used to map to no contrast pairs; derived keys now include it.
+    const out = await call(tools.get('assign_color_role')!, {
+      role: 'input',
+      family: 'primary',
+      intensity: 'soft',
+    });
+    expect(out.applied.role).toBe('input');
+    expect(Array.isArray(out.warnings)).toBe(true);
+  });
+
   it('check_contrast returns checks and is read-only', async () => {
     const tool = tools.get('check_contrast')!;
     expect(tool.annotations?.readOnlyHint).toBe(true);

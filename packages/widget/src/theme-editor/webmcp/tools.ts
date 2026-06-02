@@ -32,6 +32,7 @@ import {
   coerceRoundnessStyle,
   coerceRadius,
   coerceTypographyRef,
+  ROLE_FAMILY_NAMES,
   FONT_FAMILY_REFS,
   FONT_SIZE_REFS,
   FONT_WEIGHT_REFS,
@@ -41,6 +42,7 @@ import {
   buildSummary,
   quickContrastWarnings,
   runContrastChecks,
+  roleContrastPairKeys,
   RADIUS_PRESETS,
   roleKey,
   type ContrastWarning,
@@ -82,15 +84,6 @@ function coerceRole(input: unknown): RoleAssignmentOptions {
   }
   return role;
 }
-
-/** Contrast pairs to check after a role recolor. */
-const ROLE_CONTRAST_KEYS: Record<string, string[]> = {
-  'role-header': ['header'],
-  'role-user-messages': ['user-message'],
-  'role-assistant-messages': ['assistant-message'],
-  'role-primary-actions': ['primary-button'],
-  'role-surfaces': ['body', 'surface'],
-};
 
 // ─── Field index (escape hatch) ─────────────────────────────────
 
@@ -171,6 +164,9 @@ export function createThemeEditorTools(
     return out;
   };
 
+  /** Which variant a color mutation should be contrast-checked against. */
+  const warnVariant = (): 'light' | 'dark' => (editTarget === 'dark' ? 'dark' : 'light');
+
   const result = (applied: unknown, warnings: ContrastWarning[] = []) =>
     toolResult({ ok: true, summary: buildSummary(state), warnings, applied });
 
@@ -201,7 +197,7 @@ export function createThemeEditorTools(
           role: roleKey(r.roleId),
           helper: r.helper,
         })),
-        availableFamilies: ['primary', 'secondary', 'accent', 'neutral'],
+        availableFamilies: ROLE_FAMILY_NAMES,
         presets: THEME_EDITOR_PRESETS.map((p) => ({
           id: p.id,
           name: p.name,
@@ -273,7 +269,11 @@ export function createThemeEditorTools(
       }
 
       state.setBatch(writes);
-      const warnings = quickContrastWarnings(state, ['primary-button', 'user-message'], 'light');
+      const warnings = quickContrastWarnings(
+        state,
+        ['primary-button', 'user-message'],
+        warnVariant()
+      );
       return result(applied, warnings);
     },
   };
@@ -287,7 +287,7 @@ export function createThemeEditorTools(
       type: 'object',
       properties: {
         role: { type: 'string', description: 'Interface role, e.g. "header" or "user-messages".' },
-        family: { type: 'string', enum: ['primary', 'secondary', 'accent', 'neutral'] },
+        family: { type: 'string', enum: ROLE_FAMILY_NAMES },
         intensity: { type: 'string', enum: ['solid', 'soft'], description: "Defaults to 'solid'." },
       },
       required: ['role', 'family'],
@@ -303,11 +303,7 @@ export function createThemeEditorTools(
       const tokensWritten = Object.keys(writes).length;
       state.setBatch(writes);
 
-      const warnings = quickContrastWarnings(
-        state,
-        ROLE_CONTRAST_KEYS[role.roleId] ?? [],
-        'light'
-      );
+      const warnings = quickContrastWarnings(state, roleContrastPairKeys(role), warnVariant());
       return result(
         { role: roleKey(role.roleId), family, intensity, tokensWritten },
         warnings
@@ -567,7 +563,7 @@ export function createThemeEditorTools(
     name: 'set_copy_and_suggestions',
     title: 'Set welcome copy and suggestion chips',
     description:
-      'Set the widget welcome copy and suggestion chips. title/subtitle are the welcome card text; placeholder is the input placeholder; sendLabel is the send button label; suggestions is an array of suggestion-chip strings (replaces the existing list); greeting sets the initial assistant message shown in the transcript.',
+      'Set the widget welcome copy and suggestion chips. title/subtitle are the welcome card text; placeholder is the input placeholder; sendLabel is the send button label; suggestions is an array of suggestion-chip strings (replaces the existing list).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -576,7 +572,6 @@ export function createThemeEditorTools(
         placeholder: { type: 'string' },
         sendLabel: { type: 'string' },
         suggestions: { type: 'array', items: { type: 'string' } },
-        greeting: { type: 'string' },
       },
       additionalProperties: false,
     },
@@ -600,16 +595,8 @@ export function createThemeEditorTools(
         applied.suggestions = chips;
       }
 
-      if (args.greeting !== undefined) {
-        const content = String(args.greeting);
-        writes['initialMessages'] = [
-          { id: 'mcp-initial', role: 'assistant', content, createdAt: new Date().toISOString() },
-        ];
-        applied.greeting = content;
-      }
-
       if (Object.keys(writes).length === 0) {
-        throw new Error('Provide at least one of: title, subtitle, placeholder, sendLabel, suggestions, greeting.');
+        throw new Error('Provide at least one of: title, subtitle, placeholder, sendLabel, suggestions.');
       }
       state.setBatch(writes);
       return result(applied);
@@ -620,7 +607,7 @@ export function createThemeEditorTools(
     name: 'set_theme_fields',
     title: 'Set theme fields by id or path (advanced)',
     description:
-      'Advanced escape hatch: set individual editor fields by field id (see get_theme_overview verbosity:"full") or by raw dot-path (theme.* / darkTheme.* / a config path). Use only when a higher-level tool does not cover the need. Values are validated against the field metadata.',
+      'Advanced escape hatch: set individual editor fields by field id (see get_theme_overview verbosity:"full") — theme field ids follow the current edit target (light/dark/both) — or by raw dot-path (theme.* / darkTheme.* / a config path), which is written as-is. Use only when a higher-level tool does not cover the need. Values are validated against the field metadata.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -648,7 +635,12 @@ export function createThemeEditorTools(
       fieldIndex ??= buildFieldIndex();
 
       const writes: Record<string, unknown> = {};
-      const report: Array<{ field: string; resolvedPath?: string; ok: boolean; error?: string }> = [];
+      const report: Array<{
+        field: string;
+        resolvedPath?: string | string[];
+        ok: boolean;
+        error?: string;
+      }> = [];
 
       for (const raw of updates) {
         const entry = rec(raw);
@@ -663,8 +655,17 @@ export function createThemeEditorTools(
             );
           }
           const value = coerceFieldValue(def, entry.value);
-          writes[path] = value;
-          report.push({ field: fieldKey, resolvedPath: path, ok: true });
+          if (def && path.startsWith('theme.')) {
+            // Field ids resolve to light-theme paths; honor the active edit
+            // target so dark-only / both edits are reachable by id (not only by
+            // raw darkTheme.* dot-path).
+            const scoped = expandScoped(path.slice('theme.'.length), value);
+            Object.assign(writes, scoped);
+            report.push({ field: fieldKey, resolvedPath: Object.keys(scoped), ok: true });
+          } else {
+            writes[path] = value;
+            report.push({ field: fieldKey, resolvedPath: path, ok: true });
+          }
         } catch (err) {
           report.push({ field: fieldKey, ok: false, error: (err as Error).message });
         }

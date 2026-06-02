@@ -22,9 +22,15 @@ describe('coerceColor', () => {
     expect(coerceColor('SlateBlue')).toBe('#6a5acd');
   });
 
-  it('passes through rgb and transparent', () => {
+  it('passes through valid rgb/rgba and transparent', () => {
     expect(coerceColor('transparent')).toBe('transparent');
     expect(coerceColor('rgb(1, 2, 3)')).toBe('rgb(1, 2, 3)');
+    expect(coerceColor('rgba(1,2,3,0.5)')).toBe('rgba(1,2,3,0.5)');
+  });
+
+  it('rejects malformed rgb-prefixed garbage', () => {
+    expect(() => coerceColor('rgbfoo')).toThrow(/not a recognized color/);
+    expect(() => coerceColor('rgba(')).toThrow(/not a recognized color/);
   });
 
   it('throws with guidance on garbage', () => {

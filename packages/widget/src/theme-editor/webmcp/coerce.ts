@@ -13,6 +13,8 @@ import {
   parseCssValue,
   formatCssValue,
 } from '../color-utils';
+import { ROLE_FAMILIES } from '../role-mappings';
+import { STYLE_SECTIONS } from '../sections';
 
 // ─── CSS named colors (common subset) ───────────────────────────
 
@@ -90,6 +92,14 @@ export const CSS_NAMED_COLORS: Record<string, string> = {
 
 // ─── Colors ─────────────────────────────────────────────────────
 
+/** Structural validation for rgb()/rgba() so malformed "rgb…" input is rejected. */
+const RGB_RE =
+  /^rgba?\(\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*(,\s*(0|1|0?\.\d+|\d{1,3}%)\s*)?\)$/;
+
+function isValidRgb(value: string): boolean {
+  return RGB_RE.test(value);
+}
+
 /**
  * Coerce a flexible color input into a canonical CSS color string.
  * Accepts: `#1d4ed8`, `1d4ed8`, `#18f`, `rgb(...)`, `transparent`, and common
@@ -105,11 +115,7 @@ export function coerceColor(input: unknown): string {
   if (named) return named;
 
   const normalized = normalizeColorValue(trimmed);
-  if (
-    isValidHex(normalized) ||
-    normalized === 'transparent' ||
-    normalized.startsWith('rgb')
-  ) {
+  if (isValidHex(normalized) || normalized === 'transparent' || isValidRgb(normalized)) {
     return normalized;
   }
 
@@ -127,11 +133,18 @@ export function coerceColor(input: unknown): string {
 export type BrandFamily = 'primary' | 'secondary' | 'accent';
 export type RoleFamilyInput = BrandFamily | 'neutral';
 
+/**
+ * Tool-facing family names, derived from the role layer's `ROLE_FAMILIES`. The
+ * role layer's canonical neutral family is `gray`; tools surface it as
+ * `neutral`. Deriving here keeps the tool vocabulary in sync if a family is
+ * added to `ROLE_FAMILIES`.
+ */
+export const ROLE_FAMILY_NAMES: RoleFamilyInput[] = ROLE_FAMILIES.map((f) =>
+  f === 'gray' ? 'neutral' : (f as RoleFamilyInput)
+);
+
 const FAMILY_SYNONYMS: Record<string, RoleFamilyInput> = {
-  primary: 'primary',
-  secondary: 'secondary',
-  accent: 'accent',
-  neutral: 'neutral',
+  ...Object.fromEntries(ROLE_FAMILY_NAMES.map((f) => [f, f])),
   gray: 'neutral',
   grey: 'neutral',
 };
@@ -203,45 +216,59 @@ export function coerceRadius(input: unknown): string {
   throw new Error('Radius must be a number (px) or a CSS length string like "0.5rem".');
 }
 
-// ─── Typography keyword → token-ref maps (verbatim from sections.ts) ─
+// ─── Typography keyword → token-ref maps ────────────────────────
+// Base maps are derived from the editor's typography <select> options in
+// sections.ts (keyed by each option value's last path segment), so the
+// high-level tool's accepted values track the editor. Only the friendly
+// synonyms (monospace, small/medium/large, numeric weights/line-heights) are
+// hand-maintained on top.
+
+function refsFromTypographyField(fieldId: string): Record<string, string> {
+  for (const section of STYLE_SECTIONS) {
+    const field = section.fields.find((f) => f.id === fieldId);
+    if (field?.options) {
+      const map: Record<string, string> = {};
+      for (const opt of field.options) {
+        const key = opt.value.split('.').pop();
+        if (key) map[key] = opt.value;
+      }
+      return map;
+    }
+  }
+  return {};
+}
+
+const FAMILY_BASE = refsFromTypographyField('typo-font-family');
+const SIZE_BASE = refsFromTypographyField('typo-font-size');
+const WEIGHT_BASE = refsFromTypographyField('typo-font-weight');
+const LINE_BASE = refsFromTypographyField('typo-line-height');
 
 export const FONT_FAMILY_REFS: Record<string, string> = {
-  sans: 'palette.typography.fontFamily.sans',
-  serif: 'palette.typography.fontFamily.serif',
-  mono: 'palette.typography.fontFamily.mono',
-  monospace: 'palette.typography.fontFamily.mono',
+  ...FAMILY_BASE,
+  monospace: FAMILY_BASE.mono,
 };
 
 export const FONT_SIZE_REFS: Record<string, string> = {
-  xs: 'palette.typography.fontSize.xs',
-  sm: 'palette.typography.fontSize.sm',
-  small: 'palette.typography.fontSize.sm',
-  base: 'palette.typography.fontSize.base',
-  md: 'palette.typography.fontSize.base',
-  medium: 'palette.typography.fontSize.base',
-  lg: 'palette.typography.fontSize.lg',
-  large: 'palette.typography.fontSize.lg',
-  xl: 'palette.typography.fontSize.xl',
+  ...SIZE_BASE,
+  small: SIZE_BASE.sm,
+  md: SIZE_BASE.base,
+  medium: SIZE_BASE.base,
+  large: SIZE_BASE.lg,
 };
 
 export const FONT_WEIGHT_REFS: Record<string, string> = {
-  normal: 'palette.typography.fontWeight.normal',
-  '400': 'palette.typography.fontWeight.normal',
-  medium: 'palette.typography.fontWeight.medium',
-  '500': 'palette.typography.fontWeight.medium',
-  semibold: 'palette.typography.fontWeight.semibold',
-  '600': 'palette.typography.fontWeight.semibold',
-  bold: 'palette.typography.fontWeight.bold',
-  '700': 'palette.typography.fontWeight.bold',
+  ...WEIGHT_BASE,
+  '400': WEIGHT_BASE.normal,
+  '500': WEIGHT_BASE.medium,
+  '600': WEIGHT_BASE.semibold,
+  '700': WEIGHT_BASE.bold,
 };
 
 export const LINE_HEIGHT_REFS: Record<string, string> = {
-  tight: 'palette.typography.lineHeight.tight',
-  '1.25': 'palette.typography.lineHeight.tight',
-  normal: 'palette.typography.lineHeight.normal',
-  '1.5': 'palette.typography.lineHeight.normal',
-  relaxed: 'palette.typography.lineHeight.relaxed',
-  '1.625': 'palette.typography.lineHeight.relaxed',
+  ...LINE_BASE,
+  '1.25': LINE_BASE.tight,
+  '1.5': LINE_BASE.normal,
+  '1.625': LINE_BASE.relaxed,
 };
 
 export function coerceTypographyRef(

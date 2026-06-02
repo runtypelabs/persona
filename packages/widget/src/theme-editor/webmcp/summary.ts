@@ -8,17 +8,39 @@
 
 import { wcagContrastRatio, SHADE_KEYS } from '../color-utils';
 import { ALL_ROLES, detectRoleAssignment } from '../role-mappings';
+import { STYLE_SECTIONS } from '../sections';
+import type { RoleAssignmentOptions } from '../types';
 import type { ThemeEditorLike } from './types';
 import type { RoundnessStyle } from './coerce';
 
-// ─── Radius presets (verbatim from sections.ts shape section) ───
+// ─── Radius presets (derived from the editor's shape section) ───
+// The editor's shape section in sections.ts owns the canonical radius preset
+// values (default/sharp/rounded); we derive them here so the tool and the GUI
+// can't drift, and add the "pill" preset the editor doesn't expose.
 
-export const RADIUS_PRESETS: Record<RoundnessStyle, Record<string, string>> = {
-  sharp: { sm: '1px', md: '2px', lg: '3px', xl: '4px', full: '4px' },
-  default: { sm: '0.125rem', md: '0.375rem', lg: '0.5rem', xl: '0.75rem', full: '9999px' },
-  rounded: { sm: '0.5rem', md: '0.75rem', lg: '1rem', xl: '1.5rem', full: '9999px' },
-  pill: { sm: '9999px', md: '9999px', lg: '9999px', xl: '9999px', full: '9999px' },
-};
+const RADIUS_PATH_PREFIX = 'theme.palette.radius.';
+
+function buildRadiusPresets(): Record<string, Record<string, string>> {
+  const presets: Record<string, Record<string, string>> = {
+    pill: { sm: '9999px', md: '9999px', lg: '9999px', xl: '9999px', full: '9999px' },
+  };
+  for (const section of STYLE_SECTIONS) {
+    for (const preset of section.presets ?? []) {
+      const match = preset.id.match(/^radius-(\w+)$/);
+      if (!match) continue;
+      const radius: Record<string, string> = {};
+      for (const [path, value] of Object.entries(preset.values)) {
+        if (path.startsWith(RADIUS_PATH_PREFIX) && typeof value === 'string') {
+          radius[path.slice(RADIUS_PATH_PREFIX.length)] = value;
+        }
+      }
+      presets[match[1]] = radius;
+    }
+  }
+  return presets;
+}
+
+export const RADIUS_PRESETS: Record<string, Record<string, string>> = buildRadiusPresets();
 
 const RADIUS_KEYS = ['sm', 'md', 'lg', 'xl', 'full'] as const;
 
@@ -150,9 +172,23 @@ export const CONTRAST_PAIRS: ContrastPair[] = [
   { key: 'assistant-message', label: 'Assistant message text', fg: 'components.message.assistant.text', bg: 'components.message.assistant.background' },
   { key: 'header', label: 'Header title', fg: 'components.header.titleForeground', bg: 'components.header.background' },
   { key: 'primary-button', label: 'Primary button label', fg: 'components.button.primary.foreground', bg: 'components.button.primary.background' },
+  { key: 'input', label: 'Input placeholder', fg: 'components.input.placeholder', bg: 'components.input.background' },
+  { key: 'link', label: 'Link text', fg: 'components.markdown.link.foreground', bg: 'semantic.colors.background' },
+  { key: 'scroll', label: 'Scroll-to-bottom icon', fg: 'components.scrollToBottom.foreground', bg: 'components.scrollToBottom.background' },
   { key: 'body', label: 'Body text on background', fg: 'semantic.colors.text', bg: 'semantic.colors.background' },
   { key: 'surface', label: 'Body text on surface', fg: 'semantic.colors.text', bg: 'semantic.colors.surface' },
 ];
+
+/**
+ * The contrast-pair keys relevant to a role, derived by intersecting the role's
+ * target token paths with the contrast pairs. This replaces a hand-maintained
+ * map so a new role or contrast pair is covered automatically. Roles with no
+ * text pair (e.g. borders) correctly yield `[]`.
+ */
+export function roleContrastPairKeys(role: RoleAssignmentOptions): string[] {
+  const targets = new Set(role.targets.map((t) => t.path));
+  return CONTRAST_PAIRS.filter((p) => targets.has(p.fg) || targets.has(p.bg)).map((p) => p.key);
+}
 
 export interface ContrastWarning {
   code: 'contrast';
