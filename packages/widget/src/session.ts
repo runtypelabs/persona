@@ -49,6 +49,31 @@ type SessionCallbacks = {
   }) => void;
 };
 
+/**
+ * Build the user-facing content shown when a dispatch fails before any
+ * assistant content streamed back. This fires on real network/server errors
+ * (connection refused, CORS, 4xx/5xx, malformed stream) — not just an
+ * un-wired proxy — so the copy stays honest about the failure and surfaces the
+ * underlying reason to help with debugging.
+ *
+ * Callers can override the copy via `config.errorMessage` (a static string or
+ * a function of the error). An override that returns an empty string yields ""
+ * here, which the caller treats as "suppress the fallback bubble".
+ */
+function buildDispatchErrorContent(
+  error: unknown,
+  override?: AgentWidgetConfig["errorMessage"]
+): string {
+  const err = error instanceof Error ? error : new Error(String(error));
+
+  if (typeof override === "string") return override;
+  if (typeof override === "function") return override(err);
+
+  const base =
+    "Sorry — I couldn't reach the assistant. The chat service didn't respond. Please check that your proxy or backend is running and reachable, then try again.";
+  return err.message ? `${base}\n\n_Details: ${err.message}_` : base;
+}
+
 export class AgentWidgetSession {
   private client: AgentWidgetClient;
   private messages: AgentWidgetMessage[];
@@ -818,16 +843,23 @@ export class AgentWidgetSession {
          error.message.includes('abort'));
 
       if (!isAbortError) {
-        const fallback: AgentWidgetMessage = {
-          id: assistantMessageId, // Use the pre-generated ID for fallback too
-          role: "assistant",
-          createdAt: new Date().toISOString(),
-          content:
-            "It looks like the proxy isn't returning a real response yet. Here's a sample message so you can continue testing locally.",
-          sequence: this.nextSequence()
-        };
+        const content = buildDispatchErrorContent(
+          error,
+          this.config.errorMessage
+        );
+        // An override that returns "" suppresses the fallback bubble entirely
+        // (onError still fires below).
+        if (content) {
+          const fallback: AgentWidgetMessage = {
+            id: assistantMessageId, // Use the pre-generated ID for fallback too
+            role: "assistant",
+            createdAt: new Date().toISOString(),
+            content,
+            sequence: this.nextSequence()
+          };
 
-        this.appendMessage(fallback);
+          this.appendMessage(fallback);
+        }
       }
 
       this.setStatus("idle");
@@ -881,16 +913,23 @@ export class AgentWidgetSession {
         this.handleEvent
       );
     } catch (error) {
-      const fallback: AgentWidgetMessage = {
-        id: assistantMessageId,
-        role: "assistant",
-        createdAt: new Date().toISOString(),
-        content:
-          "It looks like the proxy isn't returning a real response yet. Here's a sample message so you can continue testing locally.",
-        sequence: this.nextSequence()
-      };
+      const content = buildDispatchErrorContent(
+        error,
+        this.config.errorMessage
+      );
+      // An override that returns "" suppresses the fallback bubble entirely
+      // (onError still fires below).
+      if (content) {
+        const fallback: AgentWidgetMessage = {
+          id: assistantMessageId,
+          role: "assistant",
+          createdAt: new Date().toISOString(),
+          content,
+          sequence: this.nextSequence()
+        };
 
-      this.appendMessage(fallback);
+        this.appendMessage(fallback);
+      }
       this.setStatus("idle");
       this.setStreaming(false);
       this.abortController = null;

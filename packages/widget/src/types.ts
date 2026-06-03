@@ -2917,6 +2917,31 @@ export type AgentWidgetConfig = {
   apiUrl?: string;
   flowId?: string;
   /**
+   * Override the assistant-bubble copy shown when a dispatch fails before any
+   * response streams back (connection refused, CORS, 4xx/5xx, malformed
+   * stream). Provide a static string, or a function of the error so you can
+   * tailor the message per failure and decide whether to surface the raw
+   * reason. When omitted, a default message is shown that includes the
+   * underlying error detail.
+   *
+   * Returning an empty string suppresses the fallback bubble entirely (the
+   * `onError` callback still fires).
+   *
+   * @example
+   * ```typescript
+   * config: {
+   *   // Static
+   *   errorMessage: "We're having trouble connecting. Please try again."
+   *   // Or dynamic
+   *   errorMessage: (error) =>
+   *     error.message.includes("Failed to fetch")
+   *       ? "You appear to be offline."
+   *       : "Something went wrong. Please try again."
+   * }
+   * ```
+   */
+  errorMessage?: string | ((error: Error) => string);
+  /**
    * Agent configuration for agent execution mode.
    * When provided, the widget uses agent loop execution instead of flow dispatch.
    * Mutually exclusive with `flowId`.
