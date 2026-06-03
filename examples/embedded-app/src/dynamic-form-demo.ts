@@ -1,4 +1,5 @@
 import "@runtypelabs/persona/widget.css";
+import { renderDemoScaffold } from "./demo-scaffold";
 import "./index.css";
 import "./App.css";
 
@@ -13,8 +14,16 @@ import {
 } from "@runtypelabs/persona";
 
 import { DynamicForm, type DynamicFormStyles } from "./components";
-import { setupMountMode, runWidgetMount } from "./mount-mode";
+import { setupMountMode, runWidgetMountWithInspector, squareInlinePanel } from "./mount-mode";
+import {
+  createDemoConfigInspector,
+  reportDemoConfig,
+} from "./demo-config-inspector";
 import type { Mode } from "./examples-nav";
+
+renderDemoScaffold({ slug: "dynamic-form" });
+
+const configInspector = createDemoConfigInspector({ title: "Dynamic Forms" });
 
 componentRegistry.register("DynamicForm", DynamicForm);
 
@@ -89,7 +98,12 @@ setupMountMode({
   slug: "dynamic-form",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
-    const { controller, teardown } = runWidgetMount(mode, stage, buildConfig(mode));
+    const { controller, teardown } = runWidgetMountWithInspector(
+      configInspector,
+      mode,
+      stage,
+      buildConfig,
+    );
     activeController = controller;
     return () => {
       teardown();
@@ -101,11 +115,7 @@ setupMountMode({
 document.getElementById("dynamic-form-preview")?.addEventListener("click", () => {
   if (!activeController) return;
   previewIndex += 1;
-  activeController.injectComponentDirective({
-    id: `preview-form-${previewIndex}`,
-    component: "DynamicForm",
-    text: "Preview: this is the same DynamicForm the AI would emit.",
-    props: {
+  const props = {
       title: "Schedule a demo",
       description: "Share your details — we'll follow up to confirm.",
       fields: [
@@ -121,10 +131,19 @@ document.getElementById("dynamic-form-preview")?.addEventListener("click", () =>
         },
       ],
       submit_text: "Request meeting",
-    },
+    };
+  activeController.injectComponentDirective({
+    id: `preview-form-${previewIndex}`,
+    component: "DynamicForm",
+    text: "Preview: this is the same DynamicForm the AI would emit.",
+    props,
     llmContent:
       "[Demo: previewed booking form via injectComponentDirective. Not a user request.]",
   });
+  configInspector.setScenario(
+    { component: "DynamicForm", props },
+    "injectComponentDirective payload",
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -230,7 +249,7 @@ function mountVariant(variant: (typeof VARIANTS)[number]): void {
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   };
 
-  const variantController = createAgentExperience(mount, config);
+  const variantController = createAgentExperience(mount, squareInlinePanel(config));
   variantController.injectComponentDirective({
     id: `variant-${variant.id}`,
     component: "DynamicForm",
@@ -259,6 +278,20 @@ VARIANTS.forEach((variant) => {
   if (defEl) defEl.textContent = renderVariantDef(variant);
 });
 
+configInspector.setScenario(
+  {
+    component: "DynamicForm",
+    props: {
+      title: "Book a demo",
+      fields: VARIANT_FIELDS,
+      submit_text: "Request meeting",
+    },
+    formStyles: VARIANTS[0].formStyles,
+    themeOverrides: VARIANTS[0].themeOverrides,
+  },
+  "Layout variant · compact",
+);
+
 setupTabs("variants-tabs");
 
 function setupTabs(rootId: string): void {
@@ -275,6 +308,22 @@ function setupTabs(rootId: string): void {
     panels.forEach((panel) => {
       panel.hidden = panel.dataset.tabPanel !== tabId;
     });
+    const variant = VARIANTS.find((v) => v.id === tabId);
+    if (variant) {
+      configInspector.setScenario(
+        {
+          component: "DynamicForm",
+          props: {
+            title: "Book a demo",
+            fields: VARIANT_FIELDS,
+            submit_text: "Request meeting",
+          },
+          formStyles: variant.formStyles,
+          themeOverrides: variant.themeOverrides,
+        },
+        `Layout variant · ${tabId}`,
+      );
+    }
   }
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {

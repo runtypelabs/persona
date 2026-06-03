@@ -9,6 +9,20 @@ import {
   type ComponentRenderer,
   type AgentWidgetInitHandle,
 } from "@runtypelabs/persona";
+import {
+  createDemoConfigInspector,
+  reportDemoConfig,
+} from "./demo-config-inspector";
+import { renderDemoScaffold } from "./demo-scaffold";
+import {
+  setupMountMode,
+  renderInlineMount,
+  renderLauncherScene,
+  squareInlinePanel,
+  type Mode,
+} from "./mount-mode";
+
+renderDemoScaffold({ slug: "artifact-demo" });
 
 const ArtifactDemoPill: ComponentRenderer = (props) => {
   const el = document.createElement("div");
@@ -40,34 +54,70 @@ const artifactDemoConfigBase: Partial<AgentWidgetConfig> = {
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
     welcomeTitle: "Artifacts demo",
-    welcomeSubtitle: "Use the toolbar buttons above or chat with the proxy.",
+    welcomeSubtitle: "Use the artifact buttons in the Configure rail or chat with the proxy.",
     inputPlaceholder: "Message the model…",
   },
 };
 
-const embedRoot = document.getElementById("artifact-root");
-if (!embedRoot) throw new Error("#artifact-root missing");
+const configInspector = createDemoConfigInspector({
+  title: "Artifact Sidebar",
+  root: "[data-config-inspector]",
+});
 
-const handle: AgentWidgetInitHandle = initAgentWidget({
-  target: embedRoot,
-  useShadowDom: false,
-  windowKey: "personaArtifactDemo",
-  config: {
+const buildConfig = (mode: Mode): AgentWidgetConfig =>
+  ({
     ...artifactDemoConfigBase,
-    launcher: {
-      ...DEFAULT_WIDGET_CONFIG.launcher,
-      enabled: false,
-      autoExpand: true,
-      width: "100%",
-    },
+    launcher:
+      mode === "launcher"
+        ? {
+            ...DEFAULT_WIDGET_CONFIG.launcher,
+            enabled: true,
+            autoExpand: true,
+            width: "480px",
+            position: "bottom-right",
+          }
+        : {
+            ...DEFAULT_WIDGET_CONFIG.launcher,
+            enabled: false,
+            autoExpand: true,
+            width: "100%",
+          },
     layout: { showHeader: false },
+  }) as AgentWidgetConfig;
+
+// Reassigned on every mode switch; the artifact toolbar buttons below read it
+// lazily so they always target the current widget.
+let handle: AgentWidgetInitHandle | null = null;
+
+setupMountMode({
+  slug: "artifact-demo",
+  modes: ["inline", "launcher"],
+  mount: (mode, { stage }) => {
+    const config = buildConfig(mode);
+    reportDemoConfig(configInspector, { config, mode });
+    // Both modes use initAgentWidget so the handle (upsertArtifact / clearChat /
+    // open) is identical; only the mount target and launcher chrome differ.
+    const target =
+      mode === "launcher"
+        ? renderLauncherScene(stage).mountEl
+        : renderInlineMount(stage);
+    if (mode !== "launcher") target.style.height = "100%";
+    handle = initAgentWidget({
+      target,
+      useShadowDom: false,
+      windowKey: "personaArtifactDemo",
+      config: mode === "launcher" ? config : squareInlinePanel(config),
+    });
+    handle.open();
+    return () => {
+      handle?.destroy();
+      handle = null;
+    };
   },
 });
 
-handle.open();
-
 document.getElementById("btn-md")?.addEventListener("click", () => {
-  handle.upsertArtifact({
+  handle?.upsertArtifact({
     artifactType: "markdown",
     title: "Sample",
     content: "## Hello\n\nThis **markdown** artifact was injected from the demo toolbar.",
@@ -75,7 +125,7 @@ document.getElementById("btn-md")?.addEventListener("click", () => {
 });
 
 document.getElementById("btn-comp")?.addEventListener("click", () => {
-  handle.upsertArtifact({
+  handle?.upsertArtifact({
     artifactType: "component",
     title: "Pill",
     component: "ArtifactDemoPill",
@@ -84,7 +134,7 @@ document.getElementById("btn-comp")?.addEventListener("click", () => {
 });
 
 document.getElementById("btn-unknown")?.addEventListener("click", () => {
-  handle.upsertArtifact({
+  handle?.upsertArtifact({
     artifactType: "component",
     title: "Missing registry entry",
     component: "TotallyUnknownWidget",
@@ -93,5 +143,5 @@ document.getElementById("btn-unknown")?.addEventListener("click", () => {
 });
 
 document.getElementById("btn-clear")?.addEventListener("click", () => {
-  handle.clearChat();
+  handle?.clearChat();
 });

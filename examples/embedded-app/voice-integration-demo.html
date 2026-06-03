@@ -10,80 +10,17 @@
       #agent-widget {
         height: 100%;
       }
-      .status-indicator {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        margin-right: 8px;
-        background-color: var(--muted);
-      }
-      .status-indicator.connected {
-        background-color: #10b981;
-      }
-      .status-indicator.listening {
-        background-color: #f59e0b;
-        animation: pulse 1.5s infinite;
-      }
-      .status-indicator.error {
-        background-color: #ef4444;
-      }
-      @keyframes pulse {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.5;
-        }
-      }
       .voice-controls {
         display: flex;
         gap: 1rem;
         margin-top: 1rem;
         flex-wrap: wrap;
       }
-      .voice-button {
-        background: var(--accent);
-        color: var(--foreground);
-        border: 1px solid var(--border);
-        padding: 0.5rem 1rem;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        transition: background-color 0.2s;
-      }
-      .voice-button:hover {
-        background: var(--border);
-      }
-      .voice-button:disabled {
-        background: var(--accent);
-        color: var(--muted);
-        cursor: not-allowed;
-      }
+      /* Voice-specific accent: highlight the toggle button while actively listening. */
       .voice-button.listening {
-        background: #f59e0b;
-        color: white;
-        animation: pulse 1.5s infinite;
-      }
-      /* The demo's original inline styles assumed a dark page background.
-         Once the page moved to the shared light shell, the hard-coded
-         dark input/label colors became hard to read. Re-skin them to the
-         shell's neutral tokens. */
-      .stage-controls input[type="text"],
-      .stage-controls input[type="number"],
-      .stage-controls select {
-        background: var(--card) !important;
-        color: var(--foreground) !important;
-        border-color: var(--border) !important;
-      }
-      .stage-controls label,
-      .stage-controls h3,
-      .stage-controls h4 {
-        color: var(--foreground) !important;
-      }
-      .stage-controls .info-section {
-        background: color-mix(in srgb, var(--foreground) 4%, transparent);
+        background: var(--warn);
+        border-color: var(--warn);
+        color: var(--paper);
       }
     </style>
   </head>
@@ -96,104 +33,40 @@
             <p>Real-time speech-to-text and text-to-speech via the Persona widget over WebSocket, with server-side voice processing through the Runtype backend.</p>
           </header>
 
+        <div data-config-inspector></div>
+
         <div class="info-section">
-          <h3>🔧 Configuration</h3>
-          <div style="margin-bottom: 1rem">
-            <label
-              style="
-                display: block;
-                margin-bottom: 0.5rem;
-                color: #fff;
-                font-size: 0.9rem;
-              "
-            >
-              Client Token:
-            </label>
+          <h3>Configuration</h3>
+          <div class="field">
+            <label>Client Token</label>
             <input
               type="text"
               id="clientTokenInput"
               placeholder="REPLACE_WITH_YOUR_CLIENT_TOKEN"
-              style="
-                width: 100%;
-                padding: 0.5rem;
-                border-radius: 4px;
-                border: 1px solid #30363d;
-                background: #0d1117;
-                color: #c9d1d9;
-                font-family: monospace;
-              "
               value="REPLACE_WITH_YOUR_CLIENT_TOKEN"
             />
           </div>
-          <div style="margin-bottom: 1rem">
-            <label
-              style="
-                display: block;
-                margin-bottom: 0.5rem;
-                color: #fff;
-                font-size: 0.9rem;
-              "
-            >
-              Agent ID:
-            </label>
+          <div class="field">
+            <label>Agent ID</label>
             <input
               type="text"
               id="agentIdInput"
               placeholder="REPLACE_WITH_YOUR_AGENT_ID"
-              style="
-                width: 100%;
-                padding: 0.5rem;
-                border-radius: 4px;
-                border: 1px solid #30363d;
-                background: #0d1117;
-                color: #c9d1d9;
-                font-family: monospace;
-              "
               value="REPLACE_WITH_YOUR_AGENT_ID"
             />
           </div>
-          <div style="margin-top: 1rem">
-            <h4
-              style="margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.9rem"
-            >
-              🎤 Voice Input (Speech-to-Text)
-            </h4>
-            <select
-              id="voiceInputProvider"
-              style="
-                width: 100%;
-                padding: 0.5rem;
-                border-radius: 4px;
-                border: 1px solid #30363d;
-                background: #0d1117;
-                color: #c9d1d9;
-                font-family: monospace;
-                margin-bottom: 0.5rem;
-              "
-            >
+          <div class="field" style="margin-top: 1rem">
+            <h4>Voice Input (Speech-to-Text)</h4>
+            <select id="voiceInputProvider">
               <option value="runtype">Runtype (Server)</option>
               <option value="browser">Browser (Web Speech API)</option>
             </select>
           </div>
 
-          <div style="margin-top: 1rem">
-            <h4
-              style="margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.9rem"
-            >
-              🔊 Voice Output (Text-to-Speech)
-            </h4>
+          <div class="field" style="margin-top: 1rem">
+            <h4>Voice Output (Text-to-Speech)</h4>
             <select
               id="voiceOutputProvider"
-              style="
-                width: 100%;
-                padding: 0.5rem;
-                border-radius: 4px;
-                border: 1px solid #30363d;
-                background: #0d1117;
-                color: #c9d1d9;
-                font-family: monospace;
-                margin-bottom: 0.5rem;
-              "
             >
               <option value="none">None (Text only)</option>
               <option value="browser">Browser (Web Speech API)</option>
@@ -202,47 +75,23 @@
 
             <div id="ttsOptions" style="display: none; margin-top: 0.5rem">
               <div id="ttsBrowserFallbackOption" style="display: none; margin-top: 0.75rem; margin-bottom: 0.75rem">
-                <label style="display: flex; align-items: center; gap: 0.5rem; color: #c9d1d9; font-size: 0.8rem; cursor: pointer">
+                <label class="checkbox-label">
                   <input type="checkbox" id="ttsBrowserFallback" />
                   Browser fallback for text messages
                 </label>
-                <span style="color: #94a3b8; font-size: 0.7rem; display: block; margin-top: 0.25rem">
+                <span class="hint">
                   When TTS provider is "Runtype", also use browser TTS for text-typed responses that the server didn't speak.
                 </span>
               </div>
 
               <div id="ttsBrowserVoiceControls">
-                <select
-                  id="ttsVoice"
-                  style="
-                    width: 100%;
-                    padding: 0.5rem;
-                    border-radius: 4px;
-                    border: 1px solid #30363d;
-                    background: #0d1117;
-                    color: #c9d1d9;
-                    font-family: monospace;
-                    margin-bottom: 0.5rem;
-                  "
-                >
-                  <option value="">Auto-detect best voice</option>
-                </select>
-                <button
-                  id="ttsTestVoice"
-                  style="
-                    width: 100%;
-                    padding: 0.4rem;
-                    border-radius: 4px;
-                    border: 1px solid #30363d;
-                    background: #161b22;
-                    color: #c9d1d9;
-                    font-family: monospace;
-                    font-size: 0.8rem;
-                    cursor: pointer;
-                    margin-bottom: 0.5rem;
-                  "
-                >&#9654; Test voice</button>
-                <div style="display: flex; gap: 0.5rem">
+                <div class="field">
+                  <select id="ttsVoice">
+                    <option value="">Auto-detect best voice</option>
+                  </select>
+                </div>
+                <button id="ttsTestVoice" class="btn" style="width: 100%; margin-bottom: 0.5rem;">&#9654; Test voice</button>
+                <div class="range-row">
                   <input
                     type="range"
                     id="ttsRate"
@@ -250,17 +99,12 @@
                     max="2"
                     step="0.1"
                     value="1"
-                    style="flex: 1"
                   />
-                  <span
-                    id="ttsRateValue"
-                    style="color: #c9d1d9; font-size: 0.8rem"
-                    >1.0</span
-                  >
+                  <span id="ttsRateValue">1.0</span>
                 </div>
-                <label style="color: #94a3b8; font-size: 0.7rem">Rate</label>
+                <label class="control-label">Rate</label>
 
-                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem">
+                <div class="range-row" style="margin-top: 0.5rem">
                   <input
                     type="range"
                     id="ttsPitch"
@@ -268,28 +112,19 @@
                     max="2"
                     step="0.1"
                     value="1"
-                    style="flex: 1"
                   />
-                  <span
-                    id="ttsPitchValue"
-                    style="color: #c9d1d9; font-size: 0.8rem"
-                    >1.0</span
-                  >
+                  <span id="ttsPitchValue">1.0</span>
                 </div>
-                <label style="color: #94a3b8; font-size: 0.7rem">Pitch</label>
+                <label class="control-label">Pitch</label>
               </div>
             </div>
           </div>
 
           <div style="margin-top: 1rem">
-            <h4
-              style="margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.9rem"
-            >
-              ⏱ Silence Detection
-            </h4>
-            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem">
-              <div style="flex: 1">
-                <label style="color: #94a3b8; font-size: 0.7rem; display: block; margin-bottom: 0.25rem">Pause Duration (ms)</label>
+            <h4 class="control-label">Silence Detection</h4>
+            <div class="field-grid">
+              <div class="field">
+                <label>Pause Duration (ms)</label>
                 <input
                   type="number"
                   id="pauseDurationInput"
@@ -297,19 +132,10 @@
                   min="500"
                   max="10000"
                   step="250"
-                  style="
-                    width: 100%;
-                    padding: 0.5rem;
-                    border-radius: 4px;
-                    border: 1px solid #30363d;
-                    background: #0d1117;
-                    color: #c9d1d9;
-                    font-family: monospace;
-                  "
                 />
               </div>
-              <div style="flex: 1">
-                <label style="color: #94a3b8; font-size: 0.7rem; display: block; margin-bottom: 0.25rem">Silence Threshold</label>
+              <div class="field">
+                <label>Silence Threshold</label>
                 <input
                   type="number"
                   id="silenceThresholdInput"
@@ -317,103 +143,53 @@
                   min="0.001"
                   max="0.1"
                   step="0.001"
-                  style="
-                    width: 100%;
-                    padding: 0.5rem;
-                    border-radius: 4px;
-                    border: 1px solid #30363d;
-                    background: #0d1117;
-                    color: #c9d1d9;
-                    font-family: monospace;
-                  "
                 />
               </div>
             </div>
           </div>
 
           <div style="margin-top: 1rem">
-            <h4
-              style="margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.9rem"
-            >
-              💬 Processing Placeholder Text
-            </h4>
-            <div style="margin-bottom: 0.5rem">
-              <label style="color: #94a3b8; font-size: 0.7rem; display: block; margin-bottom: 0.25rem">Processing Text (user bubble)</label>
+            <h4 class="control-label">Processing Placeholder Text</h4>
+            <div class="field">
+              <label>Processing Text (user bubble)</label>
               <input
                 type="text"
                 id="processingTextInput"
                 value="🎤 Processing voice..."
-                style="
-                  width: 100%;
-                  padding: 0.5rem;
-                  border-radius: 4px;
-                  border: 1px solid #30363d;
-                  background: #0d1117;
-                  color: #c9d1d9;
-                  font-family: monospace;
-                "
               />
             </div>
-            <div style="margin-bottom: 0.5rem">
-              <label style="color: #94a3b8; font-size: 0.7rem; display: block; margin-bottom: 0.25rem">Error Text (assistant bubble)</label>
+            <div class="field">
+              <label>Error Text (assistant bubble)</label>
               <input
                 type="text"
                 id="processingErrorTextInput"
                 value="Voice processing failed. Please try again."
-                style="
-                  width: 100%;
-                  padding: 0.5rem;
-                  border-radius: 4px;
-                  border: 1px solid #30363d;
-                  background: #0d1117;
-                  color: #c9d1d9;
-                  font-family: monospace;
-                "
               />
             </div>
           </div>
 
           <div style="margin-top: 1rem">
-            <h4
-              style="margin-bottom: 0.5rem; color: #94a3b8; font-size: 0.9rem"
-            >
-              🎨 Custom Processing UI
-            </h4>
-            <label style="display: flex; align-items: center; gap: 0.5rem; color: #c9d1d9; font-size: 0.85rem; cursor: pointer">
+            <h4 class="control-label">Custom Processing UI</h4>
+            <label class="checkbox-label">
               <input type="checkbox" id="customProcessingUIToggle" />
               Enable custom <code>postprocessMessage</code> for voice placeholders
             </label>
-            <p style="margin: 0.5rem 0 0 0; font-size: 0.7rem; color: #64748b">
+            <p class="hint">
               When enabled, voice processing placeholders use a custom animated component
               via the <code>voiceProcessing</code> message flag instead of plain text.
             </p>
           </div>
 
-          <button
-            id="applyConfigBtn"
-            style="
-              background: #38bdf8;
-              color: white;
-              border: none;
-              padding: 0.5rem 1rem;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 0.9rem;
-              margin-top: 1rem;
-            "
-          >
+          <button id="applyConfigBtn" class="btn btn-primary" style="margin-top: 1rem">
             Apply Configuration
           </button>
-          <p
-            id="configStatus"
-            style="margin-top: 1rem; font-size: 0.85rem; color: #94a3b8"
-          >
+          <p id="configStatus" class="hint" style="margin-top: 1rem">
             Configuration not applied yet
           </p>
         </div>
 
        <div class="info-section">
-         <h3>🎤 Voice Features</h3>
+         <h3>Voice Features</h3>
          <p>• Real-time voice-to-text transcription via WebSocket</p>
          <p>• <strong>Auto-stop on silence</strong> — configurable pause duration &amp; threshold</p>
          <p>• <strong>Typing indicator</strong> — shows while server processes audio</p>
@@ -425,7 +201,7 @@
        </div>
 
        <div class="info-section">
-         <h3>🔧 Configuration</h3>
+         <h3>Configuration</h3>
          <div class="code-block">
            <span class="comment">// Voice recognition configuration for AgentWidget</span>
            <span class="keyword">const</span> <span class="prop">config</span> = {
@@ -464,10 +240,9 @@
            };
          </div>
        </div>
-        </div>
 
         <div class="info-section">
-          <h3>📡 Connection Status</h3>
+          <h3>Connection Status</h3>
           <div id="connection-status">
             <span class="status-indicator"></span>
             <span id="status-text">Disconnected</span>
@@ -475,38 +250,21 @@
         </div>
 
         <div class="info-section">
-          <h3>🎤 Voice Controls</h3>
+          <h3>Voice Controls</h3>
           <div class="voice-controls">
-            <button id="toggle-voice" class="voice-button" disabled>
+            <button id="toggle-voice" class="btn btn-primary voice-button" disabled>
               Start Listening
             </button>
-            <button id="test-connection" class="voice-button">
+            <button id="test-connection" class="btn voice-button">
               Test Connection
             </button>
           </div>
-          <div
-            id="voice-feedback"
-            style="margin-top: 0.5rem; font-size: 0.85rem; color: #94a3b8"
-          ></div>
+          <div id="voice-feedback" class="hint" style="margin-top: 0.5rem"></div>
         </div>
 
         <div class="info-section">
-          <h3>📝 Transcription Results</h3>
-          <div
-            id="transcription-results"
-            style="
-              background: #0d1117;
-              border: 1px solid #30363d;
-              border-radius: 6px;
-              padding: 1rem;
-              min-height: 100px;
-              font-family: monospace;
-              font-size: 0.85rem;
-              color: #c9d1d9;
-              overflow-y: auto;
-              max-height: 200px;
-            "
-          ></div>
+          <h3>Transcription Results</h3>
+          <div id="transcription-results" class="event-log event-log--sm"></div>
         </div>
 
         </aside>
@@ -537,6 +295,19 @@
         createVoiceProvider,
         isVoiceSupported,
       } from "@runtypelabs/persona";
+      import {
+        createDemoConfigInspector,
+        reportDemoConfig,
+      } from "./src/demo-config-inspector.ts";
+      import { renderDemoScaffold } from "./src/demo-scaffold.ts";
+      import { setupMountMode, squareInlinePanel } from "./src/mount-mode.ts";
+
+      renderDemoScaffold({ slug: "voice-integration-demo" });
+
+      const configInspector = createDemoConfigInspector({
+        title: "Voice Integration",
+        root: "[data-config-inspector]",
+      });
 
       // UI Elements - these will be initialized in the function
       let statusIndicator,
@@ -564,6 +335,10 @@
       };
 
       // Function to create config dynamically based on current configuration
+      // Mount mode (inline/launcher) driven by setupMountMode. createConfig()
+      // toggles the launcher chrome accordingly.
+      let activeMountMode = "inline";
+
       function createConfig() {
         // Store host in a variable first to avoid circular reference
         const websocketHost = window.location.hostname.includes("localhost") ? "localhost:8787" : "api.runtype.com";
@@ -655,7 +430,13 @@
             bubbleTextColor: "#0f172a",
           },
           launcher: {
-            enabled: true,
+            enabled: activeMountMode === "launcher",
+            // Inline mode mounts via initAgentWidget with the launcher disabled.
+            // Without fullHeight the docked panel caps at the default launcher
+            // width (440px) and sizes to content height, unlike the other inline
+            // demos (which mount via createAgentExperience). fullHeight makes the
+            // panel fill the container's width AND height for inline.
+            ...(activeMountMode === "launcher" ? {} : { fullHeight: true }),
             title: "Voice Assistant",
             subtitle: "Try voice interaction",
             agentIconText: "🎤",
@@ -667,6 +448,7 @@
 
       // Create initial config
       let config = createConfig();
+      reportDemoConfig(configInspector, { config, mode: activeMountMode });
 
       // Function to apply configuration from input fields
       async function applyConfiguration() {
@@ -735,6 +517,7 @@
 
         // Recreate config with new values
         config = createConfig();
+        reportDemoConfig(configInspector, { config, mode: activeMountMode });
 
         configStatus.textContent = "Configuration applied successfully!";
         configStatus.style.color = "#10b981";
@@ -915,6 +698,7 @@
 
         // Recreate config with loaded values
         config = createConfig();
+        reportDemoConfig(configInspector, { config, mode: "inline" });
 
         if (savedClientToken || savedAgentId) {
           const configStatus = document.getElementById("configStatus");
@@ -1015,11 +799,14 @@
           mountPoint.style.height = "100%";
           widgetContainer.appendChild(mountPoint);
 
-          // Initialize the widget
+          // Initialize the widget into the fresh mount point we just created.
+          // Targeting the outer container instead would leave the empty
+          // mountPoint as a full-height spacer sibling, pushing the widget
+          // panel below the visible preview area.
           const widget = await initAgentWidget({
-            target: widgetContainer,
+            target: mountPoint,
             useShadowDom: false,
-            config: config,
+            config: activeMountMode === "launcher" ? config : squareInlinePanel(config),
             onReady: () => {
               console.log("Widget ready, setting up voice...");
               setupVoiceInterface();
@@ -1220,7 +1007,24 @@
       // Initialize on page load
       document.addEventListener("DOMContentLoaded", () => {
         loadSavedConfiguration();
-        initWidget();
+
+        // setupMountMode renders the "View as" Inline / Launcher toggle and
+        // drives the active mount mode. Its factory rebuilds the config for the
+        // selected mode and (re)initializes the widget; applyConfiguration also
+        // re-runs initWidget() in the current mode.
+        setupMountMode({
+          slug: "voice-integration-demo",
+          modes: ["inline", "launcher"],
+          mount: async (mode) => {
+            activeMountMode = mode;
+            config = createConfig();
+            await initWidget();
+            return () => {
+              const c = document.getElementById("agent-widget");
+              if (c) c.innerHTML = "";
+            };
+          },
+        });
 
         // Setup event listeners for configuration
         const applyConfigBtn = document.getElementById("applyConfigBtn");

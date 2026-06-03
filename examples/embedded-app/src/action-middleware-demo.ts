@@ -39,8 +39,13 @@ import type {
   AgentWidgetStorageAdapter,
   AgentWidgetStoredState,
   AgentWidgetRequestPayload,
-  AgentWidgetActionHandler
+  AgentWidgetActionHandler,
 } from "@runtypelabs/persona";
+import {
+  createDemoConfigInspector,
+  reportDemoConfig,
+} from "./demo-config-inspector";
+import { renderDemoScaffold } from "./demo-scaffold";
 
 const clientToken = import.meta.env.VITE_CLIENT_TOKEN || '';
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
@@ -489,6 +494,18 @@ clearChatHistoryStorageKey: "persona-action-middleware",  // Automatically clear
   },
   debug: true
 };
+
+renderDemoScaffold({ slug: "action-middleware" });
+
+const configInspector = createDemoConfigInspector({
+  title: "Action Middleware",
+  root: "[data-config-inspector]",
+});
+
+reportDemoConfig(configInspector, {
+  config: config as AgentWidgetConfig,
+  mode: "launcher",
+});
 
 // Initialize widget
 // Note: We use a separate variable to avoid reference error in onReady callback

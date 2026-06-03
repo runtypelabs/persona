@@ -1,4 +1,5 @@
 import "@runtypelabs/persona/widget.css";
+import { renderDemoScaffold } from "./demo-scaffold";
 import {
   createLocalStorageAdapter,
   markdownPostprocessor,
@@ -9,8 +10,17 @@ import {
   type LoadingIndicatorRenderContext,
   type IdleIndicatorRenderContext,
 } from "@runtypelabs/persona";
-import { setupMountMode, runWidgetMount } from "./mount-mode";
+import { setupMountMode, runWidgetMountWithInspector } from "./mount-mode";
+import {
+  createDemoConfigInspector,
+  reportDemoConfig,
+} from "./demo-config-inspector";
 import type { Mode } from "./examples-nav";
+
+renderDemoScaffold({ slug: "custom-loading-indicator" });
+
+const configInspector = createDemoConfigInspector({ title: "Replace the Loader" });
+let customLoadingMountMode: Mode = "inline";
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
@@ -480,7 +490,13 @@ setupMountMode({
   slug: "custom-loading-indicator",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
-    const { controller, teardown } = runWidgetMount(mode, stage, buildConfig(mode));
+    customLoadingMountMode = mode;
+    const { controller, teardown } = runWidgetMountWithInspector(
+      configInspector,
+      mode,
+      stage,
+      buildConfig,
+    );
     activeController = controller;
     return () => {
       teardown();
@@ -519,6 +535,10 @@ if (bubbleToggle) {
     activeController?.update({
       loadingIndicator: buildLoadingIndicatorConfig(),
     } as Partial<AgentWidgetConfig>);
+    reportDemoConfig(configInspector, {
+      config: buildConfig(customLoadingMountMode),
+      mode: customLoadingMountMode,
+    });
   });
 }
 
@@ -531,6 +551,10 @@ if (idleToggle) {
     activeController?.update({
       loadingIndicator: buildLoadingIndicatorConfig(),
     } as Partial<AgentWidgetConfig>);
+    reportDemoConfig(configInspector, {
+      config: buildConfig(customLoadingMountMode),
+      mode: customLoadingMountMode,
+    });
   });
 }
 

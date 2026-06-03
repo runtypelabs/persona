@@ -5,6 +5,10 @@ import {
   type AgentWidgetController,
 } from "@runtypelabs/persona";
 import type { Mode } from "./examples-nav";
+import {
+  reportDemoConfig,
+  type DemoConfigInspector,
+} from "./demo-config-inspector";
 
 export type { Mode };
 
@@ -96,8 +100,10 @@ const writeStoredMode = (slug: string, mode: Mode): void => {
 };
 
 /**
- * Default scaffold for launcher mode: render a faux host-page canvas inside
- * the stage and append a launcher mount target in the bottom-right.
+ * Default scaffold for launcher mode: render a launcher mount target pinned to
+ * the bottom-right of the stage. The surrounding preview frame already
+ * simulates the host page (see `renderDemoScaffold`), so this no longer renders
+ * its own faux-site card.
  *
  * Demos can opt out by calling `mount` themselves and ignoring this helper.
  */
@@ -108,16 +114,6 @@ export function renderLauncherScene(stage: HTMLElement): {
   stage.innerHTML = "";
   const scene = document.createElement("div");
   scene.className = "launcher-scene";
-  scene.innerHTML = `
-    <div class="launcher-scene-host">
-      <div class="launcher-scene-card">
-        <span class="launcher-scene-eyebrow">Your site</span>
-        <h2>Imagine this is your website.</h2>
-        <p>The Persona launcher floats in the corner.</p>
-        <p>Click it to open the chat.</p>
-      </div>
-    </div>
-  `;
   const mountEl = document.createElement("div");
   mountEl.className = "launcher-scene-mount";
   scene.appendChild(mountEl);
@@ -148,6 +144,30 @@ export function renderInlineMount(stage: HTMLElement): HTMLElement {
  * `controller.on(...)`, etc. Call `teardown()` from the `setupMountMode.mount`
  * factory's return value to destroy the widget when the mode changes.
  */
+/**
+ * Square off the widget panel so an inline mount reads as flush with the
+ * preview pane rather than a rounded card floating inside it. Demos that
+ * mount inline directly (bypassing {@link runWidgetMount}) should wrap their
+ * config in this so the gallery preview stays visually consistent. Returns a
+ * shallow clone — the caller's config (and what the Code tab reports) is left
+ * untouched. A demo that explicitly sets `panel.borderRadius` still wins.
+ */
+export function squareInlinePanel(config: AgentWidgetConfig): AgentWidgetConfig {
+  return {
+    ...config,
+    theme: {
+      ...config.theme,
+      components: {
+        ...config.theme?.components,
+        panel: {
+          borderRadius: "0",
+          ...config.theme?.components?.panel,
+        },
+      },
+    },
+  };
+}
+
 export function runWidgetMount(
   mode: Mode,
   stage: HTMLElement,
@@ -163,8 +183,23 @@ export function runWidgetMount(
   }
   const mount = renderInlineMount(stage);
   mount.style.height = "100%";
-  const controller = createAgentExperience(mount, config);
+  const controller = createAgentExperience(mount, squareInlinePanel(config));
   return { controller, teardown: () => controller.destroy() };
+}
+
+/**
+ * Mount the widget and push the same config object to the demo config inspector.
+ */
+export function runWidgetMountWithInspector(
+  inspector: DemoConfigInspector | null | undefined,
+  mode: Mode,
+  stage: HTMLElement,
+  buildConfig: (mode: Mode) => AgentWidgetConfig,
+): { controller: AgentWidgetController; teardown: Teardown; config: AgentWidgetConfig } {
+  const config = buildConfig(mode);
+  reportDemoConfig(inspector, { config, mode });
+  const { controller, teardown } = runWidgetMount(mode, stage, config);
+  return { controller, teardown, config };
 }
 
 const buildToolbar = (

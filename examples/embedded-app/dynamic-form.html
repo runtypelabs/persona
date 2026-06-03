@@ -7,126 +7,6 @@
     <link rel="icon" href="/favicon.ico" />
     <title>Streaming Chat Widget – Dynamic Form Demo</title>
     <style>
-      .dynamic-form-demo-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin: 0.75rem 0;
-        flex-wrap: wrap;
-      }
-      .dynamic-form-demo-button {
-        appearance: none;
-        background: #111827;
-        color: #ffffff;
-        border: 1px solid #111827;
-        border-radius: 0.5rem;
-        padding: 0.5rem 0.875rem;
-        font-size: 0.8125rem;
-        font-weight: 600;
-        font-family: inherit;
-        cursor: pointer;
-        transition: background 0.15s ease, border-color 0.15s ease;
-      }
-      .dynamic-form-demo-button:hover {
-        background: #1f2937;
-      }
-      .dynamic-form-demo-button:focus-visible {
-        outline: 2px solid #6366f1;
-        outline-offset: 2px;
-      }
-      .dynamic-form-demo-toolbar-hint {
-        color: #64748b;
-        font-size: 0.8125rem;
-      }
-      /* ---- Tabbed variant explorer ---- */
-      .form-tabs {
-        margin-top: 1rem;
-      }
-      .form-tabs-tablist {
-        display: flex;
-        gap: 0.25rem;
-        border-bottom: 1px solid #e5e7eb;
-        padding: 0;
-        margin: 0 0 1rem 0;
-        flex-wrap: wrap;
-      }
-      .form-tabs-tab {
-        appearance: none;
-        background: transparent;
-        border: 0;
-        border-bottom: 2px solid transparent;
-        padding: 0.5rem 0.875rem;
-        margin-bottom: -1px;
-        font-size: 0.8125rem;
-        font-weight: 500;
-        color: #64748b;
-        cursor: pointer;
-        font-family: inherit;
-        transition: color 0.15s ease, border-color 0.15s ease;
-      }
-      .form-tabs-tab:hover {
-        color: #1f2937;
-      }
-      .form-tabs-tab[aria-selected="true"] {
-        color: #111827;
-        border-bottom-color: #111827;
-        font-weight: 600;
-      }
-      .form-tabs-tab small {
-        display: block;
-        font-size: 0.6875rem;
-        font-weight: 400;
-        color: #94a3b8;
-        margin-top: 0.0625rem;
-      }
-      .form-tabs-tab[aria-selected="true"] small {
-        color: #64748b;
-      }
-      .form-tabs-panel {
-        display: grid;
-        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-        gap: 1.25rem;
-        align-items: stretch;
-      }
-      .form-tabs-panel[hidden] {
-        display: none;
-      }
-      @media (max-width: 920px) {
-        .form-tabs-panel {
-          grid-template-columns: 1fr;
-        }
-      }
-      .form-tabs-def {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-        background: #0f172a;
-        color: #e2e8f0;
-        border-radius: 0.625rem;
-        padding: 1rem;
-        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-        font-size: 0.75rem;
-        line-height: 1.55;
-        overflow: auto;
-        max-height: 760px;
-      }
-      .form-tabs-def pre {
-        margin: 0;
-        white-space: pre;
-        word-break: normal;
-      }
-      .form-tabs-def-caption {
-        font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
-        font-size: 0.6875rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: #94a3b8;
-        margin-bottom: 0.625rem;
-      }
-      .form-tabs-preview {
-        min-width: 0;
-      }
       .form-tabs-preview .embedded-target {
         height: 760px;
         min-height: 760px;
@@ -159,6 +39,8 @@
               Preview form
             </button>
           </div>
+
+          <div data-config-inspector></div>
         </aside>
 
         <div class="stage-widget"></div>

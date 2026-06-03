@@ -6,33 +6,6 @@
   <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Event Inspector</title>
-  <style>
-    .section { margin-bottom: 1.25rem; }
-    .section h3 {
-      margin: 0 0 0.5rem 0;
-      font-size: 0.9rem;
-      color: var(--muted);
-    }
-    .btn-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-      align-items: center;
-    }
-    .log-panel {
-      background: var(--accent);
-      border-radius: var(--radius);
-      padding: 0.75rem;
-      max-height: 180px;
-      overflow-y: auto;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin-top: 0.5rem;
-      display: none;
-    }
-  </style>
 </head>
 <body>
   <main class="shell-main">
@@ -48,7 +21,7 @@
           <div class="mount-toolbar" data-mount-toolbar></div>
         </header>
 
-        <div class="section">
+        <div class="info-section">
           <h3>Launcher panel</h3>
           <p style="font-size: 0.78rem; color: var(--muted); margin: 0 0 0.5rem 0;">Only effective when mounted as a launcher.</p>
           <div class="btn-row">
@@ -57,35 +30,39 @@
           </div>
         </div>
 
-        <div class="section">
-          <h3>Controller methods</h3>
-          <div class="btn-row">
-            <button class="btn btn-primary" type="button" id="es-show">Show event stream</button>
-            <button class="btn" type="button" id="es-hide">Hide event stream</button>
-            <button class="btn" type="button" id="es-check">Check visibility</button>
+        <div class="info-section">
+          <h3>Event stream</h3>
+          <div class="section">
+            <label>Controller methods</label>
+            <div class="btn-row">
+              <button class="btn btn-primary" type="button" id="es-show">Show event stream</button>
+              <button class="btn" type="button" id="es-hide">Hide event stream</button>
+              <button class="btn" type="button" id="es-check">Check visibility</button>
+            </div>
+          </div>
+          <div class="section">
+            <label>Window events</label>
+            <div class="btn-row">
+              <button class="btn" type="button" id="es-win-show-all">Show all</button>
+              <button class="btn" type="button" id="es-win-hide-all">Hide all</button>
+              <button class="btn" type="button" id="es-win-show-wrong">Show wrong ID</button>
+            </div>
           </div>
         </div>
 
-        <div class="section">
-          <h3>Window events</h3>
-          <div class="btn-row">
-            <button class="btn" type="button" id="es-win-show-all">Show all</button>
-            <button class="btn" type="button" id="es-win-hide-all">Hide all</button>
-            <button class="btn" type="button" id="es-win-show-wrong">Show wrong ID</button>
-          </div>
-        </div>
+        <div data-config-inspector></div>
 
-        <div class="section">
+        <div class="info-section">
           <h3>Event listeners</h3>
           <div class="btn-row">
             <button class="btn" type="button" id="es-listen">Register listeners</button>
           </div>
-          <div id="es-log" class="log-panel">
+          <div id="es-log" class="log-panel" style="display: none;">
             <pre id="es-log-pre" style="margin:0; white-space: pre-wrap;"></pre>
           </div>
         </div>
 
-        <div class="section">
+        <div class="info-section">
           <h3>Synthetic load</h3>
           <p style="font-size: 0.85rem; color: var(--muted); margin: 0 0 0.5rem 0;">
             Injects 1000 alternating messages into the active widget.

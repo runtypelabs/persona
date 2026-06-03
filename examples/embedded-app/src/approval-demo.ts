@@ -1,4 +1,5 @@
 import "@runtypelabs/persona/widget.css";
+import { renderDemoScaffold } from "./demo-scaffold";
 
 import {
   createAgentExperience,
@@ -10,8 +11,17 @@ import {
   type AgentWidgetController,
 } from "@runtypelabs/persona";
 import { createMockSSEResponse, createMockSSEStream } from "@runtypelabs/persona/testing";
-import { setupMountMode, renderInlineMount, renderLauncherScene } from "./mount-mode";
+import { setupMountMode, renderInlineMount, renderLauncherScene, squareInlinePanel } from "./mount-mode";
+import {
+  createDemoConfigInspector,
+  reportDemoConfig,
+} from "./demo-config-inspector";
 import type { Mode } from "./examples-nav";
+
+renderDemoScaffold({ slug: "approval-demo" });
+
+const configInspector = createDemoConfigInspector({ title: "Tool Approval" });
+let approvalMountMode: Mode = "inline";
 
 let activeController: AgentWidgetController | null = null;
 let lastApprovalDecision: "approved" | "denied" | null = null;
@@ -109,6 +119,8 @@ setupMountMode({
   slug: "approval-demo",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
+    approvalMountMode = mode;
+    reportDemoConfig(configInspector, { config: buildConfig(mode), mode });
     if (mode === "launcher") {
       const { mountEl } = renderLauncherScene(stage);
       const handle = initAgentWidget({ target: mountEl, config: buildConfig("launcher") });
@@ -121,7 +133,7 @@ setupMountMode({
     }
     const mount = renderInlineMount(stage);
     mount.style.height = "100%";
-    const controller = createAgentExperience(mount, buildConfig(mode));
+    const controller = createAgentExperience(mount, squareInlinePanel(buildConfig(mode)));
     activeController = controller;
     wireApprovalLogging(controller);
     return () => {

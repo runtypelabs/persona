@@ -17,23 +17,28 @@
           <div class="mount-toolbar" data-mount-toolbar></div>
         </header>
 
-        <div class="toggle-section">
-          <label for="bubble-toggle">Show bubble</label>
-          <label class="toggle-switch">
-            <input type="checkbox" id="bubble-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-        <div class="toggle-status" id="toggle-status">Bubble: hidden (showBubble: false)</div>
+        <div class="info-section">
+          <h3>Loading indicator</h3>
+          <div class="toggle-section">
+            <label for="bubble-toggle">Show bubble</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="bubble-toggle">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="toggle-status" id="toggle-status">Bubble: hidden (showBubble: false)</div>
 
-        <div class="toggle-section">
-          <label for="idle-toggle">Show idle indicator</label>
-          <label class="toggle-switch">
-            <input type="checkbox" id="idle-toggle">
-            <span class="toggle-slider"></span>
-          </label>
+          <div class="toggle-section">
+            <label for="idle-toggle">Show idle indicator</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="idle-toggle">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="toggle-status" id="idle-toggle-status">Idle indicator: disabled</div>
         </div>
-        <div class="toggle-status" id="idle-toggle-status">Idle indicator: disabled</div>
+
+        <div data-config-inspector></div>
       </aside>
 
       <div class="stage-widget"></div>

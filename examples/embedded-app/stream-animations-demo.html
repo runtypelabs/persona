@@ -7,110 +7,21 @@
     <link rel="icon" href="/favicon.ico" />
     <title>Stream Animations — Persona</title>
     <style>
-      .controls {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
       .preview-hint {
         display: flex;
         align-items: center;
         justify-content: center;
         height: 100%;
-        background: var(--card);
-        border: 1px dashed var(--border);
-        border-radius: var(--radius-lg);
         padding: 2rem;
         color: var(--muted);
         text-align: center;
         font-size: 0.9rem;
         line-height: 1.5;
       }
-      .section { display: flex; flex-direction: column; gap: 0.5rem; }
-      .section label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--muted);
-      }
-
-      .mode-group {
-        display: flex;
-        gap: 0.375rem;
-        flex-wrap: wrap;
-      }
-      .mode-btn {
-        padding: 0.375rem 0.75rem;
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--border);
-        background: var(--card);
-        color: var(--foreground);
-        font-size: 0.8125rem;
-        cursor: pointer;
-      }
-      .mode-btn:hover { background: var(--border); }
-      .mode-btn.active {
-        border-color: #5b2eff;
-        background: rgba(91, 46, 255, 0.1);
-        color: #5b2eff;
-        font-weight: 600;
-      }
-
-      .range-row {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      .range-row span {
-        font-size: 0.8125rem;
-        color: var(--muted);
-        min-width: 60px;
-        text-align: right;
-      }
-      input[type="range"] { width: 100%; }
-
-      button.play {
-        padding: 0.6rem 0.9rem;
-        border-radius: var(--radius-sm);
-        border: 1px solid #5b2eff;
-        background: #5b2eff;
-        color: white;
-        font-size: 0.875rem;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      button.play:disabled { opacity: 0.5; cursor: not-allowed; }
-
-      .reply-row { display: flex; flex-direction: column; gap: 0.5rem; }
-      .reply-row textarea {
-        padding: 0.4rem 0.6rem;
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--border);
-        background: var(--card);
-        color: var(--foreground);
-        font-size: 0.8125rem;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        min-height: 6rem;
-        resize: vertical;
-      }
-      .reply-row button.play { align-self: flex-start; }
-
-      #log {
-        font-size: 0.75rem;
-        font-family: monospace;
-        background: #111;
-        color: #aaa;
-        border-radius: var(--radius-sm);
-        padding: 0.5rem;
-        max-height: 120px;
-        overflow-y: auto;
-        line-height: 1.6;
-      }
+      .btn.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
   </head>
   <body>
-    <div id="stream-anim-launcher-root" aria-hidden="true"></div>
 
     <main class="shell-main">
       <div class="stage">
@@ -121,80 +32,79 @@
           </header>
 
           <div class="controls">
-          <div class="section">
-            <label>Animation type</label>
-        <div class="mode-group" id="type-selector">
-          <button class="mode-btn active" data-type="none">None</button>
-          <button class="mode-btn" data-type="typewriter">Typewriter</button>
-          <button class="mode-btn" data-type="word-fade">Word fade</button>
-          <button class="mode-btn" data-type="letter-rise">Letter rise</button>
-          <button class="mode-btn" data-type="glyph-cycle">Glyph cycle</button>
-          <button class="mode-btn" data-type="wipe">Wipe</button>
-          <button class="mode-btn" data-type="pop-bubble">Pop bubble</button>
-          <button class="mode-btn" data-type="rainbow">Rainbow (custom)</button>
-        </div>
-      </div>
+            <div class="info-section">
+              <h3>Animation settings</h3>
+              <div class="section">
+                <label>Animation type</label>
+                <div class="mode-group" id="type-selector">
+                  <button class="mode-btn active" data-type="none">None</button>
+                  <button class="mode-btn" data-type="typewriter">Typewriter</button>
+                  <button class="mode-btn" data-type="word-fade">Word fade</button>
+                  <button class="mode-btn" data-type="letter-rise">Letter rise</button>
+                  <button class="mode-btn" data-type="glyph-cycle">Glyph cycle</button>
+                  <button class="mode-btn" data-type="wipe">Wipe</button>
+                  <button class="mode-btn" data-type="pop-bubble">Pop bubble</button>
+                  <button class="mode-btn" data-type="rainbow">Rainbow (custom)</button>
+                </div>
+              </div>
+              <div class="section">
+                <label>Buffering</label>
+                <div class="mode-group" id="buffer-selector">
+                  <button class="mode-btn active" data-buffer="none">None</button>
+                  <button class="mode-btn" data-buffer="word">Word</button>
+                  <button class="mode-btn" data-buffer="line">Line</button>
+                </div>
+              </div>
+              <div class="section">
+                <label>Pre-first-token placeholder</label>
+                <div class="mode-group" id="placeholder-selector">
+                  <button class="mode-btn active" data-placeholder="none">Typing dots (default)</button>
+                  <button class="mode-btn" data-placeholder="skeleton">Skeleton shimmer</button>
+                </div>
+              </div>
+              <div class="section">
+                <label>Per-char animation duration (ms)</label>
+                <div class="range-row">
+                  <input type="range" id="speed" min="40" max="500" step="10" value="120" />
+                  <span id="speed-label">120ms</span>
+                </div>
+              </div>
+              <div class="section">
+                <label>Container animation duration (pop-bubble)</label>
+                <div class="range-row">
+                  <input type="range" id="duration" min="200" max="4000" step="100" value="1800" />
+                  <span id="duration-label">1800ms</span>
+                </div>
+              </div>
+            </div>
 
-      <div class="section">
-        <label>Buffering</label>
-        <div class="mode-group" id="buffer-selector">
-          <button class="mode-btn active" data-buffer="none">None</button>
-          <button class="mode-btn" data-buffer="word">Word</button>
-          <button class="mode-btn" data-buffer="line">Line</button>
-        </div>
-      </div>
+            <div class="info-section">
+              <h3>Replay</h3>
+              <div class="section">
+                <label>Canned reply</label>
+                <div class="mode-group" id="preset-selector">
+                  <button class="mode-btn active" data-preset="default">Default</button>
+                  <button class="mode-btn" data-preset="code">Code block</button>
+                  <button class="mode-btn" data-preset="table">Markdown table</button>
+                  <button class="mode-btn" data-preset="images">Images</button>
+                </div>
+                <div class="reply-row">
+                  <textarea id="reply-text" spellcheck="false"></textarea>
+                  <button class="btn btn-primary" id="btn-play">Replay stream</button>
+                </div>
+              </div>
+            </div>
 
-      <div class="section">
-        <label>Pre-first-token placeholder</label>
-        <div class="mode-group" id="placeholder-selector">
-          <button class="mode-btn active" data-placeholder="none">Typing dots (default)</button>
-          <button class="mode-btn" data-placeholder="skeleton">Skeleton shimmer</button>
-        </div>
-      </div>
+            <div data-config-inspector></div>
 
-      <div class="section">
-        <label>Per-char animation duration (ms)</label>
-        <div class="range-row">
-          <input type="range" id="speed" min="40" max="500" step="10" value="120" />
-          <span id="speed-label">120ms</span>
-        </div>
-      </div>
-
-      <div class="section">
-        <label>Container animation duration (pop-bubble)</label>
-        <div class="range-row">
-          <input type="range" id="duration" min="200" max="4000" step="100" value="1800" />
-          <span id="duration-label">1800ms</span>
-        </div>
-      </div>
-
-      <div class="section">
-        <label>Canned reply</label>
-        <div class="mode-group" id="preset-selector">
-          <button class="mode-btn active" data-preset="default">Default</button>
-          <button class="mode-btn" data-preset="code">Code block</button>
-          <button class="mode-btn" data-preset="table">Markdown table</button>
-          <button class="mode-btn" data-preset="images">Images</button>
-        </div>
-        <div class="reply-row">
-          <textarea id="reply-text" spellcheck="false"></textarea>
-          <button class="play" id="btn-play">Replay stream</button>
-        </div>
-      </div>
-
-          <div class="section">
-            <label>Log</label>
-            <div id="log"></div>
-          </div>
+            <div class="info-section">
+              <h3>Log</h3>
+              <div id="log" class="event-log"></div>
+            </div>
           </div>
         </aside>
 
-        <div class="stage-widget">
-          <div class="preview-hint">
-            The widget mounts as a floating launcher in the bottom-right corner.<br>
-            Pick an animation type and click "Replay stream" to preview.
-          </div>
-        </div>
+        <div class="stage-widget"></div>
       </div>
     </main>
 
@@ -207,6 +117,19 @@
         markdownPostprocessor,
         registerStreamAnimationPlugin,
       } from "@runtypelabs/persona";
+      import {
+        createDemoConfigInspector,
+        reportDemoConfig,
+      } from "./src/demo-config-inspector.ts";
+      import { renderDemoScaffold } from "./src/demo-scaffold.ts";
+      import { setupMountMode, renderInlineMount, squareInlinePanel } from "./src/mount-mode.ts";
+
+      renderDemoScaffold({ slug: "stream-animations-demo" });
+
+      const configInspector = createDemoConfigInspector({
+        title: "Text Reveal Effects",
+        root: "[data-config-inspector]",
+      });
 
       // Subpath plugins: each import auto-registers the plugin. Removing any
       // of these `import` lines drops that animation from the bundle.
@@ -258,7 +181,9 @@
       let currentType = "none";
       let currentPlaceholder = "none";
       let currentBuffer = "none";
+      let activeMountMode = "inline";  // mount mode (inline/launcher), driven by setupMountMode
       let controller = null;
+      let currentTeardown = null;
       let msgCounter = 0;
       const nextId = (p) => `${p}-${++msgCounter}`;
 
@@ -301,13 +226,15 @@ Both were captured at *golden hour*.`,
       const getConfig = () => ({
         ...DEFAULT_WIDGET_CONFIG,
         apiUrl: "https://noop.test/chat",
-        launcher: {
-          ...DEFAULT_WIDGET_CONFIG.launcher,
-          enabled: true,
-          autoExpand: true,
-          width: "560px",
-          position: "bottom-right",
-        },
+        launcher: activeMountMode === "launcher"
+          ? {
+              ...DEFAULT_WIDGET_CONFIG.launcher,
+              enabled: true,
+              autoExpand: true,
+              width: "560px",
+              position: "bottom-right",
+            }
+          : { ...DEFAULT_WIDGET_CONFIG.launcher, enabled: false, width: "100%" },
         suggestionChips: [],
         persistState: false,
         features: {
@@ -328,11 +255,35 @@ Both were captured at *golden hour*.`,
         postprocessMessage: ({ text }) => markdownPostprocessor(text),
       });
 
+      const stageEl = document.querySelector(".stage-widget");
+      const doMount = () => {
+        const cfg = getConfig();
+        let mount;
+        if (activeMountMode === "launcher") {
+          stageEl.innerHTML =
+            '<div class="preview-hint">The widget mounts as a floating launcher in the bottom-right corner.<br>Pick an animation type and click "Replay stream" to preview.</div>';
+          mount = document.createElement("div");
+          stageEl.appendChild(mount);
+        } else {
+          mount = renderInlineMount(stageEl);
+          mount.style.height = "100%";
+        }
+        controller = createAgentExperience(mount, activeMountMode === "launcher" ? cfg : squareInlinePanel(cfg));
+        currentTeardown = () => controller.destroy();
+        reportDemoConfig(configInspector, { config: cfg, mode: activeMountMode });
+      };
+
+      // Re-mount the widget in the current mode (used before each replay).
       const createWidget = () => {
-        const mount = document.getElementById("stream-anim-launcher-root");
-        if (controller) controller.destroy();
-        mount.innerHTML = "";
-        controller = createAgentExperience(mount, getConfig());
+        if (currentTeardown) {
+          try { currentTeardown(); } catch (e) { /* ignore */ }
+          currentTeardown = null;
+        }
+        doMount();
+      };
+
+      const refreshConfigPreview = () => {
+        reportDemoConfig(configInspector, { config: getConfig(), mode: activeMountMode });
       };
 
       const playReply = async () => {
@@ -380,6 +331,7 @@ Both were captured at *golden hour*.`,
         typeSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         currentType = btn.dataset.type;
+        refreshConfigPreview();
       });
 
       const placeholderSelector = document.getElementById("placeholder-selector");
@@ -389,6 +341,7 @@ Both were captured at *golden hour*.`,
         placeholderSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         currentPlaceholder = btn.dataset.placeholder;
+        refreshConfigPreview();
       });
 
       const bufferSelector = document.getElementById("buffer-selector");
@@ -398,15 +351,22 @@ Both were captured at *golden hour*.`,
         bufferSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         currentBuffer = btn.dataset.buffer;
+        refreshConfigPreview();
       });
 
       const speedSlider = document.getElementById("speed");
       const speedLabel = document.getElementById("speed-label");
-      speedSlider.addEventListener("input", () => { speedLabel.textContent = `${speedSlider.value}ms`; });
+      speedSlider.addEventListener("input", () => {
+        speedLabel.textContent = `${speedSlider.value}ms`;
+        refreshConfigPreview();
+      });
 
       const durationSlider = document.getElementById("duration");
       const durationLabel = document.getElementById("duration-label");
-      durationSlider.addEventListener("input", () => { durationLabel.textContent = `${durationSlider.value}ms`; });
+      durationSlider.addEventListener("input", () => {
+        durationLabel.textContent = `${durationSlider.value}ms`;
+        refreshConfigPreview();
+      });
 
       document.getElementById("btn-play").addEventListener("click", playReply);
 
@@ -421,9 +381,24 @@ Both were captured at *golden hour*.`,
         if (preset != null) replyTextarea.value = preset;
       });
 
-      // Boot
+      // Boot. setupMountMode renders the "View as" Inline / Launcher toggle and
+      // does the initial mount; replay/config changes call createWidget() to
+      // re-mount in the current mode.
       replyTextarea.value = PRESETS.default;
-      createWidget();
+      setupMountMode({
+        slug: "stream-animations-demo",
+        modes: ["inline", "launcher"],
+        mount: (mode) => {
+          activeMountMode = mode;
+          doMount();
+          return () => {
+            if (currentTeardown) {
+              try { currentTeardown(); } catch (e) { /* ignore */ }
+              currentTeardown = null;
+            }
+          };
+        },
+      });
       log("Ready — pick a type and click Replay.");
     </script>
     <script type="module">

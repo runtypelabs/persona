@@ -10,10 +10,20 @@
 <body>
   <main class="shell-main">
     <header class="title-strip">
+      <p class="eyebrow">Persona · Component reference</p>
       <h1>Advanced Examples</h1>
-      <p>Configuration patterns, plugin hooks, and integration recipes. Start with the highlighted demos, then explore patterns as you need them.</p>
+      <p>Configuration patterns, plugin hooks, and integration recipes. Start with the highlighted demos, then explore patterns as you need them. Press <kbd class="shell-kbd">⌘K</kbd> anywhere to jump between examples.</p>
     </header>
 
+    <div class="gallery-search">
+      <input
+        type="search"
+        id="gallery-search"
+        class="gallery-search-input"
+        placeholder="Search examples by title, tag, or description…"
+        aria-label="Search advanced examples"
+      />
+    </div>
     <div id="advanced-tiers"></div>
   </main>
 
@@ -23,6 +33,7 @@
       TIER_LABELS,
       TIER_ORDER,
       renderExamplesShell,
+      formatExampleIndex,
     } from "/src/examples-nav.ts";
 
     renderExamplesShell();
@@ -33,10 +44,30 @@
       reference: "Catalogs and debugging surfaces. Useful when wiring up the widget against your own backend.",
     };
 
-    const root = document.getElementById("advanced-tiers");
-    if (root) {
+    const searchInput = document.getElementById("gallery-search");
+    let searchQuery = "";
+
+    const matchesSearch = (entry) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.trim().toLowerCase();
+      const haystack = [
+        entry.title,
+        entry.blurb,
+        entry.tier,
+        ...entry.tags,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    };
+
+    const renderGallery = () => {
+      const root = document.getElementById("advanced-tiers");
+      if (!root) return;
       root.innerHTML = TIER_ORDER.map((tier) => {
-        const entries = ADVANCED_EXAMPLES.filter((e) => e.tier === tier);
+        const entries = ADVANCED_EXAMPLES.filter(
+          (e) => e.tier === tier && matchesSearch(e),
+        );
         if (entries.length === 0) return "";
 
         const cards = entries.map((entry) => {
@@ -46,15 +77,13 @@
           const tags = entry.tags
             .map((t) => `<span class="demo-card-tag">${t}</span>`)
             .join("");
-          const modes = entry.modes
-            .map((m) => `<span class="demo-card-mode">${m}</span>`)
-            .join("");
+          const index = formatExampleIndex(ADVANCED_EXAMPLES.indexOf(entry));
           return `<a class="demo-card" href="${entry.href}">
+            <span class="demo-card-index">${index}</span>
             <h3 class="demo-card-title">${entry.title}${badge}</h3>
             <p class="demo-card-subtitle">${entry.blurb}</p>
             <div class="demo-card-foot">
               <div class="demo-card-tags">${tags}</div>
-              <div class="demo-card-modes" title="Supported mount modes">${modes}</div>
             </div>
           </a>`;
         }).join("");
@@ -68,7 +97,13 @@
           <div class="gallery-tier-grid">${cards}</div>
         </section>`;
       }).join("");
-    }
+    };
+
+    renderGallery();
+    searchInput?.addEventListener("input", () => {
+      searchQuery = searchInput.value;
+      renderGallery();
+    });
   </script>
 </body>
 </html>

@@ -6,56 +6,6 @@
   <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Feedback Integration Demo</title>
-  <style>
-    .feedback-log { max-height: 300px; }
-    .stat-card.upvotes .stat-value { color: #22c55e; }
-    .stat-card.downvotes .stat-value { color: #ef4444; }
-    .stat-card.copies .stat-value { color: #3b82f6; }
-    .log-entry.csat { background: #fef3c7; color: #92400e; border-left: 3px solid #f59e0b; }
-    .log-entry.nps { background: #f3e8ff; color: #6b21a8; border-left: 3px solid #a855f7; }
-    .log-entry.session { background: #e0e7ff; color: #3730a3; border-left: 3px solid #6366f1; }
-    .log-entry.error { background: #fef2f2; color: #b91c1c; border-left: 3px solid #ef4444; }
-    .button-group {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
-    }
-    .action-btn {
-      padding: 0.5rem 1rem;
-      font-size: 0.875rem;
-      font-weight: 500;
-      border-radius: var(--radius);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      border: 1px solid;
-    }
-    .action-btn.csat {
-      background: #fef3c7;
-      border-color: #f59e0b;
-      color: #92400e;
-    }
-    .action-btn.csat:hover { background: #fde68a; }
-    .action-btn.nps {
-      background: #f3e8ff;
-      border-color: #a855f7;
-      color: #6b21a8;
-    }
-    .action-btn.nps:hover { background: #e9d5ff; }
-    .section-title {
-      margin: 0 0 0.75rem 0;
-      font-size: 0.9rem;
-      color: var(--muted);
-    }
-    .satisfaction-stats {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-    .satisfaction-stats .stat-card.csat .stat-value { color: #f59e0b; }
-    .satisfaction-stats .stat-card.nps .stat-value { color: #a855f7; }
-  </style>
 </head>
 <body>
   <main class="shell-main">
@@ -70,35 +20,35 @@
         <div class="info-section">
           <h3>Message actions</h3>
           <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-            <div style="display: flex; gap: 1.25rem; flex-wrap: wrap;">
-              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+            <div class="checkbox-row">
+              <label class="checkbox-label">
                 <input type="checkbox" id="cfg-copy" checked> Copy
               </label>
-              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+              <label class="checkbox-label">
                 <input type="checkbox" id="cfg-upvote" checked> Upvote
               </label>
-              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+              <label class="checkbox-label">
                 <input type="checkbox" id="cfg-downvote" checked> Downvote
               </label>
             </div>
-            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
-                Visibility
-                <select id="cfg-visibility" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
+            <div class="field-grid">
+              <label class="field">
+                <span class="control-label">Visibility</span>
+                <select id="cfg-visibility">
                   <option value="always" selected>Always</option>
                   <option value="hover">Hover</option>
                 </select>
               </label>
-              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
-                Layout
-                <select id="cfg-layout" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
+              <label class="field">
+                <span class="control-label">Layout</span>
+                <select id="cfg-layout">
                   <option value="pill-inside" selected>Pill</option>
                   <option value="row-inside">Row</option>
                 </select>
               </label>
-              <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
-                Align
-                <select id="cfg-align" style="font-size: 0.85rem; padding: 0.2rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border);">
+              <label class="field">
+                <span class="control-label">Align</span>
+                <select id="cfg-align">
                   <option value="left">Left</option>
                   <option value="center">Center</option>
                   <option value="right" selected>Right</option>
@@ -138,11 +88,13 @@
               <div class="stat-label">NPS (0-10)</div>
             </div>
           </div>
-          <div class="button-group" style="margin-bottom: 0;">
+          <div class="btn-row">
             <button class="action-btn csat" id="show-csat">Show CSAT Form</button>
             <button class="action-btn nps" id="show-nps">Show NPS Form</button>
           </div>
         </div>
+
+        <div data-config-inspector></div>
 
         <div class="info-section">
           <h3>Event log</h3>
