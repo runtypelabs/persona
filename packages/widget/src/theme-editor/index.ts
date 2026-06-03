@@ -128,6 +128,7 @@ export {
   convertFromPx,
   normalizeColorValue,
   isValidHex,
+  rgbToHex,
   wcagContrastRatio,
   hexToHsl,
   hslToHex,

@@ -236,13 +236,13 @@ export function createThemeEditorTools(
     name: 'set_brand_colors',
     title: 'Set brand colors',
     description:
-      'Set one or more brand colors (primary, secondary, accent). Each color auto-generates a full 50–950 shade scale and applies to the light and dark themes (per the current edit target). Accepts hex ("#2563eb", "2563eb", "#18f") or CSS color names ("blue", "slateblue").',
+      'Set one or more brand colors (primary, secondary, accent). Each color auto-generates a full 50–950 shade scale and applies to the light and dark themes (per the current edit target). Accepts hex ("#2563eb", "2563eb", "#18f"), rgb()/rgba() ("rgb(37, 99, 235)"), or CSS color names ("blue", "slateblue").',
     inputSchema: {
       type: 'object',
       properties: {
-        primary: { type: 'string', description: 'Hex or CSS color name.' },
-        secondary: { type: 'string', description: 'Hex or CSS color name.' },
-        accent: { type: 'string', description: 'Hex or CSS color name.' },
+        primary: { type: 'string', description: 'Hex, rgb()/rgba(), or CSS color name.' },
+        secondary: { type: 'string', description: 'Hex, rgb()/rgba(), or CSS color name.' },
+        accent: { type: 'string', description: 'Hex, rgb()/rgba(), or CSS color name.' },
       },
       additionalProperties: false,
     },

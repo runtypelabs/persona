@@ -64,6 +64,36 @@ export function isValidHex(value: string): boolean {
   return /^#[0-9A-Fa-f]{6}$/.test(value);
 }
 
+/**
+ * Parse an `rgb()` / `rgba()` string into `#rrggbb`. Accepts integer (0-255) or
+ * percentage channels; any alpha component is dropped. Returns `null` when the
+ * string is not a parseable rgb/rgba value, so callers can fall back. This lets
+ * the HSL/luminance paths — which otherwise `parseInt` hex digits — accept the
+ * `rgb()` inputs that `coerceColor` admits without producing `#NaNNaNNaN`.
+ */
+export function rgbToHex(value: string): string | null {
+  const match = value.trim().toLowerCase().match(/^rgba?\(([^)]+)\)$/);
+  if (!match) return null;
+
+  const parts = match[1].split(',').map((p) => p.trim());
+  if (parts.length < 3) return null;
+
+  const channel = (raw: string): number => {
+    const isPct = raw.endsWith('%');
+    const n = parseFloat(isPct ? raw.slice(0, -1) : raw);
+    if (!Number.isFinite(n)) return NaN;
+    return Math.max(0, Math.min(255, Math.round(isPct ? (n / 100) * 255 : n)));
+  };
+
+  const r = channel(parts[0]);
+  const g = channel(parts[1]);
+  const b = channel(parts[2]);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return null;
+
+  const toHex = (n: number) => n.toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
 // ─── WCAG Contrast ──────────────────────────────────────────────
 
 /**
@@ -72,7 +102,8 @@ export function isValidHex(value: string): boolean {
  */
 export function wcagContrastRatio(hex1: string, hex2: string): number {
   const luminance = (hex: string): number => {
-    const norm = normalizeColorValue(hex);
+    const normalized = normalizeColorValue(hex);
+    const norm = normalized.startsWith('rgb') ? rgbToHex(normalized) ?? '#000000' : normalized;
     const channels = [1, 3, 5].map((i) => {
       const v = parseInt(norm.slice(i, i + 2), 16) / 255;
       return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
@@ -87,7 +118,12 @@ export function wcagContrastRatio(hex1: string, hex2: string): number {
 // ─── HSL Conversion ─────────────────────────────────────────────
 
 export function hexToHsl(hex: string): { h: number; s: number; l: number } {
-  const normalized = normalizeColorValue(hex);
+  const normalizedValue = normalizeColorValue(hex);
+  // `rgb()`/`rgba()` is valid color input (see coerceColor) but can't be sliced
+  // as hex digits; convert it first so the scale isn't built from NaN channels.
+  const normalized = normalizedValue.startsWith('rgb')
+    ? rgbToHex(normalizedValue) ?? '#000000'
+    : normalizedValue;
   const r = parseInt(normalized.slice(1, 3), 16) / 255;
   const g = parseInt(normalized.slice(3, 5), 16) / 255;
   const b = parseInt(normalized.slice(5, 7), 16) / 255;

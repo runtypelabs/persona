@@ -62,6 +62,15 @@ describe('createThemeEditorTools', () => {
     expect(state.get('darkTheme.palette.colors.primary.500')).toMatch(/^#/);
   });
 
+  it('set_brand_colors accepts rgb() input without corrupting the scale', async () => {
+    const out = await call(tools.get('set_brand_colors')!, { primary: 'rgb(37, 99, 235)' });
+    expect(out.ok).toBe(true);
+    for (const shade of ['50', '500', '700', '950']) {
+      expect(state.get(`theme.palette.colors.primary.${shade}`)).toMatch(/^#[0-9a-f]{6}$/);
+      expect(state.get(`darkTheme.palette.colors.primary.${shade}`)).not.toContain('NaN');
+    }
+  });
+
   it('assign_color_role writes role tokens to both variants', async () => {
     const out = await call(tools.get('assign_color_role')!, {
       role: 'header',
