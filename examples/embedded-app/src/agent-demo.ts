@@ -9,8 +9,17 @@ import {
   type AgentWidgetConfig,
   type AgentWidgetController,
 } from "@runtypelabs/persona";
-import { setupMountMode, renderInlineMount, renderLauncherScene } from "./mount-mode";
+import { setupMountMode, renderInlineMount, renderLauncherScene, squareInlinePanel } from "./mount-mode";
+import {
+  createDemoConfigInspector,
+  reportDemoConfig,
+} from "./demo-config-inspector";
+import { renderDemoScaffold } from "./demo-scaffold";
 import type { Mode } from "./examples-nav";
+
+renderDemoScaffold({ slug: "agent-demo" });
+
+const configInspector = createDemoConfigInspector({ title: "Agent Loop" });
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const apiUrl =
@@ -20,6 +29,7 @@ const apiUrl =
 
 let iterationDisplay: "separate" | "merged" = "separate";
 let activeController: AgentWidgetController | null = null;
+let activeMountMode: Mode = "inline";
 
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const showLauncherChrome = mode === "launcher";
@@ -88,6 +98,9 @@ setupMountMode({
   slug: "agent-demo",
   modes: ["inline", "launcher", "fullscreen"],
   mount: (mode, { stage }) => {
+    activeMountMode = mode;
+    const config = buildConfig(mode);
+    reportDemoConfig(configInspector, { config, mode });
     if (mode === "launcher") {
       const { mountEl } = renderLauncherScene(stage);
       const handle = initAgentWidget({
@@ -104,7 +117,7 @@ setupMountMode({
     // inline + fullscreen share the same in-page mount; CSS handles the chrome
     const mount = renderInlineMount(stage);
     mount.style.height = "100%";
-    const controller = createAgentExperience(mount, buildConfig(mode));
+    const controller = createAgentExperience(mount, squareInlinePanel(config));
     activeController = controller;
     return () => {
       controller.destroy();
@@ -126,5 +139,9 @@ if (iterationToggle) {
       iterationStatus.textContent = `iterationDisplay: '${iterationDisplay}'`;
     }
     activeController?.update({ iterationDisplay } as Partial<AgentWidgetConfig>);
+    reportDemoConfig(configInspector, {
+      config: buildConfig(activeMountMode),
+      mode: activeMountMode,
+    });
   });
 }

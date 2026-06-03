@@ -17,14 +17,19 @@
           <div class="mount-toolbar" data-mount-toolbar></div>
         </header>
 
-        <div class="toggle-section">
-          <label for="iteration-toggle">Separate Messages Per Iteration</label>
-          <label class="toggle-switch">
-            <input type="checkbox" id="iteration-toggle" checked>
-            <span class="toggle-slider"></span>
-          </label>
+        <div class="info-section">
+          <h3>Iteration display</h3>
+          <div class="toggle-section">
+            <label for="iteration-toggle">Separate Messages Per Iteration</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="iteration-toggle" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="toggle-status" id="iteration-status">iterationDisplay: 'separate'</div>
         </div>
-        <div class="toggle-status" id="iteration-status">iterationDisplay: 'separate'</div>
+
+        <div data-config-inspector></div>
       </aside>
 
       <div class="stage-widget"></div>
@@ -64,27 +69,8 @@
       </div>
 
       <div class="notes-section">
-        <h3 class="notes-section-title">Config snippet</h3>
-        <div class="code-block">
-<span class="comment">// Agent execution configuration</span>
-{
-  <span class="prop">agent</span>: {
-    <span class="prop">name</span>: <span class="string">'Travel Planner Assistant'</span>,
-    <span class="prop">model</span>: <span class="string">'mercury-2'</span>,
-    <span class="prop">systemPrompt</span>: <span class="string">'You are a travel planning assistant...'</span>,
-    <span class="prop">tools</span>: {
-      <span class="prop">toolIds</span>: [<span class="string">'builtin:exa'</span>]
-    },
-    <span class="prop">loopConfig</span>: {
-      <span class="prop">maxTurns</span>: 3
-    }
-  },
-  <span class="prop">agentOptions</span>: {
-    <span class="prop">streamResponse</span>: <span class="keyword">true</span>,
-    <span class="prop">recordMode</span>: <span class="string">'virtual'</span>
-  }
-}
-        </div>
+        <h3 class="notes-section-title">Configuration</h3>
+        <p>Use the <strong>Configuration</strong> panel in the left rail. It updates live when you change iteration display or mount mode, and includes copyable install snippets.</p>
       </div>
     </section>
   </main>

@@ -6,18 +6,6 @@
   <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Tool Approval Demo</title>
-  <style>
-    .btn-approve {
-      background: rgba(200, 200, 200, 0.1);
-      border-color: rgba(200, 200, 200, 0.3);
-    }
-    .btn-approve:hover { background: rgba(200, 200, 200, 0.2); }
-    .btn-deny {
-      background: rgba(200, 50, 50, 0.2);
-      border-color: rgba(200, 50, 50, 0.4);
-    }
-    .btn-deny:hover { background: rgba(200, 50, 50, 0.3); }
-  </style>
 </head>
 <body>
   <main class="shell-main">
@@ -37,6 +25,8 @@
             <button class="btn btn-deny" id="btn-deny">Deny</button>
           </div>
         </div>
+
+        <div data-config-inspector></div>
 
         <div class="info-section">
           <h3>Event log</h3>

@@ -7,157 +7,20 @@
     <link rel="icon" href="/favicon.ico" />
     <title>Tool &amp; Reasoning Loading Animations - Persona</title>
     <style>
-      .controls {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
       .preview-hint {
         display: flex;
         align-items: center;
         justify-content: center;
         height: 100%;
-        background: var(--card);
-        border: 1px dashed var(--border);
-        border-radius: var(--radius-lg);
         padding: 2rem;
         color: var(--muted);
         text-align: center;
         font-size: 0.9rem;
         line-height: 1.5;
       }
-      .section {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      .section label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--muted);
-      }
-
-      /* Mode selector buttons */
-      .mode-group {
-        display: flex;
-        gap: 0.375rem;
-        flex-wrap: wrap;
-      }
-      .mode-btn {
-        padding: 0.375rem 0.75rem;
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--border);
-        background: var(--card);
-        color: var(--foreground);
-        font-size: 0.8125rem;
-        cursor: pointer;
-        transition: background 0.15s, border-color 0.15s;
-      }
-      .mode-btn:hover { background: var(--border); }
-      .mode-btn.active {
-        border-color: #0d9488;
-        background: rgba(13, 148, 136, 0.1);
-        color: #0d9488;
-        font-weight: 600;
-      }
-
-      /* Inputs */
-      input[type="text"], input[type="number"] {
-        padding: 0.4rem 0.6rem;
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--border);
-        background: var(--card);
-        color: var(--foreground);
-        font-size: 0.8125rem;
-        width: 100%;
-        box-sizing: border-box;
-      }
-      input[type="range"] {
-        width: 100%;
-      }
-      .range-row {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      .range-row span {
-        font-size: 0.8125rem;
-        color: var(--muted);
-        min-width: 50px;
-        text-align: right;
-      }
-      .color-row {
-        display: flex;
-        gap: 0.75rem;
-        align-items: center;
-      }
-      .color-row label {
-        font-size: 0.75rem;
-        color: var(--muted);
-        text-transform: none;
-        letter-spacing: 0;
-        font-weight: 400;
-      }
-      input[type="color"] {
-        width: 32px;
-        height: 28px;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-        padding: 0;
-      }
-
-      /* Scenario buttons */
-      button {
-        padding: 0.5rem 0.75rem;
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--border);
-        background: var(--card);
-        color: var(--foreground);
-        font-size: 0.8125rem;
-        cursor: pointer;
-        transition: background 0.15s;
-        text-align: left;
-      }
-      button:hover { background: var(--border); }
-      button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      button.running {
-        border-color: #f59e0b;
-        background: rgba(245, 158, 11, 0.1);
-      }
-      .btn-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      .btn-row {
-        display: flex;
-        gap: 0.5rem;
-      }
-      .btn-row button { flex: 1; }
-
-      #log {
-        font-size: 0.75rem;
-        font-family: monospace;
-        background: #111;
-        color: #aaa;
-        border-radius: var(--radius-sm);
-        padding: 0.5rem;
-        max-height: 120px;
-        overflow-y: auto;
-        line-height: 1.6;
-      }
-      #log .info { color: #60a5fa; }
     </style>
   </head>
   <body>
-    <div id="tool-loading-launcher-root" aria-hidden="true"></div>
-
     <main class="shell-main">
       <div class="stage">
         <aside class="stage-controls">
@@ -167,119 +30,138 @@
           </header>
 
           <div class="controls">
-          <div class="section">
-        <label>Animation Mode</label>
-        <div class="mode-group" id="mode-selector">
-          <button class="mode-btn active" data-mode="none">None</button>
-          <button class="mode-btn" data-mode="pulse">Pulse</button>
-          <button class="mode-btn" data-mode="shimmer">Shimmer</button>
-          <button class="mode-btn" data-mode="shimmer-color">Shimmer Color</button>
-          <button class="mode-btn" data-mode="rainbow">Rainbow</button>
-        </div>
-      </div>
+            <div class="info-section">
+              <h3>Animations</h3>
+              <div class="section">
+                <label>Animation Mode</label>
+                <div class="mode-group" id="mode-selector">
+                  <button class="mode-btn active" data-mode="none">None</button>
+                  <button class="mode-btn" data-mode="pulse">Pulse</button>
+                  <button class="mode-btn" data-mode="shimmer">Shimmer</button>
+                  <button class="mode-btn" data-mode="shimmer-color">Shimmer Color</button>
+                  <button class="mode-btn" data-mode="rainbow">Rainbow</button>
+                </div>
+              </div>
+              <div class="section">
+                <label>Animation Duration</label>
+                <div class="range-row">
+                  <input type="range" id="anim-duration" min="500" max="5000" step="100" value="2000" />
+                  <span id="anim-duration-label">2000ms</span>
+                </div>
+              </div>
+              <div class="section" id="color-section">
+                <label>Shimmer Color Options</label>
+                <div class="color-row">
+                  <label>Primary</label>
+                  <input type="color" id="color-primary" value="#0d9488" />
+                  <label>Secondary</label>
+                  <input type="color" id="color-secondary" value="#3b82f6" />
+                </div>
+              </div>
+            </div>
 
-      <div class="section">
-        <label>Tool Text Templates</label>
-        <input type="text" id="active-template" placeholder="e.g. Calling {toolName}..." value="Calling {toolName}... ~{duration}~" />
-        <input type="text" id="complete-template" placeholder="e.g. Finished {toolName} ({duration})" value="Finished {toolName} ~{duration}~" />
-        <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
-          Placeholders: <code>{toolName}</code> <code>{duration}</code> &nbsp;|&nbsp; Formatting: <code>~dim~</code> <code>*italic*</code> <code>**bold**</code>
-        </small>
-      </div>
+            <div class="info-section">
+              <h3>Text templates</h3>
+              <div class="section">
+                <label>Tool Text Templates</label>
+                <input type="text" id="active-template" placeholder="e.g. Calling {toolName}..." value="Calling {toolName}... ~{duration}~" />
+                <input type="text" id="complete-template" placeholder="e.g. Finished {toolName} ({duration})" value="Finished {toolName} ~{duration}~" />
+                <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
+                  Placeholders: <code>{toolName}</code> <code>{duration}</code> &nbsp;|&nbsp; Formatting: <code>~dim~</code> <code>*italic*</code> <code>**bold**</code>
+                </small>
+              </div>
+              <div class="section">
+                <label>Reasoning Text Templates</label>
+                <input type="text" id="reason-active-template" placeholder="e.g. Thinking... ~{duration}~" value="Thinking... ~{duration}~" />
+                <input type="text" id="reason-complete-template" placeholder="e.g. Thought for ~{duration}~" value="Thought for ~{duration}~" />
+                <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
+                  Placeholder: <code>{duration}</code> &nbsp;|&nbsp; Formatting: <code>~dim~</code> <code>*italic*</code> <code>**bold**</code>
+                </small>
+              </div>
+            </div>
 
-      <div class="section">
-        <label>Reasoning Text Templates</label>
-        <input type="text" id="reason-active-template" placeholder="e.g. Thinking... ~{duration}~" value="Thinking... ~{duration}~" />
-        <input type="text" id="reason-complete-template" placeholder="e.g. Thought for ~{duration}~" value="Thought for ~{duration}~" />
-        <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
-          Placeholder: <code>{duration}</code> &nbsp;|&nbsp; Formatting: <code>~dim~</code> <code>*italic*</code> <code>**bold**</code>
-        </small>
-      </div>
+            <div class="info-section">
+              <h3>Tool display</h3>
+              <label class="checkbox-label">
+                <input type="checkbox" id="show-tool-calls" checked />
+                Show tool calls
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="group-tools" />
+                Group consecutive tool calls
+              </label>
+              <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
+                Toggle <code>features.showToolCalls</code> (visibility) and
+                <code>toolCallDisplay.grouped</code> (grouping) — these apply instantly
+                via <code>controller.update()</code> without clearing the transcript.
+                Run <strong>Multiple Concurrent Tools</strong>, then toggle grouping to
+                see it regroup live.
+              </small>
+            </div>
 
-      <div class="section">
-        <label>Animation Duration</label>
-        <div class="range-row">
-          <input type="range" id="anim-duration" min="500" max="5000" step="100" value="2000" />
-          <span id="anim-duration-label">2000ms</span>
-        </div>
-      </div>
+            <div class="info-section">
+              <h3>Scenarios</h3>
+              <div class="section">
+                <label>Tool Scenarios</label>
+                <div class="btn-group">
+                  <button id="btn-short">Short Tool (1s)</button>
+                  <button id="btn-medium">Medium Tool (4s)</button>
+                  <button id="btn-long">Long Tool (8s) with streaming chunks</button>
+                  <button id="btn-concurrent">Multiple Concurrent Tools (3 tools)</button>
+                  <button id="btn-names">Tool Name Variants (short, long, empty)</button>
+                </div>
+              </div>
+              <div class="section">
+                <label>Reasoning Scenarios</label>
+                <div class="btn-group">
+                  <button id="btn-reason-short">Short Thinking (2s)</button>
+                  <button id="btn-reason-long">Long Thinking (6s) with chunks</button>
+                </div>
+              </div>
+              <div class="section">
+                <label>Sequence Reorder (QA)</label>
+                <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
+                  Exercises <code>SequenceReorderBuffer</code> end-to-end via <code>connectStream</code>. Chunks are emitted out of server order.
+                </small>
+                <div class="btn-group">
+                  <button id="btn-seq-reason-text">Reasoning + text (scrambled seq)</button>
+                  <button id="btn-seq-markdown">Markdown table + box-drawing (scrambled seq)</button>
+                </div>
+              </div>
+              <div class="section">
+                <label>Nested Flow (QA)</label>
+                <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
+                  Exercises nested-flow-as-tool routing: <code>step_delta</code> with
+                  <code>toolContext</code>, partId-based segmentation, and outer-stream
+                  isolation. Simulates what Runtype emits when an outer agent calls a
+                  flow as a tool.
+                </small>
+                <div class="btn-group">
+                  <button id="btn-nested-send-stream">Nested send-streams + reasoning</button>
+                  <button id="btn-nested-prompt-split">Nested prompt split by inner tool call</button>
+                  <button id="btn-nested-interleave">Outer text ↔ nested flow interleave</button>
+                </div>
+              </div>
+            </div>
 
-      <div class="section" id="color-section">
-        <label>Shimmer Color Options</label>
-        <div class="color-row">
-          <label>Primary</label>
-          <input type="color" id="color-primary" value="#0d9488" />
-          <label>Secondary</label>
-          <input type="color" id="color-secondary" value="#3b82f6" />
-        </div>
-      </div>
+            <div class="info-section">
+              <h3>Actions</h3>
+              <div class="btn-row">
+                <button id="btn-apply">Apply Config</button>
+                <button id="btn-reset">Reset</button>
+              </div>
+            </div>
 
-      <div class="section">
-        <label>Tool Scenarios</label>
-        <div class="btn-group">
-          <button id="btn-short">Short Tool (1s)</button>
-          <button id="btn-medium">Medium Tool (4s)</button>
-          <button id="btn-long">Long Tool (8s) with streaming chunks</button>
-          <button id="btn-concurrent">Multiple Concurrent Tools (3 tools)</button>
-          <button id="btn-names">Tool Name Variants (short, long, empty)</button>
-        </div>
-      </div>
+            <div data-config-inspector></div>
 
-      <div class="section">
-        <label>Reasoning Scenarios</label>
-        <div class="btn-group">
-          <button id="btn-reason-short">Short Thinking (2s)</button>
-          <button id="btn-reason-long">Long Thinking (6s) with chunks</button>
-        </div>
-      </div>
-
-      <div class="section">
-        <label>Sequence Reorder (QA)</label>
-        <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
-          Exercises <code>SequenceReorderBuffer</code> end-to-end via <code>connectStream</code>. Chunks are emitted out of server order.
-        </small>
-        <div class="btn-group">
-          <button id="btn-seq-reason-text">Reasoning + text (scrambled seq)</button>
-          <button id="btn-seq-markdown">Markdown table + box-drawing (scrambled seq)</button>
-        </div>
-      </div>
-
-      <div class="section">
-        <label>Nested Flow (QA)</label>
-        <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
-          Exercises nested-flow-as-tool routing: <code>step_delta</code> with
-          <code>toolContext</code>, partId-based segmentation, and outer-stream
-          isolation. Simulates what Runtype emits when an outer agent calls a
-          flow as a tool.
-        </small>
-        <div class="btn-group">
-          <button id="btn-nested-send-stream">Nested send-streams + reasoning</button>
-          <button id="btn-nested-prompt-split">Nested prompt split by inner tool call</button>
-          <button id="btn-nested-interleave">Outer text ↔ nested flow interleave</button>
-        </div>
-      </div>
-
-      <div class="section">
-        <label>Actions</label>
-        <div class="btn-row">
-          <button id="btn-apply">Apply Config</button>
-          <button id="btn-reset">Reset</button>
-        </div>
-      </div>
-
-          <div class="section">
-            <label>Log</label>
-            <div id="log"></div>
-          </div>
+            <div class="info-section">
+              <h3>Log</h3>
+              <div id="log" class="event-log"></div>
+            </div>
           </div>
         </aside>
 
-        <div class="stage-widget">
-          <div class="preview-hint">
-            The widget mounts as a floating launcher in the bottom-right corner.<br>
-            Pick a scenario in the rail to trigger an animation.
-          </div>
-        </div>
+        <div class="stage-widget"></div>
       </div>
     </main>
 
@@ -287,6 +169,19 @@
       import "@runtypelabs/persona/widget.css";
       import "./src/index.css";
       import { createAgentExperience, DEFAULT_WIDGET_CONFIG, markdownPostprocessor } from "@runtypelabs/persona";
+      import {
+        createDemoConfigInspector,
+        reportDemoConfig,
+      } from "./src/demo-config-inspector.ts";
+      import { renderDemoScaffold } from "./src/demo-scaffold.ts";
+      import { setupMountMode, renderInlineMount, squareInlinePanel } from "./src/mount-mode.ts";
+
+      renderDemoScaffold({ slug: "tool-loading-demo" });
+
+      const configInspector = createDemoConfigInspector({
+        title: "Tool & Reasoning Loaders",
+        root: "[data-config-inspector]",
+      });
 
       // ── helpers ──────────────────────────────────────────────────
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -315,8 +210,10 @@
       const nextId = (prefix) => `${prefix}-${++msgCounter}`;
 
       // ── state ───────────────────────────────────────────────────
-      let currentMode = "none";
+      let currentMode = "none";        // animation mode (none/pulse/shimmer/…)
+      let activeMountMode = "inline";  // mount mode (inline/launcher), driven by setupMountMode
       let controller = null;
+      let currentTeardown = null;
 
       function getConfig() {
         const mode = currentMode;
@@ -327,26 +224,36 @@
         const duration = parseInt(document.getElementById("anim-duration").value, 10);
         const primaryColor = document.getElementById("color-primary").value;
         const secondaryColor = document.getElementById("color-secondary").value;
+        const showToolCalls = document.getElementById("show-tool-calls").checked;
+        const groupTools = document.getElementById("group-tools").checked;
+
+        // Launcher mode → floating, auto-expanded launcher. Inline mode → the
+        // widget renders in-page (no launcher chrome).
+        const launcher = activeMountMode === "launcher"
+          ? {
+              ...DEFAULT_WIDGET_CONFIG.launcher,
+              enabled: true,
+              autoExpand: true,
+              width: "560px",
+              position: "bottom-right",
+            }
+          : { ...DEFAULT_WIDGET_CONFIG.launcher, enabled: false, width: "100%" };
 
         return {
           ...DEFAULT_WIDGET_CONFIG,
           apiUrl: "https://noop.test/chat",
-          launcher: {
-            ...DEFAULT_WIDGET_CONFIG.launcher,
-            enabled: true,
-            autoExpand: true,
-            width: "560px",
-            position: "bottom-right",
-          },
+          launcher,
           suggestionChips: [],
           persistState: false,
           features: {
             ...DEFAULT_WIDGET_CONFIG.features,
             showReasoning: true,
+            showToolCalls,
             toolCallDisplay: {
               collapsedMode: "tool-name",
               activePreview: false,
               expandable: true,
+              grouped: groupTools,
               loadingAnimation: mode,
             },
             reasoningDisplay: {
@@ -391,14 +298,52 @@
         };
       }
 
-      function createWidget() {
-        const mount = document.getElementById("tool-loading-launcher-root");
-        if (controller) {
-          controller.destroy();
+      // Mount the widget into the stage for the active mount mode. Launcher
+      // mode floats a fixed launcher (config-driven); inline mode renders in
+      // the stage. Both use createAgentExperience so the scenario controller
+      // (injectUserMessage / connectStream / injectTestMessage) is identical.
+      const stageEl = document.querySelector(".stage-widget");
+      function doMount() {
+        const cfg = getConfig();
+        let mount;
+        if (activeMountMode === "launcher") {
+          stageEl.innerHTML =
+            '<div class="preview-hint">The widget mounts as a floating launcher in the bottom-right corner.<br>Pick a scenario in the rail to trigger an animation.</div>';
+          mount = document.createElement("div");
+          stageEl.appendChild(mount);
+        } else {
+          mount = renderInlineMount(stageEl);
+          mount.style.height = "100%";
         }
-        mount.innerHTML = "";
-        controller = createAgentExperience(mount, getConfig());
+        controller = createAgentExperience(mount, activeMountMode === "launcher" ? cfg : squareInlinePanel(cfg));
+        currentTeardown = () => controller.destroy();
+        reportDemoConfig(configInspector, { config: cfg, mode: activeMountMode });
         log("Widget created with loadingAnimation: " + currentMode, "info");
+      }
+
+      // Re-mount the widget in the current mode (used by Apply / Reset).
+      function createWidget() {
+        if (currentTeardown) {
+          try { currentTeardown(); } catch (e) { /* ignore */ }
+          currentTeardown = null;
+        }
+        doMount();
+      }
+
+      function refreshConfigPreview() {
+        reportDemoConfig(configInspector, { config: getConfig(), mode: activeMountMode });
+      }
+
+      // Apply config to the live widget without re-mounting, so the existing
+      // transcript re-renders in place (no messages lost). Used by the Tool
+      // Display toggles — controller.update() reads showToolCalls and
+      // toolCallDisplay.grouped on each render pass.
+      function applyLive() {
+        const cfg = getConfig();
+        if (controller) {
+          controller.update(activeMountMode === "launcher" ? cfg : squareInlinePanel(cfg));
+        }
+        reportDemoConfig(configInspector, { config: cfg, mode: activeMountMode });
       }
 
       // ── mode selector ───────────────────────────────────────────
@@ -412,6 +357,7 @@
         // Show/hide color section
         document.getElementById("color-section").style.display =
           currentMode === "shimmer-color" ? "" : "none";
+        refreshConfigPreview();
       });
       // Initialize color section visibility
       document.getElementById("color-section").style.display = "none";
@@ -421,7 +367,17 @@
       const durationLabel = document.getElementById("anim-duration-label");
       durationSlider.addEventListener("input", () => {
         durationLabel.textContent = durationSlider.value + "ms";
+        refreshConfigPreview();
       });
+
+      document.getElementById("active-template")?.addEventListener("change", refreshConfigPreview);
+      document.getElementById("complete-template")?.addEventListener("change", refreshConfigPreview);
+      document.getElementById("reason-active-template")?.addEventListener("change", refreshConfigPreview);
+      document.getElementById("reason-complete-template")?.addEventListener("change", refreshConfigPreview);
+      document.getElementById("color-primary")?.addEventListener("input", refreshConfigPreview);
+      document.getElementById("color-secondary")?.addEventListener("input", refreshConfigPreview);
+      document.getElementById("show-tool-calls")?.addEventListener("change", applyLive);
+      document.getElementById("group-tools")?.addEventListener("change", applyLive);
 
       // ── tool injection helper ───────────────────────────────────
       function injectToolMessage({ id, name, status = "running", chunks = [], args, result, startedAt, completedAt, duration }) {
@@ -1294,6 +1250,8 @@
         document.getElementById("color-primary").value = "#0d9488";
         document.getElementById("color-secondary").value = "#3b82f6";
         document.getElementById("color-section").style.display = "none";
+        document.getElementById("show-tool-calls").checked = true;
+        document.getElementById("group-tools").checked = false;
         msgCounter = 0;
         setAllScenarioButtons(false);
         document.querySelectorAll(".running").forEach((b) => b.classList.remove("running"));
@@ -1302,7 +1260,24 @@
       });
 
       // ── init ────────────────────────────────────────────────────
-      createWidget();
+      // setupMountMode renders the "View as" Inline / Launcher toggle and
+      // drives the active mount mode. Its mount factory does the initial mount
+      // and re-mounts on mode switch; Apply / Reset call createWidget() to
+      // re-mount in the current mode.
+      setupMountMode({
+        slug: "tool-loading-demo",
+        modes: ["inline", "launcher"],
+        mount: (mode) => {
+          activeMountMode = mode;
+          doMount();
+          return () => {
+            if (currentTeardown) {
+              try { currentTeardown(); } catch (e) { /* ignore */ }
+              currentTeardown = null;
+            }
+          };
+        },
+      });
     </script>
     <script type="module">
       import { renderExamplesShell } from "/src/examples-nav.ts";

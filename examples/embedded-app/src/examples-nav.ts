@@ -179,6 +179,17 @@ export function getExample(slug: string): AdvancedExample | undefined {
   return ADVANCED_EXAMPLES.find((e) => e.slug === slug);
 }
 
+/** 1-based position of an example in the gallery, or -1. */
+export function getExampleIndex(slug: string): number {
+  return ADVANCED_EXAMPLES.findIndex((e) => e.slug === slug);
+}
+
+/** Zero-padded "NN/TT" counter, e.g. "03/15". */
+export function formatExampleIndex(index: number): string {
+  const total = ADVANCED_EXAMPLES.length;
+  return `${String(index + 1).padStart(2, "0")}/${String(total).padStart(2, "0")}`;
+}
+
 /**
  * Mount the persistent top app bar with brand + demo picker + prev/next.
  * Idempotent — safe to call multiple times.
@@ -205,20 +216,16 @@ export function renderExamplesShell(currentSlug?: string): void {
   const pickerBadge = current?.badge
     ? `<span class="nav-badge">${escapeHtml(current.badge)}</span>`
     : "";
-
   const renderItem = (entry: AdvancedExample): string => {
     const isCurrent = entry.slug === currentSlug;
     const badge = entry.badge
       ? `<span class="nav-badge">${escapeHtml(entry.badge)}</span>`
       : "";
-    const modes = entry.modes
-      .map((m) => `<span class="shell-picker-mode">${escapeHtml(m)}</span>`)
-      .join("");
+    const index = formatExampleIndex(items.indexOf(entry));
     return `<li class="shell-picker-item${isCurrent ? " is-current" : ""}">
       <a href="${entry.href}" title="${escapeHtml(entry.blurb)}">
-        <span class="shell-picker-item-title">${escapeHtml(entry.title)}${badge}</span>
+        <span class="shell-picker-item-title"><span class="shell-picker-item-index">${index}</span>${escapeHtml(entry.title)}${badge}</span>
         <span class="shell-picker-item-blurb">${escapeHtml(entry.blurb)}</span>
-        <span class="shell-picker-modes">${modes}</span>
       </a>
     </li>`;
   };
@@ -250,15 +257,18 @@ export function renderExamplesShell(currentSlug?: string): void {
   const header = document.createElement("nav");
   header.className = "shell-header";
   header.innerHTML = `
-    <a class="shell-brand" href="/">Persona Examples</a>
+    <a class="shell-brand" href="/">Persona</a>
+    <span class="shell-sep" aria-hidden="true">/</span>
+    <a class="shell-crumb" href="/advanced.html">Advanced Examples</a>
     <span class="shell-sep" aria-hidden="true">/</span>
     <div class="shell-picker">
       <button type="button" class="shell-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
         <span class="shell-picker-label">${escapeHtml(pickerLabel)}${pickerBadge}</span>
         <svg class="shell-picker-chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path fill="currentColor" d="M2.3 4.3a1 1 0 0 1 1.4 0L6 6.6l2.3-2.3a1 1 0 1 1 1.4 1.4l-3 3a1 1 0 0 1-1.4 0l-3-3a1 1 0 0 1 0-1.4z"/></svg>
+        <kbd class="shell-kbd" aria-hidden="true">⌘K</kbd>
       </button>
       <div class="shell-picker-menu" role="listbox" hidden>
-        <a class="shell-picker-all" href="/advanced.html">View all examples →</a>
+        <a class="shell-picker-all" href="/advanced.html">▸ All examples</a>
         <ul class="shell-picker-list">${sections}</ul>
       </div>
     </div>
@@ -266,6 +276,10 @@ export function renderExamplesShell(currentSlug?: string): void {
   `;
 
   document.body.insertBefore(header, document.body.firstChild);
+  // Fade the header in instead of popping it in. This runs in a deferred
+  // module (after first paint), so paint it at opacity 0 once, then flip the
+  // ready flag on the next frame to trigger the CSS transition.
+  requestAnimationFrame(() => header.setAttribute("data-shell-ready", ""));
 
   // Picker dropdown wiring
   const trigger = header.querySelector<HTMLButtonElement>(
@@ -304,6 +318,12 @@ export function renderExamplesShell(currentSlug?: string): void {
     if (e.key === "Escape" && !menu.hidden) {
       setOpen(false);
       trigger.focus();
+      return;
+    }
+    // ⌘K / Ctrl+K opens the example picker (spec-sheet jump-to).
+    if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      setOpen(menu.hidden);
     }
   });
 }

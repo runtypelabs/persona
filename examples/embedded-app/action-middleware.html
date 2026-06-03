@@ -183,17 +183,13 @@
   </head>
   <body>
     <main class="shell-main">
-      <header class="title-strip">
-        <h1>Action Middleware</h1>
-        <p>Live DOM context on every message; structured actions for navigation, cart, and checkout. Open the launcher (bottom-right) and ask the agent to add items, navigate, or check out.</p>
-      </header>
-
-      <div class="stage-toolbar">
-        <button class="btn" id="clear-storage-btn">Clear chat history &amp; reset</button>
-        <span style="font-size: 0.8rem; color: var(--muted); margin-left: auto;">Live shop · launcher in bottom-right</span>
-      </div>
-
-      <div class="stage stage--full">
+      <div class="stage">
+        <aside class="stage-controls">
+          <div class="info-section">
+            <button class="btn" id="clear-storage-btn">Clear chat history &amp; reset</button>
+            <p style="font-size: 0.8rem; color: var(--muted); margin: 0.6rem 0 0;">Live shop · launcher in bottom-right</p>
+          </div>
+        </aside>
         <div class="stage-widget shop-pane">
         <header class="bg-white">
         <nav aria-label="Top" class="mx-auto max-w-2xl px-4 sm:px-6 lg:max-w-7xl lg:px-8">

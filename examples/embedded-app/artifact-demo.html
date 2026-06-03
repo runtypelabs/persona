@@ -7,62 +7,28 @@
     <link rel="icon" href="/favicon.ico" />
     <title>Artifact sidebar demo – Persona</title>
     <style>
-      .artifact-toolbars {
-        display: flex;
-        flex-direction: column;
-        gap: 0.6rem;
-        margin-bottom: 1rem;
-      }
-      .artifact-toolbar-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      .artifact-toolbar-label {
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--muted);
-        min-width: 140px;
-      }
-      .artifact-toolbar-row button {
-        background: var(--accent);
-        color: var(--foreground);
-        border: 1px solid var(--border);
-        padding: 0.35rem 0.65rem;
-        border-radius: var(--radius);
-        cursor: pointer;
-        font-size: 0.78rem;
-        font-family: inherit;
-      }
-      .artifact-toolbar-row button:hover { background: var(--border); }
       .embed {
         height: 100%;
-        border-radius: var(--radius-lg);
         overflow: hidden;
-        background: var(--card);
+        background: var(--paper);
+        border: 1px solid var(--border);
       }
     </style>
   </head>
   <body>
     <main class="shell-main">
-      <header class="title-strip">
-        <h1>Artifact Sidebar</h1>
-        <p>An inline embed with <code>features.artifacts</code> enabled — adds a resizable split view for rich content (markdown, custom components) next to the chat.</p>
-      </header>
-
-      <div class="artifact-toolbars">
-        <div class="artifact-toolbar-row">
-          <span class="artifact-toolbar-label">Artifact controls</span>
-          <button type="button" id="btn-md">Add markdown</button>
-          <button type="button" id="btn-comp">Add component</button>
-          <button type="button" id="btn-unknown">Add unknown</button>
-          <button type="button" id="btn-clear">Clear</button>
-        </div>
-      </div>
-
-      <div class="stage stage--full">
+      <div class="stage">
+        <aside class="stage-controls">
+          <div class="info-section">
+            <h3>Artifact controls</h3>
+            <div class="btn-group">
+              <button type="button" class="btn" id="btn-md">Add markdown</button>
+              <button type="button" class="btn" id="btn-comp">Add component</button>
+              <button type="button" class="btn" id="btn-unknown">Add unknown</button>
+              <button type="button" class="btn" id="btn-clear">Clear</button>
+            </div>
+          </div>
+        </aside>
         <div class="stage-widget">
           <div class="embed" id="artifact-root"></div>
         </div>

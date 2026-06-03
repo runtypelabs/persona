@@ -1,4 +1,5 @@
 import "@runtypelabs/persona/widget.css";
+import { renderDemoScaffold } from "./demo-scaffold";
 import "./demo-shared.css";
 
 import {
@@ -7,8 +8,13 @@ import {
   type AgentWidgetConfig,
   type AgentWidgetController,
 } from "@runtypelabs/persona";
-import { setupMountMode, runWidgetMount } from "./mount-mode";
+import { setupMountMode, runWidgetMountWithInspector } from "./mount-mode";
+import { createDemoConfigInspector } from "./demo-config-inspector";
 import type { Mode } from "./examples-nav";
+
+renderDemoScaffold({ slug: "event-stream-testing" });
+
+const configInspector = createDemoConfigInspector({ title: "Event Inspector" });
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
@@ -57,7 +63,12 @@ setupMountMode({
   slug: "event-stream-testing",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
-    const { controller, teardown } = runWidgetMount(mode, stage, buildConfig(mode));
+    const { controller, teardown } = runWidgetMountWithInspector(
+      configInspector,
+      mode,
+      stage,
+      buildConfig,
+    );
     activeController = controller;
     // Re-register listeners against the new controller if the user clicked "Register listeners" before.
     if (logger) {

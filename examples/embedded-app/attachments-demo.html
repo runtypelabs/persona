@@ -6,33 +6,6 @@
   <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Attachments Demo</title>
-  <style>
-    .config-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-
-    .config-field label {
-      display: block;
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-bottom: 0.25rem;
-    }
-
-    .config-field select,
-    .config-field input {
-      width: 100%;
-      padding: 0.4rem 0.5rem;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--card);
-      color: var(--foreground);
-      font-family: var(--font-sans);
-      font-size: 0.85rem;
-    }
-  </style>
 </head>
 <body>
   <main class="shell-main">
@@ -151,6 +124,8 @@
 
           <button class="btn btn-primary" id="apply-config">Apply &amp; Reload Widget</button>
         </div>
+
+        <div data-config-inspector></div>
 
         <div class="info-section">
           <h3>Event log</h3>

@@ -1,4 +1,5 @@
 import "@runtypelabs/persona/widget.css";
+import { renderDemoScaffold } from "./demo-scaffold";
 import {
   createLocalStorageAdapter,
   markdownPostprocessor,
@@ -7,8 +8,13 @@ import {
   type AgentWidgetController,
   type AgentWidgetAttachmentsConfig,
 } from "@runtypelabs/persona";
-import { setupMountMode, runWidgetMount } from "./mount-mode";
+import { setupMountMode, runWidgetMountWithInspector } from "./mount-mode";
+import { createDemoConfigInspector } from "./demo-config-inspector";
 import type { Mode } from "./examples-nav";
+
+renderDemoScaffold({ slug: "attachments-demo" });
+
+const configInspector = createDemoConfigInspector({ title: "File Attachments" });
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl = import.meta.env.VITE_PROXY_URL
@@ -113,7 +119,12 @@ setupMountMode({
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
     currentMode = mode;
-    const { controller, teardown } = runWidgetMount(mode, stage, buildConfig(mode));
+    const { controller, teardown } = runWidgetMountWithInspector(
+      configInspector,
+      mode,
+      stage,
+      buildConfig,
+    );
     activeController = controller;
     return () => {
       teardown();
@@ -135,4 +146,8 @@ document.getElementById("apply-config")?.addEventListener("click", () => {
   // Rebuild the active mode's widget with the latest attachment config.
   activeController?.update({ attachments: readAttachmentsConfig() } as Partial<AgentWidgetConfig>);
   log(`Applied new config to ${currentMode} widget`);
+  configInspector.update({
+    config: buildConfig(currentMode),
+    mode: currentMode,
+  });
 });

@@ -6,37 +6,6 @@
   <link rel="stylesheet" href="/src/demo-shared.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Focus Input Demo</title>
-  <style>
-    .section { margin-bottom: 1.5rem; }
-    .section h3 {
-      margin: 0 0 0.5rem 0;
-      font-size: 0.9rem;
-      color: var(--muted);
-    }
-    .btn-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-    }
-    .checkbox-row {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-    }
-    .checkbox-row input { width: 18px; height: 18px; }
-    .log {
-      background: var(--accent);
-      border-radius: var(--radius);
-      padding: 0.75rem;
-      max-height: 120px;
-      overflow-y: auto;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--muted);
-    }
-  </style>
 </head>
 <body>
   <main class="shell-main">
@@ -48,33 +17,38 @@
           <div class="mount-toolbar" data-mount-toolbar></div>
         </header>
 
-        <div class="section">
-          <h3>1. autoFocusInput</h3>
-          <div class="checkbox-row">
-            <input type="checkbox" id="auto-focus-toggle" />
-            <label for="auto-focus-toggle">Enable autoFocusInput</label>
+        <div class="info-section">
+          <h3>Focus controls</h3>
+          <div class="section">
+            <label>1. autoFocusInput</label>
+            <div class="checkbox-row">
+              <input type="checkbox" id="auto-focus-toggle" />
+              <label for="auto-focus-toggle">Enable autoFocusInput</label>
+            </div>
+            <p style="font-size: 0.8rem; margin-top: 0.25rem;">For launcher mode, open the launcher to see auto-focus. For inline mode, the change takes effect on next message.</p>
           </div>
-          <p style="font-size: 0.8rem; margin-top: 0.25rem;">For launcher mode, open the launcher to see auto-focus. For inline mode, the change takes effect on next message.</p>
+
+          <div class="section">
+            <label>2. controller.focusInput()</label>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="focus-active">Focus active widget</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <label>3. persona:focusInput (DOM event)</label>
+            <div class="btn-row">
+              <button class="btn" id="focus-win-all">Focus All</button>
+              <button class="btn" id="focus-win-wrong">Focus Wrong ID</button>
+            </div>
+          </div>
         </div>
 
-        <div class="section">
-          <h3>2. controller.focusInput()</h3>
-          <div class="btn-row">
-            <button class="btn btn-primary" id="focus-active">Focus active widget</button>
-          </div>
-        </div>
+        <div data-config-inspector></div>
 
-        <div class="section">
-          <h3>3. persona:focusInput (DOM event)</h3>
-          <div class="btn-row">
-            <button class="btn" id="focus-win-all">Focus All</button>
-            <button class="btn" id="focus-win-wrong">Focus Wrong ID</button>
-          </div>
-        </div>
-
-        <div class="section">
+        <div class="info-section">
           <h3>Log</h3>
-          <div class="log" id="log"></div>
+          <div class="event-log event-log--sm" id="log"></div>
         </div>
       </aside>
 

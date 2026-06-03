@@ -7,214 +7,67 @@
     <link rel="icon" href="/favicon.ico" />
     <title>Streaming Chat Widget – Dynamic Form Fields Reference</title>
     <style>
-
-      /* The preview pane needs to scroll because the tabbed panels are tall. */
-      .fields-pane {
-        padding: 1.5rem;
-        overflow-y: auto;
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-lg);
-      }
-
-      /* ---- Tabbed field reference ---- */
-      .form-tabs {
-        margin-top: 0;
-      }
-      .form-tabs-tablist {
-        display: flex;
-        gap: 0.25rem;
-        border-bottom: 1px solid #e5e7eb;
-        padding: 0;
-        margin: 0 0 1rem 0;
-        flex-wrap: wrap;
-      }
-      .form-tabs-tab {
-        appearance: none;
-        background: transparent;
-        border: 0;
-        border-bottom: 2px solid transparent;
-        padding: 0.5rem 0.875rem;
-        margin-bottom: -1px;
-        font-size: 0.8125rem;
-        font-weight: 500;
-        color: #64748b;
-        cursor: pointer;
-        font-family: inherit;
-        transition: color 0.15s ease, border-color 0.15s ease;
-        text-align: left;
-      }
-      .form-tabs-tab:hover {
-        color: #1f2937;
-      }
-      .form-tabs-tab[aria-selected="true"] {
-        color: #111827;
-        border-bottom-color: #111827;
-        font-weight: 600;
-      }
-      .form-tabs-tab small {
-        display: block;
-        font-size: 0.6875rem;
-        font-weight: 400;
-        color: #94a3b8;
-        margin-top: 0.0625rem;
-      }
-      .form-tabs-tab[aria-selected="true"] small {
-        color: #64748b;
-      }
-      .form-tabs-panel {
-        display: grid;
-        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-        gap: 1.25rem;
-        align-items: stretch;
-      }
-      .form-tabs-panel[hidden] {
-        display: none;
-      }
-      @media (max-width: 920px) {
-        .form-tabs-panel {
-          grid-template-columns: 1fr;
-        }
-      }
-      .form-tabs-def {
+      /* Page-specific: stack the variant selector vertically in the left rail,
+         each button showing a label + a short descriptor (like the old tabs). */
+      #field-variants {
         display: flex;
         flex-direction: column;
-        min-width: 0;
-        background: #0f172a;
-        color: #e2e8f0;
-        border-radius: 0.625rem;
-        padding: 1rem;
-        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-        font-size: 0.75rem;
-        line-height: 1.55;
-        overflow: auto;
-        max-height: 760px;
+        gap: 0.4rem;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
       }
-      .form-tabs-def pre {
-        margin: 0;
-        white-space: pre;
-        word-break: normal;
+      #field-variants .mode-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.15rem;
+        width: 100%;
+        text-align: left;
+        padding: 0.6rem 0.8rem;
+        border: 1px solid var(--border);
       }
-      .form-tabs-def-caption {
-        font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
-        font-size: 0.6875rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: #94a3b8;
-        margin-bottom: 0.625rem;
+      #field-variants .mode-btn small {
+        font-weight: 500;
+        font-size: 0.7rem;
+        line-height: 1.35;
+        color: var(--muted);
       }
-      .form-tabs-preview {
-        min-width: 0;
-      }
-      .form-tabs-preview .embedded-target {
-        height: 760px;
-        min-height: 760px;
-      }
+      #field-variants .mode-btn.active { border-color: var(--signal); }
     </style>
   </head>
   <body>
     <main class="shell-main">
-      <header class="title-strip">
-        <h1>Dynamic Form Fields</h1>
-        <p>Reference for every field type, layout option, and helper state the bundled <code>DynamicForm</code> component supports.</p>
-      </header>
-
-      <div class="stage stage--full">
-        <div class="fields-pane">
-        <div class="form-tabs" id="fields-tabs">
-          <div class="form-tabs-tablist" role="tablist" aria-label="Form field reference">
-            <button
-              type="button"
-              class="form-tabs-tab"
-              role="tab"
-              id="fields-tab-types"
-              aria-controls="fields-panel-types"
-              aria-selected="true"
-              data-tab-id="types"
-            >
-              Field types
-              <small>text, email, tel, url, number, date, time, textarea</small>
-            </button>
-            <button
-              type="button"
-              class="form-tabs-tab"
-              role="tab"
-              id="fields-tab-widths"
-              aria-controls="fields-panel-widths"
-              aria-selected="false"
-              tabindex="-1"
-              data-tab-id="widths"
-            >
-              Layout widths
-              <small>full vs half — paired half fields share a row</small>
-            </button>
-            <button
-              type="button"
-              class="form-tabs-tab"
-              role="tab"
-              id="fields-tab-helpers"
-              aria-controls="fields-panel-helpers"
-              aria-selected="false"
-              tabindex="-1"
-              data-tab-id="helpers"
-            >
-              Helpers + required
-              <small>helper_text, red asterisk on required fields</small>
-            </button>
-          </div>
-
-          <div
-            class="form-tabs-panel"
-            role="tabpanel"
-            id="fields-panel-types"
-            aria-labelledby="fields-tab-types"
-            data-tab-panel="types"
-          >
-            <div class="form-tabs-def">
-              <div class="form-tabs-def-caption">props</div>
-              <pre id="fields-def-types"></pre>
-            </div>
-            <div class="form-tabs-preview">
-              <div class="embedded-target" id="field-types-mount"></div>
+      <div class="stage">
+        <aside class="stage-controls">
+          <div class="controls">
+            <div class="info-section">
+              <h3>Field reference</h3>
+              <div
+                class="mode-group"
+                id="field-variants"
+                role="group"
+                aria-label="Form field reference variant"
+              >
+                <button type="button" class="mode-btn active" data-variant="types" aria-pressed="true">
+                  Field types
+                  <small>text, email, tel, url, number, date, time, textarea</small>
+                </button>
+                <button type="button" class="mode-btn" data-variant="widths" aria-pressed="false">
+                  Layout widths
+                  <small>full vs half — paired half fields share a row</small>
+                </button>
+                <button type="button" class="mode-btn" data-variant="helpers" aria-pressed="false">
+                  Helpers + required
+                  <small>helper_text, red asterisk on required fields</small>
+                </button>
+              </div>
             </div>
           </div>
+        </aside>
 
-          <div
-            class="form-tabs-panel"
-            role="tabpanel"
-            id="fields-panel-widths"
-            aria-labelledby="fields-tab-widths"
-            data-tab-panel="widths"
-            hidden
-          >
-            <div class="form-tabs-def">
-              <div class="form-tabs-def-caption">props</div>
-              <pre id="fields-def-widths"></pre>
-            </div>
-            <div class="form-tabs-preview">
-              <div class="embedded-target" id="field-widths-mount"></div>
-            </div>
-          </div>
-
-          <div
-            class="form-tabs-panel"
-            role="tabpanel"
-            id="fields-panel-helpers"
-            aria-labelledby="fields-tab-helpers"
-            data-tab-panel="helpers"
-            hidden
-          >
-            <div class="form-tabs-def">
-              <div class="form-tabs-def-caption">props</div>
-              <pre id="fields-def-helpers"></pre>
-            </div>
-            <div class="form-tabs-preview">
-              <div class="embedded-target" id="field-helpers-mount"></div>
-            </div>
-          </div>
-        </div>
-        </div>
+        <div class="stage-widget"></div>
       </div>
 
       <section class="notes">
@@ -222,7 +75,7 @@
 
         <div class="notes-section">
           <h3 class="notes-section-title">How it works</h3>
-          <p>Each tab mounts a fresh widget and uses <code>injectComponentDirective(...)</code> to render the form on load — no LLM round-trip — and shows the directive <code>props</code> JSON beside it.</p>
+          <p>Each variant mounts a fresh widget and uses <code>injectComponentDirective(...)</code> to render the form on selection — no LLM round-trip. Switch to <strong>Code</strong> (top-right) and open the <strong>Scenario</strong> tab to see the directive <code>props</code> JSON.</p>
         </div>
 
         <div class="notes-section">
@@ -231,7 +84,7 @@
         </div>
 
         <div class="notes-section">
-          <h3 class="notes-section-title">Tabs</h3>
+          <h3 class="notes-section-title">Variants</h3>
           <p>
             <strong>Field types</strong> — text, email, tel, url, number, date, time, textarea<br>
             <strong>Layout widths</strong> — full vs half (paired half fields share a row)<br>

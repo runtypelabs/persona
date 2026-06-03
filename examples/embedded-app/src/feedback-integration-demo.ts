@@ -1,4 +1,5 @@
 import "@runtypelabs/persona/widget.css";
+import { renderDemoScaffold } from "./demo-scaffold";
 import {
   createLocalStorageAdapter,
   markdownPostprocessor,
@@ -9,8 +10,16 @@ import {
   type AgentWidgetMessage,
   type AgentWidgetMessageFeedback,
 } from "@runtypelabs/persona";
-import { setupMountMode, runWidgetMount } from "./mount-mode";
+import { setupMountMode, runWidgetMountWithInspector } from "./mount-mode";
+import {
+  createDemoConfigInspector,
+  reportDemoConfig,
+} from "./demo-config-inspector";
 import type { Mode } from "./examples-nav";
+
+renderDemoScaffold({ slug: "feedback-integration-demo" });
+
+const configInspector = createDemoConfigInspector({ title: "Feedback Events" });
 
 const clientToken = import.meta.env.VITE_CLIENT_TOKEN || "";
 const apiUrl = import.meta.env.VITE_API_URL || "https://api.runtype.com";
@@ -127,11 +136,19 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
   };
 };
 
+let feedbackMountMode: Mode = "inline";
+
 setupMountMode({
   slug: "feedback-integration-demo",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
-    const { controller, teardown } = runWidgetMount(mode, stage, buildConfig(mode));
+    feedbackMountMode = mode;
+    const { controller, teardown } = runWidgetMountWithInspector(
+      configInspector,
+      mode,
+      stage,
+      buildConfig,
+    );
     activeController = controller;
     controller.on("message:copy", (message) => {
       console.log("[Event] message:copy - ID:", message.id);
@@ -149,6 +166,10 @@ setupMountMode({
 for (const el of [cfgCopy, cfgUpvote, cfgDownvote, cfgVisibility, cfgLayout, cfgAlign]) {
   el.addEventListener("change", () => {
     activeController?.update({ messageActions: getMessageActionsConfig() });
+    reportDemoConfig(configInspector, {
+      config: buildConfig(feedbackMountMode),
+      mode: feedbackMountMode,
+    });
   });
 }
 
