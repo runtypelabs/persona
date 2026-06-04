@@ -69,6 +69,40 @@ describe("createSendButton", () => {
     send.setMode("send");
     expect(send.button.textContent).toBe("Send");
   });
+
+  describe("icon mode", () => {
+    const iconConfig: AgentWidgetConfig = {
+      ...baseConfig,
+      sendButton: { useIcon: true, iconName: "send", stopIconName: "square" },
+    };
+    const iconCount = (btn: HTMLElement) => btn.querySelectorAll("svg").length;
+
+    it("keeps exactly one icon across a send→stop→send cycle", () => {
+      const send = createSendButton(iconConfig);
+      expect(iconCount(send.button)).toBe(1);
+      send.setMode("stop");
+      expect(iconCount(send.button)).toBe(1);
+      send.setMode("send");
+      expect(iconCount(send.button)).toBe(1);
+    });
+
+    it("does not stack a stale icon when an external re-render swapped the live icon node", () => {
+      const send = createSendButton(iconConfig);
+      // Simulate a DOM morph/re-render (e.g. a host calling controller.update())
+      // that replaces the live icon child with a clone. This detaches the
+      // captured `sendIcon` reference, so `sendIcon.parentNode !== button`.
+      // The old replaceChild/appendChild fallback then left BOTH icons mounted,
+      // producing the doubled send-arrow after the first send→stop→send cycle.
+      const live = send.button.firstElementChild as SVGElement;
+      send.button.replaceChildren(live.cloneNode(true));
+      expect(iconCount(send.button)).toBe(1);
+
+      send.setMode("stop");
+      expect(iconCount(send.button)).toBe(1);
+      send.setMode("send");
+      expect(iconCount(send.button)).toBe(1);
+    });
+  });
 });
 
 describe("createMicButton", () => {
