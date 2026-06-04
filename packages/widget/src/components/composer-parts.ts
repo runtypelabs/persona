@@ -218,12 +218,15 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
     if (useIcon) {
       if (sendIcon && stopIcon) {
         const next = mode === "stop" ? stopIcon : sendIcon;
-        const prev = mode === "stop" ? sendIcon : stopIcon;
-        if (prev.parentNode === button) {
-          button.replaceChild(next, prev);
-        } else {
-          button.appendChild(next);
-        }
+        // Replace whatever icon is currently mounted — the button only ever
+        // holds the single active icon. We use replaceChildren(next) rather
+        // than replaceChild(next, prev) against a captured `prev` reference:
+        // an external re-render/morph can swap the live icon child out from
+        // under us, detaching our captured node so `prev.parentNode !== button`.
+        // The old appendChild fallback then left BOTH icons mounted, which is
+        // how the send button ended up showing two stacked arrows after the
+        // first send→stop→send cycle.
+        button.replaceChildren(next);
       }
     } else {
       button.textContent = mode === "stop" ? stopLabel : sendLabel;
