@@ -897,6 +897,14 @@ export type AgentWidgetFeatureFlags = {
   showReasoning?: boolean;
   showToolCalls?: boolean;
   showEventStreamToggle?: boolean;
+  /**
+   * Up/Down arrow navigation through previously sent user messages in the
+   * composer, for quick re-entry or editing (shell / Slack style). History is
+   * only entered when the caret is at the start of the input, so normal
+   * multi-line cursor movement is preserved. Set to `false` to disable.
+   * @default true
+   */
+  composerHistory?: boolean;
   /** Shared transcript + event stream scroll-to-bottom affordance. */
   scrollToBottom?: AgentWidgetScrollToBottomFeature;
   /** Collapsed transcript behavior for tool call rows. */

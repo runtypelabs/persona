@@ -73,6 +73,9 @@ Optional side-panel for rendering markdown and component content. Desktop split 
 ### Event Stream Inspector
 Optional real-time event capture with search/filter, badge coloring, timestamps, and expandable payloads. Enable via `features.showEventStreamToggle`. Customize rows, toolbar, and payload rendering through plugin hooks.
 
+### Composer Keyboard Shortcuts
+`Enter` sends a message (`Shift+Enter` for a newline) and is inert while a response is streaming — it never interrupts generation. Press `Esc` within the widget to stop an in-flight response (the visible Stop button does the same). `Up`/`Down` navigate previously sent messages for quick re-entry or editing — entered only when the caret is at the start of the input, so multi-line editing is preserved, and your in-progress draft is restored when you page back to the present. History navigation is on by default; disable via `features.composerHistory: false`.
+
 ### Themes & Styling
 Light and dark themes included. Full design token system (palette, semantic, component-level) with CSS variable support. Extend with built-in plugins for accessibility, reduced motion, high contrast, and branding — or create your own.
 
