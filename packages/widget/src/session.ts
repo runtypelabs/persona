@@ -86,6 +86,24 @@ export class AgentWidgetSession {
   // subsequent re-emit will re-trigger.
   private webMcpInflightKeys: Set<string> = new Set();
   private webMcpResolvedKeys: Set<string> = new Set();
+  // Per-resolve AbortControllers, kept in a set so multiple `webmcp:*`
+  // step_await resolves in one turn never abort one another. The shared
+  // `this.abortController` is intentionally NOT used by resolveWebMcpToolCall:
+  // in a CHAINED turn (tool A → /resume → tool B, where the server emits B's
+  // step_await inside A's resume SSE stream) the shared controller is still
+  // piping A's resume stream — the very stream that just delivered B. Aborting
+  // it mid-chain (the prior shared-controller pre-abort) tore that stream down,
+  // so B never reached execute() and its /resume was never POSTed, pausing the
+  // dispatch forever. cancel(), clearMessages(), hydrateMessages(), and
+  // sendMessage() iterate this set to tear every in-flight resolve down on a
+  // real stop / new turn.
+  private webMcpResolveControllers: Set<AbortController> = new Set();
+  // Bumped on every teardown / new-turn boundary (cancel, clearMessages,
+  // hydrateMessages, sendMessage). A resolveWebMcpToolCall deferred via
+  // queueMicrotask captures the epoch at queue time and bails if it changed,
+  // so a resolve queued just before a teardown can't escape it by installing a
+  // fresh controller after the set was already cleared.
+  private webMcpEpoch = 0;
 
   // Voice support
   private voiceProvider: VoiceProvider | null = null;
@@ -794,6 +812,11 @@ export class AgentWidgetSession {
 
     this.stopSpeaking();
     this.abortController?.abort();
+    // A new user turn supersedes any in-flight WebMCP resolve from the prior
+    // turn. Tear them down here (they own controllers separate from the shared
+    // one) so a lingering resolve can't race the new dispatch or post a stale
+    // /resume against a superseded execution.
+    this.abortWebMcpResolves();
 
     // Generate IDs for both user message and expected assistant response
     const userMessageId = generateUserMessageId();
@@ -1397,22 +1420,20 @@ export class AgentWidgetSession {
       },
     });
 
-    // Abort any controller still in flight before installing a fresh one,
-    // mirroring resolveAskUserQuestion / resolveApproval / continueConversation
-    // / sendMessage. A host that calls sendMessage synchronously from
-    // onMessagesChanged (which fires when handleEvent upserts the awaiting
-    // message) can race ahead of our queued microtask and leave its own
-    // controller installed; pre-aborting prevents two server conversations
-    // from overlapping in that case.
-    //
-    // Trade-off: when one turn produces multiple `webmcp:*` step_await
-    // messages, the second resolve aborts the first. Parallel resolves are
-    // uncommon enough in practice (and the user-visible behaviour — second
-    // tool's result wins — is recoverable) that we accept the limitation to
-    // keep the cancel/sendMessage/clear paths simple.
-    this.abortController?.abort();
-    this.abortController = new AbortController();
-    const { signal } = this.abortController;
+    // Per-resolve AbortController, NOT the shared `this.abortController`.
+    // A single turn can produce multiple `webmcp:*` step_await messages —
+    // both PARALLEL (two awaits in one stream) and, more commonly, CHAINED
+    // (tool A → /resume → tool B, where B's step_await arrives inside A's
+    // resume SSE stream). The old code pre-aborted `this.abortController`
+    // here to mirror the sibling resolve paths; in the chained case that
+    // aborted the stream still delivering B, so B never executed and its
+    // /resume was never POSTed — the dispatch hung forever. Using a dedicated
+    // per-resolve controller leaves the in-flight resume stream untouched.
+    // cancel()/clearMessages()/hydrateMessages()/sendMessage() iterate
+    // `webMcpResolveControllers` to tear these down on a real stop / new turn.
+    const resolveController = new AbortController();
+    this.webMcpResolveControllers.add(resolveController);
+    const { signal } = resolveController;
     this.setStreaming(true);
 
     const args = toolMessage.toolCall?.args;
@@ -1442,9 +1463,10 @@ export class AgentWidgetSession {
       // If cancel() fired during execute, the bridge returned an aborted
       // result — don't post it. The server's SSE has been torn down; a
       // /resume now would just produce an orphan dispatch on the server.
+      // Streaming/teardown is handled by the shared `finally` below (gated on
+      // the resolve set) so we don't clobber a sibling resolve or a live
+      // dispatch's controller here.
       if (signal.aborted) {
-        this.setStreaming(false);
-        this.abortController = null;
         return;
       }
       // Mark resolved as soon as the HTTP /resume returns OK — not after the
@@ -1466,8 +1488,9 @@ export class AgentWidgetSession {
         (error.name === "AbortError" ||
           error.message.includes("aborted") ||
           error.message.includes("abort"));
-      this.setStreaming(false);
-      this.abortController = null;
+      // Streaming/teardown handled by the shared `finally` (gated on the
+      // resolve set) — do NOT null the shared `this.abortController` here; it
+      // may belong to a live dispatch or sibling resolve, not to us.
       if (!isAbortError) {
         // The bridge normalizes tool errors into result objects, so reaching
         // here means a network failure during `/resume` itself, OR a stream
@@ -1479,6 +1502,14 @@ export class AgentWidgetSession {
       }
     } finally {
       this.webMcpInflightKeys.delete(dedupeKey);
+      this.webMcpResolveControllers.delete(resolveController);
+      // Only flip streaming off when this was the last in-flight resolve AND
+      // no shared dispatch is live. Otherwise a finishing resolve would hide
+      // the typing indicator while a sibling (parallel) or successor (chained)
+      // resolve — or a live dispatch — is still running.
+      if (this.webMcpResolveControllers.size === 0 && !this.abortController) {
+        this.setStreaming(false);
+      }
     }
   }
 
@@ -1515,12 +1546,31 @@ export class AgentWidgetSession {
     }
   }
 
+  /**
+   * Tear down every in-flight WebMCP resolve and advance the epoch. Each
+   * resolve owns a dedicated AbortController (chained/parallel resolves don't
+   * share one), so we abort them individually; the aborts propagate into the
+   * bridge's execute race and into each `/resume` fetch signal. Bumping
+   * `webMcpEpoch` strands any resolve still deferred in a queued microtask —
+   * it captured the prior epoch and bails before installing a fresh
+   * controller, so it can't escape this teardown. Called from every stop /
+   * new-turn boundary (cancel, clearMessages, hydrateMessages, sendMessage).
+   */
+  private abortWebMcpResolves(): void {
+    for (const controller of this.webMcpResolveControllers) {
+      controller.abort();
+    }
+    this.webMcpResolveControllers.clear();
+    this.webMcpEpoch++;
+  }
+
   public cancel() {
     this.abortController?.abort();
     this.abortController = null;
-    // Cancel also tears down any in-flight WebMCP resolve via the shared
-    // abortController above. Clear the inflight set so retries are
-    // possible if the user re-issues the same step_await context.
+    // Tear down every in-flight WebMCP resolve (each owns its own controller,
+    // independent of the shared one above). Clear the inflight set so retries
+    // are possible if the user re-issues the same step_await context.
+    this.abortWebMcpResolves();
     this.webMcpInflightKeys.clear();
     // Stop any in-progress audio too — when the user hits "stop", they want
     // the assistant to actually stop talking, not just stop generating tokens.
@@ -1535,6 +1585,9 @@ export class AgentWidgetSession {
     this.stopSpeaking();
     this.abortController?.abort();
     this.abortController = null;
+    // Tear down every in-flight WebMCP resolve too — their messages are about
+    // to be wiped, and a microtask-deferred resolve must not survive the clear.
+    this.abortWebMcpResolves();
     this.messages = [];
     this.agentExecution = null;
     this.clearArtifactState();
@@ -1667,6 +1720,9 @@ export class AgentWidgetSession {
   public hydrateMessages(messages: AgentWidgetMessage[]) {
     this.abortController?.abort();
     this.abortController = null;
+    // Hydration replaces the conversation — abort and forget every in-flight
+    // WebMCP resolve; their messages are about to be replaced.
+    this.abortWebMcpResolves();
     // Wipe the WebMCP dedupe state alongside the message restore — the
     // incoming snapshot is treated as a fresh conversation context.
     this.webMcpInflightKeys.clear();
@@ -1723,7 +1779,13 @@ export class AgentWidgetSession {
         isWebMcpToolName(tc.name)
       ) {
         const snapshot = event.message;
+        const queuedEpoch = this.webMcpEpoch;
         queueMicrotask(() => {
+          // A teardown (cancel / clearMessages / hydrateMessages / new
+          // sendMessage) between queue and run bumps the epoch. Bail so this
+          // deferred resolve can't install a fresh controller that escaped the
+          // teardown's set-clear (the reverted iter-10 leak).
+          if (queuedEpoch !== this.webMcpEpoch) return;
           void this.resolveWebMcpToolCall(snapshot);
         });
       }
@@ -1748,8 +1810,14 @@ export class AgentWidgetSession {
       if (event.status === "connecting") {
         this.setStreaming(true);
       } else if (event.status === "idle" || event.status === "error") {
-        this.setStreaming(false);
-        this.abortController = null;
+        // Keep the typing indicator up while a WebMCP resolve is still in
+        // flight: in a chained turn the intermediate resume stream ends with an
+        // idle status, but the successor tool is still executing. The resolve's
+        // own `finally` flips streaming off once the resolve set drains.
+        if (this.webMcpResolveControllers.size === 0) {
+          this.setStreaming(false);
+          this.abortController = null;
+        }
         // Mark agent execution as complete when streaming ends
         if (this.agentExecution?.status === 'running') {
           this.agentExecution.status = event.status === "error" ? 'error' : 'complete';

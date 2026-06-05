@@ -187,19 +187,95 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(resumeSpy).not.toHaveBeenCalled();
   });
 
-  it("aborts an existing controller before installing the resolve controller", async () => {
-    // Parity with resolveAskUserQuestion / resolveApproval / sendMessage —
-    // a host that re-enters via onMessagesChanged before our microtask runs
-    // can leave its own controller installed; we must abort it so two
-    // server conversations don't overlap.
+  it("does NOT abort the shared session abortController", async () => {
+    // The chained-turn fix: a webmcp resolve must leave `this.abortController`
+    // untouched. In a chain (tool A → /resume → tool B) that shared controller
+    // is still piping A's resume SSE — the very stream that just delivered B's
+    // step_await — so aborting it strands B (it never executes; its /resume is
+    // never POSTed; the dispatch hangs forever). Resolves use a dedicated
+    // per-call controller tracked in `webMcpResolveControllers` instead.
     const { session } = makeSession();
-    const existing = new AbortController();
+    const shared = new AbortController();
     (session as unknown as { abortController: AbortController | null })
-      .abortController = existing;
+      .abortController = shared;
     await session.resolveWebMcpToolCall(
       awaitingMessage("tool-1", "webmcp:search"),
     );
-    expect(existing.signal.aborted).toBe(true);
+    expect(shared.signal.aborted).toBe(false);
+    expect(
+      (session as unknown as { abortController: AbortController | null })
+        .abortController,
+    ).toBe(shared);
+  });
+
+  it("a second resolve does not abort the first (chained / parallel)", () => {
+    // Two `webmcp:*` resolves in one turn each own a controller; neither aborts
+    // the other. (Previously the second pre-aborted the shared controller,
+    // killing the first / the in-flight resume stream.)
+    const stuck = new Promise<WebMcpToolResult>(() => undefined);
+    const { session } = makeSession({ executeImpl: () => stuck });
+    const set = (
+      session as unknown as { webMcpResolveControllers: Set<AbortController> }
+    ).webMcpResolveControllers;
+
+    void session.resolveWebMcpToolCall(awaitingMessage("tool-1", "webmcp:search"));
+    const first = [...set][0]!;
+    void session.resolveWebMcpToolCall(awaitingMessage("tool-2", "webmcp:add"));
+
+    expect(set.size).toBe(2);
+    expect(first.signal.aborted).toBe(false);
+  });
+
+  it("cancel() aborts and clears every in-flight resolve controller", () => {
+    const stuck = new Promise<WebMcpToolResult>(() => undefined);
+    const { session } = makeSession({ executeImpl: () => stuck });
+    const set = (
+      session as unknown as { webMcpResolveControllers: Set<AbortController> }
+    ).webMcpResolveControllers;
+
+    void session.resolveWebMcpToolCall(awaitingMessage("tool-1", "webmcp:search"));
+    void session.resolveWebMcpToolCall(awaitingMessage("tool-2", "webmcp:add"));
+    const controllers = [...set];
+    expect(controllers).toHaveLength(2);
+
+    session.cancel();
+    expect(set.size).toBe(0);
+    for (const c of controllers) expect(c.signal.aborted).toBe(true);
+  });
+
+  it("clearMessages() tears down in-flight resolve controllers", () => {
+    const stuck = new Promise<WebMcpToolResult>(() => undefined);
+    const { session } = makeSession({ executeImpl: () => stuck });
+    const set = (
+      session as unknown as { webMcpResolveControllers: Set<AbortController> }
+    ).webMcpResolveControllers;
+
+    void session.resolveWebMcpToolCall(awaitingMessage("tool-1", "webmcp:search"));
+    const c = [...set][0]!;
+
+    session.clearMessages();
+    expect(set.size).toBe(0);
+    expect(c.signal.aborted).toBe(true);
+  });
+
+  it("a microtask-deferred resolve bails if a teardown bumped the epoch", async () => {
+    // Problem #3 from the reverted iter-10: a resolve deferred via
+    // queueMicrotask must not escape a teardown that happened between queue and
+    // run. handleEvent captures the epoch; clearMessages bumps it; the deferred
+    // resolve sees the mismatch and never executes the page tool.
+    const { session, executeSpy } = makeSession();
+    (
+      session as unknown as { handleEvent: (e: unknown) => void }
+    ).handleEvent({
+      type: "message",
+      message: awaitingMessage("tool-1", "webmcp:search"),
+    });
+    // Teardown BEFORE the queued microtask runs.
+    session.clearMessages();
+    // Flush the microtask queue.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(executeSpy).not.toHaveBeenCalled();
   });
 
   it("forwards the abort signal into client.executeWebMcpToolCall", async () => {
