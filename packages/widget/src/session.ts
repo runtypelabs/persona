@@ -913,30 +913,43 @@ export class AgentWidgetSession {
         this.handleEvent
       );
     } catch (error) {
-      const content = buildDispatchErrorContent(
-        error,
-        this.config.errorMessage
-      );
-      // An override that returns "" suppresses the fallback bubble entirely
-      // (onError still fires below).
-      if (content) {
-        const fallback: AgentWidgetMessage = {
-          id: assistantMessageId,
-          role: "assistant",
-          createdAt: new Date().toISOString(),
-          content,
-          sequence: this.nextSequence()
-        };
+      // Check if this is an abort error (a prior in-flight stream was canceled,
+      // the user navigated away, etc.). In these cases, don't show fallback or
+      // fire onError - the request was intentionally interrupted.
+      const isAbortError =
+        error instanceof Error &&
+        (error.name === 'AbortError' ||
+         error.message.includes('aborted') ||
+         error.message.includes('abort'));
 
-        this.appendMessage(fallback);
+      if (!isAbortError) {
+        const content = buildDispatchErrorContent(
+          error,
+          this.config.errorMessage
+        );
+        // An override that returns "" suppresses the fallback bubble entirely
+        // (onError still fires below).
+        if (content) {
+          const fallback: AgentWidgetMessage = {
+            id: assistantMessageId,
+            role: "assistant",
+            createdAt: new Date().toISOString(),
+            content,
+            sequence: this.nextSequence()
+          };
+
+          this.appendMessage(fallback);
+        }
       }
       this.setStatus("idle");
       this.setStreaming(false);
       this.abortController = null;
-      if (error instanceof Error) {
-        this.callbacks.onError?.(error);
-      } else {
-        this.callbacks.onError?.(new Error(String(error)));
+      if (!isAbortError) {
+        if (error instanceof Error) {
+          this.callbacks.onError?.(error);
+        } else {
+          this.callbacks.onError?.(new Error(String(error)));
+        }
       }
     }
   }
