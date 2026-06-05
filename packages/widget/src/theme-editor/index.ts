@@ -128,6 +128,7 @@ export {
   convertFromPx,
   normalizeColorValue,
   isValidHex,
+  rgbToHex,
   wcagContrastRatio,
   hexToHsl,
   hslToHex,
@@ -138,3 +139,37 @@ export {
   resolveThemeColorPath,
   tokenRefDisplayName,
 } from './color-utils';
+
+// WebMCP tools (transport-agnostic factory for agent-driven theming)
+export {
+  createThemeEditorTools,
+  toolResult,
+  buildSummary,
+  runContrastChecks,
+  quickContrastWarnings,
+  CONTRAST_PAIRS,
+  RADIUS_PRESETS,
+  coerceColor,
+  coerceFamily,
+  coerceIntensity,
+  coerceScheme,
+  coerceRoundnessStyle,
+  coerceRadius,
+  CSS_NAMED_COLORS,
+} from './webmcp';
+export type {
+  WebMcpTool,
+  ToolResult,
+  ToolAnnotations,
+  ToolTextContent,
+  ToolExecute,
+  ThemeEditorLike,
+  EditTarget,
+  CreateThemeEditorToolsOptions,
+  ThemeSummary,
+  RoleState,
+  ContrastReport,
+  ContrastCheck,
+  ContrastWarning,
+  ContrastLevel,
+} from './webmcp';

@@ -14,6 +14,7 @@ import type {
 } from '@runtypelabs/persona';
 import type { OnChangeCallback, ControlResult } from './types';
 import * as state from './state';
+import { mountThemeEditorMcp } from './webmcp/register';
 import { initSearchUI, pruneSearchIndex, resetSearchIndex } from './search';
 import * as styleTab from './sections/appearance';
 import type { DrilldownView } from './sections/appearance';
@@ -215,6 +216,11 @@ function init(): void {
     }
     previewManager?.update();
   });
+
+  // Expose the theme editor as WebMCP tools so a browser agent can configure
+  // the theme; routed through `state` so the preview + controls update for free.
+  const unmountMcp = mountThemeEditorMcp(state);
+  window.addEventListener('beforeunload', unmountMcp);
 }
 
 // ─── Tabs ────────────────────────────────────────────────────────
