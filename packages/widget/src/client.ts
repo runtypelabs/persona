@@ -212,8 +212,8 @@ export class AgentWidgetClient {
   /**
    * WebMCP: `true` when the bridge installed the polyfill and can both
    * snapshot the page registry and execute returned `webmcp:*` tool calls.
-   * `false` for any guard miss (iframe, insecure context, native-deferred,
-   * or `config.webmcp.enabled` not set).
+   * `false` for any guard miss (no `document.modelContext`, polyfill not yet
+   * installed, or `config.webmcp.enabled` not set).
    */
   public isWebMcpOperational(): boolean {
     return this.webMcpBridge?.isOperational() === true;
@@ -222,9 +222,8 @@ export class AgentWidgetClient {
   /**
    * WebMCP: execute a returned `webmcp:<name>` tool call against the page's
    * registry and return the normalized MCP-shaped result for `/resume`. The
-   * bridge handles confirm-bubble gating, `requestUserInteraction` shimming,
-   * the 30s timeout, error normalization, and `signal`-driven abort — callers
-   * never see throws.
+   * bridge handles confirm-bubble gating, the 30s timeout, error
+   * normalization, and `signal`-driven abort — callers never see throws.
    *
    * Returns `null` when WebMCP is not enabled on this client (signal to the
    * session that it should fall back to the legacy local-tool resume path,
@@ -936,7 +935,7 @@ export class AgentWidgetClient {
 
     // WebMCP: snapshot the page tool registry per turn and ship as
     // `clientTools[]`. The server merges these under the `webmcp:` namespace.
-    const webMcpSnapshot = this.webMcpBridge?.snapshotForDispatch();
+    const webMcpSnapshot = await this.webMcpBridge?.snapshotForDispatch();
     if (webMcpSnapshot && webMcpSnapshot.length > 0) {
       payload.clientTools = webMcpSnapshot;
     }
@@ -996,7 +995,7 @@ export class AgentWidgetClient {
     };
 
     // WebMCP: same per-turn snapshot as buildAgentPayload (flow-dispatch path).
-    const webMcpSnapshot = this.webMcpBridge?.snapshotForDispatch();
+    const webMcpSnapshot = await this.webMcpBridge?.snapshotForDispatch();
     if (webMcpSnapshot && webMcpSnapshot.length > 0) {
       payload.clientTools = webMcpSnapshot;
     }

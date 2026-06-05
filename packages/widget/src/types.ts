@@ -243,7 +243,7 @@ export type ClientToolDefinition = {
 
 /**
  * Information passed to the confirm-bubble handler before a `webmcp:*` tool
- * call executes. Phase 3 routes every WebMCP tool through this gate.
+ * call executes. Every WebMCP tool routes through this single gate.
  */
 export type WebMcpConfirmInfo = {
   /** Bare tool name (no `webmcp:` prefix). */
@@ -255,11 +255,12 @@ export type WebMcpConfirmInfo = {
     untrustedContentHint?: boolean;
   };
   /**
-   * `true` when the tool itself invoked `client.requestUserInteraction(cb)`
-   * from inside `execute`, vs. the default Phase 3 gate that fires before
-   * every `webmcp:*` call.
+   * Why the confirm was requested. Currently always `'gate'` — the default
+   * confirm-by-default gate that fires before every `webmcp:*` call. (The
+   * `@mcp-b/webmcp-polyfill` owns the spec's `requestUserInteraction` callback
+   * internally, so Persona no longer surfaces a nested in-tool confirm.)
    */
-  reason: 'gate' | 'requestUserInteraction';
+  reason: 'gate';
 };
 
 /**
@@ -3261,8 +3262,8 @@ export type AgentWidgetConfig = {
   approval?: AgentWidgetApprovalConfig | false;
   /**
    * WebMCP — consume page-registered tools (`document.modelContext.registerTool`).
-   * When `enabled`, the widget installs `@runtypelabs/webmcp-polyfill`, snapshots
-   * the registry on every dispatch, ships it as `clientTools[]`, and executes
+   * When `enabled`, the widget installs `@mcp-b/webmcp-polyfill`, snapshots the
+   * registry on every dispatch, ships it as `clientTools[]`, and executes
    * returned `webmcp:*` tool calls with confirm-by-default gating.
    *
    * Server-side policy on the chat surface is the source of truth — these
