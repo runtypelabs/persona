@@ -171,8 +171,6 @@ body.webmcp-shop .shop-explainer code {
   padding: 0.08em 0.38em;
   border-radius: 5px;
 }
-body.webmcp-shop .shop-hero .mount-toolbar { justify-content: flex-start; margin: 0.85rem 0 0; min-height: 0; }
-
 /* ── Section scaffolding ───────────────────────────────────────────────── */
 
 body.webmcp-shop .shop-section { margin-bottom: 1.25rem; }

@@ -3,14 +3,13 @@ import "@runtypelabs/persona/widget.css";
 import {
   createAgentExperience,
   createLocalStorageAdapter,
-  initAgentWidget,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetConfig,
   type WebMcpConfirmInfo,
 } from "@runtypelabs/persona";
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
-import { setupMountMode, renderInlineMount, renderLauncherScene } from "./mount-mode";
+import { setupMountMode, renderInlineMount } from "./mount-mode";
 import type { Mode } from "./examples-nav";
 import { CATALOG, searchCatalog, findBySku, type CatalogProduct } from "./webmcp-catalog";
 
@@ -722,11 +721,27 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
       iconForeground: "#1c1917",
       actionIconForeground: "#d6d3d1",
     },
+    // The widget's component defaults back these surfaces with `gray.50`, which
+    // this dark palette keeps light (#f5f5f4) — so without explicit overrides the
+    // assistant bubbles, composer input, tool-call chrome, and inline code would
+    // render as bright cream cards on the espresso-night panel. Pin them to the
+    // dark surface set (and flip their default dark `gray.900` text to light).
+    message: {
+      assistant: { background: "#292524", text: "#f5f5f4", border: "#3a3530" },
+    },
+    input: { background: "#2c2724", placeholder: "#a8a29e" },
+    collapsibleWidget: {
+      container: "#292524", // tool/reasoning bubble chrome
+      surface: "#141110", // inset args/code box — reads as a dark terminal panel
+      border: "#3a3530",
+    },
+    markdown: {
+      inlineCode: { background: "#44403c", foreground: "#f5f5f4" },
+    },
   },
 };
 
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
-  const showLauncherChrome = mode === "launcher";
   return {
     ...DEFAULT_WIDGET_CONFIG,
     ...(usingClientToken
@@ -781,23 +796,20 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     launcher: {
       title: "Switchback",
       subtitle: "Trail & road running assistant",
-      ...(showLauncherChrome
-        ? { enabled: true, autoExpand: false, width: "420px", fullHeight: true }
-        : { enabled: false, autoExpand: true, width: "100%", fullHeight: true }),
+      enabled: false,
+      autoExpand: true,
+      width: "100%",
+      fullHeight: true,
     },
   };
 };
 
+// Inline-only: the widget mounts flush in the storefront's right-hand stage.
+// A single mode means setupMountMode renders no "View as" toggle.
 setupMountMode({
   slug: "webmcp-demo",
-  modes: ["inline", "launcher", "fullscreen"],
+  modes: ["inline"],
   mount: (mode, { stage }) => {
-    if (mode === "launcher") {
-      const { mountEl } = renderLauncherScene(stage);
-      const handle = initAgentWidget({ target: mountEl, config: buildConfig("launcher") });
-      return () => handle.destroy();
-    }
-
     const mount = renderInlineMount(stage);
     mount.style.height = "100%";
     const controller = createAgentExperience(mount, buildConfig(mode));
