@@ -2059,6 +2059,10 @@ export class AgentWidgetSession {
     // a tool with the same key resolved in the prior conversation.
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
+    // A fresh conversation must resend the full WebMCP tool list on its next
+    // turn — drop the diff-only fingerprint cache (server keys by recordId, so
+    // a new conversation has no stored set to match).
+    this.client.resetClientToolsFingerprint();
     this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);

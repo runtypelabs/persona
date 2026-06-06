@@ -2224,6 +2224,23 @@ export type ClientChatRequest = {
   context?: Record<string, unknown>;
   /** WebMCP page-discovered tools — same shape as `dispatch.clientTools[]`. */
   clientTools?: ClientToolDefinition[];
+  /**
+   * Diff-only / send-once: order-independent fingerprint of the client tool set.
+   * When the set is unchanged from the previous turn the widget sends this
+   * WITHOUT `clientTools` and the server reuses its stored set. On a cache miss
+   * the server replies `409 { error: 'client_tools_resend_required' }` and the
+   * widget retries once with the full `clientTools[]`.
+   */
+  clientToolsFingerprint?: string;
+};
+
+/**
+ * Body the server returns (HTTP 409) when it holds no stored tool set matching
+ * a fingerprint-only `/client/chat` turn. The widget retries once with the full
+ * `clientTools[]` (and the fingerprint).
+ */
+export type ClientToolsResendRequiredResponse = {
+  error: 'client_tools_resend_required';
 };
 
 /**
