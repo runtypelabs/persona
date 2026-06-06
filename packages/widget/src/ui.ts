@@ -33,6 +33,11 @@ import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
 import { createElement, createElementInDocument } from "./utils/dom";
 import { morphMessages } from "./utils/morph";
+import {
+  navigateComposerHistory,
+  INITIAL_HISTORY_STATE,
+  type ComposerHistoryState
+} from "./utils/composer-history";
 import { computeMessageFingerprint, createMessageCache, getCachedWrapper, setCachedWrapper, pruneCache } from "./utils/message-fingerprint";
 import {
   createFollowStateController,
@@ -4577,6 +4582,7 @@ export const createAgentExperience = (
 
     textarea.value = "";
     textarea.style.height = "auto"; // Reset height after clearing
+    resetHistoryNavigation();
 
     // Send message with optional content parts
     session.sendMessage(value, { contentParts });
@@ -4587,11 +4593,107 @@ export const createAgentExperience = (
     }
   };
 
-  const handleInputEnter = (event: KeyboardEvent) => {
+  // --- Composer message-history navigation (Up/Down arrows) ---
+  // Lets users recall and edit previously sent messages, shell/Slack style.
+  // The pure state machine lives in utils/composer-history.ts; here we feed it
+  // caret info and apply the value it returns. Text-only recall — attachments
+  // on past messages are not restored.
+  const historyNavigationEnabled = () =>
+    config.features?.composerHistory !== false;
+
+  let composerHistoryState: ComposerHistoryState = { ...INITIAL_HISTORY_STATE };
+  // Guards the reset-on-edit listener so our own programmatic value sets (which
+  // dispatch an `input` event for auto-resize) don't exit navigation mode.
+  let suppressHistoryReset = false;
+
+  const resetHistoryNavigation = () => {
+    composerHistoryState = { ...INITIAL_HISTORY_STATE };
+  };
+
+  const getUserMessageHistory = (): string[] =>
+    session
+      .getMessages()
+      .filter((message) => message.role === "user")
+      .map((message) => message.content ?? "")
+      .filter((text) => text.length > 0);
+
+  const applyHistoryValue = (value: string) => {
+    if (!textarea) return;
+    suppressHistoryReset = true;
+    textarea.value = value;
+    // Trigger the auto-resize handler (it listens on `input`).
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    suppressHistoryReset = false;
+    // Caret to end for natural editing / appending.
+    const end = textarea.value.length;
+    textarea.setSelectionRange(end, end);
+  };
+
+  const handleComposerInput = () => {
+    // A real edit leaves history-navigation mode.
+    if (suppressHistoryReset) return;
+    resetHistoryNavigation();
+  };
+
+  const handleComposerKeydown = (event: KeyboardEvent) => {
+    if (!textarea) return;
+
+    // Up/Down: walk through previously sent user messages.
+    if (
+      historyNavigationEnabled() &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.isComposing
+    ) {
+      const atStart =
+        textarea.selectionStart === 0 && textarea.selectionEnd === 0;
+      const result = navigateComposerHistory({
+        direction: event.key === "ArrowUp" ? "up" : "down",
+        history: getUserMessageHistory(),
+        currentValue: textarea.value,
+        atStart,
+        state: composerHistoryState
+      });
+      composerHistoryState = result.state;
+      if (result.handled) {
+        event.preventDefault();
+        if (result.value !== undefined) {
+          applyHistoryValue(result.value);
+        }
+        return;
+      }
+      // Not handled — fall through to default cursor movement.
+    }
+
+    // Enter: send, unless a response is streaming. While streaming, Enter is
+    // inert (never a stop trigger) — the visible Stop button / Esc stop it.
     if (event.key === "Enter" && !event.shiftKey) {
+      if (session.isStreaming()) {
+        event.preventDefault();
+        return;
+      }
+      resetHistoryNavigation();
       event.preventDefault();
       sendButton.click();
     }
+  };
+
+  // Esc-to-stop: while a response streams, Escape within this widget aborts it.
+  // Capture phase + registered at init so it runs before the composer-bar Esc
+  // collapse listener (attached later on open); stopImmediatePropagation keeps
+  // a stream-stop from also collapsing the panel. Scoped via composedPath so a
+  // page-wide Escape elsewhere doesn't hijack.
+  const handleEscStop = (event: KeyboardEvent) => {
+    if (event.key !== "Escape" || event.isComposing) return;
+    if (!session.isStreaming()) return;
+    if (!event.composedPath().includes(container)) return;
+    session.cancel();
+    resetHistoryNavigation();
+    event.preventDefault();
+    event.stopImmediatePropagation();
   };
 
   const handleInputPaste = async (event: ClipboardEvent) => {
@@ -5465,8 +5567,12 @@ export const createAgentExperience = (
   if (composerForm) {
     composerForm.addEventListener("submit", handleSubmit);
   }
-  textarea?.addEventListener("keydown", handleInputEnter);
+  textarea?.addEventListener("keydown", handleComposerKeydown);
+  textarea?.addEventListener("input", handleComposerInput);
   textarea?.addEventListener("paste", handleInputPaste);
+
+  const escStopDoc = mount.ownerDocument ?? document;
+  escStopDoc.addEventListener("keydown", handleEscStop, true);
 
   const ATTACHMENT_DROP_ACTIVE_CLASS = "persona-attachment-drop-active";
   let attachmentFileDragDepth = 0;
@@ -5544,8 +5650,10 @@ export const createAgentExperience = (
     if (composerForm) {
       composerForm.removeEventListener("submit", handleSubmit);
     }
-    textarea?.removeEventListener("keydown", handleInputEnter);
+    textarea?.removeEventListener("keydown", handleComposerKeydown);
+    textarea?.removeEventListener("input", handleComposerInput);
     textarea?.removeEventListener("paste", handleInputPaste);
+    escStopDoc.removeEventListener("keydown", handleEscStop, true);
   });
 
   destroyCallbacks.push(() => {

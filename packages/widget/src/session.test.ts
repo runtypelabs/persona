@@ -794,3 +794,160 @@ describe('AgentWidgetSession.resolveApproval', () => {
     expect(errors.length).toBe(1);
   });
 });
+
+describe('AgentWidgetSession - dispatch error fallback', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  // Make fetch reject so client.dispatch throws and the session falls back.
+  const failFetchWith = (error: Error) => {
+    global.fetch = vi.fn().mockRejectedValue(error);
+  };
+
+  const lastAssistantMessage = (
+    session: AgentWidgetSession
+  ): AgentWidgetMessage | undefined =>
+    [...session.getMessages()].reverse().find((m) => m.role === 'assistant');
+
+  it('shows the default message with the underlying error detail and fires onError', async () => {
+    failFetchWith(new Error('Failed to fetch'));
+    const errors: Error[] = [];
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://example.invalid/chat' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onError: (e) => errors.push(e),
+      }
+    );
+
+    await session.sendMessage('Hello');
+
+    const assistant = lastAssistantMessage(session);
+    expect(assistant?.content).toContain("I couldn't reach the assistant");
+    expect(assistant?.content).toContain('_Details: Failed to fetch_');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toBe('Failed to fetch');
+    expect(session.isStreaming()).toBe(false);
+    expect(session.getStatus()).toBe('idle');
+  });
+
+  it('uses a static errorMessage override verbatim', async () => {
+    failFetchWith(new Error('boom'));
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://example.invalid/chat',
+        errorMessage: 'We are having trouble connecting.',
+      },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+
+    await session.sendMessage('Hello');
+
+    const assistant = lastAssistantMessage(session);
+    expect(assistant?.content).toBe('We are having trouble connecting.');
+    expect(assistant?.content).not.toContain('Details');
+  });
+
+  it('passes the error to a function errorMessage override', async () => {
+    failFetchWith(new Error('Failed to fetch'));
+    const seen: Error[] = [];
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://example.invalid/chat',
+        errorMessage: (error) => {
+          seen.push(error);
+          return error.message.includes('Failed to fetch')
+            ? 'You appear to be offline.'
+            : 'Something went wrong.';
+        },
+      },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+
+    await session.sendMessage('Hello');
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toBeInstanceOf(Error);
+    expect(lastAssistantMessage(session)?.content).toBe(
+      'You appear to be offline.'
+    );
+  });
+
+  it('suppresses the fallback bubble when the override returns an empty string but still fires onError', async () => {
+    failFetchWith(new Error('boom'));
+    const errors: Error[] = [];
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://example.invalid/chat',
+        errorMessage: () => '',
+      },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onError: (e) => errors.push(e),
+      }
+    );
+
+    await session.sendMessage('Hello');
+
+    expect(lastAssistantMessage(session)).toBeUndefined();
+    expect(errors).toHaveLength(1);
+    expect(session.isStreaming()).toBe(false);
+    expect(session.getStatus()).toBe('idle');
+  });
+
+  it('does NOT show a fallback bubble when the dispatch is aborted', async () => {
+    const abortErr = new Error('The operation was aborted');
+    abortErr.name = 'AbortError';
+    failFetchWith(abortErr);
+    const errors: Error[] = [];
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://example.invalid/chat' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onError: (e) => errors.push(e),
+      }
+    );
+
+    await session.sendMessage('Hello');
+
+    expect(lastAssistantMessage(session)).toBeUndefined();
+    expect(errors).toHaveLength(0);
+  });
+
+  it('applies the override on continueConversation failures too', async () => {
+    failFetchWith(new Error('boom'));
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://example.invalid/chat',
+        errorMessage: 'Custom continue error.',
+      },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+
+    await session.continueConversation();
+
+    expect(lastAssistantMessage(session)?.content).toBe('Custom continue error.');
+  });
+});

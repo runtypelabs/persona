@@ -2278,6 +2278,7 @@ config: {
 | `showReasoning` | `boolean?` | Show thinking/reasoning bubbles. Default: `true`. |
 | `showToolCalls` | `boolean?` | Show tool usage bubbles. Default: `true`. |
 | `showEventStreamToggle` | `boolean?` | Show the event stream inspector toggle in the header. Default: `false`. |
+| `composerHistory` | `boolean?` | `Up`/`Down` arrows in the composer navigate previously sent user messages for re-entry/editing (shell / Slack style). Entered only when the caret is at the start of the input, so multi-line cursor movement is preserved. Default: `true`. |
 | `eventStream` | `EventStreamConfig?` | Event stream inspector configuration: `badgeColors`, `timestampFormat`, `showSequenceNumbers`, `maxEvents`, `descriptionFields`, `classNames`. |
 | `artifacts` | `AgentWidgetArtifactsFeature?` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (see below). |
 
