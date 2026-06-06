@@ -23,7 +23,7 @@ export const STOREFRONT_ASSISTANT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "minimax-m2.7",
+        model: "mercury-2",
         reasoning: false,
         responseFormat: "JSON",
         outputVariable: "prompt_result",

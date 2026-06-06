@@ -460,7 +460,7 @@ const config = mergeWithDefaults({
   },
   agent: {
     name: "Chat Assistant",
-    model: "minimax-m2.7",
+    model: "mercury-2",
     systemPrompt: "You are a helpful assistant. Be friendly, concise, and helpful. If you don't know something, say so.",
     artifacts: { enabled: true, types: ["markdown", "component"] },
   },
