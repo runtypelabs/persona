@@ -493,24 +493,28 @@ if (!modelContext) {
       annotations: { readOnlyHint: false },
       execute(input): unknown {
         const { sku, quantity } = input as { sku: string; quantity?: number };
-        const line = cart.get(sku);
-        if (!line) {
+        // Resolve the SKU the same way add_to_cart/view_product do (trimmed,
+        // case-insensitive) — the cart is keyed by the canonical product.sku, so
+        // a raw `cart.get(sku)` would miss on different casing/spacing.
+        const product = findBySku(sku);
+        const line = product ? cart.get(product.sku) : undefined;
+        if (!product || !line) {
           logWire("exec", "remove_from_cart", `<b>${esc(sku)}</b> → not in cart`);
           return { removed: false, error: `"${sku}" is not in the cart.`, cart: cartSummary() };
         }
         if (quantity && quantity < line.quantity) {
           line.quantity -= quantity;
         } else {
-          cart.delete(sku);
+          cart.delete(product.sku);
         }
         renderCart();
         flashCart();
         logWire(
           "exec",
           "remove_from_cart",
-          `<b>${esc(sku)}</b>${quantity ? ` ×${esc(quantity)}` : ""} → removed`,
+          `<b>${esc(product.sku)}</b>${quantity ? ` ×${esc(quantity)}` : ""} → removed`,
         );
-        return { removed: true, sku, cart: cartSummary() };
+        return { removed: true, sku: product.sku, cart: cartSummary() };
       },
     },
     { signal: ac.signal },
