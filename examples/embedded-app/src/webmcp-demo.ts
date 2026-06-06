@@ -13,6 +13,7 @@ import {
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 import { setupMountMode, renderInlineMount, renderLauncherScene } from "./mount-mode";
 import type { Mode } from "./examples-nav";
+import { searchCatalog, findBySku, type CatalogProduct } from "./webmcp-catalog";
 
 // ---------------------------------------------------------------------------
 // 1. Install the polyfill and register two page tools.
@@ -56,6 +57,85 @@ const writeLog = (msg: string): void => {
   log.textContent = `[${ts}] ${msg}\n${log.textContent ?? ""}`;
 };
 
+// ---------------------------------------------------------------------------
+// Simulated cart — the visible side effect of the `add_to_cart` page tool.
+// Mutating the cart re-renders the on-page panel so you can watch the agent's
+// tool calls take effect, and add_to_cart echoes the cart state back to the
+// agent so it can summarize the running total.
+// ---------------------------------------------------------------------------
+
+interface CartLine {
+  sku: string;
+  title: string;
+  price: number;
+  quantity: number;
+}
+
+const cart = new Map<string, CartLine>();
+const money = (n: number): string => `$${n.toFixed(2)}`;
+
+const cartSummary = (): {
+  items: Array<{ sku: string; title: string; quantity: number; lineTotal: number }>;
+  itemCount: number;
+  total: number;
+} => {
+  const items = [...cart.values()].map((line) => ({
+    sku: line.sku,
+    title: line.title,
+    quantity: line.quantity,
+    lineTotal: Number((line.price * line.quantity).toFixed(2)),
+  }));
+  return {
+    items,
+    itemCount: items.reduce((n, i) => n + i.quantity, 0),
+    total: Number(items.reduce((sum, i) => sum + i.lineTotal, 0).toFixed(2)),
+  };
+};
+
+const renderCart = (): void => {
+  const root = document.getElementById("webmcp-cart");
+  if (!root) return;
+  const summary = cartSummary();
+  if (summary.items.length === 0) {
+    root.innerHTML = `<p class="webmcp-cart-empty">Your cart is empty.</p>`;
+    return;
+  }
+  const rows = [...cart.values()]
+    .map(
+      (line) => `
+      <li class="webmcp-cart-line">
+        <span class="webmcp-cart-qty">${line.quantity}×</span>
+        <span class="webmcp-cart-title">${line.title}</span>
+        <span class="webmcp-cart-sku">${line.sku}</span>
+        <span class="webmcp-cart-price">${money(line.price * line.quantity)}</span>
+      </li>`,
+    )
+    .join("");
+  root.innerHTML = `
+    <ul class="webmcp-cart-lines">${rows}</ul>
+    <div class="webmcp-cart-total">
+      <span>${summary.itemCount} item${summary.itemCount === 1 ? "" : "s"}</span>
+      <strong>${money(summary.total)}</strong>
+    </div>`;
+};
+
+const addToCart = (product: CatalogProduct, quantity: number): void => {
+  const existing = cart.get(product.sku);
+  if (existing) {
+    existing.quantity += quantity;
+  } else {
+    cart.set(product.sku, {
+      sku: product.sku,
+      title: `${product.title} (${product.color})`,
+      price: product.price,
+      quantity,
+    });
+  }
+  renderCart();
+};
+
+renderCart();
+
 initializeWebMCPPolyfill();
 
 const modelContext = (
@@ -72,7 +152,8 @@ if (!modelContext) {
   modelContext.registerTool(
     {
       name: "search_products",
-      description: "Search the mock product catalog by free-text query.",
+      description:
+        "Search the product catalog by free-text query (e.g. 'blue running shoes', 'trail', 'jacket'). Returns matching products with SKU, title, color, and price.",
       inputSchema: {
         type: "object",
         properties: {
@@ -83,14 +164,20 @@ if (!modelContext) {
       annotations: { readOnlyHint: true },
       execute(input): unknown {
         const { query } = input as { query: string };
-        writeLog(`search_products({ query: "${query}" })`);
+        const hits = searchCatalog(query ?? "");
+        writeLog(`search_products("${query}") → ${hits.length} hit(s)`);
         return {
           query,
-          hits: [
-            { sku: "SHOE-001", title: "Running Shoes (Blue)", price: 89.0 },
-            { sku: "SHOE-002", title: "Running Shoes (Black)", price: 89.0 },
-            { sku: "SHOE-007", title: "Trail Runners", price: 119.0 },
-          ],
+          count: hits.length,
+          hits: hits.map((p) => ({
+            sku: p.sku,
+            title: p.title,
+            color: p.color,
+            brand: p.brand,
+            category: p.category,
+            price: p.price,
+            description: p.description,
+          })),
         };
       },
     },
@@ -100,7 +187,8 @@ if (!modelContext) {
   modelContext.registerTool(
     {
       name: "add_to_cart",
-      description: "Add a product to the shopper's cart by SKU.",
+      description:
+        "Add a product to the shopper's cart by SKU (from search_products results). Returns the updated cart so you can confirm the running total.",
       inputSchema: {
         type: "object",
         properties: {
@@ -115,10 +203,26 @@ if (!modelContext) {
           sku: string;
           quantity?: number;
         };
-        writeLog(`add_to_cart({ sku: "${sku}", quantity: ${quantity} })`);
-        // Approval is handled by Persona's single outer confirm gate before
-        // this runs — the page tool just performs the action.
-        return { added: true, sku, quantity };
+        const product = findBySku(sku);
+        if (!product) {
+          writeLog(`add_to_cart("${sku}") → not found`);
+          return {
+            added: false,
+            error: `No product with SKU "${sku}". Call search_products first to get valid SKUs.`,
+          };
+        }
+        // Approval is handled by Persona's confirm gate before this runs — the
+        // page tool just performs the action and updates the visible cart.
+        addToCart(product, quantity);
+        writeLog(`add_to_cart("${sku}" ×${quantity}) → ${product.title}`);
+        return {
+          added: true,
+          sku: product.sku,
+          title: product.title,
+          quantity,
+          unitPrice: product.price,
+          cart: cartSummary(),
+        };
       },
     },
     { signal: ac.signal },
@@ -170,14 +274,20 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       : { apiUrl: proxyApiUrl }),
     storageAdapter: createLocalStorageAdapter(`persona-state-webmcp-${mode}`),
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
-    // Demo starter pills that exercise the page's WebMCP tools. Kept
-    // single-intent (one tool per prompt) — chained "search and add" still
-    // depends on core #3870 (parallel local tool calls). SKUs match the
-    // mock catalog returned by the page-side search_products tool above.
+    // Demo starter pills, ordered to show off escalating tool-call shapes:
+    //   1. single read-only call (auto-approved, no bubble)
+    //   2. single mutating call (native approval bubble → cart update)
+    //   3. multi-step continuation — the agent searches, then runs a SECOND
+    //      turn to add the cheapest hit, proving the loop continues after a
+    //      tool result.
+    // NOTE: prompts that ask to add two items "at once" make the model emit
+    // PARALLEL local tool calls in a single turn, which currently hangs on the
+    // second resume (see README → WebMCP Demo "Known limitation"). Keep the
+    // canned pills single-intent or dependency-sequenced.
     suggestionChips: [
       "Search for blue running shoes",
-      "Show me trail running shoes",
       "Add SHOE-001 to my cart",
+      "Find the cheapest blue running shoe and add it to my cart",
     ],
     webmcp: {
       enabled: true,

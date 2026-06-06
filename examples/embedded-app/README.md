@@ -123,6 +123,15 @@ The action middleware example demonstrates:
   - Demonstrates the widget consuming **page-provided tools** via WebMCP (`document.modelContext`)
   - The page registers `search_products` and `add_to_cart` on the polyfilled `document.modelContext` (`@mcp-b/webmcp-polyfill`); the widget snapshots them per turn and sends them to the agent as `clientTools[]`
   - When the agent calls one, the widget executes it on the page (behind an `onConfirm` gate) and resumes the turn with the result
+  - The catalog (`webmcp-catalog.ts`) and the on-page **Cart** panel are the visible side effects: `search_products` filters the static catalog; `add_to_cart` updates the cart
+
+#### What the starter pills show
+
+1. **Single read** — *"Search for blue running shoes"* → one `search_products` call (read-only, auto-approved by the demo's `autoApprove` policy, no bubble).
+2. **Single write** — *"Add SHOE-001 to my cart"* → one `add_to_cart` call gated by the native approval bubble; on Approve the cart updates.
+3. **Continuation** — *"Find the cheapest blue running shoe and add it to my cart"* → the agent searches, then runs a **second turn** to add the cheapest hit, proving the agent loop continues after a tool result.
+
+> **Known limitation — parallel local tool calls.** Asking to add two items "at the same time" makes the model emit *parallel* local tool calls in a single turn. The server correctly emits a `step_await` for each (core #3870 is fixed server-side), but the widget currently posts one `/resume` per tool **keyed by tool name** (`session.ts → resumeWithToolOutput`). Two parallel calls to the same tool share one `executionId` and collide on that key, so the first resume advances the execution and the second resets — the turn hangs on the second tool. The fix is to batch all pending local tool calls for an `executionId` into a single `/resume` keyed by `toolId` (likely needs a core resume-payload contract change). Until then, keep prompts single-intent or dependency-sequenced.
 
 #### Two wiring modes
 

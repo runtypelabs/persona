@@ -29,13 +29,19 @@
           <ul>
             <li>
               <code>search_products</code> — annotated
-              <code>readOnlyHint: true</code>. Returns mock catalog hits.
+              <code>readOnlyHint: true</code>. Filters a static catalog and
+              returns realistic hits (auto-approved by the demo's gate policy).
             </li>
             <li>
-              <code>add_to_cart</code> — sensitive operation, gated by Persona's
-              confirm bubble before it runs.
+              <code>add_to_cart</code> — mutating operation; gated by Persona's
+              native approval bubble, then updates the cart below.
             </li>
           </ul>
+        </section>
+
+        <section class="notes-section">
+          <h3 class="notes-section-title">Cart</h3>
+          <div id="webmcp-cart" class="webmcp-cart"></div>
         </section>
 
         <section class="notes-section">
@@ -50,10 +56,20 @@
     <section class="notes">
       <h2 class="notes-heading">Try it</h2>
       <ol>
-        <li>Ask <em>"search for blue running shoes"</em> — the agent calls <code>search_products</code>; Persona's confirm bubble opens (every <code>webmcp:*</code> call is confirmed by default, even <code>readOnlyHint: true</code> ones).</li>
-        <li>Ask <em>"add SKU SHOE-001 to my cart"</em> — the agent calls <code>add_to_cart</code>; Persona's confirm gate fires once, then the page tool runs.</li>
+        <li><strong>Single read:</strong> <em>"search for blue running shoes"</em> — the agent calls <code>search_products</code> against the static catalog. Read-only, so the demo auto-approves it (no bubble).</li>
+        <li><strong>Single write:</strong> <em>"add SHOE-001 to my cart"</em> — the agent calls <code>add_to_cart</code>; Persona's native approval bubble opens, and on Approve the <strong>Cart</strong> panel updates.</li>
+        <li><strong>Continuation:</strong> <em>"find the cheapest blue running shoe and add it to my cart"</em> — the agent searches, then runs a <em>second</em> turn to add the cheapest hit (proving the agent loop continues after a tool result).</li>
         <li>Open DevTools → Network → look for <code>/dispatch</code> requests and confirm the body has a <code>clientTools[]</code> array with the two tools, including <code>origin: "webmcp"</code> and <code>pageOrigin</code>.</li>
       </ol>
+      <p>
+        <strong>Known limitation:</strong> asking to add two items "at the same
+        time" makes the model emit <em>parallel</em> local tool calls in one
+        turn. The server emits a <code>step_await</code> for each, but the
+        widget currently posts one <code>/resume</code> per tool (keyed by tool
+        name), so parallel calls to the same tool collide and the turn hangs on
+        the second. Keep prompts single-intent or dependency-sequenced until
+        the batched-resume fix lands.
+      </p>
       <p>
         Server-side, the Runtype surface must have
         <code>behavior.webmcp.enabled = true</code> for the agent to see these
