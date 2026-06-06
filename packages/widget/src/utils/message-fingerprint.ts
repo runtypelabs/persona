@@ -63,6 +63,8 @@ export function computeMessageFingerprint(
         ? JSON.stringify(message.toolCall.args).length
         : 0,
     message.reasoning?.chunks?.length ?? 0,
+    message.reasoning?.chunks?.[message.reasoning.chunks.length - 1]?.length ?? 0,
+    message.reasoning?.chunks?.[message.reasoning.chunks.length - 1]?.slice(-32) ?? "",
     message.contentParts?.length ?? 0,
     message.stopReason ?? "",
     configVersion,

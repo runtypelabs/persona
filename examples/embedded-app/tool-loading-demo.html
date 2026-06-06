@@ -126,6 +126,7 @@
                 <div class="btn-group">
                   <button id="btn-seq-reason-text">Reasoning + text (scrambled seq)</button>
                   <button id="btn-seq-markdown">Markdown table + box-drawing (scrambled seq)</button>
+                  <button id="btn-seq-reason-freeze">Long sequenced reasoning (~9s, in order)</button>
                 </div>
               </div>
               <div class="section">
@@ -890,6 +891,75 @@
         log("Done: Reasoning + text (scrambled seq)");
       }
 
+      // ── Long sequenced reasoning (regression guard) ────────────
+      // Streams many reason_delta events IN ORDER, each carrying a
+      // `sequenceIndex`, so the client takes the ordered path in client.ts
+      // and collapses `reasoning.chunks` to a single accumulated string —
+      // `chunks.length` stays 1 for the whole stream. This is the path that
+      // regressed once: when the reasoning fingerprint (message-fingerprint.ts)
+      // only hashed `chunks.length`, the message cache never invalidated and
+      // the bubble froze if you opened the "Thinking…" accordion mid-stream.
+      // QA check: open the accordion ~2s in and confirm the text keeps
+      // streaming live (and toggling open/close never freezes it).
+      async function longSequencedReasoning() {
+        log("Starting: Long sequenced reasoning", "info");
+        setAllScenarioButtons(true);
+        document.getElementById("btn-seq-reason-freeze").classList.add("running");
+
+        controller.injectUserMessage({
+          id: nextId("user"),
+          content: "Think step by step for a while, then answer.",
+        });
+        await sleep(200);
+
+        const flowId = nextId("flow");
+        const stepId = nextId("step");
+        const reasoningId = nextId("reason");
+
+        const thoughts = [
+          "Let me start by restating the problem. ",
+          "There are a few constraints to weigh here. ",
+          "First, consider the time complexity. ",
+          "A naive approach would be quadratic, ",
+          "but memoization brings it down. ",
+          "Next, the space tradeoff matters. ",
+          "Edge cases: empty input, single element, ",
+          "and very large inputs that could overflow. ",
+          "Let me sanity-check the recurrence. ",
+          "It holds for the base cases. ",
+          "Propagating to the general case, ",
+          "the invariant is preserved each step. ",
+          "Double-checking the boundary conditions. ",
+          "Everything lines up — ready to answer.",
+        ];
+
+        const entries = [
+          { data: { type: "flow_start", flowId, flowName: "QA", totalSteps: 1 } },
+          { data: { type: "step_start", id: stepId, name: "Prompt", stepType: "prompt", index: 1, totalSteps: 1 } },
+          { data: { type: "reason_start", reasoningId, hidden: false, done: false, sequenceIndex: 1 } },
+        ];
+        thoughts.forEach((t, i) => {
+          entries.push({
+            data: { type: "reason_delta", reasoningId, reasoningText: t, hidden: false, done: false, sequenceIndex: 2 + i },
+            delayMs: 650,
+          });
+        });
+        entries.push({ data: { type: "reason_complete", reasoningId, hidden: false, done: true, sequenceIndex: 2 + thoughts.length }, delayMs: 650 });
+        entries.push({ data: { type: "step_complete", id: stepId, name: "Prompt", success: true } });
+        entries.push({ data: { type: "flow_complete", success: true } });
+
+        try {
+          await controller.connectStream(buildSSEStream(entries));
+          log("Expected reasoning to end with: '…ready to answer.'");
+        } catch (err) {
+          log(`Error: ${err?.message ?? err}`);
+        }
+
+        document.getElementById("btn-seq-reason-freeze").classList.remove("running");
+        setAllScenarioButtons(false);
+        log("Done: Long sequenced reasoning");
+      }
+
       async function markdownTableScrambled() {
         log("Starting: Markdown table + box-drawing (scrambled seq)", "info");
         setAllScenarioButtons(true);
@@ -1228,6 +1298,7 @@
       document.getElementById("btn-reason-long").addEventListener("click", longReasoning);
       document.getElementById("btn-seq-reason-text").addEventListener("click", reasoningPlusTextScrambled);
       document.getElementById("btn-seq-markdown").addEventListener("click", markdownTableScrambled);
+      document.getElementById("btn-seq-reason-freeze").addEventListener("click", longSequencedReasoning);
       document.getElementById("btn-nested-send-stream").addEventListener("click", nestedSendStreams);
       document.getElementById("btn-nested-prompt-split").addEventListener("click", nestedPromptSplitByInnerTool);
       document.getElementById("btn-nested-interleave").addEventListener("click", nestedOuterInterleave);
