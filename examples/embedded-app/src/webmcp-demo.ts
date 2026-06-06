@@ -732,6 +732,12 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     ...(usingClientToken
       ? { clientToken, ...(clientApiBase ? { apiUrl: clientApiBase } : {}) }
       : { apiUrl: proxyApiUrl }),
+    // Surface the widget's Events diagnostics screen (header toggle) so the new
+    // "Output throughput" (tok/s) row is visible for live testing.
+    features: {
+      ...DEFAULT_WIDGET_CONFIG.features,
+      showEventStreamToggle: true,
+    },
     storageAdapter: createLocalStorageAdapter(`persona-state-webmcp-${mode}`),
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
     theme: shopTheme,
