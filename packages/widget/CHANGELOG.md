@@ -1,5 +1,53 @@
 # @runtypelabs/persona
 
+## 3.22.0
+
+### Minor Changes
+
+- d3db148: Improve the dispatch-failure fallback message and make it configurable. Replaces the misleading "proxy isn't returning a real response yet" copy with an honest message that explains the chat service couldn't be reached and surfaces the underlying error reason. Adds a new `errorMessage` config option (a static string or `(error) => string`) to override the copy; returning an empty string suppresses the fallback bubble while still firing `onError`.
+
+  Also fixes abort handling on `continueConversation`: a cancelled continuation (e.g. a superseded in-flight stream) no longer shows the dispatch-error bubble or fires `onError`, matching `sendMessage`'s behavior — only genuine failures surface.
+
+- 130513f: Composer keyboard UX improvements:
+
+  - **Enter no longer stops a streaming response.** Pressing Enter while a response streams is now inert (it never aborts generation). Use the visible Stop button or press Escape to stop.
+  - **Escape stops streaming.** While a response streams, pressing Escape within the widget aborts it (scoped to the widget; the composer-bar Escape-to-collapse behavior still applies when not streaming).
+  - **Up/Down arrows navigate message history.** In the composer, Up recalls previously sent user messages for quick re-entry or editing and Down walks back toward the in-progress draft (shell / Slack style). History is only entered when the caret is at the start of the input, preserving normal multi-line cursor movement. Disable via `features.composerHistory: false`.
+
+- eb7f3e1: Export the action-system types from the package root: `AgentWidgetActionHandler`,
+  `AgentWidgetActionHandlerResult`, `AgentWidgetActionParser`, `AgentWidgetParsedAction`,
+  `AgentWidgetActionContext`, and `AgentWidgetActionEventPayload`. These back the public
+  `actionHandlers` / `actionParsers` config options but were previously unexported, so
+  consumers authoring custom action handlers or parsers could not type them by name.
+- eb7f3e1: Add an optional `@runtypelabs/persona/smart-dom-reader` entry point for richer host-page
+  DOM parsing. It exposes `createSmartDomReaderContextProvider()` (drop into
+  `config.contextProviders`), `collectSmartDomContext()`, and the pure mapper
+  `smartDomResultToEnriched()`, adding Shadow-DOM piercing, form grouping, and page
+  landmarks/state over the default `collectEnrichedPageContext` reader. Both the collector
+  and provider accept a `root` element to scope extraction to a subtree (parity with the
+  default reader's `root`). The backing
+  library (`@mcp-b/smart-dom-reader`, MIT) is vendored and bundled only into this opt-in
+  entry, so the main bundle and IIFE/CDN build are unaffected. Also re-exports the
+  `AgentWidgetContextProvider` / `AgentWidgetContextProviderContext` types from the public API.
+- e9103cb: Add WebMCP tools for the theme editor. `@runtypelabs/persona/theme-editor` now exports `createThemeEditorTools(state)`, a transport-agnostic factory that returns intent-level WebMCP tools (set brand colors, assign color roles, set typography/roundness/color-scheme, apply presets, configure the widget, check WCAG contrast, plus a low-level field escape hatch and session/export controls). Wiring the tools to a `ThemeEditorState` lets a browser agent configure a theme — including a Persona widget styling itself.
+- 87c18d8: WebMCP: complete the local-tool `/resume` round-trip in client-token mode. `resumeFlow` now posts to `POST /v1/client/resume` (the session-authenticated route from runtypelabs/core#3889) with the active `sessionId` in the body and no Bearer key when the widget runs in client-token mode; dispatch/proxy mode is unchanged (`${apiUrl}/resume`). Previously a client-token (browser) page could register and dispatch WebMCP tools but had no endpoint to post tool outputs back, so paused local-tool turns hung unless routed through a proxy.
+- c4cd7a6: Add WebMCP consumption. Persona now snapshots page-registered tools per turn via `@mcp-b/webmcp-polyfill`, ships them on `dispatch.clientTools[]`, and executes returned `webmcp:*` tool calls with confirm-by-default gating.
+
+  Opt in via `config.webmcp = { enabled: true }`. When enabled, the widget lazily installs the polyfill, reads `document.modelContext.getTools()` before each dispatch, and routes any `webmcp:*` tool call returned by the agent through the bridge — confirming with the user, executing the page tool via `document.modelContext.executeTool()` with a 30s timeout, normalizing the return into MCP `{ content: [...] }` shape, and posting to `/v1/dispatch/resume`. Wire a custom confirm UI through `config.webmcp.onConfirm`; the default falls back to `window.confirm()`.
+
+  The polyfill is loaded only when WebMCP is enabled, so widgets that don't opt in never install `document.modelContext`. Consumption also works on browsers that ship WebMCP natively.
+
+  When a single turn produces multiple `webmcp:*` tool awaits, each resolve now uses its own per-call `AbortController` (tracked for teardown by `cancel()`/`clearMessages()`/`hydrateMessages()`/`sendMessage()`), so resolving one local tool no longer aborts the in-flight resume stream that delivers the next — fixing a hang on chained/parallel local tool calls.
+
+- 87c18d8: WebMCP tool-call confirmations now render through Persona's native in-panel approval bubble by default (the same chrome used for server-driven tool approvals), instead of the blunt `window.confirm` fallback. A new `webmcp.autoApprove(info)` predicate lets you skip the gate for specific tools (e.g. auto-allow a read-only catalog search while still confirming mutating calls). Supplying `webmcp.onConfirm` continues to fully override the UI.
+- 87c18d8: WebMCP: support parallel local-tool calls. When one model turn makes several `step_await(local_tool_required)` calls for a single paused execution — including two PARALLEL calls to the **same** tool (e.g. "add SHOE-001 and SHOE-007 to my cart") — the widget now executes each page tool concurrently (each gated by its own native approval bubble) and posts a **single** `/resume` whose `toolOutputs` are keyed by the per-call `toolCallId` (runtypelabs/core#3878) instead of one resume per tool keyed by tool name. Same-tool parallel calls previously collided on the name key and raced on `/resume`, hanging the turn after the first tool. Single-call and distinct-tool turns are unchanged (name-keying remains the fallback for servers that don't emit `toolCallId`).
+
+### Patch Changes
+
+- f58cba9: Fix reasoning ("thinking") text freezing mid-stream once the accordion is opened. On the sequenced streaming path the client collapses `reasoning.chunks` to a single accumulated string, so `chunks.length` stays 1 and the content-blind reasoning fingerprint never changed — leaving the render cache stuck on a stale bubble. The fingerprint now also hashes the last reasoning chunk's length and trailing 32 characters (mirroring the tool-call treatment), so the cache invalidates on every reasoning delta and the bubble streams live.
+- 17314db: Fix theme editor `set_brand_colors` (and contrast checks) corrupting palettes when given `rgb()`/`rgba()` color input. `hexToHsl` and `wcagContrastRatio` now parse rgb strings instead of producing `#NaNNaNNaN` shades. Adds an `rgbToHex` color utility.
+- 52e3047: Refresh the client session before resuming a paused flow in client-token mode. A WebMCP local-tool approval can sit awaiting user input long enough for the session to expire; `resumeFlow` now awaits `initSession()` (which returns the live session while valid, else re-inits) and threads the refreshed `sessionId` to `POST /v1/client/resume`, instead of trusting a possibly-stale cached session.
+
 ## 3.21.3
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # @runtypelabs/persona-proxy
 
+## 3.22.0
+
+### Minor Changes
+
+- eb7f3e1: Add `PAGE_CONTEXT_FLOW`, a page-aware shopping flow that injects live page content via
+  `{{pageContext}}`. It returns a small JSON envelope: a markdown `text` field for chat
+  replies, plus an optional `add_to_cart` action carrying a product handle so the assistant
+  can drive the host. Used by the smart-dom-reader example to demonstrate shadow-DOM-aware
+  page context reaching the model — and the assistant adding shadow-DOM products to the cart.
+
+### Patch Changes
+
+- 6569c56: Forward WebMCP `clientTools[]` to the upstream API in flow-dispatch mode. The proxy rebuilds the flow-dispatch payload from scratch, which previously dropped the page-discovered tools the widget snapshots from `document.modelContext` — so a WebMCP-enabled flow behind the proxy never received them and the agent could not call page tools. The flow path now copies `clientTools` through (agent mode already forwarded the payload as-is), pairing with the existing `/resume` endpoint to complete the local-tool round-trip.
+
 ## 3.19.0
 
 ### Minor Changes
