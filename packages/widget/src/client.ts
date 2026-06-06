@@ -885,6 +885,18 @@ export class AgentWidgetClient {
       ? this.getClientApiUrl('resume')
       : `${this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE}/resume`;
 
+    // The client-token resume route authenticates the session, not a Bearer
+    // key. A WebMCP approval can sit awaiting user input for a long time, so by
+    // the time we resume the original session may have expired. Re-validate (and
+    // silently re-init if needed) via initSession() — which returns the live
+    // session when `new Date() < expiresAt`, else mints a fresh one — instead of
+    // trusting the possibly-stale `this.clientSession`. (core#3889; BugBot
+    // PR #214 r3367875360.)
+    let resumeSessionId: string | undefined;
+    if (isClientToken) {
+      resumeSessionId = (await this.initSession()).sessionId;
+    }
+
     let headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...this.headers
@@ -898,10 +910,9 @@ export class AgentWidgetClient {
       toolOutputs,
       streamResponse: options?.streamResponse ?? true,
     };
-    // The client-token resume route authenticates the session, not a Bearer
-    // key — thread the active sessionId through like `/v1/client/chat` does.
-    if (isClientToken && this.clientSession?.sessionId) {
-      body.sessionId = this.clientSession.sessionId;
+    // Thread the (refreshed) sessionId through like `/v1/client/chat` does.
+    if (resumeSessionId) {
+      body.sessionId = resumeSessionId;
     }
 
     return fetch(url, {
