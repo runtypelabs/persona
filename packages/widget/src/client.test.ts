@@ -3129,9 +3129,45 @@ describe('AgentWidgetClient.resumeFlow', () => {
       clientToken: 'ct_live_demo',
       apiUrl: 'https://api.runtype-staging.com/v1/dispatch',
     });
+    // A live session so initSession() short-circuits instead of fetching /init.
+    (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
+      sessionId: 'cs_123',
+      expiresAt: new Date(Date.now() + 60_000),
+    };
     await client.resumeFlow('exec_abc', {});
 
     expect(capturedUrl).toBe('https://api.runtype-staging.com/v1/client/resume');
+  });
+
+  it('refreshes the session via initSession() before resuming when stale (BugBot r3367875360)', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(init.body as string);
+      return { ok: true, body: null };
+    });
+
+    const client = new AgentWidgetClient({
+      clientToken: 'ct_live_demo',
+      apiUrl: 'https://api.runtype-staging.com',
+    });
+    // A stale session that has already expired — a long WebMCP approval wait can
+    // outlive it, so resumeFlow must not trust this.clientSession directly.
+    (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
+      sessionId: 'cs_stale',
+      expiresAt: new Date(Date.now() - 60_000),
+    };
+    // initSession() is the single source of truth for a live session (it returns
+    // the existing one while unexpired, else re-inits). Assert resumeFlow awaits
+    // it and sends the refreshed sessionId, not the stale one.
+    const initSpy = vi
+      .spyOn(client, 'initSession')
+      .mockResolvedValue({ sessionId: 'cs_fresh', expiresAt: new Date(Date.now() + 60_000) } as never);
+
+    await client.resumeFlow('exec_xyz', { toolu_A: { ok: true } });
+
+    expect(initSpy).toHaveBeenCalledTimes(1);
+    expect(capturedBody!.sessionId).toBe('cs_fresh');
+    expect(capturedBody!.sessionId).not.toBe('cs_stale');
   });
 });
 
