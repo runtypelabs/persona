@@ -132,6 +132,9 @@ importers:
 
   packages/widget:
     dependencies:
+      '@mcp-b/webmcp-polyfill':
+        specifier: ^3.0.0
+        version: 3.0.0
       dompurify:
         specifier: ^3.3.3
         version: 3.3.3

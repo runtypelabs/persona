@@ -1,0 +1,429 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type {
+  AgentWidgetWebMcpConfig,
+  WebMcpConfirmHandler,
+  WebMcpToolResult,
+} from "./types";
+
+// ---------------------------------------------------------------------------
+// Mock the strict @mcp-b/webmcp-polyfill. The bridge dynamically imports it and
+// calls `initializeWebMCPPolyfill()` (idempotent install of document.modelContext).
+// We stub the install as a no-op and provide `document.modelContext` ourselves,
+// modeling the strict producer-preview surface the bridge consumes:
+//   - getTools(): async; inputSchema is a JSON string; NO annotations
+//   - executeTool(info, argsJson, { signal }): async; validates+runs execute(),
+//     returns JSON.stringify(rawResult) or null; honors the abort signal.
+// ---------------------------------------------------------------------------
+
+const polyfillMock = { initThrows: false };
+
+vi.mock("@mcp-b/webmcp-polyfill", () => ({
+  initializeWebMCPPolyfill: vi.fn(() => {
+    if (polyfillMock.initThrows) throw new Error("init boom");
+  }),
+}));
+
+// Import AFTER vi.mock so the bridge's dynamic import resolves to the mock.
+import {
+  WebMcpBridge,
+  isWebMcpToolName,
+  stripWebMcpPrefix,
+} from "./webmcp-bridge";
+
+type MockClient = { requestUserInteraction: (cb: () => unknown) => Promise<unknown> };
+
+type MockTool = {
+  name: string;
+  description?: string;
+  inputSchema?: object;
+  execute: (args: Record<string, unknown>, client: MockClient) => unknown;
+};
+
+const registry: { tools: MockTool[] } = { tools: [] };
+
+/** A fake `document.modelContext` exposing the strict consumer surface. */
+const makeModelContext = () => ({
+  async getTools() {
+    return registry.tools.map((t) => ({
+      name: t.name,
+      description: t.description ?? `mock ${t.name}`,
+      inputSchema: JSON.stringify(t.inputSchema ?? { type: "object" }),
+    }));
+  },
+  async executeTool(
+    info: { name: string },
+    inputArgsJson: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<string | null> {
+    if (options?.signal?.aborted) throw new Error("Tool execution was cancelled");
+    const tool = registry.tools.find((t) => t.name === info.name);
+    if (!tool) throw new Error(`Tool not found: ${info.name}`);
+    const args = inputArgsJson ? JSON.parse(inputArgsJson) : {};
+    // The polyfill owns this client; `requestUserInteraction` is a pass-through.
+    const client: MockClient = {
+      requestUserInteraction: async (cb) => cb(),
+    };
+    const execPromise = Promise.resolve(tool.execute(args, client));
+    const raced = options?.signal
+      ? Promise.race<unknown>([
+          execPromise,
+          new Promise<never>((_, reject) => {
+            const sig = options.signal!;
+            if (sig.aborted) reject(new Error("Tool execution was cancelled"));
+            else
+              sig.addEventListener(
+                "abort",
+                () => reject(new Error("Tool execution was cancelled")),
+                { once: true },
+              );
+          }),
+        ])
+      : execPromise;
+    const raw = await raced;
+    return raw === undefined ? null : JSON.stringify(raw);
+  },
+});
+
+const fakeTool = (
+  overrides: Partial<MockTool> & { name: string },
+): MockTool => ({
+  description: `mock ${overrides.name}`,
+  execute: () => "ok",
+  ...overrides,
+});
+
+const allowAll: WebMcpConfirmHandler = vi.fn(async () => true);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  polyfillMock.initThrows = false;
+  registry.tools = [];
+  // location is read by snapshotForDispatch; document.modelContext is the
+  // consumer surface. Both are absent in the Node test environment.
+  vi.stubGlobal("location", { origin: "https://example.test" });
+  vi.stubGlobal("document", { modelContext: makeModelContext() });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("stripWebMcpPrefix", () => {
+  it("strips a leading 'webmcp:' prefix", () => {
+    expect(stripWebMcpPrefix("webmcp:add_to_cart")).toBe("add_to_cart");
+  });
+  it("leaves names without the prefix untouched", () => {
+    expect(stripWebMcpPrefix("add_to_cart")).toBe("add_to_cart");
+  });
+});
+
+describe("isWebMcpToolName", () => {
+  it("returns true for prefixed names", () => {
+    expect(isWebMcpToolName("webmcp:search")).toBe(true);
+  });
+  it("returns false otherwise", () => {
+    expect(isWebMcpToolName("builtin:search")).toBe(false);
+    expect(isWebMcpToolName("search")).toBe(false);
+  });
+});
+
+describe("WebMcpBridge.snapshotForDispatch", () => {
+  it("returns empty when config.webmcp.enabled is not set", async () => {
+    const bridge = new WebMcpBridge({} as AgentWidgetWebMcpConfig);
+    expect(bridge.isOperational()).toBe(false);
+    expect(await bridge.snapshotForDispatch()).toEqual([]);
+  });
+
+  it("returns empty when document.modelContext is absent (no polyfill, no native)", async () => {
+    vi.stubGlobal("document", {});
+    const bridge = new WebMcpBridge({ enabled: true });
+    expect(await bridge.snapshotForDispatch()).toEqual([]);
+    expect(bridge.isOperational()).toBe(false);
+  });
+
+  it("returns empty when initializeWebMCPPolyfill() throws", async () => {
+    polyfillMock.initThrows = true;
+    const bridge = new WebMcpBridge({ enabled: true });
+    expect(await bridge.snapshotForDispatch()).toEqual([]);
+    expect(bridge.isOperational()).toBe(false);
+  });
+
+  it("ships only the JSON-serializable surface (name, description, schema, origin)", async () => {
+    registry.tools = [
+      fakeTool({
+        name: "search",
+        description: "search the shop",
+        inputSchema: { type: "object", properties: { q: { type: "string" } } },
+      }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true });
+    const snap = await bridge.snapshotForDispatch();
+    expect(snap).toHaveLength(1);
+    const tool = snap[0]!;
+    expect(tool.name).toBe("search");
+    expect(tool.description).toBe("search the shop");
+    expect(tool.parametersSchema).toEqual({
+      type: "object",
+      properties: { q: { type: "string" } },
+    });
+    expect(tool.origin).toBe("webmcp");
+    expect(tool.pageOrigin).toBe("https://example.test");
+    expect((tool as unknown as { execute?: unknown }).execute).toBeUndefined();
+    // Now that the registry was read, the bridge reports operational.
+    expect(bridge.isOperational()).toBe(true);
+  });
+
+  it("applies client-side allowlist glob (`search_*`)", async () => {
+    registry.tools = [
+      fakeTool({ name: "search_products" }),
+      fakeTool({ name: "add_to_cart" }),
+    ];
+    const bridge = new WebMcpBridge({
+      enabled: true,
+      allowlist: ["search_*"],
+    });
+    const snap = await bridge.snapshotForDispatch();
+    expect(snap.map((t) => t.name)).toEqual(["search_products"]);
+  });
+
+  it("respects '*' as match-all", async () => {
+    registry.tools = [fakeTool({ name: "foo" }), fakeTool({ name: "bar" })];
+    const bridge = new WebMcpBridge({ enabled: true, allowlist: ["*"] });
+    expect((await bridge.snapshotForDispatch()).map((t) => t.name)).toEqual([
+      "foo",
+      "bar",
+    ]);
+  });
+});
+
+describe("WebMcpBridge.executeToolCall", () => {
+  it("returns isError when WebMCP is not enabled", async () => {
+    const bridge = new WebMcpBridge({} as AgentWidgetWebMcpConfig);
+    const r = await bridge.executeToolCall("webmcp:search", {});
+    expect(r.isError).toBe(true);
+    expect(r.content[0]?.type).toBe("text");
+  });
+
+  it("returns isError when document.modelContext is absent", async () => {
+    vi.stubGlobal("document", {});
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:search", {});
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/not operational/i);
+    expect((r.content[0] as { text: string }).text).toMatch(/not available/i);
+  });
+
+  it("warns once and degrades cleanly when document.modelContext is present but incompatible", async () => {
+    // A different / older WebMCP polyfill (or divergent native draft) squats
+    // document.modelContext without the strict getTools()/executeTool() surface.
+    // @mcp-b's initializeWebMCPPolyfill correctly declines to overwrite it, so
+    // Persona must (a) report non-operational, (b) surface an actionable error
+    // distinct from "not available", and (c) warn exactly once.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal("document", {
+      modelContext: { registerTool: () => undefined }, // no getTools/executeTool
+    });
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+
+    expect(await bridge.snapshotForDispatch()).toEqual([]);
+    expect(bridge.isOperational()).toBe(false);
+
+    const r = await bridge.executeToolCall("webmcp:search", {});
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/present but/i);
+
+    // Warned about the incompatible context, exactly once despite multiple hits.
+    const incompatWarnings = warnSpy.mock.calls.filter(([msg]) =>
+      String(msg).includes("does not expose getTools()/executeTool()"),
+    );
+    expect(incompatWarnings).toHaveLength(1);
+    warnSpy.mockRestore();
+  });
+
+  it("strips the webmcp: prefix before registry lookup and forwards args", async () => {
+    const execute = vi.fn(() => ({ matches: 3 }));
+    registry.tools = [fakeTool({ name: "search", execute })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:search", { q: "shoes" });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith({ q: "shoes" }, expect.anything());
+    expect(r.isError).toBeUndefined();
+  });
+
+  it("returns isError when the tool is not in the registry (unmount race)", async () => {
+    registry.tools = [fakeTool({ name: "search" })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:add_to_cart", {});
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/not registered/);
+  });
+
+  it("normalizes a string return into a single text content block", async () => {
+    registry.tools = [fakeTool({ name: "ping", execute: () => "pong" })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:ping", {});
+    expect(r).toEqual({ content: [{ type: "text", text: "pong" }] });
+  });
+
+  it("normalizes an object return by JSON-stringifying it", async () => {
+    registry.tools = [
+      fakeTool({ name: "lookup", execute: () => ({ found: true, n: 7 }) }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:lookup", {});
+    expect(r.content[0]).toEqual({
+      type: "text",
+      text: JSON.stringify({ found: true, n: 7 }),
+    });
+  });
+
+  it("passes already-MCP-shaped returns through unchanged", async () => {
+    const shaped: WebMcpToolResult = {
+      content: [
+        { type: "text", text: "hi" },
+        { type: "image", url: "x" },
+      ],
+    };
+    registry.tools = [fakeTool({ name: "render", execute: () => shaped })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:render", {});
+    expect(r).toEqual(shaped);
+  });
+
+  it("normalizes an undefined return into an empty text block", async () => {
+    registry.tools = [fakeTool({ name: "act", execute: () => undefined })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:act", {});
+    expect(r).toEqual({ content: [{ type: "text", text: "" }] });
+  });
+
+  it("runs a tool's client.requestUserInteraction callback without a second confirm", async () => {
+    const confirmSpy = vi.fn(async () => true);
+    registry.tools = [
+      fakeTool({
+        name: "sensitive",
+        execute: async (_args, client) => {
+          const ack = await client.requestUserInteraction(async () => "ok!");
+          return { ack };
+        },
+      }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: confirmSpy });
+    const r = await bridge.executeToolCall("webmcp:sensitive", {});
+    // Only the single outer gate fires — the polyfill owns the in-tool callback.
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(r.isError).toBeUndefined();
+    expect(r.content[0]).toEqual({
+      type: "text",
+      text: JSON.stringify({ ack: "ok!" }),
+    });
+  });
+
+  it("returns isError when the user declines the confirm gate", async () => {
+    const decline: WebMcpConfirmHandler = vi.fn(async () => false);
+    const executeSpy = vi.fn(() => "should not run");
+    registry.tools = [fakeTool({ name: "checkout", execute: executeSpy })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: decline });
+    const r = await bridge.executeToolCall("webmcp:checkout", { sku: "x" });
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/declined/);
+    expect(decline).toHaveBeenCalledTimes(1);
+    expect(executeSpy).not.toHaveBeenCalled();
+  });
+
+  it("translates a thrown execute() into an isError result (no rethrow)", async () => {
+    registry.tools = [
+      fakeTool({
+        name: "boom",
+        execute: () => {
+          throw new Error("network down");
+        },
+      }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:boom", {});
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toBe("network down");
+  });
+
+  it("times out an execute() that exceeds the 30s budget", async () => {
+    vi.useFakeTimers();
+    try {
+      registry.tools = [
+        fakeTool({ name: "slow", execute: () => new Promise(() => undefined) }),
+      ];
+      const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+      const pending = bridge.executeToolCall("webmcp:slow", {});
+      await vi.advanceTimersByTimeAsync(30_000);
+      const r = await pending;
+      expect(r.isError).toBe(true);
+      expect((r.content[0] as { text: string }).text).toMatch(/timed out/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("bails before rendering the confirm bubble when signal is already aborted", async () => {
+    // A late approval after cancel() must not fire a host-page side effect. The
+    // bridge checks the signal BEFORE rendering the confirm.
+    const confirmSpy = vi.fn(async () => true);
+    const executeSpy = vi.fn(() => "should not run");
+    registry.tools = [fakeTool({ name: "checkout", execute: executeSpy })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: confirmSpy });
+    const controller = new AbortController();
+    controller.abort();
+    const r = await bridge.executeToolCall(
+      "webmcp:checkout",
+      {},
+      controller.signal,
+    );
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/abort/i);
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(executeSpy).not.toHaveBeenCalled();
+  });
+
+  it("aborts a stuck execute() when the signal fires mid-flight", async () => {
+    let resolveStuck: ((v: string) => void) | undefined;
+    const stuck = new Promise<string>((resolve) => {
+      resolveStuck = resolve;
+    });
+    const executeSpy = vi.fn(() => stuck);
+    registry.tools = [fakeTool({ name: "slow", execute: executeSpy })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const controller = new AbortController();
+    const pending = bridge.executeToolCall(
+      "webmcp:slow",
+      {},
+      controller.signal,
+    );
+    // Wait until execute() has actually started, then cancel.
+    await vi.waitFor(() => expect(executeSpy).toHaveBeenCalledTimes(1));
+    controller.abort();
+    const r = await pending;
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/abort/i);
+    // Late resolve from the page side — must not poison anything.
+    resolveStuck?.("late");
+  });
+
+  it("rejects a webmcp call for a tool excluded by the client allowlist", async () => {
+    // snapshotForDispatch filters by allowlist for the wire surface, but
+    // executeToolCall must also re-check it — defense-in-depth alongside the
+    // server-side check.
+    const executeSpy = vi.fn(() => "should not run");
+    registry.tools = [
+      fakeTool({ name: "secret_admin_action", execute: executeSpy }),
+    ];
+    const bridge = new WebMcpBridge({
+      enabled: true,
+      onConfirm: allowAll,
+      allowlist: ["search_*"],
+    });
+    const r = await bridge.executeToolCall("webmcp:secret_admin_action", {});
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/allowlist/i);
+    expect(executeSpy).not.toHaveBeenCalled();
+  });
+});

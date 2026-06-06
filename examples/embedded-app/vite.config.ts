@@ -347,6 +347,8 @@ export default defineConfig({
         'persistent-composer': path.resolve(__dirname, 'persistent-composer.html'),
         // Agent demo
         'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
+        // WebMCP — page-discovered tools
+        'webmcp-demo': path.resolve(__dirname, 'webmcp-demo.html'),
         // Bakery demo pages
         'bakery': path.resolve(__dirname, 'bakery.html'),
         'bakery-story': path.resolve(__dirname, 'bakery-story.html'),

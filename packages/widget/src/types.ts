@@ -99,6 +99,13 @@ export type AgentWidgetRequestPayload = {
   metadata?: Record<string, unknown>;
   /** Per-turn template variables for /v1/client/chat (merged as root-level {{var}} in Runtype). */
   inputs?: Record<string, unknown>;
+  /**
+   * Per-turn page-discovered tools (WebMCP). Sent to Runtype's dispatch so the
+   * agent can call them as `webmcp:<name>`. The widget snapshots
+   * `document.modelContext.__getRegisteredTools()` each turn and ships only
+   * the JSON-serializable surface (no `execute`).
+   */
+  clientTools?: ClientToolDefinition[];
 };
 
 // ============================================================================
@@ -194,6 +201,110 @@ export type AgentWidgetAgentRequestPayload = {
   options: AgentRequestOptions;
   context?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  /**
+   * Per-turn page-discovered tools (WebMCP) — same shape as
+   * `AgentWidgetRequestPayload.clientTools`.
+   */
+  clientTools?: ClientToolDefinition[];
+};
+
+// ============================================================================
+// WebMCP Types (page-discovered tools shipped per dispatch)
+// ============================================================================
+
+/**
+ * Wire shape for a single client-discovered tool sent on `dispatch.clientTools[]`.
+ *
+ * Mirrors the SDK's `ClientToolDefinition` in `@runtypelabs/sdk`. Only the
+ * JSON-serializable surface of a WebMCP tool — the `execute` function stays
+ * client-side; the server merges these into the agent's tool catalog under
+ * the `webmcp:` namespace.
+ */
+export type ClientToolDefinition = {
+  /** Bare tool name; the server prepends `webmcp:` on the wire. */
+  name: string;
+  description: string;
+  /** JSON Schema (per WebMCP spec) — passed through as-is. */
+  parametersSchema?: object;
+  /** Set to `'webmcp'` for tools discovered via the polyfill. */
+  origin?: 'webmcp' | 'local';
+  /** Origin of the page that registered the tool — for server-side audit. */
+  pageOrigin?: string;
+  /**
+   * WebMCP `Tool.annotations` (spec). Not used for gating server-side; the
+   * widget reads these client-side. Forwarded so traces/dashboards can show
+   * `readOnlyHint` / `untrustedContentHint` on tool-call records.
+   */
+  annotations?: {
+    readOnlyHint?: boolean;
+    untrustedContentHint?: boolean;
+  };
+};
+
+/**
+ * Information passed to the confirm-bubble handler before a `webmcp:*` tool
+ * call executes. Every WebMCP tool routes through this single gate.
+ */
+export type WebMcpConfirmInfo = {
+  /** Bare tool name (no `webmcp:` prefix). */
+  toolName: string;
+  args: unknown;
+  description?: string;
+  annotations?: {
+    readOnlyHint?: boolean;
+    untrustedContentHint?: boolean;
+  };
+  /**
+   * Why the confirm was requested. Currently always `'gate'` — the default
+   * confirm-by-default gate that fires before every `webmcp:*` call. (The
+   * `@mcp-b/webmcp-polyfill` owns the spec's `requestUserInteraction` callback
+   * internally, so Persona no longer surfaces a nested in-tool confirm.)
+   */
+  reason: 'gate';
+};
+
+/**
+ * Resolves to `true` if the user approves the tool call; `false` to decline.
+ */
+export type WebMcpConfirmHandler = (info: WebMcpConfirmInfo) => Promise<boolean>;
+
+/**
+ * Persona's normalized tool-result shape sent back to the agent on `/resume`.
+ * Mirrors the MCP `CallToolResult` content shape; arbitrary `execute()` return
+ * values are wrapped as a single text block at the bridge boundary.
+ */
+export type WebMcpToolResult = {
+  content: Array<
+    | { type: 'text'; text: string }
+    | { type: string;[key: string]: unknown }
+  >;
+  isError?: boolean;
+  /** Pass-through of the tool's `annotations.untrustedContentHint`. */
+  annotations?: {
+    untrustedContentHint?: boolean;
+  };
+};
+
+/**
+ * Widget-level WebMCP configuration. Set `enabled: true` to opt in. The
+ * surface's server-side `webmcp` policy is the source of truth for which
+ * tools are accepted — these client-side options are convenience filters.
+ */
+export type AgentWidgetWebMcpConfig = {
+  /** Master switch. Default: `false` (widget never installs the polyfill). */
+  enabled?: boolean;
+  /**
+   * Glob-ish name patterns to include client-side. `'*'` matches any chars
+   * except `:`. Patterns are matched against the bare tool name (no `webmcp:`
+   * prefix). If unset, all registered tools are included.
+   */
+  allowlist?: string[];
+  /**
+   * Confirm-bubble handler. Persona's default UI implementation lives in
+   * `ui.ts` and reuses the approval-bubble chrome — consumers can override
+   * with a custom confirmer (e.g., a route-level modal).
+   */
+  onConfirm?: WebMcpConfirmHandler;
 };
 
 /**
@@ -2083,6 +2194,8 @@ export type ClientChatRequest = {
   /** Per-turn inputs for Runtype prompt templates (e.g. {{page_url}}). */
   inputs?: Record<string, unknown>;
   context?: Record<string, unknown>;
+  /** WebMCP page-discovered tools — same shape as `dispatch.clientTools[]`. */
+  clientTools?: ClientToolDefinition[];
 };
 
 /**
@@ -3147,6 +3260,26 @@ export type AgentWidgetConfig = {
    * ```
    */
   approval?: AgentWidgetApprovalConfig | false;
+  /**
+   * WebMCP — consume page-registered tools (`document.modelContext.registerTool`).
+   * When `enabled`, the widget installs `@mcp-b/webmcp-polyfill`, snapshots the
+   * registry on every dispatch, ships it as `clientTools[]`, and executes
+   * returned `webmcp:*` tool calls with confirm-by-default gating.
+   *
+   * Server-side policy on the chat surface is the source of truth — these
+   * fields layer on top.
+   *
+   * @example
+   * ```typescript
+   * config: {
+   *   webmcp: {
+   *     enabled: true,
+   *     allowlist: ['search_*', 'list_*'],
+   *   }
+   * }
+   * ```
+   */
+  webmcp?: AgentWidgetWebMcpConfig;
   postprocessMessage?: (context: {
     text: string;
     message: AgentWidgetMessage;

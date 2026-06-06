@@ -20,8 +20,10 @@ import {
   ClientFeedbackRequest,
   ClientFeedbackType,
   PersonaArtifactKind,
-  ContentPart
+  ContentPart,
+  WebMcpConfirmHandler
 } from "./types";
+import { WebMcpBridge } from "./webmcp-bridge";
 import {
   extractTextFromJson,
   createPlainTextParser,
@@ -169,6 +171,10 @@ export class AgentWidgetClient {
   private clientSession: ClientSession | null = null;
   private sessionInitPromise: Promise<ClientSession> | null = null;
 
+  // WebMCP — page-discovered tool consumption (see ./webmcp-bridge).
+  // Constructed lazily: null when `config.webmcp?.enabled !== true`.
+  private readonly webMcpBridge: WebMcpBridge | null;
+
   constructor(private config: AgentWidgetConfig = {}) {
     this.apiUrl = config.apiUrl ?? DEFAULT_ENDPOINT;
     this.headers = {
@@ -183,6 +189,8 @@ export class AgentWidgetClient {
     this.customFetch = config.customFetch;
     this.parseSSEEvent = config.parseSSEEvent;
     this.getHeaders = config.getHeaders;
+    this.webMcpBridge =
+      config.webmcp?.enabled === true ? new WebMcpBridge(config.webmcp) : null;
   }
 
   /**
@@ -190,6 +198,44 @@ export class AgentWidgetClient {
    */
   public setSSEEventCallback(callback: SSEEventCallback): void {
     this.onSSEEvent = callback;
+  }
+
+  /**
+   * WebMCP: wire (or replace) the confirm-bubble handler. Called from
+   * `ui.ts` once the widget panel is built and the approval-bubble
+   * chrome is ready to render.
+   */
+  public setWebMcpConfirmHandler(handler: WebMcpConfirmHandler | null): void {
+    this.webMcpBridge?.setConfirmHandler(handler);
+  }
+
+  /**
+   * WebMCP: `true` when the bridge installed the polyfill and can both
+   * snapshot the page registry and execute returned `webmcp:*` tool calls.
+   * `false` for any guard miss (no `document.modelContext`, polyfill not yet
+   * installed, or `config.webmcp.enabled` not set).
+   */
+  public isWebMcpOperational(): boolean {
+    return this.webMcpBridge?.isOperational() === true;
+  }
+
+  /**
+   * WebMCP: execute a returned `webmcp:<name>` tool call against the page's
+   * registry and return the normalized MCP-shaped result for `/resume`. The
+   * bridge handles confirm-bubble gating, the 30s timeout, error
+   * normalization, and `signal`-driven abort — callers never see throws.
+   *
+   * Returns `null` when WebMCP is not enabled on this client (signal to the
+   * session that it should fall back to the legacy local-tool resume path,
+   * if any).
+   */
+  public executeWebMcpToolCall(
+    wireToolName: string,
+    args: unknown,
+    signal?: AbortSignal,
+  ): Promise<import("./types").WebMcpToolResult> | null {
+    if (!this.webMcpBridge) return null;
+    return this.webMcpBridge.executeToolCall(wireToolName, args, signal);
   }
 
   /**
@@ -540,6 +586,9 @@ export class AgentWidgetClient {
         ...(sanitizedMetadata && Object.keys(sanitizedMetadata).length > 0 && { metadata: sanitizedMetadata }),
         ...(basePayload.inputs && Object.keys(basePayload.inputs).length > 0 && { inputs: basePayload.inputs }),
         ...(basePayload.context && { context: basePayload.context }),
+        // Forward per-turn WebMCP tools snapshotted by buildPayload(). The
+        // client-token chat endpoint accepts the same shape as /v1/dispatch.
+        ...(basePayload.clientTools && basePayload.clientTools.length > 0 && { clientTools: basePayload.clientTools }),
       };
 
       if (this.debug) {
@@ -822,7 +871,7 @@ export class AgentWidgetClient {
   public async resumeFlow(
     executionId: string,
     toolOutputs: Record<string, unknown>,
-    options?: { streamResponse?: boolean }
+    options?: { streamResponse?: boolean; signal?: AbortSignal }
   ): Promise<Response> {
     const trimmed = this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE;
     // Runtype mounts POST /resume as a child route of /v1/dispatch, so the
@@ -846,6 +895,7 @@ export class AgentWidgetClient {
         toolOutputs,
         streamResponse: options?.streamResponse ?? true,
       }),
+      signal: options?.signal,
     });
   }
 
@@ -882,6 +932,13 @@ export class AgentWidgetClient {
         ...this.config.agentOptions
       }
     };
+
+    // WebMCP: snapshot the page tool registry per turn and ship as
+    // `clientTools[]`. The server merges these under the `webmcp:` namespace.
+    const webMcpSnapshot = await this.webMcpBridge?.snapshotForDispatch();
+    if (webMcpSnapshot && webMcpSnapshot.length > 0) {
+      payload.clientTools = webMcpSnapshot;
+    }
 
     // Add context from providers
     if (this.contextProviders.length) {
@@ -937,6 +994,12 @@ export class AgentWidgetClient {
       ...(this.config.flowId && { flowId: this.config.flowId })
     };
 
+    // WebMCP: same per-turn snapshot as buildAgentPayload (flow-dispatch path).
+    const webMcpSnapshot = await this.webMcpBridge?.snapshotForDispatch();
+    if (webMcpSnapshot && webMcpSnapshot.length > 0) {
+      payload.clientTools = webMcpSnapshot;
+    }
+
     if (this.contextProviders.length) {
       const contextAggregate: Record<string, unknown> = {};
       await Promise.all(
@@ -970,7 +1033,22 @@ export class AgentWidgetClient {
           config: this.config
         });
         if (result && typeof result === "object") {
-          return result as AgentWidgetRequestPayload;
+          const next = result as AgentWidgetRequestPayload;
+          // Preserve `clientTools` if the middleware returned a fresh
+          // payload object without it. Naive middlewares often rebuild
+          // the payload by listing the fields they care about and
+          // dropping `clientTools` accidentally; the WebMCP wire surface
+          // is invisible to them. The integrator can still set
+          // `clientTools: []` or `clientTools: undefined` explicitly to
+          // strip them on purpose — we only fall back when the field is
+          // entirely absent from the returned object.
+          if (
+            payload.clientTools !== undefined &&
+            !("clientTools" in next)
+          ) {
+            next.clientTools = payload.clientTools;
+          }
+          return next;
         }
       } catch (error) {
         if (typeof console !== "undefined") {
