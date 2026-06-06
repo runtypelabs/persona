@@ -121,18 +121,32 @@ const STOPWORDS = new Set([
   "i", "want", "need", "show", "find", "please", "buy", "get",
 ]);
 
+// Query tokens that describe price intent rather than the product itself —
+// dropped before matching so "waterproof trail shoe under $170" still matches on
+// "waterproof/trail/shoe" (the agent reasons over the returned prices itself).
+const PRICE_WORDS = new Set([
+  "under", "below", "over", "above", "cheap", "cheapest", "budget", "than",
+  "less", "more", "around", "about", "max", "min", "price", "priced",
+]);
+
 /**
  * Filter the catalog by a free-text query. A product matches when every
  * meaningful query token appears somewhere in its searchable text
- * (title/brand/category/color). Results are sorted cheapest-first so prompts
- * like "the cheapest blue running shoe" have a deterministic top hit. An empty
- * query returns the whole catalog (cheapest-first).
+ * (title/brand/category/color/description). Results are sorted cheapest-first so
+ * prompts like "the cheapest blue running shoe" have a deterministic top hit. An
+ * empty query returns the whole catalog (cheapest-first).
  */
 export function searchCatalog(query: string): CatalogProduct[] {
   const tokens = query
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
+    .filter(
+      (t) =>
+        t.length >= 2 &&
+        !STOPWORDS.has(t) &&
+        !PRICE_WORDS.has(t) &&
+        !/^\d+$/.test(t), // bare numbers (e.g. a "$170" budget) aren't catalog text
+    );
 
   const byPrice = (a: CatalogProduct, b: CatalogProduct): number =>
     a.price - b.price;
@@ -143,7 +157,7 @@ export function searchCatalog(query: string): CatalogProduct[] {
 
   return CATALOG.filter((p) => {
     const haystack =
-      `${p.title} ${p.brand} ${p.category} ${p.color}`.toLowerCase();
+      `${p.title} ${p.brand} ${p.category} ${p.color} ${p.description}`.toLowerCase();
     return tokens.every((t) => haystack.includes(t));
   }).sort(byPrice);
 }

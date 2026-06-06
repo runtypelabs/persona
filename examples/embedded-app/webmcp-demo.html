@@ -4,49 +4,65 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="stylesheet" href="/src/webmcp-shop.css">
   <link rel="icon" href="/favicon.ico" />
-  <title>WebMCP Consumption Demo</title>
+  <title>WebMCP Storefront Demo</title>
 </head>
-<body>
+<body class="webmcp-shop">
   <main class="shell-main">
     <div class="stage">
       <aside class="stage-controls">
-        <header class="demo-meta">
-          <h1>WebMCP — Page tools</h1>
-          <p>
-            This page registers two tools through
-            <code>document.modelContext.registerTool()</code> (via
-            <code>@mcp-b/webmcp-polyfill</code>). Persona snapshots them on
-            every dispatch and ships them as <code>clientTools[]</code>. When the
-            agent calls one, the widget executes it on the page and posts the
-            result back via <code>/resume</code>.
+        <header class="shop-hero">
+          <h1 class="shop-wordmark">
+            <span class="shop-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-9 4 6 2-3 5 6"/></svg>
+            </span>
+            Switchback
+          </h1>
+          <p class="shop-tagline">Trail &amp; road running, outfitted.</p>
+          <p class="shop-explainer">
+            This storefront publishes its own page tools through
+            <code>document.modelContext.registerTool()</code>. Persona snapshots
+            them on every turn, ships them to the agent as
+            <code>clientTools[]</code>, and when the agent calls one the widget
+            runs it <em>here on the page</em> and posts the result back via
+            <code>/resume</code>. Ask the assistant&nbsp;→ and watch the catalog,
+            cart, and the wire log react.
           </p>
           <div class="mount-toolbar" data-mount-toolbar></div>
         </header>
 
-        <section class="notes-section">
-          <h3 class="notes-section-title">Registered tools</h3>
-          <ul>
-            <li>
-              <code>search_products</code> — annotated
-              <code>readOnlyHint: true</code>. Filters a static catalog and
-              returns realistic hits (auto-approved by the demo's gate policy).
-            </li>
-            <li>
-              <code>add_to_cart</code> — mutating operation; gated by Persona's
-              native approval bubble, then updates the cart below.
-            </li>
-          </ul>
+        <section class="shop-section">
+          <div class="shop-section-head">
+            <h2 class="shop-section-title">Catalog</h2>
+            <span class="shop-section-meta" id="shop-catalog-meta"></span>
+          </div>
+          <div id="shop-catalog" class="shop-catalog"></div>
         </section>
 
-        <section class="notes-section">
-          <h3 class="notes-section-title">Cart</h3>
-          <div id="webmcp-cart" class="webmcp-cart"></div>
+        <section class="shop-section">
+          <div class="shop-section-head">
+            <h2 class="shop-section-title">Cart</h2>
+            <span class="shop-section-meta" id="shop-cart-meta"></span>
+          </div>
+          <div id="shop-cart" class="shop-cart"></div>
         </section>
 
-        <section class="notes-section">
-          <h3 class="notes-section-title">Live state</h3>
-          <pre id="webmcp-log" class="webmcp-log"></pre>
+        <section class="shop-section">
+          <details class="shop-wire" id="shop-wire" open>
+            <summary class="shop-wire-head">
+              WebMCP wire log
+              <span class="shop-wire-count" id="shop-wire-count">0 events</span>
+            </summary>
+            <div id="webmcp-wire" class="shop-wire-body"></div>
+            <div class="shop-wire-legend" aria-hidden="true">
+              <span><i style="background: var(--wire-reg)"></i>register</span>
+              <span><i style="background: var(--wire-send)"></i>dispatch · clientTools[]</span>
+              <span><i style="background: var(--wire-gate)"></i>approval gate</span>
+              <span><i style="background: var(--wire-exec)"></i>page exec</span>
+              <span><i style="background: var(--wire-resume)"></i>batched /resume</span>
+            </div>
+          </details>
         </section>
       </aside>
 
@@ -56,14 +72,18 @@
     <section class="notes">
       <h2 class="notes-heading">Try it</h2>
       <ol>
-        <li><strong>Single read:</strong> <em>"search for blue running shoes"</em> — the agent calls <code>search_products</code> against the static catalog. Read-only, so the demo auto-approves it (no bubble).</li>
-        <li><strong>Single write:</strong> <em>"add SHOE-001 to my cart"</em> — the agent calls <code>add_to_cart</code>; Persona's native approval bubble opens, and on Approve the <strong>Cart</strong> panel updates.</li>
-        <li><strong>Continuation:</strong> <em>"find the cheapest blue running shoe and add it to my cart"</em> — the agent searches, then runs a <em>second</em> turn to add the cheapest hit (proving the agent loop continues after a tool result).</li>
-        <li><strong>Parallel:</strong> <em>"add SHOE-001 and SHOE-007 to my cart"</em> — the model emits two <code>add_to_cart</code> calls in one turn. Each opens its <em>own</em> approval bubble; approve both and the widget batches their results into a single <code>/resume</code> (keyed by per-call id, runtypelabs/core#3878), so both items land in the cart.</li>
-        <li>Open DevTools → Network → look for <code>/dispatch</code> requests and confirm the body has a <code>clientTools[]</code> array with the two tools, including <code>origin: "webmcp"</code> and <code>pageOrigin</code>.</li>
+        <li><strong>Browse (read-only):</strong> <em>"find a waterproof trail shoe under $170"</em> — the agent calls <code>search_products</code>. It's annotated <code>readOnlyHint: true</code>, so the gate auto-approves it (no bubble) and matching cards light up.</li>
+        <li><strong>Inspect (read-only):</strong> <em>"tell me about SHOE-005"</em> — the agent calls <code>view_product</code>; the card flashes and scrolls into view. Still read-only → still no bubble.</li>
+        <li><strong>Add (mutating):</strong> <em>"add SHOE-001 to my cart"</em> — <code>add_to_cart</code> is mutating, so Persona's native approval bubble opens; approve it and the <strong>Cart</strong> updates.</li>
+        <li><strong>Parallel (the headline):</strong> <em>"add SHOE-001 and SHOE-007 at the same time"</em> — the model emits two <code>add_to_cart</code> calls in one turn. Each gets its <em>own</em> approval bubble; approve both and the widget batches the two results into a <strong>single <code>/resume</code></strong>, keyed by per-call id (runtypelabs/core#3878). Watch the orange <strong>batched /resume</strong> row in the wire log show both ids at once.</li>
+        <li><strong>Promo &amp; remove (mutating):</strong> <em>"apply code TRAIL10 and drop the socks"</em> — <code>apply_promo</code> + <code>remove_from_cart</code>, both gated. The cart shows the discount line and the item leaves.</li>
       </ol>
       <p>
-        Server-side, the Runtype surface must have
+        The gate policy splits read-only from mutating: the storefront
+        auto-approves its read-only tools (<code>search_products</code>,
+        <code>view_product</code>) so they run with no friction, and routes every
+        mutating call to the approval bubble. The page is the authority on which
+        of its own tools mutate state. Server-side, the Runtype surface must have
         <code>behavior.webmcp.enabled = true</code> for the agent to see these
         tools.
       </p>
