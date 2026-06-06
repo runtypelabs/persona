@@ -3,14 +3,13 @@ import "@runtypelabs/persona/widget.css";
 import {
   createAgentExperience,
   createLocalStorageAdapter,
-  initAgentWidget,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetConfig,
   type WebMcpConfirmInfo,
 } from "@runtypelabs/persona";
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
-import { setupMountMode, renderInlineMount, renderLauncherScene } from "./mount-mode";
+import { setupMountMode, renderInlineMount } from "./mount-mode";
 import type { Mode } from "./examples-nav";
 import { CATALOG, searchCatalog, findBySku, type CatalogProduct } from "./webmcp-catalog";
 
@@ -743,7 +742,6 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
 };
 
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
-  const showLauncherChrome = mode === "launcher";
   return {
     ...DEFAULT_WIDGET_CONFIG,
     ...(usingClientToken
@@ -792,23 +790,20 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     launcher: {
       title: "Switchback",
       subtitle: "Trail & road running assistant",
-      ...(showLauncherChrome
-        ? { enabled: true, autoExpand: false, width: "420px", fullHeight: true }
-        : { enabled: false, autoExpand: true, width: "100%", fullHeight: true }),
+      enabled: false,
+      autoExpand: true,
+      width: "100%",
+      fullHeight: true,
     },
   };
 };
 
+// Inline-only: the widget mounts flush in the storefront's right-hand stage.
+// A single mode means setupMountMode renders no "View as" toggle.
 setupMountMode({
   slug: "webmcp-demo",
-  modes: ["inline", "launcher", "fullscreen"],
+  modes: ["inline"],
   mount: (mode, { stage }) => {
-    if (mode === "launcher") {
-      const { mountEl } = renderLauncherScene(stage);
-      const handle = initAgentWidget({ target: mountEl, config: buildConfig("launcher") });
-      return () => handle.destroy();
-    }
-
     const mount = renderInlineMount(stage);
     mount.style.height = "100%";
     const controller = createAgentExperience(mount, buildConfig(mode));
