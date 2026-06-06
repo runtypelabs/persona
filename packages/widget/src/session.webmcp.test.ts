@@ -608,8 +608,16 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
       message: msg,
     });
 
+  // The batch flushes only when the stream that delivered the awaits ENDS —
+  // the client emits `status: idle` at stream end. Simulate that.
+  const endStream = (session: AgentWidgetSession) =>
+    (session as unknown as { handleEvent: (e: unknown) => void }).handleEvent({
+      type: "status",
+      status: "idle",
+    });
+
   const flushMicrotasks = async () => {
-    // enqueue → queueMicrotask(flush) → resolveWebMcpToolCallBatch (async).
+    // idle → queueMicrotask(flush) → resolveWebMcpToolCallBatch (async).
     for (let i = 0; i < 6; i++) await Promise.resolve();
   };
 
@@ -630,9 +638,11 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
       },
     );
 
-    // Two parallel step_awaits arrive in the SAME tick (one paused execution).
+    // Two parallel step_awaits arrive in the SAME tick (one paused execution),
+    // then the stream ends.
     feed(session, parallelAwait("toolu_A", "SHOE-001"));
     feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    endStream(session);
     await flushMicrotasks();
 
     // Both page tools ran.
@@ -673,6 +683,7 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
 
     feed(session, parallelAwait("toolu_A", "SHOE-001"));
     feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    endStream(session);
     await flushMicrotasks();
 
     // Both executes are in flight even though neither has resolved → no
@@ -699,17 +710,20 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     feed(session, parallelAwait("toolu_A", "SHOE-001"));
     feed(session, parallelAwait("toolu_A", "SHOE-001")); // duplicate id
     feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    endStream(session);
     await flushMicrotasks();
     expect(executeSpy).toHaveBeenCalledTimes(2); // A once, B once
     expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("a teardown before the batch flush strands it (epoch guard)", async () => {
+  it("a teardown before the stream-end flush strands the batch", async () => {
     const { session, executeSpy, resumeSpy } = makeSession();
     feed(session, parallelAwait("toolu_A", "SHOE-001"));
     feed(session, parallelAwait("toolu_B", "SHOE-007"));
-    // Teardown BEFORE the queued flush microtask runs.
+    // Teardown clears the buffered batch (and bumps the epoch) BEFORE the
+    // stream-end flush — even if a late idle arrives, nothing should resolve.
     session.clearMessages();
+    endStream(session);
     await flushMicrotasks();
     expect(executeSpy).not.toHaveBeenCalled();
     expect(resumeSpy).not.toHaveBeenCalled();

@@ -151,7 +151,7 @@ export class AgentWidgetSession {
   // every teardown via `abortWebMcpResolves`.
   private webMcpAwaitBatches: Map<
     string,
-    { snapshots: AgentWidgetMessage[]; seen: Set<string>; scheduled: boolean }
+    { snapshots: AgentWidgetMessage[]; seen: Set<string> }
   > = new Map();
 
   // Voice support
@@ -1530,23 +1530,38 @@ export class AgentWidgetSession {
 
     let batch = this.webMcpAwaitBatches.get(executionId);
     if (!batch) {
-      batch = { snapshots: [], seen: new Set(), scheduled: false };
+      batch = { snapshots: [], seen: new Set() };
       this.webMcpAwaitBatches.set(executionId, batch);
     }
     // Duplicate step_await re-emit for a call already in this batch — ignore.
     if (batch.seen.has(callId)) return;
     batch.seen.add(callId);
     batch.snapshots.push(toolMessage);
+    // NB: no flush is scheduled here. Flushing happens once the stream that is
+    // delivering these awaits ENDS (handleEvent's `status: idle` →
+    // scheduleWebMcpBatchFlush). Flushing per-await on the next microtask would
+    // race SSE chunk boundaries: two PARALLEL step_awaits split across separate
+    // `read()` chunks would flush the first alone and post a partial resume.
+    // Waiting for stream end guarantees every parallel await is collected first.
+  }
 
-    if (batch.scheduled) return;
-    batch.scheduled = true;
+  /**
+   * Flush every buffered local-tool await batch, one `/resume` per executionId.
+   * Called once a stream ends (`status: idle` / `error`) — by then all parallel
+   * `step_await`s the stream carried have been collected, even if split across
+   * SSE chunks. Deferred via `queueMicrotask` (epoch-guarded) so the idle
+   * handler returns first and the stream's end-of-stream teardown (streaming /
+   * abortController) settles before a resolve grabs them — the same ordering the
+   * single-call resolve always relied on.
+   */
+  private scheduleWebMcpBatchFlush(): void {
+    if (this.webMcpAwaitBatches.size === 0) return;
     const queuedEpoch = this.webMcpEpoch;
     queueMicrotask(() => {
-      if (queuedEpoch !== this.webMcpEpoch) {
-        this.webMcpAwaitBatches.delete(executionId);
-        return;
+      if (queuedEpoch !== this.webMcpEpoch) return;
+      for (const executionId of [...this.webMcpAwaitBatches.keys()]) {
+        this.flushWebMcpAwaitBatch(executionId);
       }
-      this.flushWebMcpAwaitBatch(executionId);
     });
   }
 
@@ -1555,7 +1570,7 @@ export class AgentWidgetSession {
    * (single call, or distinct-tool turns that happened to arrive alone) takes
    * the original single-call path; size >1 (parallel calls) takes the batched
    * path that posts ONE `/resume`. The batch is removed from the map up front
-   * so any later sibling re-emit (e.g. a split SSE chunk) forms a fresh batch
+   * so any later sibling re-emit (e.g. from a re-pause) forms a fresh batch
    * rather than mutating one already in flight.
    */
   private flushWebMcpAwaitBatch(executionId: string): void {
@@ -2253,6 +2268,12 @@ export class AgentWidgetSession {
         if (this.agentExecution?.status === 'running') {
           this.agentExecution.status = event.status === "error" ? 'error' : 'complete';
         }
+        // The stream that delivered any local-tool `step_await`s has now ended,
+        // so every parallel await it carried is collected. Flush them as ONE
+        // batched `/resume` per executionId (deferred — see
+        // scheduleWebMcpBatchFlush). Runs AFTER the teardown above so a resolve
+        // doesn't fight the end-of-stream streaming/abortController reset.
+        this.scheduleWebMcpBatchFlush();
       }
     } else if (event.type === "error") {
       this.setStatus("error");
