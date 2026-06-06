@@ -313,6 +313,31 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect((session as unknown as { streaming: boolean }).streaming).toBe(true);
   });
 
+  it("connectStream error does not clear streaming while a webmcp resolve is in flight", async () => {
+    // BugBot: connectStream's catch mirrors the error/idle handlers — a failed
+    // resume stream must not tear down streaming while another resolve runs.
+    const session = new AgentWidgetSession(
+      { apiUrl: "http://test", webmcp: { enabled: true } },
+      {
+        onMessagesChanged: () => undefined,
+        onStatusChanged: () => undefined,
+        onStreamingChanged: () => undefined,
+      },
+    );
+    const s = session as unknown as {
+      client: { processStream: (...a: unknown[]) => Promise<void> };
+      webMcpResolveControllers: Set<AbortController>;
+      streaming: boolean;
+    };
+    s.client.processStream = vi.fn(async () => {
+      throw new Error("stream blip");
+    });
+    // Simulate a resolve still in flight.
+    s.webMcpResolveControllers.add(new AbortController());
+    await session.connectStream(new ReadableStream(), { allowReentry: true });
+    expect(s.streaming).toBe(true);
+  });
+
   it("forwards the abort signal into client.executeWebMcpToolCall", async () => {
     // BugBot finding #12: the session must thread its signal INTO the
     // bridge so cancel() can short-circuit the confirm bubble AND the

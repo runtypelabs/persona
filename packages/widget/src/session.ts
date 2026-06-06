@@ -982,8 +982,14 @@ export class AgentWidgetSession {
       );
     } catch (error) {
       this.setStatus("error");
-      this.setStreaming(false);
-      this.abortController = null;
+      // Mirror the idle/error handlers: a failed resume stream must not tear
+      // down streaming/abortController while another WebMCP resolve is still
+      // confirming or executing. The in-flight resolve's `finally` owns the
+      // teardown once `webMcpResolveControllers` drains.
+      if (this.webMcpResolveControllers.size === 0) {
+        this.setStreaming(false);
+        this.abortController = null;
+      }
       this.callbacks.onError?.(
         error instanceof Error ? error : new Error(String(error))
       );
