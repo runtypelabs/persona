@@ -156,6 +156,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     tags: ["events", "dev"],
     modes: ["inline", "launcher"],
   },
+  {
+    slug: "smart-dom-reader-demo",
+    href: "/smart-dom-reader-demo.html",
+    title: "Shadow-aware Page Context",
+    blurb: "Launcher reads a live shop, piercing shadow-DOM products the default reader misses.",
+    tier: "reference",
+    tags: ["context", "dev"],
+    modes: ["launcher"],
+  },
 ];
 
 const escapeHtml = (s: string): string =>

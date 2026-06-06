@@ -20,6 +20,9 @@ export type {
   AgentWidgetStreamParser,
   AgentWidgetStreamParserResult,
   AgentWidgetRequestPayload,
+  // Context provider types (e.g. for config.contextProviders)
+  AgentWidgetContextProvider,
+  AgentWidgetContextProviderContext,
   AgentWidgetCustomFetch,
   AgentWidgetSSEEventParser,
   AgentWidgetSSEEventResult,
@@ -222,6 +225,17 @@ export type {
   AgentWidgetStreamAnimationType,
   AgentWidgetStreamAnimationFeature,
   AgentWidgetStreamAnimationPlaceholder,
+} from "./types";
+
+// Action system types — needed to type the `actionHandlers` / `actionParsers`
+// config options and to author custom handlers/parsers.
+export type {
+  AgentWidgetActionHandler,
+  AgentWidgetActionHandlerResult,
+  AgentWidgetActionParser,
+  AgentWidgetParsedAction,
+  AgentWidgetActionContext,
+  AgentWidgetActionEventPayload,
 } from "./types";
 
 // Dropdown utility exports

@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>Shadow-aware Page Context — Persona</title>
+
+    <style>
+      /* Scope shop styles to the preview pane so they don't leak into the rail. */
+      .shop-pane {
+        padding: 0;
+        overflow-y: auto;
+        background: #f8fafc;
+      }
+      .shop-header {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        background: #fff;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .shop-brand {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #0f172a;
+      }
+      .shop-cart {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #334155;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        border-radius: 999px;
+        padding: 0.35rem 0.8rem;
+      }
+      .shop-body {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 1.5rem;
+      }
+      .shop-section-title {
+        margin: 1.5rem 0 0.25rem;
+        font-size: 1.05rem;
+        color: #0f172a;
+      }
+      .shop-section-sub {
+        margin: 0 0 1rem;
+        font-size: 0.82rem;
+        color: #64748b;
+      }
+      .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+      }
+      .product-card {
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 1rem;
+      }
+      .product-thumb {
+        height: 110px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        background: #f1f5f9;
+        border-radius: 8px;
+        margin-bottom: 0.75rem;
+      }
+      .product-name {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .product-price {
+        margin: 0.15rem 0 0.75rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #334155;
+      }
+      .add-to-cart {
+        margin-top: auto;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #111827;
+        background: #111827;
+        color: #fff;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .add-to-cart:hover {
+        background: #1f2937;
+      }
+      .shadow-badge {
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        padding: 0.1rem 0.45rem;
+        border-radius: 4px;
+        background: #ede9fe;
+        color: #6d28d9;
+        margin-left: 0.45rem;
+        vertical-align: middle;
+      }
+      /* "Assistant's page reader" segmented toggle (left rail) */
+      .reader-toggle {
+        display: flex;
+        gap: 0.2rem;
+        margin-top: 0.6rem;
+        padding: 0.2rem;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+      }
+      .reader-toggle-opt {
+        flex: 1;
+        border: none;
+        background: transparent;
+        border-radius: 6px;
+        padding: 0.4rem 0.25rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        line-height: 1.2;
+        color: #475569;
+        cursor: pointer;
+      }
+      .reader-toggle-opt:hover {
+        color: #0f172a;
+      }
+      .reader-toggle-opt.is-active {
+        background: #fff;
+        color: #6d28d9;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+      }
+      .reader-toggle-desc {
+        margin: 0.55rem 0 0;
+        font-size: 0.75rem;
+        line-height: 1.4;
+        color: #64748b;
+        min-height: 3.2em;
+      }
+
+      /* Compare-readers results (left rail) */
+      .reader-results {
+        display: grid;
+        gap: 0.75rem;
+        margin-top: 0.85rem;
+      }
+      .reader-result {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #fff;
+        padding: 0.7rem 0.8rem;
+      }
+      .reader-result[data-empty] {
+        background: #f8fafc;
+      }
+      .reader-result-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .reader-result-name {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #0f172a;
+      }
+      .reader-result-count {
+        font-size: 0.72rem;
+        color: #64748b;
+        font-variant-numeric: tabular-nums;
+      }
+      .reader-result-empty {
+        margin: 0;
+        font-size: 0.78rem;
+        color: #94a3b8;
+      }
+      .reader-result-probes {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.32rem;
+      }
+      .reader-result-probes li {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.8rem;
+        color: #334155;
+      }
+      .reader-result-probes li.miss {
+        color: #94a3b8;
+      }
+      .probe-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.05rem;
+        height: 1.05rem;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .reader-result-probes li.ok .probe-icon {
+        background: #dcfce7;
+        color: #15803d;
+      }
+      .reader-result-probes li.miss .probe-icon {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+      .probe-zone {
+        margin-left: auto;
+        font-size: 0.66rem;
+        color: #94a3b8;
+      }
+      .probe-zone.shadow {
+        color: #6d28d9;
+        background: #ede9fe;
+        padding: 0.05rem 0.4rem;
+        border-radius: 4px;
+      }
+      .reader-result-raw {
+        margin-top: 0.6rem;
+      }
+      .reader-result-raw summary {
+        cursor: pointer;
+        font-size: 0.72rem;
+        color: #475569;
+      }
+      .reader-result-raw pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0.4rem 0 0;
+        padding: 0.55rem 0.6rem;
+        background: #0f172a;
+        color: #e2e8f0;
+        border-radius: 6px;
+        font-size: 0.68rem;
+        line-height: 1.45;
+        max-height: 200px;
+        overflow: auto;
+      }
+      .shop-toast {
+        position: fixed;
+        bottom: 1rem;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #111827;
+        color: #fff;
+        padding: 0.6rem 1.1rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        z-index: 1000;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell-main">
+      <div class="stage">
+        <aside class="stage-controls">
+          <div class="info-section">
+            <h3>Assistant's page reader</h3>
+            <p style="font-size: 0.8rem;">
+              Switch the context method the launcher sends on each message, then ask the
+              assistant <em>"what's in the featured drop?"</em> or <em>"add the
+              headphones"</em> and watch what it can see and do.
+            </p>
+            <div
+              class="reader-toggle"
+              role="radiogroup"
+              aria-label="Page context method the assistant receives"
+            >
+              <button class="reader-toggle-opt" role="radio" data-method="default" aria-checked="false">
+                Default
+              </button>
+              <button class="reader-toggle-opt" role="radio" data-method="smart" aria-checked="false">
+                smart-dom
+              </button>
+              <button class="reader-toggle-opt is-active" role="radio" data-method="sectioned" aria-checked="true">
+                Section-grouped
+              </button>
+            </div>
+            <p class="reader-toggle-desc" id="reader-method-desc"></p>
+          </div>
+
+          <div class="info-section">
+            <h3>Compare readers</h3>
+            <p style="font-size: 0.8rem;">
+              The <strong>Featured drop</strong> products render inside a
+              <strong>shadow root</strong>. Run each reader and watch those products flip
+              from missed to found — then open the launcher and ask the assistant about
+              them.
+            </p>
+            <div class="btn-row">
+              <button class="btn" id="run-default">Default reader</button>
+              <button class="btn btn-primary" id="run-smart">smart-dom-reader (full)</button>
+            </div>
+
+            <div class="reader-results">
+              <div class="reader-result" id="result-default" data-empty>
+                <div class="reader-result-head">
+                  <span class="reader-result-name">Default reader</span>
+                  <span class="reader-result-count"></span>
+                </div>
+                <p class="reader-result-empty">Click “Default reader” to run.</p>
+              </div>
+              <div class="reader-result" id="result-smart" data-empty>
+                <div class="reader-result-head">
+                  <span class="reader-result-name">smart-dom-reader (full)</span>
+                  <span class="reader-result-count"></span>
+                </div>
+                <p class="reader-result-empty">Click “smart-dom-reader (full)” to run.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <button class="btn" id="clear-storage-btn">Clear chat history &amp; reset</button>
+            <p style="font-size: 0.8rem; color: var(--muted); margin: 0.6rem 0 0;">
+              Live shop · launcher in bottom-right
+            </p>
+          </div>
+        </aside>
+
+        <div class="stage-widget shop-pane">
+          <header class="shop-header">
+            <span class="shop-brand">🛍️ Agentic Shop</span>
+            <span class="shop-cart">Cart: <span id="cart-count">0</span></span>
+          </header>
+
+          <div class="shop-body">
+            <h2 class="shop-section-title">Everyday picks</h2>
+            <p class="shop-section-sub">Standard light-DOM products — every reader sees these.</p>
+            <div class="products-grid">
+              <div class="product-card" data-product="mug">
+                <div class="product-thumb">☕</div>
+                <span class="product-name">Ceramic Mug</span>
+                <span class="product-price">$14.00</span>
+                <button class="add-to-cart" data-product="mug" data-name="Ceramic Mug" data-price="$14.00">Add to cart</button>
+              </div>
+              <div class="product-card" data-product="notebook">
+                <div class="product-thumb">📓</div>
+                <span class="product-name">Notebook</span>
+                <span class="product-price">$8.50</span>
+                <button class="add-to-cart" data-product="notebook" data-name="Notebook" data-price="$8.50">Add to cart</button>
+              </div>
+              <div class="product-card" data-product="pen">
+                <div class="product-thumb">🖊️</div>
+                <span class="product-name">Gel Pen Set</span>
+                <span class="product-price">$6.00</span>
+                <button class="add-to-cart" data-product="pen" data-name="Gel Pen Set" data-price="$6.00">Add to cart</button>
+              </div>
+              <div class="product-card" data-product="tote">
+                <div class="product-thumb">👜</div>
+                <span class="product-name">Canvas Tote</span>
+                <span class="product-price">$18.00</span>
+                <button class="add-to-cart" data-product="tote" data-name="Canvas Tote" data-price="$18.00">Add to cart</button>
+              </div>
+            </div>
+
+            <h2 class="shop-section-title">
+              Featured drop <span class="shadow-badge">shadow DOM</span>
+            </h2>
+            <p class="shop-section-sub">
+              These cards render inside a <strong>shadow root</strong>. The default
+              TreeWalker reader cannot see them; smart-dom-reader (full) can — so the
+              assistant can too.
+            </p>
+            <!-- The demo script attaches an open shadow root here and renders the
+                 featured products inside it. -->
+            <article id="featured-drop" aria-label="Featured drop"></article>
+          </div>
+        </div>
+      </div>
+
+      <section class="notes">
+        <h2 class="notes-heading">Notes</h2>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">How it works</h3>
+          <p>
+            On every agent request the launcher widget runs a
+            <strong>section-grouped context provider</strong>: it walks the shop's two
+            <code>&lt;h2&gt;</code> sections and lists each product <em>under its heading</em>,
+            crossing into the <strong>shadow root</strong> via <code>host.shadowRoot</code>
+            for the Featured drop. Each product carries a <code>product=&lt;id&gt;</code>
+            handle, and the result is merged into <code>payload.context.pageContext</code>.
+          </p>
+          <p>
+            Grouping by section (rather than the default reader's flat
+            interactivity buckets) is what lets the assistant reliably answer
+            <em>"what's in the featured drop?"</em> — the heading and its products stay
+            together instead of scattering across the prompt.
+          </p>
+          <p>
+            Use the <strong>Assistant's page reader</strong> toggle in the rail to switch
+            the <em>live</em> method the launcher sends — Default, smart-dom-reader, or
+            section-grouped — and watch the assistant gain (or lose) sight of the Featured
+            drop and the ability to add it to the cart. The <strong>Compare readers</strong>
+            buttons below it show the same readers' raw output side by side:
+            <code>smart-dom-reader</code> (full mode) is the general-purpose library that
+            pierces the shadow root the default <code>collectEnrichedPageContext</code>
+            reader cannot reach.
+          </p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Acting across the shadow boundary</h3>
+          <p>
+            The assistant doesn't just describe the shop — it can add products to the
+            cart. It replies with a small JSON envelope
+            (<code>{"action": "add_to_cart", "product": "headphones", "text": "…"}</code>);
+            the host's handler resolves that <code>product</code> id to its Add-to-cart
+            button and clicks it.
+          </p>
+          <p>
+            Persona's default click loop uses <code>document.querySelector</code>, which
+            cannot pierce shadow roots — so the Featured-drop buttons would be
+            unreachable. This demo's handler crosses the boundary with
+            <code>host.shadowRoot.querySelector('.buy-&lt;id&gt;')</code>, so even the
+            shadow-DOM products are clickable. Try <em>"add the Studio Headphones"</em>.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <div id="launcher-root"></div>
+    <script type="module" src="/src/smart-dom-reader-demo.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("smart-dom-reader-demo");
+    </script>
+  </body>
+</html>

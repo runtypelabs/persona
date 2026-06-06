@@ -8,6 +8,7 @@ import {
   COMPONENT_FLOW,
   BAKERY_ASSISTANT_FLOW,
   STOREFRONT_ASSISTANT_FLOW,
+  PAGE_CONTEXT_FLOW,
   createCheckoutSession
 } from "@runtypelabs/persona-proxy";
 
@@ -80,12 +81,24 @@ const storefrontApp = createChatProxyApp({
   upstreamUrl
 });
 
+// Page-context proxy - read-only, markdown answers about the current page.
+// Used by the smart-dom-reader demo: the widget sends live page context (including
+// shadow-DOM elements) as `inputs`, and this flow injects it via {{pageContext}}.
+const pageContextApp = createChatProxyApp({
+  path: "/api/chat/dispatch-page-context",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_PAGE_CONTEXT || undefined,
+  flowConfig: process.env.FLOW_ID_PAGE_CONTEXT ? undefined : PAGE_CONTEXT_FLOW,
+  upstreamUrl
+});
+
 // Mount all apps
 app.route("/", directiveApp);
 app.route("/", actionApp);
 app.route("/", componentApp);
 app.route("/", bakeryApp);
 app.route("/", storefrontApp);
+app.route("/", pageContextApp);
 
 // Stripe checkout endpoint
 // Uses the shared createCheckoutSession helper from @runtypelabs/persona-proxy

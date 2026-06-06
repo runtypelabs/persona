@@ -27,6 +27,11 @@
       "import": "./dist/testing.js",
       "require": "./dist/testing.cjs"
     },
+    "./smart-dom-reader": {
+      "types": "./dist/smart-dom-reader.d.ts",
+      "import": "./dist/smart-dom-reader.js",
+      "require": "./dist/smart-dom-reader.cjs"
+    },
     "./animations/glyph-cycle": {
       "types": "./dist/animations/glyph-cycle.d.ts",
       "import": "./dist/animations/glyph-cycle.js",
@@ -44,9 +49,10 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer && pnpm run build:theme-ref && pnpm run build:theme-editor && pnpm run build:testing && pnpm run build:animations",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer && pnpm run build:theme-ref && pnpm run build:theme-editor && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:animations",
     "build:theme-editor": "tsup src/theme-editor.ts --format esm,cjs --dts --out-dir dist --no-splitting",
     "build:testing": "tsup src/testing.ts --format esm,cjs --dts --out-dir dist --no-splitting",
+    "build:smart-dom-reader": "tsup src/smart-dom-reader.ts --format esm,cjs --dts --out-dir dist --no-splitting",
     "build:animations": "tsup src/animations/glyph-cycle.ts src/animations/wipe.ts --format esm,cjs --dts --out-dir dist/animations --no-splitting",
     "build:theme-ref": "tsup src/theme-reference.ts --format esm,cjs --minify --dts",
     "build:styles": "node -e \"const fs=require('fs');fs.mkdirSync('dist',{recursive:true});fs.copyFileSync('src/styles/widget.css','dist/widget.css');\"",
