@@ -533,4 +533,181 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     await session.resolveWebMcpToolCall(partial());
     expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("keys a single call's /resume by webMcpToolCallId when present", async () => {
+    // core#3878: when the server emits a per-call id, the single-call path keys
+    // /resume by it (server prefers id over name) — not by the wire tool name.
+    const { session, resumeSpy } = makeSession({
+      executeReturn: { content: [{ type: "text", text: "added" }] },
+    });
+    const msg: AgentWidgetMessage = {
+      id: "msg-single",
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+      agentMetadata: {
+        executionId: "exec-1",
+        awaitingLocalTool: true,
+        webMcpToolCallId: "toolu_AAA",
+      },
+      toolCall: {
+        id: "toolu_AAA",
+        name: "webmcp:add_to_cart",
+        status: "complete",
+        args: { sku: "SHOE-001" },
+      },
+    };
+    await session.resolveWebMcpToolCall(msg);
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    const payload = (resumeSpy.mock.calls[0]! as unknown[])[1] as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(payload)).toEqual(["toolu_AAA"]);
+  });
+});
+
+describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // A `step_await(local_tool_required)` message as client.ts emits it for a
+  // PARALLEL local-tool call: the per-call `toolCallId` is both the toolCall.id
+  // AND `agentMetadata.webMcpToolCallId`. Two of these for one executionId share
+  // a tool name but differ by id (the whole point of core#3878).
+  const parallelAwait = (
+    toolCallId: string,
+    sku: string,
+    executionId = "exec-par",
+  ): AgentWidgetMessage => ({
+    id: `tool-${toolCallId}`,
+    role: "assistant",
+    content: "",
+    createdAt: new Date().toISOString(),
+    agentMetadata: {
+      executionId,
+      awaitingLocalTool: true,
+      webMcpToolCallId: toolCallId,
+    },
+    toolCall: {
+      id: toolCallId,
+      name: "webmcp:add_to_cart",
+      status: "complete",
+      args: { sku },
+    },
+  });
+
+  const feed = (session: AgentWidgetSession, msg: AgentWidgetMessage) =>
+    (session as unknown as { handleEvent: (e: unknown) => void }).handleEvent({
+      type: "message",
+      message: msg,
+    });
+
+  const flushMicrotasks = async () => {
+    // enqueue → queueMicrotask(flush) → resolveWebMcpToolCallBatch (async).
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+  };
+
+  it("two parallel same-tool awaits → both execute → exactly ONE batched /resume keyed by toolCallId", async () => {
+    const { session, executeSpy, resumeSpy } = makeSession({
+      // Echo the sku so we can prove each call's output is mapped to its id.
+      executeImpl: undefined,
+    });
+    // Make execute return a per-call result derived from its args.
+    const client = (session as unknown as { client: Record<string, unknown> })
+      .client;
+    (client.executeWebMcpToolCall as ReturnType<typeof vi.fn>).mockImplementation(
+      (_name: string, args: { sku: string }) => {
+        executeSpy();
+        return Promise.resolve({
+          content: [{ type: "text", text: `added ${args.sku}` }],
+        });
+      },
+    );
+
+    // Two parallel step_awaits arrive in the SAME tick (one paused execution).
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    await flushMicrotasks();
+
+    // Both page tools ran.
+    expect(executeSpy).toHaveBeenCalledTimes(2);
+
+    // Exactly ONE /resume for the shared execution — not one per tool.
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    const [execId, toolOutputs] = resumeSpy.mock.calls[0]! as unknown as [
+      string,
+      Record<string, { content: { text: string }[] }>,
+    ];
+    expect(execId).toBe("exec-par");
+    // Keyed by per-call toolCallId, with each call's own output.
+    expect(Object.keys(toolOutputs).sort()).toEqual(["toolu_A", "toolu_B"]);
+    expect(toolOutputs["toolu_A"].content[0].text).toBe("added SHOE-001");
+    expect(toolOutputs["toolu_B"].content[0].text).toBe("added SHOE-007");
+  });
+
+  it("executes siblings concurrently — one call's gate Promise does not block the other", async () => {
+    // The native approval bubble parks each call's execute on a Promise. A
+    // gated sibling must not head-of-line-block the others: both executes
+    // should be in flight before either completes.
+    let releaseA: (r: WebMcpToolResult) => void = () => undefined;
+    let releaseB: (r: WebMcpToolResult) => void = () => undefined;
+    const pA = new Promise<WebMcpToolResult>((r) => (releaseA = r));
+    const pB = new Promise<WebMcpToolResult>((r) => (releaseB = r));
+    const started: string[] = [];
+
+    const { session, resumeSpy } = makeSession();
+    const client = (session as unknown as { client: Record<string, unknown> })
+      .client;
+    (client.executeWebMcpToolCall as ReturnType<typeof vi.fn>).mockImplementation(
+      (_name: string, args: { sku: string }) => {
+        started.push(args.sku);
+        return args.sku === "SHOE-001" ? pA : pB;
+      },
+    );
+
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    await flushMicrotasks();
+
+    // Both executes are in flight even though neither has resolved → no
+    // head-of-line blocking. No /resume yet (both still parked).
+    expect(started.sort()).toEqual(["SHOE-001", "SHOE-007"]);
+    expect(resumeSpy).not.toHaveBeenCalled();
+
+    // Release out of order; the batched resume waits for BOTH.
+    releaseB({ content: [{ type: "text", text: "b" }] });
+    await flushMicrotasks();
+    expect(resumeSpy).not.toHaveBeenCalled();
+    releaseA({ content: [{ type: "text", text: "a" }] });
+    await flushMicrotasks();
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    const toolOutputs = (resumeSpy.mock.calls[0]! as unknown[])[1] as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(toolOutputs).sort()).toEqual(["toolu_A", "toolu_B"]);
+  });
+
+  it("dedupes a duplicate parallel await within the same batch", async () => {
+    const { session, executeSpy, resumeSpy } = makeSession();
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_A", "SHOE-001")); // duplicate id
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    await flushMicrotasks();
+    expect(executeSpy).toHaveBeenCalledTimes(2); // A once, B once
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("a teardown before the batch flush strands it (epoch guard)", async () => {
+    const { session, executeSpy, resumeSpy } = makeSession();
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    // Teardown BEFORE the queued flush microtask runs.
+    session.clearMessages();
+    await flushMicrotasks();
+    expect(executeSpy).not.toHaveBeenCalled();
+    expect(resumeSpy).not.toHaveBeenCalled();
+  });
 });

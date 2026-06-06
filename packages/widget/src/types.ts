@@ -359,6 +359,16 @@ export type AgentMessageMetadata = {
    */
   awaitingLocalTool?: boolean;
   /**
+   * The provider per-call id (`toolu_…`) carried on the `step_await` /
+   * `flow_await` events for a LOCAL tool (core#3878). Present only when the
+   * server emits it. Two PARALLEL calls to the same tool in one turn share a
+   * `toolName` (and a collapsed `toolId`) but get DISTINCT `webMcpToolCallId`s,
+   * so this is the key the widget batches a single `/resume` on — preferred
+   * over tool name, which collides for same-tool parallel calls. Absent →
+   * fall back to the legacy name-keyed resume contract.
+   */
+  webMcpToolCallId?: string;
+  /**
    * Set to `true` once the user has picked / typed / dismissed an answer for
    * an `ask_user_question` tool call, so renderers stop re-mounting the
    * answer-pill sheet for this tool call on subsequent render passes.

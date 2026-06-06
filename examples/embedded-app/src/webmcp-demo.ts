@@ -280,14 +280,15 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     //   3. multi-step continuation — the agent searches, then runs a SECOND
     //      turn to add the cheapest hit, proving the loop continues after a
     //      tool result.
-    // NOTE: prompts that ask to add two items "at once" make the model emit
-    // PARALLEL local tool calls in a single turn, which currently hangs on the
-    // second resume (see README → WebMCP Demo "Known limitation"). Keep the
-    // canned pills single-intent or dependency-sequenced.
+    //   4. PARALLEL same-tool calls — adding two SKUs "at once" makes the model
+    //      emit two add_to_cart calls in one turn. The widget batches their
+    //      outputs into ONE /resume keyed by per-call id (runtypelabs/core#3878);
+    //      each call still renders its own approval bubble.
     suggestionChips: [
       "Search for blue running shoes",
       "Add SHOE-001 to my cart",
       "Find the cheapest blue running shoe and add it to my cart",
+      "Add SHOE-001 and SHOE-007 to my cart",
     ],
     webmcp: {
       enabled: true,

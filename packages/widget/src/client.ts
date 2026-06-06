@@ -1889,7 +1889,22 @@ export class AgentWidgetClient {
           // ask_user_question bubble + sheet paths fire. Mark the message with
           // `awaitingLocalTool: true` so the UI knows to resolve via
           // resumeFlow rather than the legacy sendMessage fallback.
-          const toolId = (payload.toolId as string) ?? `local-${nextSequence()}`;
+          //
+          // Key the message by the per-call `toolCallId` (provider `toolu_…`;
+          // core#3878) when present. Two PARALLEL calls to the SAME tool in one
+          // turn collapse to an identical `toolId` (`runtime_webmcp:<name>_<ms>`)
+          // and `index: 0` — only `toolCallId` distinguishes them. Keying on it
+          // (a) keeps the two awaits as DISTINCT messages with their own args
+          // instead of the second clobbering the first, and (b) merges each
+          // await into the matching `tool_start` bubble (also keyed by
+          // `toolCallId`). Fall back to the collapsed `toolId` for legacy
+          // servers that don't emit `toolCallId`.
+          const toolCallId: string | undefined =
+            typeof payload.toolCallId === "string" && payload.toolCallId.length > 0
+              ? (payload.toolCallId as string)
+              : undefined;
+          const toolId =
+            toolCallId ?? (payload.toolId as string) ?? `local-${nextSequence()}`;
           const toolMessage = ensureToolMessage(toolId);
           const tool = toolMessage.toolCall ?? { id: toolId, status: "pending" as const };
           tool.name = payload.toolName as string;
@@ -1905,6 +1920,10 @@ export class AgentWidgetClient {
             ...toolMessage.agentMetadata,
             executionId: (payload.executionId as string) ?? toolMessage.agentMetadata?.executionId,
             awaitingLocalTool: true,
+            // Only set when the server emitted a real per-call id; its presence
+            // is what tells session.ts to batch + key `/resume` by id rather
+            // than by tool name (which can't represent two same-tool calls).
+            ...(toolCallId ? { webMcpToolCallId: toolCallId } : {}),
           };
           emitMessage(toolMessage);
         } else if (payloadType === "text_start") {
