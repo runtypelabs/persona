@@ -81,6 +81,14 @@ body.webmcp-shop {
   }
 }
 
+/* Soften the rail↔widget divider. The gallery's full-bleed desktop layout
+   draws it with the light `--border` token, which is jarringly bright against
+   the dark shop background — retint it to the shop's medium line color (which
+   adapts per scheme). */
+body.webmcp-shop .shell-main:has(.stage-widget) .stage-controls {
+  border-right-color: var(--shop-line-strong);
+}
+
 /* ── Storefront hero ───────────────────────────────────────────────────── */
 
 body.webmcp-shop .shop-hero {
