@@ -41,7 +41,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     ),
     agent: {
       name: "Travel Planner Assistant",
-      model: "mercury-2",
+      model: "minimax-m2.7",
       systemPrompt:
         "You are a travel planning assistant with access to the Exa web search tool. " +
         "For itinerary requests, complete work in exactly 3 iterations: " +

@@ -84,7 +84,7 @@ const DEFAULT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "mercury-2",
+        model: "minimax-m2.7",
         responseFormat: "markdown",
         outputVariable: "prompt_result",
         userPrompt: "{{user_message}}",
