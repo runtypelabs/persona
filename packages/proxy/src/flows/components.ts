@@ -14,7 +14,7 @@ export const COMPONENT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "mercury-2",
+        model: "minimax-m2.7",
         reasoning: false,
         responseFormat: "JSON",
         outputVariable: "prompt_result",
