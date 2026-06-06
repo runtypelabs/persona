@@ -1980,6 +1980,19 @@ export class AgentWidgetSession {
       controller.abort();
     }
     this.webMcpResolveControllers.clear();
+    // Settle every approval bubble still awaiting a click. The bridge parks a
+    // resolve on `await requestConfirm(...)` (→ requestWebMcpApproval) and only
+    // re-checks `signal.aborted` AFTER that await returns — aborting the
+    // controller above does NOT unblock it. Left unsettled, the bridge's
+    // execute(), its `/resume`, and the resolve's `finally` would all hang
+    // forever (and the resolver map would leak across teardowns). Resolve them
+    // `false` (declined) so the bridge returns cleanly; the post-confirm
+    // `signal.aborted` guard then bails before any host-page side effect or
+    // stale `/resume`.
+    for (const resolve of this.webMcpApprovalResolvers.values()) {
+      resolve(false);
+    }
+    this.webMcpApprovalResolvers.clear();
     // Drop any awaits buffered for a not-yet-flushed batch — their messages are
     // being torn down, and a microtask-deferred flush must not survive. The
     // epoch bump below also strands an already-scheduled flush.

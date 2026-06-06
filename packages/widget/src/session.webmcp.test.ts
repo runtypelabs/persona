@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { AgentWidgetSession } from "./session";
-import type { AgentWidgetMessage, WebMcpToolResult } from "./types";
+import type {
+  AgentWidgetMessage,
+  WebMcpConfirmInfo,
+  WebMcpToolResult,
+} from "./types";
 
 // Build a session whose client has WebMCP methods overridden by spies.
 const makeSession = (overrides?: {
@@ -709,5 +713,45 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     await flushMicrotasks();
     expect(executeSpy).not.toHaveBeenCalled();
     expect(resumeSpy).not.toHaveBeenCalled();
+  });
+
+  it("settles pending approval bubbles on teardown so a parked resolve can't hang", async () => {
+    // BugBot (PR #214): the bridge parks a resolve on `await requestConfirm`
+    // and only re-checks signal.aborted AFTER that await. If a teardown
+    // (cancel/clearMessages/hydrate/sendMessage) happens while an approval
+    // bubble is still awaiting a click, the resolver must be settled or the
+    // bridge execute / its /resume / the resolve's finally all hang forever.
+    const { session } = makeSession();
+    const s = session as unknown as {
+      webMcpApprovalResolvers: Map<string, (b: boolean) => void>;
+    };
+
+    // No autoApprove → the gate parks on a pending Promise.
+    const pending = session.requestWebMcpApproval({
+      toolName: "add_to_cart",
+      args: { sku: "SHOE-001" },
+    } as WebMcpConfirmInfo);
+    expect(s.webMcpApprovalResolvers.size).toBe(1);
+
+    session.cancel();
+
+    // The parked confirm Promise resolves false (declined) and the map clears.
+    await expect(pending).resolves.toBe(false);
+    expect(s.webMcpApprovalResolvers.size).toBe(0);
+  });
+
+  it("clearMessages() also settles pending approval bubbles", async () => {
+    const { session } = makeSession();
+    const s = session as unknown as {
+      webMcpApprovalResolvers: Map<string, (b: boolean) => void>;
+    };
+    const pending = session.requestWebMcpApproval({
+      toolName: "add_to_cart",
+      args: { sku: "SHOE-007" },
+    } as WebMcpConfirmInfo);
+    expect(s.webMcpApprovalResolvers.size).toBe(1);
+    session.clearMessages();
+    await expect(pending).resolves.toBe(false);
+    expect(s.webMcpApprovalResolvers.size).toBe(0);
   });
 });
