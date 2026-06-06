@@ -951,3 +951,104 @@ describe('AgentWidgetSession - dispatch error fallback', () => {
     expect(lastAssistantMessage(session)?.content).toBe('Custom continue error.');
   });
 });
+
+describe('AgentWidgetSession - WebMCP native approval gate', () => {
+  const makeSession = (
+    webmcp?: Record<string, unknown>
+  ): { session: AgentWidgetSession; getMessages: () => AgentWidgetMessage[] } => {
+    let messages: AgentWidgetMessage[] = [];
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://localhost:8000', webmcp: { enabled: true, ...webmcp } },
+      {
+        onMessagesChanged: (msgs) => { messages = msgs; },
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+    return { session, getMessages: () => messages };
+  };
+
+  it('renders a pending approval bubble and resolves true on approve', async () => {
+    const { session, getMessages } = makeSession();
+    const promise = session.requestWebMcpApproval({
+      toolName: 'add_to_cart',
+      args: { sku: 'SHOE-001' },
+      reason: 'gate',
+    });
+
+    const bubble = getMessages().find((m) => m.variant === 'approval');
+    expect(bubble).toBeDefined();
+    expect(bubble?.approval?.status).toBe('pending');
+    expect(bubble?.approval?.toolType).toBe('webmcp');
+    expect(bubble?.approval?.toolName).toBe('add_to_cart');
+    expect(bubble?.approval?.parameters).toEqual({ sku: 'SHOE-001' });
+
+    session.resolveWebMcpApproval(bubble!.id, 'approved');
+    await expect(promise).resolves.toBe(true);
+
+    const resolved = getMessages().find((m) => m.variant === 'approval');
+    expect(resolved?.approval?.status).toBe('approved');
+    expect(resolved?.approval?.resolvedAt).toBeDefined();
+  });
+
+  it('resolves false on deny and marks the bubble denied', async () => {
+    const { session, getMessages } = makeSession();
+    const promise = session.requestWebMcpApproval({
+      toolName: 'add_to_cart',
+      args: { sku: 'SHOE-002' },
+      reason: 'gate',
+    });
+    const bubble = getMessages().find((m) => m.variant === 'approval');
+
+    session.resolveWebMcpApproval(bubble!.id, 'denied');
+    await expect(promise).resolves.toBe(false);
+    expect(
+      getMessages().find((m) => m.variant === 'approval')?.approval?.status
+    ).toBe('denied');
+  });
+
+  it('auto-approves (no bubble) when autoApprove returns true', async () => {
+    const { session, getMessages } = makeSession({
+      autoApprove: (info: { toolName: string }) => info.toolName !== 'add_to_cart',
+    });
+
+    await expect(
+      session.requestWebMcpApproval({
+        toolName: 'search_products',
+        args: { query: 'shoes' },
+        reason: 'gate',
+      })
+    ).resolves.toBe(true);
+    // No approval bubble for an auto-approved (read-only) call.
+    expect(getMessages().some((m) => m.variant === 'approval')).toBe(false);
+  });
+
+  it('still gates a mutating tool when autoApprove excludes it', () => {
+    const { session, getMessages } = makeSession({
+      autoApprove: (info: { toolName: string }) => info.toolName !== 'add_to_cart',
+    });
+    void session.requestWebMcpApproval({
+      toolName: 'add_to_cart',
+      args: { sku: 'SHOE-001' },
+      reason: 'gate',
+    });
+    expect(getMessages().some((m) => m.variant === 'approval')).toBe(true);
+  });
+
+  it('treats a second resolve as a no-op', async () => {
+    const { session, getMessages } = makeSession();
+    const promise = session.requestWebMcpApproval({
+      toolName: 'add_to_cart',
+      args: {},
+      reason: 'gate',
+    });
+    const bubble = getMessages().find((m) => m.variant === 'approval');
+    session.resolveWebMcpApproval(bubble!.id, 'approved');
+    // Second call must not throw or flip the resolved status.
+    expect(() => session.resolveWebMcpApproval(bubble!.id, 'denied')).not.toThrow();
+    await expect(promise).resolves.toBe(true);
+    expect(
+      getMessages().find((m) => m.variant === 'approval')?.approval?.status
+    ).toBe('approved');
+  });
+});

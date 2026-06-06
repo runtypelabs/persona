@@ -1403,8 +1403,14 @@ export const createAgentExperience = (
       });
     }
 
-    // Resolve the approval
-    session.resolveApproval(approvalMessage.approval, decision);
+    // WebMCP gate approvals resolve a local Promise the bridge is parked on
+    // (no server round-trip); server-driven approvals call the API. The
+    // `toolType` marker set in `requestWebMcpApproval` discriminates the two.
+    if (approvalMessage.approval.toolType === "webmcp") {
+      session.resolveWebMcpApproval(messageId, decision);
+    } else {
+      session.resolveApproval(approvalMessage.approval, decision);
+    }
   });
 
   let artifactPaneApi: ArtifactPaneApi | null = null;

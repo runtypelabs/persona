@@ -170,16 +170,24 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       : { apiUrl: proxyApiUrl }),
     storageAdapter: createLocalStorageAdapter(`persona-state-webmcp-${mode}`),
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
+    // Demo starter pills that exercise the page's WebMCP tools. Kept
+    // single-intent (one tool per prompt) — chained "search and add" still
+    // depends on core #3870 (parallel local tool calls). SKUs match the
+    // mock catalog returned by the page-side search_products tool above.
+    suggestionChips: [
+      "Search for blue running shoes",
+      "Show me trail running shoes",
+      "Add SHOE-001 to my cart",
+    ],
     webmcp: {
       enabled: true,
-      onConfirm: async (info: WebMcpConfirmInfo): Promise<boolean> => {
-        writeLog(`confirm(${info.reason}): ${info.toolName}`);
-        const argsLine = info.args
-          ? `\n\nargs: ${JSON.stringify(info.args)}`
-          : "";
-        return window.confirm(
-          `Allow ${info.toolName}? (${info.reason})${argsLine}`,
-        );
+      // Per-tool gate policy: auto-allow the read-only search so it runs
+      // frictionlessly, and let the mutating add_to_cart fall through to
+      // Persona's native in-panel approval bubble (no custom onConfirm — the
+      // widget renders the approval chrome and waits for Approve/Deny).
+      autoApprove: (info: WebMcpConfirmInfo): boolean => {
+        writeLog(`gate: ${info.toolName}`);
+        return info.toolName !== "add_to_cart";
       },
     },
     launcher: showLauncherChrome

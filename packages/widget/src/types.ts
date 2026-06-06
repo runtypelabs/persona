@@ -300,9 +300,19 @@ export type AgentWidgetWebMcpConfig = {
    */
   allowlist?: string[];
   /**
-   * Confirm-bubble handler. Persona's default UI implementation lives in
-   * `ui.ts` and reuses the approval-bubble chrome — consumers can override
-   * with a custom confirmer (e.g., a route-level modal).
+   * Per-tool gate policy. Called before the confirm gate for every
+   * `webmcp:*` call; return `true` to approve immediately and skip the
+   * confirmation UI entirely. Use this to auto-allow read-only tools (e.g.
+   * a catalog search) while still gating mutating ones. Only consulted on
+   * the default-UI path — a custom `onConfirm` takes full control instead.
+   */
+  autoApprove?: (info: WebMcpConfirmInfo) => boolean;
+  /**
+   * Confirm gate handler. When omitted, Persona renders its native in-panel
+   * approval bubble (the same chrome used for server-driven tool approvals)
+   * and resolves on the user's Approve/Deny click. Supply this to override
+   * with a custom confirmer (e.g. a route-level modal). The legacy
+   * `window.confirm` fallback only applies when no widget UI is attached.
    */
   onConfirm?: WebMcpConfirmHandler;
 };

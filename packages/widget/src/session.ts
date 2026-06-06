@@ -5,6 +5,7 @@ import {
   AgentWidgetEvent,
   AgentWidgetMessage,
   AgentWidgetApproval,
+  WebMcpConfirmInfo,
   AgentExecutionState,
   ClientSession,
   ContentPart,
@@ -129,6 +130,14 @@ export class AgentWidgetSession {
   // so a resolve queued just before a teardown can't escape it by installing a
   // fresh controller after the set was already cleared.
   private webMcpEpoch = 0;
+  // WebMCP native approval-bubble gate. When no custom `webmcp.onConfirm` is
+  // supplied, the bridge's confirm handler routes here: we inject an
+  // approval-variant message and park the bridge on a Promise that resolves
+  // when the user clicks Approve/Deny (see requestWebMcpApproval /
+  // resolveWebMcpApproval). Resolvers are keyed by the approval message id.
+  private webMcpApprovalResolvers: Map<string, (approved: boolean) => void> =
+    new Map();
+  private webMcpApprovalSeq = 0;
 
   // Voice support
   private voiceProvider: VoiceProvider | null = null;
@@ -145,6 +154,7 @@ export class AgentWidgetSession {
     }));
     this.messages = this.sortMessages(this.messages);
     this.client = new AgentWidgetClient(config);
+    this.wireDefaultWebMcpConfirm();
 
     // Hydrate artifacts from config (mirrors `initialMessages`). Restored
     // records are forced to `status: "complete"` — a mid-stream artifact should
@@ -578,6 +588,7 @@ export class AgentWidgetSession {
     const prevSSECallback = this.client.getSSEEventCallback();
     this.config = { ...this.config, ...next };
     this.client = new AgentWidgetClient(this.config);
+    this.wireDefaultWebMcpConfirm();
     if (prevSSECallback) {
       this.client.setSSEEventCallback(prevSSECallback);
     }
@@ -1046,6 +1057,97 @@ export class AgentWidgetSession {
         error instanceof Error ? error : new Error(String(error))
       );
     }
+  }
+
+  /**
+   * Install the native approval-bubble confirm handler on the WebMCP bridge
+   * when the integrator hasn't supplied a custom `webmcp.onConfirm`. Without
+   * this, the bridge falls back to a blunt `window.confirm`. Safe to call
+   * repeatedly (e.g. after the client is re-created in `updateConfig`).
+   */
+  private wireDefaultWebMcpConfirm(): void {
+    const webmcp = this.config.webmcp;
+    if (webmcp?.enabled === true && !webmcp.onConfirm) {
+      this.client.setWebMcpConfirmHandler((info) =>
+        this.requestWebMcpApproval(info)
+      );
+    }
+  }
+
+  /**
+   * Default WebMCP confirm gate: render Persona's native in-panel approval
+   * bubble and resolve when the user clicks Approve/Deny. Returns immediately
+   * with `true` when `webmcp.autoApprove(info)` opts the tool out of the gate
+   * (e.g. a read-only catalog search), so no bubble is shown. The bridge
+   * awaits this Promise before executing the page tool.
+   */
+  public requestWebMcpApproval(info: WebMcpConfirmInfo): Promise<boolean> {
+    // Per-tool policy hook — auto-allow opted-out tools without any UI. A
+    // throwing predicate must not block the call, so fall through to an
+    // explicit gate on error.
+    try {
+      if (this.config.webmcp?.autoApprove?.(info) === true) {
+        return Promise.resolve(true);
+      }
+    } catch {
+      // fall through to explicit approval
+    }
+
+    const approval: AgentWidgetApproval = {
+      id: `webmcp-${++this.webMcpApprovalSeq}`,
+      status: "pending",
+      agentId: "",
+      executionId: "",
+      toolName: info.toolName,
+      toolType: "webmcp",
+      description:
+        info.description ?? `Allow the assistant to run ${info.toolName}?`,
+      parameters: info.args,
+    };
+    const approvalMessageId = `approval-${approval.id}`;
+
+    this.upsertMessage({
+      id: approvalMessageId,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+      streaming: false,
+      variant: "approval",
+      approval,
+    });
+
+    return new Promise<boolean>((resolve) => {
+      this.webMcpApprovalResolvers.set(approvalMessageId, resolve);
+    });
+  }
+
+  /**
+   * Resolve a pending WebMCP approval bubble (from the Approve/Deny click in
+   * `ui.ts`). Updates the bubble to its resolved state and unblocks the
+   * bridge Promise parked in `requestWebMcpApproval`. No-op if already
+   * resolved (double-click, re-render).
+   */
+  public resolveWebMcpApproval(
+    approvalMessageId: string,
+    decision: "approved" | "denied"
+  ): void {
+    const resolve = this.webMcpApprovalResolvers.get(approvalMessageId);
+    if (!resolve) return;
+    this.webMcpApprovalResolvers.delete(approvalMessageId);
+
+    const existing = this.messages.find((m) => m.id === approvalMessageId);
+    if (existing?.approval) {
+      this.upsertMessage({
+        ...existing,
+        approval: {
+          ...existing.approval,
+          status: decision,
+          resolvedAt: Date.now(),
+        },
+      });
+    }
+
+    resolve(decision === "approved");
   }
 
   /**
