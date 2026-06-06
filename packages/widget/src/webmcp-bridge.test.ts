@@ -489,4 +489,21 @@ describe("computeClientToolsFingerprint — diff-only / send-once", () => {
     ]);
     expect(annotated).not.toBe(plain);
   });
+
+  it("stays within the server's 128-char wire bound for large tool sets", () => {
+    // The server validates `clientToolsFingerprint` as `z.string().max(128)`.
+    // A fingerprint that grew with the tool content would 400 the first turn.
+    const many = Array.from({ length: 50 }, (_, i) =>
+      tool({
+        name: `tool_${i}`,
+        description: `A fairly long description for tool number ${i} `.repeat(8),
+        parametersSchema: {
+          type: "object",
+          properties: { a: { type: "string" }, b: { type: "number" }, c: { type: "boolean" } },
+        },
+      }),
+    );
+    const fp = computeClientToolsFingerprint(many);
+    expect(fp.length).toBeLessThanOrEqual(128);
+  });
 });

@@ -96,10 +96,13 @@ const log = {
  * ordering does not affect the result. `pageOrigin` is deliberately excluded —
  * it is audit metadata, not part of the tool contract.
  *
- * This is a fast, non-cryptographic content key (the same role as
- * {@link computeMessageFingerprint}). The server computes its own canonical hash
- * over the validated/namespaced set, so cross-implementation byte-equality is
- * NOT required — only self-consistency across this widget's turns.
+ * This is a fast, non-cryptographic content key. The canonical per-tool content
+ * is hashed down to a short, fixed-length digest so the result fits the server's
+ * `clientToolsFingerprint` wire field (`z.string().max(128)`) regardless of how
+ * many tools the page registers — sending the raw concatenated content would
+ * overflow that bound and be rejected with a 400. The server stores and compares
+ * the widget's fingerprint verbatim, so cross-implementation byte-equality is NOT
+ * required — only self-consistency across this widget's turns.
  */
 export function computeClientToolsFingerprint(
   tools: ClientToolDefinition[],
@@ -116,7 +119,39 @@ export function computeClientToolsFingerprint(
       ].join("\x1f"),
     )
     .sort();
-  return `${tools.length}:${parts.join("\x1e")}`;
+  return `${tools.length}:${hashFingerprintContent(parts.join("\x1e"))}`;
+}
+
+/**
+ * cyrb53 — a fast, well-distributed non-cryptographic string hash. Returns a
+ * 53-bit value (safe-integer range). Two independent seeds are combined by the
+ * caller for a ~106-bit digest, which makes accidental collisions across a
+ * single conversation's handful of tool-set variants infeasible.
+ */
+function cyrb53(str: string, seed: number): number {
+  let h1 = 0xdeadbeef ^ seed;
+  let h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+
+/**
+ * Compress the canonical tool-set content string into a short, fixed-length
+ * fingerprint (≤ ~24 chars) that fits the server's 128-char wire bound. Uses two
+ * seeded cyrb53 passes, base-36 encoded.
+ */
+function hashFingerprintContent(content: string): string {
+  const a = cyrb53(content, 0).toString(36);
+  const b = cyrb53(content, 0x9e3779b1).toString(36);
+  return `${a}.${b}`;
 }
 
 export class WebMcpBridge {
