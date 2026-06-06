@@ -1,0 +1,44 @@
+[
+  {
+    "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
+    "path": "dist/index.global.js",
+    "limit": "180 kB",
+    "gzip": true
+  },
+  {
+    "name": "⛔ CRITICAL · browser stylesheet (widget.css)",
+    "path": "dist/widget.css",
+    "limit": "21 kB",
+    "gzip": true
+  },
+  {
+    "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
+    "path": "dist/index.js",
+    "limit": "138 kB",
+    "gzip": true
+  },
+  {
+    "name": "CJS bundle (index.cjs)",
+    "path": "dist/index.cjs",
+    "limit": "139 kB",
+    "gzip": true
+  },
+  {
+    "name": "Script installer (install.global.js)",
+    "path": "dist/install.global.js",
+    "limit": "2.5 kB",
+    "gzip": true
+  },
+  {
+    "name": "Opt-in · theme-editor subpath (theme-editor.js)",
+    "path": "dist/theme-editor.js",
+    "limit": "150 kB",
+    "gzip": true
+  },
+  {
+    "name": "Opt-in · smart-dom-reader subpath (smart-dom-reader.js)",
+    "path": "dist/smart-dom-reader.js",
+    "limit": "13 kB",
+    "gzip": true
+  }
+]
