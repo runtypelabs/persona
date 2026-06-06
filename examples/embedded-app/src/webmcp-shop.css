@@ -173,6 +173,27 @@ body.webmcp-shop .shop-explainer code {
 }
 body.webmcp-shop .shop-hero .mount-toolbar { justify-content: flex-start; margin: 0.85rem 0 0; min-height: 0; }
 
+/* "View as" mode toggle — the gallery styles this with the shared neutral
+   tokens (`--paper`/`--background`/`--foreground`), which have no dark variant,
+   so the pill group glares bright white on the espresso-night page. Retint it to
+   the shop palette; `--shop-*` adapt per scheme, so this fixes both light + dark. */
+body.webmcp-shop .mount-toggle-label { color: var(--shop-faint); }
+body.webmcp-shop .mount-toggle-group {
+  background: var(--shop-bg);
+  border-color: var(--shop-line);
+}
+body.webmcp-shop .mount-toggle-button { color: var(--shop-ink-soft); }
+body.webmcp-shop .mount-toggle-button:hover {
+  color: var(--shop-ink);
+  background: color-mix(in srgb, var(--shop-ink) 7%, transparent);
+}
+body.webmcp-shop .mount-toggle-button[aria-pressed="true"] {
+  background: var(--shop-paper);
+  color: var(--shop-ink);
+  box-shadow: var(--shop-shadow), 0 0 0 1px var(--shop-line);
+}
+body.webmcp-shop .mount-toggle-button:focus-visible { outline-color: var(--shop-accent); }
+
 /* ── Section scaffolding ───────────────────────────────────────────────── */
 
 body.webmcp-shop .shop-section { margin-bottom: 1.25rem; }

@@ -722,6 +722,23 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
       iconForeground: "#1c1917",
       actionIconForeground: "#d6d3d1",
     },
+    // The widget's component defaults back these surfaces with `gray.50`, which
+    // this dark palette keeps light (#f5f5f4) — so without explicit overrides the
+    // assistant bubbles, composer input, tool-call chrome, and inline code would
+    // render as bright cream cards on the espresso-night panel. Pin them to the
+    // dark surface set (and flip their default dark `gray.900` text to light).
+    message: {
+      assistant: { background: "#292524", text: "#f5f5f4", border: "#3a3530" },
+    },
+    input: { background: "#2c2724", placeholder: "#a8a29e" },
+    collapsibleWidget: {
+      container: "#292524", // tool/reasoning bubble chrome
+      surface: "#141110", // inset args/code box — reads as a dark terminal panel
+      border: "#3a3530",
+    },
+    markdown: {
+      inlineCode: { background: "#44403c", foreground: "#f5f5f4" },
+    },
   },
 };
 
