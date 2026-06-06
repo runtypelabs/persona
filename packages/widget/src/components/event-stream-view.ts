@@ -7,6 +7,7 @@ import {
   resolveFollowStateFromWheel
 } from "../utils/auto-follow";
 import type { EventStreamBuffer } from "../utils/event-stream-buffer";
+import type { ThroughputMetric } from "../utils/throughput-tracker";
 import type {
   SSEEventRecord,
   AgentWidgetConfig,
@@ -149,6 +150,36 @@ function formatEventForCopy(event: SSEEventRecord): string {
     null,
     2
   );
+}
+
+// ============================================================================
+// Output Throughput Summary
+// ============================================================================
+
+/** Format the headline value, e.g. `23.9 tok/s` or `-- tok/s` when unavailable. */
+function formatThroughputValue(metric: ThroughputMetric): string {
+  if (
+    metric.tokensPerSecond === undefined ||
+    !Number.isFinite(metric.tokensPerSecond)
+  ) {
+    return "-- tok/s";
+  }
+  return `${metric.tokensPerSecond.toFixed(1)} tok/s`;
+}
+
+/** Compact supporting details: output tokens, duration, and usage/estimate source. */
+function formatThroughputMeta(metric: ThroughputMetric): string {
+  const parts: string[] = [];
+  if (metric.outputTokens !== undefined) {
+    parts.push(`${metric.outputTokens.toLocaleString()} tok`);
+  }
+  if (metric.durationMs !== undefined) {
+    parts.push(`${(metric.durationMs / 1000).toFixed(2)}s`);
+  }
+  if (metric.source) {
+    parts.push(metric.source);
+  }
+  return parts.join(" · ");
 }
 
 // ============================================================================
@@ -381,6 +412,12 @@ export type EventStreamViewOptions = {
   onClose?: () => void;
   config?: AgentWidgetConfig;
   plugins?: AgentWidgetPlugin[];
+  /**
+   * Optional accessor for the current output-throughput metric, derived from
+   * the same SSE event stream. When provided, a compact "Output throughput"
+   * summary row is rendered and refreshed on each update.
+   */
+  getThroughput?: () => ThroughputMetric;
 };
 
 export function createEventStreamView(
@@ -396,6 +433,7 @@ export function createEventStreamView(
     onClose,
     config,
     plugins = [],
+    getThroughput,
   } = options;
   const scrollToBottomConfig = config?.features?.scrollToBottom;
   const scrollToBottomEnabled = scrollToBottomConfig?.enabled !== false;
@@ -474,11 +512,17 @@ export function createEventStreamView(
     let copyAllBtn!: HTMLButtonElement;
     let searchInput!: HTMLInputElement;
     let searchClearBtn!: HTMLButtonElement;
+    // Inline "Throughput <tok/s>" group, rendered into the header bar next to
+    // the "Events" count when getThroughput is provided. The detailed
+    // breakdown is revealed on hover via the native title tooltip.
+    let throughputValueEl: HTMLElement | null = null;
+    let throughputContainer: HTMLElement | null = null;
+    let throughputTooltipEl: HTMLElement | null = null;
 
     function buildDefaultToolbar(): HTMLElement {
       const toolbarOuter = createElement(
         "div",
-        "persona-flex persona-flex-col persona-flex-shrink-0"
+        "persona-relative persona-flex persona-flex-col persona-flex-shrink-0"
       );
 
       // --- Header bar ---
@@ -501,6 +545,58 @@ export function createEventStreamView(
         "persona-text-[11px] persona-font-mono persona-bg-persona-container persona-text-persona-muted persona-px-2 persona-py-0.5 persona-rounded persona-border persona-border-persona-border"
       );
       countBadge.textContent = "0";
+
+      // Inline throughput group: "Throughput  146.3 tok/s", grouped with the
+      // Events count. Hover reveals tokens · duration · source via a custom
+      // tooltip (shown instantly, unlike the slow native `title` delay).
+      if (getThroughput) {
+        throughputContainer = createElement(
+          "div",
+          "persona-relative persona-flex persona-items-center persona-gap-1.5 persona-whitespace-nowrap persona-ml-1"
+        );
+        throughputContainer.style.cursor = "help";
+        // Label styled to match the "Events" title.
+        const throughputLabel = createElement(
+          "span",
+          "persona-text-sm persona-font-medium persona-text-persona-primary persona-whitespace-nowrap"
+        );
+        throughputLabel.textContent = "Throughput";
+        // Same bounding box + styling as the Events count badge.
+        throughputValueEl = createElement(
+          "span",
+          "persona-text-[11px] persona-font-mono persona-bg-persona-container persona-text-persona-muted persona-px-2 persona-py-0.5 persona-rounded persona-border persona-border-persona-border persona-tabular-nums"
+        );
+        throughputValueEl.textContent = "-- tok/s";
+
+        // Custom hover tooltip — appears instantly (no native title delay).
+        // Appended to the (non-clipping) toolbar wrapper rather than the header
+        // bar, which has overflow-hidden and would clip a dropdown. Position is
+        // measured on hover so it sits just under the throughput group.
+        throughputTooltipEl = createElement(
+          "div",
+          "persona-absolute persona-z-50 persona-whitespace-nowrap persona-rounded persona-border persona-border-persona-border persona-bg-persona-container persona-text-persona-primary persona-text-[11px] persona-font-mono persona-px-2 persona-py-1 persona-shadow"
+        );
+        throughputTooltipEl.style.display = "none";
+        throughputTooltipEl.style.pointerEvents = "none";
+        const group = throughputContainer;
+        const tooltip = throughputTooltipEl;
+        const showTooltip = () => {
+          if (!tooltip.textContent) return;
+          const gRect = group.getBoundingClientRect();
+          const pRect = toolbarOuter.getBoundingClientRect();
+          tooltip.style.left = `${gRect.left - pRect.left}px`;
+          tooltip.style.top = `${gRect.bottom - pRect.top + 4}px`;
+          tooltip.style.display = "block";
+        };
+        const hideTooltip = () => {
+          tooltip.style.display = "none";
+        };
+        throughputContainer.addEventListener("mouseenter", showTooltip);
+        throughputContainer.addEventListener("mouseleave", hideTooltip);
+
+        throughputContainer.appendChild(throughputLabel);
+        throughputContainer.appendChild(throughputValueEl);
+      }
 
       const headerSpacer = createElement("div", "persona-flex-1");
 
@@ -540,6 +636,7 @@ export function createEventStreamView(
 
       headerBar.appendChild(title);
       headerBar.appendChild(countBadge);
+      if (throughputContainer) headerBar.appendChild(throughputContainer);
       headerBar.appendChild(headerSpacer);
       headerBar.appendChild(filterSelect);
       headerBar.appendChild(copyAllBtn);
@@ -592,6 +689,7 @@ export function createEventStreamView(
 
       toolbarOuter.appendChild(headerBar);
       toolbarOuter.appendChild(searchBar);
+      if (throughputTooltipEl) toolbarOuter.appendChild(throughputTooltipEl);
       return toolbarOuter;
     }
 
@@ -629,6 +727,28 @@ export function createEventStreamView(
       "persona-text-xs persona-text-persona-muted persona-text-center persona-py-0.5 persona-px-4 persona-bg-persona-container persona-border-b persona-border-persona-divider persona-italic persona-flex-shrink-0"
     );
     truncationBanner.style.display = "none";
+
+    // Refresh the inline header throughput value + hover tooltip. The elements
+    // live in the header bar (built by buildDefaultToolbar); this is a no-op
+    // when getThroughput is absent or a plugin replaced the toolbar.
+    function updateThroughputSummary(): void {
+      if (!getThroughput || !throughputValueEl || !throughputContainer) return;
+      const metric = getThroughput();
+      throughputValueEl.textContent = formatThroughputValue(metric);
+      // Detailed breakdown is revealed on hover via the custom tooltip; mirror
+      // it into aria-label for assistive tech. When there's nothing to show,
+      // hide the tooltip so an empty box never flashes on hover.
+      const meta = formatThroughputMeta(metric);
+      if (throughputTooltipEl) {
+        throughputTooltipEl.textContent = meta;
+        if (!meta) throughputTooltipEl.style.display = "none";
+      }
+      if (meta) {
+        throughputContainer.setAttribute("aria-label", meta);
+      } else {
+        throughputContainer.removeAttribute("aria-label");
+      }
+    }
 
     // ========================================================================
     // Events List (simple DOM, no virtual scroller)
@@ -804,6 +924,7 @@ export function createEventStreamView(
       lastRenderTime = Date.now();
       pendingUpdate = false;
 
+      updateThroughputSummary();
       updateFilterOptions();
 
       // Truncation banner

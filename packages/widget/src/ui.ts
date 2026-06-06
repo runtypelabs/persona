@@ -89,6 +89,7 @@ import { createApprovalBubble } from "./components/approval-bubble";
 import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
+import { ThroughputTracker } from "./utils/throughput-tracker";
 import { createEventStreamView } from "./components/event-stream-view";
 import { createArtifactPane, type ArtifactPaneApi } from "./components/artifact-pane";
 import {
@@ -669,6 +670,8 @@ export const createAgentExperience = (
   let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
   const eventStreamMaxEvents = config.features?.eventStream?.maxEvents ?? 2000;
   let eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore) : null;
+  // Passive output-throughput tracker, fed from the same SSE tap as the buffer.
+  let throughputTracker = showEventStreamToggle ? new ThroughputTracker() : null;
   let eventStreamView: ReturnType<typeof createEventStreamView> | null = null;
   let eventStreamVisible = false;
   let eventStreamRAF: number | null = null;
@@ -858,6 +861,8 @@ export const createAgentExperience = (
         onClose: () => toggleEventStreamOff(),
         config,
         plugins,
+        getThroughput: () =>
+          throughputTracker?.getMetric() ?? { status: "idle" },
       });
     }
     if (eventStreamView) {
@@ -4508,6 +4513,7 @@ export const createAgentExperience = (
   if (eventStreamBuffer || config.onSSEEvent) {
     session.setSSEEventCallback((type: string, payload: unknown) => {
       config.onSSEEvent?.(type, payload);
+      throughputTracker?.processEvent(type, payload);
       eventStreamBuffer?.push({
         id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         type,
@@ -4563,6 +4569,10 @@ export const createAgentExperience = (
     // intact so the user can edit and resend without retyping.
     if (session.isStreaming()) {
       session.cancel();
+      // Cancelling emits no terminal/error SSE frame, so reset the throughput
+      // tracker (as clear-chat does) to avoid a stale `running` row lingering.
+      throughputTracker?.reset();
+      eventStreamView?.update();
       return;
     }
 
@@ -4697,6 +4707,10 @@ export const createAgentExperience = (
     if (!session.isStreaming()) return;
     if (!event.composedPath().includes(container)) return;
     session.cancel();
+    // Cancelling emits no terminal/error SSE frame — reset throughput so the
+    // Events row doesn't keep showing a live rate from the stopped stream.
+    throughputTracker?.reset();
+    eventStreamView?.update();
     resetHistoryNavigation();
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -5562,8 +5576,9 @@ export const createAgentExperience = (
       persistentMetadata = {};
       actionManager.syncFromMetadata();
 
-      // Clear event stream buffer and store
+      // Clear event stream buffer and store, and reset throughput tracking
       eventStreamBuffer?.clear();
+      throughputTracker?.reset();
       eventStreamView?.update();
     });
   };
@@ -5732,10 +5747,12 @@ export const createAgentExperience = (
         if (!eventStreamBuffer) {
           eventStreamStore = new EventStreamStore(eventStreamDbName);
           eventStreamBuffer = new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore);
+          throughputTracker = throughputTracker ?? new ThroughputTracker();
           eventStreamStore.open().then(() => eventStreamBuffer?.restore()).catch(() => {});
-          // Register the SSE event callback (host tap + buffer)
+          // Register the SSE event callback (host tap + buffer + throughput)
           session.setSSEEventCallback((type: string, payload: unknown) => {
             config.onSSEEvent?.(type, payload);
+            throughputTracker?.processEvent(type, payload);
             eventStreamBuffer!.push({
               id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               type,
@@ -5784,6 +5801,8 @@ export const createAgentExperience = (
         eventStreamStore?.destroy();
         eventStreamBuffer = null;
         eventStreamStore = null;
+        throughputTracker?.reset();
+        throughputTracker = null;
       }
 
       if (config.launcher?.enabled === false && launcherButtonInstance) {
@@ -7024,8 +7043,9 @@ export const createAgentExperience = (
       persistentMetadata = {};
       actionManager.syncFromMetadata();
 
-      // Clear event stream buffer and store
+      // Clear event stream buffer and store, and reset throughput tracking
       eventStreamBuffer?.clear();
+      throughputTracker?.reset();
       eventStreamView?.update();
     },
     setMessage(message: string): boolean {
@@ -7179,6 +7199,7 @@ export const createAgentExperience = (
     /** Push a raw event into the event stream buffer (for testing/debugging) */
     __pushEventStreamEvent(event: { type: string; payload: unknown }): void {
       if (eventStreamBuffer) {
+        throughputTracker?.processEvent(event.type, event.payload);
         eventStreamBuffer.push({
           id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           type: event.type,
