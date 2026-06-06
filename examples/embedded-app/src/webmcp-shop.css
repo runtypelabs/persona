@@ -31,15 +31,20 @@ body.webmcp-shop {
   --shop-line: #e7e5e4;
   --shop-line-strong: #d6d3d1;
 
-  /* Wire-inspector palette (warm instrument readout) */
-  --wire-bg: #211c18;
-  --wire-fg: #e7e0d6;
+  /* Wire-inspector palette (warm instrument readout) — light scheme.
+     Category colors are the deeper variants so the tags + left rules read on a
+     light panel; the dark scheme below swaps in the brighter set. */
+  --wire-bg: #f4f1ea;
+  --wire-fg: #4b4640;
   --wire-faint: #9a8f80;
-  --wire-reg: #86efac;     /* registration */
-  --wire-send: #7dd3fc;    /* outgoing dispatch */
-  --wire-gate: #fcd34d;    /* approval gate */
-  --wire-exec: #d6bcfa;    /* page-tool execution */
-  --wire-resume: #e0a868;  /* batched resume (caramel) */
+  --wire-line: #e4ddcf;
+  --wire-head-bg: #ece5d8;
+  --wire-row-bg: rgba(28, 25, 23, 0.035);
+  --wire-reg: #15803d;     /* registration */
+  --wire-send: #0369a1;    /* outgoing dispatch */
+  --wire-gate: #a16207;    /* approval gate */
+  --wire-exec: #6d28d9;    /* page-tool execution */
+  --wire-resume: #c2410c;  /* batched resume */
 
   --shop-radius: 14px;
   --shop-radius-sm: 9px;
@@ -78,6 +83,19 @@ body.webmcp-shop {
 
     --shop-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shop-shadow-md: 0 16px 36px -22px rgba(0, 0, 0, 0.7);
+
+    /* Wire-inspector palette — dark scheme (brighter category set). */
+    --wire-bg: #211c18;
+    --wire-fg: #e7e0d6;
+    --wire-faint: #9a8f80;
+    --wire-line: rgba(255, 255, 255, 0.08);
+    --wire-head-bg: #2a241f;
+    --wire-row-bg: rgba(255, 255, 255, 0.03);
+    --wire-reg: #86efac;
+    --wire-send: #7dd3fc;
+    --wire-gate: #fcd34d;
+    --wire-exec: #d6bcfa;
+    --wire-resume: #e0a868;
   }
 }
 
@@ -367,7 +385,7 @@ body.webmcp-shop .shop-wire-head {
   text-align: left;
   list-style: none;
   padding: 0.6rem 0.8rem;
-  background: color-mix(in srgb, #ffffff 5%, var(--wire-bg));
+  background: var(--wire-head-bg);
   color: var(--wire-fg);
   font-family: var(--font-label, sans-serif);
   font-size: 0.72rem;
@@ -418,7 +436,7 @@ body.webmcp-shop .wire-row {
   padding: 0.32rem 0.4rem;
   border-radius: 6px;
   border-left: 3px solid var(--wire-faint);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--wire-row-bg);
   color: var(--wire-fg);
 }
 body.webmcp-shop .wire-row .wire-time { color: var(--wire-faint); }
@@ -445,7 +463,7 @@ body.webmcp-shop .shop-wire-legend {
   flex-wrap: wrap;
   gap: 0.35rem 0.7rem;
   padding: 0.45rem 0.7rem 0.6rem;
-  border-top: 1px solid color-mix(in srgb, #ffffff 8%, transparent);
+  border-top: 1px solid var(--wire-line);
 }
 body.webmcp-shop .shop-wire-legend span {
   display: inline-flex;
