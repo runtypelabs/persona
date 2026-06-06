@@ -1540,7 +1540,11 @@ export class AgentWidgetSession {
     options?.onHttpOk?.();
     if (response.body) {
       await this.connectStream(response.body, { allowReentry: true });
-    } else {
+    } else if (this.webMcpResolveControllers.size === 0) {
+      // No stream to pipe. Clear streaming only when no WebMCP resolve is in
+      // flight — for a WebMCP caller the current resolve's controller is still
+      // in the set, so its own `finally` (gated on the set draining) owns the
+      // teardown. Non-WebMCP callers (ask_user_question) keep the old behavior.
       this.setStreaming(false);
       this.abortController = null;
     }
@@ -1825,8 +1829,15 @@ export class AgentWidgetSession {
       }
     } else if (event.type === "error") {
       this.setStatus("error");
-      this.setStreaming(false);
-      this.abortController = null;
+      // Mirror the idle/status handler: don't tear down streaming while a
+      // WebMCP resolve is still confirming/executing on another stream — an
+      // error on one chained resume stream must not hide the typing indicator
+      // (or null a controller) for a sibling/successor resolve still in flight.
+      // The resolve's own `finally` flips streaming off once the set drains.
+      if (this.webMcpResolveControllers.size === 0) {
+        this.setStreaming(false);
+        this.abortController = null;
+      }
       if (this.agentExecution?.status === 'running') {
         this.agentExecution.status = 'error';
       }
@@ -2012,6 +2023,33 @@ export class AgentWidgetSession {
           // re-emit flip us back to awaiting.
           awaitingLocalTool: false,
         };
+      }
+      // WebMCP equivalent: once a `webmcp:*` tool has started resolving
+      // (inflight) or resolved, a duplicate `step_await` re-emit must not
+      // flip `awaitingLocalTool` back to true and resurrect the "waiting on
+      // local tool" UI. resolveWebMcpToolCall's dedupe path returns without
+      // re-touching the message, so correct the merge here (also avoids a
+      // one-frame flash before that microtask runs).
+      const reTcName = withSequence.toolCall?.name;
+      const reExecId = withSequence.agentMetadata?.executionId;
+      const reTcId = withSequence.toolCall?.id;
+      if (
+        reTcName &&
+        isWebMcpToolName(reTcName) &&
+        reExecId &&
+        reTcId &&
+        withSequence.agentMetadata?.awaitingLocalTool === true
+      ) {
+        const reKey = `${reExecId}:${reTcId}`;
+        if (
+          this.webMcpInflightKeys.has(reKey) ||
+          this.webMcpResolvedKeys.has(reKey)
+        ) {
+          merged.agentMetadata = {
+            ...(merged.agentMetadata ?? {}),
+            awaitingLocalTool: false,
+          };
+        }
       }
       return merged;
     });

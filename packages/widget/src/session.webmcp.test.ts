@@ -278,6 +278,41 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(executeSpy).not.toHaveBeenCalled();
   });
 
+  it("a stale step_await re-emit does not resurrect awaitingLocalTool once resolved", () => {
+    // BugBot: a duplicate step_await (awaitingLocalTool:true) for an
+    // already-resolved webmcp tool must not flip the message back to awaiting
+    // and show a stuck local-tool wait. upsertMessage clears it when the
+    // tool's `${executionId}:${toolCallId}` key is inflight/resolved.
+    const session = makeSession().session;
+    const s = session as unknown as {
+      webMcpResolvedKeys: Set<string>;
+      upsertMessage: (m: AgentWidgetMessage) => void;
+      messages: AgentWidgetMessage[];
+    };
+    s.webMcpResolvedKeys.add("exec-1:tool-1");
+    // Baseline: the resolved message with awaiting already cleared.
+    s.upsertMessage({
+      ...awaitingMessage("tool-1", "webmcp:search"),
+      agentMetadata: { executionId: "exec-1", awaitingLocalTool: false },
+    });
+    // Stale re-emit flips awaiting back to true on the wire.
+    s.upsertMessage(awaitingMessage("tool-1", "webmcp:search"));
+    const stored = s.messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(stored?.agentMetadata?.awaitingLocalTool).toBe(false);
+  });
+
+  it("an error event does not clear streaming while a webmcp resolve is in flight", () => {
+    // BugBot: the error handler mirrors the idle handler — it must not tear
+    // down streaming while a sibling/successor resolve is still executing.
+    const stuck = new Promise<WebMcpToolResult>(() => undefined);
+    const session = makeSession({ executeImpl: () => stuck }).session;
+    void session.resolveWebMcpToolCall(awaitingMessage("tool-1", "webmcp:search"));
+    (
+      session as unknown as { handleEvent: (e: unknown) => void }
+    ).handleEvent({ type: "error", error: new Error("stream blip") });
+    expect((session as unknown as { streaming: boolean }).streaming).toBe(true);
+  });
+
   it("forwards the abort signal into client.executeWebMcpToolCall", async () => {
     // BugBot finding #12: the session must thread its signal INTO the
     // bridge so cancel() can short-circuit the confirm bubble AND the
