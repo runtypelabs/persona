@@ -131,12 +131,15 @@ if (!modelContext) {
 // 2. Mount Persona with WebMCP enabled.
 // ---------------------------------------------------------------------------
 
-// Two wiring modes:
-//   1. Client-token mode (preferred for staging end-to-end tests): set
-//      VITE_PERSONA_CLIENT_TOKEN + VITE_PERSONA_API_URL (the API *base*, e.g.
-//      https://api.runtype.com). The widget talks to the Runtype API directly.
-//      WebMCP requires the token's surface to have `behavior.webmcp.enabled`.
-//   2. Proxy mode (default): routes through the local proxy on VITE_PROXY_PORT.
+// Two wiring modes (see README → "WebMCP Demo"):
+//   1. Client-token mode (used by the live persona-chat.dev deploy and for
+//      staging end-to-end tests): set VITE_PERSONA_CLIENT_TOKEN +
+//      VITE_PERSONA_API_URL (the API *base*, e.g. https://api.runtype.com).
+//      The widget talks to the Runtype API directly. WebMCP requires the
+//      token's surface to have `behavior.webmcp.enabled`. Set the token via
+//      .env.local locally, or Vercel env on the deploy — never commit it.
+//   2. Proxy mode (fallback when no client token): routes through the local
+//      proxy on VITE_PROXY_PORT.
 const clientToken = import.meta.env.VITE_PERSONA_CLIENT_TOKEN as
   | string
   | undefined;
