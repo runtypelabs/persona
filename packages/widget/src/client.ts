@@ -262,11 +262,9 @@ export class AgentWidgetClient {
   /**
    * Get the appropriate API URL based on mode
    */
-  private getClientApiUrl(endpoint: 'init' | 'chat'): string {
+  private getClientApiUrl(endpoint: 'init' | 'chat' | 'resume'): string {
     const baseUrl = this.config.apiUrl?.replace(/\/+$/, '').replace(/\/v1\/dispatch$/, '') || DEFAULT_CLIENT_API_BASE;
-    return endpoint === 'init'
-      ? `${baseUrl}/v1/client/init`
-      : `${baseUrl}/v1/client/chat`;
+    return `${baseUrl}/v1/client/${endpoint}`;
   }
 
   /**
@@ -860,24 +858,32 @@ export class AgentWidgetClient {
    * (client-executed) tools. Used by the built-in `ask_user_question`
    * answer-pill sheet, but generic enough for any LOCAL tool.
    *
-   * Posts to the upstream `/resume` endpoint (the dispatch URL with
-   * `/dispatch` replaced by `/resume` — works for both direct-to-Runtype
-   * and the persona proxy) and returns the raw Response so the caller can
-   * pipe its SSE body through `connectStream()`.
+   * Routes by mode:
+   *  - **client-token mode**: POST `${apiBase}/v1/client/resume` (the
+   *    session-authenticated sibling of `/v1/client/chat`; runtypelabs/core#3889),
+   *    with the active `sessionId` in the body and no Bearer key — a browser
+   *    client-token page holds no secret. `clientTools` are already persisted
+   *    server-side from the dispatch turn, so only `toolOutputs` is re-sent.
+   *  - **dispatch / proxy mode**: POST `${apiUrl}/resume` — Runtype mounts
+   *    resume as a child of `/v1/dispatch`, so the URL is `${apiUrl}/resume`,
+   *    and proxies follow the same shape (`/api/chat/dispatch/resume`).
+   *
+   * Returns the raw Response so the caller can pipe its SSE body through
+   * `connectStream()`.
    *
    * @param executionId - The paused execution id carried on `step_await`.
-   * @param toolOutputs - Map keyed by tool name → the tool's result value.
+   * @param toolOutputs - Map keyed by per-call `toolCallId` (core#3878),
+   *   falling back to tool name for legacy servers → the tool's result value.
    */
   public async resumeFlow(
     executionId: string,
     toolOutputs: Record<string, unknown>,
     options?: { streamResponse?: boolean; signal?: AbortSignal }
   ): Promise<Response> {
-    const trimmed = this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE;
-    // Runtype mounts POST /resume as a child route of /v1/dispatch, so the
-    // final URL is always `${apiUrl}/resume`. Proxies should follow the
-    // same shape (`/api/chat/dispatch/resume`) to keep the widget agnostic.
-    const url = `${trimmed}/resume`;
+    const isClientToken = this.isClientTokenMode();
+    const url = isClientToken
+      ? this.getClientApiUrl('resume')
+      : `${this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE}/resume`;
 
     let headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -887,14 +893,21 @@ export class AgentWidgetClient {
       Object.assign(headers, await this.getHeaders());
     }
 
+    const body: Record<string, unknown> = {
+      executionId,
+      toolOutputs,
+      streamResponse: options?.streamResponse ?? true,
+    };
+    // The client-token resume route authenticates the session, not a Bearer
+    // key — thread the active sessionId through like `/v1/client/chat` does.
+    if (isClientToken && this.clientSession?.sessionId) {
+      body.sessionId = this.clientSession.sessionId;
+    }
+
     return fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        executionId,
-        toolOutputs,
-        streamResponse: options?.streamResponse ?? true,
-      }),
+      body: JSON.stringify(body),
       signal: options?.signal,
     });
   }
