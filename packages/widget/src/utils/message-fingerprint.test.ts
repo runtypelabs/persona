@@ -125,6 +125,26 @@ describe("computeMessageFingerprint", () => {
     expect(fp1).not.toBe(fp2);
   });
 
+  it("changes when reasoning content grows while chunk count stays at 1 (ordered streaming path)", () => {
+    // The sequenced/production path collapses reasoning to a single accumulated
+    // chunk (client.ts: `reasoning.chunks = [ordered]`), so chunks.length is
+    // permanently 1 while the text grows. A length-only fingerprint would freeze
+    // the reasoning bubble mid-stream; hashing the last chunk's length + tail
+    // keeps the cache invalidating on every delta.
+    const fp1 = computeMessageFingerprint(
+      makeMessage({ variant: "reasoning", reasoning: { chunks: ["I am thinking about"], status: "streaming" } }),
+      0
+    );
+    const fp2 = computeMessageFingerprint(
+      makeMessage({
+        variant: "reasoning",
+        reasoning: { chunks: ["I am thinking about the user's question"], status: "streaming" },
+      }),
+      0
+    );
+    expect(fp1).not.toBe(fp2);
+  });
+
   it("changes when contentParts length changes", () => {
     const fp1 = computeMessageFingerprint(makeMessage({ contentParts: [] }), 0);
     const fp2 = computeMessageFingerprint(makeMessage({ contentParts: [{ type: "text", text: "hi" }] }), 0);
