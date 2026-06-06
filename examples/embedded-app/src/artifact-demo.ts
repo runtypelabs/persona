@@ -81,6 +81,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig =>
             enabled: false,
             autoExpand: true,
             width: "100%",
+            fullHeight: true,
           },
     layout: { showHeader: false },
   }) as AgentWidgetConfig;

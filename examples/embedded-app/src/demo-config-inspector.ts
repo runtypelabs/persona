@@ -228,7 +228,6 @@ export function createDemoConfigInspector(
       <h2 class="config-inspector-title">Configuration</h2>
       <p class="config-inspector-subtitle">${options.title ? `${options.title} · ` : ""}Live values from this demo</p>
     </div>
-    <span class="config-inspector-badge" title="Updates when you change controls">Live</span>
   `;
 
   const tablist = document.createElement("div");

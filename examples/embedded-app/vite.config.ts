@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin, type HtmlTagDescriptor } from "vite";
 import path from "node:path";
 import fs from "node:fs";
 
@@ -305,9 +305,56 @@ function previewEmbedCheck(): Plugin {
   };
 }
 
+// Font sets used by the shared stylesheets. Kept in sync with the families each
+// CSS file expects: demo-shared.css (gallery/demo pages) and index.css (home,
+// theme, products).
+const GALLERY_FONTS_HREF =
+  "https://fonts.googleapis.com/css2?family=Asap+Condensed:wght@400;600&family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500;600&display=swap";
+
+const HOME_FONTS_HREF =
+  "https://fonts.googleapis.com/css2?family=Asap+Condensed:wght@400&family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;700&display=swap";
+
+// Load the gallery fonts via <link> in <head> rather than an `@import` inside the
+// CSS. The browser only discovers an `@import` *after* the stylesheet downloads —
+// a serialized request with no preconnect — which delayed the web fonts enough to
+// show a visible font-swap flash (FOUT) on first paint. Injecting preconnect +
+// the stylesheet into <head> lets the fonts download in parallel and arrive far
+// sooner. Pages that ship their own fonts (bakery, standalone) are left alone.
+function galleryFonts(): Plugin {
+  return {
+    name: "gallery-fonts",
+    transformIndexHtml(html) {
+      const href = html.includes("demo-shared.css")
+        ? GALLERY_FONTS_HREF
+        : html.includes("src/index.css")
+          ? HOME_FONTS_HREF
+          : null;
+      if (!href) return;
+      const tags: HtmlTagDescriptor[] = [
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" },
+          injectTo: "head-prepend",
+        },
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: true },
+          injectTo: "head-prepend",
+        },
+        {
+          tag: "link",
+          attrs: { rel: "stylesheet", href },
+          injectTo: "head-prepend",
+        },
+      ];
+      return tags;
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [serveWidgetDist(), llmsTxt(), previewEmbedCheck()],
+  plugins: [serveWidgetDist(), llmsTxt(), previewEmbedCheck(), galleryFonts()],
   resolve: {
     alias: {
       "@runtypelabs/persona/theme-editor": path.resolve(
