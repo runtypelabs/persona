@@ -656,10 +656,14 @@ const shopTheme: NonNullable<AgentWidgetConfig["theme"]> = {
     },
   },
   components: {
+    // Square the panel's outer edges so it sits flush in the inline/fullscreen
+    // stage instead of letting the page show through rounded corners.
+    panel: { borderRadius: "0" },
     // Keep the header a dark espresso bar with a caramel icon in BOTH schemes
     // (decoupled from `primary`, which flips to caramel in dark mode and would
     // otherwise leave light header text on a light caramel bar).
     header: {
+      borderRadius: "0",
       background: "#1c1917",
       titleForeground: "#fafaf9",
       subtitleForeground: "#d6d3d1",
@@ -708,7 +712,9 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
     },
   },
   components: {
+    panel: { borderRadius: "0" },
     header: {
+      borderRadius: "0",
       background: "#292524",
       titleForeground: "#f5f5f4",
       subtitleForeground: "#a8a29e",
