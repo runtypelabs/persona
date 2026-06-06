@@ -211,6 +211,34 @@ describe("WebMcpBridge.executeToolCall", () => {
     const r = await bridge.executeToolCall("webmcp:search", {});
     expect(r.isError).toBe(true);
     expect((r.content[0] as { text: string }).text).toMatch(/not operational/i);
+    expect((r.content[0] as { text: string }).text).toMatch(/not available/i);
+  });
+
+  it("warns once and degrades cleanly when document.modelContext is present but incompatible", async () => {
+    // A different / older WebMCP polyfill (or divergent native draft) squats
+    // document.modelContext without the strict getTools()/executeTool() surface.
+    // @mcp-b's initializeWebMCPPolyfill correctly declines to overwrite it, so
+    // Persona must (a) report non-operational, (b) surface an actionable error
+    // distinct from "not available", and (c) warn exactly once.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal("document", {
+      modelContext: { registerTool: () => undefined }, // no getTools/executeTool
+    });
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+
+    expect(await bridge.snapshotForDispatch()).toEqual([]);
+    expect(bridge.isOperational()).toBe(false);
+
+    const r = await bridge.executeToolCall("webmcp:search", {});
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/present but/i);
+
+    // Warned about the incompatible context, exactly once despite multiple hits.
+    const incompatWarnings = warnSpy.mock.calls.filter(([msg]) =>
+      String(msg).includes("does not expose getTools()/executeTool()"),
+    );
+    expect(incompatWarnings).toHaveLength(1);
+    warnSpy.mockRestore();
   });
 
   it("strips the webmcp: prefix before registry lookup and forwards args", async () => {

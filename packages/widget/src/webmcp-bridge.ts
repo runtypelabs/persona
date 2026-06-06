@@ -94,6 +94,12 @@ export class WebMcpBridge {
   private installed = false;
   /** Memoizes the one-shot async install so concurrent callers share it. */
   private readyPromise: Promise<void> | null = null;
+  /**
+   * Warn-once latch for a present-but-incompatible `document.modelContext`
+   * (some other / older WebMCP polyfill squatting the global). `getModelContext`
+   * is hit on every snapshot + execute, so we log the diagnostic only once.
+   */
+  private incompatibleContextWarned = false;
 
   constructor(private readonly config: AgentWidgetWebMcpConfig) {
     this.confirmHandler = config.onConfirm ?? null;
@@ -198,8 +204,17 @@ export class WebMcpBridge {
 
     const mc = this.getModelContext();
     if (!mc) {
+      // Distinguish "no modelContext at all" from "present but incompatible"
+      // (a foreign/older polyfill squatting document.modelContext) so the
+      // resumed error is actionable. getModelContext has already warned once
+      // for the incompatible case.
+      const present =
+        typeof document !== "undefined" &&
+        Boolean((document as Document & { modelContext?: unknown }).modelContext);
       return errorResult(
-        "WebMCP bridge is not operational on this page (polyfill not installed).",
+        present
+          ? "WebMCP is not operational: document.modelContext is present but does not expose the strict getTools()/executeTool() surface (likely a different or older WebMCP polyfill)."
+          : "WebMCP bridge is not operational on this page (document.modelContext not available).",
       );
     }
 
@@ -338,12 +353,32 @@ export class WebMcpBridge {
   private getModelContext(): ModelContextCoreLike | null {
     if (typeof document === "undefined") return null;
     const mc = (document as Document & { modelContext?: unknown }).modelContext;
+    if (!mc || typeof mc !== "object") {
+      // Absent (not yet installed, or no WebMCP on this page) — not an error,
+      // and not worth warning about; the snapshot/execute paths fall back to a
+      // clean "not operational" result.
+      return null;
+    }
+    const core = mc as Partial<ModelContextCoreLike>;
     if (
-      !mc ||
-      typeof mc !== "object" ||
-      typeof (mc as ModelContextCoreLike).getTools !== "function" ||
-      typeof (mc as ModelContextCoreLike).executeTool !== "function"
+      typeof core.getTools !== "function" ||
+      typeof core.executeTool !== "function"
     ) {
+      // A `document.modelContext` IS present but doesn't expose the strict-core
+      // surface we consume (`getTools` / `executeTool`). This usually means a
+      // different or older WebMCP polyfill (or a native impl on a divergent
+      // draft) installed the global first — which `@mcp-b/webmcp-polyfill`
+      // correctly declines to overwrite. Warn once so integrators understand
+      // why WebMCP is inert instead of seeing a silent no-op.
+      if (!this.incompatibleContextWarned) {
+        this.incompatibleContextWarned = true;
+        log.warn(
+          "document.modelContext is present but does not expose getTools()/executeTool() — " +
+            "WebMCP consumption is disabled. Another (incompatible or older) WebMCP polyfill " +
+            "likely installed document.modelContext before Persona. Remove it, or use a polyfill " +
+            "implementing the strict standard surface (e.g. @mcp-b/webmcp-polyfill).",
+        );
+      }
       return null;
     }
     return mc as ModelContextCoreLike;
