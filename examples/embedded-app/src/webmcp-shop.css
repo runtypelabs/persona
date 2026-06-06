@@ -114,6 +114,16 @@ body.webmcp-shop .shell-main:has(.stage-widget) .stage-controls {
   border-right-color: var(--shop-line-strong);
 }
 
+/* This page has no gallery shell header, so the full-bleed layout's
+   `padding-top: var(--shell-header)` is just dead space at the top. Drop it on
+   desktop so the widget runs the full viewport height; the rail keeps its own
+   top padding for a little breathing room above the wordmark. */
+@media (min-width: 1101px) {
+  body.webmcp-shop .shell-main:has(.stage-widget) {
+    padding-top: 0;
+  }
+}
+
 /* ── Storefront hero ───────────────────────────────────────────────────── */
 
 body.webmcp-shop .shop-hero {
