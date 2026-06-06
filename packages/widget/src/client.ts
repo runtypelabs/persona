@@ -23,7 +23,7 @@ import {
   ContentPart,
   WebMcpConfirmHandler
 } from "./types";
-import { WebMcpBridge } from "./webmcp-bridge";
+import { WebMcpBridge, computeClientToolsFingerprint } from "./webmcp-bridge";
 import {
   extractTextFromJson,
   createPlainTextParser,
@@ -170,6 +170,14 @@ export class AgentWidgetClient {
   // Client token mode properties
   private clientSession: ClientSession | null = null;
   private sessionInitPromise: Promise<ClientSession> | null = null;
+
+  // Diff-only / send-once WebMCP tool dispatch (client-token mode ONLY).
+  // Fingerprint of the clientTools[] last *sent in full* and confirmed by a
+  // successful stream start; null => the next client-token turn sends the full
+  // array. Paired with the sessionId it was sent under so a session change
+  // (silent re-init / expiry) forces a fresh full send.
+  private lastSentClientToolsFingerprint: string | null = null;
+  private clientToolsFingerprintSessionId: string | null = null;
 
   // WebMCP — page-discovered tool consumption (see ./webmcp-bridge).
   // Constructed lazily: null when `config.webmcp?.enabled !== true`.
@@ -358,6 +366,17 @@ export class AgentWidgetClient {
   public clearClientSession(): void {
     this.clientSession = null;
     this.sessionInitPromise = null;
+    this.resetClientToolsFingerprint();
+  }
+
+  /**
+   * Forget the diff-only WebMCP tool fingerprint so the next client-token turn
+   * resends the full `clientTools[]`. Called when the session is cleared and
+   * when the conversation is reset (`WidgetSession.clearMessages`).
+   */
+  public resetClientToolsFingerprint(): void {
+    this.lastSentClientToolsFingerprint = null;
+    this.clientToolsFingerprintSessionId = null;
   }
 
   /**
@@ -551,7 +570,7 @@ export class AgentWidgetClient {
       // Check if session is about to expire (within 1 minute)
       if (new Date() >= new Date(session.expiresAt.getTime() - 60000)) {
         // Session expired or expiring soon
-        this.clientSession = null;
+        this.clearClientSession();
         this.config.onSessionExpired?.();
         const error = new Error('Session expired. Please refresh to continue.');
         onEvent({ type: "error", error });
@@ -569,7 +588,8 @@ export class AgentWidgetClient {
           )
         : undefined;
       
-      const chatRequest: ClientChatRequest = {
+      // Common (tools-independent) fields for the chat request.
+      const baseChatRequest: Omit<ClientChatRequest, 'clientTools' | 'clientToolsFingerprint'> = {
         sessionId: session.sessionId,
         // Filter out messages with empty content to prevent validation errors
         messages: options.messages.filter(hasValidContent).map(m => ({
@@ -584,44 +604,90 @@ export class AgentWidgetClient {
         ...(sanitizedMetadata && Object.keys(sanitizedMetadata).length > 0 && { metadata: sanitizedMetadata }),
         ...(basePayload.inputs && Object.keys(basePayload.inputs).length > 0 && { inputs: basePayload.inputs }),
         ...(basePayload.context && { context: basePayload.context }),
-        // Forward per-turn WebMCP tools snapshotted by buildPayload(). The
-        // client-token chat endpoint accepts the same shape as /v1/dispatch.
-        ...(basePayload.clientTools && basePayload.clientTools.length > 0 && { clientTools: basePayload.clientTools }),
       };
 
-      if (this.debug) {
-        // eslint-disable-next-line no-console
-        console.debug("[AgentWidgetClient] client token dispatch", chatRequest);
+      // Diff-only / send-once WebMCP tool dispatch. `buildPayload()` already
+      // snapshotted the full set; decide whether to ship it again or just its
+      // fingerprint. First turn of a session, or a changed set, sends the full
+      // array; an unchanged set sends only the fingerprint and the server
+      // reuses its stored copy. The cache is committed only after a successful
+      // stream start (below), so a 409/failure leaves it untouched.
+      const fullClientTools = basePayload.clientTools;
+      const hasClientTools = !!(fullClientTools && fullClientTools.length > 0);
+      const clientToolsFingerprint = hasClientTools
+        ? computeClientToolsFingerprint(fullClientTools!)
+        : undefined;
+      const sameSession = this.clientToolsFingerprintSessionId === session.sessionId;
+      const unchanged =
+        hasClientTools && sameSession && this.lastSentClientToolsFingerprint === clientToolsFingerprint;
+
+      // `forceFull` flips to true after a 409 cache-miss so the single retry
+      // resends the full list. Capture any error body read inside the loop so
+      // the `!response.ok` handler below doesn't re-consume the stream.
+      let forceFull = false;
+      let errorData: { error?: string; hint?: string } | null = null;
+      let response: Response;
+      for (let attempt = 0; ; attempt++) {
+        const sendFull = hasClientTools && (forceFull || !unchanged);
+        const chatRequest: ClientChatRequest = {
+          ...baseChatRequest,
+          ...(sendFull && fullClientTools ? { clientTools: fullClientTools } : {}),
+          ...(clientToolsFingerprint ? { clientToolsFingerprint } : {}),
+        };
+
+        if (this.debug) {
+          // eslint-disable-next-line no-console
+          console.debug("[AgentWidgetClient] client token dispatch", chatRequest);
+        }
+
+        response = await fetch(this.getClientApiUrl('chat'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(chatRequest),
+          signal: controller.signal,
+        });
+
+        // Diff-only cache miss: the server has no stored tool set matching our
+        // fingerprint. Retry exactly once with the full list. A second miss
+        // falls through to the normal error handling below (no infinite loop).
+        if (response.status === 409 && attempt === 0 && hasClientTools) {
+          const body = (await response.json().catch(() => null)) as
+            | { error?: string; hint?: string }
+            | null;
+          if (body?.error === 'client_tools_resend_required') {
+            forceFull = true;
+            // Invalidate so future turns also resend until a clean success
+            // commits a fresh fingerprint.
+            this.lastSentClientToolsFingerprint = null;
+            continue;
+          }
+          // Some other 409 — keep the parsed body for the handler below.
+          errorData = body ?? { error: 'Chat request failed' };
+        }
+        break;
       }
 
-      const response = await fetch(this.getClientApiUrl('chat'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(chatRequest),
-        signal: controller.signal,
-      });
-
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Chat request failed' }));
-        
+        const data = errorData ?? (await response.json().catch(() => ({ error: 'Chat request failed' })));
+
         if (response.status === 401) {
           // Session expired
-          this.clientSession = null;
+          this.clearClientSession();
           this.config.onSessionExpired?.();
           const error = new Error('Session expired. Please refresh to continue.');
           onEvent({ type: "error", error });
           throw error;
         }
-        
+
         if (response.status === 429) {
-          const error = new Error(errorData.hint || 'Message limit reached for this session.');
+          const error = new Error(data.hint || 'Message limit reached for this session.');
           onEvent({ type: "error", error });
           throw error;
         }
-        
-        const error = new Error(errorData.error || 'Failed to send message');
+
+        const error = new Error(data.error || 'Failed to send message');
         onEvent({ type: "error", error });
         throw error;
       }
@@ -631,6 +697,12 @@ export class AgentWidgetClient {
         onEvent({ type: "error", error });
         throw error;
       }
+
+      // Stream is good: the server now holds this tool set under this
+      // fingerprint for the session. Commit the cache so unchanged follow-up
+      // turns can send fingerprint-only.
+      this.lastSentClientToolsFingerprint = clientToolsFingerprint ?? null;
+      this.clientToolsFingerprintSessionId = session.sessionId;
 
       onEvent({ type: "status", status: "connected" });
       

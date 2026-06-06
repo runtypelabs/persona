@@ -29,7 +29,9 @@ import {
   WebMcpBridge,
   isWebMcpToolName,
   stripWebMcpPrefix,
+  computeClientToolsFingerprint,
 } from "./webmcp-bridge";
+import type { ClientToolDefinition } from "./types";
 
 type MockClient = { requestUserInteraction: (cb: () => unknown) => Promise<unknown> };
 
@@ -425,5 +427,66 @@ describe("WebMcpBridge.executeToolCall", () => {
     expect(r.isError).toBe(true);
     expect((r.content[0] as { text: string }).text).toMatch(/allowlist/i);
     expect(executeSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("computeClientToolsFingerprint — diff-only / send-once", () => {
+  const tool = (over: Partial<ClientToolDefinition> = {}): ClientToolDefinition => ({
+    name: "search",
+    description: "Search the catalog",
+    parametersSchema: { type: "object", properties: { q: { type: "string" } } },
+    origin: "webmcp",
+    ...over,
+  });
+
+  it("returns a stable sentinel for an empty set", () => {
+    expect(computeClientToolsFingerprint([])).toBe(computeClientToolsFingerprint([]));
+    expect(computeClientToolsFingerprint([])).toBe("0:empty");
+  });
+
+  it("is deterministic for the same set", () => {
+    const a = computeClientToolsFingerprint([tool({ name: "a" }), tool({ name: "b" })]);
+    const b = computeClientToolsFingerprint([tool({ name: "a" }), tool({ name: "b" })]);
+    expect(a).toBe(b);
+  });
+
+  it("is order-independent (tool order does not matter)", () => {
+    const ab = computeClientToolsFingerprint([tool({ name: "a" }), tool({ name: "b" })]);
+    const ba = computeClientToolsFingerprint([tool({ name: "b" }), tool({ name: "a" })]);
+    expect(ab).toBe(ba);
+  });
+
+  it("changes when a description changes", () => {
+    expect(computeClientToolsFingerprint([tool({ description: "x" })])).not.toBe(
+      computeClientToolsFingerprint([tool({ description: "y" })]),
+    );
+  });
+
+  it("changes when the schema changes", () => {
+    const base = computeClientToolsFingerprint([tool()]);
+    const changed = computeClientToolsFingerprint([
+      tool({ parametersSchema: { type: "object", properties: { q: { type: "number" } } } }),
+    ]);
+    expect(changed).not.toBe(base);
+  });
+
+  it("changes when a tool is added", () => {
+    const one = computeClientToolsFingerprint([tool({ name: "a" })]);
+    const two = computeClientToolsFingerprint([tool({ name: "a" }), tool({ name: "b" })]);
+    expect(two).not.toBe(one);
+  });
+
+  it("ignores pageOrigin (audit metadata, not part of the contract)", () => {
+    const withOrigin = computeClientToolsFingerprint([tool({ pageOrigin: "https://a.example" })]);
+    const without = computeClientToolsFingerprint([tool({ pageOrigin: undefined })]);
+    expect(withOrigin).toBe(without);
+  });
+
+  it("reflects annotations (they ride along to the server)", () => {
+    const plain = computeClientToolsFingerprint([tool()]);
+    const annotated = computeClientToolsFingerprint([
+      tool({ annotations: { readOnlyHint: true } }),
+    ]);
+    expect(annotated).not.toBe(plain);
   });
 });

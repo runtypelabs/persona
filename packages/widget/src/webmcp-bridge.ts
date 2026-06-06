@@ -86,6 +86,39 @@ const log = {
   },
 };
 
+/**
+ * Compute a stable, order-independent fingerprint of a `ClientToolDefinition[]`
+ * snapshot, for the diff-only / send-once dispatch path (client-token mode).
+ *
+ * The widget caches "the fingerprint of the tool set last sent in full" for the
+ * current session; an unchanged set on a follow-up turn lets it ship only the
+ * fingerprint instead of the whole array. Per-tool strings are sorted so tool
+ * ordering does not affect the result. `pageOrigin` is deliberately excluded —
+ * it is audit metadata, not part of the tool contract.
+ *
+ * This is a fast, non-cryptographic content key (the same role as
+ * {@link computeMessageFingerprint}). The server computes its own canonical hash
+ * over the validated/namespaced set, so cross-implementation byte-equality is
+ * NOT required — only self-consistency across this widget's turns.
+ */
+export function computeClientToolsFingerprint(
+  tools: ClientToolDefinition[],
+): string {
+  if (tools.length === 0) return "0:empty";
+  const parts = tools
+    .map((t) =>
+      [
+        t.name,
+        t.description ?? "",
+        t.parametersSchema ? JSON.stringify(t.parametersSchema) : "",
+        t.origin ?? "",
+        t.annotations ? JSON.stringify(t.annotations) : "",
+      ].join("\x1f"),
+    )
+    .sort();
+  return `${tools.length}:${parts.join("\x1e")}`;
+}
+
 export class WebMcpBridge {
   private confirmHandler: WebMcpConfirmHandler | null;
   private readonly timeoutMs: number;

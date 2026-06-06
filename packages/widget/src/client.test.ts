@@ -3771,3 +3771,230 @@ describe('AgentWidgetClient - requestMiddleware preserves clientTools', () => {
   });
 });
 
+
+// ============================================================================
+// Diff-only / send-once WebMCP clientTools (client-token mode)
+// ============================================================================
+
+describe('AgentWidgetClient - diff-only clientTools (client-token)', () => {
+  const TOOLS = [
+    { name: 'add_to_cart', description: 'Add to cart', origin: 'webmcp' as const },
+  ];
+
+  function sse(): Response {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(c) {
+        c.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+        c.close();
+      },
+    });
+    return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
+  }
+
+  // A client-token client with a live session (so initSession short-circuits)
+  // and a stubbed bridge returning `tools`.
+  function makeClient(tools: unknown[]) {
+    const client = new AgentWidgetClient({
+      clientToken: 'ct_live_demo',
+      apiUrl: 'https://api.runtype-staging.com',
+    });
+    (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
+      sessionId: 'cs_diff_1',
+      expiresAt: new Date(Date.now() + 600_000),
+    };
+    (client as unknown as { webMcpBridge: { snapshotForDispatch: () => unknown[] } | null }).webMcpBridge = {
+      snapshotForDispatch: () => tools,
+    };
+    return client;
+  }
+
+  const userMsg = (content = 'hi') => ({
+    messages: [{ id: 'u1', role: 'user' as const, content, createdAt: new Date().toISOString() }],
+    assistantMessageId: 'a1',
+  });
+
+  let chatBodies: Array<Record<string, unknown>>;
+  beforeEach(() => {
+    chatBodies = [];
+  });
+
+  function captureSseFetch() {
+    return vi.fn().mockImplementation(async (url: string, init: { body: string }) => {
+      if (url.includes('/client/chat')) chatBodies.push(JSON.parse(init.body));
+      return sse();
+    });
+  }
+
+  it('first turn sends the full tool list AND a fingerprint', async () => {
+    global.fetch = captureSseFetch();
+    const client = makeClient(TOOLS);
+
+    await client.dispatch(userMsg(), () => undefined);
+
+    expect(chatBodies).toHaveLength(1);
+    expect(chatBodies[0]!.clientTools).toEqual(TOOLS);
+    expect(typeof chatBodies[0]!.clientToolsFingerprint).toBe('string');
+  });
+
+  it('an unchanged second turn sends fingerprint-only (no clientTools array)', async () => {
+    global.fetch = captureSseFetch();
+    const client = makeClient(TOOLS);
+
+    await client.dispatch(userMsg('one'), () => undefined);
+    await client.dispatch(userMsg('two'), () => undefined);
+
+    expect(chatBodies).toHaveLength(2);
+    expect(chatBodies[1]!.clientTools).toBeUndefined();
+    expect(chatBodies[1]!.clientToolsFingerprint).toBe(chatBodies[0]!.clientToolsFingerprint);
+  });
+
+  it('a changed tool set resends the full list with a new fingerprint', async () => {
+    global.fetch = captureSseFetch();
+    // Mutable stub so the second turn snapshots a different set.
+    const live = [...TOOLS];
+    const client = new AgentWidgetClient({
+      clientToken: 'ct_live_demo',
+      apiUrl: 'https://api.runtype-staging.com',
+    });
+    (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
+      sessionId: 'cs_diff_1',
+      expiresAt: new Date(Date.now() + 600_000),
+    };
+    (client as unknown as { webMcpBridge: { snapshotForDispatch: () => unknown[] } | null }).webMcpBridge = {
+      snapshotForDispatch: () => live,
+    };
+
+    await client.dispatch(userMsg('one'), () => undefined);
+    live.push({ name: 'checkout', description: 'Checkout', origin: 'webmcp' });
+    await client.dispatch(userMsg('two'), () => undefined);
+
+    expect(chatBodies).toHaveLength(2);
+    expect(chatBodies[1]!.clientTools).toEqual(live);
+    expect(chatBodies[1]!.clientToolsFingerprint).not.toBe(chatBodies[0]!.clientToolsFingerprint);
+  });
+
+  it('order-independent: reordering the same tools stays fingerprint-only', async () => {
+    global.fetch = captureSseFetch();
+    const live = [
+      { name: 'a', description: 'A', origin: 'webmcp' as const },
+      { name: 'b', description: 'B', origin: 'webmcp' as const },
+    ];
+    const client = new AgentWidgetClient({
+      clientToken: 'ct_live_demo',
+      apiUrl: 'https://api.runtype-staging.com',
+    });
+    (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
+      sessionId: 'cs_diff_1',
+      expiresAt: new Date(Date.now() + 600_000),
+    };
+    let current = live;
+    (client as unknown as { webMcpBridge: { snapshotForDispatch: () => unknown[] } | null }).webMcpBridge = {
+      snapshotForDispatch: () => current,
+    };
+
+    await client.dispatch(userMsg('one'), () => undefined);
+    current = [live[1]!, live[0]!]; // same set, reordered
+    await client.dispatch(userMsg('two'), () => undefined);
+
+    expect(chatBodies[1]!.clientTools).toBeUndefined();
+  });
+
+  it('a 409 client_tools_resend_required triggers exactly one retry with the full list', async () => {
+    let call = 0;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init: { body: string }) => {
+      if (!url.includes('/client/chat')) return sse();
+      call += 1;
+      chatBodies.push(JSON.parse(init.body));
+      if (call === 1) {
+        return new Response(JSON.stringify({ error: 'client_tools_resend_required' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return sse();
+    });
+    const client = makeClient(TOOLS);
+    // Pre-seed the cache so the first attempt would be fingerprint-only — the
+    // server then forces a resend.
+    (client as unknown as { lastSentClientToolsFingerprint: string | null; clientToolsFingerprintSessionId: string | null }).lastSentClientToolsFingerprint =
+      'stale';
+    (client as unknown as { clientToolsFingerprintSessionId: string | null }).clientToolsFingerprintSessionId =
+      'cs_diff_1';
+
+    await client.dispatch(userMsg(), () => undefined);
+
+    expect(chatBodies).toHaveLength(2);
+    // Retry carried the full list...
+    expect(chatBodies[1]!.clientTools).toEqual(TOOLS);
+    // ...with the SAME messages + assistantMessageId (no double user message).
+    expect(chatBodies[1]!.messages).toEqual(chatBodies[0]!.messages);
+    expect(chatBodies[1]!.assistantMessageId).toBe(chatBodies[0]!.assistantMessageId);
+  });
+
+  it('clearMessages-style reset (resetClientToolsFingerprint) forces a full resend next turn', async () => {
+    global.fetch = captureSseFetch();
+    const client = makeClient(TOOLS);
+
+    await client.dispatch(userMsg('one'), () => undefined);
+    client.resetClientToolsFingerprint();
+    await client.dispatch(userMsg('two'), () => undefined);
+
+    expect(chatBodies[1]!.clientTools).toEqual(TOOLS); // not fingerprint-only
+  });
+
+  it('does not commit the cache on a network failure (next turn resends full)', async () => {
+    let call = 0;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init: { body: string }) => {
+      if (!url.includes('/client/chat')) return sse();
+      call += 1;
+      chatBodies.push(JSON.parse(init.body));
+      if (call === 1) throw new Error('network down');
+      return sse();
+    });
+    const client = makeClient(TOOLS);
+
+    await client.dispatch(userMsg('one'), () => undefined).catch(() => undefined);
+    await client.dispatch(userMsg('two'), () => undefined);
+
+    // Second turn still sends the full list because the first never committed.
+    expect(chatBodies[1]!.clientTools).toEqual(TOOLS);
+  });
+});
+
+describe('AgentWidgetClient - non-client-token paths always send full clientTools', () => {
+  function sse(): Response {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(c) {
+        c.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+        c.close();
+      },
+    });
+    return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
+  }
+
+  it('proxy mode sends full clientTools and no fingerprint on every turn', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    global.fetch = vi.fn().mockImplementation(async (_url: string, init: { body: string }) => {
+      bodies.push(JSON.parse(init.body));
+      return sse();
+    });
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    (client as unknown as { webMcpBridge: { snapshotForDispatch: () => unknown[] } | null }).webMcpBridge = {
+      snapshotForDispatch: () => [{ name: 'search', description: 's', origin: 'webmcp' }],
+    };
+
+    const msg = () => ({
+      messages: [{ id: 'u1', role: 'user' as const, content: 'hi', createdAt: new Date().toISOString() }],
+    });
+    await client.dispatch(msg(), () => undefined);
+    await client.dispatch(msg(), () => undefined);
+
+    expect(bodies).toHaveLength(2);
+    for (const b of bodies) {
+      expect(b.clientTools).toEqual([{ name: 'search', description: 's', origin: 'webmcp' }]);
+      expect(b.clientToolsFingerprint).toBeUndefined();
+    }
+  });
+});
