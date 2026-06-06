@@ -3960,6 +3960,40 @@ describe('AgentWidgetClient - diff-only clientTools (client-token)', () => {
     // Second turn still sends the full list because the first never committed.
     expect(chatBodies[1]!.clientTools).toEqual(TOOLS);
   });
+
+  it('minting a fresh session via initSession() resets the fingerprint cache', async () => {
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes('/client/init')) {
+        return new Response(
+          JSON.stringify({
+            sessionId: 'cs_freshly_minted',
+            expiresAt: new Date(Date.now() + 600_000).toISOString(),
+            flow: { id: 'flow_x', name: 'F', description: null },
+            config: { welcomeMessage: null, placeholder: 'p', theme: null },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return sse();
+    });
+    const client = new AgentWidgetClient({
+      clientToken: 'ct_live_demo',
+      apiUrl: 'https://api.runtype-staging.com',
+    });
+    // Pre-seed a stale fingerprint bound to a prior session (no live session, so
+    // initSession() takes the mint path and fetches /client/init).
+    const internals = client as unknown as {
+      lastSentClientToolsFingerprint: string | null;
+      clientToolsFingerprintSessionId: string | null;
+    };
+    internals.lastSentClientToolsFingerprint = 'stale-fp';
+    internals.clientToolsFingerprintSessionId = 'cs_old';
+
+    await client.initSession();
+
+    expect(internals.lastSentClientToolsFingerprint).toBeNull();
+    expect(internals.clientToolsFingerprintSessionId).toBeNull();
+  });
 });
 
 describe('AgentWidgetClient - non-client-token paths always send full clientTools', () => {

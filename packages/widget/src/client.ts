@@ -305,6 +305,12 @@ export class AgentWidgetClient {
     try {
       const session = await this.sessionInitPromise;
       this.clientSession = session;
+      // A freshly-minted session must resend the full WebMCP tool list on its
+      // next turn: drop any diff-only fingerprint cached under a prior session,
+      // so we never claim "unchanged" against a session the server didn't store
+      // the set under. (Belt-and-suspenders with the sessionId comparison in the
+      // send decision and the server's 409 resend signal.)
+      this.resetClientToolsFingerprint();
       this.config.onSessionInit?.(session);
       return session;
     } finally {
