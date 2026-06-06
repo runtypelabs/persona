@@ -600,6 +600,16 @@ export class AgentWidgetSession {
   }
 
   public updateConfig(next: AgentWidgetConfig) {
+    // Replacing the client invalidates every in-flight WebMCP resolve, buffered
+    // parallel-await batch, and pending approval bubble tied to the OLD client/
+    // session. Tear them down BEFORE the swap (the new client has no session
+    // yet) so a deferred batch flush or a parked confirm can't fire against the
+    // fresh client — in client-token mode that would POST /resume without a
+    // valid sessionId and strand the paused turn. Mirrors clearMessages' WebMCP
+    // reset; the client swap already abandons any in-flight stream regardless.
+    this.abortWebMcpResolves();
+    this.webMcpInflightKeys.clear();
+    this.webMcpResolvedKeys.clear();
     const prevSSECallback = this.client.getSSEEventCallback();
     this.config = { ...this.config, ...next };
     this.client = new AgentWidgetClient(this.config);

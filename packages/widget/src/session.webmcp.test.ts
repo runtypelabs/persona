@@ -730,6 +730,31 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     expect(s.agentExecution?.status).toBe("running");
   });
 
+  it("updateConfig tears down buffered batches and pending approvals", async () => {
+    // BugBot (PR #214): updateConfig swaps the client; a buffered batch or
+    // parked approval flushed afterward would target the fresh (session-less)
+    // client and strand the paused turn. updateConfig must reset WebMCP state.
+    const { session } = makeSession();
+    const s = session as unknown as {
+      webMcpAwaitBatches: Map<string, unknown>;
+      webMcpApprovalResolvers: Map<string, unknown>;
+    };
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    const pending = session.requestWebMcpApproval({
+      toolName: "add_to_cart",
+      args: { sku: "SHOE-001" },
+    } as WebMcpConfirmInfo);
+    expect(s.webMcpAwaitBatches.size).toBe(1); // one batch keyed by executionId
+    expect(s.webMcpApprovalResolvers.size).toBe(1);
+
+    session.updateConfig({ apiUrl: "http://test", webmcp: { enabled: true } });
+
+    expect(s.webMcpAwaitBatches.size).toBe(0);
+    await expect(pending).resolves.toBe(false);
+    expect(s.webMcpApprovalResolvers.size).toBe(0);
+  });
+
   it("a teardown before the stream-end flush strands the batch", async () => {
     const { session, executeSpy, resumeSpy } = makeSession();
     feed(session, parallelAwait("toolu_A", "SHOE-001"));
