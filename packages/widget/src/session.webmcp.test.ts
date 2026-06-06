@@ -716,6 +716,20 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the run 'running' at stream-end while a batch is still pending flush", () => {
+    // BugBot (PR #214): the batch flush is deferred to a microtask after the
+    // idle handler, so webMcpResolveControllers is empty when idle runs. The
+    // run must NOT be marked complete while local tools are still outstanding.
+    const { session } = makeSession();
+    const s = session as unknown as {
+      agentExecution: { status: string } | null;
+    };
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    endStream(session); // idle arrives BEFORE the deferred batch flush
+    expect(s.agentExecution?.status).toBe("running");
+  });
+
   it("a teardown before the stream-end flush strands the batch", async () => {
     const { session, executeSpy, resumeSpy } = makeSession();
     feed(session, parallelAwait("toolu_A", "SHOE-001"));
@@ -738,6 +752,7 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     const { session } = makeSession();
     const s = session as unknown as {
       webMcpApprovalResolvers: Map<string, (b: boolean) => void>;
+      messages: AgentWidgetMessage[];
     };
 
     // No autoApprove → the gate parks on a pending Promise.
@@ -752,6 +767,10 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     // The parked confirm Promise resolves false (declined) and the map clears.
     await expect(pending).resolves.toBe(false);
     expect(s.webMcpApprovalResolvers.size).toBe(0);
+    // The bubble must not be left visually "pending" — it flips to denied so no
+    // stale Approve/Deny remains clickable.
+    const bubble = s.messages.find((m) => m.variant === "approval");
+    expect(bubble?.approval?.status).toBe("denied");
   });
 
   it("clearMessages() also settles pending approval bubbles", async () => {

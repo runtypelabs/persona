@@ -2000,14 +2000,16 @@ export class AgentWidgetSession {
     // re-checks `signal.aborted` AFTER that await returns — aborting the
     // controller above does NOT unblock it. Left unsettled, the bridge's
     // execute(), its `/resume`, and the resolve's `finally` would all hang
-    // forever (and the resolver map would leak across teardowns). Resolve them
-    // `false` (declined) so the bridge returns cleanly; the post-confirm
-    // `signal.aborted` guard then bails before any host-page side effect or
-    // stale `/resume`.
-    for (const resolve of this.webMcpApprovalResolvers.values()) {
-      resolve(false);
+    // forever (and the resolver map would leak across teardowns). Route through
+    // `resolveWebMcpApproval(…, "denied")` so each parked Promise resolves
+    // `false` AND its bubble message flips out of `pending` (no stale "Approve/
+    // Deny" left clickable). The bridge then returns cleanly and its
+    // post-confirm `signal.aborted` guard bails before any host-page side effect
+    // or stale `/resume`. Snapshot the keys first — resolveWebMcpApproval
+    // mutates the map as it deletes each resolver.
+    for (const approvalMessageId of [...this.webMcpApprovalResolvers.keys()]) {
+      this.resolveWebMcpApproval(approvalMessageId, "denied");
     }
-    this.webMcpApprovalResolvers.clear();
     // Drop any awaits buffered for a not-yet-flushed batch — their messages are
     // being torn down, and a microtask-deferred flush must not survive. The
     // epoch bump below also strands an already-scheduled flush.
@@ -2264,9 +2266,22 @@ export class AgentWidgetSession {
           this.setStreaming(false);
           this.abortController = null;
         }
-        // Mark agent execution as complete when streaming ends
+        // Mark agent execution as complete when streaming ends — UNLESS local
+        // tools are still outstanding. A batched WebMCP resume is deferred to
+        // the microtask below (so `webMcpResolveControllers` is still empty
+        // here) and a chained resolve may be mid-flight; marking the run
+        // 'complete' now would make isAgentRunning() report a finished run while
+        // page tools are still executing. Stay 'running' — the resume stream's
+        // own idle (with batches drained and resolves settled) marks it done.
+        const webMcpPending =
+          this.webMcpAwaitBatches.size > 0 ||
+          this.webMcpResolveControllers.size > 0;
         if (this.agentExecution?.status === 'running') {
-          this.agentExecution.status = event.status === "error" ? 'error' : 'complete';
+          if (event.status === "error") {
+            this.agentExecution.status = 'error';
+          } else if (!webMcpPending) {
+            this.agentExecution.status = 'complete';
+          }
         }
         // The stream that delivered any local-tool `step_await`s has now ended,
         // so every parallel await it carried is collected. Flush them as ONE
