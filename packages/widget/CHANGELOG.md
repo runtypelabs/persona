@@ -1,5 +1,15 @@
 # @runtypelabs/persona
 
+## 3.23.0
+
+### Minor Changes
+
+- 67ddea7: Add an output throughput (tok/s) metric to the Events diagnostics screen. Throughput is derived passively from the existing SSE event stream — estimated live from visible text deltas and finalized from exact provider usage on terminal `flow_complete` / `agent_complete` events — and shown as a compact "Output throughput" summary row: the tok/s value is the headline, with the supporting breakdown (output tokens, duration, and source — usage vs estimate) revealed on hover.
+
+### Patch Changes
+
+- 377fd22: Minify the subpath build outputs (`theme-editor`, `smart-dom-reader`, `testing`, `animations/*`), which were previously shipped unminified. This cuts `theme-editor.js` from ~1,020 kB to ~538 kB raw (200.8 kB → 143.0 kB gzip) and `smart-dom-reader.js` from ~73 kB to ~37 kB raw, with no API or behavior change.
+
 ## 3.22.0
 
 ### Minor Changes
