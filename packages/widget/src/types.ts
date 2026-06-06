@@ -300,9 +300,19 @@ export type AgentWidgetWebMcpConfig = {
    */
   allowlist?: string[];
   /**
-   * Confirm-bubble handler. Persona's default UI implementation lives in
-   * `ui.ts` and reuses the approval-bubble chrome — consumers can override
-   * with a custom confirmer (e.g., a route-level modal).
+   * Per-tool gate policy. Called before the confirm gate for every
+   * `webmcp:*` call; return `true` to approve immediately and skip the
+   * confirmation UI entirely. Use this to auto-allow read-only tools (e.g.
+   * a catalog search) while still gating mutating ones. Only consulted on
+   * the default-UI path — a custom `onConfirm` takes full control instead.
+   */
+  autoApprove?: (info: WebMcpConfirmInfo) => boolean;
+  /**
+   * Confirm gate handler. When omitted, Persona renders its native in-panel
+   * approval bubble (the same chrome used for server-driven tool approvals)
+   * and resolves on the user's Approve/Deny click. Supply this to override
+   * with a custom confirmer (e.g. a route-level modal). The legacy
+   * `window.confirm` fallback only applies when no widget UI is attached.
    */
   onConfirm?: WebMcpConfirmHandler;
 };
@@ -348,6 +358,16 @@ export type AgentMessageMetadata = {
    * `POST /v1/dispatch/resume` with the user's answer keyed by tool name.
    */
   awaitingLocalTool?: boolean;
+  /**
+   * The provider per-call id (`toolu_…`) carried on the `step_await` /
+   * `flow_await` events for a LOCAL tool (core#3878). Present only when the
+   * server emits it. Two PARALLEL calls to the same tool in one turn share a
+   * `toolName` (and a collapsed `toolId`) but get DISTINCT `webMcpToolCallId`s,
+   * so this is the key the widget batches a single `/resume` on — preferred
+   * over tool name, which collides for same-tool parallel calls. Absent →
+   * fall back to the legacy name-keyed resume contract.
+   */
+  webMcpToolCallId?: string;
   /**
    * Set to `true` once the user has picked / typed / dismissed an answer for
    * an `ask_user_question` tool call, so renderers stop re-mounting the

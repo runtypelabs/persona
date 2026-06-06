@@ -1148,6 +1148,60 @@ body.demo-code-active [data-persona-root] { display: none; }
 .notes-section code { font-size: 0.78em; }
 .notes-section .code-block { margin-top: 0.6rem; }
 
+/* WebMCP demo — simulated cart panel */
+.webmcp-cart {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--paper);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+}
+.webmcp-cart-empty {
+  margin: 0;
+  color: var(--muted, #6b7280);
+  font-style: italic;
+}
+.webmcp-cart-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.webmcp-cart-line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0.35rem 0.5rem;
+}
+.webmcp-cart-qty {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #6b7280);
+}
+.webmcp-cart-title { font-weight: 600; }
+.webmcp-cart-sku {
+  grid-column: 2;
+  font-size: 0.72rem;
+  color: var(--muted, #6b7280);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.webmcp-cart-price {
+  grid-row: 1 / span 2;
+  grid-column: 3;
+  align-self: center;
+  font-variant-numeric: tabular-nums;
+}
+.webmcp-cart-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
 .notes details {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);

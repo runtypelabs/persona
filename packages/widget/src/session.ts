@@ -5,6 +5,7 @@ import {
   AgentWidgetEvent,
   AgentWidgetMessage,
   AgentWidgetApproval,
+  WebMcpConfirmInfo,
   AgentExecutionState,
   ClientSession,
   ContentPart,
@@ -129,6 +130,29 @@ export class AgentWidgetSession {
   // so a resolve queued just before a teardown can't escape it by installing a
   // fresh controller after the set was already cleared.
   private webMcpEpoch = 0;
+  // WebMCP native approval-bubble gate. When no custom `webmcp.onConfirm` is
+  // supplied, the bridge's confirm handler routes here: we inject an
+  // approval-variant message and park the bridge on a Promise that resolves
+  // when the user clicks Approve/Deny (see requestWebMcpApproval /
+  // resolveWebMcpApproval). Resolvers are keyed by the approval message id.
+  private webMcpApprovalResolvers: Map<string, (approved: boolean) => void> =
+    new Map();
+  private webMcpApprovalSeq = 0;
+  // Parallel local-tool batching (core#3878). A single model turn can emit
+  // multiple `step_await(local_tool_required)` events for ONE paused
+  // executionId — including two PARALLEL calls to the SAME tool ("add SHOE-001
+  // and SHOE-007"). Those collapse to an identical `toolId`/`index` and differ
+  // only by the per-call `webMcpToolCallId`. We collect all awaits for an
+  // executionId that arrive in the same stream tick, then post ONE `/resume`
+  // keyed by `webMcpToolCallId` — NOT one `/resume` per tool keyed by name
+  // (which collides for same-tool calls, and whose concurrent posts on one
+  // execution raced → the second 404'd → the turn hung). Keyed by executionId;
+  // `seen` dedupes duplicate step_await re-emits within a batch. Cleared on
+  // every teardown via `abortWebMcpResolves`.
+  private webMcpAwaitBatches: Map<
+    string,
+    { snapshots: AgentWidgetMessage[]; seen: Set<string> }
+  > = new Map();
 
   // Voice support
   private voiceProvider: VoiceProvider | null = null;
@@ -145,6 +169,7 @@ export class AgentWidgetSession {
     }));
     this.messages = this.sortMessages(this.messages);
     this.client = new AgentWidgetClient(config);
+    this.wireDefaultWebMcpConfirm();
 
     // Hydrate artifacts from config (mirrors `initialMessages`). Restored
     // records are forced to `status: "complete"` — a mid-stream artifact should
@@ -575,9 +600,20 @@ export class AgentWidgetSession {
   }
 
   public updateConfig(next: AgentWidgetConfig) {
+    // Replacing the client invalidates every in-flight WebMCP resolve, buffered
+    // parallel-await batch, and pending approval bubble tied to the OLD client/
+    // session. Tear them down BEFORE the swap (the new client has no session
+    // yet) so a deferred batch flush or a parked confirm can't fire against the
+    // fresh client — in client-token mode that would POST /resume without a
+    // valid sessionId and strand the paused turn. Mirrors clearMessages' WebMCP
+    // reset; the client swap already abandons any in-flight stream regardless.
+    this.abortWebMcpResolves();
+    this.webMcpInflightKeys.clear();
+    this.webMcpResolvedKeys.clear();
     const prevSSECallback = this.client.getSSEEventCallback();
     this.config = { ...this.config, ...next };
     this.client = new AgentWidgetClient(this.config);
+    this.wireDefaultWebMcpConfirm();
     if (prevSSECallback) {
       this.client.setSSEEventCallback(prevSSECallback);
     }
@@ -1049,6 +1085,97 @@ export class AgentWidgetSession {
   }
 
   /**
+   * Install the native approval-bubble confirm handler on the WebMCP bridge
+   * when the integrator hasn't supplied a custom `webmcp.onConfirm`. Without
+   * this, the bridge falls back to a blunt `window.confirm`. Safe to call
+   * repeatedly (e.g. after the client is re-created in `updateConfig`).
+   */
+  private wireDefaultWebMcpConfirm(): void {
+    const webmcp = this.config.webmcp;
+    if (webmcp?.enabled === true && !webmcp.onConfirm) {
+      this.client.setWebMcpConfirmHandler((info) =>
+        this.requestWebMcpApproval(info)
+      );
+    }
+  }
+
+  /**
+   * Default WebMCP confirm gate: render Persona's native in-panel approval
+   * bubble and resolve when the user clicks Approve/Deny. Returns immediately
+   * with `true` when `webmcp.autoApprove(info)` opts the tool out of the gate
+   * (e.g. a read-only catalog search), so no bubble is shown. The bridge
+   * awaits this Promise before executing the page tool.
+   */
+  public requestWebMcpApproval(info: WebMcpConfirmInfo): Promise<boolean> {
+    // Per-tool policy hook — auto-allow opted-out tools without any UI. A
+    // throwing predicate must not block the call, so fall through to an
+    // explicit gate on error.
+    try {
+      if (this.config.webmcp?.autoApprove?.(info) === true) {
+        return Promise.resolve(true);
+      }
+    } catch {
+      // fall through to explicit approval
+    }
+
+    const approval: AgentWidgetApproval = {
+      id: `webmcp-${++this.webMcpApprovalSeq}`,
+      status: "pending",
+      agentId: "",
+      executionId: "",
+      toolName: info.toolName,
+      toolType: "webmcp",
+      description:
+        info.description ?? `Allow the assistant to run ${info.toolName}?`,
+      parameters: info.args,
+    };
+    const approvalMessageId = `approval-${approval.id}`;
+
+    this.upsertMessage({
+      id: approvalMessageId,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+      streaming: false,
+      variant: "approval",
+      approval,
+    });
+
+    return new Promise<boolean>((resolve) => {
+      this.webMcpApprovalResolvers.set(approvalMessageId, resolve);
+    });
+  }
+
+  /**
+   * Resolve a pending WebMCP approval bubble (from the Approve/Deny click in
+   * `ui.ts`). Updates the bubble to its resolved state and unblocks the
+   * bridge Promise parked in `requestWebMcpApproval`. No-op if already
+   * resolved (double-click, re-render).
+   */
+  public resolveWebMcpApproval(
+    approvalMessageId: string,
+    decision: "approved" | "denied"
+  ): void {
+    const resolve = this.webMcpApprovalResolvers.get(approvalMessageId);
+    if (!resolve) return;
+    this.webMcpApprovalResolvers.delete(approvalMessageId);
+
+    const existing = this.messages.find((m) => m.id === approvalMessageId);
+    if (existing?.approval) {
+      this.upsertMessage({
+        ...existing,
+        approval: {
+          ...existing.approval,
+          status: decision,
+          resolvedAt: Date.now(),
+        },
+      });
+    }
+
+    resolve(decision === "approved");
+  }
+
+  /**
    * Resolve a tool approval request (approve or deny).
    * Updates the approval message status, calls the API (or custom onDecision),
    * and pipes the response stream through connectStream().
@@ -1383,6 +1510,252 @@ export class AgentWidgetSession {
   }
 
   /**
+   * Collect a `webmcp:*` LOCAL-tool `step_await` into a per-executionId batch
+   * and schedule a single deferred flush. Parallel calls (core#3878) emit
+   * several `step_await`s for ONE paused execution within the same stream tick;
+   * buffering them and flushing once lets us post ONE `/resume` keyed by the
+   * per-call `webMcpToolCallId` rather than racing N name-keyed resumes on the
+   * same execution (which 404'd on the second and hung the turn).
+   *
+   * Deferred via `queueMicrotask` (epoch-guarded) for the same reason the old
+   * direct resolve was: handleEvent must return first so the dispatch's
+   * `connectStream` sees end-of-stream and releases the shared abortController
+   * before a resolve grabs it.
+   *
+   * Awaits without an `executionId` or `toolCall.id` can't be batched (no key)
+   * — route them straight to the single-call path, which surfaces the malformed
+   * wire shape via `onError` / an `isError` resume.
+   */
+  private enqueueWebMcpAwait(toolMessage: AgentWidgetMessage): void {
+    const executionId = toolMessage.agentMetadata?.executionId;
+    const callId = toolMessage.toolCall?.id;
+    if (!executionId || !callId) {
+      const queuedEpoch = this.webMcpEpoch;
+      queueMicrotask(() => {
+        if (queuedEpoch !== this.webMcpEpoch) return;
+        void this.resolveWebMcpToolCall(toolMessage);
+      });
+      return;
+    }
+
+    let batch = this.webMcpAwaitBatches.get(executionId);
+    if (!batch) {
+      batch = { snapshots: [], seen: new Set() };
+      this.webMcpAwaitBatches.set(executionId, batch);
+    }
+    // Duplicate step_await re-emit for a call already in this batch — ignore.
+    if (batch.seen.has(callId)) return;
+    batch.seen.add(callId);
+    batch.snapshots.push(toolMessage);
+    // NB: no flush is scheduled here. Flushing happens once the stream that is
+    // delivering these awaits ENDS (handleEvent's `status: idle` →
+    // scheduleWebMcpBatchFlush). Flushing per-await on the next microtask would
+    // race SSE chunk boundaries: two PARALLEL step_awaits split across separate
+    // `read()` chunks would flush the first alone and post a partial resume.
+    // Waiting for stream end guarantees every parallel await is collected first.
+  }
+
+  /**
+   * Flush every buffered local-tool await batch, one `/resume` per executionId.
+   * Called once a stream ends (`status: idle` / `error`) — by then all parallel
+   * `step_await`s the stream carried have been collected, even if split across
+   * SSE chunks. Deferred via `queueMicrotask` (epoch-guarded) so the idle
+   * handler returns first and the stream's end-of-stream teardown (streaming /
+   * abortController) settles before a resolve grabs them — the same ordering the
+   * single-call resolve always relied on.
+   */
+  private scheduleWebMcpBatchFlush(): void {
+    if (this.webMcpAwaitBatches.size === 0) return;
+    const queuedEpoch = this.webMcpEpoch;
+    queueMicrotask(() => {
+      if (queuedEpoch !== this.webMcpEpoch) return;
+      for (const executionId of [...this.webMcpAwaitBatches.keys()]) {
+        this.flushWebMcpAwaitBatch(executionId);
+      }
+    });
+  }
+
+  /**
+   * Run a buffered batch of local-tool awaits for one executionId. Size 1
+   * (single call, or distinct-tool turns that happened to arrive alone) takes
+   * the original single-call path; size >1 (parallel calls) takes the batched
+   * path that posts ONE `/resume`. The batch is removed from the map up front
+   * so any later sibling re-emit (e.g. from a re-pause) forms a fresh batch
+   * rather than mutating one already in flight.
+   */
+  private flushWebMcpAwaitBatch(executionId: string): void {
+    const batch = this.webMcpAwaitBatches.get(executionId);
+    if (!batch) return;
+    this.webMcpAwaitBatches.delete(executionId);
+    const { snapshots } = batch;
+    if (snapshots.length === 1) {
+      void this.resolveWebMcpToolCall(snapshots[0]);
+    } else if (snapshots.length > 1) {
+      void this.resolveWebMcpToolCallBatch(executionId, snapshots);
+    }
+  }
+
+  /**
+   * Resolve TWO OR MORE parallel local-tool awaits sharing one paused
+   * executionId with a SINGLE `/resume` (core#3878). Each call is executed
+   * against the page registry concurrently — every gated call renders its own
+   * native approval bubble, and a sibling's confirm Promise never blocks
+   * another's execution. Outputs are keyed by per-call `webMcpToolCallId`
+   * (server prefers it over tool name; name-keying remains the fallback for
+   * legacy single/distinct-tool turns), so two calls to the SAME tool no longer
+   * collide. The server is tolerant: any call we omit (declined-after-abort,
+   * dedupe, exec failure) simply re-pauses and is retried on its re-emit.
+   *
+   * Mirrors `resolveWebMcpToolCall`'s dedupe / abort / streaming machinery, but
+   * shares one resume POST and marks every resolved key on that POST's HTTP OK.
+   */
+  private async resolveWebMcpToolCallBatch(
+    executionId: string,
+    snapshots: AgentWidgetMessage[],
+  ): Promise<void> {
+    const claimedKeys: string[] = [];
+    const controllers: AbortController[] = [];
+    // Dedicated controller for the shared resume fetch so cancel() can abort it
+    // alongside the per-call ones (all live in webMcpResolveControllers).
+    const resumeController = new AbortController();
+    this.webMcpResolveControllers.add(resumeController);
+    this.setStreaming(true);
+
+    // Phase 1 — execute every pending call concurrently. A null result means
+    // the call was deduped, aborted, or threw; it's omitted from the resume and
+    // (per the tolerant server) re-pauses for retry.
+    const executed = await Promise.all(
+      snapshots.map(async (toolMessage) => {
+        const wireToolName = toolMessage.toolCall?.name;
+        const callId = toolMessage.toolCall?.id;
+        if (!wireToolName || !callId) return null;
+
+        const dedupeKey = `${executionId}:${callId}`;
+        if (
+          this.webMcpInflightKeys.has(dedupeKey) ||
+          this.webMcpResolvedKeys.has(dedupeKey)
+        ) {
+          return null;
+        }
+        this.webMcpInflightKeys.add(dedupeKey);
+        claimedKeys.push(dedupeKey);
+
+        // Clear the awaiting flag so the local-tool UI doesn't linger.
+        this.upsertMessage({
+          ...toolMessage,
+          agentMetadata: {
+            ...toolMessage.agentMetadata,
+            awaitingLocalTool: false,
+          },
+        });
+
+        const controller = new AbortController();
+        this.webMcpResolveControllers.add(controller);
+        controllers.push(controller);
+
+        // Per-call id wins for resume keying; fall back to the wire tool name
+        // for legacy servers that don't emit `webMcpToolCallId`.
+        const resumeKey =
+          toolMessage.agentMetadata?.webMcpToolCallId ?? wireToolName;
+
+        const execPromise = this.client.executeWebMcpToolCall(
+          wireToolName,
+          toolMessage.toolCall?.args,
+          controller.signal,
+        );
+
+        let output: unknown;
+        if (!execPromise) {
+          output = {
+            isError: true,
+            content: [
+              { type: "text", text: "WebMCP not enabled on this widget." },
+            ],
+          };
+        } else {
+          try {
+            output = await execPromise;
+          } catch (error) {
+            const isAbortError =
+              error instanceof Error &&
+              (error.name === "AbortError" ||
+                error.message.includes("aborted") ||
+                error.message.includes("abort"));
+            if (!isAbortError) {
+              this.callbacks.onError?.(
+                error instanceof Error ? error : new Error(String(error)),
+              );
+            }
+            // Release the dedupe claim so a re-emit can retry this call.
+            this.webMcpInflightKeys.delete(dedupeKey);
+            return null;
+          }
+        }
+        if (controller.signal.aborted) {
+          this.webMcpInflightKeys.delete(dedupeKey);
+          return null;
+        }
+        return { dedupeKey, resumeKey, output };
+      }),
+    );
+
+    try {
+      const ready = executed.filter(
+        (r): r is { dedupeKey: string; resumeKey: string; output: unknown } =>
+          r !== null,
+      );
+      // Everything deduped/aborted/failed — nothing to post.
+      if (ready.length === 0) return;
+
+      const toolOutputs: Record<string, unknown> = {};
+      for (const r of ready) {
+        // Two omitted-on-collision safety: if two calls somehow resolve to the
+        // same key (only possible on a legacy name fallback), last write wins —
+        // the server re-pauses the unrepresented call for retry.
+        toolOutputs[r.resumeKey] = r.output;
+      }
+
+      const response = await this.client.resumeFlow(executionId, toolOutputs, {
+        signal: resumeController.signal,
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error ?? `Resume failed: ${response.status}`);
+      }
+      // Server accepted the batch — mark every included call resolved so stale
+      // re-emits don't re-execute the page tool.
+      for (const r of ready) {
+        this.webMcpResolvedKeys.add(r.dedupeKey);
+      }
+      if (response.body) {
+        await this.connectStream(response.body, { allowReentry: true });
+      }
+    } catch (error) {
+      const isAbortError =
+        error instanceof Error &&
+        (error.name === "AbortError" ||
+          error.message.includes("aborted") ||
+          error.message.includes("abort"));
+      if (!isAbortError) {
+        this.callbacks.onError?.(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+    } finally {
+      for (const key of claimedKeys) {
+        this.webMcpInflightKeys.delete(key);
+      }
+      for (const controller of controllers) {
+        this.webMcpResolveControllers.delete(controller);
+      }
+      this.webMcpResolveControllers.delete(resumeController);
+      if (this.webMcpResolveControllers.size === 0 && !this.abortController) {
+        this.setStreaming(false);
+      }
+    }
+  }
+
+  /**
    * Resolve a paused `webmcp:*` LOCAL tool call by executing it against the
    * host page's tool registry and posting the result to `/resume`.
    *
@@ -1534,7 +1907,13 @@ export class AgentWidgetSession {
       // here pairs with the dedupe semantics: a successful POST means the
       // server got the answer; later step_await re-emits for the same
       // toolCall.id are stale and must not re-execute the page tool.
-      await this.resumeWithToolOutput(executionId, wireToolName, resumeOutput, {
+      // Key the resume by the per-call id (core#3878) when present; the server
+      // prefers it over tool name. Falls back to the wire tool name for legacy
+      // servers — the original name-keyed contract, still correct for a single
+      // call (only same-tool PARALLEL calls could collide on the name).
+      const resumeKey =
+        toolMessage.agentMetadata?.webMcpToolCallId ?? wireToolName;
+      await this.resumeWithToolOutput(executionId, resumeKey, resumeOutput, {
         onHttpOk: () => {
           this.webMcpResolvedKeys.add(dedupeKey);
         },
@@ -1572,23 +1951,26 @@ export class AgentWidgetSession {
   }
 
   /**
-   * POST `/resume` with a single tool's output and pipe the resulting SSE
-   * stream back through `connectStream`. Shared by every local-tool resolve
-   * path (ask_user_question and WebMCP).
+   * POST `/resume` with a SINGLE tool's output and pipe the resulting SSE
+   * stream back through `connectStream`. Shared by every single-call local-tool
+   * resolve path (ask_user_question and single WebMCP calls). Parallel WebMCP
+   * calls use `resolveWebMcpToolCallBatch`, which posts one resume for many.
    *
-   * `onHttpOk` runs synchronously between the HTTP-status check and the
+   * `resumeKey` is the `toolOutputs` map key: the per-call `webMcpToolCallId`
+   * for WebMCP (core#3878), or the tool name for ask_user_question / legacy
+   * servers. `onHttpOk` runs synchronously between the HTTP-status check and the
    * stream pipe; it lets the WebMCP resolve path commit the dedupe flag at
    * "server accepted the answer" rather than "stream finished cleanly".
    */
   private async resumeWithToolOutput(
     executionId: string,
-    toolName: string,
+    resumeKey: string,
     output: unknown,
     options?: { onHttpOk?: () => void; signal?: AbortSignal },
   ): Promise<void> {
     const response = await this.client.resumeFlow(
       executionId,
-      { [toolName]: output },
+      { [resumeKey]: output },
       { signal: options?.signal },
     );
     if (!response.ok) {
@@ -1623,6 +2005,25 @@ export class AgentWidgetSession {
       controller.abort();
     }
     this.webMcpResolveControllers.clear();
+    // Settle every approval bubble still awaiting a click. The bridge parks a
+    // resolve on `await requestConfirm(...)` (→ requestWebMcpApproval) and only
+    // re-checks `signal.aborted` AFTER that await returns — aborting the
+    // controller above does NOT unblock it. Left unsettled, the bridge's
+    // execute(), its `/resume`, and the resolve's `finally` would all hang
+    // forever (and the resolver map would leak across teardowns). Route through
+    // `resolveWebMcpApproval(…, "denied")` so each parked Promise resolves
+    // `false` AND its bubble message flips out of `pending` (no stale "Approve/
+    // Deny" left clickable). The bridge then returns cleanly and its
+    // post-confirm `signal.aborted` guard bails before any host-page side effect
+    // or stale `/resume`. Snapshot the keys first — resolveWebMcpApproval
+    // mutates the map as it deletes each resolver.
+    for (const approvalMessageId of [...this.webMcpApprovalResolvers.keys()]) {
+      this.resolveWebMcpApproval(approvalMessageId, "denied");
+    }
+    // Drop any awaits buffered for a not-yet-flushed batch — their messages are
+    // being torn down, and a microtask-deferred flush must not survive. The
+    // epoch bump below also strands an already-scheduled flush.
+    this.webMcpAwaitBatches.clear();
     this.webMcpEpoch++;
   }
 
@@ -1840,16 +2241,11 @@ export class AgentWidgetSession {
         tc?.name &&
         isWebMcpToolName(tc.name)
       ) {
-        const snapshot = event.message;
-        const queuedEpoch = this.webMcpEpoch;
-        queueMicrotask(() => {
-          // A teardown (cancel / clearMessages / hydrateMessages / new
-          // sendMessage) between queue and run bumps the epoch. Bail so this
-          // deferred resolve can't install a fresh controller that escaped the
-          // teardown's set-clear (the reverted iter-10 leak).
-          if (queuedEpoch !== this.webMcpEpoch) return;
-          void this.resolveWebMcpToolCall(snapshot);
-        });
+        // Collect the await into its executionId's batch instead of resolving
+        // it on the spot. Parallel same-tool calls (core#3878) arrive as
+        // separate `step_await`s in the same stream; batching lets us post ONE
+        // `/resume` keyed by per-call id (see `enqueueWebMcpAwait`).
+        this.enqueueWebMcpAwait(event.message);
       }
 
       // Track agent execution state from message metadata
@@ -1880,10 +2276,29 @@ export class AgentWidgetSession {
           this.setStreaming(false);
           this.abortController = null;
         }
-        // Mark agent execution as complete when streaming ends
+        // Mark agent execution as complete when streaming ends — UNLESS local
+        // tools are still outstanding. A batched WebMCP resume is deferred to
+        // the microtask below (so `webMcpResolveControllers` is still empty
+        // here) and a chained resolve may be mid-flight; marking the run
+        // 'complete' now would make isAgentRunning() report a finished run while
+        // page tools are still executing. Stay 'running' — the resume stream's
+        // own idle (with batches drained and resolves settled) marks it done.
+        const webMcpPending =
+          this.webMcpAwaitBatches.size > 0 ||
+          this.webMcpResolveControllers.size > 0;
         if (this.agentExecution?.status === 'running') {
-          this.agentExecution.status = event.status === "error" ? 'error' : 'complete';
+          if (event.status === "error") {
+            this.agentExecution.status = 'error';
+          } else if (!webMcpPending) {
+            this.agentExecution.status = 'complete';
+          }
         }
+        // The stream that delivered any local-tool `step_await`s has now ended,
+        // so every parallel await it carried is collected. Flush them as ONE
+        // batched `/resume` per executionId (deferred — see
+        // scheduleWebMcpBatchFlush). Runs AFTER the teardown above so a resolve
+        // doesn't fight the end-of-stream streaming/abortController reset.
+        this.scheduleWebMcpBatchFlush();
       }
     } else if (event.type === "error") {
       this.setStatus("error");

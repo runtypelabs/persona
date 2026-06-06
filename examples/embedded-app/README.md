@@ -118,6 +118,55 @@ The action middleware example demonstrates:
 - Page navigation with persistent chat state
 - localStorage-based chat history persistence
 
+### WebMCP Demo
+- **WebMCP page**: `http://localhost:5173/webmcp-demo.html`
+  - Demonstrates the widget consuming **page-provided tools** via WebMCP (`document.modelContext`)
+  - The page registers `search_products` and `add_to_cart` on the polyfilled `document.modelContext` (`@mcp-b/webmcp-polyfill`); the widget snapshots them per turn and sends them to the agent as `clientTools[]`
+  - When the agent calls one, the widget executes it on the page (behind an `onConfirm` gate) and resumes the turn with the result
+  - The catalog (`webmcp-catalog.ts`) and the on-page **Cart** panel are the visible side effects: `search_products` filters the static catalog; `add_to_cart` updates the cart
+
+#### What the starter pills show
+
+1. **Single read** — *"Search for blue running shoes"* → one `search_products` call (read-only, auto-approved by the demo's `autoApprove` policy, no bubble).
+2. **Single write** — *"Add SHOE-001 to my cart"* → one `add_to_cart` call gated by the native approval bubble; on Approve the cart updates.
+3. **Continuation** — *"Find the cheapest blue running shoe and add it to my cart"* → the agent searches, then runs a **second turn** to add the cheapest hit, proving the agent loop continues after a tool result.
+4. **Parallel** — *"Add SHOE-001 and SHOE-007 to my cart"* → the model emits **two** `add_to_cart` calls in a single turn. Each renders its own native approval bubble; approve both and the widget batches their results into a **single** `/resume`, so both items land in the cart and the agent summarizes the total.
+
+> **Parallel local tool calls (fixed).** Asking to add two items "at the same time" makes the model emit *parallel* local tool calls in one turn. The server emits a `step_await` for each carrying a distinct per-call `toolCallId` (**runtypelabs/core#3878**, follow-on to #3870). The widget collects all pending local calls for one `executionId` and posts **one** `/resume` whose `toolOutputs` are keyed by `toolCallId` (`session.ts → resolveWebMcpToolCallBatch`) — previously it posted one `/resume` per tool keyed by **tool name**, so two calls to the same tool collided on that key and the turn hung on the second. Single-call and distinct-tool turns are unchanged (name-keying remains the fallback for servers that don't emit `toolCallId`).
+>
+> **Note on resume routing.** The widget completes the local-tool `/resume` round-trip in **both** modes. In **client-token mode** it posts to `POST /v1/client/resume` — the session-authenticated route added in **runtypelabs/core#3889** (no secret key; `sessionId` in the body) — and in **proxy mode** the local proxy forwards to `/v1/dispatch/resume` with its surface API key. (Client-token resume requires a Runtype deployment that includes core#3889; older deployments only support the proxy path.)
+
+#### Two wiring modes
+
+`webmcp-demo.ts` selects its backend from env, reading a **distinct** pair of vars (note the `VITE_PERSONA_` prefix — not the `VITE_CLIENT_TOKEN` / `VITE_API_URL` used by the other demos):
+
+1. **Client-token mode** — set `VITE_PERSONA_CLIENT_TOKEN` (and optionally `VITE_PERSONA_API_URL`, default `https://api.runtype.com`). The widget talks to the Runtype API directly. The token's surface must have `behavior.webmcp.enabled`. This is the mode the live `persona-chat.dev` deploy uses.
+2. **Proxy mode** (fallback when no client token is set) — routes through the local proxy on `VITE_PROXY_PORT`.
+
+Locally, put the token in `.env.local` (gitignored — **never commit a live token**):
+
+```bash
+# examples/embedded-app/.env.local
+VITE_PERSONA_CLIENT_TOKEN=ct_live_...
+VITE_PERSONA_API_URL=https://api.runtype.com
+```
+
+The page log at the top of the demo prints the resolved mode, e.g. `mode: client-token → https://api.runtype.com`.
+
+#### Production deploy (persona-chat.dev on Vercel)
+
+The live demo runs in client-token mode against production Runtype. The token is a browser-safe, origin-locked **publishable** client token — but it still belongs in Vercel env, not the repo. Set it on the `persona` Vercel project (Production scope):
+
+```bash
+vercel env add VITE_PERSONA_CLIENT_TOKEN production   # paste the ct_live_... value when prompted
+vercel env add VITE_PERSONA_API_URL production        # https://api.runtype.com
+vercel --prod                                          # redeploy to pick up the new env
+```
+
+After redeploy, confirm the page log shows `mode: client-token → https://api.runtype.com` (not `mode: proxy → …`), then run a single-tool prompt (`search for blue running shoes`) and confirm `search_products` fires on the page (confirm gate → execute → resume → summary).
+
+> **Status (blocked):** Production Runtype core must ship the `clientTools[]`-threading fix before this works end-to-end. Until then, prod agents hallucinate the tool call as text instead of emitting a native tool call (no `step_await`), regardless of model — verified against both `minimax-m2.7` and `claude-sonnet-4-6`, while the identical setup on staging produces a real `step_await`. Keep the Vercel wiring above ready, but don't expect tool execution on prod until the core deploy lands. Chained "search **and** add" prompts additionally depend on `runtypelabs/core#3870` (parallel local tool calls); single-tool turns work once core is deployed.
+
 ### Custom Components Demo
 - **Components page**: `http://localhost:5173/custom-components.html`
   - Demonstrates custom component rendering from JSON directives

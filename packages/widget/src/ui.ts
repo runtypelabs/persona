@@ -1403,8 +1403,14 @@ export const createAgentExperience = (
       });
     }
 
-    // Resolve the approval
-    session.resolveApproval(approvalMessage.approval, decision);
+    // WebMCP gate approvals resolve a local Promise the bridge is parked on
+    // (no server round-trip); server-driven approvals call the API. The
+    // `toolType` marker set in `requestWebMcpApproval` discriminates the two.
+    if (approvalMessage.approval.toolType === "webmcp") {
+      session.resolveWebMcpApproval(messageId, decision);
+    } else {
+      session.resolveApproval(approvalMessage.approval, decision);
+    }
   });
 
   let artifactPaneApi: ArtifactPaneApi | null = null;
@@ -7238,6 +7244,14 @@ export const createAgentExperience = (
       );
       if (!approvalMessage?.approval) {
         throw new Error(`Approval not found: ${approvalId}`);
+      }
+      // Mirror the in-panel click handler: WebMCP gate bubbles resolve a local
+      // Promise the bridge is parked on (no server round-trip and they carry an
+      // empty executionId/agentId), so they must NOT hit the server approval
+      // API. Route by the `toolType` marker set in `requestWebMcpApproval`.
+      if (approvalMessage.approval.toolType === "webmcp") {
+        session.resolveWebMcpApproval(approvalMessage.id, decision);
+        return;
       }
       return session.resolveApproval(approvalMessage.approval, decision);
     },

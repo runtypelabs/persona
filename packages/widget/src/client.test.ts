@@ -3083,6 +3083,56 @@ describe('AgentWidgetClient.resumeFlow', () => {
 
     expect(capturedUrl).toBe('http://localhost:43111/api/chat/dispatch/resume');
   });
+
+  it('routes to /v1/client/resume with sessionId in client-token mode (core#3889)', async () => {
+    let capturedUrl: string | undefined;
+    let capturedBody: Record<string, unknown> | undefined;
+    let capturedHeaders: Record<string, string> | undefined;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      capturedUrl = url;
+      capturedBody = JSON.parse(init.body as string);
+      capturedHeaders = init.headers as Record<string, string>;
+      return { ok: true, body: null };
+    });
+
+    const client = new AgentWidgetClient({
+      clientToken: 'ct_live_demo',
+      apiUrl: 'https://api.runtype-staging.com',
+    });
+    // Simulate an initialized client session (resumeFlow reads sessionId off it).
+    (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
+      sessionId: 'cs_123',
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+
+    await client.resumeFlow('exec_xyz', { toolu_A: { ok: true } });
+
+    // Session-authed sibling of /v1/client/chat — no Bearer key, sessionId in body.
+    expect(capturedUrl).toBe('https://api.runtype-staging.com/v1/client/resume');
+    expect(capturedBody).toEqual({
+      executionId: 'exec_xyz',
+      toolOutputs: { toolu_A: { ok: true } },
+      streamResponse: true,
+      sessionId: 'cs_123',
+    });
+    expect(capturedHeaders!['Authorization']).toBeUndefined();
+  });
+
+  it('strips a trailing /v1/dispatch from apiUrl when building the client resume URL', async () => {
+    let capturedUrl: string | undefined;
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      capturedUrl = url;
+      return { ok: true, body: null };
+    });
+
+    const client = new AgentWidgetClient({
+      clientToken: 'ct_live_demo',
+      apiUrl: 'https://api.runtype-staging.com/v1/dispatch',
+    });
+    await client.resumeFlow('exec_abc', {});
+
+    expect(capturedUrl).toBe('https://api.runtype-staging.com/v1/client/resume');
+  });
 });
 
 // ============================================================================
