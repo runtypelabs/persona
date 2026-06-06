@@ -497,13 +497,30 @@ if (!modelContext) {
         // case-insensitive) — the cart is keyed by the canonical product.sku, so
         // a raw `cart.get(sku)` would miss on different casing/spacing.
         const product = findBySku(sku);
-        const line = product ? cart.get(product.sku) : undefined;
-        if (!product || !line) {
-          logWire("exec", "remove_from_cart", `<b>${esc(sku)}</b> → not in cart`);
-          return { removed: false, error: `"${sku}" is not in the cart.`, cart: cartSummary() };
+        if (!product) {
+          logWire("exec", "remove_from_cart", `<b>${esc(sku)}</b> → not found`);
+          return {
+            removed: false,
+            error: `No product with SKU "${sku}". Call search_products first to get valid SKUs.`,
+            cart: cartSummary(),
+          };
         }
-        if (quantity && quantity < line.quantity) {
-          line.quantity -= quantity;
+        const line = cart.get(product.sku);
+        if (!line) {
+          logWire("exec", "remove_from_cart", `<b>${esc(product.sku)}</b> → not in cart`);
+          return {
+            removed: false,
+            error: `"${product.sku}" is not in the cart.`,
+            cart: cartSummary(),
+          };
+        }
+        // Only a positive partial quantity decrements; anything else (omitted,
+        // ≤0, or ≥ the line qty) removes the whole line — so a negative quantity
+        // can't subtract-a-negative and inflate the cart.
+        const partial =
+          typeof quantity === "number" && quantity >= 1 && quantity < line.quantity;
+        if (partial) {
+          line.quantity -= quantity as number;
         } else {
           cart.delete(product.sku);
         }
@@ -512,7 +529,7 @@ if (!modelContext) {
         logWire(
           "exec",
           "remove_from_cart",
-          `<b>${esc(product.sku)}</b>${quantity ? ` ×${esc(quantity)}` : ""} → removed`,
+          `<b>${esc(product.sku)}</b>${partial ? ` ×${esc(quantity)}` : ""} → removed`,
         );
         return { removed: true, sku: product.sku, cart: cartSummary() };
       },
