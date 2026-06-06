@@ -1,0 +1,469 @@
+/* ════════════════════════════════════════════════════════════════════════
+   WebMCP demo — "Switchback" storefront skin
+   ───────────────────────────────────────────────────────────────────────
+   Page-scoped under `body.webmcp-shop` so it never leaks into the other ~35
+   gallery demos (which share demo-shared.css :root). This dresses the demo
+   page as a small trail/road running outfitter so the Persona widget reads as
+   *that store's* assistant rather than gallery chrome. The matching widget
+   theme is set in buildConfig() (webmcp-demo.ts); the two share the same brand
+   green + trail-orange accent and both follow the OS light/dark preference.
+
+   The gallery shell header (top nav) intentionally keeps its neutral gallery
+   styling — it's the gallery wrapper, not part of the store.
+   ════════════════════════════════════════════════════════════════════════ */
+
+body.webmcp-shop {
+  /* Brand — warm artisan palette (espresso + caramel), inspired by the
+     "Flour & Stone" bakery demo. */
+  --shop-brand: #1c1917;          /* espresso — primary fills, header */
+  --shop-brand-strong: #292524;   /* hover / deeper */
+  --shop-brand-ink: #fafaf9;      /* text on brand fills (≈16:1 on #1c1917) */
+  --shop-accent: #b8814b;         /* caramel — highlights, borders */
+  --shop-accent-strong: #8a5a2b;  /* deep caramel — accent text on cream (≈5:1) */
+
+  /* Paper + ink (warm stone neutrals) */
+  --shop-bg: #f6f4f0;
+  --shop-paper: #ffffff;
+  --shop-card: #ffffff;
+  --shop-ink: #1c1917;
+  --shop-ink-soft: #78716c;
+  --shop-faint: #a8a29e;
+  --shop-line: #e7e5e4;
+  --shop-line-strong: #d6d3d1;
+
+  /* Wire-inspector palette (warm instrument readout) */
+  --wire-bg: #211c18;
+  --wire-fg: #e7e0d6;
+  --wire-faint: #9a8f80;
+  --wire-reg: #86efac;     /* registration */
+  --wire-send: #7dd3fc;    /* outgoing dispatch */
+  --wire-gate: #fcd34d;    /* approval gate */
+  --wire-exec: #d6bcfa;    /* page-tool execution */
+  --wire-resume: #e0a868;  /* batched resume (caramel) */
+
+  --shop-radius: 14px;
+  --shop-radius-sm: 9px;
+  --shop-shadow: 0 1px 2px rgba(28, 25, 23, 0.05);
+  --shop-shadow-md: 0 14px 32px -20px rgba(28, 25, 23, 0.28);
+
+  /* Give the storefront rail room for a 2-up product grid on this page only. */
+  --stage-controls: minmax(440px, 42%);
+
+  background-color: var(--shop-bg);
+  /* Replace the gallery's grey grid with a calm warm wash. */
+  background-image:
+    radial-gradient(circle at 18% -8%, color-mix(in srgb, var(--shop-accent) 8%, transparent), transparent 42%),
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--shop-brand) 5%, transparent), transparent 38%);
+  background-attachment: fixed;
+  color: var(--shop-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  body.webmcp-shop {
+    /* Warm espresso night: caramel becomes the interactive primary. */
+    --shop-brand: #d4a574;
+    --shop-brand-strong: #e0b787;
+    --shop-brand-ink: #1c1917;
+    --shop-accent: #d4a574;
+    --shop-accent-strong: #e0b787;
+
+    --shop-bg: #1c1917;
+    --shop-paper: #292524;
+    --shop-card: #2c2724;
+    --shop-ink: #f5f5f4;
+    --shop-ink-soft: #a8a29e;
+    --shop-faint: #78716c;
+    --shop-line: #3a3530;
+    --shop-line-strong: #44403c;
+
+    --shop-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shop-shadow-md: 0 16px 36px -22px rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* ── Storefront hero ───────────────────────────────────────────────────── */
+
+body.webmcp-shop .shop-hero {
+  margin: 0 0 1.25rem 0;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid var(--shop-line-strong);
+}
+body.webmcp-shop .shop-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.5rem 0;
+  font-family: var(--font-display, Georgia, serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--shop-ink);
+}
+body.webmcp-shop .shop-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 9px;
+  background: var(--shop-brand);
+  color: var(--shop-brand-ink);
+  flex: none;
+}
+body.webmcp-shop .shop-mark svg { width: 1.05rem; height: 1.05rem; }
+body.webmcp-shop .shop-tagline {
+  margin: 0 0 0.7rem 0;
+  font-size: 0.9rem;
+  color: var(--shop-ink-soft);
+}
+body.webmcp-shop .shop-explainer {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--shop-ink-soft);
+}
+body.webmcp-shop .shop-explainer code {
+  background: color-mix(in srgb, var(--shop-ink) 7%, transparent);
+  color: var(--shop-ink);
+  font-size: 0.82em;
+  padding: 0.08em 0.38em;
+  border-radius: 5px;
+}
+body.webmcp-shop .shop-hero .mount-toolbar { justify-content: flex-start; margin: 0.85rem 0 0; min-height: 0; }
+
+/* ── Section scaffolding ───────────────────────────────────────────────── */
+
+body.webmcp-shop .shop-section { margin-bottom: 1.25rem; }
+body.webmcp-shop .shop-section:last-child { margin-bottom: 0; }
+body.webmcp-shop .shop-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0 0 0.6rem 0;
+}
+body.webmcp-shop .shop-section-title {
+  font-family: var(--font-label, sans-serif);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--shop-faint);
+  margin: 0;
+}
+body.webmcp-shop .shop-section-meta {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  color: var(--shop-faint);
+}
+
+/* ── Catalog grid ──────────────────────────────────────────────────────── */
+
+body.webmcp-shop .shop-catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(186px, 1fr));
+  gap: 0.6rem;
+}
+body.webmcp-shop .shop-product {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.7rem 0.8rem 0.75rem;
+  background: var(--shop-card);
+  border: 1px solid var(--shop-line);
+  border-radius: var(--shop-radius-sm);
+  box-shadow: var(--shop-shadow);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+body.webmcp-shop .shop-product-top {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+body.webmcp-shop .shop-swatch {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid color-mix(in srgb, var(--shop-ink) 18%, transparent);
+  box-shadow: inset 0 0 0 2px var(--shop-card);
+}
+body.webmcp-shop .shop-product-cat {
+  font-family: var(--font-label, sans-serif);
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--shop-faint);
+}
+body.webmcp-shop .shop-product-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  color: var(--shop-ink);
+}
+body.webmcp-shop .shop-product-sub {
+  font-size: 0.74rem;
+  color: var(--shop-ink-soft);
+}
+body.webmcp-shop .shop-product-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+body.webmcp-shop .shop-product-price {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--shop-ink);
+  font-variant-numeric: tabular-nums;
+}
+body.webmcp-shop .shop-product-sku {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.66rem;
+  color: var(--shop-faint);
+}
+
+/* Search-hit highlight (read-only search_products / view_product). */
+body.webmcp-shop .shop-product.is-hit {
+  border-color: var(--shop-brand);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--shop-brand) 30%, transparent);
+}
+/* In-cart badge (mutating add_to_cart). */
+body.webmcp-shop .shop-product.in-cart {
+  border-color: color-mix(in srgb, var(--shop-accent) 45%, var(--shop-line));
+}
+body.webmcp-shop .shop-product .shop-incart-badge {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.32rem;
+  display: none;
+  place-items: center;
+  background: var(--shop-accent);
+  color: #1c1917;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.66rem;
+  font-weight: 700;
+  border-radius: 999px;
+  box-shadow: var(--shop-shadow-md);
+}
+body.webmcp-shop .shop-product.in-cart .shop-incart-badge { display: grid; }
+
+/* Flash when a tool mutates / reads a specific card. */
+body.webmcp-shop .shop-product.just-changed { animation: shop-flash 0.9s ease; }
+@keyframes shop-flash {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--shop-accent) 60%, transparent); }
+  30%  { box-shadow: 0 0 0 5px color-mix(in srgb, var(--shop-accent) 28%, transparent); }
+  100% { box-shadow: var(--shop-shadow); }
+}
+
+/* ── Cart ──────────────────────────────────────────────────────────────── */
+
+body.webmcp-shop .shop-cart {
+  border: 1px solid var(--shop-line);
+  border-radius: var(--shop-radius);
+  background: var(--shop-paper);
+  box-shadow: var(--shop-shadow);
+  padding: 0.85rem 0.95rem;
+  font-size: 0.85rem;
+  transition: box-shadow 0.2s ease;
+}
+body.webmcp-shop .shop-cart.just-changed { animation: shop-flash 0.9s ease; }
+body.webmcp-shop .shop-cart-empty {
+  margin: 0;
+  color: var(--shop-ink-soft);
+  font-style: italic;
+}
+body.webmcp-shop .shop-cart-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+body.webmcp-shop .shop-cart-line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0.2rem 0.55rem;
+}
+body.webmcp-shop .shop-cart-qty {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--shop-brand);
+}
+body.webmcp-shop .shop-cart-title { font-weight: 600; color: var(--shop-ink); }
+body.webmcp-shop .shop-cart-sku {
+  grid-column: 2;
+  font-size: 0.7rem;
+  color: var(--shop-faint);
+  font-family: var(--font-mono, monospace);
+}
+body.webmcp-shop .shop-cart-price {
+  grid-row: 1 / span 2;
+  grid-column: 3;
+  align-self: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--shop-ink);
+}
+body.webmcp-shop .shop-cart-foot {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--shop-line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+body.webmcp-shop .shop-cart-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+body.webmcp-shop .shop-cart-row.muted { color: var(--shop-ink-soft); font-size: 0.8rem; }
+body.webmcp-shop .shop-cart-row.promo { color: var(--shop-accent-strong); font-size: 0.8rem; }
+body.webmcp-shop .shop-cart-row.total { font-size: 1rem; }
+body.webmcp-shop .shop-cart-row.total strong { color: var(--shop-ink); }
+body.webmcp-shop .shop-cart-chip {
+  display: inline-block;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.66rem;
+  padding: 0.04rem 0.4rem;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--shop-accent) 16%, transparent);
+  color: var(--shop-accent-strong);
+}
+
+/* ── Wire inspector ────────────────────────────────────────────────────── */
+
+body.webmcp-shop .shop-wire {
+  border: 1px solid var(--shop-line-strong);
+  border-radius: var(--shop-radius);
+  overflow: hidden;
+  background: var(--wire-bg);
+}
+body.webmcp-shop .shop-wire-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  list-style: none;
+  padding: 0.6rem 0.8rem;
+  background: color-mix(in srgb, #ffffff 5%, var(--wire-bg));
+  color: var(--wire-fg);
+  font-family: var(--font-label, sans-serif);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+body.webmcp-shop .shop-wire-head::before {
+  content: "";
+  width: 0; height: 0;
+  border: 4px solid transparent;
+  border-left-color: currentColor;
+  transition: transform 0.15s ease;
+  flex: none;
+}
+body.webmcp-shop .shop-wire-head::-webkit-details-marker { display: none; }
+body.webmcp-shop .shop-wire[open] .shop-wire-head::before { transform: rotate(90deg); }
+body.webmcp-shop .shop-wire-count {
+  margin-left: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.66rem;
+  letter-spacing: 0;
+  color: var(--wire-faint);
+  text-transform: none;
+}
+body.webmcp-shop .shop-wire-body {
+  max-height: 290px;
+  overflow-y: auto;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+body.webmcp-shop .shop-wire:not([open]) .shop-wire-body { display: none; }
+body.webmcp-shop .shop-wire-empty {
+  color: var(--wire-faint);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  padding: 0.4rem 0.2rem;
+}
+body.webmcp-shop .wire-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  padding: 0.32rem 0.4rem;
+  border-radius: 6px;
+  border-left: 3px solid var(--wire-faint);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--wire-fg);
+}
+body.webmcp-shop .wire-row .wire-time { color: var(--wire-faint); }
+body.webmcp-shop .wire-row .wire-tag {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+body.webmcp-shop .wire-row .wire-detail { color: color-mix(in srgb, var(--wire-fg) 82%, transparent); word-break: break-word; }
+body.webmcp-shop .wire-row .wire-detail b { color: var(--wire-fg); font-weight: 700; }
+body.webmcp-shop .wire-row.reg    { border-left-color: var(--wire-reg); }
+body.webmcp-shop .wire-row.reg    .wire-tag { color: var(--wire-reg); }
+body.webmcp-shop .wire-row.send   { border-left-color: var(--wire-send); }
+body.webmcp-shop .wire-row.send   .wire-tag { color: var(--wire-send); }
+body.webmcp-shop .wire-row.gate   { border-left-color: var(--wire-gate); }
+body.webmcp-shop .wire-row.gate   .wire-tag { color: var(--wire-gate); }
+body.webmcp-shop .wire-row.exec   { border-left-color: var(--wire-exec); }
+body.webmcp-shop .wire-row.exec   .wire-tag { color: var(--wire-exec); }
+body.webmcp-shop .wire-row.resume { border-left-color: var(--wire-resume); background: color-mix(in srgb, var(--wire-resume) 9%, transparent); }
+body.webmcp-shop .wire-row.resume .wire-tag { color: var(--wire-resume); }
+
+/* Legend under the inspector. */
+body.webmcp-shop .shop-wire-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+  padding: 0.45rem 0.7rem 0.6rem;
+  border-top: 1px solid color-mix(in srgb, #ffffff 8%, transparent);
+}
+body.webmcp-shop .shop-wire-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  color: var(--wire-faint);
+}
+body.webmcp-shop .shop-wire-legend i {
+  width: 0.55rem; height: 0.55rem; border-radius: 2px; flex: none;
+}
+
+/* ── Notes (Try-it) tints to brand on this page ────────────────────────── */
+
+body.webmcp-shop .notes-heading { color: var(--shop-faint); }
+body.webmcp-shop .notes-section-title { color: var(--shop-ink); }
+body.webmcp-shop .notes-section > p,
+body.webmcp-shop .notes-section ul,
+body.webmcp-shop .notes-section ol { color: var(--shop-ink-soft); }
+body.webmcp-shop .notes-section code {
+  background: color-mix(in srgb, var(--shop-ink) 7%, transparent);
+  color: var(--shop-ink);
+}
+body.webmcp-shop .notes em { color: var(--shop-brand-strong); font-style: normal; font-weight: 600; }
+
+@media (prefers-color-scheme: dark) {
+  body.webmcp-shop .notes-section code { background: color-mix(in srgb, #ffffff 10%, transparent); }
+}
