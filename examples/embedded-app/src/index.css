@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Asap+Condensed:wght@400&family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;700&display=swap');
+/* Fonts load via a <link> in <head>, injected by the gallery-fonts Vite plugin
+   (vite.config.ts). Do NOT re-add an `@import` here — it loads the fonts late
+   and causes a font-swap flash on first paint. */
 
 :root {
   color-scheme: light;

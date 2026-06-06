@@ -241,9 +241,6 @@ const homeDemoSharedAssistant = {
       ],
       maxToolCalls: 3,
     },
-    loopConfig: {
-      maxTurns: 3,
-    },
   },
   agentOptions: {
     streamResponse: true,

@@ -111,6 +111,7 @@ The widget uses a layered architecture:
    - `plugins/` - Plugin registry system for custom functionality (`types.ts`, `registry.ts`)
    - `postprocessors.ts` - Markdown and directive postprocessors
    - `defaults.ts` - Default configuration with light/dark theme presets
+   - `smart-dom-reader.ts` - Optional entry (`@runtypelabs/persona/smart-dom-reader`) exposing a `contextProviders` provider backed by a vendored `@mcp-b/smart-dom-reader` (`src/vendor/`, see its README) for Shadow-DOM-piercing page context; kept out of the main bundle. The pure mapper is `utils/smart-dom-adapter.ts`.
 
 ### Key Patterns
 

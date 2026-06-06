@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Asap+Condensed:wght@400;600&family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Fonts (Newsreader / Inter / Asap Condensed / JetBrains Mono) load via a
+   <link> in <head>, injected by the gallery-fonts Vite plugin (vite.config.ts).
+   Do NOT re-add an `@import` here: the browser discovers it only after this file
+   downloads, which loads the fonts late and brings back the font-swap flash. */
 
 /* ════════════════════════════════════════════════════════════════════════
    Persona Examples — design system
@@ -148,7 +151,6 @@ a {
   font-family: var(--font-label);
   font-size: 0.75rem;
   font-weight: 600;
-  text-transform: uppercase;
   letter-spacing: 0.2em;
   color: var(--muted);
 }
@@ -157,8 +159,7 @@ a {
 .control-label,
 .artifact-controls-label {
   font-family: var(--font-label);
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 300;
   text-transform: none;
   letter-spacing: 0.01em;
   color: var(--muted);
@@ -1199,8 +1200,8 @@ body.demo-code-active [data-persona-root] { display: none; }
   gap: 0.5rem;
   cursor: pointer;
   font-family: var(--font-label);
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 300;
   text-transform: none;
   letter-spacing: 0.01em;
   color: var(--muted);
@@ -1418,7 +1419,6 @@ body.is-fullscreen .fullscreen-exit { display: inline-flex !important; }
   font-family: var(--font-label);
   font-size: 0.8rem;
   font-weight: 600;
-  text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--foreground);
 }
@@ -1427,29 +1427,6 @@ body.is-fullscreen .fullscreen-exit { display: inline-flex !important; }
   font-size: 0.72rem;
   color: var(--muted);
   line-height: 1.4;
-}
-.config-inspector-badge {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-family: var(--font-label);
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 0.68rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 100px;
-  background: var(--signal-soft);
-  color: var(--primary);
-  letter-spacing: 0.12em;
-}
-.config-inspector-badge::before {
-  content: "";
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 50%;
-  background: var(--signal);
-  animation: persona-pulse 1.6s ease-in-out infinite;
 }
 .config-inspector-tabs {
   display: flex;

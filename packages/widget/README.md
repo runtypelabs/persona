@@ -459,6 +459,72 @@ const myRules: ParseRule[] = [
 ];
 ```
 
+#### Optional: smart-dom-reader provider
+
+The default reader above is a zero-dependency `TreeWalker` and **does not pierce shadow
+DOM**. For pages built from web components, an optional provider backed by a
+vendored copy of [`@mcp-b/smart-dom-reader`](https://github.com/WebMCP-org/npm-packages/tree/main/packages/smart-dom-reader)
+ships as a **separate entry point**, `@runtypelabs/persona/smart-dom-reader`. It is **not**
+imported by the main bundle, so consumers who never import this subpath pay nothing — no
+extra install, no bundle weight, no IIFE/CDN impact.
+
+It adds, over the default reader: **Shadow-DOM piercing**, form grouping, and page
+landmarks/state — while still emitting Persona's `EnrichedPageElement[]` shape so it
+formats and flows through the same pipeline.
+
+```ts
+import initAgentWidget from '@runtypelabs/persona';
+import { createSmartDomReaderContextProvider } from '@runtypelabs/persona/smart-dom-reader';
+
+initAgentWidget({
+  // ...config
+  contextProviders: [
+    createSmartDomReaderContextProvider({
+      // 'interactive' (default) | 'full' — full adds semantic content AND is required
+      // for shadow-DOM piercing (shadow descendants surface only in full mode).
+      mode: 'full',
+      contextKey: 'pageContext',            // key under payload.context (default)
+      // root: document.querySelector('main') // optional: scope to a subtree, skip chrome
+    })
+  ]
+});
+```
+
+`contextProviders` are honored on the **agent** send path (`buildAgentPayload` merges each
+provider's result into `payload.context` on every request). If you drive the legacy
+flow/`buildPayload` path, call `collectSmartDomContext()` yourself and inject the result.
+
+You can also use the pieces directly:
+
+```ts
+import {
+  collectSmartDomContext,      // → EnrichedPageElement[] (parity with collectEnrichedPageContext)
+  smartDomResultToEnriched     // pure mapper: SmartDOMResult → EnrichedPageElement[]
+} from '@runtypelabs/persona/smart-dom-reader';
+import { formatEnrichedContext } from '@runtypelabs/persona';
+
+const pageContext = formatEnrichedContext(collectSmartDomContext({ mode: 'full' }));
+```
+
+Both `collectSmartDomContext()` and `createSmartDomReaderContextProvider()` accept a
+`root` element to scope extraction to a subtree (parity with `collectEnrichedPageContext`'s
+`root`) — useful to read only your main content region and skip nav/sidebars. Shadow DOM
+inside the subtree is still pierced.
+
+> **Actionability caveat.** Persona's click loop (`utils/actions.ts`) drives
+> `document.querySelector`, which cannot pierce shadow roots or evaluate XPath. The adapter
+> therefore prefers plain-CSS selectors; elements reachable only via shadow-piercing or
+> XPath selectors are surfaced to the model as **context only** and are **not clickable**
+> through the current `message_and_click` handler.
+
+> **Why vendored, not a dependency.** Every published version of `@mcp-b/smart-dom-reader`
+> (2.3.1–3.0.0) is mis-published — its `package.json` points to `dist/index.js` /
+> `dist/index.d.ts` while the build only ships `.mjs` / `.d.mts`, so it cannot be imported
+> by name in Node or any bundler. The library (MIT, zero-dep) is therefore vendored under
+> `packages/widget/src/vendor/smart-dom-reader/`; see that directory's `README.md` for
+> provenance and update steps. Once upstream republishes correctly this can revert to a
+> normal optional peer dependency.
+
 ### DOM Events
 
 The widget dispatches custom DOM events that you can listen to for integration with your application:
