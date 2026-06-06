@@ -280,6 +280,20 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       } else {
         runtypePayload.flow = flowConfig;
       }
+
+      // WebMCP: forward page-discovered tools so the upstream flow's agent step
+      // can call them. The widget snapshots `document.modelContext` per turn and
+      // ships them as `clientTools[]`; the flow-dispatch payload is rebuilt from
+      // scratch above, so without this they'd be silently dropped and the agent
+      // would never see the page tools. (Agent mode forwards the payload as-is,
+      // so it already carries `clientTools`.) The matching results come back via
+      // the `${path}/resume` endpoint below.
+      if (
+        Array.isArray(clientPayload.clientTools) &&
+        clientPayload.clientTools.length > 0
+      ) {
+        runtypePayload.clientTools = clientPayload.clientTools;
+      }
     }
 
     // Development only: do not log key material or full bodies in production.
