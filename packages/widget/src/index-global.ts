@@ -12,8 +12,10 @@
  * modules so bundlers can tree-shake them.
  */
 
-// Re-export the full public API.
-export * from "./index";
+// Re-export the full public API — from `index-core` (NOT `index`) so the
+// dev-only helpers (`generateCodeSnippet`, `createDemoCarousel`) stay out of the
+// CDN/IIFE bundle. npm consumers still get them via the `index.ts` barrel.
+export * from "./index-core";
 
 // Side-import the remaining subpath animations so they're available to
 // script-tag consumers without an explicit import. (`letter-rise` and
