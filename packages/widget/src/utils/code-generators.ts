@@ -141,6 +141,16 @@ export type CodeGeneratorOptions = {
    * Only affects script formats (script-installer, script-manual, script-advanced).
    */
   windowKey?: string;
+
+  /**
+   * CSS selector for the mount target. When omitted, the widget mounts on
+   * `body` (the existing default). When provided, the generated snippet mounts
+   * into that element: ESM / React / manual / advanced formats emit it as the
+   * `target` argument to `initAgentWidget()`, and `script-installer` serializes
+   * it into `data-config` (the installer reads `config.target`).
+   * @default "body"
+   */
+  target?: string;
 };
 
 // Internal type for normalized hooks (always strings)
@@ -540,6 +550,15 @@ function appendSerializableObjectBlock(
   lines.push(`${indent}},`);
 }
 
+/**
+ * Resolve the mount-target selector for a single-quoted JS string context.
+ * Defaults to `body` and escapes backslashes / single quotes so an arbitrary
+ * selector can't break out of the emitted `target: '...'` literal.
+ */
+function emitTargetSelector(options?: CodeGeneratorOptions): string {
+  return (options?.target ?? "body").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
 export function generateCodeSnippet(
   config: any,
   format: CodeFormat = "esm",
@@ -580,7 +599,7 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
     "import { initAgentWidget, markdownPostprocessor } from '@runtypelabs/persona';",
     "",
     "initAgentWidget({",
-    "  target: 'body',",
+    `  target: '${emitTargetSelector(options)}',`,
     "  config: {"
   ];
 
@@ -726,7 +745,7 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
     "    let handle: AgentWidgetInitHandle | null = null;",
     "",
     "    handle = initAgentWidget({",
-    "      target: 'body',",
+    `      target: '${emitTargetSelector(options)}',`,
     "      config: {"
   ];
 
@@ -990,7 +1009,7 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     "    };",
     "",
     "    handle = initAgentWidget({",
-    "      target: 'body',",
+    `      target: '${emitTargetSelector(options)}',`,
     "      config: {"
   ];
 
@@ -1356,6 +1375,12 @@ function buildSerializableConfig(config: any): Record<string, any> {
 function generateScriptInstallerCode(config: any, options?: CodeGeneratorOptions): string {
   const serializableConfig = buildSerializableConfig(config);
 
+  // Mount target: the installer reads `config.target` from data-config, so a
+  // non-default selector is serialized into the config the installer parses.
+  if (options?.target) {
+    serializableConfig.target = options.target;
+  }
+
   // When windowKey is provided, nest the widget config under `config` so the
   // install script's parsedConfig.config detection picks it up alongside windowKey.
   const payload = options?.windowKey
@@ -1383,7 +1408,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
     "<!-- Initialize widget -->",
     "<script>",
     "  var handle = window.AgentWidget.initAgentWidget({",
-    "    target: 'body',",
+    `    target: '${emitTargetSelector(options)}',`,
     ...(options?.windowKey ? [`    windowKey: '${options.windowKey}',`] : []),
     "    config: {"
   ];
@@ -1735,7 +1760,7 @@ function generateScriptAdvancedCode(config: any, options?: CodeGeneratorOptions)
     "",
     "    // Initialize widget",
     "    var handle = agentWidget.initAgentWidget({",
-    "      target: 'body',",
+    `      target: '${emitTargetSelector(options)}',`,
     "      useShadowDom: false,",
     ...(options?.windowKey ? [`      windowKey: '${options.windowKey}',`] : []),
     "      config: widgetConfig",
