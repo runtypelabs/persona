@@ -96,6 +96,10 @@ export const createApprovalBubble = (
   // Apply styling — use semantic tokens with config overrides
   bubble.style.backgroundColor = approvalConfig?.backgroundColor ?? "var(--persona-approval-bg, #fefce8)";
   bubble.style.borderColor = approvalConfig?.borderColor ?? "var(--persona-approval-border, #fef08a)";
+  bubble.style.boxShadow =
+    approvalConfig?.shadow !== undefined
+      ? (approvalConfig.shadow.trim() === "" ? "none" : approvalConfig.shadow)
+      : "var(--persona-approval-shadow, 0 5px 15px rgba(15, 23, 42, 0.08))";
 
   if (!approval) {
     return bubble;

@@ -1825,6 +1825,8 @@ export type AgentWidgetApprovalConfig = {
   backgroundColor?: string;
   /** Border color of the approval bubble */
   borderColor?: string;
+  /** Box-shadow for the approval bubble; pass `"none"` to remove it. Overrides the default `persona-shadow-sm`. */
+  shadow?: string;
   /** Color for the title text */
   titleColor?: string;
   /** Color for the description text */

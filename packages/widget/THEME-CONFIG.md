@@ -350,10 +350,22 @@ Semantic tokens provide intent-based naming that references palette values.
 | `requested.background` | `palette.colors.warning.50` |
 | `requested.border` | `palette.colors.warning.200` |
 | `requested.text` | `palette.colors.gray.900` |
+| `requested.shadow` | `"0 5px 15px rgba(15, 23, 42, 0.08)"` |
 | `approve.background` | `palette.colors.success.500` |
 | `approve.foreground` | `palette.colors.gray.50` |
 | `deny.background` | `palette.colors.error.500` |
 | `deny.foreground` | `palette.colors.gray.50` |
+
+**Per-widget overrides (`config.approval.*`)** take precedence over the tokens above:
+
+| Property | Description |
+|----------|-------------|
+| `backgroundColor` / `borderColor` | Bubble container styling |
+| `shadow` | Box-shadow for the bubble; pass `"none"` to remove it. Overrides the `requested.shadow` token / `--persona-approval-shadow` |
+| `title` / `titleColor` / `descriptionColor` | Title and description text |
+| `parameterBackgroundColor` / `parameterTextColor` | Parameters code block |
+| `approveLabel` / `approveButtonColor` / `approveButtonTextColor` | Approve button |
+| `denyLabel` / `denyButtonColor` / `denyButtonTextColor` | Deny button (text color also drives the outline) |
 
 ### Attachment (`components.attachment.*`)
 
@@ -474,6 +486,7 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-approval-bg
 --persona-approval-border
 --persona-approval-text
+--persona-approval-shadow
 --persona-approval-approve-bg
 --persona-approval-deny-bg
 ```

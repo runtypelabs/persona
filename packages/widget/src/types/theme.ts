@@ -330,6 +330,8 @@ export interface ApprovalTokens {
     background: TokenReference<'color'>;
     border: TokenReference<'color'>;
     text: TokenReference<'color'>;
+    /** Box-shadow for the approval bubble (token ref or raw CSS, e.g. `none`). */
+    shadow: string;
   };
   approve: ComponentTokenSet;
   deny: ComponentTokenSet;

@@ -389,6 +389,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       background: 'palette.colors.warning.50',
       border: 'palette.colors.warning.200',
       text: 'palette.colors.gray.900',
+      shadow: '0 5px 15px rgba(15, 23, 42, 0.08)',
     },
     approve: {
       background: 'palette.colors.success.500',
@@ -683,6 +684,7 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-approval-bg'] = cssVars['--persona-components-approval-requested-background'] ?? cssVars['--persona-palette-colors-warning-50'];
   cssVars['--persona-approval-border'] = cssVars['--persona-components-approval-requested-border'] ?? cssVars['--persona-palette-colors-warning-200'];
   cssVars['--persona-approval-text'] = cssVars['--persona-components-approval-requested-text'] ?? cssVars['--persona-palette-colors-gray-900'];
+  cssVars['--persona-approval-shadow'] = cssVars['--persona-components-approval-requested-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
   cssVars['--persona-approval-approve-bg'] = cssVars['--persona-components-approval-approve-background'] ?? cssVars['--persona-palette-colors-success-500'];
   cssVars['--persona-approval-deny-bg'] = cssVars['--persona-components-approval-deny-background'] ?? cssVars['--persona-palette-colors-error-500'];
 
