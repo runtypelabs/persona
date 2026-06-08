@@ -42,7 +42,7 @@ talking to Runtype.
 ## Run
 
 Model calls route through the **Vercel AI Gateway** (the shim uses a bare
-`anthropic/claude-sonnet-4.6` model id). On Vercel this authenticates
+`nvidia/nemotron-3-ultra-550b-a55b` model id). On Vercel this authenticates
 automatically via the deployment's OIDC token — **no key to set**. For local dev
 you need an `AI_GATEWAY_API_KEY`:
 
