@@ -26,6 +26,7 @@ Persona works with any SSE-capable backend. It's pre-integrated with [Runtype](h
 | Example | Platform | Description |
 |---------|----------|-------------|
 | [`examples/embedded-app`](./examples/embedded-app) | Vite | Vanilla JS demo with runtime configuration ([live](https://persona-chat.dev)) |
+| [`examples/ai-sdk-webmcp`](./examples/ai-sdk-webmcp) | Next.js | WebMCP page tools on a direct Vercel AI SDK backend, no Runtype ([live](https://ai-sdk-webmcp.persona-chat.dev)) |
 | [`examples/vercel-edge`](./examples/vercel-edge) | Vercel / Railway / Fly.io | Node.js proxy server |
 | [`examples/cloudflare-workers`](./examples/cloudflare-workers) | Cloudflare Workers | Edge proxy server |
 

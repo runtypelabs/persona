@@ -4,6 +4,8 @@ A Next.js port of the **Switchback** WebMCP storefront demo that drives the
 **real Persona widget** against a **direct [Vercel AI SDK](https://ai-sdk.dev)
 backend** — **no Runtype**.
 
+**Live demo:** [ai-sdk-webmcp.persona-chat.dev](https://ai-sdk-webmcp.persona-chat.dev)
+
 The storefront publishes its own page tools via WebMCP
 (`document.modelContext.registerTool`). The Persona widget snapshots them each
 turn, ships them as `clientTools[]`, and when the agent calls one the widget runs
