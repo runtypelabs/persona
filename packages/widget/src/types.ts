@@ -1861,7 +1861,7 @@ export type AgentWidgetApprovalConfig = {
 };
 
 export type AgentWidgetToolCallConfig = {
-  /** Box-shadow for tool-call bubbles; overrides `theme.toolBubbleShadow` when set. */
+  /** Box-shadow for tool-call bubbles; pass `"none"` to remove it. Overrides the `components.toolBubble.shadow` token / `--persona-tool-bubble-shadow`. */
   shadow?: string;
   /** Background color of the tool call bubble container. */
   backgroundColor?: string;

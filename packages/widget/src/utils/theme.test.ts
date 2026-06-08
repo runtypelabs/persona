@@ -288,7 +288,7 @@ describe('theme utils', () => {
     );
   });
 
-  it('lets config.toolCall.shadow override theme tool bubble shadow on the root element', () => {
+  it('drives --persona-tool-bubble-shadow from the theme token (config.toolCall.shadow is applied inline on the bubble, not the root var)', () => {
     const el = document.createElement('div');
     applyThemeVariables(el, {
       colorScheme: 'light',
@@ -297,8 +297,12 @@ describe('theme utils', () => {
           toolBubble: { shadow: '0 1px 2px rgba(255,0,0,0.5)' },
         },
       },
+      // config.toolCall.shadow no longer rewrites the root variable — the
+      // override is applied inline by createToolBubble (see tool-bubble tests).
       toolCall: { shadow: 'none' },
     });
-    expect(el.style.getPropertyValue('--persona-tool-bubble-shadow').trim()).toBe('none');
+    expect(el.style.getPropertyValue('--persona-tool-bubble-shadow').trim()).toBe(
+      '0 1px 2px rgba(255,0,0,0.5)'
+    );
   });
 });

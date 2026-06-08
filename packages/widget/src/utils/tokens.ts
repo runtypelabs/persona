@@ -739,6 +739,9 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-panel-shadow'] ??
     cssVars['--persona-palette-shadows-xl'] ??
     '0 25px 50px -12px rgba(0, 0, 0, 0.25)';
+  cssVars['--persona-launcher-shadow'] =
+    cssVars['--persona-components-launcher-shadow'] ??
+    '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)';
   cssVars['--persona-input-radius'] =
     cssVars['--persona-components-input-borderRadius'] ??
     cssVars['--persona-radius-lg'] ??

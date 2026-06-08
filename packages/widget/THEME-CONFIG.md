@@ -569,7 +569,7 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 | Property | Default | Description |
 |----------|---------|-------------|
 | `border` | `"1px solid #e5e7eb"` | Border style for the launcher button |
-| `shadow` | `"0 10px 15px -3px rgba(0,0,0,0.1), ..."` | Box shadow for the launcher button |
+| `shadow` | `"0 10px 15px -3px rgba(0,0,0,0.1), ..."` | Box shadow for the launcher button; pass `"none"` to remove it. Overrides the `components.launcher.shadow` token / `--persona-launcher-shadow` |
 | `collapsedMaxWidth` | *(unset)* | CSS `max-width` for the floating launcher pill when the panel is closed; title/subtitle truncate with ellipsis (full text in `title` tooltip). Does not change the open panel width (`width`). |
 
 ### Header Icon
@@ -658,7 +658,7 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 ### Styling
 | Property | Description |
 |----------|-------------|
-| `shadow` | Box-shadow for tool call bubbles; overrides `theme.toolBubbleShadow` |
+| `shadow` | Box-shadow for tool call bubbles; pass `"none"` to remove it. Overrides the `components.toolBubble.shadow` token / `--persona-tool-bubble-shadow` |
 | `backgroundColor` / `borderColor` / `borderWidth` / `borderRadius` | Container styling |
 | `headerBackgroundColor` / `headerTextColor` / `headerPaddingX` / `headerPaddingY` | Header styling |
 | `contentBackgroundColor` / `contentTextColor` / `contentPaddingX` / `contentPaddingY` | Content styling |
