@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" />
+  <title>Installer Lifecycle Events Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      line-height: 1.6;
+    }
+    header {
+      background: white;
+      padding: 1.5rem 2rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    h1 { margin: 0; font-size: 1.6rem; color: #0f172a; }
+    .subtitle { margin-top: 0.4rem; color: #64748b; font-size: 0.95rem; }
+    .container { max-width: 860px; margin: 0 auto; padding: 2rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1.5rem;
+      align-items: start;
+    }
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .card h2 { margin-top: 0; font-size: 1.1rem; color: #0f172a; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.85rem;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: #fef9c3;
+      color: #854d0e;
+      transition: background 0.2s, color 0.2s;
+    }
+    .status-badge.ready { background: #dcfce7; color: #166534; }
+    .step-list { margin: 0.5rem 0 0; padding-left: 1.1rem; color: #475569; font-size: 0.92rem; }
+    .step-list li { margin-bottom: 0.4rem; }
+    .step-list code { background: #f1f5f9; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+    .log {
+      font-family: "SFMono-Regular", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+      font-size: 0.8rem;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 1rem;
+      min-height: 260px;
+      max-height: 420px;
+      overflow-y: auto;
+    }
+    .log:empty::after { content: "Waiting for the installer to run…"; color: #64748b; }
+    .log-row { padding: 0.45rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+    .log-line { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.6rem; row-gap: 0.15rem; }
+    .log-sub { color: #64748b; padding-left: 90px; margin-top: 0.25rem; font-size: 0.72rem; line-height: 1.4; overflow-wrap: anywhere; }
+    .log-time { color: #64748b; flex: none; width: 64px; text-align: right; }
+    .log-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; align-self: center; }
+    .log-name { font-weight: 600; flex: none; }
+    .log-detail { color: #94a3b8; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+    .dot-script { background: #94a3b8; }
+    .dot-launcher { background: #38bdf8; }
+    .dot-chat { background: #4ade80; }
+    .dot-error { background: #f87171; }
+    .name-script { color: #cbd5e1; }
+    .name-launcher { color: #7dd3fc; }
+    .name-chat { color: #86efac; }
+    .name-error { color: #fca5a5; }
+    .source-tag {
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #64748b;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 4px;
+      padding: 0 0.3rem;
+      align-self: center;
+      flex: none;
+      margin-left: auto;
+    }
+    pre {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      margin: 0.5rem 0 0;
+    }
+    .toolbar { margin-bottom: 1rem; display: flex; gap: 0.6rem; flex-wrap: wrap; }
+    .btn {
+      padding: 0.45rem 0.9rem;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: white;
+      color: #1e293b;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .btn:hover { background: #f8fafc; }
+    .hint { color: #64748b; font-size: 0.85rem; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚡ Installer Lifecycle Events</h1>
+    <p class="subtitle">
+      Watch the deferred-launcher optimization in action: the real launcher paints from a tiny
+      critical bundle on load, and the full widget only initializes on your first click.
+    </p>
+  </header>
+
+  <div class="container">
+    <div class="toolbar">
+      <button class="btn" id="reload-btn">Reload page</button>
+      <span class="status-badge" id="status">⏳ waiting for first open…</span>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Live event log</h2>
+        <div class="log" id="log" aria-live="polite"></div>
+        <p class="hint">
+          Each lifecycle moment is logged <strong>twice on purpose</strong> — to show both ways to
+          subscribe. Line one names the subscription: the <code>onX()</code> config
+          <strong>callback</strong> vs the <code>persona:*</code> <strong>DOM event</strong> on
+          <code>window</code>. The grey sub-line explains what that moment means.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>What you're seeing</h2>
+        <ol class="step-list">
+          <li>
+            <strong><code>persona:script-load</code></strong> fires immediately — the installer ran.
+          </li>
+          <li>
+            <strong><code>persona:launcher-shown</code></strong> (<code>deferred: true</code>) fires at
+            page load: the real launcher is painted from the ~13&nbsp;KB critical bundle.
+          </li>
+          <li>
+            Nothing else fires yet. The heavy conversation panel is <em>not</em> downloaded.
+          </li>
+          <li>
+            Click the launcher (bottom-right). The full bundle loads, then
+            <strong><code>persona:chat-ready</code></strong> fires and the panel opens.
+          </li>
+        </ol>
+        <p class="hint">
+          Each row is timestamped with <code>performance.now()</code> (ms since navigation), so the gap
+          between launcher-shown and chat-ready is the deferral you saved on initial load.
+        </p>
+
+        <h2 style="margin-top:1.5rem">The config powering this page</h2>
+        <pre id="config-snippet"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Lifecycle wiring ─────────────────────────────────────────────────────
+       Define the logger and configure the installer BEFORE the installer script
+       loads, so the very first callback (onScriptLoad) is captured. -->
+  <script>
+    (function () {
+      "use strict";
+
+      var logEl = document.getElementById("log");
+      var statusEl = document.getElementById("status");
+
+      var META = {
+        "script-load": { dot: "dot-script", name: "name-script", label: "persona:script-load", cb: "onScriptLoad", meaning: "the installer script executed — fires before any loading or gating" },
+        "launcher-shown": { dot: "dot-launcher", name: "name-launcher", label: "persona:launcher-shown", cb: "onLauncherShown", meaning: "the real launcher was painted (deferred: true = from the ~13 KB critical bundle)" },
+        "chat-ready": { dot: "dot-chat", name: "name-chat", label: "persona:chat-ready", cb: "onChatReady", meaning: "the full widget is initialized and its controller API is now callable" },
+        "error": { dot: "dot-error", name: "name-error", label: "persona:error", cb: "onError", meaning: "a load step failed (css / bundle / init)" }
+      };
+
+      function logEvent(kind, detail, source) {
+        var meta = META[kind] || META["script-load"];
+        var isDom = source === "dom";
+
+        var row = document.createElement("div");
+        row.className = "log-row";
+
+        // ── Top line: time · dot · event name · payload · channel badge ──
+        var line = document.createElement("div");
+        line.className = "log-line";
+
+        var time = document.createElement("span");
+        time.className = "log-time";
+        time.textContent = "+" + Math.round(performance.now()) + "ms";
+
+        var dot = document.createElement("span");
+        dot.className = "log-dot " + meta.dot;
+
+        var name = document.createElement("span");
+        name.className = "log-name " + meta.name;
+        // Line-one label reflects the *subscription*, not just the event: the
+        // callback shows its function signature, the DOM row shows the event name.
+        name.textContent = isDom ? meta.label : meta.cb + "()";
+
+        var det = document.createElement("span");
+        det.className = "log-detail";
+        det.textContent = detail || "";
+
+        var tag = document.createElement("span");
+        tag.className = "source-tag";
+        tag.textContent = isDom ? "DOM event" : "callback";
+
+        line.appendChild(time);
+        line.appendChild(dot);
+        line.appendChild(name);
+        if (detail) line.appendChild(det);
+        line.appendChild(tag);
+
+        // ── Sub line: which subscription fired + what the event means, so a
+        //    callback row and its DOM-event twin are each self-explanatory. ──
+        var sub = document.createElement("div");
+        sub.className = "log-sub";
+        sub.textContent = isDom
+          ? 'same moment — any code can subscribe via window.addEventListener("' + meta.label + '")'
+          : meta.meaning;
+
+        row.appendChild(line);
+        row.appendChild(sub);
+        logEl.appendChild(row);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      // On localhost, point the installer at the LOCAL widget build so the
+      // deferred launcher (launcher.global.js) actually loads. The published CDN
+      // @latest does not ship launcher.global.js yet, so without this its fetch
+      // 404s and the installer silently falls back to the eager path — you'd see
+      // `deferred: false` and launcher-shown + chat-ready at the same timestamp.
+      // Setting cssUrl/jsUrl is also exactly how a self-hosted deploy opts into
+      // the optimization: the installer derives the sibling launcher.global.js
+      // URL from jsUrl.
+      var isLocal = window.location.hostname === "localhost";
+
+      // Configure the installer. A plain floating launcher with no autoExpand /
+      // persisted-open / onStateLoaded → the installer takes the deferred path.
+      window.siteAgentConfig = {
+        target: "body",
+        cssUrl: isLocal ? "/widget-dist/widget.css" : undefined,
+        jsUrl: isLocal ? "/widget-dist/index.global.js" : undefined,
+        config: {
+          apiUrl: "http://localhost:43111/api/chat/dispatch",
+          launcher: {
+            enabled: true,
+            title: "Lifecycle Demo",
+            subtitle: "Click me to load the full widget",
+            iconText: "💬"
+          },
+          suggestionChips: ["Hello!", "What can you do?"]
+        },
+
+        // ── The lifecycle callbacks (recommended API) ──
+        onScriptLoad: function (info) {
+          logEvent("script-load", "version: " + JSON.stringify(info.version));
+        },
+        onLauncherShown: function (info) {
+          logEvent("launcher-shown", "deferred: " + info.deferred);
+        },
+        onChatReady: function (handle) {
+          logEvent("chat-ready", "handle.open is " + typeof handle.open);
+          statusEl.textContent = "✅ chat ready";
+          statusEl.classList.add("ready");
+        },
+        onError: function (info) {
+          logEvent("error", "phase: " + info.phase + " — " + (info.error && info.error.message || info.error));
+        }
+      };
+
+      // ── The same lifecycle as DOM events (tagged "dom" in the log) ──
+      window.addEventListener("persona:script-load", function (e) {
+        logEvent("script-load", "version: " + JSON.stringify(e.detail && e.detail.version), "dom");
+      });
+      window.addEventListener("persona:launcher-shown", function (e) {
+        logEvent("launcher-shown", "deferred: " + (e.detail && e.detail.deferred), "dom");
+      });
+      window.addEventListener("persona:chat-ready", function () {
+        logEvent("chat-ready", "event.detail = handle", "dom");
+      });
+      window.addEventListener("persona:error", function (e) {
+        logEvent("error", "phase: " + (e.detail && e.detail.phase), "dom");
+      });
+
+      // Reload button → re-run the whole lifecycle from a clean load.
+      document.getElementById("reload-btn").addEventListener("click", function () {
+        window.location.reload();
+      });
+
+      // Show the config that drives the page (kept in sync by hand for clarity).
+      document.getElementById("config-snippet").textContent =
+        "window.siteAgentConfig = {\n" +
+        "  target: \"body\",\n" +
+        "  // localhost only — load the unreleased launcher bundle from the local\n" +
+        "  // build; in production omit these two and the CDN is used:\n" +
+        "  cssUrl: \"/widget-dist/widget.css\",\n" +
+        "  jsUrl:  \"/widget-dist/index.global.js\",\n" +
+        "  config: {\n" +
+        "    apiUrl: \"…/api/chat/dispatch\",\n" +
+        "    launcher: { enabled: true, title: \"Lifecycle Demo\" }\n" +
+        "  },\n" +
+        "  onScriptLoad:    (info)   => { /* info.version */ },\n" +
+        "  onLauncherShown: (info)   => { /* info.deferred, info.element */ },\n" +
+        "  onChatReady:     (handle) => { /* handle.open(), handle.on(…) */ },\n" +
+        "  onError:         (info)   => { /* info.phase: css|bundle|init */ }\n" +
+        "};";
+    })();
+  </script>
+
+  <!-- Load Widget Installer (local build on localhost, CDN in production) -->
+  <!-- Run `pnpm build:widget` to refresh the local /widget-dist build. -->
+  <script>
+    (function () {
+      var base = window.location.hostname === "localhost"
+        ? "/widget-dist"
+        : "https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist";
+      var s = document.createElement("script");
+      s.src = base + "/install.global.js";
+      document.currentScript.parentNode.insertBefore(s, document.currentScript.nextSibling);
+    })();
+  </script>
+
+  <script type="module">
+    import { renderStandaloneNav } from "/src/standalone-nav.ts";
+    renderStandaloneNav("lifecycle-events");
+  </script>
+</body>
+</html>

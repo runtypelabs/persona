@@ -92,7 +92,8 @@ const docked = initAgentWidget({
 | `target` | `string \| HTMLElement` | CSS selector or element where widget mounts. |
 | `config` | `AgentWidgetConfig` | Widget configuration object (see [Configuration reference](#configuration-reference) below). |
 | `useShadowDom` | `boolean` | Use Shadow DOM for style isolation (default: `true`). |
-| `onReady` | `() => void` | Callback fired when widget is initialized. |
+| `onChatReady` | `() => void` | Callback fired when the widget is initialized and its API is callable. |
+| `onReady` | `() => void` | **Deprecated** alias of `onChatReady`; still works, removed in the next major. |
 | `windowKey` | `string` | If provided, stores the controller on `window[windowKey]` for global access. Automatically cleaned up on `destroy()`. |
 
 When `config.launcher.mountMode` is `'docked'`, `target` is treated as the page container that Persona should wrap. Use a concrete element such as `#workspace-main`; `body` and `html` are rejected.
@@ -354,7 +355,7 @@ window.chatController.submitMessage("Test message")
 window.chatController.startVoiceRecognition()
 ```
 
-When using the automatic installer script (`install.global.js`), see [Programmatic access with the installer](#programmatic-access-with-the-installer) for additional approaches including the `onReady` callback and `persona:ready` event.
+When using the automatic installer script (`install.global.js`), see [Programmatic access with the installer](#programmatic-access-with-the-installer) for additional approaches including the `onChatReady` callback and `persona:chat-ready` event.
 
 #### Message Types
 
@@ -619,19 +620,30 @@ window.dispatchEvent(new CustomEvent('persona:focusInput', {
 
 **Instance scoping:** Same as `persona:showEventStream` — use `detail.instanceId` to target a specific widget. Without `instanceId`, all instances receive the event.
 
-#### `persona:ready`
+#### `persona:chat-ready`
 
-Dispatched on `window` by the automatic installer script (`install.global.js`) after the widget is initialized. The `event.detail` contains the `AgentWidgetInitHandle` (the same object returned by `initAgentWidget()`).
+Dispatched on `window` by the automatic installer script (`install.global.js`) when the widget is initialized and its controller API is callable. The `event.detail` contains the `AgentWidgetInitHandle` (the same object returned by `initAgentWidget()`). In a deferred install (the default floating-launcher case) this fires after the user first opens the panel; in an eager install it fires on page load.
 
 ```ts
-window.addEventListener('persona:ready', (e) => {
+window.addEventListener('persona:chat-ready', (e) => {
   const handle = e.detail;
   handle.on('message:sent', (msg) => console.log(msg));
   handle.open();
 });
 ```
 
-> **Note:** This event is only dispatched by the automatic installer script. Direct calls to `initAgentWidget()` return the handle synchronously and do not fire this event.
+The installer also dispatches sibling lifecycle events for diagnostics and analytics:
+
+| Event | `detail` | Fires |
+| --- | --- | --- |
+| `persona:script-load` | `{ version }` | the installer script executed (before any loading) |
+| `persona:launcher-shown` | `{ deferred, element? }` | the floating launcher painted on the page (page-load time) |
+| `persona:chat-ready` | the widget handle | the widget is initialized and its API is callable |
+| `persona:error` | `{ phase, error }` | a load step (`css` / `bundle` / `init`) failed |
+
+> **Note:** These events are only dispatched by the automatic installer script. Direct calls to `initAgentWidget()` return the handle synchronously and do not fire them.
+>
+> `persona:ready` is still dispatched as a **deprecated** alias of `persona:chat-ready` and will be removed in the next major.
 
 ### Controller Events
 
@@ -1553,7 +1565,11 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 - `previewQueryParam` - Query parameter key that gates widget loading; widget only loads when the parameter is present and truthy
 - `useShadowDom` - Use Shadow DOM for style isolation (default: `false`)
 - `windowKey` - If provided, stores the widget handle on `window[windowKey]` for programmatic access
-- `onReady` - Callback fired with the widget handle after initialization; signature: `(handle) => void`
+- `onScriptLoad` - Fired as soon as the installer script executes, before it loads or gates anything (diagnostics / timing); signature: `({ version }) => void`
+- `onLauncherShown` - Fired when the floating launcher is painted on the page (page-load time — for "widget appeared" analytics); signature: `({ deferred, element? }) => void`
+- `onChatReady` - Fired when the widget is initialized and its controller API is callable (after first open in a deferred install); signature: `(handle) => void`
+- `onError` - Fired when a load step fails (`css` / `bundle` / `init`), so ad-blocked / timed-out installs don't fail silently; signature: `({ phase, error }) => void`
+- `onReady` - **Deprecated** alias of `onChatReady`; still works, removed in the next major; signature: `(handle) => void`
 
 **Example with version pinning:**
 
@@ -1574,14 +1590,14 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 
 The installer is fully asynchronous (it waits for framework hydration, then loads CSS and JS). To interact with the widget after it initializes, use one of these approaches:
 
-**`onReady` callback** — best when config and access logic live in the same script:
+**`onChatReady` callback** — best when config and access logic live in the same script:
 
 ```html
 <script>
   window.siteAgentConfig = {
     clientToken: 'YOUR_TOKEN',
     windowKey: 'myChat',
-    onReady(handle) {
+    onChatReady(handle) {
       handle.on('message:sent', (e) => console.log('sent:', e));
       handle.on('message:received', (e) => console.log('received:', e));
     }
@@ -1590,11 +1606,11 @@ The installer is fully asynchronous (it waits for framework hydration, then load
 <script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
 ```
 
-**`persona:ready` event** — best for decoupled integration (e.g. tag managers, separate scripts):
+**`persona:chat-ready` event** — best for decoupled integration (e.g. tag managers, separate scripts):
 
 ```html
 <script>
-  window.addEventListener('persona:ready', (e) => {
+  window.addEventListener('persona:chat-ready', (e) => {
     const handle = e.detail;
     handle.on('message:sent', (e) => console.log('sent:', e));
   });
@@ -1607,7 +1623,7 @@ The installer is fully asynchronous (it waits for framework hydration, then load
 <script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
 ```
 
-**`windowKey`** — stores the handle on `window[windowKey]` for persistent global access. Combine with `onReady` or `persona:ready` to know when it's available:
+**`windowKey`** — stores the handle on `window[windowKey]` for persistent global access. Combine with `onChatReady` or `persona:chat-ready` to know when it's available:
 
 ```html
 <script>
@@ -1619,7 +1635,7 @@ The installer is fully asynchronous (it waits for framework hydration, then load
 <script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
 
 <script>
-  window.addEventListener('persona:ready', () => {
+  window.addEventListener('persona:chat-ready', () => {
     // window.myChat is now available and persists until destroy()
     window.myChat.open();
   });

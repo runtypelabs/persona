@@ -4136,6 +4136,9 @@ export type AgentWidgetInitOptions = {
   target: string | HTMLElement;
   config?: AgentWidgetConfig;
   useShadowDom?: boolean;
+  /** Fired when the widget controller is mounted and its API is callable. */
+  onChatReady?: () => void;
+  /** @deprecated Use `onChatReady`. Retained as an alias; removed in the next major. */
   onReady?: () => void;
   windowKey?: string; // If provided, stores the controller on window[windowKey] for global access
   debugTools?: boolean;

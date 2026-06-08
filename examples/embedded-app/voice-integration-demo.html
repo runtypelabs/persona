@@ -807,7 +807,7 @@
             target: mountPoint,
             useShadowDom: false,
             config: activeMountMode === "launcher" ? config : squareInlinePanel(config),
-            onReady: () => {
+            onChatReady: () => {
               console.log("Widget ready, setting up voice...");
               setupVoiceInterface();
             },

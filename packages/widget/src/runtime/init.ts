@@ -3,6 +3,9 @@ import { AgentWidgetConfig as _AgentWidgetConfig, AgentWidgetInitOptions, AgentW
 import { isComposerBarMountMode, isDockedMountMode } from "../utils/dock";
 import { createWidgetHostLayout } from "./host-layout";
 
+// Warn at most once per page when the deprecated `onReady` alias is used.
+let warnedOnReadyDeprecated = false;
+
 const ensureTarget = (target: string | HTMLElement): HTMLElement => {
   if (typeof window === "undefined" || typeof document === "undefined") {
     throw new Error("Chat widget can only be mounted in a browser environment");
@@ -157,7 +160,20 @@ export const initAgentWidget = (
   };
 
   mountController();
-  options.onReady?.();
+  // Fired when the controller is mounted and its API is callable. `onReady` is
+  // the deprecated alias of `onChatReady` (removed next major) — warn once.
+  if (options.onChatReady) {
+    options.onChatReady();
+  } else if (options.onReady) {
+    if (!warnedOnReadyDeprecated) {
+      warnedOnReadyDeprecated = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[Persona] `onReady` is deprecated — use `onChatReady`. `onReady` still works but is removed in the next major."
+      );
+    }
+    options.onReady();
+  }
 
   const rebuildLayout = (nextConfig?: _AgentWidgetConfig) => {
     destroyCurrentController();

@@ -88,7 +88,7 @@ initAgentWidget({
 
 Two entry points:
 
-- `initAgentWidget({ target, config, useShadowDom?, onReady?, windowKey? })` — floating launcher or docked panel. Returns a controller.
+- `initAgentWidget({ target, config, useShadowDom?, onChatReady?, windowKey? })` — floating launcher or docked panel. Returns a controller.
 - `createAgentExperience(element, config)` — inline embed with no launcher. Returns a controller.
 
 ### Controller API

@@ -427,6 +427,7 @@ export default defineConfig({
         'standalone/example-shop-installer-voice-metadata': path.resolve(__dirname, 'standalone/example-shop-installer-voice-metadata.html'),
         'standalone/sample': path.resolve(__dirname, 'standalone/sample.html'),
         'standalone/preview-mode': path.resolve(__dirname, 'standalone/preview-mode.html'),
+        'standalone/lifecycle-events': path.resolve(__dirname, 'standalone/lifecycle-events.html'),
       }).filter(([, entryPath]) => fs.existsSync(entryPath))
       )
     }

@@ -535,7 +535,7 @@
           ],
           storageAdapter: createStorageAdapter(STORAGE_KEY),
           voiceRecognition: userConfig.voiceRecognition,
-          onReady: () => {
+          onChatReady: () => {
             const controller = window.chatController;
             handleDeferredNavigation(controller);
             exposeHelpers(controller);
