@@ -226,7 +226,7 @@ const homeDemoInputPlaceholder =
 const homeDemoSharedAssistant = {
   agent: {
     name: "Persona Documentation Assistant",
-    model: "claude-haiku-4-5-20251001",
+    model: "nemotron-3-ultra-550b-a55b",
     systemPrompt: PERSONA_SYSTEM_PROMPT,
     temperature: 0.5,
     tools: {

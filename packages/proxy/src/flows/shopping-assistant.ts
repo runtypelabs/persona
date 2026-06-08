@@ -18,7 +18,7 @@ export const SHOPPING_ASSISTANT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "mercury-2",
+        model: "nemotron-3-ultra-550b-a55b",
         reasoning: false,
         responseFormat: "JSON",
         outputVariable: "prompt_result",
@@ -97,7 +97,7 @@ export const SHOPPING_ASSISTANT_METADATA_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "mercury-2",
+        model: "nemotron-3-ultra-550b-a55b",
         reasoning: false,
         responseFormat: "JSON",
         outputVariable: "prompt_result",
