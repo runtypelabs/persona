@@ -14,7 +14,7 @@ export const CONVERSATIONAL_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "mercury-2",
+        model: "nemotron-3-ultra-550b-a55b",
         responseFormat: "markdown",
         outputVariable: "prompt_result",
         userPrompt: "{{user_message}}",

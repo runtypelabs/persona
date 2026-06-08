@@ -31,7 +31,7 @@ export const PAGE_CONTEXT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "mercury-2",
+        model: "nemotron-3-ultra-550b-a55b",
         responseFormat: "JSON",
         outputVariable: "prompt_result",
         userPrompt: "{{user_message}}",

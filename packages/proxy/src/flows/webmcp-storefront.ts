@@ -17,10 +17,9 @@ import type { RuntypeFlowConfig } from "../index.js";
  * needs a tool-capable model and a system prompt that knows how to shop the
  * (page-provided) catalog.
  *
- * Model: `claude-sonnet-4-6`. WebMCP depends on the model emitting **native**
- * tool calls (each surfaces as a `step_await` the widget resumes); a
- * tool-reliable model is required here, so this flow does not use the
- * `mercury-2` default the conversational demos rely on. `responseFormat` is
+ * Model: `nemotron-3-ultra-550b-a55b`. WebMCP depends on the model
+ * emitting **native** tool calls (each surfaces as a `step_await` the widget
+ * resumes), so a tool-reliable model is required here. `responseFormat` is
  * markdown (not JSON) so the model is free to interleave tool calls with a
  * natural-language summary instead of being constrained to a JSON envelope.
  */
@@ -35,7 +34,7 @@ export const WEBMCP_STOREFRONT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "claude-sonnet-4-6",
+        model: "nemotron-3-ultra-550b-a55b",
         reasoning: false,
         responseFormat: "markdown",
         outputVariable: "prompt_result",
