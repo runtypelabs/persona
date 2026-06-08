@@ -3146,7 +3146,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
 
     const client = new AgentWidgetClient({
       clientToken: 'ct_live_demo',
-      apiUrl: 'https://api.runtype-staging.com',
+      apiUrl: 'https://api.runtype.com',
     });
     // Simulate an initialized client session (resumeFlow reads sessionId off it).
     (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
@@ -3157,7 +3157,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
     await client.resumeFlow('exec_xyz', { toolu_A: { ok: true } });
 
     // Session-authed sibling of /v1/client/chat — no Bearer key, sessionId in body.
-    expect(capturedUrl).toBe('https://api.runtype-staging.com/v1/client/resume');
+    expect(capturedUrl).toBe('https://api.runtype.com/v1/client/resume');
     expect(capturedBody).toEqual({
       executionId: 'exec_xyz',
       toolOutputs: { toolu_A: { ok: true } },
@@ -3176,7 +3176,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
 
     const client = new AgentWidgetClient({
       clientToken: 'ct_live_demo',
-      apiUrl: 'https://api.runtype-staging.com/v1/dispatch',
+      apiUrl: 'https://api.runtype.com/v1/dispatch',
     });
     // A live session so initSession() short-circuits instead of fetching /init.
     (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
@@ -3185,7 +3185,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
     };
     await client.resumeFlow('exec_abc', {});
 
-    expect(capturedUrl).toBe('https://api.runtype-staging.com/v1/client/resume');
+    expect(capturedUrl).toBe('https://api.runtype.com/v1/client/resume');
   });
 
   it('refreshes the session via initSession() before resuming when stale (BugBot r3367875360)', async () => {
@@ -3197,7 +3197,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
 
     const client = new AgentWidgetClient({
       clientToken: 'ct_live_demo',
-      apiUrl: 'https://api.runtype-staging.com',
+      apiUrl: 'https://api.runtype.com',
     });
     // A stale session that has already expired — a long WebMCP approval wait can
     // outlive it, so resumeFlow must not trust this.clientSession directly.
@@ -3846,7 +3846,7 @@ describe('AgentWidgetClient - diff-only clientTools (client-token)', () => {
   function makeClient(tools: unknown[]) {
     const client = new AgentWidgetClient({
       clientToken: 'ct_live_demo',
-      apiUrl: 'https://api.runtype-staging.com',
+      apiUrl: 'https://api.runtype.com',
     });
     (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
       sessionId: 'cs_diff_1',
@@ -3904,7 +3904,7 @@ describe('AgentWidgetClient - diff-only clientTools (client-token)', () => {
     const live = [...TOOLS];
     const client = new AgentWidgetClient({
       clientToken: 'ct_live_demo',
-      apiUrl: 'https://api.runtype-staging.com',
+      apiUrl: 'https://api.runtype.com',
     });
     (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
       sessionId: 'cs_diff_1',
@@ -3931,7 +3931,7 @@ describe('AgentWidgetClient - diff-only clientTools (client-token)', () => {
     ];
     const client = new AgentWidgetClient({
       clientToken: 'ct_live_demo',
-      apiUrl: 'https://api.runtype-staging.com',
+      apiUrl: 'https://api.runtype.com',
     });
     (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
       sessionId: 'cs_diff_1',
@@ -4027,7 +4027,7 @@ describe('AgentWidgetClient - diff-only clientTools (client-token)', () => {
     });
     const client = new AgentWidgetClient({
       clientToken: 'ct_live_demo',
-      apiUrl: 'https://api.runtype-staging.com',
+      apiUrl: 'https://api.runtype.com',
     });
     // Pre-seed a stale fingerprint bound to a prior session (no live session, so
     // initSession() takes the mint path and fetches /client/init).

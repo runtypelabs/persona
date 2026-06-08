@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DEFAULT_OPENAPI_URL = "https://api.runtype-staging.com/v1/openapi.json";
+const DEFAULT_OPENAPI_URL = "https://api.runtype.com/v1/openapi.json";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, "..");
 const defaultOutput = resolve(packageRoot, "openapi/runtype-public-openapi.snapshot.json");
