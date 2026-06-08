@@ -253,8 +253,17 @@ async function runTurn(
     return; // no flow_complete — the widget will /resume with tool outputs
   }
 
-  // No tool calls: the turn is done.
+  // No tool calls: the turn is done. Clean up the stored execution now that it
+  // has completed (a no-op on the initial dispatch path). We deliberately did
+  // NOT delete earlier in handleResume: if the turn errors mid-stream, the
+  // paused state must stay put so the widget can retry /resume with the same
+  // executionId instead of getting an "unknown executionId" error.
   send.send("step_complete", { id: stepId, result: { response: text } });
+  try {
+    await deletePausedExecution(executionId);
+  } catch {
+    /* best-effort cleanup; the cache TTL expires it regardless */
+  }
   send.send("flow_complete", { success: true, executionId });
 }
 
@@ -278,16 +287,30 @@ export function handleResume(body: ResumeBody): Response {
       });
       return;
     }
-    await deletePausedExecution(executionId);
+    // NB: we do NOT delete the paused state here — runTurn cleans it up only
+    // once the continued turn completes, so a mid-stream failure stays retryable.
 
     const outputs = body.toolOutputs ?? {};
-    const toolResults: ToolResultPart[] = paused.pending.map((p) => ({
-      type: "tool-result",
-      toolCallId: p.toolCallId,
-      toolName: p.toolName,
-      // Widget keys outputs by the toolCallId we emitted; fall back to toolName.
-      output: resultToOutput(outputs[p.toolCallId] ?? outputs[p.toolName]),
-    }));
+    const toolResults: ToolResultPart[] = paused.pending.map((p) => {
+      // The widget's batched /resume may omit a call (aborted, deduped, or its
+      // execute() failed), so its output key is absent. Anthropic still requires
+      // a tool_result for every tool_use, so emit an explicit error result for
+      // the missing one rather than a "null" placeholder (which would read as a
+      // real, empty result). The model can then react / re-request as needed.
+      const has = p.toolCallId in outputs || p.toolName in outputs;
+      return {
+        type: "tool-result",
+        toolCallId: p.toolCallId,
+        toolName: p.toolName,
+        output: has
+          ? resultToOutput(outputs[p.toolCallId] ?? outputs[p.toolName])
+          : {
+              type: "error-text",
+              value:
+                "No output was returned for this tool call (it was cancelled or failed on the page).",
+            },
+      };
+    });
 
     const messages: ModelMessage[] = [
       ...paused.messages,
