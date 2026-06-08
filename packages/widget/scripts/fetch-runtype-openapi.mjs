@@ -60,6 +60,17 @@ function assertContractShape(doc, source) {
       throw new Error(`OpenAPI response from ${source} is missing POST ${path}`);
     }
   }
+
+  const stepComplete = doc.components?.schemas?.FlowSSEEvent?.oneOf?.find((variant) => {
+    const enumValue = variant?.properties?.type?.enum?.[0];
+    const constValue = variant?.properties?.type?.const;
+    return enumValue === "step_complete" || constValue === "step_complete";
+  });
+  const stopReasonEnum = stepComplete?.properties?.stopReason?.enum;
+  const expectedStopReasons = ["end_turn", "max_tool_calls", "length", "content_filter", "error", "unknown"];
+  if (!stopReasonEnum || expectedStopReasons.some((value) => !stopReasonEnum.includes(value))) {
+    throw new Error(`OpenAPI response from ${source} is missing FlowSSEEvent.step_complete.stopReason with the expected enum`);
+  }
 }
 
 const { url, output } = parseArgs(process.argv.slice(2));

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -213,7 +213,7 @@ async function main() {
 }
 
 function generate(doc, inputPath) {
-  const sourceName = inputPath.replace(`${packageRoot}/`, "");
+  const sourceName = relative(packageRoot, inputPath).replace(/\\/g, "/");
   const agent = requiredSchema(doc, "components.schemas.AgentSSEEvent");
   const flow = requiredSchema(doc, "components.schemas.FlowSSEEvent");
   const dispatch = requiredSchema(doc, "components.schemas.DispatchSSEEvent");
