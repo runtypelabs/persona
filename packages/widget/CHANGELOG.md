@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 3.26.0
+
+### Patch Changes
+
+- 8909069: Suppress whitespace-only assistant bubbles emitted before leading tool calls.
+
 ## 3.25.0
 
 ### Minor Changes
