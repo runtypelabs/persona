@@ -1,0 +1,608 @@
+/* ════════════════════════════════════════════════════════════════════════
+   Switchback storefront — Next.js port of the embedded-app WebMCP demo.
+   Ports examples/embedded-app/src/webmcp-shop.css and recreates the two-column
+   "shell" layout that the gallery's demo-shared.css used to provide. The whole
+   app IS the shop, so the original `body.webmcp-shop` scope becomes top-level.
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-label: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Brand — warm artisan palette (espresso + caramel). */
+  --shop-brand: #1c1917;
+  --shop-brand-strong: #292524;
+  --shop-brand-ink: #fafaf9;
+  --shop-accent: #b8814b;
+  --shop-accent-strong: #8a5a2b;
+
+  --shop-bg: #f6f4f0;
+  --shop-paper: #ffffff;
+  --shop-card: #ffffff;
+  --shop-ink: #1c1917;
+  --shop-ink-soft: #78716c;
+  --shop-faint: #a8a29e;
+  --shop-line: #e7e5e4;
+  --shop-line-strong: #d6d3d1;
+
+  --wire-bg: #f4f1ea;
+  --wire-fg: #4b4640;
+  --wire-faint: #9a8f80;
+  --wire-line: #e4ddcf;
+  --wire-head-bg: #ece5d8;
+  --wire-row-bg: rgba(28, 25, 23, 0.035);
+  --wire-reg: #15803d;
+  --wire-send: #0369a1;
+  --wire-gate: #a16207;
+  --wire-exec: #6d28d9;
+  --wire-resume: #c2410c;
+
+  --shop-radius: 14px;
+  --shop-radius-sm: 9px;
+  --shop-shadow: 0 1px 2px rgba(28, 25, 23, 0.05);
+  --shop-shadow-md: 0 14px 32px -20px rgba(28, 25, 23, 0.28);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --shop-brand: #d4a574;
+    --shop-brand-strong: #e0b787;
+    --shop-brand-ink: #1c1917;
+    --shop-accent: #d4a574;
+    --shop-accent-strong: #e0b787;
+
+    --shop-bg: #1c1917;
+    --shop-paper: #292524;
+    --shop-card: #2c2724;
+    --shop-ink: #f5f5f4;
+    --shop-ink-soft: #a8a29e;
+    --shop-faint: #78716c;
+    --shop-line: #3a3530;
+    --shop-line-strong: #44403c;
+
+    --shop-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shop-shadow-md: 0 16px 36px -22px rgba(0, 0, 0, 0.7);
+
+    --wire-bg: #211c18;
+    --wire-fg: #e7e0d6;
+    --wire-faint: #9a8f80;
+    --wire-line: rgba(255, 255, 255, 0.08);
+    --wire-head-bg: #2a241f;
+    --wire-row-bg: rgba(255, 255, 255, 0.03);
+    --wire-reg: #86efac;
+    --wire-send: #7dd3fc;
+    --wire-gate: #fcd34d;
+    --wire-exec: #d6bcfa;
+    --wire-resume: #e0a868;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--shop-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='140'%3E%3Cg fill='none' stroke='%231c1917' stroke-opacity='0.05' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M0 84 L60 44 L120 84 L180 44 L240 84'/%3E%3Cpath d='M0 106 L40 86 L80 106 L120 86 L160 106 L200 86 L240 106'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 240px 140px;
+  background-repeat: repeat;
+  background-position: center top;
+  color: var(--shop-ink);
+  font-family: var(--font-label);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='140'%3E%3Cg fill='none' stroke='%23f5f5f4' stroke-opacity='0.05' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M0 84 L60 44 L120 84 L180 44 L240 84'/%3E%3Cpath d='M0 106 L40 86 L80 106 L120 86 L160 106 L200 86 L240 106'/%3E%3C/g%3E%3C/svg%3E");
+  }
+}
+
+/* ── Two-column shell (full viewport height) ───────────────────────────── */
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(440px, 42%) 1fr;
+  min-height: 100vh;
+}
+.stage-controls {
+  max-height: 100vh;
+  overflow-y: auto;
+  padding: 1.6rem 1.5rem;
+  border-right: 1px solid var(--shop-line-strong);
+}
+.stage-widget {
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+.stage-widget > div {
+  height: 100%;
+}
+
+@media (max-width: 1100px) {
+  .stage {
+    grid-template-columns: 1fr;
+  }
+  .stage-controls {
+    max-height: none;
+    overflow-y: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--shop-line-strong);
+  }
+  .stage-widget {
+    height: 80vh;
+    position: static;
+  }
+}
+
+/* ── Storefront hero ───────────────────────────────────────────────────── */
+
+.shop-hero {
+  margin: 0 0 1.25rem 0;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid var(--shop-line-strong);
+}
+.shop-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.5rem 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--shop-ink);
+}
+.shop-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 9px;
+  background: var(--shop-brand);
+  color: var(--shop-brand-ink);
+  flex: none;
+}
+.shop-mark svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+.shop-tagline {
+  margin: 0 0 0.7rem 0;
+  font-size: 0.9rem;
+  color: var(--shop-ink-soft);
+}
+.shop-explainer {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--shop-ink-soft);
+}
+.shop-explainer code {
+  background: color-mix(in srgb, var(--shop-ink) 7%, transparent);
+  color: var(--shop-ink);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  padding: 0.08em 0.38em;
+  border-radius: 5px;
+}
+
+/* ── Section scaffolding ───────────────────────────────────────────────── */
+
+.shop-section {
+  margin-bottom: 1.25rem;
+}
+.shop-section:last-child {
+  margin-bottom: 0;
+}
+.shop-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0 0 0.6rem 0;
+}
+.shop-section-title {
+  font-family: var(--font-label);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--shop-faint);
+  margin: 0;
+}
+.shop-section-meta {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--shop-faint);
+}
+
+/* ── Catalog grid ──────────────────────────────────────────────────────── */
+
+.shop-catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(186px, 1fr));
+  gap: 0.6rem;
+}
+.shop-product {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.7rem 0.8rem 0.75rem;
+  background: var(--shop-card);
+  border: 1px solid var(--shop-line);
+  border-radius: var(--shop-radius-sm);
+  box-shadow: var(--shop-shadow);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.shop-product-top {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.shop-swatch {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid color-mix(in srgb, var(--shop-ink) 18%, transparent);
+  box-shadow: inset 0 0 0 2px var(--shop-card);
+}
+.shop-product-cat {
+  font-family: var(--font-label);
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--shop-faint);
+}
+.shop-product-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  color: var(--shop-ink);
+}
+.shop-product-sub {
+  font-size: 0.74rem;
+  color: var(--shop-ink-soft);
+}
+.shop-product-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+.shop-product-price {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--shop-ink);
+  font-variant-numeric: tabular-nums;
+}
+.shop-product-sku {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--shop-faint);
+}
+
+.shop-product.is-hit {
+  border-color: var(--shop-brand);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--shop-brand) 30%, transparent);
+}
+.shop-product.in-cart {
+  border-color: color-mix(in srgb, var(--shop-accent) 45%, var(--shop-line));
+}
+.shop-product .shop-incart-badge {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.32rem;
+  display: none;
+  place-items: center;
+  background: var(--shop-accent);
+  color: #1c1917;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  border-radius: 999px;
+  box-shadow: var(--shop-shadow-md);
+}
+.shop-product.in-cart .shop-incart-badge {
+  display: grid;
+}
+
+.shop-product.just-changed {
+  animation: shop-flash 0.9s ease;
+}
+@keyframes shop-flash {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--shop-accent) 60%, transparent);
+  }
+  30% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--shop-accent) 28%, transparent);
+  }
+  100% {
+    box-shadow: var(--shop-shadow);
+  }
+}
+
+/* ── Cart ──────────────────────────────────────────────────────────────── */
+
+.shop-cart {
+  border: 1px solid var(--shop-line);
+  border-radius: var(--shop-radius);
+  background: var(--shop-paper);
+  box-shadow: var(--shop-shadow);
+  padding: 0.85rem 0.95rem;
+  font-size: 0.85rem;
+  transition: box-shadow 0.2s ease;
+}
+.shop-cart.just-changed {
+  animation: shop-flash 0.9s ease;
+}
+.shop-cart-empty {
+  margin: 0;
+  color: var(--shop-ink-soft);
+  font-style: italic;
+}
+.shop-cart-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.shop-cart-line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0.2rem 0.55rem;
+}
+.shop-cart-qty {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--shop-brand);
+}
+.shop-cart-title {
+  font-weight: 600;
+  color: var(--shop-ink);
+}
+.shop-cart-sku {
+  grid-column: 2;
+  font-size: 0.7rem;
+  color: var(--shop-faint);
+  font-family: var(--font-mono);
+}
+.shop-cart-price {
+  grid-row: 1 / span 2;
+  grid-column: 3;
+  align-self: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--shop-ink);
+}
+.shop-cart-foot {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--shop-line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+.shop-cart-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.shop-cart-row.muted {
+  color: var(--shop-ink-soft);
+  font-size: 0.8rem;
+}
+.shop-cart-row.promo {
+  color: var(--shop-accent-strong);
+  font-size: 0.8rem;
+}
+.shop-cart-row.total {
+  font-size: 1rem;
+}
+.shop-cart-row.total strong {
+  color: var(--shop-ink);
+}
+.shop-cart-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  padding: 0.04rem 0.4rem;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--shop-accent) 16%, transparent);
+  color: var(--shop-accent-strong);
+}
+
+/* ── Wire inspector ────────────────────────────────────────────────────── */
+
+.shop-wire {
+  border: 1px solid var(--shop-line-strong);
+  border-radius: var(--shop-radius);
+  overflow: hidden;
+  background: var(--wire-bg);
+}
+.shop-wire-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  list-style: none;
+  padding: 0.6rem 0.8rem;
+  background: var(--wire-head-bg);
+  color: var(--wire-fg);
+  font-family: var(--font-label);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.shop-wire-head::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border: 4px solid transparent;
+  border-left-color: currentColor;
+  transition: transform 0.15s ease;
+  flex: none;
+}
+.shop-wire-head::-webkit-details-marker {
+  display: none;
+}
+.shop-wire[open] .shop-wire-head::before {
+  transform: rotate(90deg);
+}
+.shop-wire-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0;
+  color: var(--wire-faint);
+  text-transform: none;
+}
+.shop-wire-body {
+  max-height: 290px;
+  overflow-y: auto;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.shop-wire:not([open]) .shop-wire-body {
+  display: none;
+}
+.shop-wire-empty {
+  color: var(--wire-faint);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 0.4rem 0.2rem;
+}
+.wire-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  padding: 0.32rem 0.4rem;
+  border-radius: 6px;
+  border-left: 3px solid var(--wire-faint);
+  background: var(--wire-row-bg);
+  color: var(--wire-fg);
+}
+.wire-row .wire-time {
+  color: var(--wire-faint);
+}
+.wire-row .wire-tag {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.wire-row .wire-detail {
+  color: color-mix(in srgb, var(--wire-fg) 82%, transparent);
+  word-break: break-word;
+}
+.wire-row .wire-detail b {
+  color: var(--wire-fg);
+  font-weight: 700;
+}
+.wire-row.reg {
+  border-left-color: var(--wire-reg);
+}
+.wire-row.reg .wire-tag {
+  color: var(--wire-reg);
+}
+.wire-row.send {
+  border-left-color: var(--wire-send);
+}
+.wire-row.send .wire-tag {
+  color: var(--wire-send);
+}
+.wire-row.gate {
+  border-left-color: var(--wire-gate);
+}
+.wire-row.gate .wire-tag {
+  color: var(--wire-gate);
+}
+.wire-row.exec {
+  border-left-color: var(--wire-exec);
+}
+.wire-row.exec .wire-tag {
+  color: var(--wire-exec);
+}
+.wire-row.resume {
+  border-left-color: var(--wire-resume);
+  background: color-mix(in srgb, var(--wire-resume) 9%, transparent);
+}
+.wire-row.resume .wire-tag {
+  color: var(--wire-resume);
+}
+.shop-wire-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+  padding: 0.45rem 0.7rem 0.6rem;
+  border-top: 1px solid var(--wire-line);
+}
+.shop-wire-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--wire-faint);
+}
+.shop-wire-legend i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  flex: none;
+}
+
+/* ── Try-it notes ──────────────────────────────────────────────────────── */
+
+.shop-notes {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--shop-ink-soft);
+}
+.shop-notes ol {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.shop-notes strong {
+  color: var(--shop-ink);
+}
+.shop-notes em {
+  color: var(--shop-brand-strong);
+  font-style: normal;
+  font-weight: 600;
+}
+.shop-notes code {
+  background: color-mix(in srgb, var(--shop-ink) 7%, transparent);
+  color: var(--shop-ink);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  padding: 0.08em 0.38em;
+  border-radius: 5px;
+}

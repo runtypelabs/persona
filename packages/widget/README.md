@@ -525,6 +525,31 @@ inside the subtree is still pierced.
 > provenance and update steps. Once upstream republishes correctly this can revert to a
 > normal optional peer dependency.
 
+### WebMCP page tools
+
+When `webmcp: { enabled: true }` is set, the widget consumes tools the page
+registers on `document.modelContext` (the [WebMCP](https://github.com/webmachinelearning/webmcp)
+producer surface), snapshots them into each request as `clientTools[]`, runs the
+agent's calls on the page, and gates each behind a confirm bubble (override with
+`autoApprove` / `onConfirm`).
+
+```ts
+initAgentWidget({
+  // ...config
+  webmcp: {
+    enabled: true,
+    autoApprove: (info) => READ_ONLY_TOOLS.has(info.toolName),
+  },
+});
+```
+
+**Using WebMCP against a non-Runtype backend (e.g. the Vercel AI SDK)?** The
+widget's WebMCP loop expects Runtype's proxy wire protocol (a `step_await` pause
+→ `/resume` round-trip). See
+[`docs/webmcp-without-runtype.md`](../../docs/webmcp-without-runtype.md) for the
+exact contract and two integration paths, with a runnable Next.js example at
+[`examples/ai-sdk-webmcp/`](../../examples/ai-sdk-webmcp/).
+
 ### DOM Events
 
 The widget dispatches custom DOM events that you can listen to for integration with your application:
