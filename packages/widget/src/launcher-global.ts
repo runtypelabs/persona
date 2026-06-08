@@ -9,7 +9,7 @@
  * The full Lucide icon registry is kept on purpose: any *supported* icon a site
  * configures (`launcher.agentIconName` / `callToActionIconName`) must render at
  * first paint with no flash, and the only synchronously-available source is this
- * bundle. See `.planning/launcher-critical-bundle-plan.md` §11.
+ * bundle. See the "Deferred Launcher Loading" pattern in CLAUDE.md.
  *
  * Public global (via tsup `--global-name AgentWidgetLauncher`):
  *

@@ -159,6 +159,77 @@ describe("initAgentWidget windowKey and ready notifications", () => {
   });
 });
 
+describe("initAgentWidget onChatReady / onReady deprecation", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    createAgentExperienceMock.mockReset();
+    createAgentExperienceMock.mockImplementation((_mount, config) => createMockController(config));
+  });
+
+  it("calls onChatReady after initialization without a deprecation warning", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    const onChatReady = vi.fn();
+    const handle = initAgentWidget({
+      target: "#target",
+      onChatReady,
+      config: { launcher: { enabled: false } },
+    });
+
+    expect(onChatReady).toHaveBeenCalledOnce();
+    expect(warn).not.toHaveBeenCalled();
+
+    handle.destroy();
+    warn.mockRestore();
+  });
+
+  it("prefers onChatReady over the deprecated onReady (onReady never fires, no warning)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    const onChatReady = vi.fn();
+    const onReady = vi.fn();
+    const handle = initAgentWidget({
+      target: "#target",
+      onChatReady,
+      onReady,
+      config: { launcher: { enabled: false } },
+    });
+
+    expect(onChatReady).toHaveBeenCalledOnce();
+    expect(onReady).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+
+    handle.destroy();
+    warn.mockRestore();
+  });
+
+  it("still calls the deprecated onReady but warns at most once across multiple widgets", async () => {
+    // Fresh module so the once-per-page warn flag starts unset.
+    vi.resetModules();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="a"></div><div id="b"></div>`;
+
+    const onReadyA = vi.fn();
+    const onReadyB = vi.fn();
+    const a = initAgentWidget({ target: "#a", onReady: onReadyA, config: { launcher: { enabled: false } } });
+    const b = initAgentWidget({ target: "#b", onReady: onReadyB, config: { launcher: { enabled: false } } });
+
+    expect(onReadyA).toHaveBeenCalledOnce();
+    expect(onReadyB).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain("`onReady` is deprecated");
+
+    a.destroy();
+    b.destroy();
+    warn.mockRestore();
+  });
+});
+
 describe("install script onReady and persona:ready event", () => {
   beforeEach(() => {
     document.body.innerHTML = "";

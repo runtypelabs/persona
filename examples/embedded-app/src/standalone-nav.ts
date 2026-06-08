@@ -48,6 +48,12 @@ export const STANDALONE_EXAMPLES: readonly StandaloneExample[] = [
     title: "Preview Mode",
     blurb: "Gate widget load behind a URL preview parameter",
   },
+  {
+    slug: "lifecycle-events",
+    href: "/standalone/lifecycle-events.html",
+    title: "Lifecycle Events",
+    blurb: "Deferred launcher + onScriptLoad/onLauncherShown/onChatReady events",
+  },
 ];
 
 const escapeHtml = (s: string): string =>

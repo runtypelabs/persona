@@ -80,6 +80,7 @@ The widget uses a layered architecture:
    - `install.ts` - Script tag installer for CDN usage
    - `runtime/init.ts` - Widget initialization (Shadow DOM setup)
    - `runtime/host-layout.ts` - Layout management for docked mode
+   - `launcher-global.ts` - Critical-path launcher entry (`launcher.global.js`); ships only the collapsed launcher + theme system so the installer can paint the real launcher from a tiny bundle and defer the full widget. See "Deferred Launcher Loading" under Key Patterns.
 
 2. **Core Layer**
    - `client.ts` - HTTP client handling SSE streaming, message dispatch, and API communication
@@ -129,6 +130,8 @@ The widget uses a layered architecture:
 
 **HTML Sanitization:** All rendered markdown is sanitized via DOMPurify by default (`utils/sanitize.ts`). Configurable per-widget via the `sanitize` option: `true` (default), `false`, or a custom `(html: string) => string` function. When writing sanitization hooks, always compare URI schemes case-insensitively (e.g. `val.toLowerCase().startsWith("data:")`) per RFC 3986.
 
+**Deferred Launcher Loading:** For the common floating-launcher case, `install.ts` paints the real launcher from the tiny `launcher.global.js` (~13 KB brotli) at page load and defers the full `index.global.js` (~134 KB) until the user's first click. `shouldDeferPanel()` gates this — floating launcher, not auto-expanded, no restored/`onStateLoaded` open state, derivable launcher URL — and everything else eager-loads unchanged. The critical launcher is mount-then-destroyed at handoff and renders pixel-identically to the full widget's, so the swap is invisible. Installer lifecycle hooks (`onScriptLoad` / `onLauncherShown` / `onChatReady` / `onError`) and matching `persona:*` DOM events expose each stage; `onChatReady` (formerly `onReady`, now a deprecated alias) fires after first open in a deferred install. See the header comment in `launcher-global.ts` and the gate/handoff comments in `install.ts` for the invariants.
+
 ### Proxy Package (`packages/proxy/src/`)
 
 Hono-based server that proxies requests to the Runtype API:
@@ -162,6 +165,8 @@ The widget builds to multiple formats via tsup:
 - `dist/index.js` - ESM (primary)
 - `dist/index.cjs` - CommonJS
 - `dist/index.global.js` - IIFE (for script tag / CDN usage)
+- `dist/install.global.js` - IIFE installer bootstrap (reads `window.siteAgentConfig`; the script-tag entry point)
+- `dist/launcher.global.js` - IIFE critical launcher bundle (deferred-loading fast path; see "Deferred Launcher Loading")
 - `dist/index.d.ts` - TypeScript declarations
 - `dist/widget.css` - Prefixed Tailwind CSS (for consumers who import styles separately)
 
