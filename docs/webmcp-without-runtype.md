@@ -31,6 +31,7 @@ So:
 ## Path A — keep the widget, shim the protocol (recommended for "drop-in")
 
 A runnable example lives at [`examples/ai-sdk-webmcp/`](../examples/ai-sdk-webmcp/)
+(live at [ai-sdk-webmcp.persona-chat.dev](https://ai-sdk-webmcp.persona-chat.dev))
 — the Switchback storefront with the real Persona widget, backed by two AI SDK
 route handlers. Point the widget at your own endpoint in **proxy mode**:
 
