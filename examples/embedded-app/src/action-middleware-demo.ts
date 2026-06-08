@@ -508,14 +508,14 @@ reportDemoConfig(configInspector, {
 });
 
 // Initialize widget
-// Note: We use a separate variable to avoid reference error in onReady callback
+// Note: We use a separate variable to avoid reference error in onChatReady callback
 let widgetControllerRef: ReturnType<typeof initAgentWidget> | null = null;
 
 const widgetController = initAgentWidget({
   target: "#launcher-root",
   useShadowDom: false,
   config,
-  onReady: () => {
+  onChatReady: () => {
     // Handle auto-open for navigation message or checkout return
     // Use setTimeout to ensure widgetControllerRef is assigned
     if (shouldAutoOpen) {

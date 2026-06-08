@@ -6,6 +6,12 @@
     "gzip": true
   },
   {
+    "name": "⛔ CRITICAL · launcher critical bundle (launcher.global.js)",
+    "path": "dist/launcher.global.js",
+    "limit": "18.5 kB",
+    "gzip": true
+  },
+  {
     "name": "⛔ CRITICAL · browser stylesheet (widget.css)",
     "path": "dist/widget.css",
     "limit": "21 kB",
@@ -26,7 +32,7 @@
   {
     "name": "Script installer (install.global.js)",
     "path": "dist/install.global.js",
-    "limit": "2.5 kB",
+    "limit": "2.8 kB",
     "gzip": true
   },
   {

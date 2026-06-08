@@ -860,7 +860,7 @@
           const widgetController = window.AgentWidget.initAgentWidget({
             target: '#shopping-assistant-root',
             config: widgetConfig,
-            onReady: function() {
+            onChatReady: function() {
               if (navMessage && shouldAutoOpen) {
                 setTimeout(() => {
                   widgetController.open();
