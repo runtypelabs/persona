@@ -66,8 +66,8 @@
     "test:run": "vitest run",
     "size": "size-limit",
     "fetch:runtype-openapi": "node scripts/fetch-runtype-openapi.mjs",
-    "generate:runtype-types": "node scripts/generate-runtype-openapi-types.mjs",
-    "check:runtype-types": "node scripts/generate-runtype-openapi-types.mjs --check"
+    "generate:runtype-types": "pnpm run fetch:runtype-openapi && node scripts/generate-runtype-openapi-types.mjs",
+    "check:runtype-types": "pnpm run fetch:runtype-openapi && node scripts/generate-runtype-openapi-types.mjs --check"
   },
   "dependencies": {
     "@mcp-b/webmcp-polyfill": "^3.0.0",

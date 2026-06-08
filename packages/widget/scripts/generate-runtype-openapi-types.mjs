@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, "..");
-const defaultInput = resolve(packageRoot, "openapi/runtype-public-openapi.snapshot.json");
+const defaultInput = resolve(packageRoot, "openapi/runtype-public-openapi.local.json");
 const defaultOutput = resolve(packageRoot, "src/generated/runtype-openapi-contract.ts");
 
 const exportedComponentNames = new Map([
