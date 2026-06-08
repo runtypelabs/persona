@@ -1297,7 +1297,25 @@ export class AgentWidgetClient {
       };
     };
 
+    const shouldEmitMessage = (msg: AgentWidgetMessage): boolean => {
+      if (msg.role !== "assistant" || msg.variant) return true;
+
+      const hasContentParts =
+        Array.isArray(msg.contentParts) && msg.contentParts.length > 0;
+      const hasRawContent =
+        typeof msg.rawContent === "string" && msg.rawContent.trim() !== "";
+      const hasVisibleText =
+        typeof msg.content === "string" && msg.content.trim() !== "";
+
+      // Do not surface assistant text bubbles that only contain whitespace.
+      // Some providers emit newline-only text parts around a leading tool call;
+      // rendering those as normal messages creates an empty bubble above the
+      // tool card. Keep media/component/stop-reason messages renderable.
+      return hasVisibleText || hasContentParts || hasRawContent || Boolean(msg.stopReason);
+    };
+
     const emitMessage = (msg: AgentWidgetMessage) => {
+      if (!shouldEmitMessage(msg)) return;
       onEvent({
         type: "message",
         message: cloneMessage(msg)
