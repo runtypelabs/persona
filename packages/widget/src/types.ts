@@ -1,5 +1,10 @@
 import type { AgentWidgetPlugin } from "./plugins/types";
 import type { DeepPartial, PersonaTheme } from "./types/theme";
+import type {
+  RuntypeClientChatRequest,
+  RuntypeClientFeedbackRequest,
+  RuntypeStopReasonKind,
+} from "./generated/runtype-openapi-contract";
 
 // ============================================================================
 // Multi-Modal Content Types
@@ -2232,6 +2237,10 @@ export type ClientChatRequest = {
    * widget retries once with the full `clientTools[]`.
    */
   clientToolsFingerprint?: string;
+  /** Stable client-owned turn ID for stale stream suppression (from Core public OpenAPI). */
+  turnId?: RuntypeClientChatRequest['turnId'];
+  /** Whether this turn should interrupt a prior in-flight response (from Core public OpenAPI). */
+  submitMode?: RuntypeClientChatRequest['submitMode'];
 };
 
 /**
@@ -2246,7 +2255,7 @@ export type ClientToolsResendRequiredResponse = {
 /**
  * Feedback types supported by the API
  */
-export type ClientFeedbackType = 'upvote' | 'downvote' | 'copy' | 'csat' | 'nps';
+export type ClientFeedbackType = RuntypeClientFeedbackRequest['type'];
 
 /**
  * Request payload for /v1/client/feedback endpoint
@@ -3810,13 +3819,7 @@ export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool" | "ap
  *
  * Absent (`undefined`) means "not reported" — distinct from `'unknown'`.
  */
-export type StopReasonKind =
-  | 'end_turn'
-  | 'max_tool_calls'
-  | 'length'
-  | 'content_filter'
-  | 'error'
-  | 'unknown';
+export type StopReasonKind = RuntypeStopReasonKind;
 
 /**
  * Represents a message in the chat conversation.

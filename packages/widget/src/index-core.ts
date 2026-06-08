@@ -105,6 +105,25 @@ export type {
   AgentWidgetAskUserQuestionStyles
 } from "./types";
 
+export type {
+  RuntypeAgentSSEEvent,
+  RuntypeFlowSSEEvent,
+  RuntypeDispatchSSEEvent,
+  RuntypeStreamEventOf,
+  RuntypeAgentTurnCompleteEvent,
+  RuntypeStepCompleteEvent,
+  RuntypeStopReasonKind,
+  RuntypeClientInitRequest,
+  RuntypeClientInitResponse,
+  RuntypeClientChatRequest,
+  RuntypeClientChatStreamEvent,
+  RuntypeClientResumeRequest,
+  RuntypeClientResumeStreamEvent,
+  RuntypeClientFeedbackRequest,
+  RuntypeClientFeedbackResponse,
+  RuntypeClientFeedbackType,
+} from "./generated/runtype-openapi-contract";
+
 export {
   ASK_USER_QUESTION_TOOL_NAME,
   createAskUserQuestionBubble,
