@@ -27,6 +27,23 @@ describe("theme editor scroll-to-bottom controls", () => {
     expect(fieldPaths).toContain("theme.components.scrollToBottom.iconSize");
   });
 
+  it("exposes a shadow control for every themeable component", () => {
+    const fieldPaths = COMPONENTS_SECTIONS.flatMap((section) => section.fields.map((field) => field.path));
+
+    // Pre-existing shadow controls.
+    expect(fieldPaths).toContain("theme.components.launcher.shadow");
+    expect(fieldPaths).toContain("theme.components.panel.shadow");
+    expect(fieldPaths).toContain("theme.components.scrollToBottom.shadow");
+    // Newly added component shadow controls.
+    expect(fieldPaths).toContain("theme.components.message.user.shadow");
+    expect(fieldPaths).toContain("theme.components.message.assistant.shadow");
+    expect(fieldPaths).toContain("theme.components.toolBubble.shadow");
+    expect(fieldPaths).toContain("theme.components.reasoningBubble.shadow");
+    expect(fieldPaths).toContain("theme.components.approval.requested.shadow");
+    expect(fieldPaths).toContain("theme.components.introCard.shadow");
+    expect(fieldPaths).toContain("theme.components.composer.shadow");
+  });
+
   it("adds a scroll-to-bottom interface role mapping", () => {
     const role = ALL_ROLES.find((entry) => entry.roleId === "role-scroll-to-bottom");
 

@@ -333,7 +333,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     shadow: 'palette.shadows.sm',
   },
   composer: {
-    shadow: 'none',
+    shadow: 'palette.shadows.none',
   },
   markdown: {
     inlineCode: {

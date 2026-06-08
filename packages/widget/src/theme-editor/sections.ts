@@ -455,6 +455,36 @@ const scrollToBottomSectionDef: SectionDef = {
   ],
 };
 
+// Reusable shadow-scale options matching the launcher / panel / scroll-to-bottom selects.
+const SHADOW_SCALE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'palette.shadows.none', label: 'None' },
+  { value: 'palette.shadows.sm', label: 'Small' },
+  { value: 'palette.shadows.md', label: 'Medium' },
+  { value: 'palette.shadows.lg', label: 'Large' },
+  { value: 'palette.shadows.xl', label: 'Extra Large' },
+];
+
+// The approval and intro-card defaults are a bespoke "card" shadow rather than a
+// palette step, so expose it as a leading "Default" option users can keep.
+const CARD_SHADOW = '0 5px 15px rgba(15, 23, 42, 0.08)';
+const CARD_SHADOW_OPTIONS = [{ value: CARD_SHADOW, label: 'Default' }, ...SHADOW_SCALE_OPTIONS];
+
+const componentShadowsSectionDef: SectionDef = {
+  id: 'comp-shadows',
+  title: 'Component Shadows',
+  description: 'Box-shadow for chat bubbles and surfaces.',
+  collapsed: true,
+  fields: [
+    { id: 'shadow-msg-user', label: 'User Message', type: 'select', path: 'theme.components.message.user.shadow', defaultValue: 'palette.shadows.sm', options: SHADOW_SCALE_OPTIONS },
+    { id: 'shadow-msg-assistant', label: 'Assistant Message', type: 'select', path: 'theme.components.message.assistant.shadow', defaultValue: 'palette.shadows.sm', options: SHADOW_SCALE_OPTIONS },
+    { id: 'shadow-tool-bubble', label: 'Tool Call Bubble', type: 'select', path: 'theme.components.toolBubble.shadow', defaultValue: 'palette.shadows.sm', options: SHADOW_SCALE_OPTIONS },
+    { id: 'shadow-reasoning-bubble', label: 'Reasoning Bubble', type: 'select', path: 'theme.components.reasoningBubble.shadow', defaultValue: 'palette.shadows.sm', options: SHADOW_SCALE_OPTIONS },
+    { id: 'shadow-approval', label: 'Approval Bubble', type: 'select', path: 'theme.components.approval.requested.shadow', defaultValue: CARD_SHADOW, options: CARD_SHADOW_OPTIONS },
+    { id: 'shadow-intro-card', label: 'Intro Card', type: 'select', path: 'theme.components.introCard.shadow', defaultValue: CARD_SHADOW, options: CARD_SHADOW_OPTIONS },
+    { id: 'shadow-composer', label: 'Composer', type: 'select', path: 'theme.components.composer.shadow', defaultValue: 'palette.shadows.none', options: SHADOW_SCALE_OPTIONS },
+  ],
+};
+
 /** Shared shape sections (not scoped to light/dark) */
 export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   panelLayoutSectionDef,
@@ -462,6 +492,7 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   messageShapeSectionDef,
   inputShapeSectionDef,
   buttonShapeSectionDef,
+  componentShadowsSectionDef,
 ];
 
 /** Component color sections (can be scoped for light/dark) */
