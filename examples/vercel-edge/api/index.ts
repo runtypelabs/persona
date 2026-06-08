@@ -6,9 +6,13 @@ import {
   COMPONENT_FLOW,
   BAKERY_ASSISTANT_FLOW,
   STOREFRONT_ASSISTANT_FLOW,
+  WEBMCP_STOREFRONT_FLOW,
   createCheckoutSession,
 } from "@runtypelabs/persona-proxy";
 
+// Production origins are supplied at deploy time via ALLOWED_ORIGINS (comma-
+// separated). Dynamic preview sites are matched separately by the proxy's
+// previewOriginPattern (set PREVIEW_ORIGIN_PATTERN to allow non-Vercel ones).
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : ["http://localhost:5173", "http://localhost:4173"];
@@ -61,11 +65,23 @@ const storefrontApp = createChatProxyApp({
   upstreamUrl,
 });
 
+// WebMCP storefront proxy - for the "Switchback" WebMCP demo. Forwards the
+// page's clientTools[] upstream and proxies the /resume round-trip; the agent
+// is defined in code as WEBMCP_STOREFRONT_FLOW (no hosted agent / client token).
+const webmcpApp = createChatProxyApp({
+  path: "/api/chat/dispatch-webmcp",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_WEBMCP || undefined,
+  flowConfig: process.env.FLOW_ID_WEBMCP ? undefined : WEBMCP_STOREFRONT_FLOW,
+  upstreamUrl,
+});
+
 app.route("/", directiveApp);
 app.route("/", actionApp);
 app.route("/", componentApp);
 app.route("/", bakeryApp);
 app.route("/", storefrontApp);
+app.route("/", webmcpApp);
 
 app.post("/api/checkout", async (c) => {
   const origin = c.req.header("origin");

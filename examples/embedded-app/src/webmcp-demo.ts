@@ -582,20 +582,16 @@ if (!modelContext) {
 // 5. Mount Persona with WebMCP enabled, themed as the Switchback storefront.
 // ===========================================================================
 
-// Two wiring modes (see README → "WebMCP Demo"):
-//   1. Client-token mode (used by the live persona-chat.dev deploy and for
-//      staging end-to-end tests): set VITE_PERSONA_CLIENT_TOKEN +
-//      VITE_PERSONA_API_URL (the API *base*, e.g. https://api.runtype.com).
-//      WebMCP requires the token's surface to have `behavior.webmcp.enabled`.
-//   2. Proxy mode (fallback when no client token): routes through the local
-//      proxy on VITE_PROXY_PORT.
-const clientToken = import.meta.env.VITE_PERSONA_CLIENT_TOKEN as string | undefined;
-const clientApiBase = import.meta.env.VITE_PERSONA_API_URL as string | undefined;
-
+// Wiring: proxy mode only — like the other example demos. The agent that
+// drives this storefront is defined entirely in code as WEBMCP_STOREFRONT_FLOW
+// (packages/proxy/src/flows/webmcp-storefront.ts); the local proxy forwards the
+// page's clientTools[] upstream and proxies the /resume round-trip. No hosted
+// Runtype agent or client token is involved. The proxy's `/api/chat/dispatch-
+// webmcp` route mounts that flow (see examples/vercel-edge/src/server.ts).
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyApiUrl = import.meta.env.VITE_PROXY_URL
-  ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch`
-  : `http://localhost:${proxyPort}/api/chat/dispatch`;
+  ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-webmcp`
+  : `http://localhost:${proxyPort}/api/chat/dispatch-webmcp`;
 
 // Tools the storefront treats as read-only (safe to run without approval). We
 // gate by name rather than by the registered `readOnlyHint` annotation because
@@ -605,14 +601,7 @@ const proxyApiUrl = import.meta.env.VITE_PROXY_URL
 // still carry `readOnlyHint` for spec-correctness and the server snapshot.)
 const READ_ONLY_TOOLS = new Set(["search_products", "view_product"]);
 
-const usingClientToken = Boolean(clientToken);
-logWire(
-  "send",
-  "mode",
-  usingClientToken
-    ? `client-token → ${esc(clientApiBase ?? "https://api.runtype.com")}`
-    : `proxy → ${esc(proxyApiUrl)}`,
-);
+logWire("send", "mode", `proxy → ${esc(proxyApiUrl)}`);
 
 // --- Switchback brand theme (mirrors webmcp-shop.css; both follow the OS
 //     light/dark preference via colorScheme:'auto'). Warm artisan palette
@@ -744,9 +733,7 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   return {
     ...DEFAULT_WIDGET_CONFIG,
-    ...(usingClientToken
-      ? { clientToken, ...(clientApiBase ? { apiUrl: clientApiBase } : {}) }
-      : { apiUrl: proxyApiUrl }),
+    apiUrl: proxyApiUrl,
     // Surface the widget's Events diagnostics screen (header toggle) so the new
     // "Output throughput" (tok/s) row is visible for live testing.
     features: {

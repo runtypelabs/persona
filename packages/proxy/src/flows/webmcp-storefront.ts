@@ -1,0 +1,63 @@
+import type { RuntypeFlowConfig } from "../index.js";
+
+/**
+ * WebMCP storefront flow for the "Switchback" trail/road running demo
+ * (`examples/embedded-app/webmcp-demo.html`).
+ *
+ * Unlike the other example flows, this agent owns **no** tools of its own. The
+ * demo page registers its tools on `document.modelContext` via WebMCP
+ * (`search_products`, `view_product`, `add_to_cart`, `remove_from_cart`,
+ * `apply_promo`); the widget snapshots them every turn and the proxy forwards
+ * them on the dispatch payload as `clientTools[]`. The Runtype runtime threads
+ * those into this prompt step's tool set, so the model calls them by name and
+ * the widget executes them **on the page**, posting results back via `/resume`.
+ *
+ * That means the agent definition that drives the WebMCP demo lives entirely in
+ * this repo — no hosted Runtype agent / client token required. The flow just
+ * needs a tool-capable model and a system prompt that knows how to shop the
+ * (page-provided) catalog.
+ *
+ * Model: `claude-sonnet-4-6`. WebMCP depends on the model emitting **native**
+ * tool calls (each surfaces as a `step_await` the widget resumes); a
+ * tool-reliable model is required here, so this flow does not use the
+ * `mercury-2` default the conversational demos rely on. `responseFormat` is
+ * markdown (not JSON) so the model is free to interleave tool calls with a
+ * natural-language summary instead of being constrained to a JSON envelope.
+ */
+export const WEBMCP_STOREFRONT_FLOW: RuntypeFlowConfig = {
+  name: "WebMCP Storefront Flow",
+  description:
+    "Switchback running-store assistant — drives page-provided WebMCP tools (clientTools[])",
+  steps: [
+    {
+      id: "webmcp_storefront_prompt",
+      name: "WebMCP Storefront Prompt",
+      type: "prompt",
+      enabled: true,
+      config: {
+        model: "claude-sonnet-4-6",
+        reasoning: false,
+        responseFormat: "markdown",
+        outputVariable: "prompt_result",
+        userPrompt: "{{user_message}}",
+        systemPrompt: `You are the shopping assistant for **Switchback**, a trail & road running store. You help shoppers find gear, inspect products, and manage their cart.
+
+Brand voice: friendly, outdoorsy, concise. Knowledgeable about running shoes, apparel, and trail gear. No hype, no emoji. Keep replies short — a sentence or two around the actions you take.
+
+## Your tools come from the page
+
+This storefront exposes its own tools to you (search the catalog, view a product, add/remove from the cart, apply a promo code). Always **use the tools** to act on the catalog and cart — never invent products, SKUs, prices, or cart contents from memory.
+
+Rules:
+- Before referencing or adding any SKU, call **search_products** (or view_product) first to confirm it exists and to get the canonical SKU, title, and price. Do not guess SKUs.
+- When the shopper asks to add, remove, or change the cart, call the matching tool. The page renders the cart — after a cart change, confirm what changed and the running total from the tool's result, briefly.
+- If the shopper asks to add two (or more) specific items "at the same time" / "both", emit the add_to_cart calls together in one turn so they batch.
+- Only apply a promo code the shopper actually gives you; if it's rejected, say so and suggest they double-check the code.
+- If a tool reports an item wasn't found or isn't in the cart, relay that plainly and offer to search.
+
+After your tool calls resolve, summarize the outcome in plain language (what you found, what's in the cart, the total). Do not describe tools, JSON, SKUs, or the WebMCP mechanism to the shopper.`,
+        previousMessages: "{{messages}}"
+      }
+    }
+  ]
+};

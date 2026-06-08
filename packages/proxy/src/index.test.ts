@@ -71,6 +71,101 @@ describe("CORS middleware", () => {
   });
 });
 
+describe("CORS preview origins", () => {
+  const savedNodeEnv = process.env.NODE_ENV;
+  const savedVercelEnv = process.env.VERCEL_ENV;
+  const savedPattern = process.env.PREVIEW_ORIGIN_PATTERN;
+
+  afterEach(() => {
+    process.env.NODE_ENV = savedNodeEnv;
+    if (savedVercelEnv === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = savedVercelEnv;
+    if (savedPattern === undefined) delete process.env.PREVIEW_ORIGIN_PATTERN;
+    else process.env.PREVIEW_ORIGIN_PATTERN = savedPattern;
+  });
+
+  const preflight = (app: ReturnType<typeof createChatProxyApp>, origin: string) =>
+    app.request("/api/chat/dispatch", { method: "OPTIONS", headers: { Origin: origin } });
+
+  it("reflects a *.vercel.app preview origin not in the allowlist (default pattern)", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.VERCEL_ENV;
+    const app = createChatProxyApp({ allowedOrigins: ["https://good.com"] });
+    const res = await preflight(app, "https://persona-git-feature-x-runtype.vercel.app");
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://persona-git-feature-x-runtype.vercel.app"
+    );
+  });
+
+  it("does not match preview-apex look-alikes", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.VERCEL_ENV;
+    const app = createChatProxyApp({ allowedOrigins: ["https://good.com"] });
+    // Apex spoofed as a deeper subdomain of an attacker domain.
+    const spoof = await preflight(app, "https://x.vercel.app.evil.com");
+    expect(spoof.status).toBe(403);
+    // Hyphen instead of dot before the apex.
+    const hyphen = await preflight(app, "https://evil-vercel.app");
+    expect(hyphen.status).toBe(403);
+  });
+
+  it("allows extra preview domains via PREVIEW_ORIGIN_PATTERN env", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.VERCEL_ENV;
+    process.env.PREVIEW_ORIGIN_PATTERN = "^https://[a-z0-9-]+\\.preview\\.example\\.com$";
+    const app = createChatProxyApp({ allowedOrigins: ["https://good.com"] });
+    const res = await preflight(app, "https://pr-42.preview.example.com");
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://pr-42.preview.example.com"
+    );
+  });
+
+  it("still rejects a non-preview, non-allowlisted origin in production", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.VERCEL_ENV;
+    const app = createChatProxyApp({ allowedOrigins: ["https://good.com"] });
+    const res = await preflight(app, "https://evil.com");
+    expect(res.status).toBe(403);
+  });
+
+  it("disables preview reflection with previewOriginPattern: false", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.VERCEL_ENV;
+    const app = createChatProxyApp({
+      allowedOrigins: ["https://good.com"],
+      previewOriginPattern: false,
+    });
+    const res = await preflight(app, "https://persona-git-feature-x-runtype.vercel.app");
+    expect(res.status).toBe(403);
+  });
+
+  it("honors a custom previewOriginPattern", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.VERCEL_ENV;
+    const app = createChatProxyApp({
+      allowedOrigins: ["https://good.com"],
+      previewOriginPattern: /^https:\/\/preview\.example\.com$/,
+    });
+    const ok = await preflight(app, "https://preview.example.com");
+    expect(ok.status).toBe(204);
+    expect(ok.headers.get("Access-Control-Allow-Origin")).toBe("https://preview.example.com");
+    // The default *.vercel.app no longer applies once a custom pattern is set.
+    const vercel = await preflight(app, "https://persona-git-x-runtype.vercel.app");
+    expect(vercel.status).toBe(403);
+  });
+
+  it("reflects any origin when the proxy itself is a Vercel preview runtime", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.VERCEL_ENV = "preview";
+    const app = createChatProxyApp({ allowedOrigins: ["https://good.com"] });
+    const res = await preflight(app, "https://anything.example.org");
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://anything.example.org");
+  });
+});
+
 describe("dispatch — WebMCP clientTools forwarding", () => {
   const realFetch = globalThis.fetch;
 

@@ -92,6 +92,24 @@ Set these in the Vercel dashboard (Settings → Environment Variables):
 - **STRIPE_SECRET_KEY** (optional): Stripe secret key for checkout functionality
 - **STRIPE_CONTEXT** (optional): Target Stripe account ID (`acct_…`) when using an organization secret key (`sk_org_…`); forwarded as the `Stripe-Context` header ([docs](https://docs.stripe.com/keys#organization-api-keys))
 - **FRONTEND_URL** (optional): Your frontend URL for checkout redirect URLs
+- **ALLOWED_ORIGINS** (optional): Comma-separated CORS allowlist of your production origins (defaults to the localhost dev ports when unset). See preview-deployment note below.
+- **PREVIEW_ORIGIN_PATTERN** (optional): Regex string of extra origins to reflect for CORS (defaults to `https://*.vercel.app`). Set this to also allow your own preview domain.
+
+> **⚠️ Set `RUNTYPE_API_KEY` on the Preview scope, not just Production.** Vercel
+> scopes env vars per-environment. If the key is only on Production, **preview
+> deployments have no key** and every agent call fails (dispatch can't
+> authenticate; `/resume` returns `401 Missing API key`). Add it to the Preview
+> (and Development) scopes too.
+>
+> **CORS and dynamic preview URLs.** Preview deployments get per-branch URLs
+> (`*-git-<branch>-<team>.vercel.app`) that can't be listed in `ALLOWED_ORIGINS`.
+> The proxy handles this automatically in two ways: (1) when the proxy itself
+> runs as a preview deployment (`VERCEL_ENV === "preview"`) it reflects the
+> caller's origin, and (2) it reflects any origin matching `PREVIEW_ORIGIN_PATTERN`
+> (default `https://*.vercel.app`) so a production proxy still accepts calls from
+> a matching preview site — set this env var to allow your own preview domain.
+> Pass `previewOriginPattern: false` to `createChatProxyApp` to lock this down to
+> the exact allowlist only.
 
 ## Deploying to Other Platforms
 
