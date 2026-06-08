@@ -1,5 +1,19 @@
 # @runtypelabs/persona
 
+## 3.27.0
+
+### Minor Changes
+
+- 10f47bd: Faster script-tag installs: the launcher now loads from a standalone ~14 KB brotli `launcher.global.js` critical bundle (vs ~134 KB for the full `index.global.js`), and the heavy conversation panel is deferred until the launcher is first clicked.
+
+  The installer (`install.global.js`) automatically takes this path for the common floating-launcher case and renders the real launcher — full theme and Lucide icon fidelity, no placeholder or flash. On first click it loads the full widget and opens the panel via the existing controller API, then removes the critical launcher. Any configuration that starts open or renders differently eager-loads the full bundle exactly as before — inline embeds, docked / composer-bar modes, `launcher.autoExpand`, a persisted "was open" state restored on reload, and `onStateLoaded` hooks — as do custom `jsUrl` overrides that don't mirror the published `dist` layout. Also adds a public `window.AgentWidgetLauncher.mount()` API for advanced/standalone use.
+
+  Clearer install lifecycle hooks, so deferral never makes a "loaded" handler fire at the wrong time: `onScriptLoad` (the embed script executed), `onLauncherShown` (the launcher painted on the page — page-load time, for "widget appeared" analytics), `onChatReady` (the full widget is initialized and its controller API is callable — after first open in deferred installs), and `onError` (a load step failed, so ad-blocked / timed-out installs no longer fail silently). Matching DOM events are dispatched too: `persona:script-load`, `persona:launcher-shown`, `persona:chat-ready`, `persona:error`. `onReady` is **deprecated** in favor of `onChatReady`: it keeps working as an alias (and still dispatches `persona:ready`) but logs a one-time console warning and will be removed in the next major. The same `onReady` → `onChatReady` rename applies to the programmatic `initAgentWidget({ … })` option.
+
+### Patch Changes
+
+- 6e89c8a: Seed Persona's Runtype SSE contract from Core's public OpenAPI spec and generate public Runtype stream/client-token types from the checked-in snapshot.
+
 ## 3.26.0
 
 ### Patch Changes
