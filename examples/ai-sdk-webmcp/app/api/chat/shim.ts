@@ -42,8 +42,7 @@ const WEBMCP_PREFIX = "webmcp:";
 // Bare "creator/model" id → the AI SDK routes through the Vercel AI Gateway
 // (the default provider when no provider instance is given). On Vercel this
 // authenticates automatically via OIDC; locally it uses AI_GATEWAY_API_KEY.
-// Gateway slugs use dots (claude-sonnet-4.6), unlike the provider SDK (…-4-6).
-const MODEL = "anthropic/claude-sonnet-4.6";
+const MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
 
 const SYSTEM_PROMPT = `You are the Switchback shopping assistant for a trail & road running store.
 You help shoppers using ONLY the page's own tools (search_products, view_product,
