@@ -15,7 +15,7 @@ import type {
 import type { OnChangeCallback, ControlResult } from './types';
 import * as state from './state';
 import { mountThemeEditorMcp } from './webmcp/register';
-import { initSearchUI, pruneSearchIndex, resetSearchIndex } from './search';
+import { initSearchUI, pruneSearchIndex, registerCatalogSections, resetSearchIndex } from './search';
 import * as styleTab from './sections/appearance';
 import type { DrilldownView } from './sections/appearance';
 import * as colorsStyleTab from './sections/colors-style';
@@ -37,7 +37,7 @@ import {
   type PreviewManager,
   normalizePreviewBackgroundUrl,
 } from './preview-manager';
-import { ZOOM_MIN, ZOOM_MAX } from '@runtypelabs/persona/theme-editor';
+import { ZOOM_MIN, ZOOM_MAX, COMPONENT_SHAPE_SECTIONS, STYLE_SECTIONS } from '@runtypelabs/persona/theme-editor';
 
 // Re-export test helpers from preview manager
 export {
@@ -320,7 +320,9 @@ function navigateToDrilldown(view: DrilldownView): void {
   // Clear previous drill-down content and prune associated search entries
   const oldControls = drilldownContent.querySelectorAll('[data-section-id]');
   if (oldControls.length > 0) {
-    pruneSearchIndex((entry) => !drilldownContent.contains(entry.element));
+    // Drop live entries belonging to the old drill-down; keep element-less
+    // catalog entries (they are re-seeded per render and stay searchable).
+    pruneSearchIndex((entry) => !entry.element || !drilldownContent.contains(entry.element));
   }
   drilldownContent.innerHTML = '';
 
@@ -369,8 +371,8 @@ function navigateBackToStyle(): void {
 
   currentDrilldown = 'none';
 
-  // Prune controls from drill-down
-  pruneSearchIndex((entry) => !drilldownContent.contains(entry.element));
+  // Prune live controls from drill-down; keep element-less catalog entries.
+  pruneSearchIndex((entry) => !entry.element || !drilldownContent.contains(entry.element));
   allControls = allControls.filter((c) => !drilldownContent.contains(c.element));
   drilldownContent.innerHTML = '';
 
@@ -645,7 +647,11 @@ function rebuildEditorSurface(): void {
   configureTab.refreshSectionMetadata(configureGroup);
 
   allControls = nextControls.filter((control) => control.element.isConnected);
-  pruneSearchIndex((entry) => entry.element.isConnected);
+  pruneSearchIndex((entry) => (entry.element ? entry.element.isConnected : true));
+
+  // Re-seed the static catalog so lazily-rendered drill-down fields (component
+  // shadows, advanced tokens) are searchable without opening the drill-down.
+  buildSearchCatalog();
 
   syncGroupVisibility('style-group');
   syncGroupVisibility('configure-group');
@@ -761,7 +767,22 @@ const SECTION_TO_DRILLDOWN: Record<string, DrilldownView> = {
   'shape': 'advanced-tokens',
   'shadows': 'advanced-tokens',
   'widget-style': 'advanced-tokens',
+  'comp-shadows': 'component-shapes',
 };
+
+// Static drill-down sections indexed up front so their fields (notably the
+// component shadow controls) are searchable before the drill-down is opened.
+const ADVANCED_TOKENS_STATIC_SECTION_IDS = ['chat-colors', 'typography', 'launcher-style', 'shape', 'shadows', 'widget-style'];
+
+function buildSearchCatalog(): void {
+  // "Component shapes" drill-down — includes the Component Shadows section.
+  registerCatalogSections('style', COMPONENT_SHAPE_SECTIONS);
+  // "Advanced Tokens" drill-down — palette shadow scale, widget surface, etc.
+  registerCatalogSections(
+    'style',
+    STYLE_SECTIONS.filter((section) => ADVANCED_TOKENS_STATIC_SECTION_IDS.includes(section.id))
+  );
+}
 
 function initSearch(): void {
   initSearchUI((tabId, sectionId, fieldId) => {

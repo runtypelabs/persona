@@ -72,6 +72,11 @@ export interface SearchEntry {
   keywords: string[];
   tabId: string;
   sectionId: string;
-  element: HTMLElement;
-  control: ControlResult;
+  /**
+   * Live control element, present for entries registered while their section is
+   * rendered. Catalog entries (registered up front from section definitions for
+   * not-yet-opened drill-downs) omit it; navigation re-finds the element by id.
+   */
+  element?: HTMLElement;
+  control?: ControlResult;
 }
