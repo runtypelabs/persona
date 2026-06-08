@@ -46,5 +46,11 @@
     "path": "dist/smart-dom-reader.js",
     "limit": "13 kB",
     "gzip": true
+  },
+  {
+    "name": "Server-safe · codegen subpath (codegen.js)",
+    "path": "dist/codegen.js",
+    "limit": "12 kB",
+    "gzip": true
   }
 ]
