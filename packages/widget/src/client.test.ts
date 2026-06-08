@@ -1633,6 +1633,55 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
     expect(seqTool).toBeLessThan(seq1);
   });
 
+  it('should not emit a whitespace-only assistant bubble before a leading tool call', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          const e = (eventType: string, data: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`event: ${eventType}\ndata: ${JSON.stringify({ type: eventType, ...data })}\n\n`));
+
+          e('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 });
+          e('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
+          // Tool UI is the first meaningful output. Some providers still emit
+          // newline-only text lifecycle events around the tool boundary; those
+          // must not become an empty assistant message bubble.
+          e('tool_start', { toolId: 'tc_1', name: 'add_to_cart', toolType: 'local', sequenceIndex: 4 });
+          e('text_start', { partId: 'text_0', messageId: 'msg_s1', seq: 1 });
+          e('step_delta', { id: 's1', text: '\n', partId: 'text_0', messageId: 'msg_s1', seq: 2 });
+          e('text_end', { partId: 'text_0', messageId: 'msg_s1', seq: 3 });
+          e('tool_complete', { toolId: 'tc_1', name: 'add_to_cart', success: true, completedAt: new Date().toISOString(), executionTime: 20, sequenceIndex: 5 });
+          e('flow_complete', { success: true });
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Add to cart', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const messageEvents = events.filter(e => e.type === 'message');
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of messageEvents) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+
+    const allMessages = Array.from(messagesById.values());
+    const assistantTexts = allMessages.filter(m => m.role === 'assistant' && !m.variant);
+    const toolMsgs = allMessages.filter(m => m.variant === 'tool');
+
+    expect(assistantTexts).toHaveLength(0);
+    expect(toolMsgs).toHaveLength(1);
+    expect(toolMsgs[0].toolCall?.name).toBe('add_to_cart');
+    expect(toolMsgs[0].toolCall?.status).toBe('complete');
+  });
+
   it('should not split when partId is absent (backward compatible)', async () => {
     const events: AgentWidgetEvent[] = [];
 
