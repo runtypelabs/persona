@@ -8,6 +8,7 @@ import {
   COMPONENT_FLOW,
   BAKERY_ASSISTANT_FLOW,
   STOREFRONT_ASSISTANT_FLOW,
+  WEBMCP_STOREFRONT_FLOW,
   PAGE_CONTEXT_FLOW,
   createCheckoutSession
 } from "@runtypelabs/persona-proxy";
@@ -23,6 +24,9 @@ import {
 
 const preferredPort = Number(process.env.PORT ?? 43111);
 const upstreamUrl = process.env.UPSTREAM_URL || undefined;
+// Production origins are supplied at deploy time via ALLOWED_ORIGINS (comma-
+// separated). Dynamic preview sites are matched separately by the proxy's
+// previewOriginPattern (set PREVIEW_ORIGIN_PATTERN to allow non-Vercel ones).
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : ["http://localhost:5173", "http://localhost:4173"];
@@ -81,6 +85,19 @@ const storefrontApp = createChatProxyApp({
   upstreamUrl
 });
 
+// WebMCP storefront proxy - for the "Switchback" WebMCP demo.
+// The demo page registers its tools on document.modelContext; the widget sends
+// them as clientTools[] each turn and the proxy forwards them upstream (and
+// proxies the /resume round-trip). The agent definition lives entirely in code
+// as WEBMCP_STOREFRONT_FLOW — no hosted Runtype agent / client token needed.
+const webmcpApp = createChatProxyApp({
+  path: "/api/chat/dispatch-webmcp",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_WEBMCP || undefined,
+  flowConfig: process.env.FLOW_ID_WEBMCP ? undefined : WEBMCP_STOREFRONT_FLOW,
+  upstreamUrl
+});
+
 // Page-context proxy - read-only, markdown answers about the current page.
 // Used by the smart-dom-reader demo: the widget sends live page context (including
 // shadow-DOM elements) as `inputs`, and this flow injects it via {{pageContext}}.
@@ -98,6 +115,7 @@ app.route("/", actionApp);
 app.route("/", componentApp);
 app.route("/", bakeryApp);
 app.route("/", storefrontApp);
+app.route("/", webmcpApp);
 app.route("/", pageContextApp);
 
 // Stripe checkout endpoint
