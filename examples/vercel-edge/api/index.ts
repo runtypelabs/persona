@@ -11,6 +11,7 @@ import {
   WEBMCP_SLIDES_FLOW,
   WEBMCP_DOCKED_FLOW,
   PAGE_CONTEXT_FLOW,
+  THEME_ASSISTANT_FLOW,
   createCheckoutSession,
 } from "@runtypelabs/persona-proxy";
 
@@ -116,6 +117,15 @@ const pageContextApp = createChatProxyApp({
   upstreamUrl,
 });
 
+// Theme Copilot proxy - for the Theme Editor's docked styling copilot.
+const themeAssistantApp = createChatProxyApp({
+  path: "/api/chat/dispatch-theme",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_THEME_ASSISTANT || undefined,
+  flowConfig: process.env.FLOW_ID_THEME_ASSISTANT ? undefined : THEME_ASSISTANT_FLOW,
+  upstreamUrl,
+});
+
 app.route("/", directiveApp);
 app.route("/", actionApp);
 app.route("/", componentApp);
@@ -126,6 +136,7 @@ app.route("/", webmcpCalendarApp);
 app.route("/", webmcpSlidesApp);
 app.route("/", webmcpDockedApp);
 app.route("/", pageContextApp);
+app.route("/", themeAssistantApp);
 
 app.post("/api/checkout", async (c) => {
   const origin = c.req.header("origin");

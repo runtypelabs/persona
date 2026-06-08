@@ -1075,6 +1075,54 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     expect(s.webMcpApprovalResolvers.size).toBe(0);
   });
 
+  it("a UI-only updateConfig preserves the client, bridge, and in-flight WebMCP state", async () => {
+    // Self-styling widget: a `webmcp:*` theme tool mutates config and re-renders
+    // mid-turn. updateConfig must NOT swap the client when only display fields
+    // (theme/copy/…) change — doing so would abort the very turn that's
+    // restyling the widget and strand the paused execution. (Inverse of the
+    // teardown test above.)
+    const { session } = makeSession();
+    const s = session as unknown as {
+      client: unknown;
+      config: { copy?: { welcomeTitle?: string } };
+      webMcpAwaitBatches: Map<string, unknown>;
+      webMcpApprovalResolvers: Map<string, unknown>;
+    };
+    const clientBefore = s.client;
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    session.requestWebMcpApproval({
+      toolName: "add_to_cart",
+      args: { sku: "SHOE-001" },
+    } as WebMcpConfirmInfo);
+    expect(s.webMcpAwaitBatches.size).toBe(1);
+    expect(s.webMcpApprovalResolvers.size).toBe(1);
+
+    // No apiUrl / webmcp in the patch → connection unchanged → in-place refresh.
+    session.updateConfig({ copy: { welcomeTitle: "Recolored" } });
+
+    expect(s.client).toBe(clientBefore); // same client instance, not swapped
+    expect(s.config.copy?.welcomeTitle).toBe("Recolored"); // display change applied
+    expect(s.webMcpAwaitBatches.size).toBe(1); // batch survives
+    expect(s.webMcpApprovalResolvers.size).toBe(1); // approval still pending
+  });
+
+  it("a connection change (apiUrl) still swaps the client and tears down WebMCP state", () => {
+    const { session } = makeSession();
+    const s = session as unknown as {
+      client: unknown;
+      webMcpAwaitBatches: Map<string, unknown>;
+    };
+    const clientBefore = s.client;
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    expect(s.webMcpAwaitBatches.size).toBe(1);
+
+    session.updateConfig({ apiUrl: "http://other" });
+
+    expect(s.client).not.toBe(clientBefore); // fresh client
+    expect(s.webMcpAwaitBatches.size).toBe(0); // batch torn down
+  });
+
   it("a teardown before the stream-end flush strands the batch", async () => {
     const { session, executeSpy, resumeSpy } = makeSession();
     feed(session, parallelAwait("toolu_A", "SHOE-001"));

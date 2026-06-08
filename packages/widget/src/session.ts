@@ -40,6 +40,49 @@ export type AgentWidgetSessionStatus =
   | "connected"
   | "error";
 
+/**
+ * Config fields the `AgentWidgetClient` reads to shape the connection and each
+ * request. When NONE of these change, `updateConfig` can refresh the live
+ * client in place (preserving the WebMCP bridge and any in-flight stream/resume)
+ * instead of swapping in a fresh client and tearing down WebMCP state. Fields
+ * outside this list (theme, copy, layout, suggestionChips, iterationDisplay,
+ * postprocessMessage, feature display toggles, …) are display-only and safe to
+ * apply mid-turn — which is what a self-styling widget needs when a `webmcp:*`
+ * theme tool re-renders the widget while the agent's turn is still streaming.
+ *
+ * Compared by identity (`!==`): primitives by value, functions/objects by
+ * reference. A consumer that rebuilds these objects on every render simply
+ * takes the (still-correct) full-rebuild path. The default is therefore safe:
+ * anything not explicitly listed here can never strand a paused turn.
+ */
+const CONNECTION_CONFIG_KEYS = [
+  "apiUrl",
+  "clientToken",
+  "flowId",
+  "agent",
+  "agentOptions",
+  "headers",
+  "getHeaders",
+  "webmcp",
+  "streamParser",
+  "parserType",
+  "contextProviders",
+  "requestMiddleware",
+  "customFetch",
+  "parseSSEEvent",
+  "onSessionInit",
+  "onSessionExpired",
+  "getStoredSessionId",
+  "setStoredSessionId",
+] as const satisfies ReadonlyArray<keyof AgentWidgetConfig>;
+
+function connectionConfigChanged(
+  prev: AgentWidgetConfig,
+  next: AgentWidgetConfig,
+): boolean {
+  return CONNECTION_CONFIG_KEYS.some((key) => prev[key] !== next[key]);
+}
+
 type SessionCallbacks = {
   onMessagesChanged: (messages: AgentWidgetMessage[]) => void;
   onStatusChanged: (status: AgentWidgetSessionStatus) => void;
@@ -615,6 +658,21 @@ export class AgentWidgetSession {
   }
 
   public updateConfig(next: AgentWidgetConfig) {
+    const merged = { ...this.config, ...next };
+
+    // Connection/request-shaping change (apiUrl, clientToken, webmcp, headers,
+    // parser, agent, …) → full client rebuild. UI-only change (theme, copy,
+    // layout, suggestions, …) → refresh in place so the live stream, WebMCP
+    // bridge, and any in-flight resolve survive. The latter is what makes a
+    // self-styling widget work: a `webmcp:*` theme tool mutates config and
+    // re-renders mid-turn; recreating the client there would abort the very
+    // turn that's restyling the widget and strand the paused execution.
+    if (!connectionConfigChanged(this.config, merged)) {
+      this.config = merged;
+      this.client.updateConfig(merged);
+      return;
+    }
+
     // Replacing the client invalidates every in-flight WebMCP resolve, buffered
     // parallel-await batch, and pending approval bubble tied to the OLD client/
     // session. Tear them down BEFORE the swap (the new client has no session
@@ -626,7 +684,7 @@ export class AgentWidgetSession {
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
     const prevSSECallback = this.client.getSSEEventCallback();
-    this.config = { ...this.config, ...next };
+    this.config = merged;
     this.client = new AgentWidgetClient(this.config);
     this.wireDefaultWebMcpConfirm();
     if (prevSSECallback) {

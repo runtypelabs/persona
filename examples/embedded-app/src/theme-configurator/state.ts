@@ -3,7 +3,7 @@
  *  adds widget controller integration, localStorage persistence, and editor UI state.
  */
 
-import type { AgentWidgetConfig } from '@runtypelabs/persona';
+import type { AgentWidgetConfig, WebMcpConfirmInfo } from '@runtypelabs/persona';
 import type { PersonaTheme } from '@runtypelabs/persona';
 import {
   createAgentExperience,
@@ -31,10 +31,51 @@ const STORAGE_KEY = 'persona-widget-config-v2';
 const EDITOR_UI_STORAGE_KEY = 'persona-theme-editor-ui';
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
+// The theme editor's preview widget is a *live* agent: it dispatches to the
+// theme-assistant flow (THEME_ASSISTANT_FLOW in @runtypelabs/persona-proxy),
+// which tool-calls the page's WebMCP theme tools to restyle the widget itself.
 const proxyUrl =
   import.meta.env.VITE_PROXY_URL
-    ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch`
-    : `http://localhost:${proxyPort}/api/chat/dispatch`;
+    ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-theme`
+    : `http://localhost:${proxyPort}/api/chat/dispatch-theme`;
+
+// Two wiring modes, same as the WebMCP demo:
+//   1. Client-token mode — set VITE_PERSONA_CLIENT_TOKEN (+ VITE_PERSONA_API_URL,
+//      the API base) to dispatch straight to a Runtype surface/agent whose prompt
+//      is the theme assistant. This is the path proven to round-trip webmcp tools.
+//   2. Proxy mode (default fallback) — dispatch to the local theme-assistant flow.
+const clientToken = import.meta.env.VITE_PERSONA_CLIENT_TOKEN as string | undefined;
+const clientApiBase = import.meta.env.VITE_PERSONA_API_URL as string | undefined;
+const connectionConfig: Pick<AgentWidgetConfig, 'apiUrl' | 'clientToken'> = clientToken
+  ? { clientToken, ...(clientApiBase ? { apiUrl: clientApiBase } : {}) }
+  : { apiUrl: proxyUrl };
+
+// The Theme Editor registers its controls as WebMCP tools on the page's
+// `document.modelContext` (see theme-configurator/webmcp/register.ts). Because the
+// preview widget is mounted by parent-realm code (its WebMCP bridge reads the
+// parent's global `document`, not the preview iframe's), it discovers those tools
+// directly — no cross-frame transport needed. Every theme tool is a safe, local
+// edit to the preview, so we auto-approve them all for a frictionless
+// "chat to restyle" loop instead of gating each color change behind a confirm.
+const THEME_TOOL_NAMES = new Set([
+  'get_theme_overview',
+  'set_brand_colors',
+  'assign_color_role',
+  'set_typography',
+  'set_roundness',
+  'set_color_scheme',
+  'apply_preset',
+  'configure_widget',
+  'set_copy_and_suggestions',
+  'set_theme_fields',
+  'check_contrast',
+  'manage_session',
+]);
+
+const THEME_WEBMCP_CONFIG: NonNullable<AgentWidgetConfig['webmcp']> = {
+  enabled: true,
+  autoApprove: (info: WebMcpConfirmInfo): boolean => THEME_TOOL_NAMES.has(info.toolName),
+};
 
 export type ParserType = 'plain' | 'json' | 'regex-json' | 'xml';
 const MB = 1024 * 1024;
@@ -42,7 +83,7 @@ const MB = 1024 * 1024;
 // ─── Default config builder ────────────────────────────────────────
 export const getDefaultConfig = (): AgentWidgetConfig => ({
   ...DEFAULT_WIDGET_CONFIG,
-  apiUrl: proxyUrl,
+  ...connectionConfig,
   parserType: 'plain',
   initialMessages: [
     {
@@ -260,6 +301,10 @@ export function buildPreviewConfig(
       suggestionChips: sanitizedSuggestionChips,
       theme: snapshot.theme,
       colorScheme,
+      // Live, self-styling preview: discover + call the page's theme tools.
+      // Injected here (not in core/persisted config) so the autoApprove function
+      // survives — functions can't round-trip through localStorage.
+      webmcp: THEME_WEBMCP_CONFIG,
     },
     scene
   );
