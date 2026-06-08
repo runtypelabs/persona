@@ -12,7 +12,10 @@
     "dev:cloudflare": "pnpm --filter cloudflare-workers dev",
     "dev": "pnpm --filter @runtypelabs/persona build:styles && NODE_ENV=development concurrently \"pnpm dev:vercel\" \"pnpm dev:widget\"",
     "changeset": "changeset",
-    "release": "changeset publish"
+    "release": "changeset publish",
+    "fetch:runtype-openapi": "pnpm --filter @runtypelabs/persona fetch:runtype-openapi",
+    "generate:runtype-types": "pnpm --filter @runtypelabs/persona generate:runtype-types",
+    "check:runtype-types": "pnpm --filter @runtypelabs/persona check:runtype-types"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
