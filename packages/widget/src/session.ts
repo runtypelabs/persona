@@ -2673,6 +2673,17 @@ export class AgentWidgetSession {
             ...(merged.agentMetadata ?? {}),
             awaitingLocalTool: false,
           };
+          // If the tool already completed, a stale duplicate step_await should
+          // not overwrite the measured result/duration and flip the bubble back
+          // to "running". Keep the completed state while still preserving the
+          // metadata correction above.
+          if (
+            this.webMcpResolvedKeys.has(reKey) &&
+            existing.toolCall?.status === "complete"
+          ) {
+            merged.toolCall = existing.toolCall;
+            merged.streaming = false;
+          }
         }
       }
       return merged;
