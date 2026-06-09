@@ -2651,9 +2651,11 @@ export class AgentWidgetSession {
       // WebMCP equivalent: once a `webmcp:*` tool has started resolving
       // (inflight) or resolved, a duplicate `step_await` re-emit must not
       // flip `awaitingLocalTool` back to true and resurrect the "waiting on
-      // local tool" UI. resolveWebMcpToolCall's dedupe path returns without
-      // re-touching the message, so correct the merge here (also avoids a
-      // one-frame flash before that microtask runs).
+      // local tool" UI. It also must not overwrite an existing running or
+      // completed toolCall with the fresh running skeleton emitted by client.ts
+      // for every step_await. resolveWebMcpToolCall's dedupe path returns
+      // without re-touching the message, so correct the merge here (also avoids
+      // a one-frame flash before that microtask runs).
       const reTcName = withSequence.toolCall?.name;
       const reExecId = withSequence.agentMetadata?.executionId;
       const reTcId = withSequence.toolCall?.id;
@@ -2665,25 +2667,26 @@ export class AgentWidgetSession {
         withSequence.agentMetadata?.awaitingLocalTool === true
       ) {
         const reKey = `${reExecId}:${reTcId}`;
-        if (
-          this.webMcpInflightKeys.has(reKey) ||
-          this.webMcpResolvedKeys.has(reKey)
-        ) {
+        const isInflight = this.webMcpInflightKeys.has(reKey);
+        const isResolved = this.webMcpResolvedKeys.has(reKey);
+        const existingToolName = existing.toolCall?.name;
+        const hasCompletedTool =
+          existing.agentMetadata?.executionId === reExecId &&
+          existing.toolCall?.id === reTcId &&
+          existingToolName !== undefined &&
+          isWebMcpToolName(existingToolName) &&
+          existing.toolCall?.status === "complete";
+        if (isInflight || isResolved || hasCompletedTool) {
           merged.agentMetadata = {
             ...(merged.agentMetadata ?? {}),
             awaitingLocalTool: false,
           };
-          // If the tool already completed, a stale duplicate step_await should
-          // not overwrite the measured result/duration and flip the bubble back
-          // to "running". Keep the completed state while still preserving the
-          // metadata correction above.
-          if (
-            this.webMcpResolvedKeys.has(reKey) &&
-            existing.toolCall?.status === "complete"
-          ) {
-            merged.toolCall = existing.toolCall;
-            merged.streaming = false;
-          }
+          // Preserve the in-flight/completed tool state. For in-flight calls,
+          // this keeps the original `startedAt`; for completed calls, it keeps
+          // the measured duration/result even when the call completed with a
+          // local/browser error and therefore was not promoted to resolved.
+          merged.toolCall = existing.toolCall;
+          merged.streaming = existing.streaming;
         }
       }
       return merged;
