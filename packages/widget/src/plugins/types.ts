@@ -1,6 +1,7 @@
 import {
   AgentWidgetMessage,
   AgentWidgetConfig,
+  AgentWidgetApprovalDecisionOptions,
   AskUserQuestionPayload,
   LoadingIndicatorRenderContext,
   IdleIndicatorRenderContext,
@@ -165,13 +166,59 @@ export interface AgentWidgetPlugin {
   }) => HTMLElement | null;
 
   /**
-   * Custom renderer for approval bubbles
-   * Return null to use default renderer
+   * Custom renderer for approval bubbles.
+   *
+   * Return an `HTMLElement` to fully own the approval UI, `defaultRenderer()`
+   * to render (or wrap) the built-in bubble, or `null` to fall through to the
+   * default. Unlike the built-in bubble — whose Approve/Deny buttons are wired
+   * via delegation — a fully custom element resolves the approval by calling
+   * the `approve`/`deny` callbacks. Both route through the same path the
+   * built-in buttons use (optimistic update, `onDecision`, in-place anchoring).
+   *
+   * An approval is a single binary gate, so there are exactly two outcomes.
+   * Pass `{ remember: true }` to flag a "remember this" affordance (e.g. an
+   * "Always allow" button); the current approval resolves identically, but the
+   * flag is forwarded to `config.approval.onDecision` so you can persist a
+   * don't-ask-again policy for future approvals.
+   *
+   * `renderApproval` is called again whenever the approval's status changes, so
+   * branch on `message.approval?.status` to render the resolved state (and tear
+   * down any global listeners you added while pending).
+   *
+   * @example
+   * ```typescript
+   * // An alternative prompt: "Always allow" / "Allow once" / "Deny".
+   * renderApproval: ({ message, approve, deny }) => {
+   *   const approval = message.approval;
+   *   if (!approval || approval.status !== "pending") return null; // default renders resolved state
+   *   const root = document.createElement("div");
+   *   root.textContent = `${approval.toolName} requires approval`;
+   *
+   *   const always = document.createElement("button");
+   *   always.textContent = "Always allow";
+   *   always.addEventListener("click", () => approve({ remember: true }));
+   *
+   *   const once = document.createElement("button");
+   *   once.textContent = "Allow once";
+   *   once.addEventListener("click", () => approve());
+   *
+   *   const no = document.createElement("button");
+   *   no.textContent = "Deny";
+   *   no.addEventListener("click", () => deny());
+   *
+   *   root.append(always, once, no);
+   *   return root;
+   * }
+   * ```
    */
   renderApproval?: (context: {
     message: AgentWidgetMessage;
     defaultRenderer: () => HTMLElement;
     config: AgentWidgetConfig;
+    /** Resolve this approval as approved. Pass `{ remember: true }` for an "Always allow" affordance. */
+    approve: (options?: AgentWidgetApprovalDecisionOptions) => void;
+    /** Resolve this approval as denied. Pass `{ remember: true }` for an "Always deny" affordance. */
+    deny: (options?: AgentWidgetApprovalDecisionOptions) => void;
   }) => HTMLElement | null;
 
   /**

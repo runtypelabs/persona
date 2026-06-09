@@ -5,6 +5,7 @@ import {
   AgentWidgetEvent,
   AgentWidgetMessage,
   AgentWidgetApproval,
+  AgentWidgetApprovalDecisionOptions,
   WebMcpConfirmInfo,
   AgentExecutionState,
   ClientSession,
@@ -1196,7 +1197,8 @@ export class AgentWidgetSession {
    */
   public async resolveApproval(
     approval: AgentWidgetApproval,
-    decision: 'approved' | 'denied'
+    decision: 'approved' | 'denied',
+    options?: AgentWidgetApprovalDecisionOptions
   ): Promise<void> {
     // 1. Update approval message status immediately for responsive UI
     const approvalMessageId = `approval-${approval.id}`;
@@ -1246,7 +1248,8 @@ export class AgentWidgetSession {
             agentId: approval.agentId,
             toolName: approval.toolName,
           },
-          decision
+          decision,
+          options
         );
       } else {
         response = await this.client.resolveApproval(

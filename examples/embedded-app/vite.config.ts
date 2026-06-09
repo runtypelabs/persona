@@ -365,6 +365,10 @@ export default defineConfig({
         __dirname,
         "../../packages/widget/src/testing"
       ),
+      "@runtypelabs/persona/plugin-kit": path.resolve(
+        __dirname,
+        "../../packages/widget/src/plugin-kit"
+      ),
       "@runtypelabs/persona/widget.css": path.resolve(
         __dirname,
         "../../packages/widget/src/styles/widget.css"

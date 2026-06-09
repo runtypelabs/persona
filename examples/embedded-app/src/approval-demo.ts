@@ -2,26 +2,42 @@ import "@runtypelabs/persona/widget.css";
 import { renderDemoScaffold } from "./demo-scaffold";
 
 import {
-  createAgentExperience,
   createLocalStorageAdapter,
-  initAgentWidget,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetConfig,
   type AgentWidgetController,
 } from "@runtypelabs/persona";
 import { createMockSSEResponse, createMockSSEStream } from "@runtypelabs/persona/testing";
-import { setupMountMode, renderInlineMount, renderLauncherScene, squareInlinePanel } from "./mount-mode";
-import {
-  createDemoConfigInspector,
-  reportDemoConfig,
-} from "./demo-config-inspector";
+import { setupMountMode, runWidgetMountWithInspector } from "./mount-mode";
+import { createDemoConfigInspector } from "./demo-config-inspector";
+// `renderApproval` plugin example — shows an alternative permission prompt
+// ("Always allow / Allow once / Deny"). Untyped JS import (mirrors the
+// ask-user-question pills plugin); the widget plugin contract is duck-typed.
+// The `icons` map gives the "Runtype" source an explicit square icon (served
+// from /public); pass `faviconService: true` instead to use Google's favicon
+// service, or omit both to fall back to the default tool icon.
+import { createApprovalActionsPlugin } from "./plugins/approval-actions-plugin.js";
 import type { Mode } from "./examples-nav";
 
 renderDemoScaffold({ slug: "approval-demo" });
 
 const configInspector = createDemoConfigInspector({ title: "Tool Approval" });
 let approvalMountMode: Mode = "inline";
+type ApprovalVariant = "builtin" | "plugin";
+let variant: ApprovalVariant = "builtin";
+
+// Icon source for the plugin renderer's source-icon box. Mirrors the three
+// resolution paths in approval-actions-plugin: explicit `icons` map, the
+// optional Google favicon service, or the built-in default tool icon.
+type IconMode = "map" | "google" | "default";
+let iconMode: IconMode = "map";
+
+const buildApprovalPlugin = () => {
+  if (iconMode === "google") return createApprovalActionsPlugin({ faviconService: true, faviconSize: 128 });
+  if (iconMode === "default") return createApprovalActionsPlugin();
+  return createApprovalActionsPlugin({ icons: { Runtype: "/sample-icon.svg" } });
+};
 
 let activeController: AgentWidgetController | null = null;
 let lastApprovalDecision: "approved" | "denied" | null = null;
@@ -31,31 +47,35 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
   return {
     ...DEFAULT_WIDGET_CONFIG,
     storageAdapter: createLocalStorageAdapter(
-      `persona-state-approval-demo-${mode}`,
+      `persona-state-approval-demo-${mode}-${variant}`,
     ),
+    plugins: variant === "plugin" ? [buildApprovalPlugin()] : [],
     customFetch: async () => {
       const events = [
         { type: "agent_start", executionId: "exec-demo-1", agentId: "demo-agent", agentName: "Demo Agent", maxTurns: 3, startedAt: Date.now() },
         { type: "agent_iteration_start", executionId: "exec-demo-1", iteration: 1 },
         { type: "agent_turn_start", executionId: "exec-demo-1", turnId: "turn-1" },
-        { type: "agent_turn_delta", executionId: "exec-demo-1", turnId: "turn-1", delta: "Let me search for that information using Exa..." },
+        { type: "agent_turn_delta", executionId: "exec-demo-1", turnId: "turn-1", delta: "Let me look that up in the documentation..." },
         { type: "agent_turn_complete", executionId: "exec-demo-1", turnId: "turn-1" },
         {
           type: "agent_approval_start",
           executionId: "exec-demo-1",
           approvalId: `approval-${Date.now()}`,
-          toolName: "exa_search",
-          toolType: "mcp",
-          description: "Search the web using Exa for relevant information",
-          parameters: { query: "latest AI news 2025", numResults: 5 },
+          toolName: "Search documentation",
+          // `toolType` is a free-form string; the plugin renders it as the
+          // source label ("from Runtype"). The built-in bubble ignores it.
+          toolType: "Runtype",
+          description: "Search the Runtype documentation for relevant information",
+          parameters: { query: "approval theming", numResults: 5 },
         },
       ];
       return createMockSSEResponse(events, { delayMs: 200 });
     },
     approval: {
-      onDecision: async (data, decision) => {
+      onDecision: async (data, decision, options) => {
         lastApprovalDecision = decision;
-        updateLog(`Decision: ${decision} for tool "${data.toolName}" (approval: ${data.approvalId})`);
+        const remember = options?.remember ? " (remember)" : "";
+        updateLog(`Decision: ${decision}${remember} for tool "${data.toolName}" (approval: ${data.approvalId})`);
         if (decision === "denied") {
           const events = [
             { type: "agent_turn_start", executionId: data.executionId, turnId: "turn-denied" },
@@ -115,32 +135,83 @@ const wireApprovalLogging = (controller: AgentWidgetController): void => {
   });
 };
 
+let activeStage: HTMLElement | null = null;
+let teardownActive: (() => void) | null = null;
+
+const createWidget = (): void => {
+  if (teardownActive) {
+    teardownActive();
+    teardownActive = null;
+  }
+  const stage = activeStage;
+  if (!stage) return;
+  const { controller, teardown } = runWidgetMountWithInspector(
+    configInspector,
+    approvalMountMode,
+    stage,
+    buildConfig,
+  );
+  activeController = controller;
+  teardownActive = () => {
+    teardown();
+    activeController = null;
+  };
+  wireApprovalLogging(controller);
+  updateLog(`Widget initialized — renderer: ${variant}`);
+};
+
 setupMountMode({
   slug: "approval-demo",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
     approvalMountMode = mode;
-    reportDemoConfig(configInspector, { config: buildConfig(mode), mode });
-    if (mode === "launcher") {
-      const { mountEl } = renderLauncherScene(stage);
-      const handle = initAgentWidget({ target: mountEl, config: buildConfig("launcher") });
-      activeController = handle as unknown as AgentWidgetController;
-      wireApprovalLogging(activeController);
-      return () => {
-        handle.destroy();
-        activeController = null;
-      };
-    }
-    const mount = renderInlineMount(stage);
-    mount.style.height = "100%";
-    const controller = createAgentExperience(mount, squareInlinePanel(buildConfig(mode)));
-    activeController = controller;
-    wireApprovalLogging(controller);
+    activeStage = stage;
+    createWidget();
     return () => {
-      controller.destroy();
-      activeController = null;
+      if (teardownActive) {
+        teardownActive();
+        teardownActive = null;
+      }
     };
   },
+});
+
+// The icon-source toggle only applies to the plugin renderer.
+const iconModeRow = document.getElementById("icon-mode-row");
+const syncIconRow = (): void => {
+  if (iconModeRow) iconModeRow.style.display = variant === "plugin" ? "" : "none";
+};
+syncIconRow();
+
+// Renderer variant selector (built-in bubble vs. renderApproval plugin).
+const variantSelector = document.getElementById("variant-selector");
+variantSelector?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLElement>(".mode-btn");
+  if (!btn) return;
+  const next = btn.dataset.variant as ApprovalVariant | undefined;
+  if (!next || next === variant) return;
+  variantSelector
+    .querySelectorAll(".mode-btn")
+    .forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  variant = next;
+  syncIconRow();
+  createWidget();
+});
+
+// Icon-source selector (square map icon vs. Google favicon vs. default tool icon).
+const iconSelector = document.getElementById("icon-selector");
+iconSelector?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLElement>(".mode-btn");
+  if (!btn) return;
+  const next = btn.dataset.icon as IconMode | undefined;
+  if (!next || next === iconMode) return;
+  iconSelector
+    .querySelectorAll(".mode-btn")
+    .forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  iconMode = next;
+  createWidget();
 });
 
 const logContainer = document.getElementById("event-log");

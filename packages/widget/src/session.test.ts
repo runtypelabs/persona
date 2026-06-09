@@ -845,6 +845,53 @@ describe('AgentWidgetSession.resolveApproval', () => {
     expect(approvalIdx).toBeGreaterThanOrEqual(0);
     expect(approvalIdx).toBeLessThan(afterIdx);
   });
+
+  it('forwards the decision options (e.g. remember) to onDecision', async () => {
+    const onDecision = vi.fn(async () => {});
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://localhost:43111/api/chat/dispatch',
+        approval: { onDecision },
+      },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+
+    await session.resolveApproval(makeApproval(), 'approved', { remember: true });
+
+    expect(onDecision).toHaveBeenCalledTimes(1);
+    expect(onDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ toolName: 'send_email', approvalId: 'approval-1' }),
+      'approved',
+      { remember: true }
+    );
+  });
+
+  it('passes undefined options to onDecision when none are given', async () => {
+    const onDecision = vi.fn(async () => {});
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://localhost:43111/api/chat/dispatch',
+        approval: { onDecision },
+      },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+
+    await session.resolveApproval(makeApproval(), 'denied');
+
+    expect(onDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ toolName: 'send_email' }),
+      'denied',
+      undefined
+    );
+  });
 });
 
 describe('AgentWidgetSession - dispatch error fallback', () => {
