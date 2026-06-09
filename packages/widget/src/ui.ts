@@ -86,7 +86,7 @@ import {
   setCurrentAnswer,
 } from "./components/ask-user-question-bubble";
 import { formatElapsedMs } from "./utils/formatting";
-import { createApprovalBubble } from "./components/approval-bubble";
+import { approvalDetailsExpansionState, createApprovalBubble, updateApprovalDetailsUI } from "./components/approval-bubble";
 import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
@@ -1225,7 +1225,7 @@ export const createAgentExperience = (
     if (!headerButton) return;
     
     // Find the parent bubble element
-    const bubble = headerButton.closest('.persona-reasoning-bubble, .persona-tool-bubble') as HTMLElement;
+    const bubble = headerButton.closest('.persona-reasoning-bubble, .persona-tool-bubble, .persona-approval-bubble') as HTMLElement;
     if (!bubble) return;
     
     // Get message ID from bubble
@@ -1249,6 +1249,12 @@ export const createAgentExperience = (
         toolExpansionState.add(messageId);
       }
       updateToolBubbleUI(messageId, bubble, config);
+    } else if (bubbleType === 'approval') {
+      const approvalConfig = config.approval !== false ? config.approval : undefined;
+      const defaultExpanded = (approvalConfig?.detailsDisplay ?? 'collapsed') === 'expanded';
+      const expanded = approvalDetailsExpansionState.get(messageId) ?? defaultExpanded;
+      approvalDetailsExpansionState.set(messageId, !expanded);
+      updateApprovalDetailsUI(messageId, bubble, config);
     }
     // Invalidate cached wrapper so next render rebuilds with current expansion state
     messageCache.delete(messageId);

@@ -2,6 +2,86 @@ import { createElement } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { formatUnknownValue } from "../utils/formatting";
 import { renderLucideIcon } from "../utils/icons";
+import { WEBMCP_TOOL_PREFIX } from "../webmcp-bridge";
+
+/**
+ * Per-message expanded/collapsed state for the technical-details section.
+ * Absent means "use the config default" (`approval.detailsDisplay`). Lives at
+ * module scope so the choice survives idiomorph re-renders, mirroring
+ * `toolExpansionState` in tool-bubble.ts.
+ */
+export const approvalDetailsExpansionState = new Map<string, boolean>();
+
+/**
+ * Turn a wire tool name into a user-facing label: strips the `webmcp:`
+ * prefix and splits snake_case / kebab-case / camelCase into a sentence
+ * (`add_to_cart` → "Add to cart"). Falls back to the input when nothing
+ * word-like remains.
+ */
+export const humanizeToolName = (toolName: string): string => {
+  const bare = toolName.startsWith(WEBMCP_TOOL_PREFIX)
+    ? toolName.slice(WEBMCP_TOOL_PREFIX.length)
+    : toolName;
+  const words = bare
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[_\-\s.]+/)
+    .filter(Boolean);
+  if (words.length === 0) return toolName;
+  const sentence = words.join(" ").toLowerCase();
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+};
+
+const resolveApprovalConfig = (config?: AgentWidgetConfig) =>
+  config?.approval !== false ? config?.approval : undefined;
+
+const isDetailsExpanded = (
+  messageId: string,
+  config?: AgentWidgetConfig
+): boolean => {
+  const detailsMode = resolveApprovalConfig(config)?.detailsDisplay ?? "collapsed";
+  return approvalDetailsExpansionState.get(messageId) ?? detailsMode === "expanded";
+};
+
+const applyDetailsToggleState = (
+  toggle: HTMLElement,
+  expanded: boolean,
+  config?: AgentWidgetConfig
+): void => {
+  const approvalConfig = resolveApprovalConfig(config);
+  toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+  const label = toggle.querySelector("[data-approval-details-label]") as HTMLElement | null;
+  if (label) {
+    label.textContent = expanded
+      ? (approvalConfig?.hideDetailsLabel ?? "Hide details")
+      : (approvalConfig?.showDetailsLabel ?? "Show details");
+  }
+  const chevronHolder = toggle.querySelector("[data-approval-details-chevron]") as HTMLElement | null;
+  if (chevronHolder) {
+    chevronHolder.innerHTML = "";
+    const chevron = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 14, "currentColor", 2);
+    if (chevron) {
+      chevronHolder.appendChild(chevron);
+    }
+  }
+};
+
+/**
+ * Sync the technical-details section (toggle label/chevron + visibility) with
+ * `approvalDetailsExpansionState`. Called from the ui.ts expansion event
+ * delegation after a toggle click.
+ */
+export const updateApprovalDetailsUI = (
+  messageId: string,
+  bubble: HTMLElement,
+  config?: AgentWidgetConfig
+): void => {
+  const toggle = bubble.querySelector('button[data-bubble-type="approval"]') as HTMLElement | null;
+  const details = bubble.querySelector("[data-approval-details]") as HTMLElement | null;
+  if (!toggle || !details) return;
+  const expanded = isDetailsExpanded(messageId, config);
+  applyDetailsToggleState(toggle, expanded, config);
+  details.style.display = expanded ? "" : "none";
+};
 
 /**
  * Update an existing approval bubble's UI after status changes.
@@ -160,30 +240,87 @@ export const createApprovalBubble = (
 
   content.appendChild(titleRow);
 
-  // Description
-  const description = createElement("p", "persona-text-sm persona-mt-0.5 persona-text-persona-muted");
-  if (approvalConfig?.descriptionColor) {
-    description.style.color = approvalConfig.descriptionColor;
-  }
-  description.textContent = approval.description;
-  content.appendChild(description);
+  // User-facing summary line. The wire `description` is the tool's
+  // agent-facing description (prompt prose, usage rules), so it is not shown
+  // here — it lives in the collapsible details section below.
+  const summaryFromConfig = approvalConfig?.formatDescription?.({
+    toolName: approval.toolName,
+    toolType: approval.toolType,
+    description: approval.description,
+    parameters: approval.parameters,
+  });
+  const summaryFallsBackToDescription = !approval.toolName;
+  const summaryText =
+    summaryFromConfig ||
+    (summaryFallsBackToDescription
+      ? approval.description
+      : `The assistant wants to use “${humanizeToolName(approval.toolName)}”.`);
 
-  // Parameters block
-  if (approval.parameters) {
-    const paramsPre = createElement(
-      "pre",
-      "persona-mt-2 persona-text-xs persona-p-2 persona-rounded persona-overflow-x-auto persona-max-h-32 persona-bg-persona-container persona-text-persona-primary"
-    );
-    if (approvalConfig?.parameterBackgroundColor) {
-      paramsPre.style.backgroundColor = approvalConfig.parameterBackgroundColor;
+  const summary = createElement("p", "persona-text-sm persona-mt-0.5 persona-text-persona-muted");
+  summary.setAttribute("data-approval-summary", "true");
+  if (approvalConfig?.descriptionColor) {
+    summary.style.color = approvalConfig.descriptionColor;
+  }
+  summary.textContent = summaryText;
+  content.appendChild(summary);
+
+  // Technical details: agent-facing description + raw parameters JSON,
+  // collapsed behind a toggle by default (`approval.detailsDisplay`).
+  const detailsMode = approvalConfig?.detailsDisplay ?? "collapsed";
+  const showDescriptionInDetails = Boolean(approval.description) && !summaryFallsBackToDescription;
+  const hasDetails = showDescriptionInDetails || Boolean(approval.parameters);
+  if (detailsMode !== "hidden" && hasDetails) {
+    const expanded = isDetailsExpanded(message.id, config);
+
+    const toggle = createElement(
+      "button",
+      "persona-inline-flex persona-items-center persona-gap-1 persona-mt-1 persona-p-0 persona-border-none persona-bg-transparent persona-text-xs persona-font-medium persona-cursor-pointer persona-text-persona-muted"
+    ) as HTMLButtonElement;
+    toggle.type = "button";
+    toggle.setAttribute("data-expand-header", "true");
+    toggle.setAttribute("data-bubble-type", "approval");
+    if (approvalConfig?.descriptionColor) {
+      toggle.style.color = approvalConfig.descriptionColor;
     }
-    if (approvalConfig?.parameterTextColor) {
-      paramsPre.style.color = approvalConfig.parameterTextColor;
+    const toggleLabel = createElement("span");
+    toggleLabel.setAttribute("data-approval-details-label", "true");
+    const chevronHolder = createElement("span", "persona-inline-flex persona-items-center");
+    chevronHolder.setAttribute("data-approval-details-chevron", "true");
+    toggle.append(toggleLabel, chevronHolder);
+    applyDetailsToggleState(toggle, expanded, config);
+    content.appendChild(toggle);
+
+    const details = createElement("div");
+    details.setAttribute("data-approval-details", "true");
+    details.style.display = expanded ? "" : "none";
+
+    if (showDescriptionInDetails) {
+      const description = createElement("p", "persona-text-sm persona-mt-1 persona-text-persona-muted");
+      if (approvalConfig?.descriptionColor) {
+        description.style.color = approvalConfig.descriptionColor;
+      }
+      description.textContent = approval.description;
+      details.appendChild(description);
     }
-    paramsPre.style.fontSize = "0.75rem";
-    paramsPre.style.lineHeight = "1rem";
-    paramsPre.textContent = formatUnknownValue(approval.parameters);
-    content.appendChild(paramsPre);
+
+    if (approval.parameters) {
+      const paramsPre = createElement(
+        "pre",
+        "persona-mt-2 persona-text-xs persona-p-2 persona-rounded persona-overflow-x-auto persona-max-h-32 persona-bg-persona-container persona-text-persona-primary"
+      );
+      if (approvalConfig?.parameterBackgroundColor) {
+        paramsPre.style.backgroundColor = approvalConfig.parameterBackgroundColor;
+      }
+      if (approvalConfig?.parameterTextColor) {
+        paramsPre.style.color = approvalConfig.parameterTextColor;
+      }
+      paramsPre.style.fontSize = "0.75rem";
+      paramsPre.style.lineHeight = "1rem";
+      paramsPre.textContent = formatUnknownValue(approval.parameters);
+      details.appendChild(paramsPre);
+    }
+
+    content.appendChild(details);
   }
 
   // Action buttons (only shown when pending)
