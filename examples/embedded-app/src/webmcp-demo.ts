@@ -61,6 +61,28 @@ const esc = (value: unknown): string =>
 
 const money = (n: number): string => `$${n.toFixed(2)}`;
 
+const DEMO_TOOL_LATENCY_MS = {
+  search_products: [450, 700],
+  view_product: [325, 550],
+  add_to_cart: [550, 900],
+  remove_from_cart: [400, 650],
+  apply_promo: [375, 600],
+} as const;
+
+type DemoToolName = keyof typeof DEMO_TOOL_LATENCY_MS;
+
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => window.setTimeout(resolve, ms));
+
+const simulateToolLatency = async (toolName: DemoToolName): Promise<number> => {
+  const [min, max] = DEMO_TOOL_LATENCY_MS[toolName];
+  const delay = Math.round(min + Math.random() * (max - min));
+  await wait(delay);
+  return delay;
+};
+
+const formatLatency = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
+
 // ===========================================================================
 // 2. Wire log — make the round-trip legible.
 //
@@ -377,14 +399,15 @@ if (!modelContext) {
         required: ["query"],
       },
       annotations: { readOnlyHint: true },
-      execute(input): unknown {
+      async execute(input): Promise<unknown> {
+        const latency = await simulateToolLatency("search_products");
         const { query } = input as { query: string };
         const hits = searchCatalog(query ?? "");
         highlightHits(hits.map((p) => p.sku));
         logWire(
           "exec",
           "search_products",
-          `query <b>${esc(query)}</b> → ${hits.length} hit${hits.length === 1 ? "" : "s"}`,
+          `query <b>${esc(query)}</b> → ${hits.length} hit${hits.length === 1 ? "" : "s"} <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
         );
         return {
           query,
@@ -416,16 +439,25 @@ if (!modelContext) {
         required: ["sku"],
       },
       annotations: { readOnlyHint: true },
-      execute(input): unknown {
+      async execute(input): Promise<unknown> {
+        const latency = await simulateToolLatency("view_product");
         const { sku } = input as { sku: string };
         const product = findBySku(sku);
         if (!product) {
-          logWire("exec", "view_product", `<b>${esc(sku)}</b> → not found`);
+          logWire(
+            "exec",
+            "view_product",
+            `<b>${esc(sku)}</b> → not found <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
+          );
           return { found: false, error: `No product with SKU "${sku}".` };
         }
         highlightHits([product.sku]);
         flashCard(product.sku);
-        logWire("exec", "view_product", `<b>${esc(product.sku)}</b> — ${esc(product.title)}`);
+        logWire(
+          "exec",
+          "view_product",
+          `<b>${esc(product.sku)}</b> — ${esc(product.title)} <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
+        );
         return {
           found: true,
           sku: product.sku,
@@ -453,18 +485,27 @@ if (!modelContext) {
         required: ["sku"],
       },
       annotations: { readOnlyHint: false },
-      execute(input): unknown {
+      async execute(input): Promise<unknown> {
+        const latency = await simulateToolLatency("add_to_cart");
         const { sku, quantity = 1 } = input as { sku: string; quantity?: number };
         const product = findBySku(sku);
         if (!product) {
-          logWire("exec", "add_to_cart", `<b>${esc(sku)}</b> → not found`);
+          logWire(
+            "exec",
+            "add_to_cart",
+            `<b>${esc(sku)}</b> → not found <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
+          );
           return {
             added: false,
             error: `No product with SKU "${sku}". Call search_products first to get valid SKUs.`,
           };
         }
         addToCart(product, quantity);
-        logWire("exec", "add_to_cart", `<b>${esc(product.sku)}</b> ×${esc(quantity)} → ${esc(product.title)}`);
+        logWire(
+          "exec",
+          "add_to_cart",
+          `<b>${esc(product.sku)}</b> ×${esc(quantity)} → ${esc(product.title)} <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
+        );
         return {
           added: true,
           sku: product.sku,
@@ -490,14 +531,19 @@ if (!modelContext) {
         required: ["sku"],
       },
       annotations: { readOnlyHint: false },
-      execute(input): unknown {
+      async execute(input): Promise<unknown> {
+        const latency = await simulateToolLatency("remove_from_cart");
         const { sku, quantity } = input as { sku: string; quantity?: number };
         // Resolve the SKU the same way add_to_cart/view_product do (trimmed,
         // case-insensitive) — the cart is keyed by the canonical product.sku, so
         // a raw `cart.get(sku)` would miss on different casing/spacing.
         const product = findBySku(sku);
         if (!product) {
-          logWire("exec", "remove_from_cart", `<b>${esc(sku)}</b> → not found`);
+          logWire(
+            "exec",
+            "remove_from_cart",
+            `<b>${esc(sku)}</b> → not found <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
+          );
           return {
             removed: false,
             error: `No product with SKU "${sku}". Call search_products first to get valid SKUs.`,
@@ -506,7 +552,11 @@ if (!modelContext) {
         }
         const line = cart.get(product.sku);
         if (!line) {
-          logWire("exec", "remove_from_cart", `<b>${esc(product.sku)}</b> → not in cart`);
+          logWire(
+            "exec",
+            "remove_from_cart",
+            `<b>${esc(product.sku)}</b> → not in cart <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
+          );
           return {
             removed: false,
             error: `"${product.sku}" is not in the cart.`,
@@ -528,7 +578,7 @@ if (!modelContext) {
         logWire(
           "exec",
           "remove_from_cart",
-          `<b>${esc(product.sku)}</b>${partial ? ` ×${esc(quantity)}` : ""} → removed`,
+          `<b>${esc(product.sku)}</b>${partial ? ` ×${esc(quantity)}` : ""} → removed <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
         );
         return { removed: true, sku: product.sku, cart: cartSummary() };
       },
@@ -548,12 +598,17 @@ if (!modelContext) {
         required: ["code"],
       },
       annotations: { readOnlyHint: false },
-      execute(input): unknown {
+      async execute(input): Promise<unknown> {
+        const latency = await simulateToolLatency("apply_promo");
         const { code } = input as { code: string };
         const key = (code ?? "").trim().toUpperCase();
         const match = PROMOS[key];
         if (!match) {
-          logWire("exec", "apply_promo", `<b>${esc(code)}</b> → rejected`);
+          logWire(
+            "exec",
+            "apply_promo",
+            `<b>${esc(code)}</b> → rejected <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
+          );
           return {
             applied: false,
             error: `"${code}" is not a valid promo code. Try TRAIL10, TRAILVIP, or SUMMIT20.`,
@@ -563,7 +618,11 @@ if (!modelContext) {
         promo = { code: key, rate: match.rate, label: match.label };
         renderCart();
         flashCart();
-        logWire("exec", "apply_promo", `<b>${esc(key)}</b> → ${esc(match.label)}`);
+        logWire(
+          "exec",
+          "apply_promo",
+          `<b>${esc(key)}</b> → ${esc(match.label)} <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
+        );
         return { applied: true, code: key, discountRate: match.rate, cart: cartSummary() };
       },
     },

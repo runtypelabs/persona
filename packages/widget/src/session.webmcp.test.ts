@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { AgentWidgetSession } from "./session";
 import type {
@@ -80,6 +80,10 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("posts result to /resume on the happy path", async () => {
     const { session, executeSpy, resumeSpy } = makeSession({
       executeReturn: {
@@ -95,6 +99,33 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
       { "webmcp:search": { content: [{ type: "text", text: "hi" }] } },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it("records the elapsed time of the resolved browser WebMCP promise", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { session } = makeSession({
+      executeImpl: async () => {
+        vi.advanceTimersByTime(1_250);
+        return { content: [{ type: "text", text: "loaded jade" }] };
+      },
+    });
+
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:get_product_by_url"),
+    );
+
+    const stored = (
+      session as unknown as { messages: AgentWidgetMessage[] }
+    ).messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(stored?.agentMetadata?.awaitingLocalTool).toBe(false);
+    expect(stored?.toolCall?.status).toBe("complete");
+    expect(stored?.toolCall?.startedAt).toBe(1_000);
+    expect(stored?.toolCall?.completedAt).toBe(2_250);
+    expect(stored?.toolCall?.durationMs).toBe(1_250);
+    expect(stored?.toolCall?.result).toEqual({
+      content: [{ type: "text", text: "loaded jade" }],
+    });
   });
 
   it("still resumes (with isError) when the bridge is not operational", async () => {
@@ -152,11 +183,41 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
 
     const msg = awaitingMessage("tool-1", "webmcp:search");
     await session.resolveWebMcpToolCall(msg);
+    const afterFailedResume = (
+      session as unknown as { messages: AgentWidgetMessage[] }
+    ).messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(afterFailedResume?.toolCall?.status).toBe("running");
+    expect(afterFailedResume?.toolCall?.result).toBeUndefined();
+    expect(afterFailedResume?.toolCall?.durationMs).toBeUndefined();
+
     await session.resolveWebMcpToolCall(msg); // retry — must be allowed
     await session.resolveWebMcpToolCall(msg); // post-success — must be blocked
 
     expect(executeSpy).toHaveBeenCalledTimes(2);
     expect(resumeSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("marks the bubble complete with an error when browser execution throws before /resume", async () => {
+    const { session, resumeSpy } = makeSession({
+      executeImpl: async () => {
+        throw new Error("page tool exploded");
+      },
+    });
+
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:search"),
+    );
+
+    const stored = (
+      session as unknown as { messages: AgentWidgetMessage[] }
+    ).messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(resumeSpy).not.toHaveBeenCalled();
+    expect(stored?.toolCall?.status).toBe("complete");
+    expect(stored?.toolCall?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(stored?.toolCall?.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "page tool exploded" }],
+    });
   });
 
   it("threads an AbortSignal into resumeFlow", async () => {
@@ -189,6 +250,14 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     release();
     await inflight;
     expect(resumeSpy).not.toHaveBeenCalled();
+    const stored = (
+      session as unknown as { messages: AgentWidgetMessage[] }
+    ).messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(stored?.toolCall?.status).toBe("complete");
+    expect(stored?.toolCall?.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "Aborted by cancel()" }],
+    });
   });
 
   it("does NOT abort the shared session abortController", async () => {
@@ -282,11 +351,12 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(executeSpy).not.toHaveBeenCalled();
   });
 
-  it("a stale step_await re-emit does not resurrect awaitingLocalTool once resolved", () => {
+  it("a stale step_await re-emit does not resurrect awaitingLocalTool or reset completed tool state once resolved", () => {
     // BugBot: a duplicate step_await (awaitingLocalTool:true) for an
     // already-resolved webmcp tool must not flip the message back to awaiting
-    // and show a stuck local-tool wait. upsertMessage clears it when the
-    // tool's `${executionId}:${toolCallId}` key is inflight/resolved.
+    // or running and show a stuck local-tool wait / lose the measured duration.
+    // upsertMessage clears it when the tool's `${executionId}:${toolCallId}`
+    // key is inflight/resolved.
     const session = makeSession().session;
     const s = session as unknown as {
       webMcpResolvedKeys: Set<string>;
@@ -298,11 +368,41 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     s.upsertMessage({
       ...awaitingMessage("tool-1", "webmcp:search"),
       agentMetadata: { executionId: "exec-1", awaitingLocalTool: false },
+      streaming: false,
+      toolCall: {
+        id: "tool-1",
+        name: "webmcp:search",
+        status: "complete",
+        args: { q: "shoes" },
+        result: { content: [{ type: "text", text: "ok" }] },
+        startedAt: 1_000,
+        completedAt: 2_200,
+        durationMs: 1_200,
+      },
     });
-    // Stale re-emit flips awaiting back to true on the wire.
-    s.upsertMessage(awaitingMessage("tool-1", "webmcp:search"));
+    // Stale re-emit flips awaiting back to true and carries the running state
+    // emitted by client.ts for WebMCP step_await events.
+    s.upsertMessage({
+      ...awaitingMessage("tool-1", "webmcp:search"),
+      streaming: false,
+      toolCall: {
+        id: "tool-1",
+        name: "webmcp:search",
+        status: "running",
+        args: { q: "shoes" },
+        startedAt: 3_000,
+      },
+    });
     const stored = s.messages.find((m) => m.toolCall?.id === "tool-1");
     expect(stored?.agentMetadata?.awaitingLocalTool).toBe(false);
+    expect(stored?.streaming).toBe(false);
+    expect(stored?.toolCall?.status).toBe("complete");
+    expect(stored?.toolCall?.result).toEqual({
+      content: [{ type: "text", text: "ok" }],
+    });
+    expect(stored?.toolCall?.startedAt).toBe(1_000);
+    expect(stored?.toolCall?.completedAt).toBe(2_200);
+    expect(stored?.toolCall?.durationMs).toBe(1_200);
   });
 
   it("an error event does not clear streaming while a webmcp resolve is in flight", () => {
@@ -576,6 +676,10 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   // A `step_await(local_tool_required)` message as client.ts emits it for a
   // PARALLEL local-tool call: the per-call `toolCallId` is both the toolCall.id
   // AND `agentMetadata.webMcpToolCallId`. Two of these for one executionId share
@@ -703,6 +807,81 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
       unknown
     >;
     expect(Object.keys(toolOutputs).sort()).toEqual(["toolu_A", "toolu_B"]);
+  });
+
+  it("records elapsed time for each resolved tool in a batched WebMCP resume", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+
+    let releaseA: (r: WebMcpToolResult) => void = () => undefined;
+    let releaseB: (r: WebMcpToolResult) => void = () => undefined;
+    const pA = new Promise<WebMcpToolResult>((r) => (releaseA = r));
+    const pB = new Promise<WebMcpToolResult>((r) => (releaseB = r));
+    const { session, resumeSpy } = makeSession();
+    const client = (session as unknown as { client: Record<string, unknown> })
+      .client;
+    (client.executeWebMcpToolCall as ReturnType<typeof vi.fn>).mockImplementation(
+      (_name: string, args: { sku: string }) =>
+        args.sku === "SHOE-001" ? pA : pB,
+    );
+
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    endStream(session);
+    await flushMicrotasks();
+
+    vi.setSystemTime(1_800);
+    releaseA({ content: [{ type: "text", text: "a" }] });
+    await flushMicrotasks();
+
+    let messages = (session as unknown as { messages: AgentWidgetMessage[] })
+      .messages;
+    const toolA = messages.find((m) => m.toolCall?.id === "toolu_A");
+    const toolBWhileRunning = messages.find((m) => m.toolCall?.id === "toolu_B");
+    expect(toolA?.toolCall?.status).toBe("running");
+    expect(toolA?.toolCall?.durationMs).toBeUndefined();
+    expect(toolBWhileRunning?.toolCall?.status).toBe("running");
+    expect(resumeSpy).not.toHaveBeenCalled();
+
+    vi.setSystemTime(2_600);
+    releaseB({ content: [{ type: "text", text: "b" }] });
+    await flushMicrotasks();
+
+    messages = (session as unknown as { messages: AgentWidgetMessage[] })
+      .messages;
+    const completedToolA = messages.find((m) => m.toolCall?.id === "toolu_A");
+    const toolB = messages.find((m) => m.toolCall?.id === "toolu_B");
+    expect(completedToolA?.toolCall?.status).toBe("complete");
+    expect(completedToolA?.toolCall?.durationMs).toBe(800);
+    expect(toolB?.toolCall?.status).toBe("complete");
+    expect(toolB?.toolCall?.durationMs).toBe(1_600);
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mark batched WebMCP bubbles complete when the shared /resume fails", async () => {
+    const { session, client, resumeSpy } = makeSession();
+    (client.resumeFlow as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      async () => {
+        throw new Error("resume failed");
+      },
+    );
+
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    endStream(session);
+    await flushMicrotasks();
+
+    const messages = (session as unknown as { messages: AgentWidgetMessage[] })
+      .messages;
+    const toolA = messages.find((m) => m.toolCall?.id === "toolu_A");
+    const toolB = messages.find((m) => m.toolCall?.id === "toolu_B");
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    expect(toolA?.toolCall?.status).toBe("running");
+    expect(toolA?.toolCall?.result).toBeUndefined();
+    expect(toolA?.toolCall?.durationMs).toBeUndefined();
+    expect(toolB?.toolCall?.status).toBe("running");
+    expect(toolB?.toolCall?.result).toBeUndefined();
+    expect(toolB?.toolCall?.durationMs).toBeUndefined();
   });
 
   it("dedupes a duplicate parallel await within the same batch", async () => {

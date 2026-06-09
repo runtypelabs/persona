@@ -3056,6 +3056,46 @@ describe('AgentWidgetClient — step_await parsing', () => {
     expect(toolMsg!.agentMetadata?.awaitingLocalTool).toBe(true);
   });
 
+  it('emits a running tool message for WebMCP local_tool_required until the browser tool resolves', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: buildStepAwaitStream({
+        awaitReason: 'local_tool_required',
+        id: 'step-1',
+        name: 'Test Step',
+        stepType: 'prompt',
+        index: 0,
+        toolCallId: 'tc_webmcp_1',
+        toolName: 'webmcp:get_product_by_url',
+        executionId: 'exec_abc',
+        startedAt: 1234,
+        parameters: { path: '/jade/' },
+      }),
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const toolMsg = events
+      .filter((e) => e.type === 'message')
+      .map((e) => (e as { message: AgentWidgetMessage }).message)
+      .find((m) => m.variant === 'tool' && m.toolCall?.name === 'webmcp:get_product_by_url');
+
+    expect(toolMsg).toBeDefined();
+    expect(toolMsg!.toolCall!.id).toBe('tc_webmcp_1');
+    expect(toolMsg!.toolCall!.status).toBe('running');
+    expect(toolMsg!.toolCall!.startedAt).toBe(1234);
+    expect(toolMsg!.toolCall!.completedAt).toBeUndefined();
+    expect(toolMsg!.toolCall!.durationMs).toBeUndefined();
+    expect(toolMsg!.toolCall!.args).toEqual({ path: '/jade/' });
+    expect(toolMsg!.agentMetadata?.executionId).toBe('exec_abc');
+    expect(toolMsg!.agentMetadata?.awaitingLocalTool).toBe(true);
+  });
+
   it('ignores step_await events whose awaitReason is not local_tool_required', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

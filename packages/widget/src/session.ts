@@ -76,6 +76,20 @@ function buildDispatchErrorContent(
   return err.message ? `${base}\n\n_Details: ${err.message}_` : base;
 }
 
+const buildWebMcpErrorResult = (message: string) => ({
+  isError: true,
+  content: [{ type: "text" as const, text: message }],
+});
+
+const getWebMcpErrorMessage = (
+  error: unknown,
+  fallback = "WebMCP tool execution failed.",
+): string => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  return fallback;
+};
+
 export class AgentWidgetSession {
   private client: AgentWidgetClient;
   private messages: AgentWidgetMessage[];
@@ -1595,6 +1609,78 @@ export class AgentWidgetSession {
     }
   }
 
+  private resolveWebMcpToolStartedAt(
+    toolMessage: AgentWidgetMessage,
+  ): number {
+    const stored = this.messages.find((m) => m.id === toolMessage.id);
+    const candidates = [
+      stored?.toolCall?.startedAt,
+      toolMessage.toolCall?.startedAt,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "number" && Number.isFinite(candidate)) {
+        return candidate;
+      }
+    }
+    return Date.now();
+  }
+
+  private markWebMcpToolRunning(
+    toolMessage: AgentWidgetMessage,
+  ): number {
+    const startedAt = this.resolveWebMcpToolStartedAt(toolMessage);
+    this.upsertMessage({
+      ...toolMessage,
+      streaming: true,
+      agentMetadata: {
+        ...toolMessage.agentMetadata,
+        awaitingLocalTool: false,
+      },
+      toolCall: toolMessage.toolCall
+        ? {
+            ...toolMessage.toolCall,
+            status: "running",
+            startedAt,
+            completedAt: undefined,
+            duration: undefined,
+            durationMs: undefined,
+          }
+        : toolMessage.toolCall,
+    });
+    return startedAt;
+  }
+
+  private markWebMcpToolComplete(
+    toolMessage: AgentWidgetMessage,
+    result: unknown,
+    startedAt: number,
+    completedAt = Date.now(),
+  ): void {
+    // A teardown such as clearMessages()/hydrateMessages()/new send can remove
+    // the bubble while an aborted WebMCP promise is settling. Never resurrect a
+    // cleared message just to mark the old resolve complete.
+    if (!this.messages.some((message) => message.id === toolMessage.id)) return;
+    this.upsertMessage({
+      ...toolMessage,
+      streaming: false,
+      agentMetadata: {
+        ...toolMessage.agentMetadata,
+        awaitingLocalTool: false,
+      },
+      toolCall: toolMessage.toolCall
+        ? {
+            ...toolMessage.toolCall,
+            status: "complete",
+            result,
+            startedAt,
+            completedAt,
+            duration: undefined,
+            durationMs: Math.max(0, completedAt - startedAt),
+          }
+        : toolMessage.toolCall,
+    });
+  }
+
   /**
    * Resolve TWO OR MORE parallel local-tool awaits sharing one paused
    * executionId with a SINGLE `/resume` (core#3878). Each call is executed
@@ -1613,6 +1699,14 @@ export class AgentWidgetSession {
     executionId: string,
     snapshots: AgentWidgetMessage[],
   ): Promise<void> {
+    type ExecutedWebMcpTool = {
+      dedupeKey: string;
+      resumeKey: string;
+      output: unknown;
+      toolMessage: AgentWidgetMessage;
+      startedAt: number;
+      completedAt: number;
+    };
     const claimedKeys: string[] = [];
     const controllers: AbortController[] = [];
     // Dedicated controller for the shared resume fetch so cancel() can abort it
@@ -1640,14 +1734,10 @@ export class AgentWidgetSession {
         this.webMcpInflightKeys.add(dedupeKey);
         claimedKeys.push(dedupeKey);
 
-        // Clear the awaiting flag so the local-tool UI doesn't linger.
-        this.upsertMessage({
-          ...toolMessage,
-          agentMetadata: {
-            ...toolMessage.agentMetadata,
-            awaitingLocalTool: false,
-          },
-        });
+        // Clear the awaiting flag and keep the tool bubble running while the
+        // browser-side WebMCP promise is in flight. The initial `step_await`
+        // only means the server paused for a local tool; it is not completion.
+        const startedAt = this.markWebMcpToolRunning(toolMessage);
 
         const controller = new AbortController();
         this.webMcpResolveControllers.add(controller);
@@ -1686,24 +1776,43 @@ export class AgentWidgetSession {
                 error instanceof Error ? error : new Error(String(error)),
               );
             }
+            this.markWebMcpToolComplete(
+              toolMessage,
+              buildWebMcpErrorResult(
+                isAbortError
+                  ? "Aborted by cancel()"
+                  : getWebMcpErrorMessage(error),
+              ),
+              startedAt,
+            );
             // Release the dedupe claim so a re-emit can retry this call.
             this.webMcpInflightKeys.delete(dedupeKey);
             return null;
           }
         }
         if (controller.signal.aborted) {
+          this.markWebMcpToolComplete(
+            toolMessage,
+            buildWebMcpErrorResult("Aborted by cancel()"),
+            startedAt,
+          );
           this.webMcpInflightKeys.delete(dedupeKey);
           return null;
         }
-        return { dedupeKey, resumeKey, output };
+        return {
+          dedupeKey,
+          resumeKey,
+          output,
+          toolMessage,
+          startedAt,
+          completedAt: Date.now(),
+        };
       }),
     );
 
+    let ready: ExecutedWebMcpTool[] = [];
     try {
-      const ready = executed.filter(
-        (r): r is { dedupeKey: string; resumeKey: string; output: unknown } =>
-          r !== null,
-      );
+      ready = executed.filter((r): r is ExecutedWebMcpTool => r !== null);
       // Everything deduped/aborted/failed — nothing to post.
       if (ready.length === 0) return;
 
@@ -1723,9 +1832,17 @@ export class AgentWidgetSession {
         throw new Error(errorData?.error ?? `Resume failed: ${response.status}`);
       }
       // Server accepted the batch — mark every included call resolved so stale
-      // re-emits don't re-execute the page tool.
+      // re-emits don't re-execute the page tool, then complete each bubble.
+      // Do this only after /resume HTTP success; if /resume fails, the server
+      // may still be paused and the retry path must not show a final result.
       for (const r of ready) {
         this.webMcpResolvedKeys.add(r.dedupeKey);
+        this.markWebMcpToolComplete(
+          r.toolMessage,
+          r.output,
+          r.startedAt,
+          r.completedAt,
+        );
       }
       if (response.body) {
         await this.connectStream(response.body, { allowReentry: true });
@@ -1740,6 +1857,14 @@ export class AgentWidgetSession {
         this.callbacks.onError?.(
           error instanceof Error ? error : new Error(String(error)),
         );
+      } else {
+        for (const r of ready) {
+          this.markWebMcpToolComplete(
+            r.toolMessage,
+            buildWebMcpErrorResult("Aborted by cancel()"),
+            r.startedAt,
+          );
+        }
       }
     } finally {
       for (const key of claimedKeys) {
@@ -1842,14 +1967,10 @@ export class AgentWidgetSession {
 
     // Mark resolved on the message so the UI's local-tool sheet (if any
     // generic one ever lands) does not show — this is a fully-automatic
-    // tool from the user's perspective, modulo the confirm bubble.
-    this.upsertMessage({
-      ...toolMessage,
-      agentMetadata: {
-        ...toolMessage.agentMetadata,
-        awaitingLocalTool: false,
-      },
-    });
+    // tool from the user's perspective, modulo the confirm bubble. Keep the
+    // tool bubble running until the browser-side promise resolves; the
+    // initial step_await was only the server pause, not tool completion.
+    const startedAt = this.markWebMcpToolRunning(toolMessage);
 
     // Per-resolve AbortController, NOT the shared `this.abortController`.
     // A single turn can produce multiple `webmcp:*` step_await messages —
@@ -1877,6 +1998,8 @@ export class AgentWidgetSession {
       signal,
     );
 
+    let phase: "execute" | "resume" = "execute";
+    let completedAt = startedAt;
     try {
       let resumeOutput: unknown;
       if (!execPromise) {
@@ -1891,6 +2014,7 @@ export class AgentWidgetSession {
       } else {
         resumeOutput = await execPromise;
       }
+      completedAt = Date.now();
       // If cancel() fired during execute, the bridge returned an aborted
       // result — don't post it. The server's SSE has been torn down; a
       // /resume now would just produce an orphan dispatch on the server.
@@ -1898,6 +2022,11 @@ export class AgentWidgetSession {
       // the resolve set) so we don't clobber a sibling resolve or a live
       // dispatch's controller here.
       if (signal.aborted) {
+        this.markWebMcpToolComplete(
+          toolMessage,
+          buildWebMcpErrorResult("Aborted by cancel()"),
+          startedAt,
+        );
         return;
       }
       // Mark resolved as soon as the HTTP /resume returns OK — not after the
@@ -1913,9 +2042,16 @@ export class AgentWidgetSession {
       // call (only same-tool PARALLEL calls could collide on the name).
       const resumeKey =
         toolMessage.agentMetadata?.webMcpToolCallId ?? wireToolName;
+      phase = "resume";
       await this.resumeWithToolOutput(executionId, resumeKey, resumeOutput, {
         onHttpOk: () => {
           this.webMcpResolvedKeys.add(dedupeKey);
+          this.markWebMcpToolComplete(
+            toolMessage,
+            resumeOutput,
+            startedAt,
+            completedAt,
+          );
         },
         signal,
       });
@@ -1928,6 +2064,17 @@ export class AgentWidgetSession {
       // Streaming/teardown handled by the shared `finally` (gated on the
       // resolve set) — do NOT null the shared `this.abortController` here; it
       // may belong to a live dispatch or sibling resolve, not to us.
+      if (phase === "execute" || isAbortError || signal.aborted) {
+        this.markWebMcpToolComplete(
+          toolMessage,
+          buildWebMcpErrorResult(
+            isAbortError || signal.aborted
+              ? "Aborted by cancel()"
+              : getWebMcpErrorMessage(error),
+          ),
+          startedAt,
+        );
+      }
       if (!isAbortError) {
         // The bridge normalizes tool errors into result objects, so reaching
         // here means a network failure during `/resume` itself, OR a stream
@@ -2526,6 +2673,17 @@ export class AgentWidgetSession {
             ...(merged.agentMetadata ?? {}),
             awaitingLocalTool: false,
           };
+          // If the tool already completed, a stale duplicate step_await should
+          // not overwrite the measured result/duration and flip the bubble back
+          // to "running". Keep the completed state while still preserving the
+          // metadata correction above.
+          if (
+            this.webMcpResolvedKeys.has(reKey) &&
+            existing.toolCall?.status === "complete"
+          ) {
+            merged.toolCall = existing.toolCall;
+            merged.streaming = false;
+          }
         }
       }
       return merged;
