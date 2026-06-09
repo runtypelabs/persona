@@ -1595,6 +1595,74 @@ export class AgentWidgetSession {
     }
   }
 
+  private resolveWebMcpToolStartedAt(
+    toolMessage: AgentWidgetMessage,
+  ): number {
+    const stored = this.messages.find((m) => m.id === toolMessage.id);
+    const candidates = [
+      stored?.toolCall?.startedAt,
+      toolMessage.toolCall?.startedAt,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "number" && Number.isFinite(candidate)) {
+        return candidate;
+      }
+    }
+    return Date.now();
+  }
+
+  private markWebMcpToolRunning(
+    toolMessage: AgentWidgetMessage,
+  ): number {
+    const startedAt = this.resolveWebMcpToolStartedAt(toolMessage);
+    this.upsertMessage({
+      ...toolMessage,
+      streaming: true,
+      agentMetadata: {
+        ...toolMessage.agentMetadata,
+        awaitingLocalTool: false,
+      },
+      toolCall: toolMessage.toolCall
+        ? {
+            ...toolMessage.toolCall,
+            status: "running",
+            startedAt,
+            completedAt: undefined,
+            duration: undefined,
+            durationMs: undefined,
+          }
+        : toolMessage.toolCall,
+    });
+    return startedAt;
+  }
+
+  private markWebMcpToolComplete(
+    toolMessage: AgentWidgetMessage,
+    result: unknown,
+    startedAt: number,
+  ): void {
+    const completedAt = Date.now();
+    this.upsertMessage({
+      ...toolMessage,
+      streaming: false,
+      agentMetadata: {
+        ...toolMessage.agentMetadata,
+        awaitingLocalTool: false,
+      },
+      toolCall: toolMessage.toolCall
+        ? {
+            ...toolMessage.toolCall,
+            status: "complete",
+            result,
+            startedAt,
+            completedAt,
+            duration: undefined,
+            durationMs: Math.max(0, completedAt - startedAt),
+          }
+        : toolMessage.toolCall,
+    });
+  }
+
   /**
    * Resolve TWO OR MORE parallel local-tool awaits sharing one paused
    * executionId with a SINGLE `/resume` (core#3878). Each call is executed
@@ -1640,14 +1708,10 @@ export class AgentWidgetSession {
         this.webMcpInflightKeys.add(dedupeKey);
         claimedKeys.push(dedupeKey);
 
-        // Clear the awaiting flag so the local-tool UI doesn't linger.
-        this.upsertMessage({
-          ...toolMessage,
-          agentMetadata: {
-            ...toolMessage.agentMetadata,
-            awaitingLocalTool: false,
-          },
-        });
+        // Clear the awaiting flag and keep the tool bubble running while the
+        // browser-side WebMCP promise is in flight. The initial `step_await`
+        // only means the server paused for a local tool; it is not completion.
+        const startedAt = this.markWebMcpToolRunning(toolMessage);
 
         const controller = new AbortController();
         this.webMcpResolveControllers.add(controller);
@@ -1695,6 +1759,7 @@ export class AgentWidgetSession {
           this.webMcpInflightKeys.delete(dedupeKey);
           return null;
         }
+        this.markWebMcpToolComplete(toolMessage, output, startedAt);
         return { dedupeKey, resumeKey, output };
       }),
     );
@@ -1842,14 +1907,10 @@ export class AgentWidgetSession {
 
     // Mark resolved on the message so the UI's local-tool sheet (if any
     // generic one ever lands) does not show — this is a fully-automatic
-    // tool from the user's perspective, modulo the confirm bubble.
-    this.upsertMessage({
-      ...toolMessage,
-      agentMetadata: {
-        ...toolMessage.agentMetadata,
-        awaitingLocalTool: false,
-      },
-    });
+    // tool from the user's perspective, modulo the confirm bubble. Keep the
+    // tool bubble running until the browser-side promise resolves; the
+    // initial step_await was only the server pause, not tool completion.
+    const startedAt = this.markWebMcpToolRunning(toolMessage);
 
     // Per-resolve AbortController, NOT the shared `this.abortController`.
     // A single turn can produce multiple `webmcp:*` step_await messages —
@@ -1900,6 +1961,7 @@ export class AgentWidgetSession {
       if (signal.aborted) {
         return;
       }
+      this.markWebMcpToolComplete(toolMessage, resumeOutput, startedAt);
       // Mark resolved as soon as the HTTP /resume returns OK — not after the
       // SSE stream finishes. `connectStream` swallows downstream SSE errors
       // (they surface via onError, not by rethrowing), so awaiting it doesn't

@@ -206,6 +206,7 @@ export type RuntypeAgentSSEEvent = {
   iteration: number;
   reflection?: string;
   seq: number;
+  timestamp?: string;
   type: "agent_reflection";
 } | {
   activatedCapabilities: Array<string>;
@@ -213,6 +214,7 @@ export type RuntypeAgentSSEEvent = {
   iteration: number;
   seq: number;
   skill: string;
+  timestamp?: string;
   toolCallId: string;
   type: "agent_skill_loaded";
 } | ({
@@ -222,6 +224,7 @@ export type RuntypeAgentSSEEvent = {
   proposalId?: string;
   seq: number;
   skill: string;
+  timestamp?: string;
   toolCallId: string;
   type: "agent_skill_proposed";
 }) | ({
@@ -255,6 +258,7 @@ export type RuntypeAgentSSEEvent = {
   iteration?: number;
   recoverable: boolean;
   seq: number;
+  timestamp?: string;
   type: "agent_error";
 } | {
   executionId: string;
@@ -289,6 +293,7 @@ export type RuntypeFlowSSEEvent = {
   failedSteps?: number;
   finalOutput?: string;
   flowId?: string;
+  flowName?: string;
   output?: unknown;
   seq?: number;
   source?: string;
@@ -340,6 +345,7 @@ export type RuntypeFlowSSEEvent = {
   id?: string;
   index?: number;
   name?: string;
+  outputVariable?: string;
   seq?: number;
   startedAt: string;
   stepId?: string;
@@ -751,6 +757,7 @@ export type RuntypeDispatchSSEEvent = {
   iteration: number;
   reflection?: string;
   seq: number;
+  timestamp?: string;
   type: "agent_reflection";
 } | {
   activatedCapabilities: Array<string>;
@@ -758,6 +765,7 @@ export type RuntypeDispatchSSEEvent = {
   iteration: number;
   seq: number;
   skill: string;
+  timestamp?: string;
   toolCallId: string;
   type: "agent_skill_loaded";
 } | ({
@@ -767,6 +775,7 @@ export type RuntypeDispatchSSEEvent = {
   proposalId?: string;
   seq: number;
   skill: string;
+  timestamp?: string;
   toolCallId: string;
   type: "agent_skill_proposed";
 }) | ({
@@ -800,6 +809,7 @@ export type RuntypeDispatchSSEEvent = {
   iteration?: number;
   recoverable: boolean;
   seq: number;
+  timestamp?: string;
   type: "agent_error";
 } | {
   executionId: string;
@@ -832,6 +842,7 @@ export type RuntypeDispatchSSEEvent = {
   failedSteps?: number;
   finalOutput?: string;
   flowId?: string;
+  flowName?: string;
   output?: unknown;
   seq?: number;
   source?: string;
@@ -883,6 +894,7 @@ export type RuntypeDispatchSSEEvent = {
   id?: string;
   index?: number;
   name?: string;
+  outputVariable?: string;
   seq?: number;
   startedAt: string;
   stepId?: string;

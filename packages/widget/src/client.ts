@@ -23,7 +23,7 @@ import {
   ContentPart,
   WebMcpConfirmHandler
 } from "./types";
-import { WebMcpBridge, computeClientToolsFingerprint } from "./webmcp-bridge";
+import { WebMcpBridge, computeClientToolsFingerprint, isWebMcpToolName } from "./webmcp-bridge";
 import {
   extractTextFromJson,
   createPlainTextParser,
@@ -2026,14 +2026,28 @@ export class AgentWidgetClient {
           const toolId =
             toolCallId ?? (payload.toolId as string) ?? `local-${nextSequence()}`;
           const toolMessage = ensureToolMessage(toolId);
+          const toolName = payload.toolName as string;
+          const webMcpTool = isWebMcpToolName(toolName);
           const tool = toolMessage.toolCall ?? { id: toolId, status: "pending" as const };
-          tool.name = payload.toolName as string;
+          tool.name = toolName;
           tool.args = payload.parameters;
-          tool.status = "complete";
+          // WebMCP tools are executed asynchronously by the browser AFTER this
+          // `step_await` arrives. Keep them running until session.ts resolves
+          // the page tool and records its actual elapsed time. Other local
+          // tools (for example ask_user_question) keep the existing complete
+          // state because they are waiting for a user interaction, not an
+          // automatic page-tool execution.
+          tool.status = webMcpTool ? "running" : "complete";
           tool.chunks = tool.chunks ?? [];
           tool.startedAt =
             tool.startedAt ?? resolveTimestamp(payload.startedAt ?? payload.timestamp);
-          tool.completedAt = tool.completedAt ?? tool.startedAt;
+          if (webMcpTool) {
+            tool.completedAt = undefined;
+            tool.duration = undefined;
+            tool.durationMs = undefined;
+          } else {
+            tool.completedAt = tool.completedAt ?? tool.startedAt;
+          }
           toolMessage.toolCall = tool;
           toolMessage.streaming = false;
           toolMessage.agentMetadata = {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { AgentWidgetSession } from "./session";
 import type {
@@ -80,6 +80,10 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("posts result to /resume on the happy path", async () => {
     const { session, executeSpy, resumeSpy } = makeSession({
       executeReturn: {
@@ -95,6 +99,33 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
       { "webmcp:search": { content: [{ type: "text", text: "hi" }] } },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it("records the elapsed time of the resolved browser WebMCP promise", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { session } = makeSession({
+      executeImpl: async () => {
+        vi.advanceTimersByTime(1_250);
+        return { content: [{ type: "text", text: "loaded jade" }] };
+      },
+    });
+
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:get_product_by_url"),
+    );
+
+    const stored = (
+      session as unknown as { messages: AgentWidgetMessage[] }
+    ).messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(stored?.agentMetadata?.awaitingLocalTool).toBe(false);
+    expect(stored?.toolCall?.status).toBe("complete");
+    expect(stored?.toolCall?.startedAt).toBe(1_000);
+    expect(stored?.toolCall?.completedAt).toBe(2_250);
+    expect(stored?.toolCall?.durationMs).toBe(1_250);
+    expect(stored?.toolCall?.result).toEqual({
+      content: [{ type: "text", text: "loaded jade" }],
+    });
   });
 
   it("still resumes (with isError) when the bridge is not operational", async () => {
@@ -576,6 +607,10 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   // A `step_await(local_tool_required)` message as client.ts emits it for a
   // PARALLEL local-tool call: the per-call `toolCallId` is both the toolCall.id
   // AND `agentMetadata.webMcpToolCallId`. Two of these for one executionId share
@@ -703,6 +738,52 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
       unknown
     >;
     expect(Object.keys(toolOutputs).sort()).toEqual(["toolu_A", "toolu_B"]);
+  });
+
+  it("records elapsed time for each resolved tool in a batched WebMCP resume", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+
+    let releaseA: (r: WebMcpToolResult) => void = () => undefined;
+    let releaseB: (r: WebMcpToolResult) => void = () => undefined;
+    const pA = new Promise<WebMcpToolResult>((r) => (releaseA = r));
+    const pB = new Promise<WebMcpToolResult>((r) => (releaseB = r));
+    const { session, resumeSpy } = makeSession();
+    const client = (session as unknown as { client: Record<string, unknown> })
+      .client;
+    (client.executeWebMcpToolCall as ReturnType<typeof vi.fn>).mockImplementation(
+      (_name: string, args: { sku: string }) =>
+        args.sku === "SHOE-001" ? pA : pB,
+    );
+
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    endStream(session);
+    await flushMicrotasks();
+
+    vi.setSystemTime(1_800);
+    releaseA({ content: [{ type: "text", text: "a" }] });
+    await flushMicrotasks();
+
+    let messages = (session as unknown as { messages: AgentWidgetMessage[] })
+      .messages;
+    const toolA = messages.find((m) => m.toolCall?.id === "toolu_A");
+    const toolBWhileRunning = messages.find((m) => m.toolCall?.id === "toolu_B");
+    expect(toolA?.toolCall?.status).toBe("complete");
+    expect(toolA?.toolCall?.durationMs).toBe(800);
+    expect(toolBWhileRunning?.toolCall?.status).toBe("running");
+    expect(resumeSpy).not.toHaveBeenCalled();
+
+    vi.setSystemTime(2_600);
+    releaseB({ content: [{ type: "text", text: "b" }] });
+    await flushMicrotasks();
+
+    messages = (session as unknown as { messages: AgentWidgetMessage[] })
+      .messages;
+    const toolB = messages.find((m) => m.toolCall?.id === "toolu_B");
+    expect(toolB?.toolCall?.status).toBe("complete");
+    expect(toolB?.toolCall?.durationMs).toBe(1_600);
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
 
   it("dedupes a duplicate parallel await within the same batch", async () => {
