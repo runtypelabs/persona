@@ -793,6 +793,58 @@ describe('AgentWidgetSession.resolveApproval', () => {
     expect(session.isStreaming()).toBe(false);
     expect(errors.length).toBe(1);
   });
+
+  it('keeps a resolved approval anchored in its original transcript position', async () => {
+    const earlier = new Date('2020-01-01T00:00:00.000Z').toISOString();
+    const later = new Date('2020-01-01T00:05:00.000Z').toISOString();
+    const approval = makeApproval();
+    // The bubble id follows the `approval-<approval.id>` convention used by
+    // resolveApproval's optimistic upsert.
+    const messageId = `approval-${approval.id}`;
+
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://localhost:43111/api/chat/dispatch',
+        // Resolve locally (return void) so no network round-trip is needed.
+        approval: { onDecision: async () => {} },
+        initialMessages: [
+          {
+            id: messageId,
+            role: 'assistant',
+            content: '',
+            createdAt: earlier,
+            variant: 'approval',
+            approval,
+          },
+          {
+            id: 'after-1',
+            role: 'assistant',
+            content: 'A message created after the approval was requested.',
+            createdAt: later,
+          },
+        ],
+      },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+
+    await session.resolveApproval(approval, 'approved');
+
+    const messages = session.getMessages();
+    const approvalMsg = messages.find((m) => m.id === messageId);
+    const approvalIdx = messages.findIndex((m) => m.id === messageId);
+    const afterIdx = messages.findIndex((m) => m.id === 'after-1');
+
+    expect(approvalMsg?.approval?.status).toBe('approved');
+    // createdAt is preserved (not re-stamped to "now"), so the resolved bubble
+    // stays before the message that was created after it.
+    expect(approvalMsg?.createdAt).toBe(earlier);
+    expect(approvalIdx).toBeGreaterThanOrEqual(0);
+    expect(approvalIdx).toBeLessThan(afterIdx);
+  });
 });
 
 describe('AgentWidgetSession - dispatch error fallback', () => {

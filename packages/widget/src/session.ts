@@ -1205,11 +1205,19 @@ export class AgentWidgetSession {
       status: decision,
       resolvedAt: Date.now(),
     };
+    // Anchor the bubble where the agent paused for permission. An approval is a
+    // timeline checkpoint, not a "now" event, so resolving it must preserve the
+    // original message's createdAt/sequence — otherwise sortMessages (which
+    // orders by createdAt first) would re-stamp it to now and float it past any
+    // message created later (e.g. a long-pending approval resolved after more
+    // conversation, or restored/replayed transcripts).
+    const existing = this.messages.find((m) => m.id === approvalMessageId);
     const updatedMessage: AgentWidgetMessage = {
       id: approvalMessageId,
       role: "assistant",
       content: "",
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      ...(existing?.sequence !== undefined ? { sequence: existing.sequence } : {}),
       streaming: false,
       variant: "approval",
       approval: updatedApproval,
