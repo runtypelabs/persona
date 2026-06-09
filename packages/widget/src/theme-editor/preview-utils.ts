@@ -206,7 +206,8 @@ export type PreviewTranscriptEntryPreset =
   | 'reasoning-streaming'
   | 'reasoning-complete'
   | 'tool-running'
-  | 'tool-complete';
+  | 'tool-complete'
+  | 'approval-request';
 
 const PREVIEW_TRANSCRIPT_PRESET_LABELS: Record<PreviewTranscriptEntryPreset, string> = {
   'user-message': 'User message',
@@ -218,6 +219,7 @@ const PREVIEW_TRANSCRIPT_PRESET_LABELS: Record<PreviewTranscriptEntryPreset, str
   'reasoning-complete': 'Reasoning (complete)',
   'tool-running': 'Tool call (running)',
   'tool-complete': 'Tool call (complete)',
+  'approval-request': 'Approval request',
 };
 
 export function getPreviewTranscriptPresetLabel(preset: PreviewTranscriptEntryPreset): string {
@@ -325,6 +327,32 @@ export function createPreviewTranscriptEntry(
           durationMs: 1200,
         },
       };
+    case 'approval-request': {
+      // Use the `approval-<approvalId>` id convention so the optimistic status
+      // flip in `session.resolveApproval` updates this bubble in place when the
+      // Approve/Deny buttons are clicked.
+      const approvalId = `preview-approval-${suffix}`;
+      return {
+        id: `approval-${approvalId}`,
+        role: 'assistant',
+        content: '',
+        createdAt,
+        streaming: false,
+        variant: 'approval',
+        approval: {
+          id: approvalId,
+          status: 'pending',
+          agentId: 'preview-agent',
+          executionId: `preview-exec-${suffix}`,
+          toolName: 'add_to_cart',
+          description:
+            'Add the selected item to the shopping cart. Approve to let the assistant continue.',
+          parameters: {
+            items: [{ productEntityId: 129, quantity: 1 }],
+          },
+        },
+      };
+    }
     case 'tool-complete':
       return {
         id: `preview-seq-tool-complete-${suffix}`,

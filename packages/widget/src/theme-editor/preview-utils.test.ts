@@ -49,6 +49,16 @@ describe("theme editor preview demo data", () => {
     expect(reasoningMessage.reasoning?.status).toBe("streaming");
   });
 
+  it("creates a pending approval preview entry for theming the approval bubble", () => {
+    const message = createPreviewTranscriptEntry("approval-request", 3);
+
+    expect(message.variant).toBe("approval");
+    expect(message.approval?.status).toBe("pending");
+    expect(message.approval?.toolName).toBe("add_to_cart");
+    // Includes parameters so the params block is exercised when theming.
+    expect(message.approval?.parameters).toBeTruthy();
+  });
+
   it("appends public preview transcript entries to an existing conversation", () => {
     const messages = appendPreviewTranscriptEntry([], "tool-running");
     const updated = appendPreviewTranscriptEntry(messages, "reasoning-complete");
