@@ -1459,16 +1459,31 @@ export function createPreviewManager(
     // content grows, instead of landing below the fold on a scrolled-up user.
     scrollPreviewWidgetsToBottom();
 
+    // Stamp interactively-added entries with a real, monotonically increasing
+    // timestamp. Messages sort by createdAt, and resolving an approval bumps its
+    // createdAt to "now" — so without this, the next entry (built with the
+    // preset's backdated createdAt) would sort *above* a just-approved/denied
+    // bubble. Captured once so all of a streaming entry's frames share one time.
+    const injectionBase = Date.now();
     const newEntries = entries.slice(lastInjectedTranscriptCount);
     newEntries.forEach((preset, idx) => {
       const suffix = lastInjectedTranscriptCount + idx;
+      const createdAt = new Date(injectionBase + idx).toISOString();
       const frames = buildTranscriptStreamFrames(preset, suffix, {
         chunkSize: STREAM_CHUNK_SIZE,
         delayMs: STREAM_CHUNK_DELAY_MS,
       });
-      emitStreamFrames(frames);
+      emitStreamFrames(frames, (message) => ({ ...message, createdAt }));
     });
     lastInjectedTranscriptCount = currentCount;
+
+    // Non-streaming entries (e.g. the approval bubble) land their full height in
+    // a single frame, and the widget's one-shot auto-scroll can fire before that
+    // layout settles — leaving a tall bubble below the fold. Re-pin to the bottom
+    // after layout/paint so the newest entry stays in view. (Streaming entries
+    // re-pin themselves via auto-follow as later frames arrive, so this is a
+    // harmless no-op for them.)
+    requestAnimationFrame(() => requestAnimationFrame(() => scrollPreviewWidgetsToBottom()));
   }
 
   function scrollPreviewWidgetsToBottom(): void {

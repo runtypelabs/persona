@@ -254,7 +254,7 @@ export function buildPreviewConfig(
   const colorScheme =
     mode === 'light' ? 'light' : mode === 'dark' ? 'dark' : (base.colorScheme ?? 'light');
 
-  return applySceneConfig(
+  const previewConfig = applySceneConfig(
     {
       ...base,
       suggestionChips: sanitizedSuggestionChips,
@@ -263,6 +263,21 @@ export function buildPreviewConfig(
     },
     scene
   );
+
+  // The preview has no agent backend, so resolve approval decisions locally:
+  // returning void from onDecision skips the API round-trip and lets the
+  // optimistic status flip stick, so Approve/Deny actually transition the
+  // bubble to its approved/denied state for theming.
+  if (previewConfig.approval !== false) {
+    const existingApproval =
+      typeof previewConfig.approval === 'object' && previewConfig.approval ? previewConfig.approval : {};
+    previewConfig.approval = {
+      ...existingApproval,
+      onDecision: async () => {},
+    };
+  }
+
+  return previewConfig;
 }
 
 function detectSystemPreviewShellMode(): PreviewShellMode {

@@ -3,6 +3,7 @@ import { resolveSanitizer } from "./utils/sanitize";
 import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
 import {
   AgentWidgetConfig,
+  AgentWidgetApprovalDecisionOptions,
   AgentWidgetMessage,
   AgentWidgetEvent,
   AgentWidgetStorageAdapter,
@@ -375,8 +376,14 @@ type Controller = {
    * Programmatically resolve a pending approval.
    * @param approvalId - The approval ID to resolve
    * @param decision - "approved" or "denied"
+   * @param options - Optional decision context (e.g. `{ remember: true }`),
+   *   forwarded to `config.approval.onDecision`.
    */
-  resolveApproval: (approvalId: string, decision: 'approved' | 'denied') => Promise<void>;
+  resolveApproval: (
+    approvalId: string,
+    decision: 'approved' | 'denied',
+    options?: AgentWidgetApprovalDecisionOptions
+  ) => Promise<void>;
 };
 
 const buildPostprocessor = (
@@ -2599,6 +2606,13 @@ export const createAgentExperience = (
   // expensive rebuild on fingerprint change so user state inside the rendered
   // component (e.g. partially-filled form inputs) is not wiped on every pass.
   const lastComponentDirectiveFingerprint = new Map<string, string>();
+  // Same idea for plugin-rendered approval bubbles (`renderApproval`). The
+  // custom element is injected into the live DOM post-morph so its event
+  // listeners (Approve/Deny, an expandable parameters accordion, etc.) survive;
+  // this map gates the rebuild on fingerprint change so interactive state (e.g.
+  // a collapsed accordion) is not reset on every pass while the approval is
+  // pending.
+  const lastApprovalBubbleFingerprint = new Map<string, string>();
   let configVersion = 0;
   const autoFollow = createFollowStateController();
   let lastScrollTop = 0;
@@ -2977,16 +2991,40 @@ export const createAgentExperience = (
     const componentDirectiveHydrate: ComponentDirectiveHydrate[] = [];
     const componentStreamingEnabled = config.enableComponentStreaming !== false;
 
+    // Plugin-rendered approval bubbles use the same stub-and-hydrate pattern:
+    // `renderApproval` may attach listeners (the built-in bubble resolves via
+    // delegation on `messagesWrapper`, but a custom element owns its own
+    // interactivity), and idiomorph imports nodes via `document.importNode`,
+    // which strips them. So we build the live element, append a stub during
+    // morph, and inject the live element afterward.
+    const hasApprovalPlugin = plugins.some((p) => p.renderApproval) && config.approval !== false;
+    type ApprovalPluginHydrate = {
+      messageId: string;
+      fingerprint: string;
+      bubble: HTMLElement | null;
+    };
+    const approvalPluginHydrate: ApprovalPluginHydrate[] = [];
+
     messages.forEach((message) => {
       activeMessageIds.add(message.id);
 
       const askWithPlugin = hasAskPlugin && isAskUserQuestionMessage(message);
+      const approvalWithPlugin =
+        hasApprovalPlugin && message.variant === "approval" && !!message.approval;
       const hasDirectiveBubble =
         !askWithPlugin &&
         message.role === "assistant" &&
         !message.variant &&
         componentStreamingEnabled &&
         hasComponentDirective(message);
+
+      // If a message stops being an approval-plugin bubble, strip
+      // `data-preserve-runtime` so the next morph can replace the live wrapper.
+      if (!approvalWithPlugin && lastApprovalBubbleFingerprint.has(message.id)) {
+        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        existing?.removeAttribute("data-preserve-runtime");
+        lastApprovalBubbleFingerprint.delete(message.id);
+      }
 
       // If a message previously rendered as a directive bubble but no longer
       // does (e.g. content was rewritten), strip `data-preserve-runtime` from
@@ -3009,7 +3047,7 @@ export const createAgentExperience = (
           }`
         : "";
       const fingerprint = computeMessageFingerprint(message, configVersion) + askMeta;
-      const cachedWrapper = (askWithPlugin || hasDirectiveBubble)
+      const cachedWrapper = (askWithPlugin || approvalWithPlugin || hasDirectiveBubble)
         ? null
         : getCachedWrapper(messageCache, message.id, fingerprint);
       if (cachedWrapper) {
@@ -3043,9 +3081,9 @@ export const createAgentExperience = (
         if (message.variant === "tool" && p.renderToolCall) {
           return true;
         }
-        if (message.variant === "approval" && p.renderApproval) {
-          return true;
-        }
+        // Approval plugins are handled via the stub-and-hydrate path below
+        // (see `approvalWithPlugin`), not this inline morph path, so their
+        // listeners survive — so they are intentionally excluded here.
         if (!message.variant && p.renderMessage) {
           return true;
         }
@@ -3159,6 +3197,74 @@ export const createAgentExperience = (
           }
           return;
         }
+      } else if (approvalWithPlugin) {
+        // Plugin-rendered approval bubble. Build the live element with its
+        // listeners, append a stub for the morph pass, and hydrate the live
+        // element into the morphed wrapper afterward (same trick as
+        // `renderAskUserQuestion` / component directives) so Approve/Deny and
+        // any accordion listeners survive idiomorph's `importNode`. Gate the
+        // rebuild on fingerprint so interactive state (e.g. a collapsed
+        // accordion) is preserved while the approval stays pending.
+        const approvalPlugin = plugins.find((p) => typeof p.renderApproval === "function");
+        const lastFp = lastApprovalBubbleFingerprint.get(message.id);
+        const needsRebuild = lastFp !== fingerprint;
+        let liveBubble: HTMLElement | null = null;
+
+        if (needsRebuild && approvalPlugin?.renderApproval) {
+          // Re-find the live message at decision time so we resolve against
+          // current state, and route WebMCP gate approvals to the local
+          // resolver — mirroring the built-in delegated handler.
+          const approvalMessageId = message.id;
+          const resolveDecision = (
+            decision: "approved" | "denied",
+            options?: AgentWidgetApprovalDecisionOptions
+          ): void => {
+            const live = sessionRef.current
+              ?.getMessages()
+              .find((m) => m.id === approvalMessageId);
+            if (!live?.approval) return;
+            if (live.approval.toolType === "webmcp") {
+              sessionRef.current?.resolveWebMcpApproval(live.id, decision);
+            } else {
+              sessionRef.current?.resolveApproval(live.approval, decision, options);
+            }
+          };
+          liveBubble = approvalPlugin.renderApproval({
+            message,
+            defaultRenderer: () => createApprovalBubble(message, config),
+            config,
+            approve: (options) => resolveDecision("approved", options),
+            deny: (options) => resolveDecision("denied", options)
+          });
+        }
+
+        if (needsRebuild && liveBubble === null) {
+          // Plugin opted out for this state (e.g. a resolved approval, where the
+          // demo plugin defers to the built-in approved/denied bubble). Render
+          // the built-in bubble — it resolves via the delegated `messagesWrapper`
+          // handler and morphs normally — and drop any preserved live wrapper so
+          // morph can replace the now-stale pending bubble.
+          const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+          existing?.removeAttribute("data-preserve-runtime");
+          lastApprovalBubbleFingerprint.delete(message.id);
+          bubble = createApprovalBubble(message, config);
+        } else {
+          // A fresh live bubble to hydrate (needsRebuild), or fingerprint
+          // unchanged so we reuse the preserved live wrapper (`bubble: null`).
+          const stub = document.createElement("div");
+          stub.className = "persona-flex";
+          stub.id = `wrapper-${message.id}`;
+          stub.setAttribute("data-wrapper-id", message.id);
+          stub.setAttribute("data-approval-plugin-stub", "true");
+          stub.setAttribute("data-preserve-runtime", "true");
+          tempContainer.appendChild(stub);
+          approvalPluginHydrate.push({
+            messageId: message.id,
+            fingerprint,
+            bubble: liveBubble
+          });
+          return;
+        }
       } else if (matchingPlugin) {
         if (message.variant === "reasoning" && message.reasoning && matchingPlugin.renderReasoning) {
           if (!showReasoning) return;
@@ -3172,13 +3278,6 @@ export const createAgentExperience = (
           bubble = matchingPlugin.renderToolCall({
             message,
             defaultRenderer: () => createToolBubble(message, config),
-            config
-          });
-        } else if (message.variant === "approval" && message.approval && matchingPlugin.renderApproval) {
-          if (config.approval === false) return;
-          bubble = matchingPlugin.renderApproval({
-            message,
-            defaultRenderer: () => createApprovalBubble(message, config),
             config
           });
         } else if (matchingPlugin.renderMessage) {
@@ -3661,6 +3760,30 @@ export const createAgentExperience = (
     if (lastComponentDirectiveFingerprint.size > 0) {
       for (const id of lastComponentDirectiveFingerprint.keys()) {
         if (!activeMessageIds.has(id)) lastComponentDirectiveFingerprint.delete(id);
+      }
+    }
+
+    // Hydrate plugin-rendered approval bubbles into their stub wrappers,
+    // mirroring the ask-question / component-directive hydration above.
+    if (approvalPluginHydrate.length > 0) {
+      for (const { messageId, fingerprint, bubble } of approvalPluginHydrate) {
+        const wrapper = container.querySelector(`#wrapper-${messageId}`);
+        if (!wrapper) continue;
+        if (bubble === null) {
+          // Fingerprint matched the previous pass (or the plugin opted out
+          // after a prior render) — the live wrapper, kept alive by
+          // `data-preserve-runtime`, still holds the listener-bearing bubble.
+          continue;
+        }
+        wrapper.replaceChildren(bubble);
+        wrapper.setAttribute("data-bubble-fp", fingerprint);
+        lastApprovalBubbleFingerprint.set(messageId, fingerprint);
+      }
+    }
+
+    if (lastApprovalBubbleFingerprint.size > 0) {
+      for (const id of lastApprovalBubbleFingerprint.keys()) {
+        if (!activeMessageIds.has(id)) lastApprovalBubbleFingerprint.delete(id);
       }
     }
   };
@@ -7258,7 +7381,11 @@ export const createAgentExperience = (
       textarea.focus();
       return true;
     },
-    async resolveApproval(approvalId: string, decision: 'approved' | 'denied'): Promise<void> {
+    async resolveApproval(
+      approvalId: string,
+      decision: 'approved' | 'denied',
+      options?: AgentWidgetApprovalDecisionOptions
+    ): Promise<void> {
       const messages = session.getMessages();
       const approvalMessage = messages.find(
         m => m.variant === "approval" && m.approval?.id === approvalId
@@ -7274,7 +7401,7 @@ export const createAgentExperience = (
         session.resolveWebMcpApproval(approvalMessage.id, decision);
         return;
       }
-      return session.resolveApproval(approvalMessage.approval, decision);
+      return session.resolveApproval(approvalMessage.approval, decision, options);
     },
     getMessages() {
       return session.getMessages();

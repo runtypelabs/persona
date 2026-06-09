@@ -52,5 +52,11 @@
     "path": "dist/codegen.js",
     "limit": "12 kB",
     "gzip": true
+  },
+  {
+    "name": "Opt-in · plugin-kit subpath (plugin-kit.js)",
+    "path": "dist/plugin-kit.js",
+    "limit": "2 kB",
+    "gzip": true
   }
 ]

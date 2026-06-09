@@ -17,16 +17,14 @@
 // `*Skipped*` user bubble) so the transcript reads as a normal conversation.
 // Plugins do NOT render the answered state — only the interactive sheet.
 //
-// Copy this file into your own app; it has zero dependencies beyond the
-// widget plugin contract.
+// Copy this file into your own app; its only dependency is the widget's
+// plugin-kit subpath (used for Shadow-DOM-safe style injection).
+
+import { injectStyles } from "@runtypelabs/persona/plugin-kit";
 
 const STYLE_ID = "ask-pill-plugin-style";
 
-const ensureStyle = () => {
-  if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
-  style.textContent = `
+const STYLE_CSS = `
     .ask-pill-sheet {
       background: var(--persona-surface, #ffffff);
       border: 1px solid var(--persona-border, #e5e7eb);
@@ -165,8 +163,6 @@ const ensureStyle = () => {
       filter: brightness(0.95);
     }
   `;
-  document.head.appendChild(style);
-};
 
 // IMPORTANT — event-delegation pattern.
 //
@@ -348,8 +344,6 @@ export const horizontalPillsAskPlugin = {
   id: "example-horizontal-pills",
 
   renderAskUserQuestion: ({ message, payload, complete, resolve, dismiss, config }) => {
-    ensureStyle();
-
     // Answered state is handled entirely by the widget — the original tool
     // message is suppressed from transcript and Q→A pair bubbles are injected
     // in its place. Plugins only render the interactive sheet.
@@ -367,6 +361,9 @@ export const horizontalPillsAskPlugin = {
     const autoAdvance = config?.features?.askUserQuestion?.groupedAutoAdvance !== false;
 
     const root = document.createElement("div");
+    // Shadow-DOM-safe: injects into the sheet's shadow root when the widget runs
+    // shadowed, the document head otherwise. Idempotent across re-renders.
+    injectStyles(root, STYLE_ID, STYLE_CSS);
     root.className = "ask-pill-sheet";
     root.setAttribute("role", "group");
     root.setAttribute("aria-label", "Suggested answers");

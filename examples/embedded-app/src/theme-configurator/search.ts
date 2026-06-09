@@ -50,6 +50,31 @@ export function registerSearchEntry(field: FieldDef, control: ControlResult): vo
   });
 }
 
+/**
+ * Register fields from section definitions up front, so they are searchable
+ * before their (lazily-rendered) drill-down has ever been opened. These entries
+ * carry no live element — navigateToField re-finds the element by id once the
+ * section has been rendered by navigation. Duplicates against live entries are
+ * collapsed by field id in `search()`.
+ */
+export function registerCatalogSections(
+  tabId: string,
+  sections: { id: string; fields: FieldDef[] }[]
+): void {
+  for (const section of sections) {
+    for (const field of section.fields) {
+      searchIndex.push({
+        fieldId: field.id,
+        label: field.label,
+        description: field.description ?? '',
+        keywords: buildKeywords(field),
+        tabId,
+        sectionId: section.id,
+      });
+    }
+  }
+}
+
 function buildKeywords(field: FieldDef): string[] {
   const words: string[] = [];
 
@@ -119,7 +144,17 @@ export function search(query: string): SearchResult[] {
   // Sort by score descending
   results.sort((a, b) => b.score - a.score);
 
-  return results;
+  // Collapse duplicates by field id (a field can have both a catalog entry and,
+  // once its drill-down is open, a live entry). Keep the highest-scored one.
+  const seen = new Set<string>();
+  const deduped: SearchResult[] = [];
+  for (const result of results) {
+    if (seen.has(result.entry.fieldId)) continue;
+    seen.add(result.entry.fieldId);
+    deduped.push(result);
+  }
+
+  return deduped;
 }
 
 // ─── Search UI ────────────────────────────────────────────────────
@@ -215,12 +250,19 @@ function navigateToField(entry: SearchEntry): void {
     onNavigate(entry.tabId, entry.sectionId, entry.fieldId);
   }
 
-  // Scroll the field into view and highlight
-  entry.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  entry.element.classList.add('field-highlight');
-  setTimeout(() => {
-    entry.element.classList.remove('field-highlight');
-  }, 2000);
+  // onNavigate may have just (re)rendered the target section (e.g. opening a
+  // drill-down), so the live control is found by id rather than via a stored
+  // element — catalog entries carry none, and re-rendered elements are fresh.
+  // Defer past onNavigate's own section-expand rAF before scrolling.
+  requestAnimationFrame(() => {
+    const input = document.getElementById(entry.fieldId);
+    const target =
+      (input?.closest('.control-row') as HTMLElement | null) ?? input ?? entry.element ?? null;
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.add('field-highlight');
+    setTimeout(() => target.classList.remove('field-highlight'), 2000);
+  });
 
   clearSearch();
 }

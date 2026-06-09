@@ -350,10 +350,22 @@ Semantic tokens provide intent-based naming that references palette values.
 | `requested.background` | `palette.colors.warning.50` |
 | `requested.border` | `palette.colors.warning.200` |
 | `requested.text` | `palette.colors.gray.900` |
+| `requested.shadow` | `"0 5px 15px rgba(15, 23, 42, 0.08)"` |
 | `approve.background` | `palette.colors.success.500` |
 | `approve.foreground` | `palette.colors.gray.50` |
 | `deny.background` | `palette.colors.error.500` |
 | `deny.foreground` | `palette.colors.gray.50` |
+
+**Per-widget overrides (`config.approval.*`)** take precedence over the tokens above:
+
+| Property | Description |
+|----------|-------------|
+| `backgroundColor` / `borderColor` | Bubble container styling |
+| `shadow` | Box-shadow for the bubble; pass `"none"` to remove it. Overrides the `requested.shadow` token / `--persona-approval-shadow` |
+| `title` / `titleColor` / `descriptionColor` | Title and description text |
+| `parameterBackgroundColor` / `parameterTextColor` | Parameters code block |
+| `approveLabel` / `approveButtonColor` / `approveButtonTextColor` | Approve button |
+| `denyLabel` / `denyButtonColor` / `denyButtonTextColor` | Deny button (text color also drives the outline) |
 
 ### Attachment (`components.attachment.*`)
 
@@ -474,6 +486,7 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-approval-bg
 --persona-approval-border
 --persona-approval-text
+--persona-approval-shadow
 --persona-approval-approve-bg
 --persona-approval-deny-bg
 ```
@@ -556,7 +569,7 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 | Property | Default | Description |
 |----------|---------|-------------|
 | `border` | `"1px solid #e5e7eb"` | Border style for the launcher button |
-| `shadow` | `"0 10px 15px -3px rgba(0,0,0,0.1), ..."` | Box shadow for the launcher button |
+| `shadow` | `"0 10px 15px -3px rgba(0,0,0,0.1), ..."` | Box shadow for the launcher button; pass `"none"` to remove it. Overrides the `components.launcher.shadow` token / `--persona-launcher-shadow` |
 | `collapsedMaxWidth` | *(unset)* | CSS `max-width` for the floating launcher pill when the panel is closed; title/subtitle truncate with ellipsis (full text in `title` tooltip). Does not change the open panel width (`width`). |
 
 ### Header Icon
@@ -645,7 +658,7 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 ### Styling
 | Property | Description |
 |----------|-------------|
-| `shadow` | Box-shadow for tool call bubbles; overrides `theme.toolBubbleShadow` |
+| `shadow` | Box-shadow for tool call bubbles; pass `"none"` to remove it. Overrides the `components.toolBubble.shadow` token / `--persona-tool-bubble-shadow` |
 | `backgroundColor` / `borderColor` / `borderWidth` / `borderRadius` | Container styling |
 | `headerBackgroundColor` / `headerTextColor` / `headerPaddingX` / `headerPaddingY` | Header styling |
 | `contentBackgroundColor` / `contentTextColor` / `contentPaddingX` / `contentPaddingY` | Content styling |

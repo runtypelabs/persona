@@ -151,6 +151,10 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   if (toolCallConfig.borderRadius) {
     bubble.style.borderRadius = toolCallConfig.borderRadius;
   }
+  bubble.style.boxShadow =
+    toolCallConfig.shadow !== undefined
+      ? (toolCallConfig.shadow.trim() === "" ? "none" : toolCallConfig.shadow)
+      : "var(--persona-tool-bubble-shadow, 0 5px 15px rgba(15, 23, 42, 0.08))";
 
   if (!tool) {
     return bubble;

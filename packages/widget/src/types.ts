@@ -1817,6 +1817,23 @@ export interface VoiceProvider {
 }
 
 /**
+ * Extra context for an approval decision, surfaced to `onDecision` and to the
+ * `approve`/`deny` callbacks passed to the `renderApproval` plugin hook.
+ */
+export type AgentWidgetApprovalDecisionOptions = {
+  /**
+   * The user chose a "remember this" affordance (e.g. an "Always allow"
+   * button) rather than a one-time decision. The widget resolves the *current*
+   * approval identically whether or not this is set — an approval bubble is a
+   * single binary gate (`approved`/`denied`). Persisting a don't-ask-again
+   * policy for *future* approvals (auto-resolving them, or not surfacing them)
+   * is the integrator's responsibility, typically inside `onDecision`.
+   * Defaults to absent/`false`.
+   */
+  remember?: boolean;
+};
+
+/**
  * Configuration for tool approval bubbles.
  * Controls styling, labels, and behavior of the approval UI.
  */
@@ -1825,6 +1842,8 @@ export type AgentWidgetApprovalConfig = {
   backgroundColor?: string;
   /** Border color of the approval bubble */
   borderColor?: string;
+  /** Box-shadow for the approval bubble; pass `"none"` to remove it. Overrides the default `persona-shadow-sm`. */
+  shadow?: string;
   /** Color for the title text */
   titleColor?: string;
   /** Color for the description text */
@@ -1851,15 +1870,21 @@ export type AgentWidgetApprovalConfig = {
    * Custom handler for approval decisions.
    * Return void to let the SDK auto-resolve via the API,
    * or return a Response/ReadableStream for custom handling.
+   *
+   * `options.remember` is `true` when the decision came from a "remember this"
+   * affordance (e.g. an "Always allow" button in a custom `renderApproval`
+   * plugin). Use it to persist a don't-ask-again policy for future approvals;
+   * the current approval resolves the same way regardless.
    */
   onDecision?: (
     data: { approvalId: string; executionId: string; agentId: string; toolName: string },
-    decision: 'approved' | 'denied'
+    decision: 'approved' | 'denied',
+    options?: AgentWidgetApprovalDecisionOptions
   ) => Promise<Response | ReadableStream<Uint8Array> | void>;
 };
 
 export type AgentWidgetToolCallConfig = {
-  /** Box-shadow for tool-call bubbles; overrides `theme.toolBubbleShadow` when set. */
+  /** Box-shadow for tool-call bubbles; pass `"none"` to remove it. Overrides the `components.toolBubble.shadow` token / `--persona-tool-bubble-shadow`. */
   shadow?: string;
   /** Background color of the tool call bubble container. */
   backgroundColor?: string;

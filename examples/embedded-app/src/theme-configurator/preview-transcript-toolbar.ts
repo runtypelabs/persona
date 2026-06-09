@@ -16,6 +16,7 @@ const PREVIEW_TRANSCRIPT_PRESETS: PreviewTranscriptEntryPreset[] = [
   'reasoning-complete',
   'tool-running',
   'tool-complete',
+  'approval-request',
 ];
 
 function buildMenu(

@@ -81,6 +81,7 @@ export type {
   // Approval types
   AgentWidgetApproval,
   AgentWidgetApprovalConfig,
+  AgentWidgetApprovalDecisionOptions,
   // WebMCP — page-discovered tool consumption
   AgentWidgetWebMcpConfig,
   ClientToolDefinition,

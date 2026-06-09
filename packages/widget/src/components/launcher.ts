@@ -187,10 +187,13 @@ export const createLauncherButton = (
 
     // Apply launcher border and shadow from config (with defaults matching previous Tailwind classes)
     const defaultBorder = "1px solid var(--persona-border, #e5e7eb)";
-    const defaultShadow = "var(--persona-shadow, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1))";
-    
+    const defaultShadow = "var(--persona-launcher-shadow, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1))";
+
     button.style.border = launcher.border ?? defaultBorder;
-    button.style.boxShadow = launcher.shadow ?? defaultShadow;
+    button.style.boxShadow =
+      launcher.shadow !== undefined
+        ? (launcher.shadow.trim() === "" ? "none" : launcher.shadow)
+        : defaultShadow;
 
     if (dockedMode) {
       // Docked mode uses a 0px column when closed and hides this button; keep no hit target.

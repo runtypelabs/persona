@@ -136,7 +136,7 @@ export const THEME_TOKEN_DOCS = {
       voice:
         'recording (indicator, background, border), processing (icon, background), speaking (icon).',
       approval:
-        'requested (background, border, text), approve (background, foreground), deny (background, foreground).',
+        'requested (background, border, text, shadow), approve (background, foreground), deny (background, foreground).',
       attachment: 'image (background, border).',
       scrollToBottom:
         'Floating scroll-to-bottom affordance shared by transcript and event stream: background, foreground, border, size, borderRadius, shadow, padding, gap, fontSize, iconSize.',
