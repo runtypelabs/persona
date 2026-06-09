@@ -62,11 +62,11 @@ const esc = (value: unknown): string =>
 const money = (n: number): string => `$${n.toFixed(2)}`;
 
 const DEMO_TOOL_LATENCY_MS = {
-  search_products: [900, 1400],
-  view_product: [650, 1100],
-  add_to_cart: [1100, 1800],
-  remove_from_cart: [800, 1300],
-  apply_promo: [750, 1200],
+  search_products: [450, 700],
+  view_product: [325, 550],
+  add_to_cart: [550, 900],
+  remove_from_cart: [400, 650],
+  apply_promo: [375, 600],
 } as const;
 
 type DemoToolName = keyof typeof DEMO_TOOL_LATENCY_MS;
