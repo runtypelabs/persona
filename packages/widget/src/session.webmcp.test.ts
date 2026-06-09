@@ -405,6 +405,147 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(stored?.toolCall?.durationMs).toBe(1_200);
   });
 
+  it("a stale step_await re-emit does not reset in-flight WebMCP tool timing", () => {
+    const session = makeSession().session;
+    const s = session as unknown as {
+      webMcpInflightKeys: Set<string>;
+      upsertMessage: (m: AgentWidgetMessage) => void;
+      messages: AgentWidgetMessage[];
+    };
+    s.webMcpInflightKeys.add("exec-1:tool-1");
+    s.upsertMessage({
+      ...awaitingMessage("tool-1", "webmcp:search"),
+      agentMetadata: { executionId: "exec-1", awaitingLocalTool: false },
+      streaming: true,
+      toolCall: {
+        id: "tool-1",
+        name: "webmcp:search",
+        status: "running",
+        args: { q: "shoes" },
+        startedAt: 1_000,
+      },
+    });
+
+    s.upsertMessage({
+      ...awaitingMessage("tool-1", "webmcp:search"),
+      streaming: false,
+      toolCall: {
+        id: "tool-1",
+        name: "webmcp:search",
+        status: "running",
+        args: { q: "shoes" },
+        startedAt: 3_000,
+      },
+    });
+
+    const stored = s.messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(stored?.agentMetadata?.awaitingLocalTool).toBe(false);
+    expect(stored?.streaming).toBe(true);
+    expect(stored?.toolCall?.status).toBe("running");
+    expect(stored?.toolCall?.startedAt).toBe(1_000);
+    expect(stored?.toolCall?.durationMs).toBeUndefined();
+  });
+
+  it("a stale step_await re-emit does not reset completed WebMCP local-error state", () => {
+    const session = makeSession().session;
+    const s = session as unknown as {
+      upsertMessage: (m: AgentWidgetMessage) => void;
+      messages: AgentWidgetMessage[];
+    };
+    s.upsertMessage({
+      ...awaitingMessage("tool-1", "webmcp:search"),
+      agentMetadata: { executionId: "exec-1", awaitingLocalTool: false },
+      streaming: false,
+      toolCall: {
+        id: "tool-1",
+        name: "webmcp:search",
+        status: "complete",
+        args: { q: "shoes" },
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "page tool exploded" }],
+        },
+        startedAt: 1_000,
+        completedAt: 1_500,
+        durationMs: 500,
+      },
+    });
+
+    s.upsertMessage({
+      ...awaitingMessage("tool-1", "webmcp:search"),
+      streaming: false,
+      toolCall: {
+        id: "tool-1",
+        name: "webmcp:search",
+        status: "running",
+        args: { q: "shoes" },
+        startedAt: 3_000,
+      },
+    });
+
+    const stored = s.messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(stored?.agentMetadata?.awaitingLocalTool).toBe(false);
+    expect(stored?.streaming).toBe(false);
+    expect(stored?.toolCall?.status).toBe("complete");
+    expect(stored?.toolCall?.result).toEqual({
+      isError: true,
+      content: [{ type: "text", text: "page tool exploded" }],
+    });
+    expect(stored?.toolCall?.startedAt).toBe(1_000);
+    expect(stored?.toolCall?.completedAt).toBe(1_500);
+    expect(stored?.toolCall?.durationMs).toBe(500);
+  });
+
+  it("a new execution reusing a completed tool id is not treated as stale", () => {
+    const session = makeSession().session;
+    const s = session as unknown as {
+      upsertMessage: (m: AgentWidgetMessage) => void;
+      messages: AgentWidgetMessage[];
+    };
+    s.upsertMessage({
+      ...awaitingMessage("tool-1", "webmcp:search"),
+      id: "tool-tool-1",
+      agentMetadata: { executionId: "exec-1", awaitingLocalTool: false },
+      streaming: false,
+      toolCall: {
+        id: "tool-1",
+        name: "webmcp:search",
+        status: "complete",
+        args: { q: "shoes" },
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "page tool exploded" }],
+        },
+        startedAt: 1_000,
+        completedAt: 1_500,
+        durationMs: 500,
+      },
+    });
+
+    s.upsertMessage({
+      ...awaitingMessage("tool-1", "webmcp:search", "exec-2"),
+      id: "tool-tool-1",
+      streaming: false,
+      toolCall: {
+        id: "tool-1",
+        name: "webmcp:search",
+        status: "running",
+        args: { q: "boots" },
+        startedAt: 3_000,
+      },
+    });
+
+    const stored = s.messages.find((m) => m.id === "tool-tool-1");
+    expect(stored?.agentMetadata?.executionId).toBe("exec-2");
+    expect(stored?.agentMetadata?.awaitingLocalTool).toBe(true);
+    expect(stored?.toolCall?.status).toBe("running");
+    expect(stored?.toolCall?.args).toEqual({ q: "boots" });
+    expect(stored?.toolCall?.startedAt).toBe(3_000);
+    expect(stored?.toolCall?.result).toBeUndefined();
+    expect(stored?.toolCall?.completedAt).toBeUndefined();
+    expect(stored?.toolCall?.durationMs).toBeUndefined();
+  });
+
   it("an error event does not clear streaming while a webmcp resolve is in flight", () => {
     // BugBot: the error handler mirrors the idle handler — it must not tear
     // down streaming while a sibling/successor resolve is still executing.
