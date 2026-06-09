@@ -1375,16 +1375,20 @@ function buildSerializableConfig(config: any): Record<string, any> {
 function generateScriptInstallerCode(config: any, options?: CodeGeneratorOptions): string {
   const serializableConfig = buildSerializableConfig(config);
 
-  // Mount target: the installer reads `config.target` from data-config, so a
-  // non-default selector is serialized into the config the installer parses.
-  if (options?.target) {
-    serializableConfig.target = options.target;
-  }
-
-  // When windowKey is provided, nest the widget config under `config` so the
-  // install script's parsedConfig.config detection picks it up alongside windowKey.
-  const payload = options?.windowKey
-    ? { config: serializableConfig, windowKey: options.windowKey }
+  // `windowKey` and `target` are INSTALLER options, not widget-config fields.
+  // install.ts reads them from the top level of data-config: the nested-`config`
+  // branch hoists every sibling key (Object.assign(scriptConfig, parsed)), while
+  // a flat payload becomes the widget config wholesale and its siblings are
+  // ignored. So whenever either is set we emit the nested `{ config, ...}` form
+  // with the option as a SIBLING of `config` — nesting `target` inside the
+  // widget config would leave the widget mounted on `body`.
+  const needsWrapper = Boolean(options?.windowKey || options?.target);
+  const payload = needsWrapper
+    ? {
+        config: serializableConfig,
+        ...(options?.windowKey ? { windowKey: options.windowKey } : {}),
+        ...(options?.target ? { target: options.target } : {}),
+      }
     : serializableConfig;
 
   // Escape single quotes in JSON for HTML attribute
