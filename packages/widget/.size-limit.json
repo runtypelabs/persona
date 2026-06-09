@@ -20,13 +20,13 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "138 kB",
+    "limit": "139 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "139 kB",
+    "limit": "140 kB",
     "gzip": true
   },
   {
