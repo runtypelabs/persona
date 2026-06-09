@@ -183,11 +183,41 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
 
     const msg = awaitingMessage("tool-1", "webmcp:search");
     await session.resolveWebMcpToolCall(msg);
+    const afterFailedResume = (
+      session as unknown as { messages: AgentWidgetMessage[] }
+    ).messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(afterFailedResume?.toolCall?.status).toBe("running");
+    expect(afterFailedResume?.toolCall?.result).toBeUndefined();
+    expect(afterFailedResume?.toolCall?.durationMs).toBeUndefined();
+
     await session.resolveWebMcpToolCall(msg); // retry — must be allowed
     await session.resolveWebMcpToolCall(msg); // post-success — must be blocked
 
     expect(executeSpy).toHaveBeenCalledTimes(2);
     expect(resumeSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("marks the bubble complete with an error when browser execution throws before /resume", async () => {
+    const { session, resumeSpy } = makeSession({
+      executeImpl: async () => {
+        throw new Error("page tool exploded");
+      },
+    });
+
+    await session.resolveWebMcpToolCall(
+      awaitingMessage("tool-1", "webmcp:search"),
+    );
+
+    const stored = (
+      session as unknown as { messages: AgentWidgetMessage[] }
+    ).messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(resumeSpy).not.toHaveBeenCalled();
+    expect(stored?.toolCall?.status).toBe("complete");
+    expect(stored?.toolCall?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(stored?.toolCall?.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "page tool exploded" }],
+    });
   });
 
   it("threads an AbortSignal into resumeFlow", async () => {
@@ -220,6 +250,14 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     release();
     await inflight;
     expect(resumeSpy).not.toHaveBeenCalled();
+    const stored = (
+      session as unknown as { messages: AgentWidgetMessage[] }
+    ).messages.find((m) => m.toolCall?.id === "tool-1");
+    expect(stored?.toolCall?.status).toBe("complete");
+    expect(stored?.toolCall?.result).toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "Aborted by cancel()" }],
+    });
   });
 
   it("does NOT abort the shared session abortController", async () => {
@@ -769,8 +807,8 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
       .messages;
     const toolA = messages.find((m) => m.toolCall?.id === "toolu_A");
     const toolBWhileRunning = messages.find((m) => m.toolCall?.id === "toolu_B");
-    expect(toolA?.toolCall?.status).toBe("complete");
-    expect(toolA?.toolCall?.durationMs).toBe(800);
+    expect(toolA?.toolCall?.status).toBe("running");
+    expect(toolA?.toolCall?.durationMs).toBeUndefined();
     expect(toolBWhileRunning?.toolCall?.status).toBe("running");
     expect(resumeSpy).not.toHaveBeenCalled();
 
@@ -780,10 +818,39 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
 
     messages = (session as unknown as { messages: AgentWidgetMessage[] })
       .messages;
+    const completedToolA = messages.find((m) => m.toolCall?.id === "toolu_A");
     const toolB = messages.find((m) => m.toolCall?.id === "toolu_B");
+    expect(completedToolA?.toolCall?.status).toBe("complete");
+    expect(completedToolA?.toolCall?.durationMs).toBe(800);
     expect(toolB?.toolCall?.status).toBe("complete");
     expect(toolB?.toolCall?.durationMs).toBe(1_600);
     expect(resumeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mark batched WebMCP bubbles complete when the shared /resume fails", async () => {
+    const { session, client, resumeSpy } = makeSession();
+    (client.resumeFlow as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      async () => {
+        throw new Error("resume failed");
+      },
+    );
+
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    endStream(session);
+    await flushMicrotasks();
+
+    const messages = (session as unknown as { messages: AgentWidgetMessage[] })
+      .messages;
+    const toolA = messages.find((m) => m.toolCall?.id === "toolu_A");
+    const toolB = messages.find((m) => m.toolCall?.id === "toolu_B");
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    expect(toolA?.toolCall?.status).toBe("running");
+    expect(toolA?.toolCall?.result).toBeUndefined();
+    expect(toolA?.toolCall?.durationMs).toBeUndefined();
+    expect(toolB?.toolCall?.status).toBe("running");
+    expect(toolB?.toolCall?.result).toBeUndefined();
+    expect(toolB?.toolCall?.durationMs).toBeUndefined();
   });
 
   it("dedupes a duplicate parallel await within the same batch", async () => {
