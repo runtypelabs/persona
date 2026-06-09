@@ -1,5 +1,12 @@
 # @runtypelabs/persona
 
+## 3.29.1
+
+### Patch Changes
+
+- 6a9d540: Preserve in-flight and locally-completed WebMCP tool state when stale await events are re-emitted.
+- 5d88959: Measure WebMCP tool bubbles through browser-side async execution instead of completing them at the local-tool pause.
+
 ## 3.29.0
 
 ### Minor Changes
