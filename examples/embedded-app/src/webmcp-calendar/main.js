@@ -1,3 +1,8 @@
+// WebMCP Calendar Copilot — adapted from WebMCP-org/chrome-devtools-quickstart
+// (https://github.com/WebMCP-org/chrome-devtools-quickstart, MIT). The embedded
+// Persona widget and Chrome DevTools MCP call the same WebMCP tools registered
+// in ./calendar.js.
+//
 // @mcp-b/global must be imported before registering tools.
 import '@mcp-b/global';
 import '@runtypelabs/persona/widget.css';
@@ -14,8 +19,11 @@ import { READ_ONLY_TOOL_NAMES, setupCalendar } from './calendar.js';
 const app = document.querySelector('#app');
 setupCalendar(app);
 
-const personaToken = import.meta.env.VITE_PERSONA_CLIENT_TOKEN;
-const personaApiUrl = import.meta.env.VITE_PERSONA_API_URL;
+// Accept both this demo's original env names and embedded-app's conventions.
+const personaToken =
+  import.meta.env.VITE_PERSONA_CLIENT_TOKEN || import.meta.env.VITE_CLIENT_TOKEN;
+const personaApiUrl =
+  import.meta.env.VITE_PERSONA_API_URL || import.meta.env.VITE_API_URL;
 
 // `?mode=pill` mounts Persona as its native bottom composer-bar pill instead
 // of the docked side panel — same WebMCP tools, different embedding style.
