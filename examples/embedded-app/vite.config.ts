@@ -233,8 +233,18 @@ function serveWidgetDist(): Plugin {
 
 function llmsTxt(): Plugin {
   const llmsTxtPath = path.resolve(__dirname, "llms.txt");
-  const widgetReadmePath = path.resolve(__dirname, "../../packages/widget/README.md");
-  const themeConfigPath = path.resolve(__dirname, "../../packages/widget/THEME-CONFIG.md");
+  const widgetDir = path.resolve(__dirname, "../../packages/widget");
+  // Order matters: README first (overview), then the split reference docs,
+  // then the theme/token reference. Keep in sync with packages/widget/docs/.
+  const widgetDocPaths = [
+    "README.md",
+    "docs/PROGRAMMATIC-CONTROL.md",
+    "docs/UI-COMPONENTS.md",
+    "docs/INSTALLATION-FRAMEWORKS.md",
+    "docs/CONFIGURATION-REFERENCE.md",
+    "docs/STREAM-PARSERS.md",
+    "THEME-CONFIG.md",
+  ].map((p) => path.resolve(widgetDir, p));
 
   function buildLlmsTxt(): string {
     return fs.readFileSync(llmsTxtPath, "utf-8");
@@ -242,8 +252,7 @@ function llmsTxt(): Plugin {
 
   function buildLlmsFullTxt(): string {
     const overview = fs.readFileSync(llmsTxtPath, "utf-8");
-    const widgetReadme = fs.readFileSync(widgetReadmePath, "utf-8");
-    const themeConfig = fs.readFileSync(themeConfigPath, "utf-8");
+    const widgetDocs = widgetDocPaths.map((p) => fs.readFileSync(p, "utf-8"));
     return [
       overview.replace(
         /^(> Full reference .*)$/m,
@@ -254,13 +263,9 @@ function llmsTxt(): Plugin {
       "",
       "# Widget Configuration Reference",
       "",
-      "The sections below are the complete widget README (initialization, programmatic control, config tables, parsers, proxy setup, framework guides) and the theme/token reference.",
+      "The sections below are the complete widget documentation (initialization, programmatic control, UI components, config tables, parsers, proxy setup, framework guides) and the theme/token reference.",
       "",
-      widgetReadme,
-      "",
-      "---",
-      "",
-      themeConfig,
+      widgetDocs.join("\n\n---\n\n"),
     ].join("\n");
   }
 
