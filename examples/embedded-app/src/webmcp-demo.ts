@@ -37,6 +37,8 @@ interface RegisterableModelContext {
   registerTool(
     tool: {
       name: string;
+      /** User-facing label (WebMCP `ToolDescriptor.title`) — shown in Persona's approval bubble. */
+      title?: string;
       description: string;
       inputSchema?: object;
       annotations?: Record<string, unknown>;
@@ -391,6 +393,7 @@ if (!modelContext) {
   modelContext.registerTool(
     {
       name: "search_products",
+      title: "Search the catalog",
       description:
         "Search the product catalog by free-text query (e.g. 'waterproof trail shoe', 'blue running', 'jacket'). Returns matching products with SKU, title, brand, color, and price.",
       inputSchema: {
@@ -431,6 +434,7 @@ if (!modelContext) {
   modelContext.registerTool(
     {
       name: "view_product",
+      title: "View product details",
       description:
         "Look at one product in detail by SKU (from search_products results). Highlights it on the page and returns its full description. Read-only.",
       inputSchema: {
@@ -477,6 +481,7 @@ if (!modelContext) {
   modelContext.registerTool(
     {
       name: "add_to_cart",
+      title: "Add to your cart",
       description:
         "Add a product to the shopper's cart by SKU (from search_products results). Returns the updated cart so you can confirm the running total.",
       inputSchema: {
@@ -523,6 +528,7 @@ if (!modelContext) {
   modelContext.registerTool(
     {
       name: "remove_from_cart",
+      title: "Remove from your cart",
       description:
         "Remove a product from the cart by SKU, or reduce its quantity. Omit quantity to remove the line entirely. Returns the updated cart.",
       inputSchema: {
@@ -590,6 +596,7 @@ if (!modelContext) {
   modelContext.registerTool(
     {
       name: "apply_promo",
+      title: "Apply a promo code",
       description:
         "Apply a promo code to the cart (e.g. TRAIL10, TRAILVIP, SUMMIT20). Returns whether it was accepted and the updated cart with the discount applied.",
       inputSchema: {

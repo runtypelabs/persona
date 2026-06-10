@@ -27,6 +27,7 @@ vi.mock("@mcp-b/webmcp-polyfill", () => ({
 // Import AFTER vi.mock so the bridge's dynamic import resolves to the mock.
 import {
   WebMcpBridge,
+  getWebMcpToolDisplayTitle,
   isWebMcpToolName,
   stripWebMcpPrefix,
   computeClientToolsFingerprint,
@@ -39,6 +40,7 @@ type MockTool = {
   name: string;
   description?: string;
   inputSchema?: object;
+  title?: string;
   execute: (args: Record<string, unknown>, client: MockClient) => unknown;
 };
 
@@ -47,10 +49,13 @@ const registry: { tools: MockTool[] } = { tools: [] };
 /** A fake `document.modelContext` exposing the strict consumer surface. */
 const makeModelContext = () => ({
   async getTools() {
+    // Mirrors the real polyfill's getRegisteredToolInfos(): `title` is always
+    // present, "" when the tool didn't declare one; annotations are absent.
     return registry.tools.map((t) => ({
       name: t.name,
       description: t.description ?? `mock ${t.name}`,
       inputSchema: JSON.stringify(t.inputSchema ?? { type: "object" }),
+      title: t.title ?? "",
     }));
   },
   async executeTool(
@@ -196,6 +201,67 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
       "foo",
       "bar",
     ]);
+  });
+});
+
+describe("WebMCP display titles", () => {
+  it("records declared titles on snapshot and exposes them via getWebMcpToolDisplayTitle", async () => {
+    registry.tools = [
+      fakeTool({ name: "add_to_cart", title: "Add to Cart" }),
+      fakeTool({ name: "search_products" }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true });
+    await bridge.snapshotForDispatch();
+    expect(getWebMcpToolDisplayTitle("add_to_cart")).toBe("Add to Cart");
+    expect(getWebMcpToolDisplayTitle("webmcp:add_to_cart")).toBe("Add to Cart");
+    expect(getWebMcpToolDisplayTitle("search_products")).toBeUndefined();
+  });
+
+  it("evicts a stale title when the tool re-registers without one", async () => {
+    registry.tools = [fakeTool({ name: "add_to_cart", title: "Add to Cart" })];
+    const bridge = new WebMcpBridge({ enabled: true });
+    await bridge.snapshotForDispatch();
+    expect(getWebMcpToolDisplayTitle("add_to_cart")).toBe("Add to Cart");
+
+    registry.tools = [fakeTool({ name: "add_to_cart" })];
+    await bridge.snapshotForDispatch();
+    expect(getWebMcpToolDisplayTitle("add_to_cart")).toBeUndefined();
+  });
+
+  it("evicts the title when the tool is removed from the registry entirely", async () => {
+    registry.tools = [
+      fakeTool({ name: "add_to_cart", title: "Add to Cart" }),
+      fakeTool({ name: "search_products", title: "Search the catalog" }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true });
+    await bridge.snapshotForDispatch();
+    expect(getWebMcpToolDisplayTitle("add_to_cart")).toBe("Add to Cart");
+
+    registry.tools = [fakeTool({ name: "search_products", title: "Search the catalog" })];
+    await bridge.snapshotForDispatch();
+    expect(getWebMcpToolDisplayTitle("add_to_cart")).toBeUndefined();
+    expect(getWebMcpToolDisplayTitle("search_products")).toBe("Search the catalog");
+  });
+
+  it("passes the declared title to the confirm gate", async () => {
+    registry.tools = [fakeTool({ name: "add_to_cart", title: "Add to Cart" })];
+    const onConfirm = vi.fn(async () => true);
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm });
+    const r = await bridge.executeToolCall("webmcp:add_to_cart", {});
+    expect(r.isError).toBeFalsy();
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ toolName: "add_to_cart", title: "Add to Cart" })
+    );
+  });
+
+  it("omits title from the confirm gate when the tool didn't declare one", async () => {
+    registry.tools = [fakeTool({ name: "add_to_cart" })];
+    const onConfirm = vi.fn(async () => true);
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm });
+    await bridge.executeToolCall("webmcp:add_to_cart", {});
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.not.objectContaining({ title: expect.anything() })
+    );
   });
 });
 

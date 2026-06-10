@@ -34,3 +34,4 @@ examples/standalone-widget/
 .npmrc
 # Local generated API contract cache
 packages/widget/openapi/runtype-public-openapi.local.json
+.claude/

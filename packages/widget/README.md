@@ -544,6 +544,29 @@ initAgentWidget({
 });
 ```
 
+**Give your tools user-facing names.** The approval bubble (and any custom
+`onConfirm` handler, via `info.title`) shows a human-readable label for the
+tool being called. Declare it once at registration with the WebMCP spec's
+top-level `title` field:
+
+```ts
+document.modelContext.registerTool({
+  name: "add_to_cart",
+  title: "Add to Cart", // shown to users in the approval bubble
+  description: "Add products to the shopping cart. IMPORTANT: …", // agent-facing
+  inputSchema: { /* … */ },
+  execute: async (args) => { /* … */ },
+});
+```
+
+Tools without a `title` get a label derived from their name
+(`add_to_cart` → "Add to cart"). The agent-facing `description` is never shown
+as the headline — it sits behind the approval bubble's "Show details" toggle.
+See [Tool Calls & Approvals](#tool-calls--approvals) for the full summary-line
+resolution order and `approval.formatDescription` for parameter-aware copy.
+(The legacy `annotations.title` is *not* read — the polyfill's consumer surface
+doesn't expose annotations; use top-level `title`.)
+
 **Using WebMCP against a non-Runtype backend (e.g. the Vercel AI SDK)?** The
 widget's WebMCP loop expects Runtype's proxy wire protocol (a `step_await` pause
 → `/resume` round-trip). See
@@ -2333,11 +2356,43 @@ config: {
 | `title` | `string?` | Title text above the description. |
 | `approveLabel` | `string?` | Label for the approve button. |
 | `denyLabel` | `string?` | Label for the deny button. |
+| `detailsDisplay` | `'collapsed' \| 'expanded' \| 'hidden'?` | How the technical details (agent-facing tool description + raw parameters JSON) are presented. Default: `'collapsed'` (behind a "Show details" toggle). `'expanded'` shows them open; `'hidden'` never renders them. |
+| `showDetailsLabel`, `hideDetailsLabel` | `string?` | Labels for the details toggle. Defaults: `"Show details"` / `"Hide details"`. |
+| `formatDescription` | `(approval) => string \| undefined` | Build the user-facing summary line. Receives `{ toolName, toolType, description, parameters, displayTitle }`. Return a falsy value to fall back to the default copy for that approval. |
 | `backgroundColor`, `borderColor`, `titleColor`, `descriptionColor` | `string?` | Bubble styling. |
 | `approveButtonColor`, `approveButtonTextColor` | `string?` | Approve button styling. |
 | `denyButtonColor`, `denyButtonTextColor` | `string?` | Deny button styling. |
 | `parameterBackgroundColor`, `parameterTextColor` | `string?` | Parameters block styling. |
 | `onDecision` | `(data, decision) => Promise<Response \| ReadableStream \| void>?` | Custom approval handler. Return `void` for SDK auto-resolve. |
+
+**How the summary line is chosen.** A tool's wire `description` is written for the
+agent (usage rules, prompt prose), not for end users, so the bubble doesn't lead
+with it. The user-facing summary resolves in priority order:
+
+1. `formatDescription(...)` from your config, when it returns a non-empty string
+2. The display title the tool declared via the WebMCP spec's `ToolDescriptor.title`
+   (e.g. `"Add to Cart"`) — WebMCP tools only
+3. The humanized tool name — `add_to_cart` / `webmcp:add_to_cart` →
+   "Add to cart", `getProductDetails` → "Get product details"
+4. The raw `description` (only when the approval carries no tool name at all)
+
+The agent-facing description and the raw parameters JSON stay available behind
+the "Show details" toggle (see `detailsDisplay`).
+
+```ts
+initAgentWidget({
+  // ...config
+  approval: {
+    // Optional: fully custom, parameter-aware copy per tool. Falsy returns
+    // fall back to the default summary, so a sparse map is fine.
+    formatDescription: ({ toolName, parameters }) =>
+      ({
+        add_to_cart: "Add these items to your shopping cart",
+        apply_promo_code: `Apply promo code “${(parameters as { code?: string })?.code}”`,
+      })[toolName.replace(/^webmcp:/, "")],
+  },
+});
+```
 
 #### Suggestion Chips
 

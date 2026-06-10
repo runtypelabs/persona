@@ -66,6 +66,14 @@ interface ModelContextToolInfo {
   description: string;
   /** JSON-encoded JSON Schema for the tool's input. */
   inputSchema?: string;
+  /**
+   * Display title declared on the tool (`ToolDescriptor.title` in the WebMCP
+   * spec). The polyfill returns `""` when the tool didn't declare one. Note:
+   * `annotations` (incl. the legacy `annotations.title`) are NOT exposed on
+   * this strict consumer surface — top-level `title` is the only display-name
+   * channel available to us.
+   */
+  title?: string;
 }
 
 interface ModelContextCoreLike {
@@ -76,6 +84,43 @@ interface ModelContextCoreLike {
     options?: { signal?: AbortSignal },
   ): Promise<string | null>;
 }
+
+/**
+ * Page-global map of bare tool name → declared display title
+ * (`ToolDescriptor.title`). `document.modelContext` is page-global, so a
+ * single map shared across widget/bridge instances is semantically correct.
+ * Refreshed on every registry read (`snapshotForDispatch` / `executeToolCall`)
+ * and consumed by the approval bubble's summary line via
+ * `getWebMcpToolDisplayTitle`.
+ */
+const webMcpToolDisplayTitles = new Map<string, string>();
+
+/**
+ * Record declared display titles from a fresh `getTools()` read. The map is
+ * rebuilt from scratch — callers always pass the FULL registry snapshot — so
+ * a tool that unregistered or dropped its title can't leave a stale label
+ * behind. Exported for tests; production callers are the bridge's registry
+ * reads.
+ */
+export const recordWebMcpToolDisplayTitles = (
+  infos: ModelContextToolInfo[],
+): void => {
+  webMcpToolDisplayTitles.clear();
+  for (const info of infos) {
+    const title = info.title?.trim();
+    if (title) webMcpToolDisplayTitles.set(info.name, title);
+  }
+};
+
+/**
+ * Look up the display title a page tool declared via the WebMCP spec's
+ * `ToolDescriptor.title`. Accepts wire (`webmcp:add_to_cart`) or bare
+ * (`add_to_cart`) names. Returns `undefined` when the tool didn't declare
+ * one (callers fall back to humanizing the tool name).
+ */
+export const getWebMcpToolDisplayTitle = (
+  toolName: string,
+): string | undefined => webMcpToolDisplayTitles.get(stripWebMcpPrefix(toolName));
 
 const log = {
   warn(message: string, ...rest: unknown[]): void {
@@ -220,6 +265,7 @@ export class WebMcpBridge {
       log.warn("getTools() threw — shipping an empty WebMCP snapshot.", err);
       return [];
     }
+    recordWebMcpToolDisplayTitles(infos);
 
     const pageOrigin = typeof location !== "undefined" ? location.origin : "";
 
@@ -295,6 +341,7 @@ export class WebMcpBridge {
       const message = err instanceof Error ? err.message : String(err);
       return errorResult(`Failed to read WebMCP registry: ${message}`);
     }
+    recordWebMcpToolDisplayTitles(infos);
     const info = infos.find((candidate) => candidate.name === bareName);
 
     if (!info) {
@@ -323,10 +370,12 @@ export class WebMcpBridge {
 
     // Confirm-by-default gate. Every `webmcp:*` call routes through here,
     // regardless of `annotations.readOnlyHint`.
+    const displayTitle = getWebMcpToolDisplayTitle(bareName);
     const gateInfo: WebMcpConfirmInfo = {
       toolName: bareName,
       args,
       description: info.description,
+      ...(displayTitle ? { title: displayTitle } : {}),
       reason: "gate",
     };
     if (!(await this.requestConfirm(gateInfo))) {
