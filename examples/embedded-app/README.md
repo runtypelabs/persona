@@ -136,6 +136,15 @@ The action middleware example demonstrates:
 >
 > **Note on resume routing.** In proxy mode the widget posts the local-tool `/resume` to `…/api/chat/dispatch-webmcp/resume`, and the proxy forwards it upstream to `/v1/dispatch/resume` with its surface API key (`packages/proxy/src/index.ts`).
 
+### WebMCP Calendar Copilot
+- **Calendar page**: `http://localhost:5173/webmcp-calendar.html` (proxy mode — agent defined in code as `WEBMCP_CALENDAR_FLOW`, mounted at `/api/chat/dispatch-calendar`)
+  - A hybrid "AI-native dashboard": a calendar with a manual **Quick Add** form *and* a conversational prompt bar; both drive the same state the WebMCP tools expose
+  - `src/webmcp-calendar/calendar.js` registers **ten tools** on `document.modelContext` via `@mcp-b/global` (create/update/delete events, availability search, state reads) — callable by the embedded Persona widget *and* by [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp/) against the same page
+  - Submitting the prompt bar slides Persona out as a **full-height docked copilot** and collapses the manual input surfaces; closing restores them. Append `?mode=pill` to mount the native composer-bar pill instead
+  - Read-only tools auto-approve (`webmcp.autoApprove`); mutating tools show approval bubbles with friendly copy via tool `title`s + `approval.formatDescription`
+  - Tool inputs/outputs use **local wall-clock times** (no UTC offsets) so "8am" lands at 8am on the visible calendar
+  - Adapted from [WebMCP-org/chrome-devtools-quickstart](https://github.com/WebMCP-org/chrome-devtools-quickstart) (MIT) by the WebMCP team — the Vite + `@mcp-b/global` foundation is theirs; the calendar dashboard, Persona integration, and copilot UX are built on top
+
 #### Wiring — same pattern as the other demos
 
 Like the bakery and storefront demos, this demo runs entirely through the **local proxy** — there is no client token and no hosted Runtype agent. The agent that drives the storefront is defined **in code** as `WEBMCP_STOREFRONT_FLOW` (`packages/proxy/src/flows/webmcp-storefront.ts`) and mounted at `/api/chat/dispatch-webmcp` by the proxy server (`examples/vercel-edge/src/server.ts`). `webmcp-demo.ts` simply points its `apiUrl` at that path.

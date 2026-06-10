@@ -9,6 +9,7 @@ import {
   BAKERY_ASSISTANT_FLOW,
   STOREFRONT_ASSISTANT_FLOW,
   WEBMCP_STOREFRONT_FLOW,
+  WEBMCP_CALENDAR_FLOW,
   PAGE_CONTEXT_FLOW,
   createCheckoutSession
 } from "@runtypelabs/persona-proxy";
@@ -98,6 +99,18 @@ const webmcpApp = createChatProxyApp({
   upstreamUrl
 });
 
+// WebMCP calendar proxy - for the calendar copilot demo. Same pattern as the
+// storefront: the page registers ten calendar tools on document.modelContext,
+// the widget forwards them as clientTools[], and the in-code
+// WEBMCP_CALENDAR_FLOW drives them — no hosted Runtype agent / client token.
+const webmcpCalendarApp = createChatProxyApp({
+  path: "/api/chat/dispatch-calendar",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_CALENDAR || undefined,
+  flowConfig: process.env.FLOW_ID_CALENDAR ? undefined : WEBMCP_CALENDAR_FLOW,
+  upstreamUrl
+});
+
 // Page-context proxy - read-only, markdown answers about the current page.
 // Used by the smart-dom-reader demo: the widget sends live page context (including
 // shadow-DOM elements) as `inputs`, and this flow injects it via {{pageContext}}.
@@ -116,6 +129,7 @@ app.route("/", componentApp);
 app.route("/", bakeryApp);
 app.route("/", storefrontApp);
 app.route("/", webmcpApp);
+app.route("/", webmcpCalendarApp);
 app.route("/", pageContextApp);
 
 // Stripe checkout endpoint

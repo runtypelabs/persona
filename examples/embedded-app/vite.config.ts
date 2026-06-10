@@ -400,6 +400,8 @@ export default defineConfig({
         'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
         // WebMCP — page-discovered tools
         'webmcp-demo': path.resolve(__dirname, 'webmcp-demo.html'),
+        // WebMCP — calendar copilot (client-token mode)
+        'webmcp-calendar': path.resolve(__dirname, 'webmcp-calendar.html'),
         // Bakery demo pages
         'bakery': path.resolve(__dirname, 'bakery.html'),
         'bakery-story': path.resolve(__dirname, 'bakery-story.html'),
