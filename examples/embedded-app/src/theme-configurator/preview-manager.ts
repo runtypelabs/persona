@@ -1338,12 +1338,18 @@ export function createPreviewManager(
       // dimensions and downscale via the library's `scale` option. Nested
       // iframes (the cross-origin background preview) are excluded via a
       // tagName check — NOT instanceof, which always fails across realms.
+      //
+      // Backfill the (JPEG, no-alpha) canvas with the frame's own body
+      // background so dark previews aren't captured against white where the
+      // canvas shows through — e.g. behind the excluded background iframe.
+      const bodyBg = doc.defaultView?.getComputedStyle(doc.body).backgroundColor;
+      const bodyBgTransparent = !bodyBg || bodyBg === 'transparent' || bodyBg === 'rgba(0, 0, 0, 0)';
       const dataUrl = await domToJpeg(doc.body, {
         width: dims.w,
         height: dims.h,
         scale,
         quality: CAPTURE_JPEG_QUALITY,
-        backgroundColor: '#ffffff',
+        backgroundColor: bodyBgTransparent ? '#ffffff' : bodyBg,
         filter: (node) => (node as Element).tagName?.toUpperCase?.() !== 'IFRAME',
       });
 

@@ -224,13 +224,15 @@ function init(): void {
   // `state` so the preview + controls update for free. screenshot_preview is
   // page-level: it captures the live preview frames for the agent's visual
   // feedback loop.
-  const unmountMcp = mountThemeEditorMcp(state, {
+  const mcp = mountThemeEditorMcp(state, {
     extraTools: [createScreenshotPreviewTool(() => previewManager)],
   });
-  window.addEventListener('beforeunload', unmountMcp);
+  window.addEventListener('beforeunload', mcp.unmount);
 
-  // Mount the docked Theme Copilot — the live agent that drives the tools above.
-  initThemeCopilot();
+  // Mount the docked Theme Copilot — the live agent that drives the tools
+  // above — only after registration completes, so its first dispatch always
+  // carries the full clientTools list.
+  void mcp.ready.then(() => initThemeCopilot());
 }
 
 // ─── Tabs ────────────────────────────────────────────────────────
