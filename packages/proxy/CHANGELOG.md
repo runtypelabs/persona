@@ -1,5 +1,12 @@
 # @runtypelabs/persona-proxy
 
+## 3.32.0
+
+### Minor Changes
+
+- 1247779: Add `WEBMCP_DOCKED_FLOW`, a tool-less dashboard-copilot flow for the docked panel demo. Like the other WebMCP flows, the page registers its workspace tools on `document.modelContext` and the proxy forwards them as `clientTools[]`.
+- 3333850: Add WEBMCP_SLIDES_FLOW — a Deck Copilot flow for the new slide-deck editor WebMCP demo (`examples/embedded-app/webmcp-slides.html`). Like the other WebMCP flows it owns no tools of its own; the system prompt teaches the model to work with the page's dynamic tool set (selection-scoped tools, presenter-mode swap) and the live `{{slides_context}}` editor state.
+
 ## 3.31.0
 
 ### Minor Changes
