@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isComposerBarMountMode, isDockedMountMode } from "./dock";
+import { isComposerBarMountMode, isDockedMountMode, resolveDockConfig } from "./dock";
 import type { AgentWidgetConfig } from "../types";
 
 describe("isDockedMountMode", () => {
@@ -13,6 +13,28 @@ describe("isDockedMountMode", () => {
     expect(isDockedMountMode({ apiUrl: "/api" } as AgentWidgetConfig)).toBe(false);
     expect(
       isDockedMountMode({ apiUrl: "/api", launcher: { mountMode: "composer-bar" } } as AgentWidgetConfig)
+    ).toBe(false);
+  });
+});
+
+describe("resolveDockConfig", () => {
+  it("defaults maxHeight to the viewport guard", () => {
+    const config: AgentWidgetConfig = { apiUrl: "/api", launcher: { mountMode: "docked" } };
+    expect(resolveDockConfig(config).maxHeight).toBe("100dvh");
+  });
+
+  it("passes through a custom maxHeight and the false opt-out", () => {
+    expect(
+      resolveDockConfig({
+        apiUrl: "/api",
+        launcher: { mountMode: "docked", dock: { maxHeight: "600px" } },
+      }).maxHeight
+    ).toBe("600px");
+    expect(
+      resolveDockConfig({
+        apiUrl: "/api",
+        launcher: { mountMode: "docked", dock: { maxHeight: false } },
+      }).maxHeight
     ).toBe(false);
   });
 });

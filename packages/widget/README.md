@@ -99,6 +99,8 @@ const docked = initAgentWidget({
 
 When `config.launcher.mountMode` is `'docked'`, `target` is treated as the page container that Persona should wrap. Use a concrete element such as `#workspace-main`; `body` and `html` are rejected.
 
+**Height contract:** the docked shell sizes itself with `height: 100%`, so give it a definite height — usually `html, body { height: 100% }` or a fixed-height app-shell container around the target. If no ancestor provides one, the panel is clamped to `dock.maxHeight` (default `100dvh`, sticky-pinned for in-flow reveals) so it stays viewport-sized and scrolls internally, and a console warning explains the fix. Override the cap with a CSS length or disable the guard with `dock.maxHeight: false`.
+
 With **`dock.reveal: 'resize'`** (default), a **closed** dock uses a **`0px`** column. **`'emerge'`** uses the same **column width** animation (content reflows) but the chat panel stays **`dock.width`** wide and is **clipped** by the growing slot—like a normal-width widget emerging from the edge. **`'overlay'`** overlays with `transform`. **`'push'`** uses a sliding track (Shopify-style). The built-in launcher stays hidden in docked mode—open with **`controller.open()`** (or your own chrome).
 
 **Rounded / card layout:** `initAgentWidget` inserts a flex **shell** as the **direct child** of your target’s **parent**, with your `target` in the content column and the dock beside it. Put border-radius, border, and `overflow: hidden` on that **parent** (or an ancestor that wraps only the shell) so the dock column sits inside the same visual card as your content.
