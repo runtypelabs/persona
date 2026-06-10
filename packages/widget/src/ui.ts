@@ -5937,6 +5937,10 @@ export const createAgentExperience = (
   body.addEventListener("wheel", handleWheel, { passive: true });
   destroyCallbacks.push(() => body.removeEventListener("wheel", handleWheel));
   scrollToBottomButton.addEventListener("click", () => {
+    // Jumping to the latest abandons the current anchor: drop the spacer
+    // first so "bottom" means the real end of content, not spacer padding
+    // that would keep shrinking underneath the reader.
+    resetAnchorState();
     body.scrollTop = body.scrollHeight;
     lastScrollTop = body.scrollTop;
     resumeAutoScroll();

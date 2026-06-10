@@ -1018,6 +1018,13 @@ describe("createAgentExperience streaming scroll", () => {
     resize.trigger();
     expect(spacer?.style.height).toBe("18px");
 
+    // Jumping to the latest abandons the anchor: the spacer is dropped so
+    // "bottom" is the real end of content.
+    getScrollToBottomButton(mount)!.click();
+    raf.flush();
+    expect(spacer?.style.height).toBe("0px");
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
     controller.destroy();
   });
 
