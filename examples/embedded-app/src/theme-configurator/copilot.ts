@@ -3,10 +3,11 @@
  *
  * The copilot is a second, independent Persona widget on the editor page (the
  * preview widgets inside the iframes stay a passive showcase). It dispatches to
- * the theme-assistant flow, discovers the editor's WebMCP theme tools from the
- * parent page's `document.modelContext`, and restyles the preview live while
- * its own panel keeps Persona defaults — theming is per-mount, so the user
- * watches the preview change, not the copilot.
+ * the theme-assistant flow through the local proxy, discovers the editor's
+ * WebMCP theme tools from the parent page's `document.modelContext`, and
+ * restyles the preview live while its own panel keeps Persona defaults —
+ * theming is per-mount, so the user watches the preview change, not the
+ * copilot.
  *
  * Multi-modal loop: attachments are enabled so the user can paste a screenshot
  * of another site's chat widget; the agent extracts a style spec, applies it
@@ -21,28 +22,22 @@ import {
   markdownPostprocessor,
 } from '@runtypelabs/persona';
 import type {
-  AgentWidgetConfig,
   AgentWidgetInitHandle,
   WebMcpConfirmInfo,
 } from '@runtypelabs/persona';
 
 const MB = 1024 * 1024;
 
+// Proxy (dispatch) mode, like the other WebMCP demos: the copilot dispatches to
+// the local theme-assistant flow (THEME_ASSISTANT_FLOW in
+// @runtypelabs/persona-proxy), which forwards the page's clientTools[] upstream
+// and proxies the /resume round-trip — including the image blocks from
+// screenshot_preview. To back it with a hosted Runtype flow instead, set
+// FLOW_ID_THEME_ASSISTANT on the proxy (examples/vercel-edge/src/server.ts).
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-theme`
   : `http://localhost:${proxyPort}/api/chat/dispatch-theme`;
-
-// Two wiring modes, same as the WebMCP demo:
-//   1. Client-token mode — set VITE_PERSONA_CLIENT_TOKEN (+ VITE_PERSONA_API_URL,
-//      the API base) to dispatch straight to a Runtype surface/agent whose prompt
-//      is the theme copilot. This is the path proven to round-trip webmcp tools.
-//   2. Proxy mode (default fallback) — dispatch to the local theme-assistant flow.
-const clientToken = import.meta.env.VITE_PERSONA_CLIENT_TOKEN as string | undefined;
-const clientApiBase = import.meta.env.VITE_PERSONA_API_URL as string | undefined;
-const connectionConfig: Pick<AgentWidgetConfig, 'apiUrl' | 'clientToken'> = clientToken
-  ? { clientToken, ...(clientApiBase ? { apiUrl: clientApiBase } : {}) }
-  : { apiUrl: proxyUrl };
 
 // The editor registers its controls as WebMCP tools on the parent page's
 // `document.modelContext` (theme-configurator/webmcp/register.ts), which is
@@ -78,7 +73,7 @@ export function initThemeCopilot(): AgentWidgetInitHandle | null {
     useShadowDom: false,
     config: {
       ...DEFAULT_WIDGET_CONFIG,
-      ...connectionConfig,
+      apiUrl: proxyUrl,
       storageAdapter: createLocalStorageAdapter('persona-state-theme-copilot'),
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
       colorScheme: 'light',
