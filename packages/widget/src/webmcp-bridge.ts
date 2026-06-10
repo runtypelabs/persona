@@ -96,18 +96,19 @@ interface ModelContextCoreLike {
 const webMcpToolDisplayTitles = new Map<string, string>();
 
 /**
- * Record declared display titles from a fresh `getTools()` read. A tool that
- * no longer declares a title is evicted so a stale label can't outlive a
- * re-registration. Exported for tests; production callers are the bridge's
- * registry reads.
+ * Record declared display titles from a fresh `getTools()` read. The map is
+ * rebuilt from scratch — callers always pass the FULL registry snapshot — so
+ * a tool that unregistered or dropped its title can't leave a stale label
+ * behind. Exported for tests; production callers are the bridge's registry
+ * reads.
  */
 export const recordWebMcpToolDisplayTitles = (
   infos: ModelContextToolInfo[],
 ): void => {
+  webMcpToolDisplayTitles.clear();
   for (const info of infos) {
     const title = info.title?.trim();
     if (title) webMcpToolDisplayTitles.set(info.name, title);
-    else webMcpToolDisplayTitles.delete(info.name);
   }
 };
 

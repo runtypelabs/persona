@@ -85,10 +85,9 @@ const getDetails = (bubble: HTMLElement) =>
 
 beforeEach(() => {
   approvalDetailsExpansionState.clear();
-  // Evict any display title recorded by a prior test (empty title = evict).
-  recordWebMcpToolDisplayTitles([
-    { name: "add_to_cart", description: "", title: "" },
-  ]);
+  // Reset display titles recorded by a prior test (the map is rebuilt from
+  // each full snapshot, so recording an empty snapshot clears it).
+  recordWebMcpToolDisplayTitles([]);
 });
 
 describe("humanizeToolName", () => {

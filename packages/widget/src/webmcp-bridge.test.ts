@@ -228,6 +228,21 @@ describe("WebMCP display titles", () => {
     expect(getWebMcpToolDisplayTitle("add_to_cart")).toBeUndefined();
   });
 
+  it("evicts the title when the tool is removed from the registry entirely", async () => {
+    registry.tools = [
+      fakeTool({ name: "add_to_cart", title: "Add to Cart" }),
+      fakeTool({ name: "search_products", title: "Search the catalog" }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true });
+    await bridge.snapshotForDispatch();
+    expect(getWebMcpToolDisplayTitle("add_to_cart")).toBe("Add to Cart");
+
+    registry.tools = [fakeTool({ name: "search_products", title: "Search the catalog" })];
+    await bridge.snapshotForDispatch();
+    expect(getWebMcpToolDisplayTitle("add_to_cart")).toBeUndefined();
+    expect(getWebMcpToolDisplayTitle("search_products")).toBe("Search the catalog");
+  });
+
   it("passes the declared title to the confirm gate", async () => {
     registry.tools = [fakeTool({ name: "add_to_cart", title: "Add to Cart" })];
     const onConfirm = vi.fn(async () => true);
