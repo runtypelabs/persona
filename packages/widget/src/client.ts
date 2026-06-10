@@ -3045,6 +3045,9 @@ export class AgentWidgetClient {
               toolName: payload.toolName ?? '',
               toolType: payload.toolType,
               description: payload.description ?? `Execute ${payload.toolName ?? 'tool'}`,
+              ...(typeof payload.reason === "string" && payload.reason
+                ? { reason: payload.reason }
+                : {}),
               parameters: payload.parameters,
             },
           };
@@ -3067,6 +3070,9 @@ export class AgentWidgetClient {
               toolName: payload.toolName ?? '',
               toolType: payload.toolType,
               description: payload.description ?? `Execute ${payload.toolName ?? 'tool'}`,
+              ...(typeof payload.reason === "string" && payload.reason
+                ? { reason: payload.reason }
+                : {}),
               parameters: payload.parameters,
             },
           };
