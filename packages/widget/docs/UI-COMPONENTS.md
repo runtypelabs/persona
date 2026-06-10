@@ -244,7 +244,21 @@ Indicators are resolved in this order:
 
 The `ask_user_question` feature turns a LOCAL agent tool into an interactive prompt with tappable option pills. When the agent calls the `ask_user_question` tool, the server pauses execution and emits a `step_await` event; the widget renders an answer-pill sheet over the composer; the user picks / types / dismisses; the widget POSTs the answer to `/v1/dispatch/resume` and the paused execution continues with a structured `tool_result`.
 
-This is the recommended pattern for human-in-the-loop clarifying questions. The agent-side setup (declare `ask_user_question` as a `runtimeTools` LOCAL tool and instruct the model to call it) lives in your `RuntypeFlowConfig` in the proxy — pair it with a `POST` handler that forwards to the upstream `/resume` endpoint (see `@runtypelabs/persona-proxy` and your deployment’s `resume` route).
+This is the recommended pattern for human-in-the-loop clarifying questions.
+
+### Exposing the tool to the agent
+
+The simplest setup is `expose: true` — the widget advertises a built-in `ask_user_question` tool definition (model-facing description + JSON schema) on every dispatch via `clientTools[]`, the same wire surface WebMCP page tools use. No server-side declaration needed; the server registers it as a LOCAL tool under its bare name and any flow's agent can call it.
+
+```ts
+features: {
+  askUserQuestion: { expose: true }
+}
+```
+
+`expose` defaults to `false` — flows that already declare the tool would otherwise present it to the model twice. It is also ignored when `enabled: false`, so the agent is never offered a question tool the widget can't render an answer UI for.
+
+The alternative is declaring the tool server-side in your `RuntypeFlowConfig` (a `runtimeTools` LOCAL tool entry); the exported `ASK_USER_QUESTION_CLIENT_TOOL` / `ASK_USER_QUESTION_PARAMETERS_SCHEMA` constants give you the same description and schema to reuse there. Either way, pair your proxy with a `POST` handler that forwards to the upstream `/resume` endpoint (see `@runtypelabs/persona-proxy` and your deployment’s `resume` route).
 
 ### Configuration
 
@@ -252,6 +266,7 @@ This is the recommended pattern for human-in-the-loop clarifying questions. The 
 features: {
   askUserQuestion: {
     enabled: true,             // default: true. When false, the tool falls through to the normal tool-bubble path.
+    expose: false,             // default: false. When true, advertises the built-in tool to the agent via clientTools[].
     dismissible: true,         // default: true. Shows a × close button on the sheet.
     slideInMs: 180,            // slide-in animation duration.
     freeTextLabel: 'Other…',

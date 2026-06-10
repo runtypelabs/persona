@@ -134,6 +134,12 @@ export {
   parseAskUserQuestionPayload
 } from "./components/ask-user-question-bubble";
 
+export {
+  ASK_USER_QUESTION_CLIENT_TOOL,
+  ASK_USER_QUESTION_PARAMETERS_SCHEMA,
+  builtInClientToolsForDispatch
+} from "./ask-user-question-tool";
+
 export { initAgentWidgetFn as initAgentWidget };
 export {
   createWidgetHostLayout,
