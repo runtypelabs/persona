@@ -31,3 +31,42 @@ export {
   listRegisteredStreamAnimations,
 } from "./utils/stream-animation";
 export type { StreamAnimationPlugin, StreamAnimationContext } from "./types";
+
+// ---------------------------------------------------------------------------
+// Deferred WebMCP polyfill loading.
+//
+// This bundle is built with `@mcp-b/webmcp-polyfill` external — the bridge's
+// default `import("@mcp-b/webmcp-polyfill")` is a bare specifier no browser
+// can resolve, so register a loader that imports the self-contained
+// `webmcp-polyfill.js` chunk from a sibling URL instead. Mirrors how
+// `install.ts` derives `launcher.global.js` from a `jsUrl` override.
+// ---------------------------------------------------------------------------
+
+import { setWebMcpPolyfillLoader } from "./webmcp-bridge";
+
+// Capture at module-evaluation time — `document.currentScript` is null once
+// execution leaves the script's initial synchronous run.
+const widgetScriptSrc: string | null =
+  typeof document !== "undefined"
+    ? ((document.currentScript as HTMLScriptElement | null)?.src ?? null)
+    : null;
+
+setWebMcpPolyfillLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "webmcp-polyfill.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the webmcp-polyfill.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should install @mcp-b/webmcp-polyfill on the " +
+          "page themselves before enabling config.webmcp.",
+      ),
+    );
+  }
+  // Runtime-only dynamic import; the specifier is a computed URL, so esbuild
+  // leaves it untouched (and must not try to bundle it).
+  return import(/* @vite-ignore */ chunkUrl);
+});

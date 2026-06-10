@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "180 kB",
+    "limit": "161 kB",
     "gzip": true
   },
   {
@@ -20,13 +20,13 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "141 kB",
+    "limit": "140 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "142 kB",
+    "limit": "141 kB",
     "gzip": true
   },
   {
@@ -57,6 +57,12 @@
     "name": "Opt-in · plugin-kit subpath (plugin-kit.js)",
     "path": "dist/plugin-kit.js",
     "limit": "2 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · WebMCP polyfill chunk (webmcp-polyfill.js)",
+    "path": "dist/webmcp-polyfill.js",
+    "limit": "11 kB",
     "gzip": true
   }
 ]
