@@ -199,6 +199,587 @@ code {
   opacity: 1;
 }
 
+/* ======================================================================
+   Top Nav
+   ====================================================================== */
+
+html {
+  scroll-behavior: smooth;
+}
+
+section[id] {
+  scroll-margin-top: 24px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.site-nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 3vw;
+}
+
+.site-nav-brand {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.site-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.site-nav-links a {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.site-nav-links a:hover {
+  color: var(--foreground);
+}
+
+.site-nav-github {
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--foreground) !important;
+}
+
+.site-nav-github:hover {
+  border-color: var(--foreground);
+}
+
+@media (max-width: 960px) {
+  .site-nav-links a:not(.site-nav-github) {
+    display: none;
+  }
+}
+
+/* ======================================================================
+   Hero Split — 3D Carousel Layout
+   ====================================================================== */
+
+.hero-split {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: 72px 3vw 0;
+}
+
+.hero-split-inner {
+  display: flex;
+  align-items: center;
+  min-height: calc(100vh - 72px - 3vw);
+  gap: 3vw;
+}
+
+/* Floating glass panel — left side */
+.hero-panel {
+  flex: 0 0 clamp(280px, 24vw, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 32px 28px 28px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    0 0 0 1px rgba(0, 0, 0, 0.03);
+  z-index: 2;
+  position: relative;
+  animation: hero-fade-in 0.8s var(--ease-smooth) 0.1s both;
+}
+
+.hero-panel h1 {
+  font-size: clamp(26px, 2.2vw, 38px);
+  line-height: 1.08;
+  margin: 4px 0 0;
+}
+
+.hero-panel p {
+  max-width: 340px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin-bottom: 0;
+}
+
+.hero-panel .hero-features {
+  justify-content: flex-start;
+}
+
+.hero-panel .hero-badges {
+  justify-content: flex-start;
+}
+
+/* Hero CTAs */
+.hero-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.hero-cta-primary,
+.hero-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius);
+  text-decoration: none;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.hero-cta-primary {
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  box-shadow: 0 4px 14px -4px rgba(91, 46, 255, 0.45);
+}
+
+.hero-cta-primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.hero-cta-secondary {
+  color: var(--foreground);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.hero-cta-secondary:hover {
+  border-color: var(--foreground);
+  transform: translateY(-1px);
+}
+
+/* Card Stack — right side */
+.carousel-3d {
+  flex: 1;
+  perspective: 1200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 420px;
+  position: relative;
+  animation: hero-fade-in 0.8s var(--ease-smooth) 0.3s both;
+}
+
+.carousel-3d::before {
+  content: '';
+  position: absolute;
+  width: 500px;
+  height: 400px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse, rgba(91, 46, 255, 0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.carousel-3d-scene {
+  width: 50vw;
+  height: calc(50vw * 0.62);
+  position: relative;
+  transform: rotateY(-4deg) rotateX(2deg);
+  transform-style: flat;
+}
+
+.carousel-3d-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  transition:
+    transform 0.7s var(--ease-smooth),
+    opacity 0.7s var(--ease-smooth);
+  will-change: transform, opacity;
+}
+
+.carousel-3d-card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 12px 40px -8px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.3s ease;
+  background: #fff;
+}
+
+.carousel-3d-card-link:hover {
+  box-shadow:
+    0 16px 48px -8px rgba(91, 46, 255, 0.25),
+    0 0 0 1px rgba(91, 46, 255, 0.15);
+}
+
+.carousel-3d-iframe-wrap {
+  width: 50vw;
+  height: calc(50vw * 0.5625);
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(135deg, var(--background) 0%, var(--accent) 100%);
+}
+
+.carousel-3d-iframe-wrap iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Simulate a ~laptop-sized viewport (2x the card), not a 4K monitor, so
+     demo pages render at a readable size. Height = 2x the wrap's 16:9. */
+  width: calc(50vw * 2);
+  height: calc(50vw * 1.125);
+  transform: scale(0.5);
+  transform-origin: top left;
+  border: none;
+  pointer-events: none;
+}
+
+.carousel-3d-card-title {
+  display: block;
+  padding: 10px 14px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+/* Carousel controls — arrows + dots */
+.carousel-3d-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.carousel-3d-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.carousel-3d-nav:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.carousel-3d-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.carousel-3d-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--border);
+  cursor: pointer;
+  transition: background 0.25s ease, width 0.25s var(--ease-smooth);
+}
+
+.carousel-3d-dot:hover {
+  background: var(--muted-light);
+}
+
+.carousel-3d-dot.is-active {
+  width: 22px;
+  background: var(--primary);
+}
+
+.carousel-3d-hint {
+  margin: -6px 0 0;
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-light);
+  position: relative;
+  z-index: 1;
+}
+
+/* "Open demo" affordance on the front card */
+.carousel-3d-card-link {
+  position: relative;
+}
+
+.carousel-3d-card.is-front .carousel-3d-card-link::after {
+  content: 'Open demo ↗';
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.96);
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(20, 20, 28, 0.82);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: opacity 0.2s ease, transform 0.2s var(--ease-smooth);
+}
+
+.carousel-3d-card.is-front .carousel-3d-card-link:hover::after,
+.carousel-3d-card.is-front .carousel-3d-card-link:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+@keyframes card-approach {
+  from { transform: scale(1) translateY(0); }
+  to { transform: scale(1.04) translateY(-8px); }
+}
+
+.carousel-3d-card.is-approaching {
+  animation: card-approach 4s ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carousel-3d-card.is-approaching {
+    animation: none;
+  }
+}
+
+@keyframes hero-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hero responsive — tablet (vw handles card scaling, just tweak panel) */
+@media (max-width: 1080px) {
+  .hero-panel h1 {
+    font-size: clamp(24px, 2.5vw, 32px);
+  }
+}
+
+/* Hero responsive — small tablet / large phone */
+@media (max-width: 960px) {
+  .hero-split {
+    padding: 76px 16px 0;
+  }
+
+  .hero-split-inner {
+    flex-direction: column;
+    min-height: auto;
+    gap: 20px;
+  }
+
+  .hero-panel {
+    flex: none;
+    width: 100%;
+    max-width: 540px;
+    text-align: center;
+    align-items: center;
+    padding: 24px 24px 20px;
+    gap: 10px;
+  }
+
+  .hero-panel p {
+    max-width: 460px;
+  }
+
+  .hero-panel .hero-features {
+    justify-content: center;
+  }
+
+  .hero-panel .hero-badges {
+    justify-content: center;
+  }
+
+  .carousel-3d {
+    min-height: 320px;
+  }
+}
+
+/* Hero responsive — phone */
+@media (max-width: 640px) {
+  .hero-split {
+    padding: 64px 10px 0;
+  }
+
+  .hero-split-inner {
+    gap: 14px;
+  }
+
+  .hero-panel {
+    padding: 20px 16px 16px;
+    gap: 8px;
+    border-radius: 12px;
+  }
+
+  .hero-panel .label {
+    font-size: 10px;
+  }
+
+  .hero-panel h1 {
+    font-size: 24px;
+  }
+
+  .hero-panel p {
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 0;
+  }
+
+  .hero-panel .hero-features {
+    column-gap: 20px;
+    row-gap: 5px;
+    margin-top: 4px;
+  }
+
+  .hero-panel .hero-features li {
+    font-size: 12px;
+  }
+
+  .hero-panel .hero-badges {
+    gap: 6px;
+  }
+
+  .hero-panel .hero-badges img {
+    height: 18px;
+  }
+
+  .hero-panel .hero-byline {
+    font-size: 12px;
+  }
+
+  .carousel-3d {
+    min-height: auto;
+    width: calc(100% + 20px);
+    margin-left: -10px;
+  }
+
+  .carousel-3d-scene {
+    width: 88vw;
+    height: calc(88vw * 0.62);
+  }
+
+  .carousel-3d-iframe-wrap {
+    width: 88vw;
+    height: calc(88vw * 0.5625);
+  }
+
+  .carousel-3d-iframe-wrap iframe {
+    width: calc(88vw * 3);
+    height: calc(88vw * 1.6875);
+    transform: scale(0.3333);
+  }
+
+  .carousel-3d-card-title {
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+
+  .site-nav {
+    padding: 14px 16px;
+  }
+
+  .site-nav-brand {
+    font-size: 19px;
+  }
+
+  .hero-cta {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .hero-cta-primary,
+  .hero-cta-secondary {
+    padding: 9px 15px;
+    font-size: 13px;
+  }
+
+  .carousel-3d-hint {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-panel,
+  .carousel-3d {
+    animation: none;
+    opacity: 1;
+  }
+
+  .carousel-3d-card {
+    transition: none;
+  }
+}
+
+/* ====================================================================== */
+
 .hero h1 {
   margin: 4px 0 0;
   font-size: 36px;
@@ -214,22 +795,45 @@ code {
 }
 
 .hero-features {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  column-gap: 24px;
+  row-gap: 7px;
   justify-content: center;
-  margin-top: 4px;
 }
 
-.hero-feature-pill {
-  font-size: 12px;
+/* If the panel is too narrow for two columns, fall back to one clean column
+   instead of letting labels collide. */
+@media (max-width: 1180px) and (min-width: 901px), (max-width: 420px) {
+  .hero-features {
+    grid-template-columns: max-content;
+  }
+}
+
+.hero-features li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--muted);
-  padding: 4px 10px;
-  border-radius: 100px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.6);
+  color: var(--secondary-text);
+  letter-spacing: 0.01em;
   white-space: nowrap;
+}
+
+.hero-features li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  background-color: var(--primary);
+  /* Inline check glyph, masked so it inherits --primary */
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 5" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>') center / contain no-repeat;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 5" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>') center / contain no-repeat;
 }
 
 .hero-badges {
@@ -303,7 +907,7 @@ code {
  * the header close control. With `width`/`height` 32px and `box-sizing: border-box`,
  * horizontal padding 18+18px leaves no room for the SVG.
  */
-.page button:not([data-persona-root] *):not(.quick-start-tab),
+.page button:not([data-persona-root] *):not(.quick-start-tab):not(.carousel-3d-dot):not(.carousel-3d-nav),
 .page select:not([data-persona-root] *),
 .page .btn:not([data-persona-root] *) {
   font-family: var(--font-sans);
@@ -1068,6 +1672,84 @@ code {
   transform: translateX(4px);
 }
 
+/* Demo Lightbox */
+.demo-lightbox {
+  width: 90vw;
+  max-width: 1600px;
+  height: 85vh;
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 24px 80px -12px rgba(0, 0, 0, 0.35);
+}
+
+.demo-lightbox::backdrop {
+  background: rgba(6, 8, 14, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.demo-lightbox-chrome {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  padding: 12px;
+}
+
+.demo-lightbox-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px !important;
+  border: none !important;
+  border-radius: 8px !important;
+  background: rgba(0, 0, 0, 0.55) !important;
+  color: #fff !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.2s ease !important;
+  box-shadow: none !important;
+}
+
+.demo-lightbox-close:hover {
+  background: rgba(0, 0, 0, 0.75) !important;
+  transform: none !important;
+}
+
+.demo-lightbox-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.6;
+  letter-spacing: 0.02em;
+}
+
+.demo-lightbox-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+@media (max-width: 640px) {
+  .demo-lightbox {
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .demo-lightbox-hint {
+    display: none;
+  }
+}
+
 /* Footer */
 .footer {
   border-top: 1px solid var(--border);
@@ -1285,4 +1967,112 @@ code {
   .footer {
     padding: 24px 16px;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Hero install one-liner
+   --------------------------------------------------------------------------- */
+.hero-install {
+  margin-top: 10px;
+  text-align: left;
+}
+
+@media (max-width: 640px) {
+  .hero-install {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   WebMCP section
+   --------------------------------------------------------------------------- */
+.webmcp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.webmcp-demo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--foreground);
+  transition: all 0.2s ease;
+}
+
+.webmcp-demo-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.webmcp-demo-card p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.webmcp-demo-tag {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.webmcp-demo-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.webmcp-demo-cta {
+  margin-top: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.webmcp-code {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .webmcp-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Featured demo grid (home "Demos" section)
+   --------------------------------------------------------------------------- */
+#demos .featured-grid {
+  margin-top: 20px;
+}
+
+.example-item-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin-bottom: 2px;
+}
+
+.example-item-desc {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+#demos .advanced-cta-actions {
+  margin-top: 20px;
 }

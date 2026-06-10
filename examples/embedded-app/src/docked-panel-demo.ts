@@ -6,13 +6,37 @@ import {
   initAgentWidget,
   markdownPostprocessor,
   type AgentWidgetInitHandle,
+  type WebMcpConfirmInfo,
 } from "@runtypelabs/persona";
+import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 
+// The docked Copilot is WebMCP-powered: this page registers four workspace
+// tools on document.modelContext (see "WebMCP page tools" at the bottom) and
+// the dispatch-docked flow drives them — read the dashboard, switch sections,
+// log activity, and even move the assistant's own dock.
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const apiUrl =
   import.meta.env.VITE_PROXY_URL
-    ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch`
-    : `http://localhost:${proxyPort}/api/chat/dispatch`;
+    ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-docked`
+    : `http://localhost:${proxyPort}/api/chat/dispatch-docked`;
+
+/** Minimal structural view of the WebMCP producer surface (see webmcp-demo.ts). */
+interface RegisterableModelContext {
+  registerTool(
+    tool: {
+      name: string;
+      title?: string;
+      description: string;
+      inputSchema?: object;
+      annotations?: Record<string, unknown>;
+      execute: (args: Record<string, unknown>) => unknown;
+    },
+    options?: { signal?: AbortSignal },
+  ): void;
+}
+
+/** Read-only tools run without confirmation; mutations get Persona's approval bubble. */
+const READ_ONLY_TOOLS = new Set(["get_workspace_overview", "switch_section"]);
 
 const dockSideSelect = document.getElementById("dock-side") as HTMLSelectElement | null;
 const dockWidthInput = document.getElementById("dock-width") as HTMLInputElement | null;
@@ -163,14 +187,23 @@ function createController(): AgentWidgetInitHandle {
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
         welcomeTitle: "Ask Copilot",
-        welcomeSubtitle: "Search docs, get answers, or draft content next to your work.",
+        welcomeSubtitle:
+          "I can read this dashboard, switch sections, log activity, and even move my own panel — using the page's own tools.",
         inputPlaceholder: "Ask a question or describe what you need…",
       },
+      // Ordered to walk the tool surface: read-only overview (auto-approved),
+      // read-only-ish navigation, then two mutations that raise approval bubbles
+      // (one of which moves the assistant's own dock).
       suggestionChips: [
-        "What should I review before publishing today?",
-        "Draft a short update for stakeholders on this week’s changes.",
-        "Summarize performance and catalog updates from the last 7 days.",
+        "What needs my attention on this dashboard?",
+        "Switch to the Catalog section",
+        "Log a note that the launch checklist is done",
+        "Move your panel to the left side, 360px wide",
       ],
+      webmcp: {
+        enabled: true,
+        autoApprove: (info: WebMcpConfirmInfo): boolean => READ_ONLY_TOOLS.has(info.toolName),
+      },
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     },
   });
@@ -256,3 +289,181 @@ assistantToggle.addEventListener("click", () => {
   document.getElementById("assistant-coachmark")?.remove();
   controller.toggle();
 });
+
+// ---------------------------------------------------------------------------
+// WebMCP page tools
+//
+// Mocked workspace actions in the same spirit as webmcp-demo.ts: the page
+// owns the tools, Persona drives them, and every result is visible on the
+// dashboard. Read-only tools auto-approve (see READ_ONLY_TOOLS); mutations
+// raise Persona's in-panel approval bubble.
+// ---------------------------------------------------------------------------
+
+initializeWebMCPPolyfill();
+
+const modelContext = (
+  document as Document & { modelContext?: RegisterableModelContext }
+).modelContext;
+
+if (modelContext) {
+  const navItems = (): HTMLElement[] =>
+    Array.from(document.querySelectorAll<HTMLElement>(".workspace-nav .nav-item"));
+  const sectionName = (el: HTMLElement): string => el.textContent?.trim() ?? "";
+
+  // -- get_workspace_overview (read-only) --
+  modelContext.registerTool({
+    name: "get_workspace_overview",
+    title: "Read the dashboard",
+    description:
+      "Read the current workspace: available sections and which is active, the overview banner, the highlight cards, the recent-activity feed, and the assistant's current dock layout.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true },
+    execute() {
+      const banner = document.querySelector(".workspace-banner");
+      const cards = Array.from(document.querySelectorAll(".workspace-card")).map((card) => ({
+        title: card.querySelector("h4")?.textContent?.trim() ?? "",
+        summary: card.querySelector("p")?.textContent?.trim() ?? "",
+      }));
+      const activity = Array.from(document.querySelectorAll(".workspace-feed .feed-item")).map(
+        (item) => {
+          const spans = item.querySelectorAll("span");
+          return {
+            when: spans[0]?.textContent?.trim() ?? "",
+            title: spans[1]?.textContent?.trim() ?? "",
+            detail: spans[2]?.textContent?.trim() ?? "",
+          };
+        },
+      );
+      return {
+        sections: navItems().map((el) => ({
+          name: sectionName(el),
+          active: el.classList.contains("is-active"),
+        })),
+        banner: {
+          title: banner?.querySelector("h3")?.textContent?.trim() ?? "",
+          text: banner?.querySelector("p")?.textContent?.trim() ?? "",
+        },
+        cards,
+        activity,
+        dock: getDockConfig(),
+      };
+    },
+  });
+
+  // -- switch_section (read-only-ish navigation) --
+  modelContext.registerTool({
+    name: "switch_section",
+    title: "Switch workspace section",
+    description:
+      "Highlight a section in the workspace navigation. Valid section names come from get_workspace_overview (e.g. Overview, Automation, Audience, Catalog, Publishing).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        section: { type: "string", description: "Exact name of the section to activate." },
+      },
+      required: ["section"],
+    },
+    annotations: { readOnlyHint: true },
+    execute(args) {
+      const requested = String(args.section ?? "").trim().toLowerCase();
+      const items = navItems();
+      const target = items.find((el) => sectionName(el).toLowerCase() === requested);
+      if (!target) {
+        return {
+          error: `Unknown section "${args.section}". Available: ${items.map(sectionName).join(", ")}.`,
+        };
+      }
+      items.forEach((el) => {
+        el.classList.toggle("is-active", el === target);
+        if (el === target) el.setAttribute("aria-current", "page");
+        else el.removeAttribute("aria-current");
+      });
+      updateStatus(`Switched to ${sectionName(target)}.`);
+      return { ok: true, active: sectionName(target) };
+    },
+  });
+
+  // -- set_dock_layout (mutating — the assistant repositions itself) --
+  modelContext.registerTool({
+    name: "set_dock_layout",
+    title: "Move the assistant dock",
+    description:
+      "Reposition or resize the assistant's own docked panel. All fields optional; omitted ones keep their current value. side: 'left' | 'right'. width: CSS width like '360px'. reveal: 'resize' | 'emerge' | 'overlay' | 'push'. animate: boolean.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        side: { type: "string", enum: ["left", "right"] },
+        width: { type: "string", description: "CSS width for the open dock, e.g. '360px'." },
+        reveal: { type: "string", enum: ["resize", "emerge", "overlay", "push"] },
+        animate: { type: "boolean" },
+      },
+    },
+    execute(args) {
+      if (args.side !== undefined) {
+        if (args.side !== "left" && args.side !== "right") {
+          return { error: `Invalid side "${args.side}" — use "left" or "right".` };
+        }
+        sideSelect.value = args.side;
+      }
+      if (args.width !== undefined) {
+        const raw = String(args.width).trim();
+        const width = /^\d+(\.\d+)?$/.test(raw) ? `${raw}px` : raw;
+        if (!/^\d+(\.\d+)?(px|rem|em|vw|%)$/.test(width)) {
+          return { error: `Invalid width "${args.width}" — use a CSS length like "360px".` };
+        }
+        widthInput.value = width;
+      }
+      if (args.reveal !== undefined) {
+        const reveal = String(args.reveal);
+        if (!["resize", "emerge", "overlay", "push"].includes(reveal)) {
+          return { error: `Invalid reveal "${args.reveal}" — use resize, emerge, overlay, or push.` };
+        }
+        revealSelect.value = reveal;
+      }
+      if (args.animate !== undefined) {
+        animateCheck.checked = Boolean(args.animate);
+      }
+      applyDockSettings();
+      return { ok: true, dock: getDockConfig() };
+    },
+  });
+
+  // -- log_activity (mutating — visible feed update) --
+  modelContext.registerTool({
+    name: "log_activity",
+    title: "Log activity",
+    description:
+      "Add an entry to the dashboard's Recent activity feed. Use a short title and put any detail in the body.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short headline for the entry." },
+        detail: { type: "string", description: "One-sentence detail shown under the title." },
+      },
+      required: ["title"],
+    },
+    execute(args) {
+      const feed = document.querySelector(".workspace-feed");
+      if (!feed) return { error: "Activity feed not found on the page." };
+
+      // Built with textContent — agent-supplied strings never touch innerHTML.
+      const item = document.createElement("div");
+      item.className = "feed-item";
+      const meta = document.createElement("span");
+      meta.className = "feed-meta";
+      meta.textContent = "Just now";
+      const title = document.createElement("span");
+      title.className = "feed-title";
+      title.textContent = String(args.title ?? "").trim() || "Untitled note";
+      item.append(meta, title);
+      if (args.detail !== undefined && String(args.detail).trim()) {
+        const detail = document.createElement("span");
+        detail.textContent = String(args.detail).trim();
+        item.append(detail);
+      }
+      feed.querySelector(".workspace-feed__heading")?.after(item);
+      updateStatus("Activity logged.");
+      return { ok: true, logged: title.textContent };
+    },
+  });
+}

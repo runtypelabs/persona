@@ -6,7 +6,6 @@ import {
   createAgentExperience,
   createLocalStorageAdapter,
   markdownPostprocessor,
-  createDemoCarousel,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
 
@@ -152,7 +151,7 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 - [Theme Editor](/theme.html) — visually customize the widget theme and styling in real time
 - [Action Middleware](/action-middleware.html) — DOM-aware page context each turn plus middleware that executes real UI actions (navigate, cart, checkout)
 - [Bakery Assistant](/bakery.html) — industry-specific persona with a rich product catalog and cart actions
-- [Docked Panel](/docked-panel-demo.html) — alternative layout with the widget docked to the side of the page
+- [Docked Panel](/docked-panel-demo.html) — WebMCP-powered dashboard copilot docked to the side of the page; it reads the workspace, switches sections, logs activity, and can move its own dock via page tools
 - [Feedback Integration](/feedback-integration-demo.html) — wiring feedback events to an external API
 - [Custom Loading Indicator](/custom-loading-indicator.html) — replace the default loading UX with your own
 - [Agent Loop Execution](/agent-demo.html) — multi-turn reasoning with internal thought processes and tool use
@@ -166,6 +165,8 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 - [Stream Animations](/stream-animations-demo.html) — customize how streamed text animates in
 - [Persistent Composer](/persistent-composer.html) — always-visible composer bar layout
 - [WebMCP Storefront](/webmcp-demo.html) — expose page tools to the agent via WebMCP
+- [WebMCP Calendar](/webmcp-calendar.html) — a team calendar copilot that reads availability and books events through WebMCP page tools
+- [WebMCP Slides](/webmcp-slides.html) — a Deck Copilot that edits a slide deck through WebMCP page tools, with selection-scoped tools and presenter-mode controls
 
 ## Customization
 
@@ -316,17 +317,351 @@ const inlineController = createAgentExperience(inlineMount, {
 setupCodeCopyHandler(inlineMount);
 
 // ---------------------------------------------------------------------------
-// Demo Carousel
+// Hero 3D Carousel
 // ---------------------------------------------------------------------------
 
-const carouselMount = document.getElementById("demo-carousel-mount");
-if (carouselMount) {
-  createDemoCarousel(carouselMount, {
-    items: [
-      { url: "/launcher-demo.html", title: "Default Launcher", description: "Out-of-the-box chat widget experience" },
-      { url: "/bakery.html", title: "Site Nav, Checkout", description: "Full business site with context-aware chat" },
-      { url: "/fullscreen-assistant-demo.html", title: "Fullscreen", description: "Full-viewport dark layout with artifacts" },
-      { url: "/docked-panel-demo.html", title: "Docked Assistant", description: "Side-docked assistant layout" },
-    ],
+function initHeroCarousel() {
+  const scene = document.querySelector('.carousel-3d-scene') as HTMLElement | null;
+  if (!scene) return;
+
+  const cards = Array.from(scene.querySelectorAll('.carousel-3d-card')) as HTMLElement[];
+  if (!cards.length) return;
+
+  const VISIBLE = 5;
+  const CYCLE_MS = 4000;
+  const stack = [...cards];
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let paused = false;
+  let cycling = false;
+  let inView = true;
+
+  const container = scene.closest('.carousel-3d') as HTMLElement | null;
+  const dotsMount = container?.querySelector('[data-carousel-dots]') as HTMLElement | null;
+  const status = container?.querySelector('[data-carousel-status]') as HTMLElement | null;
+  const cardTitle = (card: HTMLElement) =>
+    card.querySelector('.carousel-3d-card-title')?.textContent?.trim() || 'Demo';
+
+  // Defer offscreen card iframes until the page has finished loading so the
+  // front card (and the rest of the page) wins the bandwidth race.
+  function hydrateDeferredIframes() {
+    scene!.querySelectorAll('iframe[data-src]').forEach((el) => {
+      const frame = el as HTMLIFrameElement;
+      frame.src = frame.dataset.src!;
+      frame.removeAttribute('data-src');
+    });
+  }
+  if (document.readyState === 'complete') {
+    hydrateDeferredIframes();
+  } else {
+    window.addEventListener('load', () => setTimeout(hydrateDeferredIframes, 250), { once: true });
+  }
+
+  function applyStyle(card: HTMLElement, i: number) {
+    const p = Math.min(i, VISIBLE);
+    card.style.transform = `translateX(${p * 16}px) translateY(${p * 4}px) rotate(${p * 0.8}deg)`;
+    card.style.opacity = i >= VISIBLE ? '0' : i >= 4 ? '0.5' : i >= 3 ? '0.7' : '1';
+    card.style.zIndex = i >= VISIBLE ? '0' : String(cards.length - i);
+    // Only the front card participates in the tab order; back cards act as
+    // bring-to-front controls for pointer users.
+    const link = card.querySelector('.carousel-3d-card-link') as HTMLAnchorElement | null;
+    if (link) link.tabIndex = i === 0 ? 0 : -1;
+    card.classList.toggle('is-front', i === 0);
+  }
+
+  // Dots — one per card, in original DOM order; clicking brings that card forward.
+  const dots: HTMLButtonElement[] = [];
+  if (dotsMount) {
+    cards.forEach((card) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'carousel-3d-dot';
+      dot.setAttribute('aria-label', `Show ${cardTitle(card)} demo`);
+      dot.addEventListener('click', () => {
+        goToCard(stack.indexOf(card));
+        resetAutoAdvance();
+      });
+      dotsMount.appendChild(dot);
+      dots.push(dot);
+    });
+  }
+
+  function syncUi() {
+    const front = stack[0];
+    const frontIdx = cards.indexOf(front);
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('is-active', i === frontIdx);
+      if (i === frontIdx) dot.setAttribute('aria-current', 'true');
+      else dot.removeAttribute('aria-current');
+    });
+    if (status) status.textContent = `${cardTitle(front)} demo, ${frontIdx + 1} of ${cards.length}`;
+  }
+
+  function applyAll() {
+    stack.forEach((card, i) => applyStyle(card, i));
+    syncUi();
+  }
+
+  // Start (or restart) the front card's approach animation, honoring an
+  // in-progress hover pause — the stack can rotate while the pointer stays
+  // over the carousel, and the new front card must come up already paused.
+  function startApproach() {
+    stack[0].classList.add('is-approaching');
+    stack[0].style.animationPlayState = paused ? 'paused' : 'running';
+  }
+
+  applyAll();
+  if (!reducedMotion) startApproach();
+
+  if (container && !reducedMotion) {
+    container.addEventListener('mouseenter', () => {
+      paused = true;
+      stack[0].style.animationPlayState = 'paused';
+    });
+    container.addEventListener('mouseleave', () => {
+      paused = false;
+      stack[0].style.animationPlayState = 'running';
+    });
+    // Don't burn cycles animating a carousel the visitor has scrolled past.
+    const visibility = new IntersectionObserver((entries) => {
+      inView = entries[0]?.isIntersecting ?? true;
+    });
+    visibility.observe(container);
+  }
+
+  function finishCycle() {
+    cycling = false;
+    if (!pendingTarget) return;
+    const queued = pendingTarget;
+    pendingTarget = null;
+    const pos = stack.indexOf(queued);
+    if (pos > 0) goToCard(pos);
+  }
+
+  function settleAfter(ms: number, fn: () => void) {
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(fn);
+      });
+    }, ms);
+  }
+
+  // Bring the card currently at stack position `targetPos` to the front. The
+  // cards in front of it peel away together; the rest slide up the stack.
+  // Requests that land mid-transition are queued (the click's default was
+  // already prevented, so dropping them would swallow the click entirely).
+  let pendingTarget: HTMLElement | null = null;
+  function goToCard(targetPos: number) {
+    if (targetPos <= 0 || targetPos >= stack.length) return;
+    if (cycling) {
+      pendingTarget = stack[targetPos];
+      return;
+    }
+
+    if (reducedMotion) {
+      stack.push(...stack.splice(0, targetPos));
+      applyAll();
+      return;
+    }
+
+    cycling = true;
+    const peeled = stack.slice(0, targetPos);
+
+    peeled.forEach((card, i) => {
+      card.classList.remove('is-approaching');
+      // Hand off front-card status immediately — a peeling card must not keep
+      // the is-front affordance or sit in the tab order for the 700ms flight.
+      card.classList.remove('is-front');
+      const link = card.querySelector('.carousel-3d-card-link') as HTMLAnchorElement | null;
+      if (link) link.tabIndex = -1;
+      const computed = getComputedStyle(card).transform;
+      card.style.transform = computed;
+      void card.offsetWidth;
+      card.style.transition = `transform 0.6s var(--ease-smooth), opacity 0.6s var(--ease-smooth)`;
+      card.style.transform = 'translateX(-60px) translateY(-30px) rotate(-2deg) scale(0.96)';
+      card.style.opacity = '0';
+      card.style.zIndex = String(cards.length + peeled.length - i);
+    });
+
+    stack.push(...stack.splice(0, targetPos));
+    for (let i = 0; i < stack.length; i++) {
+      if (peeled.includes(stack[i])) continue;
+      stack[i].style.transition = '';
+      applyStyle(stack[i], i);
+    }
+
+    settleAfter(700, () => {
+      peeled.forEach((card) => {
+        card.style.transition = 'none';
+        card.style.animationPlayState = '';
+        applyStyle(card, stack.indexOf(card));
+      });
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          peeled.forEach((card) => {
+            card.style.transition = '';
+          });
+          startApproach();
+          finishCycle();
+        });
+      });
+    });
+    syncUi();
+  }
+
+  function cycleForward() {
+    if (cycling && pendingTarget) return;
+    goToCard(1);
+  }
+
+  function cycleBackward() {
+    if (cycling) return;
+
+    if (reducedMotion) {
+      stack.unshift(stack.pop()!);
+      applyAll();
+      return;
+    }
+
+    cycling = true;
+    stack[0].classList.remove('is-approaching');
+
+    const incoming = stack.pop()!;
+    stack.unshift(incoming);
+
+    incoming.style.transition = 'none';
+    incoming.style.transform = 'translateX(80px) translateY(20px) rotate(3deg)';
+    incoming.style.opacity = '0';
+    incoming.style.zIndex = String(cards.length + 1);
+    void incoming.offsetWidth;
+
+    incoming.style.transition = `transform 0.6s var(--ease-smooth), opacity 0.6s var(--ease-smooth)`;
+    applyStyle(incoming, 0);
+
+    for (let i = 1; i < stack.length; i++) {
+      stack[i].style.transition = '';
+      applyStyle(stack[i], i);
+    }
+
+    settleAfter(700, () => {
+      startApproach();
+      finishCycle();
+    });
+    syncUi();
+  }
+
+  let autoId: ReturnType<typeof setInterval> | undefined;
+  function resetAutoAdvance() {
+    if (reducedMotion) return;
+    clearInterval(autoId);
+    autoId = setInterval(() => {
+      if (!paused && !cycling && inView && !document.hidden) cycleForward();
+    }, CYCLE_MS);
+  }
+  resetAutoAdvance();
+
+  container?.querySelector('[data-carousel-prev]')?.addEventListener('click', () => {
+    cycleBackward();
+    resetAutoAdvance();
+  });
+  container?.querySelector('[data-carousel-next]')?.addEventListener('click', () => {
+    cycleForward();
+    resetAutoAdvance();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+
+    const target = e.target as HTMLElement | null;
+    if (target && (target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName))) return;
+    // Roving-tabindex widgets (e.g. the Quick Start tabs) own the arrow keys
+    // while focused — don't page the carousel on the same keypress.
+    if (target?.closest('[role="tablist"], [role="tab"]')) return;
+
+    const lightbox = document.getElementById('demo-lightbox') as HTMLDialogElement;
+    if (lightbox?.open) return;
+
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    if (rect.bottom < 0 || rect.top > window.innerHeight) return;
+
+    if (e.key === 'ArrowRight') {
+      cycleForward();
+    } else {
+      cycleBackward();
+    }
+    resetAutoAdvance();
+  });
+
+  // Expose stack order so the lightbox can tell front cards from back cards.
+  (window as Window & { __heroCarouselStack?: HTMLElement[] }).__heroCarouselStack = stack;
+  (window as Window & { __heroCarouselGoTo?: (pos: number) => void }).__heroCarouselGoTo = (pos) => {
+    goToCard(pos);
+    resetAutoAdvance();
+  };
+}
+
+initHeroCarousel();
+
+// ---------------------------------------------------------------------------
+// Demo Lightbox
+// ---------------------------------------------------------------------------
+
+function initDemoLightbox() {
+  const lightbox = document.getElementById('demo-lightbox') as HTMLDialogElement | null;
+  if (!lightbox) return;
+
+  const iframe = lightbox.querySelector('.demo-lightbox-iframe') as HTMLIFrameElement;
+  let closedByPopstate = false;
+
+  document.querySelectorAll('.carousel-3d-card-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      // Clicking a back card brings it to the front instead of opening it —
+      // its visible edge reads as a "next card" affordance, not a link.
+      const card = link.closest('.carousel-3d-card') as HTMLElement | null;
+      const win = window as Window & {
+        __heroCarouselStack?: HTMLElement[];
+        __heroCarouselGoTo?: (pos: number) => void;
+      };
+      if (card && win.__heroCarouselStack && win.__heroCarouselGoTo) {
+        const pos = win.__heroCarouselStack.indexOf(card);
+        if (pos > 0) {
+          win.__heroCarouselGoTo(pos);
+          return;
+        }
+      }
+
+      const anchor = link as HTMLAnchorElement;
+      iframe.src = anchor.href;
+      iframe.title = link.querySelector('.carousel-3d-card-title')?.textContent || 'Demo preview';
+      lightbox.showModal();
+      history.pushState({ demoLightbox: true }, '');
+    });
+  });
+
+  lightbox.addEventListener('click', (e) => {
+    if (e.target === lightbox) lightbox.close();
+  });
+
+  lightbox.querySelector('.demo-lightbox-close')?.addEventListener('click', () => lightbox.close());
+
+  window.addEventListener('popstate', () => {
+    if (lightbox.open) {
+      closedByPopstate = true;
+      lightbox.close();
+    }
+  });
+
+  lightbox.addEventListener('close', () => {
+    iframe.src = '';
+    // Only rewind if the lightbox entry is still the active one — the visitor
+    // may have navigated (e.g. a hash link) while the modal was open, and
+    // history.back() would undo that navigation instead.
+    const state = history.state as { demoLightbox?: boolean } | null;
+    if (!closedByPopstate && state?.demoLightbox) history.back();
+    closedByPopstate = false;
   });
 }
+
+initDemoLightbox();
