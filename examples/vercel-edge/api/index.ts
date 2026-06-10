@@ -8,6 +8,8 @@ import {
   STOREFRONT_ASSISTANT_FLOW,
   WEBMCP_STOREFRONT_FLOW,
   WEBMCP_CALENDAR_FLOW,
+  WEBMCP_SLIDES_FLOW,
+  PAGE_CONTEXT_FLOW,
   createCheckoutSession,
 } from "@runtypelabs/persona-proxy";
 
@@ -86,6 +88,24 @@ const webmcpCalendarApp = createChatProxyApp({
   upstreamUrl,
 });
 
+// WebMCP slides proxy - for the Deck Copilot slide-editor demo.
+const webmcpSlidesApp = createChatProxyApp({
+  path: "/api/chat/dispatch-slides",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_SLIDES || undefined,
+  flowConfig: process.env.FLOW_ID_SLIDES ? undefined : WEBMCP_SLIDES_FLOW,
+  upstreamUrl,
+});
+
+// Page-context proxy - read-only, markdown answers about the current page.
+const pageContextApp = createChatProxyApp({
+  path: "/api/chat/dispatch-page-context",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_PAGE_CONTEXT || undefined,
+  flowConfig: process.env.FLOW_ID_PAGE_CONTEXT ? undefined : PAGE_CONTEXT_FLOW,
+  upstreamUrl,
+});
+
 app.route("/", directiveApp);
 app.route("/", actionApp);
 app.route("/", componentApp);
@@ -93,6 +113,8 @@ app.route("/", bakeryApp);
 app.route("/", storefrontApp);
 app.route("/", webmcpApp);
 app.route("/", webmcpCalendarApp);
+app.route("/", webmcpSlidesApp);
+app.route("/", pageContextApp);
 
 app.post("/api/checkout", async (c) => {
   const origin = c.req.header("origin");
