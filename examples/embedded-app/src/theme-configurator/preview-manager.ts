@@ -113,6 +113,18 @@ const STREAM_CHUNK_SIZE = 6;
 const STREAM_CHUNK_DELAY_MS = 80;
 const STREAM_INITIAL_DELAY_MS = 600;
 
+// Screenshot capture (screenshot_preview WebMCP tool). Downscaled JPEG keeps a
+// two-frame capture comfortably inside the tool-result payload budget the
+// /resume round-trip can carry (~150KB of base64).
+const CAPTURE_TARGET_WIDTH = 600;
+const CAPTURE_JPEG_QUALITY = 0.7;
+const CAPTURE_FRAME_LABELS: Record<string, string> = {
+  'preview-current': 'Current',
+  'preview-baseline': 'Baseline',
+  'preview-light': 'Light',
+  'preview-dark': 'Dark',
+};
+
 // ─── Test Helpers (re-exported) ─────────────────────────────────
 
 /**
@@ -282,6 +294,17 @@ const _embedCheckReasonCache = new Map<string, string>();
 
 export { CompareMode };
 
+export type PreviewCaptureFrame = {
+  mountId: string;
+  /** Human label matching the on-screen frame caption ('Current', 'Dark', …). */
+  label: string;
+  /** JPEG data URL (`data:image/jpeg;base64,...`). */
+  dataUrl: string;
+  /** Post-downscale pixel dimensions. */
+  width: number;
+  height: number;
+};
+
 export interface PreviewManager {
   /** Full mount / remount of the preview (initial or after structural change). */
   mount(): void;
@@ -303,6 +326,8 @@ export interface PreviewManager {
   highlightZone(zone: string): void;
   /** Remove any active zone highlight from all iframes. */
   clearHighlight(): void;
+  /** Capture each visible preview frame as a downscaled JPEG data URL. */
+  capturePreview(): Promise<PreviewCaptureFrame[]>;
   /** Clean up all resources. */
   destroy(): void;
 }
@@ -1280,6 +1305,65 @@ export function createPreviewManager(
     }
   }
 
+  async function capturePreviewFrames(): Promise<PreviewCaptureFrame[]> {
+    // Lazy import keeps the screenshot library off the editor's load path.
+    const { domToJpeg } = await import('modern-screenshot');
+
+    const iframes = (
+      Array.from(container.querySelectorAll('iframe[data-mount-id]')) as HTMLIFrameElement[]
+    )
+      .sort(
+        (a, b) =>
+          (a.dataset.mountId === 'preview-current' ? 0 : 1) -
+          (b.dataset.mountId === 'preview-current' ? 0 : 1)
+      )
+      .slice(0, 2);
+
+    const frames: PreviewCaptureFrame[] = [];
+    for (const iframe of iframes) {
+      const mountId = iframe.dataset.mountId;
+      const doc = iframe.contentDocument;
+      if (!mountId || !doc?.body) continue;
+
+      const wrapper = iframe.closest('.preview-iframe-wrapper') as HTMLElement | null;
+      const device = wrapper?.dataset.device ?? stateModule.getPreviewDevice();
+      const dims = DEVICE_DIMENSIONS[device] ?? DEVICE_DIMENSIONS.desktop;
+      const scale = Math.min(1, CAPTURE_TARGET_WIDTH / dims.w);
+
+      // Capture the iframe's body, not the widget mount: in floating/minimized
+      // scenes the widget is position:fixed in the body (the mount box is
+      // empty), and the body shows the widget in situ — shell, placement,
+      // launcher. The CSS scale() on the iframe element lives in the parent
+      // document and doesn't affect the inner DOM, so render at device
+      // dimensions and downscale via the library's `scale` option. Nested
+      // iframes (the cross-origin background preview) are excluded via a
+      // tagName check — NOT instanceof, which always fails across realms.
+      //
+      // Backfill the (JPEG, no-alpha) canvas with the frame's own body
+      // background so dark previews aren't captured against white where the
+      // canvas shows through — e.g. behind the excluded background iframe.
+      const bodyBg = doc.defaultView?.getComputedStyle(doc.body).backgroundColor;
+      const bodyBgTransparent = !bodyBg || bodyBg === 'transparent' || bodyBg === 'rgba(0, 0, 0, 0)';
+      const dataUrl = await domToJpeg(doc.body, {
+        width: dims.w,
+        height: dims.h,
+        scale,
+        quality: CAPTURE_JPEG_QUALITY,
+        backgroundColor: bodyBgTransparent ? '#ffffff' : bodyBg,
+        filter: (node) => (node as Element).tagName?.toUpperCase?.() !== 'IFRAME',
+      });
+
+      frames.push({
+        mountId,
+        label: CAPTURE_FRAME_LABELS[mountId] ?? mountId,
+        dataUrl,
+        width: Math.round(dims.w * scale),
+        height: Math.round(dims.h * scale),
+      });
+    }
+    return frames;
+  }
+
   function doMount(preserveBackgroundStates = false): void {
     destroyPreviewControllers();
     lastMountedScene = stateModule.getPreviewScene();
@@ -1781,6 +1865,10 @@ export function createPreviewManager(
 
     clearHighlight(): void {
       applyHighlightZone(null);
+    },
+
+    capturePreview(): Promise<PreviewCaptureFrame[]> {
+      return capturePreviewFrames();
     },
 
     destroy(): void {

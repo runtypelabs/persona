@@ -20,8 +20,17 @@ export interface ToolTextContent {
   text: string;
 }
 
+/** MCP image content block: raw base64 (no `data:` prefix) plus its MIME type. */
+export interface ToolImageContent {
+  type: 'image';
+  data: string;
+  mimeType: string;
+}
+
+export type ToolContent = ToolTextContent | ToolImageContent;
+
 export interface ToolResult {
-  content: ToolTextContent[];
+  content: ToolContent[];
   /** Optional machine-readable mirror of the text content. */
   structuredContent?: unknown;
   isError?: boolean;

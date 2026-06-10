@@ -15,6 +15,20 @@ body {
   background: #f3f4f6;
 }
 
+/* Theme Copilot dock target — the docked widget shell wraps this element and
+   flexes the editor when the copilot sidebar opens. min-width: 0 lets the
+   grid's 1fr preview column absorb the squeeze instead of overflowing. */
+.theme-copilot-dock-target {
+  height: 100vh;
+  min-width: 0;
+}
+
+.theme-copilot-toggle.active {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+}
+
 .configurator-layout {
   display: grid;
   grid-template-columns: 420px 1fr;

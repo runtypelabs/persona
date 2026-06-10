@@ -13,6 +13,7 @@ import {
   WEBMCP_SLIDES_FLOW,
   WEBMCP_DOCKED_FLOW,
   PAGE_CONTEXT_FLOW,
+  THEME_ASSISTANT_FLOW,
   createCheckoutSession
 } from "@runtypelabs/persona-proxy";
 
@@ -148,6 +149,20 @@ const pageContextApp = createChatProxyApp({
   upstreamUrl
 });
 
+// Theme-assistant proxy — for the Theme Editor's docked Theme Copilot.
+// The Theme Editor registers its controls (plus screenshot_preview) as WebMCP
+// tools on document.modelContext; the copilot widget ships them as clientTools[]
+// and the agent calls them (webmcp:*) to restyle the live theme preview.
+// Tool-calling flow (not an action envelope), so it relies on clientTools
+// forwarding + /resume — including image blocks in screenshot tool results.
+const themeAssistantApp = createChatProxyApp({
+  path: "/api/chat/dispatch-theme",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_THEME_ASSISTANT || undefined,
+  flowConfig: process.env.FLOW_ID_THEME_ASSISTANT ? undefined : THEME_ASSISTANT_FLOW,
+  upstreamUrl
+});
+
 // Mount all apps
 app.route("/", directiveApp);
 app.route("/", actionApp);
@@ -159,6 +174,7 @@ app.route("/", webmcpCalendarApp);
 app.route("/", webmcpSlidesApp);
 app.route("/", webmcpDockedApp);
 app.route("/", pageContextApp);
+app.route("/", themeAssistantApp);
 
 // Stripe checkout endpoint
 // Uses the shared createCheckoutSession helper from @runtypelabs/persona-proxy

@@ -202,6 +202,28 @@ export class AgentWidgetClient {
   }
 
   /**
+   * Refresh config in place WITHOUT tearing down the live connection or the
+   * WebMCP bridge. `AgentWidgetSession.updateConfig` calls this when only
+   * connection-irrelevant fields changed (theme, copy, layout, suggestions, …),
+   * so a UI update that lands mid-turn — e.g. a `webmcp:*` tool restyling the
+   * widget while the agent's turn is still streaming — doesn't abandon the
+   * in-flight stream/resume. Connection or request-shaping changes (apiUrl,
+   * clientToken, webmcp, headers, parser, …) take the full client rebuild path
+   * in the session instead, which is the only place the bridge is recreated.
+   *
+   * Only the live-read `config` is refreshed (e.g. `iterationDisplay`); the
+   * constructor-derived request-shaping fields (apiUrl, headers, parser,
+   * contextProviders, middleware, …) are left untouched because the session
+   * routes any change to those down the full-rebuild path instead — so they are
+   * guaranteed unchanged here. The `webMcpBridge` instance and its
+   * installed-polyfill memo are deliberately preserved, which keeps any
+   * in-flight resolve alive.
+   */
+  public updateConfig(next: AgentWidgetConfig): void {
+    this.config = next;
+  }
+
+  /**
    * Set callback for capturing raw SSE events
    */
   public setSSEEventCallback(callback: SSEEventCallback): void {

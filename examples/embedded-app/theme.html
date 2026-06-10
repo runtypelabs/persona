@@ -14,6 +14,10 @@
       class="config-drawer-backdrop"
       aria-hidden="true"
     ></div>
+    <!-- Dock target for the Theme Copilot sidebar: the docked widget shell
+         wraps this element's children and squeezes the editor layout when the
+         copilot opens (reveal: emerge). -->
+    <div id="theme-copilot-dock-target" class="theme-copilot-dock-target">
     <main class="configurator-layout">
       <header class="mobile-editor-toolbar" aria-label="Theme editor">
         <div class="mobile-editor-toolbar-start">
@@ -153,6 +157,18 @@
             </button>
           </div>
           <div class="preview-toolbar-trail">
+            <button
+              type="button"
+              id="theme-copilot-toggle"
+              class="preview-pill-btn theme-copilot-toggle"
+              aria-expanded="false"
+              title="Open Theme Copilot — chat to restyle the preview"
+            >
+              <span class="preview-pill-theme-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+              </span>
+              Copilot
+            </button>
             <div class="preview-pill-wrapper">
               <button id="preview-pill-btn" class="preview-pill-btn" type="button">
                 <span id="preview-pill-scene">Conversation</span>
@@ -300,6 +316,7 @@
         </div>
       </section>
     </main>
+    </div>
 
     <div id="wizard-overlay" class="wizard-overlay hidden">
       <div class="wizard-dialog">
