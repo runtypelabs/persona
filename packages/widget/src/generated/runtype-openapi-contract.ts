@@ -150,6 +150,7 @@ export type RuntypeAgentSSEEvent = {
 };
   iteration?: number;
   parameters?: Record<string, unknown>;
+  reason?: string;
   seq: number;
   startedAt: string;
   timeout: number;
@@ -422,6 +423,7 @@ export type RuntypeFlowSSEEvent = {
   when: string;
 } | {
   executionId?: string;
+  reason?: string;
   seq?: number;
   type: "step_await";
   [key: string]: unknown;
@@ -701,6 +703,7 @@ export type RuntypeDispatchSSEEvent = {
 };
   iteration?: number;
   parameters?: Record<string, unknown>;
+  reason?: string;
   seq: number;
   startedAt: string;
   timeout: number;
@@ -971,6 +974,7 @@ export type RuntypeDispatchSSEEvent = {
   when: string;
 } | {
   executionId?: string;
+  reason?: string;
   seq?: number;
   type: "step_await";
   [key: string]: unknown;

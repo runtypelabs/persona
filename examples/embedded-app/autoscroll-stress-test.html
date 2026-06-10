@@ -52,7 +52,8 @@
         letter-spacing: 0.05em;
         color: var(--muted);
       }
-      button {
+      button,
+      select {
         padding: 0.5rem 0.75rem;
         border-radius: var(--radius-sm);
         border: 1px solid var(--border);
@@ -123,6 +124,15 @@
         </div>
 
         <div class="btn-group">
+          <label>Scroll mode</label>
+          <select id="scroll-mode">
+            <option value="follow" selected>follow — stick to bottom (default)</option>
+            <option value="anchor-top">anchor-top — pin sent message to top</option>
+            <option value="none">none — never auto-scroll</option>
+          </select>
+        </div>
+
+        <div class="btn-group">
           <label>Scenarios</label>
           <button id="btn-rapid">Rapid Messages (20 msgs, 100ms apart)</button>
           <button id="btn-stream">Simulate Streaming (word-by-word)</button>
@@ -131,6 +141,7 @@
           <button id="btn-trace">Tool + Reasoning Trace</button>
           <button id="btn-burst">Burst Mixed Types (catch-up test)</button>
           <button id="btn-stress">Stress Test (all at once)</button>
+          <button id="btn-image">Late Image Load (re-pin test)</button>
         </div>
 
         <div class="btn-group">
@@ -163,6 +174,7 @@
       }
 
       const logEl = document.getElementById("log");
+      const LATE_IMAGE_SRC = "/autoscroll-late-image.jpg";
       function log(msg, cls = "") {
         if (!logEl) return;
         const line = document.createElement("div");
@@ -187,7 +199,7 @@
       if (!mount) {
         throw new Error('[autoscroll-stress-test] Missing #autoscroll-launcher-root in the DOM.');
       }
-      const controller = createAgentExperience(mount, {
+      const buildWidgetConfig = (scrollMode) => ({
         ...DEFAULT_WIDGET_CONFIG,
         apiUrl: "https://noop.test/chat",
         launcher: {
@@ -208,6 +220,9 @@
           reasoningDisplay: {
             activePreview: true,
           },
+          scrollBehavior: {
+            mode: scrollMode,
+          },
         },
         theme: {
           ...DEFAULT_WIDGET_CONFIG.theme,
@@ -221,6 +236,17 @@
           welcomeTitle: "Auto-Scroll Stress Test",
           welcomeSubtitle: "Run a scenario from the test page, or type here. The transcript should auto-scroll while streaming.",
         },
+      });
+
+      const controller = createAgentExperience(mount, buildWidgetConfig("follow"));
+
+      document.getElementById("scroll-mode").addEventListener("change", (event) => {
+        const mode = event.target.value;
+        controller.update(buildWidgetConfig(mode));
+        log(`Scroll mode → ${mode}`, "info");
+        if (mode === "anchor-top") {
+          log("Run 'Simulate Streaming' or type a message — the sent message should pin near the top while the reply streams below.", "info");
+        }
       });
 
       // ── follow-state monitor ────────────────────────────────────
@@ -853,8 +879,43 @@ Let me know if you need any additional help with the setup!`;
         }
       }
 
+      // Late image load: in follow mode the transcript should re-pin to the
+      // bottom when the image finishes loading and grows the content — even
+      // though no message render fires at that moment.
+      async function lateImageLoad() {
+        setAllButtons(true);
+        document.getElementById("btn-image").classList.add("running");
+        log("Late Image Load: text streams, then a large image arrives. Transcript should stay pinned in follow mode.", "info");
+
+        controller.injectUserMessage({ id: nextId("img-user"), content: "Show me a photo" });
+        await sleep(250);
+
+        const msgId = nextId("img");
+        const words = "Here is a large photo — it loads after this text has already rendered, so the transcript grows without a new message:".split(" ");
+        let acc = "";
+        for (const word of words) {
+          if (cancelToken.cancelled) break;
+          acc += (acc ? " " : "") + word;
+          controller.injectAssistantMessage({ id: msgId, content: acc, streaming: true });
+          await sleep(40);
+        }
+        // Keep the fixture repo-local and cache-bust per run so repeated
+        // clicks still exercise an image load/growth event.
+        const imageSrc = `${LATE_IMAGE_SRC}?run=${encodeURIComponent(msgId)}`;
+        controller.injectAssistantMessage({
+          id: msgId,
+          content: `${acc}\n\n![Generated alpine lake image](${imageSrc})\n\n…and a line after the image so it lands mid-transcript.`,
+          streaming: false,
+        });
+
+        document.getElementById("btn-image").classList.remove("running");
+        setAllButtons(false);
+        log("Done: Late Image Load — watch for the re-pin when the image pops in.");
+      }
+
       // ── wire buttons ────────────────────────────────────────────
 
+      document.getElementById("btn-image").addEventListener("click", lateImageLoad);
       document.getElementById("btn-rapid").addEventListener("click", rapidMessages);
       document.getElementById("btn-stream").addEventListener("click", simulateStreaming);
       document.getElementById("btn-conversation").addEventListener("click", realisticConversation);

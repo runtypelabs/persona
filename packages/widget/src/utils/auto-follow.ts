@@ -110,3 +110,71 @@ export function resolveFollowStateFromWheel(
 
   return "none";
 }
+
+export type SelectionLike = Pick<Selection, "isCollapsed"> & {
+  anchorNode: Node | null;
+  focusNode: Node | null;
+};
+
+/**
+ * True when the user has a non-collapsed text selection that touches the
+ * given container. Used to pause auto-follow while the user is selecting
+ * transcript text, so the streaming scroll doesn't drag content out from
+ * under an in-progress drag-selection.
+ */
+export function hasSelectionWithin(
+  selection: SelectionLike | null,
+  container: Pick<Node, "contains">
+): boolean {
+  if (!selection || selection.isCollapsed) return false;
+  return (
+    container.contains(selection.anchorNode) ||
+    container.contains(selection.focusNode)
+  );
+}
+
+export type AnchorScrollInput = {
+  /** Top of the anchored user message, relative to the scroll content. */
+  anchorOffsetTop: number;
+  /** Desired gap kept between the anchored message and the viewport top. */
+  topOffset: number;
+  /** clientHeight of the scroll container. */
+  viewportHeight: number;
+  /** scrollHeight of the scroll container, excluding any anchor spacer. */
+  contentHeight: number;
+};
+
+/**
+ * Geometry for anchor-top ("pin the sent user message near the viewport
+ * top") scrolling. The spacer height is the extra scrollable room needed so
+ * the target scroll position is reachable before the streamed response has
+ * grown tall enough to provide it naturally.
+ */
+export function computeAnchorScrollState(input: AnchorScrollInput): {
+  targetScrollTop: number;
+  spacerHeight: number;
+} {
+  const targetScrollTop = Math.max(0, input.anchorOffsetTop - input.topOffset);
+  const spacerHeight = Math.max(
+    0,
+    targetScrollTop + input.viewportHeight - input.contentHeight
+  );
+  return { targetScrollTop, spacerHeight };
+}
+
+/**
+ * Shrink-only spacer update: as streamed content grows beneath the anchored
+ * message, the spacer gives back exactly that much room so total scroll
+ * height stays constant and nothing jumps. Never grows after anchoring.
+ */
+export function computeShrunkSpacerHeight(input: {
+  initialSpacerHeight: number;
+  contentHeightAtAnchor: number;
+  currentContentHeight: number;
+}): number {
+  const growth = Math.max(
+    0,
+    input.currentContentHeight - input.contentHeightAtAnchor
+  );
+  return Math.max(0, input.initialSpacerHeight - growth);
+}
