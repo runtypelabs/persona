@@ -151,7 +151,7 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 - [Theme Editor](/theme.html) — visually customize the widget theme and styling in real time
 - [Action Middleware](/action-middleware.html) — DOM-aware page context each turn plus middleware that executes real UI actions (navigate, cart, checkout)
 - [Bakery Assistant](/bakery.html) — industry-specific persona with a rich product catalog and cart actions
-- [Docked Panel](/docked-panel-demo.html) — alternative layout with the widget docked to the side of the page
+- [Docked Panel](/docked-panel-demo.html) — WebMCP-powered dashboard copilot docked to the side of the page; it reads the workspace, switches sections, logs activity, and can move its own dock via page tools
 - [Feedback Integration](/feedback-integration-demo.html) — wiring feedback events to an external API
 - [Custom Loading Indicator](/custom-loading-indicator.html) — replace the default loading UX with your own
 - [Agent Loop Execution](/agent-demo.html) — multi-turn reasoning with internal thought processes and tool use

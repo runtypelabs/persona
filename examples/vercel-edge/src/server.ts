@@ -11,6 +11,7 @@ import {
   WEBMCP_STOREFRONT_FLOW,
   WEBMCP_CALENDAR_FLOW,
   WEBMCP_SLIDES_FLOW,
+  WEBMCP_DOCKED_FLOW,
   PAGE_CONTEXT_FLOW,
   createCheckoutSession
 } from "@runtypelabs/persona-proxy";
@@ -124,6 +125,18 @@ const webmcpSlidesApp = createChatProxyApp({
   upstreamUrl
 });
 
+// WebMCP docked-dashboard proxy - for the docked panel demo. Same pattern as
+// the storefront/calendar: the page registers four workspace tools on
+// document.modelContext, the widget forwards them as clientTools[], and the
+// in-code WEBMCP_DOCKED_FLOW drives them — no hosted Runtype agent / client token.
+const webmcpDockedApp = createChatProxyApp({
+  path: "/api/chat/dispatch-docked",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_DOCKED || undefined,
+  flowConfig: process.env.FLOW_ID_DOCKED ? undefined : WEBMCP_DOCKED_FLOW,
+  upstreamUrl
+});
+
 // Page-context proxy - read-only, markdown answers about the current page.
 // Used by the smart-dom-reader demo: the widget sends live page context (including
 // shadow-DOM elements) as `inputs`, and this flow injects it via {{pageContext}}.
@@ -144,6 +157,7 @@ app.route("/", storefrontApp);
 app.route("/", webmcpApp);
 app.route("/", webmcpCalendarApp);
 app.route("/", webmcpSlidesApp);
+app.route("/", webmcpDockedApp);
 app.route("/", pageContextApp);
 
 // Stripe checkout endpoint
