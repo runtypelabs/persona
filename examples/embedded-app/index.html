@@ -7,16 +7,37 @@
   <link rel="stylesheet" href="/src/App.css">
   <link rel="icon" href="/favicon.ico" />
   <title>Persona — AI Chat Widget by Runtype</title>
+  <meta name="description" content="Persona is an open-source, themeable AI chat widget you can add to any website in minutes. SSE streaming, agent loops, tool use, and style isolation — zero framework dependencies.">
+  <meta property="og:title" content="Persona — Open Source AI Chat Widget">
+  <meta property="og:description" content="Add a streaming AI chat to any website, in minutes. Themeable, pluggable, zero framework dependencies.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://persona-chat.dev/">
 </head>
 <body>
   <div class="page">
+    <!-- Top nav -->
+    <header class="site-nav">
+      <a class="site-nav-brand" href="/">Persona</a>
+      <nav class="site-nav-links" aria-label="Page sections">
+        <a href="#try-it">Live demo</a>
+        <a href="#quick-start">Quick start</a>
+        <a href="#demos">Demos</a>
+        <a href="/theme.html">Theme editor</a>
+        <a class="site-nav-github" href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </header>
+
     <!-- Hero — 3D Carousel Showcase -->
     <section class="hero-split">
       <div class="hero-split-inner">
         <div class="hero-panel">
           <span class="label">Open Source AI Chat Widget</span>
-          <h1 class="kern-tight">Add a streaming AI chat<br>to any website, in minutes.</h1>
+          <h1 class="kern-tight">Add a streaming AI chat to any website, in minutes.</h1>
           <p>Themeable, pluggable, zero framework dependencies. Style isolation, SSE streaming, agent loops, and tool use — all in one drop-in widget.</p>
+          <div class="hero-cta">
+            <a class="hero-cta-primary" href="#quick-start">Get started <span aria-hidden="true">→</span></a>
+            <a class="hero-cta-secondary" href="#try-it">Try it live</a>
+          </div>
           <div class="hero-features">
             <span class="hero-feature-pill">Style Isolation</span>
             <span class="hero-feature-pill">SSE Streaming</span>
@@ -35,7 +56,7 @@
             <a href="https://runtype.com" target="_blank" rel="noopener"><img src="/runtype-logo.svg" alt="Runtype" class="runtype-logo"></a>
           </div>
         </div>
-        <div class="carousel-3d" id="hero-carousel">
+        <div class="carousel-3d" id="hero-carousel" role="region" aria-roledescription="carousel" aria-label="Live demo gallery">
           <div class="carousel-3d-scene">
             <div class="carousel-3d-card">
               <a href="/bakery.html" class="carousel-3d-card-link">
@@ -48,7 +69,7 @@
             <div class="carousel-3d-card">
               <a href="/fullscreen-assistant-demo.html" class="carousel-3d-card-link">
                 <div class="carousel-3d-iframe-wrap">
-                  <iframe src="/fullscreen-assistant-demo.html" loading="lazy" tabindex="-1" title="Fullscreen Layout"></iframe>
+                  <iframe data-src="/fullscreen-assistant-demo.html" tabindex="-1" title="Fullscreen Layout"></iframe>
                 </div>
                 <span class="carousel-3d-card-title">Fullscreen Layout</span>
               </a>
@@ -56,7 +77,7 @@
             <div class="carousel-3d-card">
               <a href="/docked-panel-demo.html" class="carousel-3d-card-link">
                 <div class="carousel-3d-iframe-wrap">
-                  <iframe src="/docked-panel-demo.html" loading="lazy" tabindex="-1" title="Docked Panel"></iframe>
+                  <iframe data-src="/docked-panel-demo.html" tabindex="-1" title="Docked Panel"></iframe>
                 </div>
                 <span class="carousel-3d-card-title">Docked Panel</span>
               </a>
@@ -64,7 +85,7 @@
             <div class="carousel-3d-card">
               <a href="/action-middleware.html" class="carousel-3d-card-link">
                 <div class="carousel-3d-iframe-wrap">
-                  <iframe src="/action-middleware.html" loading="lazy" tabindex="-1" title="Action Middleware"></iframe>
+                  <iframe data-src="/action-middleware.html" tabindex="-1" title="Action Middleware"></iframe>
                 </div>
                 <span class="carousel-3d-card-title">Action Middleware</span>
               </a>
@@ -72,7 +93,7 @@
             <div class="carousel-3d-card">
               <a href="/theme.html" class="carousel-3d-card-link">
                 <div class="carousel-3d-iframe-wrap">
-                  <iframe src="/theme.html" loading="lazy" tabindex="-1" title="Theme Editor"></iframe>
+                  <iframe data-src="/theme.html" tabindex="-1" title="Theme Editor"></iframe>
                 </div>
                 <span class="carousel-3d-card-title">Theme Editor</span>
               </a>
@@ -80,12 +101,19 @@
             <div class="carousel-3d-card">
               <a href="/launcher-demo.html" class="carousel-3d-card-link">
                 <div class="carousel-3d-iframe-wrap">
-                  <iframe src="/launcher-demo.html" loading="lazy" tabindex="-1" title="Default Launcher"></iframe>
+                  <iframe data-src="/launcher-demo.html" tabindex="-1" title="Default Launcher"></iframe>
                 </div>
                 <span class="carousel-3d-card-title">Default Launcher</span>
               </a>
             </div>
           </div>
+          <div class="carousel-3d-controls">
+            <button type="button" class="carousel-3d-nav" data-carousel-prev aria-label="Previous demo">&larr;</button>
+            <div class="carousel-3d-dots" data-carousel-dots></div>
+            <button type="button" class="carousel-3d-nav" data-carousel-next aria-label="Next demo">&rarr;</button>
+          </div>
+          <p class="carousel-3d-hint" aria-hidden="true">Click a card to open it full size</p>
+          <span class="visually-hidden" aria-live="polite" data-carousel-status></span>
         </div>
       </div>
     </section>
@@ -93,7 +121,7 @@
     <main class="shell">
 
       <!-- Live Demo -->
-      <section class="card cardFull tryit-section reveal-el">
+      <section class="card cardFull tryit-section reveal-el" id="try-it">
         <span class="label">Live Demo</span>
         <h2 class="card-title kern-tight" style="font-size: 24px;">Try it live</h2>
         <p>Ask Persona anything — or pick a suggestion below to explore.</p>
@@ -109,7 +137,7 @@
 
 
       <!-- Quick Start -->
-      <section class="card cardFull quick-start-section reveal-el">
+      <section class="card cardFull quick-start-section reveal-el" id="quick-start">
         <span class="label">Quick Start</span>
         <h2 class="card-title kern-tight" style="font-size: 24px;">Choose your integration path</h2>
         <p>Ship to prod with Runtype in minutes, or wire Persona into your own SSE backend.</p>
@@ -326,7 +354,7 @@
       </section>
 
       <!-- Demos -->
-      <section class="card cardFull reveal-el">
+      <section class="card cardFull reveal-el" id="demos">
         <span class="label">Demos</span>
         <h2 class="card-title kern-tight">See what Persona can do</h2>
         <p>Explore different use cases across full-page layouts, embedded contexts, and business scenarios.</p>

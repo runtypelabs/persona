@@ -200,6 +200,90 @@ code {
 }
 
 /* ======================================================================
+   Top Nav
+   ====================================================================== */
+
+html {
+  scroll-behavior: smooth;
+}
+
+section[id] {
+  scroll-margin-top: 24px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.site-nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 3vw;
+}
+
+.site-nav-brand {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.site-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.site-nav-links a {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.site-nav-links a:hover {
+  color: var(--foreground);
+}
+
+.site-nav-github {
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--foreground) !important;
+}
+
+.site-nav-github:hover {
+  border-color: var(--foreground);
+}
+
+@media (max-width: 960px) {
+  .site-nav-links a:not(.site-nav-github) {
+    display: none;
+  }
+}
+
+/* ======================================================================
    Hero Split — 3D Carousel Layout
    ====================================================================== */
 
@@ -207,13 +291,13 @@ code {
   position: relative;
   z-index: 1;
   width: 100%;
-  padding: 3vw 3vw 0;
+  padding: 72px 3vw 0;
 }
 
 .hero-split-inner {
   display: flex;
   align-items: center;
-  min-height: calc(100vh - 6vw);
+  min-height: calc(100vh - 72px - 3vw);
   gap: 3vw;
 }
 
@@ -259,13 +343,61 @@ code {
   justify-content: flex-start;
 }
 
+/* Hero CTAs */
+.hero-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.hero-cta-primary,
+.hero-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius);
+  text-decoration: none;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.hero-cta-primary {
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  box-shadow: 0 4px 14px -4px rgba(91, 46, 255, 0.45);
+}
+
+.hero-cta-primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.hero-cta-secondary {
+  color: var(--foreground);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.hero-cta-secondary:hover {
+  border-color: var(--foreground);
+  transform: translateY(-1px);
+}
+
 /* Card Stack — right side */
 .carousel-3d {
   flex: 1;
   perspective: 1200px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 18px;
   min-height: 420px;
   position: relative;
   animation: hero-fade-in 0.8s var(--ease-smooth) 0.3s both;
@@ -353,6 +485,110 @@ code {
   letter-spacing: 0.01em;
 }
 
+/* Carousel controls — arrows + dots */
+.carousel-3d-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.carousel-3d-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.carousel-3d-nav:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.carousel-3d-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.carousel-3d-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--border);
+  cursor: pointer;
+  transition: background 0.25s ease, width 0.25s var(--ease-smooth);
+}
+
+.carousel-3d-dot:hover {
+  background: var(--muted-light);
+}
+
+.carousel-3d-dot.is-active {
+  width: 22px;
+  background: var(--primary);
+}
+
+.carousel-3d-hint {
+  margin: -6px 0 0;
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-light);
+  position: relative;
+  z-index: 1;
+}
+
+/* "Open demo" affordance on the front card */
+.carousel-3d-card-link {
+  position: relative;
+}
+
+.carousel-3d-card.is-front .carousel-3d-card-link::after {
+  content: 'Open demo ↗';
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.96);
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(20, 20, 28, 0.82);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: opacity 0.2s ease, transform 0.2s var(--ease-smooth);
+}
+
+.carousel-3d-card.is-front .carousel-3d-card-link:hover::after,
+.carousel-3d-card.is-front .carousel-3d-card-link:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
 @keyframes card-approach {
   from { transform: scale(1) translateY(0); }
   to { transform: scale(1.04) translateY(-8px); }
@@ -389,7 +625,7 @@ code {
 /* Hero responsive — small tablet / large phone */
 @media (max-width: 960px) {
   .hero-split {
-    padding: 24px 16px 0;
+    padding: 76px 16px 0;
   }
 
   .hero-split-inner {
@@ -428,7 +664,7 @@ code {
 /* Hero responsive — phone */
 @media (max-width: 640px) {
   .hero-split {
-    padding: 12px 10px 0;
+    padding: 64px 10px 0;
   }
 
   .hero-split-inner {
@@ -503,6 +739,29 @@ code {
     font-size: 11px;
     padding: 8px 10px;
   }
+
+  .site-nav {
+    padding: 14px 16px;
+  }
+
+  .site-nav-brand {
+    font-size: 19px;
+  }
+
+  .hero-cta {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .hero-cta-primary,
+  .hero-cta-secondary {
+    padding: 9px 15px;
+    font-size: 13px;
+  }
+
+  .carousel-3d-hint {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -510,6 +769,10 @@ code {
   .carousel-3d {
     animation: none;
     opacity: 1;
+  }
+
+  .carousel-3d-card {
+    transition: none;
   }
 }
 
@@ -619,7 +882,7 @@ code {
  * the header close control. With `width`/`height` 32px and `box-sizing: border-box`,
  * horizontal padding 18+18px leaves no room for the SVG.
  */
-.page button:not([data-persona-root] *):not(.quick-start-tab),
+.page button:not([data-persona-root] *):not(.quick-start-tab):not(.carousel-3d-dot):not(.carousel-3d-nav),
 .page select:not([data-persona-root] *),
 .page .btn:not([data-persona-root] *) {
   font-family: var(--font-sans);
