@@ -7,6 +7,7 @@ import {
   BAKERY_ASSISTANT_FLOW,
   STOREFRONT_ASSISTANT_FLOW,
   WEBMCP_STOREFRONT_FLOW,
+  WEBMCP_CALENDAR_FLOW,
   createCheckoutSession,
 } from "@runtypelabs/persona-proxy";
 
@@ -76,12 +77,22 @@ const webmcpApp = createChatProxyApp({
   upstreamUrl,
 });
 
+// WebMCP calendar proxy - for the chrome-devtools-quickstart calendar copilot demo.
+const webmcpCalendarApp = createChatProxyApp({
+  path: "/api/chat/dispatch-calendar",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_CALENDAR || undefined,
+  flowConfig: process.env.FLOW_ID_CALENDAR ? undefined : WEBMCP_CALENDAR_FLOW,
+  upstreamUrl,
+});
+
 app.route("/", directiveApp);
 app.route("/", actionApp);
 app.route("/", componentApp);
 app.route("/", bakeryApp);
 app.route("/", storefrontApp);
 app.route("/", webmcpApp);
+app.route("/", webmcpCalendarApp);
 
 app.post("/api/checkout", async (c) => {
   const origin = c.req.header("origin");
