@@ -255,6 +255,12 @@ export type WebMcpConfirmInfo = {
   toolName: string;
   args: unknown;
   description?: string;
+  /**
+   * Display title the tool declared via the WebMCP spec's
+   * `ToolDescriptor.title` (e.g. `"Add to Cart"`). Absent when the tool
+   * didn't declare one.
+   */
+  title?: string;
   annotations?: {
     readOnlyHint?: boolean;
     untrustedContentHint?: boolean;
@@ -1881,13 +1887,16 @@ export type AgentWidgetApprovalConfig = {
   /**
    * Build the user-facing summary line for an approval request. Overrides the
    * default "The assistant wants to use “Tool name”." copy. Return a falsy
-   * value to fall back to the default for that approval.
+   * value to fall back to the default for that approval. `displayTitle` is
+   * the display name the tool declared via the WebMCP spec's
+   * `ToolDescriptor.title`, when one exists.
    */
   formatDescription?: (approval: {
     toolName: string;
     toolType?: string;
     description: string;
     parameters?: unknown;
+    displayTitle?: string;
   }) => string | undefined;
   /**
    * Custom handler for approval decisions.

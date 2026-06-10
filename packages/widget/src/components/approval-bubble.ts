@@ -2,7 +2,7 @@ import { createElement } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { formatUnknownValue } from "../utils/formatting";
 import { renderLucideIcon } from "../utils/icons";
-import { WEBMCP_TOOL_PREFIX } from "../webmcp-bridge";
+import { WEBMCP_TOOL_PREFIX, getWebMcpToolDisplayTitle } from "../webmcp-bridge";
 
 /**
  * Per-message expanded/collapsed state for the technical-details section.
@@ -242,19 +242,28 @@ export const createApprovalBubble = (
 
   // User-facing summary line. The wire `description` is the tool's
   // agent-facing description (prompt prose, usage rules), so it is not shown
-  // here — it lives in the collapsible details section below.
+  // here — it lives in the collapsible details section below. Label priority:
+  // formatDescription → declared WebMCP `title` → humanized tool name →
+  // raw description (no tool name at all).
+  const isWebMcpTool =
+    approval.toolType === "webmcp" ||
+    approval.toolName.startsWith(WEBMCP_TOOL_PREFIX);
+  const declaredTitle = isWebMcpTool
+    ? getWebMcpToolDisplayTitle(approval.toolName)
+    : undefined;
   const summaryFromConfig = approvalConfig?.formatDescription?.({
     toolName: approval.toolName,
     toolType: approval.toolType,
     description: approval.description,
     parameters: approval.parameters,
+    ...(declaredTitle ? { displayTitle: declaredTitle } : {}),
   });
   const summaryFallsBackToDescription = !approval.toolName;
   const summaryText =
     summaryFromConfig ||
     (summaryFallsBackToDescription
       ? approval.description
-      : `The assistant wants to use “${humanizeToolName(approval.toolName)}”.`);
+      : `The assistant wants to use “${declaredTitle ?? humanizeToolName(approval.toolName)}”.`);
 
   const summary = createElement("p", "persona-text-sm persona-mt-0.5 persona-text-persona-muted");
   summary.setAttribute("data-approval-summary", "true");

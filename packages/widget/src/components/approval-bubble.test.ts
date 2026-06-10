@@ -7,6 +7,7 @@ import {
   humanizeToolName,
   updateApprovalDetailsUI,
 } from "./approval-bubble";
+import { recordWebMcpToolDisplayTitles } from "../webmcp-bridge";
 import type {
   AgentWidgetApproval,
   AgentWidgetConfig,
@@ -84,6 +85,10 @@ const getDetails = (bubble: HTMLElement) =>
 
 beforeEach(() => {
   approvalDetailsExpansionState.clear();
+  // Evict any display title recorded by a prior test (empty title = evict).
+  recordWebMcpToolDisplayTitles([
+    { name: "add_to_cart", description: "", title: "" },
+  ]);
 });
 
 describe("humanizeToolName", () => {
@@ -183,6 +188,57 @@ describe("createApprovalBubble summary and details", () => {
     );
     expect(getToggle(bubble)).toBeNull();
     expect(getDetails(bubble)).toBeNull();
+  });
+
+  it("prefers a declared WebMCP display title over the humanized tool name", () => {
+    recordWebMcpToolDisplayTitles([
+      { name: "add_to_cart", description: "", title: "Add to Cart" },
+    ]);
+    const bubble = createApprovalBubble(makeDetailedMessage());
+    expect(getSummary(bubble)?.textContent).toBe(
+      "The assistant wants to use “Add to Cart”."
+    );
+  });
+
+  it("resolves the declared title for wire-prefixed tool names", () => {
+    recordWebMcpToolDisplayTitles([
+      { name: "add_to_cart", description: "", title: "Add to Cart" },
+    ]);
+    const bubble = createApprovalBubble(
+      makeDetailedMessage({ toolName: "webmcp:add_to_cart", toolType: undefined })
+    );
+    expect(getSummary(bubble)?.textContent).toBe(
+      "The assistant wants to use “Add to Cart”."
+    );
+  });
+
+  it("ignores recorded titles for non-WebMCP approvals", () => {
+    recordWebMcpToolDisplayTitles([
+      { name: "add_to_cart", description: "", title: "Add to Cart" },
+    ]);
+    const bubble = createApprovalBubble(
+      makeDetailedMessage({ toolType: undefined })
+    );
+    expect(getSummary(bubble)?.textContent).toBe(
+      "The assistant wants to use “Add to cart”."
+    );
+  });
+
+  it("passes the declared title to formatDescription as displayTitle", () => {
+    recordWebMcpToolDisplayTitles([
+      { name: "add_to_cart", description: "", title: "Add to Cart" },
+    ]);
+    const seen: unknown[] = [];
+    const config = {
+      approval: {
+        formatDescription: (ctx: { displayTitle?: string }) => {
+          seen.push(ctx.displayTitle);
+          return undefined;
+        },
+      },
+    } as AgentWidgetConfig;
+    createApprovalBubble(makeDetailedMessage(), config);
+    expect(seen).toEqual(["Add to Cart"]);
   });
 
   it("honors custom toggle labels", () => {
