@@ -166,6 +166,7 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 - [Persistent Composer](/persistent-composer.html) — always-visible composer bar layout
 - [WebMCP Storefront](/webmcp-demo.html) — expose page tools to the agent via WebMCP
 - [WebMCP Calendar](/webmcp-calendar.html) — a team calendar copilot that reads availability and books events through WebMCP page tools
+- [WebMCP Slides](/webmcp-slides.html) — a Deck Copilot that edits a slide deck through WebMCP page tools, with selection-scoped tools and presenter-mode controls
 
 ## Customization
 
