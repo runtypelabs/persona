@@ -4,6 +4,15 @@
   box-sizing: border-box;
 }
 
+/* The docked Theme Copilot shell sizes itself with `height: 100%`, so html and
+   body need a definite height. Without it the dock slot's height resolves to
+   auto and the copilot sidebar grows with the conversation instead of pinning
+   to the viewport with internal scroll. */
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -13,6 +22,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: #f3f4f6;
+  overflow: hidden;
 }
 
 /* Theme Copilot dock target — the docked widget shell wraps this element and
