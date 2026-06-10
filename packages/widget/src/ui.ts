@@ -3003,6 +3003,10 @@ export const createAgentExperience = (
       cancelAnimationFrame(anchorRAF);
       anchorRAF = null;
     }
+    // Also stop an in-flight anchor scroll animation — otherwise its
+    // remaining frames keep easing scrollTop toward the stale anchor target
+    // after a jump-to-latest, chat clear, or scroll-mode change.
+    cancelSmoothScroll();
     anchorState = null;
     anchorSpacer.style.height = "0px";
   };

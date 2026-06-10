@@ -1050,6 +1050,46 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
+  it("jump-to-latest cancels an in-flight anchor scroll animation", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 }
+      }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitUserMessage(controller, "user-anchor-cancel", "Question");
+
+    // Anchor target (484) is reachable without a spacer, and differs from
+    // the bottom (600) so a stale animation is distinguishable.
+    const bubble = scrollContainer!.querySelector<HTMLElement>(
+      '[data-message-id="user-anchor-cancel"]'
+    );
+    Object.defineProperty(bubble!, "offsetTop", { value: 500 });
+
+    raf.step(1); // anchor frame: starts the scroll animation
+    raf.step(1); // first animation frame — animation now in flight
+
+    // Jump to the latest mid-animation: the stale anchor animation must not
+    // keep easing scrollTop back toward the old target.
+    getScrollToBottomButton(mount)!.click();
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    controller.destroy();
+  });
+
   it("scroll mode none never auto-scrolls during streaming", () => {
     const raf = installRafMock();
     const mount = createMount();
