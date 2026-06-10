@@ -5827,6 +5827,21 @@ export const createAgentExperience = (
   lastScrollTop = body.scrollTop;
   let lastBottomOffset = getScrollBottomOffset(body);
 
+  const getTranscriptSelection = (): Selection | null => {
+    // Selections inside a shadow root are not always reflected by
+    // document.getSelection(); prefer the shadow root's view when available
+    // (non-standard but supported where it matters).
+    const root = body.getRootNode();
+    const shadowSelection =
+      typeof (root as ShadowRoot & { getSelection?: () => Selection | null })
+        .getSelection === "function"
+        ? (root as ShadowRoot & { getSelection: () => Selection | null }).getSelection()
+        : null;
+    return shadowSelection ?? body.ownerDocument.getSelection();
+  };
+  const hasActiveTranscriptSelection = () =>
+    hasSelectionWithin(getTranscriptSelection(), body);
+
   const handleScroll = () => {
     const scrollTop = body.scrollTop;
     // When content mutates (e.g. stream-animation plugins re-rendering text)
@@ -5863,7 +5878,12 @@ export const createAgentExperience = (
     lastScrollTop = nextLastScrollTop;
 
     if (action === "resume") {
-      resumeAutoScroll();
+      // Drag-selecting downward near the bottom edge auto-scrolls down and
+      // would otherwise read as a resume gesture; keep follow paused while a
+      // transcript selection is active so it isn't yanked mid-drag.
+      if (!hasActiveTranscriptSelection()) {
+        resumeAutoScroll();
+      }
       return;
     }
 
@@ -5895,22 +5915,10 @@ export const createAgentExperience = (
   // selection (Shift+arrows, select-all) pauses too; a stale selection
   // left in the transcript fires no further events, so it can't re-pause
   // after the user resumes following.
-  const getTranscriptSelection = (): Selection | null => {
-    // Selections inside a shadow root are not always reflected by
-    // document.getSelection(); prefer the shadow root's view when available
-    // (non-standard but supported where it matters).
-    const root = body.getRootNode();
-    const shadowSelection =
-      typeof (root as ShadowRoot & { getSelection?: () => Selection | null })
-        .getSelection === "function"
-        ? (root as ShadowRoot & { getSelection: () => Selection | null }).getSelection()
-        : null;
-    return shadowSelection ?? body.ownerDocument.getSelection();
-  };
   const handleSelectionChange = () => {
     if (getScrollMode() !== "follow") return;
     if (!autoFollow.isFollowing()) return;
-    if (hasSelectionWithin(getTranscriptSelection(), body)) {
+    if (hasActiveTranscriptSelection()) {
       pauseAutoScroll();
     }
   };
@@ -5930,7 +5938,7 @@ export const createAgentExperience = (
 
     if (action === "pause") {
       pauseAutoScroll();
-    } else if (action === "resume") {
+    } else if (action === "resume" && !hasActiveTranscriptSelection()) {
       resumeAutoScroll();
     }
   };

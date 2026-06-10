@@ -871,11 +871,14 @@ describe("createAgentExperience streaming scroll", () => {
 
     // A selection forms inside the transcript (mouse drag or keyboard —
     // both surface as selectionchange).
-    vi.spyOn(document, "getSelection").mockReturnValue({
+    let currentSelection: Partial<Selection> | null = {
       isCollapsed: false,
       anchorNode: scrollContainer,
       focusNode: scrollContainer
-    } as unknown as Selection);
+    };
+    vi.spyOn(document, "getSelection").mockImplementation(
+      () => currentSelection as Selection | null
+    );
     document.dispatchEvent(new Event("selectionchange"));
 
     metrics.setScrollHeight(1100);
@@ -884,6 +887,25 @@ describe("createAgentExperience streaming scroll", () => {
 
     // Auto-follow paused: the selection isn't dragged out from under the user.
     expect(metrics.getScrollTop()).toBe(600);
+
+    // Drag-selecting toward the bottom edge auto-scrolls down — that must
+    // not read as a resume gesture while the selection is still active.
+    metrics.setScrollTop(metrics.getBottomScrollTop());
+    scrollContainer!.dispatchEvent(new Event("scroll"));
+    const heldPosition = metrics.getScrollTop();
+    metrics.setScrollHeight(1200);
+    emitStreamingMessage(controller, "Third chunk");
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(heldPosition);
+
+    // Once the selection clears, scrolling down near the bottom resumes.
+    currentSelection = null;
+    metrics.setScrollTop(metrics.getBottomScrollTop());
+    scrollContainer!.dispatchEvent(new Event("scroll"));
+    metrics.setScrollHeight(1300);
+    emitStreamingMessage(controller, "Fourth chunk");
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
 
     controller.destroy();
   });
