@@ -49,10 +49,13 @@ const applyDockSlotMaxHeight = (
 };
 
 /**
- * Sticky keeps in-flow dock reveals pinned to the top of the viewport when the
- * surrounding page is taller than the screen (e.g. a missing height chain or a
- * deliberately scrolling page). With a properly sized shell it behaves exactly
- * like the previous `position: relative`.
+ * Sticky keeps the resize/emerge dock column pinned to the top of the viewport
+ * when the surrounding page is taller than the screen (e.g. a missing height
+ * chain or a deliberately scrolling page). With a properly sized shell it
+ * behaves exactly like the previous `position: relative`. Not used for push:
+ * there the slot lives inside the translated push track, and that transformed
+ * ancestor defeats sticky (verified in Chromium) — push gets the max-height
+ * cap only, like overlay.
  */
 const applyInFlowDockSlotPosition = (
   dockSlot: HTMLElement,
@@ -391,7 +394,8 @@ const applyDockStyles = (
     dockSlot.style.width = dock.width;
     dockSlot.style.minWidth = dock.width;
     dockSlot.style.maxWidth = dock.width;
-    applyInFlowDockSlotPosition(dockSlot, dock.maxHeight);
+    dockSlot.style.position = "relative";
+    dockSlot.style.top = "";
     dockSlot.style.overflow = "hidden";
     dockSlot.style.transition = "none";
     dockSlot.style.pointerEvents = expanded ? "auto" : "none";

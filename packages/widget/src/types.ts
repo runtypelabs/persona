@@ -1357,8 +1357,10 @@ export type AgentWidgetDockConfig = {
    * an ancestor (usually `html, body { height: 100% }`) provides a definite
    * height. Without one, the dock column would otherwise grow with the
    * conversation and scroll off the page. This cap clamps the panel to the
-   * viewport (and keeps in-flow reveals pinned with `position: sticky`) so a
-   * missing height chain degrades gracefully instead of breaking the chat.
+   * viewport (and keeps the `resize`/`emerge` reveals pinned with
+   * `position: sticky`; `push`/`overlay` get the cap only, since their
+   * transform/absolute contexts defeat sticky) so a missing height chain
+   * degrades gracefully instead of breaking the chat.
    *
    * - Set a CSS length (e.g. `"600px"`, `"80vh"`) to override the cap.
    * - Set `false` to disable the guard entirely (the panel then sizes purely

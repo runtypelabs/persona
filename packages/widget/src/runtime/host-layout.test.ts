@@ -194,8 +194,8 @@ describe("createWidgetHostLayout docked", () => {
     layout.destroy();
   });
 
-  it("clamps the dock slot to the viewport guard and pins in-flow reveals sticky", () => {
-    for (const reveal of ["resize", "emerge", "push"] as const) {
+  it("clamps the dock slot to the viewport guard and pins resize/emerge sticky", () => {
+    for (const reveal of ["resize", "emerge"] as const) {
       const parent = document.createElement("div");
       document.body.appendChild(parent);
       const target = document.createElement("div");
@@ -219,25 +219,34 @@ describe("createWidgetHostLayout docked", () => {
     }
   });
 
-  it("clamps the overlay dock slot without changing its absolute positioning", () => {
-    const parent = document.createElement("div");
-    document.body.appendChild(parent);
-    const target = document.createElement("div");
-    parent.appendChild(target);
+  it("clamps push and overlay dock slots without sticky (transform/absolute contexts)", () => {
+    // push: the slot lives inside the translated track, where a transformed
+    // ancestor defeats sticky — cap only. overlay: keeps absolute positioning.
+    const cases = [
+      { reveal: "push" as const, position: "relative" },
+      { reveal: "overlay" as const, position: "absolute" },
+    ];
+    for (const { reveal, position } of cases) {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
 
-    const layout = createWidgetHostLayout(target, {
-      launcher: {
-        mountMode: "docked",
-        autoExpand: false,
-        dock: { width: "320px", reveal: "overlay" },
-      },
-    });
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: false,
+          dock: { width: "320px", reveal },
+        },
+      });
 
-    const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
-    expect(dockSlot?.style.maxHeight).not.toBe("");
-    expect(dockSlot?.style.position).toBe("absolute");
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      expect(dockSlot?.style.maxHeight, reveal).not.toBe("");
+      expect(dockSlot?.style.position, reveal).toBe(position);
 
-    layout.destroy();
+      layout.destroy();
+      document.body.innerHTML = "";
+    }
   });
 
   it("honors a custom dock.maxHeight and the false opt-out", () => {
