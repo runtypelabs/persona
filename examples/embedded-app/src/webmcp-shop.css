@@ -5,62 +5,71 @@
    gallery demos (which share demo-shared.css :root). This dresses the demo
    page as a small trail/road running outfitter so the Persona widget reads as
    *that store's* assistant rather than gallery chrome. The matching widget
-   theme is set in buildConfig() (webmcp-demo.ts); the two share the same brand
-   green + trail-orange accent and both follow the OS light/dark preference.
+   theme is set in buildConfig() (webmcp-demo.ts); the two share the same
+   pine + blaze palette and both follow the OS light/dark preference.
 
    The gallery shell header (top nav) intentionally keeps its neutral gallery
    styling — it's the gallery wrapper, not part of the store.
    ════════════════════════════════════════════════════════════════════════ */
 
 body.webmcp-shop {
-  /* Brand — warm artisan palette (espresso + caramel), inspired by the
-     "Flour & Stone" bakery demo. */
-  --shop-brand: #1c1917;          /* espresso — primary fills, header */
-  --shop-brand-strong: #292524;   /* hover / deeper */
-  --shop-brand-ink: #fafaf9;      /* text on brand fills (≈16:1 on #1c1917) */
-  --shop-accent: #b8814b;         /* caramel — highlights, borders */
-  --shop-accent-strong: #8a5a2b;  /* deep caramel — accent text on cream (≈5:1) */
+  /* Brand — "Pine & Blaze": deep pine green primary, trail-blaze orange
+     accent, goldenrod promo tints, warm granite neutrals. Blaze on white is
+     only ~4:1, so it never carries small text: `--shop-accent-strong` (≈6:1
+     on cream) is the text-safe blaze and `--shop-badge-bg` (deep blaze,
+     ≈5.2:1 under white) is the fill used behind white badge text. */
+  --shop-brand: #1f3d2b;          /* deep pine — primary fills, header */
+  --shop-brand-strong: #2a5240;   /* hover / lifted pine */
+  --shop-brand-deep: #15291d;     /* active / inset pine */
+  --shop-brand-ink: #f4f3ee;      /* text on pine fills (≈11:1 on #1f3d2b) */
+  --shop-accent: #d9531e;         /* blaze orange — fills, rings, highlights */
+  --shop-accent-strong: #a63a14;  /* text-safe blaze on cream (≈6:1) */
+  --shop-gold: #b8860b;           /* goldenrod — promo fills/tints */
+  --shop-gold-strong: #8a6508;    /* text-safe goldenrod on cream (≈5.3:1) */
+  --shop-badge-bg: #c2410c;       /* deep blaze — in-cart count fill */
+  --shop-badge-ink: #ffffff;
 
-  /* Paper + ink (warm stone neutrals) */
-  --shop-bg: #f6f4f0;
+  /* Paper + ink (warm granite neutrals) */
+  --shop-bg: #f4f3ee;
   --shop-paper: #ffffff;
   --shop-card: #ffffff;
-  --shop-ink: #1c1917;
-  --shop-ink-soft: #78716c;
-  --shop-faint: #a8a29e;
-  --shop-line: #e7e5e4;
-  --shop-line-strong: #d6d3d1;
+  --shop-ink: #1d211c;
+  --shop-ink-soft: #5f675e;
+  --shop-faint: #8b9286;
+  --shop-line: #e2e1d6;
+  --shop-line-strong: #d2d2c4;
 
-  /* Wire-inspector palette (warm instrument readout) — light scheme.
+  /* Wire-inspector palette (pine-tinted instrument readout) — light scheme.
      Category colors are the deeper variants so the tags + left rules read on a
      light panel; the dark scheme below swaps in the brighter set. */
-  --wire-bg: #f4f1ea;
-  --wire-fg: #4b4640;
-  --wire-faint: #9a8f80;
-  --wire-line: #e4ddcf;
-  --wire-head-bg: #ece5d8;
-  --wire-row-bg: rgba(28, 25, 23, 0.035);
-  --wire-reg: #15803d;     /* registration */
-  --wire-send: #0369a1;    /* outgoing dispatch */
-  --wire-gate: #a16207;    /* approval gate */
-  --wire-exec: #6d28d9;    /* page-tool execution */
-  --wire-resume: #c2410c;  /* batched resume */
+  --wire-bg: #f1f0e6;
+  --wire-fg: #4a514a;
+  --wire-faint: #8e9282;
+  --wire-line: #e0ded0;
+  --wire-head-bg: #e8e6d8;
+  --wire-row-bg: rgba(29, 33, 28, 0.035);
+  --wire-reg: #2f7d4f;     /* registration — forest */
+  --wire-send: #31708f;    /* outgoing dispatch — lake */
+  --wire-gate: #8a6508;    /* approval gate — goldenrod */
+  --wire-exec: #6b46c1;    /* page-tool execution — heather */
+  --wire-resume: #c2410c;  /* batched resume — deep blaze */
 
   --shop-radius: 14px;
   --shop-radius-sm: 9px;
-  --shop-shadow: 0 1px 2px rgba(28, 25, 23, 0.05);
-  --shop-shadow-md: 0 14px 32px -20px rgba(28, 25, 23, 0.28);
+  --shop-shadow: 0 1px 2px rgba(29, 33, 28, 0.05);
+  --shop-shadow-md: 0 14px 32px -20px rgba(21, 41, 29, 0.32);
 
   /* Give the storefront rail room for a 2-up product grid on this page only. */
   --stage-controls: minmax(440px, 42%);
 
   background-color: var(--shop-bg);
-  /* Subtle low-contrast "switchback" mountain linework. We set background-size
-     and -repeat explicitly: the gallery's base `body` rule declares
+  /* Faint topographic contour rings — two "summits" per tile, drawn entirely
+     inside the tile so the repeat never seams. We set background-size and
+     -repeat explicitly: the gallery's base `body` rule declares
      `background-size: 40px 40px`, which this selector would otherwise inherit
      and tile any wash into a 40px patchwork. */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='140'%3E%3Cg fill='none' stroke='%231c1917' stroke-opacity='0.05' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M0 84 L60 44 L120 84 L180 44 L240 84'/%3E%3Cpath d='M0 106 L40 86 L80 106 L120 86 L160 106 L200 86 L240 106'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: 240px 140px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='200'%3E%3Cg fill='none' stroke='%231f3d2b' stroke-opacity='0.055' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M105 25c38 0 68 21 68 49s-30 50-68 50-66-22-66-50 28-49 66-49z'/%3E%3Cpath d='M105 43c27 0 49 14 49 31s-22 33-49 33-47-15-47-33 20-31 47-31z'/%3E%3Cpath d='M105 60c16 0 28 8 28 15s-12 17-28 17-26-8-26-17 10-15 26-15z'/%3E%3Cpath d='M225 122c25 0 44 14 44 31s-19 33-44 33-43-15-43-33 18-31 43-31z'/%3E%3Cpath d='M225 138c14 0 25 7 25 15s-11 16-25 16-24-7-24-16 10-15 24-15z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 280px 200px;
   background-repeat: repeat;
   background-position: center top;
   color: var(--shop-ink);
@@ -68,41 +77,47 @@ body.webmcp-shop {
 
 @media (prefers-color-scheme: dark) {
   body.webmcp-shop {
-    /* Warm espresso night: caramel becomes the interactive primary. */
-    --shop-brand: #d4a574;
-    --shop-brand-strong: #e0b787;
-    --shop-brand-ink: #1c1917;
-    --shop-accent: #d4a574;
-    --shop-accent-strong: #e0b787;
+    /* Night forest: lichen green becomes the interactive primary (pine ink on
+       it ≈7:1) and blaze glows brighter against the spruce-night ground. */
+    --shop-brand: #7fb594;
+    --shop-brand-strong: #94c7a8;
+    --shop-brand-deep: #6aa382;
+    --shop-brand-ink: #15291d;
+    --shop-accent: #ff7a3d;
+    --shop-accent-strong: #ff9a62;
+    --shop-gold: #e3b341;
+    --shop-gold-strong: #e3b341;
+    --shop-badge-bg: #ff7a3d;
+    --shop-badge-ink: #15291d;
 
-    --shop-bg: #1c1917;
-    --shop-paper: #292524;
-    --shop-card: #2c2724;
-    --shop-ink: #f5f5f4;
-    --shop-ink-soft: #a8a29e;
-    --shop-faint: #78716c;
-    --shop-line: #3a3530;
-    --shop-line-strong: #44403c;
+    --shop-bg: #141915;
+    --shop-paper: #1d2420;
+    --shop-card: #212a24;
+    --shop-ink: #e8eee7;
+    --shop-ink-soft: #9fab9d;
+    --shop-faint: #6e7a6c;
+    --shop-line: #2c352d;
+    --shop-line-strong: #3a463b;
 
     --shop-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shop-shadow-md: 0 16px 36px -22px rgba(0, 0, 0, 0.7);
 
-    /* Same mountain linework, light stroke for the dark background
+    /* Same contour rings, pale stroke for the dark background
        (size/repeat/position inherit from the base rule). */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='140'%3E%3Cg fill='none' stroke='%23f5f5f4' stroke-opacity='0.05' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M0 84 L60 44 L120 84 L180 44 L240 84'/%3E%3Cpath d='M0 106 L40 86 L80 106 L120 86 L160 106 L200 86 L240 106'/%3E%3C/g%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='200'%3E%3Cg fill='none' stroke='%23e8eee7' stroke-opacity='0.05' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M105 25c38 0 68 21 68 49s-30 50-68 50-66-22-66-50 28-49 66-49z'/%3E%3Cpath d='M105 43c27 0 49 14 49 31s-22 33-49 33-47-15-47-33 20-31 47-31z'/%3E%3Cpath d='M105 60c16 0 28 8 28 15s-12 17-28 17-26-8-26-17 10-15 26-15z'/%3E%3Cpath d='M225 122c25 0 44 14 44 31s-19 33-44 33-43-15-43-33 18-31 43-31z'/%3E%3Cpath d='M225 138c14 0 25 7 25 15s-11 16-25 16-24-7-24-16 10-15 24-15z'/%3E%3C/g%3E%3C/svg%3E");
 
     /* Wire-inspector palette — dark scheme (brighter category set). */
-    --wire-bg: #211c18;
-    --wire-fg: #e7e0d6;
-    --wire-faint: #9a8f80;
+    --wire-bg: #181d18;
+    --wire-fg: #dde4d9;
+    --wire-faint: #8b9286;
     --wire-line: rgba(255, 255, 255, 0.08);
-    --wire-head-bg: #2a241f;
+    --wire-head-bg: #222822;
     --wire-row-bg: rgba(255, 255, 255, 0.03);
     --wire-reg: #86efac;
     --wire-send: #7dd3fc;
     --wire-gate: #fcd34d;
-    --wire-exec: #d6bcfa;
-    --wire-resume: #e0a868;
+    --wire-exec: #c4b5fd;
+    --wire-resume: #ff9a62;
   }
 }
 
@@ -129,7 +144,16 @@ body.webmcp-shop .shell-main:has(.stage-widget) .stage-controls {
 body.webmcp-shop .shop-hero {
   margin: 0 0 1.25rem 0;
   padding-bottom: 1.1rem;
-  border-bottom: 1px solid var(--shop-line-strong);
+  /* Hairline rule with a short blaze segment at the left — the trail-marker
+     "blaze" painted on the brand line. */
+  background-image: linear-gradient(
+    90deg,
+    var(--shop-accent) 0 44px,
+    var(--shop-line-strong) 44px 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 2px;
+  background-position: left bottom;
 }
 body.webmcp-shop .shop-wordmark {
   display: inline-flex;
@@ -216,6 +240,26 @@ body.webmcp-shop .shop-product {
   box-shadow: var(--shop-shadow);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
+body.webmcp-shop .shop-product:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--shop-brand) 35%, var(--shop-line));
+  box-shadow: var(--shop-shadow-md);
+}
+body.webmcp-shop .shop-product-media {
+  aspect-ratio: 4 / 3;
+  margin: -0.35rem -0.45rem 0.35rem;
+  overflow: hidden;
+  border: 1px solid var(--shop-line);
+  border-radius: calc(var(--shop-radius-sm) - 2px);
+  background: color-mix(in srgb, var(--shop-bg) 82%, var(--shop-paper));
+}
+body.webmcp-shop .shop-product-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
 body.webmcp-shop .shop-product-top {
   display: flex;
   align-items: center;
@@ -285,8 +329,8 @@ body.webmcp-shop .shop-product .shop-incart-badge {
   padding: 0 0.32rem;
   display: none;
   place-items: center;
-  background: var(--shop-accent);
-  color: #1c1917;
+  background: var(--shop-badge-bg);
+  color: var(--shop-badge-ink);
   font-family: var(--font-mono, monospace);
   font-size: 0.66rem;
   font-weight: 700;
@@ -368,7 +412,7 @@ body.webmcp-shop .shop-cart-row {
   font-variant-numeric: tabular-nums;
 }
 body.webmcp-shop .shop-cart-row.muted { color: var(--shop-ink-soft); font-size: 0.8rem; }
-body.webmcp-shop .shop-cart-row.promo { color: var(--shop-accent-strong); font-size: 0.8rem; }
+body.webmcp-shop .shop-cart-row.promo { color: var(--shop-gold-strong); font-size: 0.8rem; }
 body.webmcp-shop .shop-cart-row.total { font-size: 1rem; }
 body.webmcp-shop .shop-cart-row.total strong { color: var(--shop-ink); }
 body.webmcp-shop .shop-cart-chip {
@@ -377,8 +421,8 @@ body.webmcp-shop .shop-cart-chip {
   font-size: 0.66rem;
   padding: 0.04rem 0.4rem;
   border-radius: 5px;
-  background: color-mix(in srgb, var(--shop-accent) 16%, transparent);
-  color: var(--shop-accent-strong);
+  background: color-mix(in srgb, var(--shop-gold) 16%, transparent);
+  color: var(--shop-gold-strong);
 }
 
 /* ── Wire inspector ────────────────────────────────────────────────────── */

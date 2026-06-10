@@ -70,6 +70,9 @@ function ProductCard({
   return (
     <article className={classes} data-sku={product.sku}>
       <span className="shop-incart-badge">{quantity > 0 ? quantity : ""}</span>
+      <div className="shop-product-media">
+        <img src={product.imageUrl} alt={product.imageAlt} loading="lazy" />
+      </div>
       <div className="shop-product-top">
         <span className="shop-swatch" style={{ background: swatch }} />
         <span className="shop-product-cat">{product.category}</span>

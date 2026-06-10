@@ -69,7 +69,7 @@ export function registerStorefrontTools(): void {
     {
       name: "search_products",
       description:
-        "Search the product catalog by free-text query (e.g. 'waterproof trail shoe', 'blue running', 'jacket'). Returns matching products with SKU, title, brand, color, and price.",
+        "Search the product catalog by free-text query (e.g. 'waterproof trail shoe', 'blue running', 'jacket'). Returns matching products with SKU, title, brand, color, price, imageUrl, and imageAlt.",
       inputSchema: {
         type: "object",
         properties: { query: { type: "string", description: "Free-text search query." } },
@@ -96,6 +96,8 @@ export function registerStorefrontTools(): void {
             color: p.color,
             price: p.price,
             description: p.description,
+            imageUrl: p.imageUrl,
+            imageAlt: p.imageAlt,
           })),
         };
       },
@@ -108,7 +110,7 @@ export function registerStorefrontTools(): void {
     {
       name: "view_product",
       description:
-        "Look at one product in detail by SKU (from search_products results). Highlights it on the page and returns its full description. Read-only.",
+        "Look at one product in detail by SKU (from search_products results). Highlights it on the page and returns its full description plus imageUrl/imageAlt. Read-only.",
       inputSchema: {
         type: "object",
         properties: { sku: { type: "string" } },
@@ -134,6 +136,8 @@ export function registerStorefrontTools(): void {
           color: product.color,
           price: product.price,
           description: product.description,
+          imageUrl: product.imageUrl,
+          imageAlt: product.imageAlt,
         };
       },
     },
@@ -170,6 +174,8 @@ export function registerStorefrontTools(): void {
           title: product.title,
           quantity,
           unitPrice: product.price,
+          imageUrl: product.imageUrl,
+          imageAlt: product.imageAlt,
           cart: cartSummary(),
         };
       },

@@ -17,6 +17,8 @@ export interface CartLine {
   title: string;
   price: number;
   quantity: number;
+  imageUrl: string;
+  imageAlt: string;
 }
 
 export type WireKind = "reg" | "send" | "gate" | "exec" | "resume";
@@ -44,7 +46,14 @@ export interface ShopState {
 }
 
 export interface CartSummary {
-  items: Array<{ sku: string; title: string; quantity: number; lineTotal: number }>;
+  items: Array<{
+    sku: string;
+    title: string;
+    quantity: number;
+    lineTotal: number;
+    imageUrl: string;
+    imageAlt: string;
+  }>;
   itemCount: number;
   subtotal: number;
   discount: number;
@@ -105,6 +114,8 @@ export function cartSummary(): CartSummary {
     title: line.title,
     quantity: line.quantity,
     lineTotal: Number((line.price * line.quantity).toFixed(2)),
+    imageUrl: line.imageUrl,
+    imageAlt: line.imageAlt,
   }));
   const subtotal = Number(items.reduce((sum, i) => sum + i.lineTotal, 0).toFixed(2));
   const discount = promo ? Number((subtotal * promo.rate).toFixed(2)) : 0;
@@ -143,6 +154,8 @@ export function addToCart(product: CatalogProduct, quantity: number): void {
       title: `${product.title} (${product.color})`,
       price: product.price,
       quantity,
+      imageUrl: product.imageUrl,
+      imageAlt: product.imageAlt,
     });
   }
   flashCard(product.sku);

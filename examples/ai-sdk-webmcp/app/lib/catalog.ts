@@ -12,6 +12,8 @@ export interface CatalogProduct {
   color: string;
   price: number;
   description: string;
+  imageUrl: string;
+  imageAlt: string;
 }
 
 export const CATALOG: CatalogProduct[] = [
@@ -23,6 +25,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "blue",
     price: 129,
     description: "Lightweight daily trainer with a responsive foam midsole.",
+    imageUrl: "/switchback-products/shoe-001.jpg",
+    imageAlt: "Blue Trailblaze Pro road running shoe",
   },
   {
     sku: "SHOE-002",
@@ -32,6 +36,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "black",
     price: 129,
     description: "Lightweight daily trainer with a responsive foam midsole.",
+    imageUrl: "/switchback-products/shoe-002.jpg",
+    imageAlt: "Black Trailblaze Pro road running shoe",
   },
   {
     sku: "SHOE-003",
@@ -41,6 +47,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "white",
     price: 149,
     description: "Plush, high-stack cushioning for long easy miles.",
+    imageUrl: "/switchback-products/shoe-003.jpg",
+    imageAlt: "White Cloudstrider 5 high-cushion road running shoe",
   },
   {
     sku: "SHOE-004",
@@ -50,6 +58,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "blue",
     price: 149,
     description: "Plush, high-stack cushioning for long easy miles.",
+    imageUrl: "/switchback-products/shoe-004.jpg",
+    imageAlt: "Blue Cloudstrider 5 high-cushion road running shoe",
   },
   {
     sku: "SHOE-005",
@@ -59,6 +69,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "red",
     price: 179,
     description: "Carbon-plated racer tuned for tempo and race day.",
+    imageUrl: "/switchback-products/shoe-005.jpg",
+    imageAlt: "Red Marathon Elite carbon-plated racing shoe",
   },
   {
     sku: "SHOE-006",
@@ -68,6 +80,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "green",
     price: 159,
     description: "Aggressive lugs and a waterproof membrane for wet trails.",
+    imageUrl: "/switchback-products/shoe-006.jpg",
+    imageAlt: "Green TrailGrip GTX waterproof trail running shoe",
   },
   {
     sku: "SHOE-007",
@@ -77,6 +91,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "grey",
     price: 159,
     description: "Aggressive lugs and a waterproof membrane for wet trails.",
+    imageUrl: "/switchback-products/shoe-007.jpg",
+    imageAlt: "Grey TrailGrip GTX waterproof trail running shoe",
   },
   {
     sku: "JKT-001",
@@ -86,6 +102,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "blue",
     price: 89,
     description: "Packable, wind- and water-resistant running shell.",
+    imageUrl: "/switchback-products/jkt-001.jpg",
+    imageAlt: "Blue StormShell packable running jacket",
   },
   {
     sku: "JKT-002",
@@ -95,6 +113,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "black",
     price: 89,
     description: "Packable, wind- and water-resistant running shell.",
+    imageUrl: "/switchback-products/jkt-002.jpg",
+    imageAlt: "Black StormShell packable running jacket",
   },
   {
     sku: "SCK-001",
@@ -104,6 +124,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "white",
     price: 18,
     description: "Moisture-wicking, cushioned crew socks.",
+    imageUrl: "/switchback-products/sck-001.jpg",
+    imageAlt: "White RunDry cushioned crew running socks three-pack",
   },
   {
     sku: "SHRT-001",
@@ -113,6 +135,8 @@ export const CATALOG: CatalogProduct[] = [
     color: "navy",
     price: 39,
     description: "5-inch lined shorts with a zip pocket.",
+    imageUrl: "/switchback-products/shrt-001.jpg",
+    imageAlt: "Navy Tempo five-inch lined running shorts",
   },
 ];
 
@@ -123,16 +147,18 @@ export const PROMOS: Record<string, { rate: number; label: string }> = {
   SUMMIT20: { rate: 0.2, label: "20% off — SUMMIT20" },
 };
 
-// Named colors → swatch hex for the catalog grid.
+// Named colors → swatch hex for the catalog grid. Curated outdoor-gear tones
+// (lake, clay, fern, granite…) rather than stock framework hexes, so the
+// swatches sit inside the storefront's pine + blaze palette.
 export const COLOR_HEX: Record<string, string> = {
-  blue: "#2563eb",
-  black: "#1f2937",
-  white: "#f3f4f6",
-  red: "#dc2626",
-  green: "#16a34a",
-  grey: "#9ca3af",
-  gray: "#9ca3af",
-  navy: "#1e3a8a",
+  blue: "#3e6e91", // lake
+  black: "#23272a", // charcoal
+  white: "#eceae2", // chalk
+  red: "#b94a36", // clay
+  green: "#4a7c59", // fern
+  grey: "#8c9189", // granite
+  gray: "#8c9189",
+  navy: "#2e4257", // midnight
 };
 
 const STOPWORDS = new Set([
