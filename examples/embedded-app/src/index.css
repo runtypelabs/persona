@@ -694,13 +694,13 @@ section[id] {
   }
 
   .hero-panel .hero-features {
-    gap: 4px;
-    margin-top: 0;
+    column-gap: 20px;
+    row-gap: 5px;
+    margin-top: 4px;
   }
 
-  .hero-panel .hero-feature-pill {
-    font-size: 11px;
-    padding: 3px 8px;
+  .hero-panel .hero-features li {
+    font-size: 12px;
   }
 
   .hero-panel .hero-badges {
@@ -795,22 +795,45 @@ section[id] {
 }
 
 .hero-features {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  column-gap: 24px;
+  row-gap: 7px;
   justify-content: center;
-  margin-top: 4px;
 }
 
-.hero-feature-pill {
-  font-size: 12px;
+/* If the panel is too narrow for two columns, fall back to one clean column
+   instead of letting labels collide. */
+@media (max-width: 1180px) and (min-width: 901px), (max-width: 420px) {
+  .hero-features {
+    grid-template-columns: max-content;
+  }
+}
+
+.hero-features li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--muted);
-  padding: 4px 10px;
-  border-radius: 100px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.6);
+  color: var(--secondary-text);
+  letter-spacing: 0.01em;
   white-space: nowrap;
+}
+
+.hero-features li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  background-color: var(--primary);
+  /* Inline check glyph, masked so it inherits --primary */
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 5" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>') center / contain no-repeat;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 5" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>') center / contain no-repeat;
 }
 
 .hero-badges {
