@@ -127,6 +127,19 @@ const parseDate = (value, label = 'date') => {
 const userById = (id) => USERS.find((user) => user.id === id) ?? USERS[0];
 const colorValue = (color) => EVENT_COLORS[color] ?? EVENT_COLORS.blue;
 
+// Strict lookup for tool *inputs*: an unknown userId must fail loudly (with
+// the valid IDs in the message so the agent can self-correct) rather than
+// silently assigning the wrong owner or filtering availability to nothing.
+const requireUser = (id) => {
+  const user = USERS.find((candidate) => candidate.id === id);
+  if (!user) {
+    throw new Error(
+      `Unknown userId "${id}". Valid user IDs: ${USERS.map((candidate) => candidate.id).join(', ')} — call get_users.`,
+    );
+  }
+  return user;
+};
+
 const createInitialEvents = () => {
   const today = startOfDay(new Date());
   const tomorrow = addDays(today, 1);
@@ -273,7 +286,7 @@ const createEvent = (input = {}) => {
   const end = parseDate(input.endDate, 'endDate');
   if (end <= start) throw new Error('endDate must be after startDate');
 
-  const user = input.userId ? userById(input.userId) : USERS[0];
+  const user = input.userId ? requireUser(input.userId) : USERS[0];
   const color = EVENT_COLORS[input.color] ? input.color : 'blue';
   const id = `evt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -306,7 +319,7 @@ const updateEvent = (input = {}) => {
   if (input.title !== undefined) event.title = String(input.title).trim() || event.title;
   if (input.description !== undefined) event.description = String(input.description);
   if (input.location !== undefined) event.location = String(input.location);
-  if (input.userId !== undefined) event.userId = userById(input.userId).id;
+  if (input.userId !== undefined) event.userId = requireUser(input.userId).id;
   if (input.color !== undefined && EVENT_COLORS[input.color]) event.color = input.color;
 
   if (input.startDate !== undefined) event.startDate = parseDate(input.startDate, 'startDate').toISOString();
@@ -332,6 +345,7 @@ const deleteEvent = (eventId) => {
 };
 
 const findAvailability = ({ date, durationMinutes = 30, userId } = {}) => {
+  if (userId) requireUser(userId);
   const day = startOfDay(parseDate(date ?? state.selectedDate, 'date'));
   const duration = Math.max(15, Math.min(240, Number(durationMinutes) || 30));
   const dayStart = new Date(day);
