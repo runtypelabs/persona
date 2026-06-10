@@ -13,4 +13,5 @@ export { BAKERY_ASSISTANT_FLOW } from "./bakery-assistant.js";
 export { STOREFRONT_ASSISTANT_FLOW } from "./storefront-assistant.js";
 export { WEBMCP_STOREFRONT_FLOW } from "./webmcp-storefront.js";
 export { WEBMCP_CALENDAR_FLOW } from "./webmcp-calendar.js";
+export { WEBMCP_SLIDES_FLOW } from "./webmcp-slides.js";
 export { PAGE_CONTEXT_FLOW } from "./page-context.js";

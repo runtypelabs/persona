@@ -10,6 +10,7 @@ import {
   STOREFRONT_ASSISTANT_FLOW,
   WEBMCP_STOREFRONT_FLOW,
   WEBMCP_CALENDAR_FLOW,
+  WEBMCP_SLIDES_FLOW,
   PAGE_CONTEXT_FLOW,
   createCheckoutSession
 } from "@runtypelabs/persona-proxy";
@@ -111,6 +112,18 @@ const webmcpCalendarApp = createChatProxyApp({
   upstreamUrl
 });
 
+// WebMCP slides proxy - for the Deck Copilot slide-editor demo. Same pattern,
+// with a twist: the page's tool set is dynamic (selection-scoped tools appear
+// with multi-select; presenter mode swaps the editing set for show controls),
+// and the widget ships live editor state as {{slides_context}} via inputs.
+const webmcpSlidesApp = createChatProxyApp({
+  path: "/api/chat/dispatch-slides",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_SLIDES || undefined,
+  flowConfig: process.env.FLOW_ID_SLIDES ? undefined : WEBMCP_SLIDES_FLOW,
+  upstreamUrl
+});
+
 // Page-context proxy - read-only, markdown answers about the current page.
 // Used by the smart-dom-reader demo: the widget sends live page context (including
 // shadow-DOM elements) as `inputs`, and this flow injects it via {{pageContext}}.
@@ -130,6 +143,7 @@ app.route("/", bakeryApp);
 app.route("/", storefrontApp);
 app.route("/", webmcpApp);
 app.route("/", webmcpCalendarApp);
+app.route("/", webmcpSlidesApp);
 app.route("/", pageContextApp);
 
 // Stripe checkout endpoint

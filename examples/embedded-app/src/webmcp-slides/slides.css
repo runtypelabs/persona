@@ -1,0 +1,474 @@
+/* WebMCP slide-deck editor — page chrome + editor surfaces.
+   Slide CONTENT styles must stay in sync between the canvas, the sorter
+   thumbnails, and presenter mode; they all share .wm-slide / .wm-element. */
+
+:root {
+  --wm-chrome-bg: #f4f3ef;
+  --wm-surface: #ffffff;
+  --wm-border: #e7e5e0;
+  --wm-text: #1f2933;
+  --wm-text-muted: #6b7280;
+  --wm-accent: #c2410c;
+  --wm-selection: #2563eb;
+  --wm-agent: #c2410c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body.wm-body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--wm-chrome-bg);
+  color: var(--wm-text);
+  font-family:
+    Inter,
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+/* ---- toolbar ---- */
+
+.wm-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--wm-surface);
+  border-bottom: 1px solid var(--wm-border);
+  flex: 0 0 auto;
+}
+
+.wm-toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wm-logo {
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
+.wm-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--wm-accent);
+  background: rgba(194, 65, 12, 0.08);
+  border: 1px solid rgba(194, 65, 12, 0.25);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.wm-deck-title {
+  flex: 1;
+  min-width: 120px;
+  max-width: 420px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--wm-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.wm-deck-title:hover {
+  border-color: var(--wm-border);
+}
+
+.wm-deck-title:focus {
+  outline: none;
+  border-color: var(--wm-selection);
+  background: var(--wm-surface);
+}
+
+.wm-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.wm-toolbar-actions button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wm-text);
+  background: var(--wm-surface);
+  border: 1px solid var(--wm-border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.wm-toolbar-actions button:hover:not(:disabled) {
+  border-color: var(--wm-text-muted);
+}
+
+.wm-toolbar-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.wm-toolbar-actions .wm-present-button {
+  background: var(--wm-text);
+  border-color: var(--wm-text);
+  color: #ffffff;
+}
+
+.wm-theme-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--wm-text-muted);
+}
+
+.wm-theme-label select {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--wm-border);
+  border-radius: 8px;
+  background: var(--wm-surface);
+  color: var(--wm-text);
+}
+
+/* ---- main layout ---- */
+
+.wm-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+#slides-sorter {
+  flex: 0 0 200px;
+  overflow-y: auto;
+  border-right: 1px solid var(--wm-border);
+  background: var(--wm-surface);
+}
+
+#slides-canvas {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Persona's docked mount wraps #editor-dock-target in a generated
+   [data-persona-host-layout="docked"] flex row and docks the panel beside
+   it — the editor shrinks to make room (same pattern as webmcp-calendar). */
+.wm-editor {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+[data-persona-host-layout="docked"] {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: none;
+}
+
+/* The wrapper's generated children (content area + panel) must be allowed to
+   shrink below their content size, or the canvas's fixed-width viewport
+   pushes the docked panel off-screen. */
+[data-persona-host-layout="docked"] > * {
+  min-width: 0;
+  min-height: 0;
+}
+
+.wm-footer {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border-top: 1px solid var(--wm-border);
+  background: var(--wm-surface);
+}
+
+.wm-footer p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--wm-text-muted);
+}
+
+.wm-footer kbd {
+  font-family: inherit;
+  border: 1px solid var(--wm-border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 11px;
+}
+
+/* ---- canvas ---- */
+
+.wm-canvas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.wm-canvas-viewport {
+  position: relative;
+  flex: 0 0 auto;
+  box-shadow: 0 18px 50px rgba(31, 41, 51, 0.18);
+  border-radius: 4px;
+}
+
+.wm-stage-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+.wm-slide {
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+.wm-element {
+  position: absolute;
+}
+
+.wm-element-text {
+  white-space: pre-wrap;
+  line-height: 1.3;
+  overflow: hidden;
+  cursor: default;
+}
+
+.wm-element-text.wm-editing {
+  outline: 2px solid var(--wm-selection);
+  cursor: text;
+  user-select: text;
+}
+
+.wm-element-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wm-element-line svg {
+  display: block;
+  overflow: visible;
+}
+
+/* ---- selection overlay ---- */
+
+.wm-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.wm-selection-box {
+  position: absolute;
+  border: 2px solid var(--wm-selection);
+  pointer-events: none;
+}
+
+.wm-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #ffffff;
+  border: 2px solid var(--wm-selection);
+  border-radius: 2px;
+  pointer-events: auto;
+}
+
+.wm-handle-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.wm-handle-n  { top: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+.wm-handle-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.wm-handle-e  { top: calc(50% - 5px); right: -6px; cursor: ew-resize; }
+.wm-handle-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+.wm-handle-s  { bottom: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+.wm-handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.wm-handle-w  { top: calc(50% - 5px); left: -6px; cursor: ew-resize; }
+
+/* ---- agent-touch flash ---- */
+
+@keyframes wm-agent-pulse {
+  0% {
+    outline-color: rgba(194, 65, 12, 0.9);
+    outline-offset: 2px;
+  }
+  100% {
+    outline-color: rgba(194, 65, 12, 0);
+    outline-offset: 8px;
+  }
+}
+
+.wm-agent-flash {
+  outline: 3px solid rgba(194, 65, 12, 0.9);
+  animation: wm-agent-pulse 1.2s ease-out forwards;
+}
+
+/* ---- sorter ---- */
+
+.wm-sorter {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wm-thumb {
+  position: relative;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 6px;
+  border: 2px solid transparent;
+}
+
+.wm-thumb:hover {
+  background: var(--wm-chrome-bg);
+}
+
+.wm-thumb.is-current {
+  border-color: var(--wm-selection);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.wm-thumb-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--wm-border);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.wm-thumb-label {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wm-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wm-thumb-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: none;
+  gap: 4px;
+}
+
+.wm-thumb:hover .wm-thumb-actions {
+  display: flex;
+}
+
+.wm-thumb-actions button {
+  font-size: 11px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--wm-border);
+  border-radius: 4px;
+  background: var(--wm-surface);
+  cursor: pointer;
+}
+
+.wm-thumb-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.wm-thumb-add {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wm-text-muted);
+  background: transparent;
+  border: 1px dashed var(--wm-border);
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.wm-thumb-add:hover {
+  color: var(--wm-text);
+  border-color: var(--wm-text-muted);
+}
+
+/* ---- presenter mode ---- */
+
+.wm-present-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99990;
+  background: #0b0f14;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wm-present-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.wm-present-frame .wm-slide {
+  flex: 0 0 auto;
+}
+
+.wm-present-bar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.wm-present-hint {
+  color: #94a3b8;
+}
+
+.wm-present-exit {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #e2e8f0;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+@media (max-width: 1080px) {
+  #slides-sorter {
+    display: none;
+  }
+}
