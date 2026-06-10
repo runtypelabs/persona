@@ -157,6 +157,18 @@ To run against your own Runtype flow instead of the in-code definition, set `FLO
 
 > **Note on parallel local tool calls.** "Add SHOE-001 and SHOE-007 at the same time" makes the model emit *parallel* local tool calls in one turn, which depends on **runtypelabs/core#3878** / **#3870** being deployed upstream; single-tool turns work regardless.
 
+### WebMCP Slide-Deck Editor (Deck Copilot)
+- **Slides page**: `http://localhost:5173/webmcp-slides.html` (proxy mode — agent defined in code as `WEBMCP_SLIDES_FLOW`, mounted at `/api/chat/dispatch-slides`)
+  - A Keynote-lite editor (960×540 canvas, slide sorter, themes, presenter mode) where the human and the Persona agent **co-edit the same live canvas** — the richest WebMCP surface in the repo (~20 tools vs. the calendar's ten)
+  - `src/webmcp-slides/tools.ts` registers the tools on `document.modelContext`, and the tool set is **dynamic** — the demo's headline trick:
+    - `style_selection` / `align_selection` exist only while the user has **2+ elements selected** (AbortController re-registration, debounced)
+    - `enter_presenter_mode` **replaces the entire editing set** with show controls (`next_slide`, `prev_slide`, `jump_to_slide`, `exit_presenter_mode`) until the show ends
+  - **Selection as context**: a `contextProviders` + `requestMiddleware` pair ships the live editor state (current slide, mode, selected element ids + bounds) as `{{slides_context}}` with every message — so *"align these"* works without the user describing anything
+  - **Shared undo stack**: agent tools and human gestures commit through the same store, so ⌘Z undoes the agent's edits too
+  - Approval policy by blast radius: reads *and* incremental writes auto-approve (watch the agent assemble a slide live, with an outline pulse on everything it touches); only destructive/deck-wide tools (`delete_slide`, `delete_elements`, `apply_theme`) raise the native approval bubble with friendly copy
+  - Theme tokens (`theme.accent`, `theme.heading`, …) resolve at render time, which is what makes `apply_theme` restyle the whole deck in one call
+  - Try: *"What's in this deck?"* → *"Add a slide about pricing with three tiers"* → drag a box out of place, shift-select two others, *"align these and match their styles"* → *"Apply the Midnight theme"* (approval) → ⌘Z → *"Present the deck"*
+
 ### Custom Components Demo
 - **Components page**: `http://localhost:5173/custom-components.html`
   - Demonstrates custom component rendering from JSON directives
