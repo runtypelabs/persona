@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  computeAnchorScrollState,
+  computeShrunkSpacerHeight,
   createFollowStateController,
   getScrollBottomOffset,
+  hasSelectionWithin,
   isElementNearBottom,
   resolveFollowStateFromScroll,
   resolveFollowStateFromWheel
@@ -88,6 +91,94 @@ describe("auto-follow utilities", () => {
 
     expect(stayPaused.action).toBe("none");
     expect(resume.action).toBe("resume");
+  });
+
+  it("detects an active selection touching the container", () => {
+    const inside = { name: "inside" } as unknown as Node;
+    const outside = { name: "outside" } as unknown as Node;
+    const container = {
+      contains: (node: Node | null) => node === inside
+    };
+
+    expect(hasSelectionWithin(null, container)).toBe(false);
+    expect(
+      hasSelectionWithin(
+        { isCollapsed: true, anchorNode: inside, focusNode: inside },
+        container
+      )
+    ).toBe(false);
+    expect(
+      hasSelectionWithin(
+        { isCollapsed: false, anchorNode: outside, focusNode: outside },
+        container
+      )
+    ).toBe(false);
+    expect(
+      hasSelectionWithin(
+        { isCollapsed: false, anchorNode: inside, focusNode: outside },
+        container
+      )
+    ).toBe(true);
+    expect(
+      hasSelectionWithin(
+        { isCollapsed: false, anchorNode: outside, focusNode: inside },
+        container
+      )
+    ).toBe(true);
+  });
+
+  it("computes anchor-top scroll geometry", () => {
+    // Anchored message deep in the transcript: spacer fills the shortfall so
+    // the target position is reachable.
+    expect(
+      computeAnchorScrollState({
+        anchorOffsetTop: 700,
+        topOffset: 16,
+        viewportHeight: 400,
+        contentHeight: 1000
+      })
+    ).toEqual({ targetScrollTop: 684, spacerHeight: 84 });
+
+    // Message near the top of the transcript: target clamps to 0.
+    expect(
+      computeAnchorScrollState({
+        anchorOffsetTop: 10,
+        topOffset: 16,
+        viewportHeight: 400,
+        contentHeight: 1000
+      }).targetScrollTop
+    ).toBe(0);
+
+    // Already enough content below: no spacer needed.
+    expect(
+      computeAnchorScrollState({
+        anchorOffsetTop: 500,
+        topOffset: 16,
+        viewportHeight: 400,
+        contentHeight: 2000
+      }).spacerHeight
+    ).toBe(0);
+  });
+
+  it("shrinks the anchor spacer as content grows, never below zero or above initial", () => {
+    const base = {
+      initialSpacerHeight: 100,
+      contentHeightAtAnchor: 1000
+    };
+
+    expect(
+      computeShrunkSpacerHeight({ ...base, currentContentHeight: 1000 })
+    ).toBe(100);
+    expect(
+      computeShrunkSpacerHeight({ ...base, currentContentHeight: 1040 })
+    ).toBe(60);
+    expect(
+      computeShrunkSpacerHeight({ ...base, currentContentHeight: 1500 })
+    ).toBe(0);
+    // Content shrank (e.g. a collapsed tool row): spacer never grows back.
+    expect(
+      computeShrunkSpacerHeight({ ...base, currentContentHeight: 900 })
+    ).toBe(100);
   });
 
   it("resolves wheel intent for pause and resume", () => {

@@ -262,6 +262,9 @@ const buildComposerBarPanel = (
   body.style.paddingTop = "48px";
   body.id = "persona-scroll-container";
   body.setAttribute("data-persona-theme-zone", "messages");
+  // Reserve the scrollbar gutter so the transcript doesn't shift horizontally
+  // when streaming content first overflows and the scrollbar appears.
+  body.style.setProperty("scrollbar-gutter", "stable");
 
   const introCard = createElement(
     "div",
@@ -399,7 +402,10 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
   );
   body.id = "persona-scroll-container";
   body.setAttribute("data-persona-theme-zone", "messages");
-  
+  // Reserve the scrollbar gutter so the transcript doesn't shift horizontally
+  // when streaming content first overflows and the scrollbar appears.
+  body.style.setProperty("scrollbar-gutter", "stable");
+
   const introCard = createElement(
     "div",
     "persona-rounded-2xl persona-bg-persona-surface persona-p-6"

@@ -61,6 +61,27 @@ const installRafMock = () => {
   };
 };
 
+const installResizeObserverMock = () => {
+  const triggers: Array<() => void> = [];
+
+  class ResizeObserverMock {
+    constructor(callback: (entries: unknown[], observer: unknown) => void) {
+      triggers.push(() => callback([], this));
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
+  return {
+    trigger() {
+      triggers.forEach((fire) => fire());
+    }
+  };
+};
+
 const installScrollMetrics = (
   element: HTMLElement,
   initial: { scrollHeight: number; clientHeight: number }
@@ -119,6 +140,22 @@ const emitStreamingMessage = (
       content,
       createdAt: STREAM_CREATED_AT,
       streaming: true
+    }
+  });
+};
+
+const emitUserMessage = (
+  controller: ReturnType<typeof createAgentExperience>,
+  id: string,
+  content = "Hello"
+) => {
+  controller.injectTestMessage({
+    type: "message",
+    message: {
+      id,
+      role: "user",
+      content,
+      createdAt: STREAM_CREATED_AT
     }
   });
 };
@@ -740,6 +777,275 @@ describe("createAgentExperience streaming scroll", () => {
     expect(button).not.toBeNull();
     expect(button?.textContent?.trim()).toBe("");
     expect(button?.querySelector("svg")).not.toBeNull();
+
+    controller.destroy();
+  });
+
+  it("re-pins to the bottom when content grows without a render event", () => {
+    const raf = installRafMock();
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    });
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    // Content grows with no render event (e.g. an image finishing loading
+    // mid-stream) — only the ResizeObserver sees it.
+    metrics.setScrollHeight(1200);
+    resize.trigger();
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    controller.destroy();
+  });
+
+  it("does not yank a paused reader when content grows without a render event", () => {
+    const raf = installRafMock();
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    });
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    scrollContainer!.dispatchEvent(new WheelEvent("wheel", { deltaY: -24 }));
+    metrics.setScrollTop(420);
+
+    metrics.setScrollHeight(1200);
+    resize.trigger();
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(420);
+
+    controller.destroy();
+  });
+
+  it("pauses auto-follow while the user selects transcript text during streaming", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    });
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    // Start a drag-selection inside the transcript.
+    scrollContainer!.dispatchEvent(
+      new MouseEvent("pointerdown", { button: 0, bubbles: true })
+    );
+    vi.spyOn(document, "getSelection").mockReturnValue({
+      isCollapsed: false,
+      anchorNode: scrollContainer,
+      focusNode: scrollContainer
+    } as unknown as Selection);
+    document.dispatchEvent(new Event("selectionchange"));
+
+    metrics.setScrollHeight(1100);
+    emitStreamingMessage(controller, "Second chunk");
+    raf.flush();
+
+    // Auto-follow paused: the selection isn't dragged out from under the user.
+    expect(metrics.getScrollTop()).toBe(600);
+
+    controller.destroy();
+  });
+
+  it("re-sticks to the bottom when the user sends a message after scrolling up", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    });
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    scrollContainer!.dispatchEvent(new WheelEvent("wheel", { deltaY: -24 }));
+    metrics.setScrollTop(300);
+
+    emitUserMessage(controller, "user-resend", "Follow-up question");
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    controller.destroy();
+  });
+
+  it("shows a count badge for messages that arrive while paused", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    });
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    raf.flush();
+
+    scrollContainer!.dispatchEvent(new WheelEvent("wheel", { deltaY: -24 }));
+    metrics.setScrollTop(300);
+
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "ast-while-paused",
+        role: "assistant",
+        content: "Another answer",
+        createdAt: STREAM_CREATED_AT
+      }
+    });
+    raf.flush();
+
+    const badge = mount.querySelector<HTMLElement>(
+      "[data-persona-scroll-to-bottom-count]"
+    );
+    expect(badge?.textContent).toBe("1");
+    expect(badge?.style.display).not.toBe("none");
+
+    // Jumping back to the latest clears the count.
+    getScrollToBottomButton(mount)!.click();
+    raf.flush();
+    expect(badge?.textContent).toBe("");
+    expect(badge?.style.display).toBe("none");
+
+    controller.destroy();
+  });
+
+  it("anchor-top mode pins the sent user message near the viewport top and never follows the stream", () => {
+    const raf = installRafMock();
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 }
+      }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitUserMessage(controller, "user-anchor", "Long question");
+
+    // Give the rendered bubble layout geometry before the anchor rAF runs.
+    const bubble = scrollContainer!.querySelector<HTMLElement>(
+      '[data-message-id="user-anchor"]'
+    );
+    expect(bubble).not.toBeNull();
+    Object.defineProperty(bubble!, "offsetTop", { value: 700 });
+
+    // Run just the anchor frame: it sizes the spacer and starts the scroll.
+    raf.step(1);
+
+    // target = 700 - 16 = 684; spacer = 684 + 400 - 1000 = 84.
+    const spacer = scrollContainer!.querySelector<HTMLElement>(
+      "[data-persona-anchor-spacer]"
+    );
+    expect(spacer?.style.height).toBe("84px");
+
+    // The spacer's height is invisible to the mocked scroll metrics — apply
+    // it manually so the anchor target is reachable, as in a real browser.
+    metrics.setScrollHeight(1084);
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(684);
+
+    // Streaming below the anchor never moves the viewport.
+    metrics.setScrollHeight(1150);
+    emitStreamingMessage(controller, "Streaming response");
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(684);
+
+    // As real content grows, the spacer gives room back (shrink-only):
+    // content grew from 1000 to 1150 - 84 = 1066, so spacer 84 - 66 = 18.
+    resize.trigger();
+    expect(spacer?.style.height).toBe("18px");
+
+    controller.destroy();
+  });
+
+  it("scroll mode none never auto-scrolls during streaming", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        scrollBehavior: { mode: "none" }
+      }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitStreamingMessage(controller, "First chunk");
+    metrics.setScrollHeight(1200);
+    emitStreamingMessage(controller, "Second chunk");
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(0);
+
+    // The affordance is still available to get back to the latest content.
+    scrollContainer!.dispatchEvent(new Event("scroll"));
+    expect(getScrollToBottomButton(mount)?.style.display).not.toBe("none");
 
     controller.destroy();
   });

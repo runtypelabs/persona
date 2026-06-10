@@ -757,6 +757,31 @@ export type AgentWidgetArtifactsFeature = {
   }) => HTMLElement | null;
 };
 
+/**
+ * How the transcript scrolls while an assistant response streams in.
+ *
+ * - `"follow"` (default): keep the newest content pinned to the bottom of the
+ *   viewport, pausing when the user scrolls up and resuming when they return
+ *   to the bottom.
+ * - `"anchor-top"`: on send, scroll the user's message near the top of the
+ *   viewport and hold it there while the response streams in beneath it
+ *   (ChatGPT-style). The transcript never auto-scrolls during streaming.
+ * - `"none"`: never auto-scroll; the scroll-to-bottom affordance is the only
+ *   way back to the latest content.
+ */
+export type AgentWidgetScrollMode = "follow" | "anchor-top" | "none";
+
+export type AgentWidgetScrollBehaviorFeature = {
+  /** Scroll behavior during streamed responses. @default "follow" */
+  mode?: AgentWidgetScrollMode;
+  /**
+   * Gap (px) kept between the anchored user message and the top of the
+   * viewport in `"anchor-top"` mode.
+   * @default 16
+   */
+  anchorTopOffset?: number;
+};
+
 export type AgentWidgetScrollToBottomFeature = {
   /**
    * When true, Persona shows a scroll-to-bottom affordance when the user breaks
@@ -1049,6 +1074,8 @@ export type AgentWidgetFeatureFlags = {
   composerHistory?: boolean;
   /** Shared transcript + event stream scroll-to-bottom affordance. */
   scrollToBottom?: AgentWidgetScrollToBottomFeature;
+  /** Transcript scroll behavior during streamed responses. */
+  scrollBehavior?: AgentWidgetScrollBehaviorFeature;
   /** Collapsed transcript behavior for tool call rows. */
   toolCallDisplay?: AgentWidgetToolCallDisplayFeature;
   /** Collapsed transcript behavior for reasoning rows. */

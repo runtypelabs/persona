@@ -123,6 +123,10 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       iconName: "arrow-down",
       label: "",
     },
+    scrollBehavior: {
+      mode: "follow",
+      anchorTopOffset: 16,
+    },
     toolCallDisplay: {
       collapsedMode: "tool-call",
       activePreview: false,
@@ -264,6 +268,8 @@ export function mergeWithDefaults(
       const ca = config.features?.artifacts;
       const dsb = DEFAULT_WIDGET_CONFIG.features?.scrollToBottom;
       const csb = config.features?.scrollToBottom;
+      const dsc = DEFAULT_WIDGET_CONFIG.features?.scrollBehavior;
+      const csc = config.features?.scrollBehavior;
       const dsa = DEFAULT_WIDGET_CONFIG.features?.streamAnimation;
       const csa = config.features?.streamAnimation;
       const dau = DEFAULT_WIDGET_CONFIG.features?.askUserQuestion;
@@ -285,6 +291,13 @@ export function mergeWithDefaults(
           : {
               ...dsb,
               ...csb,
+            };
+      const mergedScrollBehavior =
+        dsc === undefined && csc === undefined
+          ? undefined
+          : {
+              ...dsc,
+              ...csc,
             };
       const mergedStreamAnimation =
         dsa === undefined && csa === undefined
@@ -308,6 +321,7 @@ export function mergeWithDefaults(
         ...DEFAULT_WIDGET_CONFIG.features,
         ...config.features,
         ...(mergedScrollToBottom !== undefined ? { scrollToBottom: mergedScrollToBottom } : {}),
+        ...(mergedScrollBehavior !== undefined ? { scrollBehavior: mergedScrollBehavior } : {}),
         ...(mergedArtifacts !== undefined ? { artifacts: mergedArtifacts } : {}),
         ...(mergedStreamAnimation !== undefined ? { streamAnimation: mergedStreamAnimation } : {}),
         ...(mergedAskUserQuestion !== undefined ? { askUserQuestion: mergedAskUserQuestion } : {}),
