@@ -2659,6 +2659,33 @@ export class AgentWidgetSession {
           awaitingLocalTool: false,
         };
       }
+      // Approval equivalent: `agent_approval_complete` carries only the
+      // resolution (approvalId, decision, resolvedBy) — the runtime does not
+      // re-send toolName/description/toolType/reason/parameters, so client.ts
+      // rebuilds the approval with empty required fields and the optional
+      // ones absent. A wholesale `approval` replacement would wipe that
+      // context from the resolved bubble on the next full re-render (morph,
+      // virtual-scroll re-mount, storage restore). Merge field-wise instead:
+      // take the resolution from the incoming event, keep existing context
+      // wherever the event is silent or empty.
+      if (
+        existing.approval &&
+        withSequence.approval &&
+        existing.approval.id === withSequence.approval.id
+      ) {
+        const prior = existing.approval;
+        const incoming = withSequence.approval;
+        merged.approval = {
+          ...prior,
+          ...incoming,
+          executionId: incoming.executionId || prior.executionId,
+          toolName: incoming.toolName || prior.toolName,
+          description: incoming.description || prior.description,
+          toolType: incoming.toolType ?? prior.toolType,
+          reason: incoming.reason ?? prior.reason,
+          parameters: incoming.parameters ?? prior.parameters,
+        };
+      }
       // WebMCP equivalent: once a `webmcp:*` tool has started resolving
       // (inflight) or resolved, a duplicate `step_await` re-emit must not
       // flip `awaitingLocalTool` back to true and resurrect the "waiting on

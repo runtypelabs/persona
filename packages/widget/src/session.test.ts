@@ -894,6 +894,68 @@ describe('AgentWidgetSession.resolveApproval', () => {
   });
 });
 
+describe('AgentWidgetSession - approval context across agent_approval_complete', () => {
+  const sseStream = (events: Array<Record<string, unknown>>): ReadableStream<Uint8Array> => {
+    const encoder = new TextEncoder();
+    const body = events
+      .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
+      .join('');
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(body));
+        controller.close();
+      },
+    });
+  };
+
+  it('keeps toolName/description/toolType/reason/parameters when the sparse complete event resolves the bubble', async () => {
+    let messages: AgentWidgetMessage[] = [];
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://localhost:8000' },
+      {
+        onMessagesChanged: (m) => { messages = m; },
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onError: () => {},
+      }
+    );
+
+    // `agent_approval_complete` carries only the resolution — none of the
+    // context fields from `agent_approval_start`. The session merge must keep
+    // them so a full re-render of the resolved bubble (morph, virtual-scroll
+    // re-mount, storage restore) still shows the tool, description, and the
+    // agent's stated reason.
+    await session.connectStream(sseStream([
+      {
+        type: 'agent_approval_start',
+        executionId: 'exec_abc',
+        approvalId: 'appr_1',
+        toolName: 'send_email',
+        toolType: 'external',
+        description: 'Send an email to the customer',
+        reason: 'The user asked me to notify the customer.',
+        parameters: { to: 'customer@example.com' },
+      },
+      {
+        type: 'agent_approval_complete',
+        executionId: 'exec_abc',
+        approvalId: 'appr_1',
+        decision: 'approved',
+        resolvedBy: 'user',
+      },
+    ]));
+
+    const bubble = messages.find((m) => m.id === 'approval-appr_1');
+    expect(bubble?.approval?.status).toBe('approved');
+    expect(bubble?.approval?.resolvedAt).toBeDefined();
+    expect(bubble?.approval?.toolName).toBe('send_email');
+    expect(bubble?.approval?.toolType).toBe('external');
+    expect(bubble?.approval?.description).toBe('Send an email to the customer');
+    expect(bubble?.approval?.reason).toBe('The user asked me to notify the customer.');
+    expect(bubble?.approval?.parameters).toEqual({ to: 'customer@example.com' });
+  });
+});
+
 describe('AgentWidgetSession - dispatch error fallback', () => {
   const originalFetch = global.fetch;
 
