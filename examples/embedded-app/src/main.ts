@@ -504,6 +504,7 @@ function initHeroCarousel() {
   }
 
   function cycleForward() {
+    if (cycling && pendingTarget) return;
     goToCard(1);
   }
 
