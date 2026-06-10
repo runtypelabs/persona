@@ -1,0 +1,19 @@
+{
+  "name": "webmcp-calendar",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "pnpm --filter @runtypelabs/persona build && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@mcp-b/global": "^3.0.0",
+    "@runtypelabs/persona": "workspace:^",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.24.6"
+  },
+  "devDependencies": {
+    "vite": "^5.4.1"
+  }
+}
