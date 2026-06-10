@@ -6,7 +6,6 @@ import {
   createAgentExperience,
   createLocalStorageAdapter,
   markdownPostprocessor,
-  createDemoCarousel,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
 
@@ -166,6 +165,7 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 - [Stream Animations](/stream-animations-demo.html) — customize how streamed text animates in
 - [Persistent Composer](/persistent-composer.html) — always-visible composer bar layout
 - [WebMCP Storefront](/webmcp-demo.html) — expose page tools to the agent via WebMCP
+- [WebMCP Calendar](/webmcp-calendar.html) — a team calendar copilot that reads availability and books events through WebMCP page tools
 
 ## Customization
 
@@ -314,22 +314,6 @@ const inlineController = createAgentExperience(inlineMount, {
   postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
 });
 setupCodeCopyHandler(inlineMount);
-
-// ---------------------------------------------------------------------------
-// Demo Carousel
-// ---------------------------------------------------------------------------
-
-const carouselMount = document.getElementById("demo-carousel-mount");
-if (carouselMount) {
-  createDemoCarousel(carouselMount, {
-    items: [
-      { url: "/launcher-demo.html", title: "Default Launcher", description: "Out-of-the-box chat widget experience" },
-      { url: "/bakery.html", title: "Site Nav, Checkout", description: "Full business site with context-aware chat" },
-      { url: "/fullscreen-assistant-demo.html", title: "Fullscreen", description: "Full-viewport dark layout with artifacts" },
-      { url: "/docked-panel-demo.html", title: "Docked Assistant", description: "Side-docked assistant layout" },
-    ],
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Hero 3D Carousel

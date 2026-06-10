@@ -38,13 +38,25 @@
             <a class="hero-cta-primary" href="#quick-start">Get started <span aria-hidden="true">→</span></a>
             <a class="hero-cta-secondary" href="#try-it">Try it live</a>
           </div>
+          <button
+            type="button"
+            class="install-command hero-install"
+            data-copy-text="npx @runtypelabs/cli@latest persona init"
+            data-copy-default="Copy"
+            data-copy-success="Copied!"
+            aria-label="Copy Persona init command"
+          >
+            <span class="install-prefix">$</span>
+            <span>npx @runtypelabs/cli@latest persona init</span>
+            <span class="install-copy" data-copy-label>Copy</span>
+          </button>
           <div class="hero-features">
-            <span class="hero-feature-pill">Style Isolation</span>
-            <span class="hero-feature-pill">SSE Streaming</span>
-            <span class="hero-feature-pill">Agent Loops</span>
-            <span class="hero-feature-pill">Theming</span>
-            <span class="hero-feature-pill">Voice Input</span>
-            <span class="hero-feature-pill">Vanilla JS</span>
+            <span class="hero-feature-pill">Won't break your styles</span>
+            <span class="hero-feature-pill">Works with any backend</span>
+            <span class="hero-feature-pill">Agents that operate your page</span>
+            <span class="hero-feature-pill">Themeable to your brand</span>
+            <span class="hero-feature-pill">Voice built in</span>
+            <span class="hero-feature-pill">No framework required</span>
           </div>
           <div class="hero-badges">
             <a href="https://www.npmjs.com/package/@runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/npm/v/@runtypelabs/persona?style=flat&color=5B2EFF&label=npm" alt="npm"></a>
@@ -352,6 +364,46 @@
       </section>
 
       <!-- Theme Editor -->
+      <!-- WebMCP -->
+      <section class="card cardFull webmcp-section reveal-el" id="webmcp">
+        <span class="label">Agentic</span>
+        <h2 class="card-title kern-tight" style="font-size: 24px;">Persona doesn't just chat — it operates your page</h2>
+        <p>Expose your page's actions as <a href="https://github.com/webmachinelearning/webmcp" target="_blank" rel="noopener">WebMCP</a> tools — search, carts, bookings, forms — and the agent drives them directly, with user approval built in. No backend integration required: the tools live in your page.</p>
+        <div class="webmcp-grid">
+          <a class="webmcp-demo-card" href="/webmcp-demo.html">
+            <span class="webmcp-demo-tag">Commerce</span>
+            <strong class="webmcp-demo-title">WebMCP Storefront</strong>
+            <p>The agent searches a live catalog, builds the cart, and walks checkout — every tool call visible in a wire log.</p>
+            <span class="webmcp-demo-cta">Open demo <span aria-hidden="true">→</span></span>
+          </a>
+          <a class="webmcp-demo-card" href="/webmcp-calendar.html">
+            <span class="webmcp-demo-tag">Scheduling</span>
+            <strong class="webmcp-demo-title">WebMCP Calendar</strong>
+            <p>A team calendar copilot — the agent reads availability, finds conflicts, and books events through page tools.</p>
+            <span class="webmcp-demo-cta">Open demo <span aria-hidden="true">→</span></span>
+          </a>
+          <div class="webmcp-code">
+            <div class="code-showcase">
+              <pre><code>// Your page registers a tool…
+document.modelContext.registerTool({
+  name: "search_products",
+  description: "Search the catalog by free-text query.",
+  inputSchema: {
+    type: "object",
+    properties: { query: { type: "string" } },
+    required: ["query"],
+  },
+  async execute({ query }) {
+    return searchCatalog(query);
+  },
+});
+
+// …and the Persona agent can call it. That's the whole integration.</code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="card cardFull theme-editor-section reveal-el">
         <span class="label">Customization</span>
         <h2 class="card-title kern-tight">Theme Editor</h2>
@@ -373,18 +425,42 @@
       <section class="card cardFull reveal-el" id="demos">
         <span class="label">Demos</span>
         <h2 class="card-title kern-tight">See what Persona can do</h2>
-        <p>Explore different use cases across full-page layouts, embedded contexts, and business scenarios.</p>
-        <div id="demo-carousel-mount"></div>
-      </section>
-
-      <!-- Advanced -->
-      <section class="card cardFull advanced-cta-section reveal-el">
-        <span class="label">More</span>
-        <h2 class="card-title kern-tight">Advanced examples</h2>
-        <p>Configuration patterns, plugin hooks, and integration recipes — agent loops, tool approval, dynamic forms, voice, artifacts, and more.</p>
+        <p>A few favorites across agentic, layout, and business scenarios — or browse the full gallery.</p>
+        <div class="featured-grid">
+          <a class="example-item" href="/webmcp-demo.html">
+            <span class="example-item-tag">Agentic</span>
+            WebMCP Storefront
+            <span class="example-item-desc">The agent drives a live catalog, cart, and checkout</span>
+          </a>
+          <a class="example-item" href="/webmcp-calendar.html">
+            <span class="example-item-tag">Agentic</span>
+            WebMCP Calendar
+            <span class="example-item-desc">Reads availability and books events through page tools</span>
+          </a>
+          <a class="example-item" href="/bakery.html">
+            <span class="example-item-tag">Business</span>
+            Bakery Assistant
+            <span class="example-item-desc">Full business site with context-aware chat and checkout</span>
+          </a>
+          <a class="example-item" href="/fullscreen-assistant-demo.html">
+            <span class="example-item-tag">Layout</span>
+            Fullscreen Assistant
+            <span class="example-item-desc">Full-viewport dark split layout with artifacts</span>
+          </a>
+          <a class="example-item" href="/approval-demo.html">
+            <span class="example-item-tag">Agentic</span>
+            Tool Approval
+            <span class="example-item-desc">User confirmation before the agent executes a tool</span>
+          </a>
+          <a class="example-item" href="/voice-integration-demo.html">
+            <span class="example-item-tag">Voice</span>
+            Voice Integration
+            <span class="example-item-desc">Voice input powered by ElevenLabs</span>
+          </a>
+        </div>
         <div class="advanced-cta-actions">
           <a class="advanced-cta-link" href="/advanced.html">
-            Browse advanced examples
+            Browse all examples
             <span aria-hidden="true">→</span>
           </a>
           <a class="advanced-cta-link advanced-cta-link--secondary" href="/standalone/sample.html">

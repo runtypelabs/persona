@@ -1943,3 +1943,111 @@ section[id] {
     padding: 24px 16px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Hero install one-liner
+   --------------------------------------------------------------------------- */
+.hero-install {
+  margin-top: 10px;
+  text-align: left;
+}
+
+@media (max-width: 640px) {
+  .hero-install {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   WebMCP section
+   --------------------------------------------------------------------------- */
+.webmcp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.webmcp-demo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--foreground);
+  transition: all 0.2s ease;
+}
+
+.webmcp-demo-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.webmcp-demo-card p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.webmcp-demo-tag {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.webmcp-demo-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.webmcp-demo-cta {
+  margin-top: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.webmcp-code {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .webmcp-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Featured demo grid (home "Demos" section)
+   --------------------------------------------------------------------------- */
+#demos .featured-grid {
+  margin-top: 20px;
+}
+
+.example-item-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin-bottom: 2px;
+}
+
+.example-item-desc {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+#demos .advanced-cta-actions {
+  margin-top: 20px;
+}
