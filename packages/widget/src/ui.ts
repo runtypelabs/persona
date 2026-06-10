@@ -3113,9 +3113,14 @@ export const createAgentExperience = (
       if (!previous && message.role === "assistant") {
         eventBus.emit("assistant:message", message);
         // Count messages the user hasn't seen for the scroll-to-bottom badge.
-        // Follow mode only: in anchor-top the user is already reading the
-        // latest turn from its top, so a "new" count would mislead.
-        if (getScrollMode() === "follow" && isAwayFromLatest()) {
+        // Skipped in anchor-top (the user is already reading the latest turn
+        // from its top, so a "new" count would mislead) and during history
+        // hydration (restored messages aren't "missed").
+        if (
+          !suppressScrollSend &&
+          getScrollMode() !== "anchor-top" &&
+          isAwayFromLatest()
+        ) {
           newMessagesSincePause += 1;
           updateScrollToBottomCountBadge();
           syncScrollToBottomButton();
@@ -5884,17 +5889,12 @@ export const createAgentExperience = (
     destroyCallbacks.push(() => contentResizeObserver.disconnect());
   }
 
-  // Pause auto-follow while the user drag-selects transcript text so the
+  // Pause auto-follow while the user selects transcript text so the
   // streaming scroll doesn't move content out from under the selection.
-  let selectionPointerDown = false;
-  const handleSelectionPointerDown = (event: PointerEvent) => {
-    if (event.button === 0) {
-      selectionPointerDown = true;
-    }
-  };
-  const handleSelectionPointerUp = () => {
-    selectionPointerDown = false;
-  };
+  // Driven purely by selectionchange (no pointer gating) so keyboard
+  // selection (Shift+arrows, select-all) pauses too; a stale selection
+  // left in the transcript fires no further events, so it can't re-pause
+  // after the user resumes following.
   const getTranscriptSelection = (): Selection | null => {
     // Selections inside a shadow root are not always reflected by
     // document.getSelection(); prefer the shadow root's view when available
@@ -5908,7 +5908,6 @@ export const createAgentExperience = (
     return shadowSelection ?? body.ownerDocument.getSelection();
   };
   const handleSelectionChange = () => {
-    if (!selectionPointerDown) return;
     if (getScrollMode() !== "follow") return;
     if (!autoFollow.isFollowing()) return;
     if (hasSelectionWithin(getTranscriptSelection(), body)) {
@@ -5916,14 +5915,8 @@ export const createAgentExperience = (
     }
   };
   const selectionDocument = body.ownerDocument;
-  body.addEventListener("pointerdown", handleSelectionPointerDown, { passive: true });
-  selectionDocument.addEventListener("pointerup", handleSelectionPointerUp, { passive: true });
-  selectionDocument.addEventListener("pointercancel", handleSelectionPointerUp, { passive: true });
   selectionDocument.addEventListener("selectionchange", handleSelectionChange);
   destroyCallbacks.push(() => {
-    body.removeEventListener("pointerdown", handleSelectionPointerDown);
-    selectionDocument.removeEventListener("pointerup", handleSelectionPointerUp);
-    selectionDocument.removeEventListener("pointercancel", handleSelectionPointerUp);
     selectionDocument.removeEventListener("selectionchange", handleSelectionChange);
   });
   const handleWheel = (event: WheelEvent) => {

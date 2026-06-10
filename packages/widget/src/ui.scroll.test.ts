@@ -237,7 +237,12 @@ describe("createAgentExperience streaming scroll", () => {
 
   afterEach(() => {
     document.body.innerHTML = "";
+    // Widgets persist chat history to localStorage by default; without
+    // clearing it, a later widget restores an earlier test's messages at
+    // construction and "new message" assertions see stale ids.
+    localStorage.clear();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("stops auto-follow after a small upward scroll during streaming", () => {
@@ -864,10 +869,8 @@ describe("createAgentExperience streaming scroll", () => {
 
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
 
-    // Start a drag-selection inside the transcript.
-    scrollContainer!.dispatchEvent(
-      new MouseEvent("pointerdown", { button: 0, bubbles: true })
-    );
+    // A selection forms inside the transcript (mouse drag or keyboard —
+    // both surface as selectionchange).
     vi.spyOn(document, "getSelection").mockReturnValue({
       isCollapsed: false,
       anchorNode: scrollContainer,
@@ -1043,9 +1046,14 @@ describe("createAgentExperience streaming scroll", () => {
 
     expect(metrics.getScrollTop()).toBe(0);
 
-    // The affordance is still available to get back to the latest content.
+    // The affordance is still available to get back to the latest content,
+    // and messages that arrived while away from the bottom are counted.
     scrollContainer!.dispatchEvent(new Event("scroll"));
     expect(getScrollToBottomButton(mount)?.style.display).not.toBe("none");
+    const badge = mount.querySelector<HTMLElement>(
+      "[data-persona-scroll-to-bottom-count]"
+    );
+    expect(badge?.textContent).toBe("1");
 
     controller.destroy();
   });
