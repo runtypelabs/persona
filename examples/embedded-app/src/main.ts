@@ -416,8 +416,16 @@ function initHeroCarousel() {
     syncUi();
   }
 
+  // Start (or restart) the front card's approach animation, honoring an
+  // in-progress hover pause — the stack can rotate while the pointer stays
+  // over the carousel, and the new front card must come up already paused.
+  function startApproach() {
+    stack[0].classList.add('is-approaching');
+    stack[0].style.animationPlayState = paused ? 'paused' : 'running';
+  }
+
   applyAll();
-  if (!reducedMotion) stack[0].classList.add('is-approaching');
+  if (!reducedMotion) startApproach();
 
   if (container && !reducedMotion) {
     container.addEventListener('mouseenter', () => {
@@ -435,6 +443,15 @@ function initHeroCarousel() {
     visibility.observe(container);
   }
 
+  function finishCycle() {
+    cycling = false;
+    if (!pendingTarget) return;
+    const queued = pendingTarget;
+    pendingTarget = null;
+    const pos = stack.indexOf(queued);
+    if (pos > 0) goToCard(pos);
+  }
+
   function settleAfter(ms: number, fn: () => void) {
     setTimeout(() => {
       requestAnimationFrame(() => {
@@ -445,8 +462,15 @@ function initHeroCarousel() {
 
   // Bring the card currently at stack position `targetPos` to the front. The
   // cards in front of it peel away together; the rest slide up the stack.
+  // Requests that land mid-transition are queued (the click's default was
+  // already prevented, so dropping them would swallow the click entirely).
+  let pendingTarget: HTMLElement | null = null;
   function goToCard(targetPos: number) {
-    if (cycling || targetPos <= 0 || targetPos >= stack.length) return;
+    if (targetPos <= 0 || targetPos >= stack.length) return;
+    if (cycling) {
+      pendingTarget = stack[targetPos];
+      return;
+    }
 
     if (reducedMotion) {
       stack.push(...stack.splice(0, targetPos));
@@ -486,8 +510,8 @@ function initHeroCarousel() {
           peeled.forEach((card) => {
             card.style.transition = '';
           });
-          stack[0].classList.add('is-approaching');
-          cycling = false;
+          startApproach();
+          finishCycle();
         });
       });
     });
@@ -528,8 +552,8 @@ function initHeroCarousel() {
     }
 
     settleAfter(700, () => {
-      stack[0].classList.add('is-approaching');
-      cycling = false;
+      startApproach();
+      finishCycle();
     });
     syncUi();
   }
@@ -558,6 +582,9 @@ function initHeroCarousel() {
 
     const target = e.target as HTMLElement | null;
     if (target && (target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName))) return;
+    // Roving-tabindex widgets (e.g. the Quick Start tabs) own the arrow keys
+    // while focused — don't page the carousel on the same keypress.
+    if (target?.closest('[role="tablist"], [role="tab"]')) return;
 
     const lightbox = document.getElementById('demo-lightbox') as HTMLDialogElement;
     if (lightbox?.open) return;
@@ -637,7 +664,11 @@ function initDemoLightbox() {
 
   lightbox.addEventListener('close', () => {
     iframe.src = '';
-    if (!closedByPopstate) history.back();
+    // Only rewind if the lightbox entry is still the active one — the visitor
+    // may have navigated (e.g. a hash link) while the modal was open, and
+    // history.back() would undo that navigation instead.
+    const state = history.state as { demoLightbox?: boolean } | null;
+    if (!closedByPopstate && state?.demoLightbox) history.back();
     closedByPopstate = false;
   });
 }
