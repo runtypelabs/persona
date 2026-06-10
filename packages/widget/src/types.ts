@@ -1900,6 +1900,16 @@ export type AgentWidgetApprovalConfig = {
   /** Label for the deny button */
   denyLabel?: string;
   /**
+   * Color for the agent-authored reason line (the agent's per-call
+   * justification, shown attributed below the summary when present).
+   */
+  reasonColor?: string;
+  /**
+   * Label prefix for the agent-authored reason line.
+   * Defaults to "Agent's stated reason:".
+   */
+  reasonLabel?: string;
+  /**
    * How the technical details (the tool's agent-facing description and the
    * raw parameters JSON) are presented:
    * - `"collapsed"` (default) — hidden behind a "Show details" toggle
@@ -1924,6 +1934,12 @@ export type AgentWidgetApprovalConfig = {
     description: string;
     parameters?: unknown;
     displayTitle?: string;
+    /**
+     * Agent-authored justification for this specific call, when the agent
+     * provided one. It is the agent's own claim — if you fold it into the
+     * summary, keep it attributed to the agent.
+     */
+    reason?: string;
   }) => string | undefined;
   /**
    * Custom handler for approval decisions.
@@ -3883,6 +3899,13 @@ export type AgentWidgetApproval = {
   toolName: string;
   toolType?: string;
   description: string;
+  /**
+   * Agent-authored justification for this specific call (the agent's own
+   * claim about its intent, extracted server-side from the reserved
+   * `_approvalReason` parameter). Render it attributed to the agent and as
+   * plain text — it is approver context, not a system statement.
+   */
+  reason?: string;
   parameters?: unknown;
   resolvedAt?: number;
 };

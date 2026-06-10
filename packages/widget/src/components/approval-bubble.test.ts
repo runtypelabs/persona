@@ -266,3 +266,55 @@ describe("updateApprovalDetailsUI", () => {
     expect(getToggle(bubble)?.textContent).toContain("Show details");
   });
 });
+
+describe("createApprovalBubble agent reason", () => {
+  it("renders the attributed reason line as plain text when present", () => {
+    const bubble = createApprovalBubble(
+      makeDetailedMessage({
+        reason: "Adds the <b>large</b> blue tee to your cart as you asked.",
+      })
+    );
+    const reasonLine = bubble.querySelector("[data-approval-reason]") as HTMLElement;
+    expect(reasonLine).not.toBeNull();
+    expect(reasonLine.textContent).toContain("Agent's stated reason:");
+    expect(reasonLine.textContent).toContain(
+      "Adds the <b>large</b> blue tee to your cart as you asked."
+    );
+    // Plain text rendering — markup in the agent-authored string must not
+    // become elements (prompt-injection surface).
+    expect(reasonLine.querySelector("b")).toBeNull();
+  });
+
+  it("omits the reason line when no reason is provided", () => {
+    const bubble = createApprovalBubble(makeDetailedMessage());
+    expect(bubble.querySelector("[data-approval-reason]")).toBeNull();
+  });
+
+  it("applies reasonColor and a custom reasonLabel from config", () => {
+    const config: AgentWidgetConfig = {
+      approval: { reasonColor: "rgb(1, 2, 3)", reasonLabel: "Why:" },
+    } as AgentWidgetConfig;
+    const bubble = createApprovalBubble(
+      makeDetailedMessage({ reason: "Because you asked." }),
+      config
+    );
+    const reasonLine = bubble.querySelector("[data-approval-reason]") as HTMLElement;
+    expect(reasonLine.style.color).toBe("rgb(1, 2, 3)");
+    expect(reasonLine.textContent).toContain("Why:");
+    expect(reasonLine.textContent).not.toContain("Agent's stated reason:");
+  });
+
+  it("passes the reason to formatDescription", () => {
+    let seenReason: string | undefined;
+    const config: AgentWidgetConfig = {
+      approval: {
+        formatDescription: (approval: { reason?: string }) => {
+          seenReason = approval.reason;
+          return undefined;
+        },
+      },
+    } as AgentWidgetConfig;
+    createApprovalBubble(makeDetailedMessage({ reason: "Because." }), config);
+    expect(seenReason).toBe("Because.");
+  });
+});

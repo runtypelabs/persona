@@ -257,6 +257,7 @@ export const createApprovalBubble = (
     description: approval.description,
     parameters: approval.parameters,
     ...(declaredTitle ? { displayTitle: declaredTitle } : {}),
+    ...(approval.reason ? { reason: approval.reason } : {}),
   });
   const summaryFallsBackToDescription = !approval.toolName;
   const summaryText =
@@ -272,6 +273,25 @@ export const createApprovalBubble = (
   }
   summary.textContent = summaryText;
   content.appendChild(summary);
+
+  // Agent-authored justification for this specific call. It is the agent's
+  // own claim about its intent (attacker-writable under prompt injection), so
+  // it is rendered as plain text via textContent — never markdown/HTML — and
+  // explicitly attributed to the agent rather than spoken in system voice.
+  if (approval.reason) {
+    const reasonLine = createElement("p", "persona-text-sm persona-mt-1 persona-text-persona-muted");
+    reasonLine.setAttribute("data-approval-reason", "true");
+    if (approvalConfig?.reasonColor) {
+      reasonLine.style.color = approvalConfig.reasonColor;
+    } else if (approvalConfig?.descriptionColor) {
+      reasonLine.style.color = approvalConfig.descriptionColor;
+    }
+    const reasonLabel = createElement("span", "persona-font-medium");
+    reasonLabel.textContent = `${approvalConfig?.reasonLabel ?? "Agent's stated reason:"} `;
+    reasonLine.appendChild(reasonLabel);
+    reasonLine.appendChild(document.createTextNode(approval.reason));
+    content.appendChild(reasonLine);
+  }
 
   // Technical details: agent-facing description + raw parameters JSON,
   // collapsed behind a toggle by default (`approval.detailsDisplay`).

@@ -229,7 +229,7 @@ export const THEME_TOKEN_DOCS = {
       description:
         'Tool approval bubble styling and behavior. Set to false to disable.',
       properties:
-        'backgroundColor, borderColor, titleColor, descriptionColor, approveButtonColor, approveButtonTextColor, denyButtonColor, denyButtonTextColor, parameterBackgroundColor, parameterTextColor, title, approveLabel, denyLabel.',
+        'backgroundColor, borderColor, titleColor, descriptionColor, reasonColor, reasonLabel, approveButtonColor, approveButtonTextColor, denyButtonColor, denyButtonTextColor, parameterBackgroundColor, parameterTextColor, title, approveLabel, denyLabel.',
     },
     copy: {
       description: 'Widget text content.',
