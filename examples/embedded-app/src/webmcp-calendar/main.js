@@ -19,11 +19,14 @@ import { READ_ONLY_TOOL_NAMES, setupCalendar } from './calendar.js';
 const app = document.querySelector('#app');
 setupCalendar(app);
 
-// Accept both this demo's original env names and embedded-app's conventions.
-const personaToken =
-  import.meta.env.VITE_PERSONA_CLIENT_TOKEN || import.meta.env.VITE_CLIENT_TOKEN;
-const personaApiUrl =
-  import.meta.env.VITE_PERSONA_API_URL || import.meta.env.VITE_API_URL;
+// Proxy mode, like the other example demos — the agent is defined in code as
+// WEBMCP_CALENDAR_FLOW (packages/proxy/src/flows/webmcp-calendar.ts) and the
+// local proxy mounts it at /api/chat/dispatch-calendar (see
+// examples/vercel-edge/src/server.ts). No hosted agent or client token needed.
+const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
+const proxyApiUrl = import.meta.env.VITE_PROXY_URL
+  ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-calendar`
+  : `http://localhost:${proxyPort}/api/chat/dispatch-calendar`;
 
 // `?mode=pill` mounts Persona as its native bottom composer-bar pill instead
 // of the docked side panel — same WebMCP tools, different embedding style.
@@ -303,18 +306,13 @@ const workspaceTarget = document.querySelector('#workspace-dock-target');
 if (!workspaceTarget) {
   console.warn('[Calendar] Workspace dock target not found.');
   setCompactPromptEnabled(false, 'Calendar Copilot mount point is missing.');
-} else if (!personaToken) {
-  setPersonaStatus('Calendar tools registered. Persona token missing.', 'error');
-  setCompactPromptEnabled(false, 'Add VITE_PERSONA_CLIENT_TOKEN to enable this prompt.');
-  assistantToggle?.setAttribute('disabled', 'true');
 } else {
   const widget = initAgentWidget({
     target: workspaceTarget,
     useShadowDom: false,
     config: {
       ...DEFAULT_WIDGET_CONFIG,
-      clientToken: personaToken,
-      ...(personaApiUrl ? { apiUrl: personaApiUrl } : {}),
+      apiUrl: proxyApiUrl,
       debug: true,
       storageAdapter: createLocalStorageAdapter('persona-state-calendar-copilot'),
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
@@ -381,7 +379,7 @@ if (!workspaceTarget) {
         errorText: 'Calendar Copilot connection error',
       },
       onSessionInit: (session) => {
-        setPersonaStatus(`Calendar Copilot connected to ${session.flow?.name || 'client-token flow'}.`, 'ready');
+        setPersonaStatus(`Calendar Copilot connected to ${session.flow?.name || 'WebMCP Calendar Flow'}.`, 'ready');
       },
       onSessionExpired: () => {
         setPersonaStatus('Calendar Copilot session expired — refresh the page to reconnect.', 'error');

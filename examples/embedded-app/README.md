@@ -137,7 +137,7 @@ The action middleware example demonstrates:
 > **Note on resume routing.** In proxy mode the widget posts the local-tool `/resume` to `…/api/chat/dispatch-webmcp/resume`, and the proxy forwards it upstream to `/v1/dispatch/resume` with its surface API key (`packages/proxy/src/index.ts`).
 
 ### WebMCP Calendar Copilot
-- **Calendar page**: `http://localhost:5173/webmcp-calendar.html` (client token mode — set `VITE_CLIENT_TOKEN`)
+- **Calendar page**: `http://localhost:5173/webmcp-calendar.html` (proxy mode — agent defined in code as `WEBMCP_CALENDAR_FLOW`, mounted at `/api/chat/dispatch-calendar`)
   - A hybrid "AI-native dashboard": a calendar with a manual **Quick Add** form *and* a conversational prompt bar; both drive the same state the WebMCP tools expose
   - `src/webmcp-calendar/calendar.js` registers **ten tools** on `document.modelContext` via `@mcp-b/global` (create/update/delete events, availability search, state reads) — callable by the embedded Persona widget *and* by [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp/) against the same page
   - Submitting the prompt bar slides Persona out as a **full-height docked copilot** and collapses the manual input surfaces; closing restores them. Append `?mode=pill` to mount the native composer-bar pill instead
