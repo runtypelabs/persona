@@ -1,5 +1,25 @@
 # @runtypelabs/persona
 
+## 3.31.0
+
+### Minor Changes
+
+- abf25b2: Render agent-supplied approval reasons. When an `agent_approval_start` or `step_await` (approval) event carries the new `reason` field, the approval bubble shows an attributed "Agent's stated reason" line between the summary and the technical details. The reason is rendered as plain text (never markdown/HTML) and is explicitly attributed to the agent, since it is the agent's own claim about its intent. New `AgentWidgetApprovalConfig` options: `reasonColor`, `reasonLabel`; `formatDescription` now also receives `reason`.
+- 2afdde1: Smarter scrolling during streamed responses:
+
+  - **Content-growth follow**: the transcript now stays pinned to the bottom when content grows without a render event — images and embeds finishing loading mid-stream, web fonts swapping, or the panel/composer resizing.
+  - **New scroll modes** via `features.scrollBehavior.mode`: `"follow"` (default, current behavior), `"anchor-top"` (on send, the user's message is pinned near the top of the viewport and the response streams in below it — no auto-scroll while reading), and `"none"`. `anchorTopOffset` tunes the anchored gap.
+  - **Selection-aware streaming**: auto-follow pauses while text is being selected in the transcript, so streaming no longer drags a selection out from under the cursor.
+  - **Scroll-on-send**: sending a message always returns the view to the latest content, even after scrolling up.
+  - **New-message badge**: the scroll-to-bottom affordance shows a count of messages that arrived while scrolled away (themeable via `--persona-scroll-to-bottom-count-bg` / `--persona-scroll-to-bottom-count-fg`).
+  - The transcript reserves its scrollbar gutter, eliminating the horizontal layout shift when the scrollbar first appears.
+
+### Patch Changes
+
+- 0fb263a: Preserve approval context (tool name, description, tool type, agent-stated reason, parameters) when `agent_approval_complete` resolves an approval bubble. The complete event only carries the decision, so the session now merges it field-wise into the existing approval instead of replacing it — resolved bubbles no longer lose their context on a full re-render.
+- a08cb62: Fix outdated theming guidance in the README: all `theme` examples now use the v2 token tree (`semantic.colors.*`) instead of the removed flat v1 shape, the config reference no longer claims flat themes are migrated at runtime, the `copy` option row lists all current keys, and the Theme Configurator link points at this repository.
+- c1e7d0d: Restructure the README into a concise landing page (install, quick start, initialization options, proxy setup) with the full reference split into `docs/`: Programmatic Control & Events, UI Features & Components, Script Tag Installation & Framework Integration, Configuration Reference, and Stream Parser Configuration. No content was removed.
+
 ## 3.30.0
 
 ### Minor Changes
