@@ -1,5 +1,33 @@
 # @runtypelabs/persona
 
+## 3.30.0
+
+### Minor Changes
+
+- 4de55e4: Make tool approval bubbles user-friendly by default. The agent-facing tool description and raw parameters JSON are now collapsed behind a "Show details" toggle, and the bubble leads with a humanized summary line ("The assistant wants to use “Add to cart”."). WebMCP tools that declare a display name via the spec's `ToolDescriptor.title` get that label instead, and custom `webmcp.onConfirm` handlers receive it as `info.title`. New `approval` config options: `detailsDisplay` (`"collapsed"` | `"expanded"` | `"hidden"`), `formatDescription` for custom summary copy (receives `displayTitle`), and `showDetailsLabel`/`hideDetailsLabel`.
+- d73082a: Unify box-shadow theming across the launcher, approval bubble, and tool-call bubble so every `config.*.shadow` override works the same way: set it globally via the component's theme token (`components.launcher.shadow`, `components.approval.requested.shadow`, `components.toolBubble.shadow`) or the matching CSS variable (`--persona-launcher-shadow`, `--persona-approval-shadow`, `--persona-tool-bubble-shadow`), or per-widget via `config.launcher.shadow` / `config.approval.shadow` / `config.toolCall.shadow` (pass `"none"` to remove the shadow). New: the approval bubble's shadow is now themeable, and `config.toolCall.shadow` is applied directly to the bubble (it previously rewrote the root CSS variable).
+
+  The theme editor (`@runtypelabs/persona/theme-editor`) gains a "Component Shadows" section with controls for the user/assistant message bubbles, tool-call bubble, reasoning bubble, approval bubble, intro card, and composer — so every themeable component shadow is now adjustable in the editor.
+
+- abc624b: Add `approve` / `deny` callbacks to the `renderApproval` plugin hook so a fully custom approval renderer can resolve the approval (previously only the built-in bubble's buttons could). Both route through the same path as the built-in buttons (optimistic update, `onDecision`, in-place anchoring, WebMCP gate handling).
+
+  Each callback accepts an optional `{ remember?: boolean }` — for "Always allow"-style affordances — that is forwarded to `config.approval.onDecision` (now `(data, decision, options?)`) and to the controller's `resolveApproval(approvalId, decision, options?)`. The current approval resolves identically whether or not `remember` is set; the flag lets integrators persist a don't-ask-again policy for future approvals. Exposes the new `AgentWidgetApprovalDecisionOptions` type.
+
+  Also fixes `renderApproval` plugin elements losing their event listeners on transcript re-renders. Custom approval bubbles are now mounted via the same stub-and-hydrate path as `renderAskUserQuestion` and component directives (the transcript morph imports nodes via `document.importNode`, which strips listeners), so interactive custom UI — Approve/Deny buttons, an expandable parameters accordion, etc. — stays interactive. Interactive state is preserved across re-renders while the approval is pending and rebuilt when its status changes.
+
+- abc624b: Add `@runtypelabs/persona/plugin-kit` — an optional, dependency-free subpath of utilities for authoring plugins:
+
+  - `injectStyles(target, id, css)` — Shadow-DOM-safe `<style>` injection. Resolves the correct root (the widget's shadow root when shadowed, the document head otherwise), is idempotent across re-renders, and defers correctly when called on an element that mounts after the call. A plain `document.head` `<style>` does not reach elements rendered inside the widget's shadow root; this does. `getStyleRoot(node)` is exported for direct use.
+  - `createPopover({ anchor, content, ... })` — a floating popover for dropdowns/menus/tooltips: `fixed`-positioned so it overlays the widget and escapes the transcript's scroll clipping, portaled into the anchor's root (shadow-aware), dismissed on outside pointerdown, repositioned on scroll/resize, and auto-closed when the anchor leaves the DOM. Returns a handle with `open`/`close`/`toggle`/`reposition`/`destroy`.
+  - `isEditableEventTarget(event)` — composed-path check so keyboard shortcuts don't fire while the user types in the composer (works across the shadow boundary).
+
+  The bundle is unaffected unless you import the subpath. Both example plugins now consume the kit as worked references: `approval-actions-plugin` (all three helpers) and `ask-horizontal-pills-plugin` (`injectStyles`), which also closes a latent Shadow-DOM styling gap where their `document.head` `<style>` would not reach elements rendered inside the widget's shadow root.
+
+### Patch Changes
+
+- a71fdfb: Add an "Approval request" preview transcript preset (`approval-request`) to the theme editor, so a pending approval bubble (with parameters and Approve/Deny buttons) can be injected to test approval theming. The injected message uses the `approval-<id>` id convention so the Approve/Deny buttons transition the bubble to its approved/denied state in previews that resolve decisions locally.
+- 856ec93: Fix `resolveApproval` re-stamping an approval bubble's `createdAt`/`sequence` to "now" on decision, which could reorder it after messages created later (e.g. a long-pending approval resolved after more conversation, or restored/replayed transcripts). The resolved bubble now stays anchored at the point the agent paused for permission, matching the standard human-in-the-loop convention of updating the approval in place.
+
 ## 3.29.1
 
 ### Patch Changes
