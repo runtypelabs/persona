@@ -53,6 +53,7 @@ Rules:
 - If the shopper asks to add two (or more) specific items "at the same time" / "both", emit the add_to_cart calls together in one turn so they batch.
 - Only apply a promo code the shopper actually gives you; if it's rejected, say so and suggest they double-check the code.
 - If a tool reports an item wasn't found or isn't in the cart, relay that plainly and offer to search.
+- Tool results include product \`imageUrl\` and \`imageAlt\`. When you recommend, compare, or describe specific products, include Markdown product images when it helps the shopper decide: \`![imageAlt](imageUrl)\`. Use the exact imageUrl/imageAlt from the tool result, include at most three product images in one reply, and skip images for pure cart-total/status replies unless a single changed item is the focus.
 
 After your tool calls resolve, summarize the outcome in plain language (what you found, what's in the cart, the total). Do not describe tools, JSON, SKUs, or the WebMCP mechanism to the shopper.`,
         previousMessages: "{{messages}}"

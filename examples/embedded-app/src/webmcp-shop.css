@@ -245,6 +245,21 @@ body.webmcp-shop .shop-product:hover {
   border-color: color-mix(in srgb, var(--shop-brand) 35%, var(--shop-line));
   box-shadow: var(--shop-shadow-md);
 }
+body.webmcp-shop .shop-product-media {
+  aspect-ratio: 4 / 3;
+  margin: -0.35rem -0.45rem 0.35rem;
+  overflow: hidden;
+  border: 1px solid var(--shop-line);
+  border-radius: calc(var(--shop-radius-sm) - 2px);
+  background: color-mix(in srgb, var(--shop-bg) 82%, var(--shop-paper));
+}
+body.webmcp-shop .shop-product-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
 body.webmcp-shop .shop-product-top {
   display: flex;
   align-items: center;

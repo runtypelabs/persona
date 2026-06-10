@@ -205,13 +205,22 @@ interface CartLine {
   title: string;
   price: number;
   quantity: number;
+  imageUrl: string;
+  imageAlt: string;
 }
 
 const cart = new Map<string, CartLine>();
 let promo: { code: string; rate: number; label: string } | null = null;
 
 const cartSummary = (): {
-  items: Array<{ sku: string; title: string; quantity: number; lineTotal: number }>;
+  items: Array<{
+    sku: string;
+    title: string;
+    quantity: number;
+    lineTotal: number;
+    imageUrl: string;
+    imageAlt: string;
+  }>;
   itemCount: number;
   subtotal: number;
   discount: number;
@@ -223,6 +232,8 @@ const cartSummary = (): {
     title: line.title,
     quantity: line.quantity,
     lineTotal: Number((line.price * line.quantity).toFixed(2)),
+    imageUrl: line.imageUrl,
+    imageAlt: line.imageAlt,
   }));
   const subtotal = Number(items.reduce((sum, i) => sum + i.lineTotal, 0).toFixed(2));
   const discount = promo ? Number((subtotal * promo.rate).toFixed(2)) : 0;
@@ -248,6 +259,9 @@ const renderCatalog = (): void => {
     return `
       <article class="shop-product" data-sku="${esc(p.sku)}">
         <span class="shop-incart-badge" data-incart-badge></span>
+        <div class="shop-product-media">
+          <img src="${esc(p.imageUrl)}" alt="${esc(p.imageAlt)}" loading="lazy" />
+        </div>
         <div class="shop-product-top">
           <span class="shop-swatch" style="background:${esc(swatch)}"></span>
           <span class="shop-product-cat">${esc(p.category)}</span>
@@ -364,6 +378,8 @@ const addToCart = (product: CatalogProduct, quantity: number): void => {
       title: `${product.title} (${product.color})`,
       price: product.price,
       quantity,
+      imageUrl: product.imageUrl,
+      imageAlt: product.imageAlt,
     });
   }
   renderCart();
@@ -394,7 +410,7 @@ if (!modelContext) {
     {
       name: "search_products",
       description:
-        "Search the product catalog by free-text query (e.g. 'waterproof trail shoe', 'blue running', 'jacket'). Returns matching products with SKU, title, brand, color, and price.",
+        "Search the product catalog by free-text query (e.g. 'waterproof trail shoe', 'blue running', 'jacket'). Returns matching products with SKU, title, brand, color, price, imageUrl, and imageAlt.",
       inputSchema: {
         type: "object",
         properties: { query: { type: "string", description: "Free-text search query." } },
@@ -422,6 +438,8 @@ if (!modelContext) {
             color: p.color,
             price: p.price,
             description: p.description,
+            imageUrl: p.imageUrl,
+            imageAlt: p.imageAlt,
           })),
         };
       },
@@ -434,7 +452,7 @@ if (!modelContext) {
     {
       name: "view_product",
       description:
-        "Look at one product in detail by SKU (from search_products results). Highlights it on the page and returns its full description. Read-only.",
+        "Look at one product in detail by SKU (from search_products results). Highlights it on the page and returns its full description plus imageUrl/imageAlt. Read-only.",
       inputSchema: {
         type: "object",
         properties: { sku: { type: "string" } },
@@ -469,6 +487,8 @@ if (!modelContext) {
           color: product.color,
           price: product.price,
           description: product.description,
+          imageUrl: product.imageUrl,
+          imageAlt: product.imageAlt,
         };
       },
     },
@@ -514,6 +534,8 @@ if (!modelContext) {
           title: product.title,
           quantity,
           unitPrice: product.price,
+          imageUrl: product.imageUrl,
+          imageAlt: product.imageAlt,
           cart: cartSummary(),
         };
       },
@@ -843,6 +865,15 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
       warning: { 500: "#e3b341" },
       error: { 500: "#e07856" },
       info: { 500: "#7dd3fc" },
+    },
+    typography: {
+      // Keep custom gallery fonts in dark mode too; darkTheme does not inherit
+      // shopTheme.palette.typography when colorScheme:'auto' rebuilds tokens.
+      fontFamily: {
+        sans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        serif: "'Newsreader', Georgia, 'Times New Roman', serif",
+        mono: "'JetBrains Mono', ui-monospace, SFMono-Regular, monospace",
+      },
     },
   },
   semantic: {

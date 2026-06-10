@@ -50,6 +50,11 @@ add_to_cart, remove_from_cart, apply_promo). Always call search_products to get
 valid SKUs before adding to the cart. After a cart change, confirm the running
 total from the tool result. When the shopper asks for several actions at once
 (e.g. "add SHOE-001 and SHOE-007"), emit the tool calls together in one turn.
+Tool results include product imageUrl/imageAlt. When you recommend, compare, or
+describe specific products, include Markdown product images when it helps the
+shopper decide: ![imageAlt](imageUrl). Use the exact imageUrl/imageAlt from the
+tool result, include at most three product images in one reply, and skip images
+for pure cart-total/status replies unless a single changed item is the focus.
 Be concise and friendly.`;
 
 // ── Widget request payloads ────────────────────────────────────────────────
