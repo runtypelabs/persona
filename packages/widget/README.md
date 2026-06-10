@@ -38,8 +38,7 @@ createAgentExperience(inlineHost, {
   apiUrl: proxyUrl,
   launcher: { enabled: false },
   theme: {
-    ...DEFAULT_WIDGET_CONFIG.theme,
-    accent: '#2563eb'
+    semantic: { colors: { accent: '#2563eb' } }
   },
   suggestionChips: ['What can you do?', 'Show API docs'],
   postprocessMessage: ({ text }) => markdownPostprocessor(text)
@@ -62,7 +61,9 @@ const controller = initAgentWidget({
 
 // Runtime theme update
 document.querySelector('#dark-mode')?.addEventListener('click', () => {
-  controller.update({ theme: { surface: '#0f172a', primary: '#f8fafc' } });
+  controller.update({
+    theme: { semantic: { colors: { surface: '#0f172a', primary: '#f8fafc' } } }
+  });
 });
 
 // Docked panel that wraps a concrete workspace container
@@ -1562,8 +1563,9 @@ The easiest way is to use the automatic installer script. It handles loading CSS
         subtitle: 'How can I help you?'
       },
       theme: {
-        accent: '#2563eb',
-        surface: '#ffffff'
+        semantic: {
+          colors: { accent: '#2563eb', surface: '#ffffff' }
+        }
       },
       // Optional: configure stream parser for JSON/XML responses
       // streamParser: () => window.AgentWidget.createJsonStreamParser()
@@ -1689,8 +1691,9 @@ For more control, manually load CSS and JavaScript:
         subtitle: 'Here to help'
       },
       theme: {
-        accent: '#111827',
-        surface: '#f5f5f5'
+        semantic: {
+          colors: { accent: '#111827', surface: '#f5f5f5' }
+        }
       },
       // Optional: configure stream parser for JSON/XML responses
       streamParser: window.AgentWidget.createJsonStreamParser // or createXmlParser, createPlainTextParser
@@ -1760,8 +1763,9 @@ export function ChatWidget() {
       config: {
         apiUrl: "/api/chat/dispatch",
         theme: {
-          primary: "#111827",
-          accent: "#1d4ed8",
+          semantic: {
+            colors: { primary: "#111827", accent: "#1d4ed8" }
+          }
         },
         launcher: {
           enabled: true,
@@ -1951,7 +1955,7 @@ import { ChatWidget } from './ChatWidget.tsx';
 
 #### Using the Theme Configurator
 
-For easy configuration generation, use the [Theme Configurator](https://github.com/becomevocal/chaty/tree/main/examples/embedded-app) which includes a "React (Client Component)" export option. It generates a complete React component with your custom theme, launcher settings, and all configuration options.
+For easy configuration generation, use the [Theme Editor demo](https://github.com/runtypelabs/persona/tree/main/examples/embedded-app) (`theme.html` in the embedded-app example) which includes a "React (Client Component)" export option. It generates a complete React component with your custom theme, launcher settings, and all configuration options.
 
 #### Installation
 
@@ -1985,8 +1989,7 @@ const controller = initAgentWidget({
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: '/api/chat/dispatch',
     theme: {
-      ...DEFAULT_WIDGET_CONFIG.theme,
-      accent: '#custom-color'  // Override only what you need
+      semantic: { colors: { accent: '#2563eb' } }  // Override only what you need
     }
   }
 });
@@ -1996,7 +1999,7 @@ const controller = initAgentWidget({
   target: '#app',
   config: mergeWithDefaults({
     apiUrl: '/api/chat/dispatch',
-    theme: { accent: '#custom-color' }
+    theme: { semantic: { colors: { accent: '#2563eb' } } }
   })
 });
 ```
@@ -2110,10 +2113,10 @@ config: {
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `theme` | `DeepPartial<PersonaTheme>` | Semantic tokens (`palette`, `semantic`, `components`). See [THEME-CONFIG.md](./THEME-CONFIG.md). Flat v1-style objects are still accepted at runtime (with a console warning) and migrated internally. |
+| `theme` | `DeepPartial<PersonaTheme>` | Semantic tokens (`palette`, `semantic`, `components`). See [THEME-CONFIG.md](./THEME-CONFIG.md). The flat v1 shape (`{ primary, accent, surface, ... }`) is **not** supported — there is no runtime migration; port themes to the token tree. |
 | `darkTheme` | `DeepPartial<PersonaTheme>` | Dark-mode token overrides, merged over `theme` when the active scheme is dark. |
 | `colorScheme` | `'light' \| 'dark' \| 'auto'` | Color scheme mode. `'auto'` detects from `<html class="dark">` or `prefers-color-scheme`. Default: `'light'`. |
-| `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel? }` | Customize user-facing text strings. |
+| `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel?, stopButtonLabel?, showWelcomeCard?, stopReasonNotice? }` | Customize user-facing text strings, hide the welcome card, or override per-stop-reason notices. |
 | `autoFocusInput` | `boolean` | Focus the chat input after the panel opens. Skips when voice is active. Default: `false`. |
 | `launcherWidth` | `string` | CSS width for the floating launcher panel (e.g. `'320px'`). Default: `'min(440px, calc(100vw - 24px))'`. |
 

@@ -47,7 +47,7 @@ const chat = initAgentWidget({
   config: {
     apiUrl: '/api/chat/dispatch',
     launcher: { enabled: true, title: 'AI Assistant' },
-    theme: { accent: '#2563eb' },
+    theme: { semantic: { colors: { accent: '#2563eb' } } },
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   },
 });

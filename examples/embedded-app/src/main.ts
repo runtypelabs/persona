@@ -161,6 +161,30 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 - [Artifact Sidebar](/artifact-demo.html) — multi-pane interface with a resizable artifact panel
 - [Fullscreen Assistant](/fullscreen-assistant-demo.html) — dark full-viewport split layout (chat + artifacts)
 - [Voice Integration](/voice-integration-demo.html) — voice input powered by ElevenLabs
+- [Custom Components](/custom-components.html) — render your own interactive components inside assistant messages
+- [Layout Configuration](/layout-config-demo.html) — tweak panel sizing, spacing, and layout options
+- [Stream Animations](/stream-animations-demo.html) — customize how streamed text animates in
+- [Persistent Composer](/persistent-composer.html) — always-visible composer bar layout
+- [WebMCP Storefront](/webmcp-demo.html) — expose page tools to the agent via WebMCP
+
+## Customization
+
+When a user asks what they can customize, cover these areas (all set via the config object passed to \`initAgentWidget\` / \`createAgentExperience\`):
+
+- **Theme** — \`theme\` accepts a token tree with three layers: \`palette\` (raw color scales, spacing, typography, shadows, radii), \`semantic\` (intent tokens like \`colors.primary\`, \`colors.surface\` that reference palette values), and \`components\` (per-component tokens like \`launcher.size\`, \`panel.borderRadius\`). Simplest override:
+  \`\`\`js
+  theme: { palette: { colors: { primary: { 500: '#7c3aed', 600: '#6d28d9' } } } }
+  \`\`\`
+  IMPORTANT: the old flat v1 shape (\`theme: { primary, accent, surface, ... }\`) was removed and is NOT supported — always show the token tree. A \`createTheme()\` helper with plugins (e.g. \`brandPlugin\`, \`accessibilityPlugin\`) is also exported. Point users at the [Theme Editor](/theme.html) demo and the THEME-CONFIG.md reference in the repo.
+- **Dark mode** — \`darkTheme\` (token overrides merged over \`theme\` when dark) and \`colorScheme: 'light' | 'dark' | 'auto'\` (auto detects the \`dark\` class on \`<html>\`, then \`prefers-color-scheme\`).
+- **Copy** — \`copy: { welcomeTitle, welcomeSubtitle, inputPlaceholder, sendButtonLabel, stopButtonLabel, showWelcomeCard, stopReasonNotice }\`.
+- **Launcher & layout** — \`launcher\` config (floating launcher vs inline embed via \`enabled: false\`, width, fullHeight), docked panel mode, artifact sidebar.
+- **Suggestion chips** — \`suggestionChips: [...]\` for starter prompts, plus \`suggestionChipsConfig\` for behavior/appearance.
+- **Composer & buttons** — \`sendButton\`, \`statusIndicator\` (idle text/link/alignment), \`autoFocusInput\`.
+- **Message rendering** — \`postprocessMessage\` hook to transform rendered HTML (e.g. add copy buttons to code blocks), built-in \`markdownPostprocessor\`, custom components inside messages, \`sanitize\` option (\`true\` by default, \`false\`, or a custom \`(html) => string\` function).
+- **Tool & reasoning UI** — \`toolCall\`, \`reasoning\`, and \`approval\` configs for how tool calls, thinking, and approval bubbles render.
+- **Voice & speech** — \`voiceRecognition\` (browser or ElevenLabs-powered providers) and \`textToSpeech\` (Web Speech API: voice, rate, pitch).
+- **Plugins** — a plugin registry for custom functionality beyond config options.
 
 ## Setting Up Persona With an AI Coding Agent
 
@@ -197,7 +221,8 @@ Add the Persona chat widget (@runtypelabs/persona) to this project.
    - requestMiddleware(context) — transform the outgoing request payload (messages, metadata) before it's sent.
 
 5. Customize appearance:
-   - theme: { primary, accent, surface, container, muted } to match site colors
+   - theme: a token tree, e.g. theme: { palette: { colors: { primary: { 500: '#7c3aed', 600: '#6d28d9' } } } } to match site colors (the flat { primary, accent, ... } shape is not supported)
+   - colorScheme: 'light' | 'dark' | 'auto', with optional darkTheme token overrides
    - copy: { welcomeTitle, welcomeSubtitle, inputPlaceholder }
    - suggestionChips: ['Question 1', 'Question 2'] for starter prompts
 
