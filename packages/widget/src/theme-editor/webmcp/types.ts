@@ -54,10 +54,14 @@ export interface WebMcpTool {
   execute: ToolExecute;
 }
 
-/** Wrap a JSON-serializable payload in the MCP tool-result envelope. */
+/**
+ * Wrap a JSON-serializable payload in the MCP tool-result envelope. Compact
+ * JSON (no indentation) — the text is consumed by a model, where pretty-print
+ * whitespace is pure token overhead.
+ */
 export function toolResult(payload: unknown): ToolResult {
   return {
-    content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+    content: [{ type: 'text', text: JSON.stringify(payload) }],
     structuredContent: payload,
   };
 }
