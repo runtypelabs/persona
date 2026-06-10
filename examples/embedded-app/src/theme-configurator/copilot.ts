@@ -61,7 +61,20 @@ const AUTO_APPROVED_TOOLS = new Set([
   'screenshot_preview',
 ]);
 
+/**
+ * Opt-in while the copilot is iterated on: visit theme.html?copilot=on to
+ * mount the sidebar. Without the flag the editor presents as copilot-less.
+ */
+export function isThemeCopilotEnabled(): boolean {
+  return new URLSearchParams(window.location.search).get('copilot') === 'on';
+}
+
 export function initThemeCopilot(): AgentWidgetInitHandle | null {
+  if (!isThemeCopilotEnabled()) {
+    document.getElementById('theme-copilot-toggle')?.remove();
+    return null;
+  }
+
   const target = document.getElementById('theme-copilot-dock-target');
   if (!target) {
     console.warn('[theme-editor] Theme Copilot dock target not found.');
