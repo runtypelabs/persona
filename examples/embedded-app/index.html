@@ -10,36 +10,87 @@
 </head>
 <body>
   <div class="page">
+    <!-- Hero — 3D Carousel Showcase -->
+    <section class="hero-split">
+      <div class="hero-split-inner">
+        <div class="hero-panel">
+          <span class="label">Open Source AI Chat Widget</span>
+          <h1 class="kern-tight">Add a streaming AI chat<br>to any website, in minutes.</h1>
+          <p>Themeable, pluggable, zero framework dependencies. Style isolation, SSE streaming, agent loops, and tool use — all in one drop-in widget.</p>
+          <div class="hero-features">
+            <span class="hero-feature-pill">Style Isolation</span>
+            <span class="hero-feature-pill">SSE Streaming</span>
+            <span class="hero-feature-pill">Agent Loops</span>
+            <span class="hero-feature-pill">Theming</span>
+            <span class="hero-feature-pill">Voice Input</span>
+            <span class="hero-feature-pill">Vanilla JS</span>
+          </div>
+          <div class="hero-badges">
+            <a href="https://www.npmjs.com/package/@runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/npm/v/@runtypelabs/persona?style=flat&color=5B2EFF&label=npm" alt="npm"></a>
+            <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/github/stars/runtypelabs/persona?style=flat&color=5B2EFF&label=GitHub" alt="GitHub"></a>
+            <a href="https://deepwiki.com/runtypelabs/persona" target="_blank" rel="noopener"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+          </div>
+          <div class="hero-byline">
+            <span>Built by</span>
+            <a href="https://runtype.com" target="_blank" rel="noopener"><img src="/runtype-logo.svg" alt="Runtype" class="runtype-logo"></a>
+          </div>
+        </div>
+        <div class="carousel-3d" id="hero-carousel">
+          <div class="carousel-3d-scene">
+            <div class="carousel-3d-card">
+              <a href="/bakery.html" class="carousel-3d-card-link">
+                <div class="carousel-3d-iframe-wrap">
+                  <iframe src="/bakery.html" tabindex="-1" title="Bakery Assistant"></iframe>
+                </div>
+                <span class="carousel-3d-card-title">Bakery Assistant</span>
+              </a>
+            </div>
+            <div class="carousel-3d-card">
+              <a href="/fullscreen-assistant-demo.html" class="carousel-3d-card-link">
+                <div class="carousel-3d-iframe-wrap">
+                  <iframe src="/fullscreen-assistant-demo.html" loading="lazy" tabindex="-1" title="Fullscreen Layout"></iframe>
+                </div>
+                <span class="carousel-3d-card-title">Fullscreen Layout</span>
+              </a>
+            </div>
+            <div class="carousel-3d-card">
+              <a href="/docked-panel-demo.html" class="carousel-3d-card-link">
+                <div class="carousel-3d-iframe-wrap">
+                  <iframe src="/docked-panel-demo.html" loading="lazy" tabindex="-1" title="Docked Panel"></iframe>
+                </div>
+                <span class="carousel-3d-card-title">Docked Panel</span>
+              </a>
+            </div>
+            <div class="carousel-3d-card">
+              <a href="/action-middleware.html" class="carousel-3d-card-link">
+                <div class="carousel-3d-iframe-wrap">
+                  <iframe src="/action-middleware.html" loading="lazy" tabindex="-1" title="Action Middleware"></iframe>
+                </div>
+                <span class="carousel-3d-card-title">Action Middleware</span>
+              </a>
+            </div>
+            <div class="carousel-3d-card">
+              <a href="/theme.html" class="carousel-3d-card-link">
+                <div class="carousel-3d-iframe-wrap">
+                  <iframe src="/theme.html" loading="lazy" tabindex="-1" title="Theme Editor"></iframe>
+                </div>
+                <span class="carousel-3d-card-title">Theme Editor</span>
+              </a>
+            </div>
+            <div class="carousel-3d-card">
+              <a href="/launcher-demo.html" class="carousel-3d-card-link">
+                <div class="carousel-3d-iframe-wrap">
+                  <iframe src="/launcher-demo.html" loading="lazy" tabindex="-1" title="Default Launcher"></iframe>
+                </div>
+                <span class="carousel-3d-card-title">Default Launcher</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <main class="shell">
-
-      <!-- Hero -->
-      <section class="hero cardFull reveal-el">
-        <span class="label">Open Source AI Chat Widget</span>
-        <h1 class="kern-tight" style="font-size: 40px; line-height: 1.05;">
-          Add a streaming AI chat<br>to any website, in minutes.
-        </h1>
-        <p>Themeable, pluggable, zero framework dependencies. Style isolation, SSE streaming, agent loops, and tool use — all in one drop-in widget.</p>
-
-        <div class="hero-features">
-          <span class="hero-feature-pill">Style Isolation</span>
-          <span class="hero-feature-pill">SSE Streaming</span>
-          <span class="hero-feature-pill">Agent Loops</span>
-          <span class="hero-feature-pill">Theming</span>
-          <span class="hero-feature-pill">Voice Input</span>
-          <span class="hero-feature-pill">Vanilla JS</span>
-        </div>
-
-        <div class="hero-badges">
-          <a href="https://www.npmjs.com/package/@runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/npm/v/@runtypelabs/persona?style=flat&color=5B2EFF&label=npm" alt="npm"></a>
-          <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/github/stars/runtypelabs/persona?style=flat&color=5B2EFF&label=GitHub" alt="GitHub"></a>
-          <a href="https://deepwiki.com/runtypelabs/persona" target="_blank" rel="noopener"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
-        </div>
-
-        <div class="hero-byline">
-          <span>Built by</span>
-          <a href="https://runtype.com" target="_blank" rel="noopener"><img src="/runtype-logo.svg" alt="Runtype" class="runtype-logo"></a>
-        </div>
-      </section>
 
       <!-- Live Demo -->
       <section class="card cardFull tryit-section reveal-el">
@@ -316,6 +367,17 @@
       </footer>
 
     </main>
+
+    <!-- Demo Lightbox -->
+    <dialog class="demo-lightbox" id="demo-lightbox">
+      <div class="demo-lightbox-chrome">
+        <button type="button" class="demo-lightbox-close" aria-label="Close demo preview">
+          <span aria-hidden="true">&times;</span>
+          <span class="demo-lightbox-hint">esc</span>
+        </button>
+      </div>
+      <iframe class="demo-lightbox-iframe" src="" title="Demo preview"></iframe>
+    </dialog>
   </div>
 
   <!-- Scroll reveal & copy buttons -->

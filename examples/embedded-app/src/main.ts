@@ -330,3 +330,194 @@ if (carouselMount) {
     ],
   });
 }
+
+// ---------------------------------------------------------------------------
+// Hero 3D Carousel
+// ---------------------------------------------------------------------------
+
+function initHeroCarousel() {
+  const scene = document.querySelector('.carousel-3d-scene') as HTMLElement | null;
+  if (!scene) return;
+
+  const cards = Array.from(scene.querySelectorAll('.carousel-3d-card')) as HTMLElement[];
+  if (!cards.length) return;
+
+  const VISIBLE = 5;
+  const CYCLE_MS = 4000;
+  const stack = [...cards];
+  let paused = false;
+  let cycling = false;
+
+  function applyStyle(card: HTMLElement, i: number) {
+    const p = Math.min(i, VISIBLE);
+    card.style.transform = `translateX(${p * 16}px) translateY(${p * 4}px) rotate(${p * 0.8}deg)`;
+    card.style.opacity = i >= VISIBLE ? '0' : i >= 4 ? '0.5' : i >= 3 ? '0.7' : '1';
+    card.style.zIndex = i >= VISIBLE ? '0' : String(cards.length - i);
+  }
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    stack.forEach((card, i) => applyStyle(card, i));
+    return;
+  }
+
+  stack.forEach((card, i) => applyStyle(card, i));
+  stack[0].classList.add('is-approaching');
+
+  const container = scene.closest('.carousel-3d') as HTMLElement;
+  if (container) {
+    container.addEventListener('mouseenter', () => {
+      paused = true;
+      stack[0].style.animationPlayState = 'paused';
+    });
+    container.addEventListener('mouseleave', () => {
+      paused = false;
+      stack[0].style.animationPlayState = 'running';
+    });
+  }
+
+  function cycleForward() {
+    if (cycling) return;
+    cycling = true;
+
+    const front = stack[0];
+    const computed = getComputedStyle(front).transform;
+    front.style.transform = computed;
+    front.classList.remove('is-approaching');
+    void front.offsetWidth;
+
+    front.style.transition = `transform 0.6s var(--ease-smooth), opacity 0.6s var(--ease-smooth)`;
+    front.style.transform = 'translateX(-60px) translateY(-30px) rotate(-2deg) scale(0.96)';
+    front.style.opacity = '0';
+    front.style.zIndex = String(cards.length + 1);
+
+    for (let i = 1; i < stack.length; i++) {
+      stack[i].style.transition = '';
+      applyStyle(stack[i], i - 1);
+    }
+
+    setTimeout(() => {
+      const old = stack.shift()!;
+      stack.push(old);
+
+      old.style.transition = 'none';
+      old.style.animationPlayState = '';
+      applyStyle(old, stack.indexOf(old));
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          old.style.transition = '';
+          stack[0].classList.add('is-approaching');
+          cycling = false;
+        });
+      });
+    }, 700);
+  }
+
+  function cycleBackward() {
+    if (cycling) return;
+    cycling = true;
+
+    stack[0].classList.remove('is-approaching');
+
+    const incoming = stack.pop()!;
+    stack.unshift(incoming);
+
+    incoming.style.transition = 'none';
+    incoming.style.transform = 'translateX(80px) translateY(20px) rotate(3deg)';
+    incoming.style.opacity = '0';
+    incoming.style.zIndex = String(cards.length + 1);
+    void incoming.offsetWidth;
+
+    incoming.style.transition = `transform 0.6s var(--ease-smooth), opacity 0.6s var(--ease-smooth)`;
+    applyStyle(incoming, 0);
+
+    for (let i = 1; i < stack.length; i++) {
+      stack[i].style.transition = '';
+      applyStyle(stack[i], i);
+    }
+
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          stack[0].classList.add('is-approaching');
+          cycling = false;
+        });
+      });
+    }, 700);
+  }
+
+  let autoId = setInterval(() => {
+    if (!paused && !cycling) cycleForward();
+  }, CYCLE_MS);
+
+  function resetAutoAdvance() {
+    clearInterval(autoId);
+    autoId = setInterval(() => {
+      if (!paused && !cycling) cycleForward();
+    }, CYCLE_MS);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+
+    const lightbox = document.getElementById('demo-lightbox') as HTMLDialogElement;
+    if (lightbox?.open) return;
+
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    if (rect.bottom < 0 || rect.top > window.innerHeight) return;
+
+    if (e.key === 'ArrowRight') {
+      cycleForward();
+    } else {
+      cycleBackward();
+    }
+    resetAutoAdvance();
+  });
+}
+
+initHeroCarousel();
+
+// ---------------------------------------------------------------------------
+// Demo Lightbox
+// ---------------------------------------------------------------------------
+
+function initDemoLightbox() {
+  const lightbox = document.getElementById('demo-lightbox') as HTMLDialogElement | null;
+  if (!lightbox) return;
+
+  const iframe = lightbox.querySelector('.demo-lightbox-iframe') as HTMLIFrameElement;
+  let closedByPopstate = false;
+
+  document.querySelectorAll('.carousel-3d-card-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const anchor = link as HTMLAnchorElement;
+      iframe.src = anchor.href;
+      iframe.title = link.querySelector('.carousel-3d-card-title')?.textContent || 'Demo preview';
+      lightbox.showModal();
+      history.pushState({ demoLightbox: true }, '');
+    });
+  });
+
+  lightbox.addEventListener('click', (e) => {
+    if (e.target === lightbox) lightbox.close();
+  });
+
+  lightbox.querySelector('.demo-lightbox-close')?.addEventListener('click', () => lightbox.close());
+
+  window.addEventListener('popstate', () => {
+    if (lightbox.open) {
+      closedByPopstate = true;
+      lightbox.close();
+    }
+  });
+
+  lightbox.addEventListener('close', () => {
+    iframe.src = '';
+    if (!closedByPopstate) history.back();
+    closedByPopstate = false;
+  });
+}
+
+initDemoLightbox();
