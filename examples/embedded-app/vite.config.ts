@@ -448,19 +448,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api/chat/dispatch": `http://localhost:${proxyPort}`,
-      "/api/chat/dispatch-directive": `http://localhost:${proxyPort}`,
-      "/api/chat/dispatch-action": `http://localhost:${proxyPort}`,
-      "/api/chat/dispatch-component": `http://localhost:${proxyPort}`,
-      "/api/chat/dispatch-bakery": `http://localhost:${proxyPort}`,
-      "/api/chat/dispatch-storefront": `http://localhost:${proxyPort}`,
-      "/api/chat/dispatch-webmcp": `http://localhost:${proxyPort}`,
-      "/api/chat/dispatch-calendar": `http://localhost:${proxyPort}`,
-      "/api/chat/dispatch-slides": `http://localhost:${proxyPort}`,
-      "/api/chat/dispatch-page-context": `http://localhost:${proxyPort}`,
+      // Wildcard: forward all /api/chat/* and /api/checkout/* to the proxy
+      // This prevents 404s when new demo endpoints are added
+      "^/api/chat/.*": `http://localhost:${proxyPort}`,
+      "^/api/checkout/.*": `http://localhost:${proxyPort}`,
       "/api/checkout": `http://localhost:${proxyPort}`,
-      "/api/checkout/bakery": `http://localhost:${proxyPort}`,
-      "/api/checkout/storefront": `http://localhost:${proxyPort}`,
       "/form": `http://localhost:${proxyPort}`
     }
   }
