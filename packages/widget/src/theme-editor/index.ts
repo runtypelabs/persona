@@ -162,6 +162,8 @@ export type {
   ToolResult,
   ToolAnnotations,
   ToolTextContent,
+  ToolImageContent,
+  ToolContent,
   ToolExecute,
   ThemeEditorLike,
   EditTarget,

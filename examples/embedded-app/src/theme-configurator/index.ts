@@ -15,6 +15,8 @@ import type {
 import type { OnChangeCallback, ControlResult } from './types';
 import * as state from './state';
 import { mountThemeEditorMcp } from './webmcp/register';
+import { createScreenshotPreviewTool } from './webmcp/screenshot-tool';
+import { initThemeCopilot } from './copilot';
 import { initSearchUI, pruneSearchIndex, registerCatalogSections, resetSearchIndex } from './search';
 import * as styleTab from './sections/appearance';
 import type { DrilldownView } from './sections/appearance';
@@ -217,10 +219,18 @@ function init(): void {
     previewManager?.update();
   });
 
-  // Expose the theme editor as WebMCP tools so a browser agent can configure
-  // the theme; routed through `state` so the preview + controls update for free.
-  const unmountMcp = mountThemeEditorMcp(state);
+  // Expose the theme editor as WebMCP tools so an agent (the Theme Copilot
+  // sidebar, or a browser agent) can configure the theme; routed through
+  // `state` so the preview + controls update for free. screenshot_preview is
+  // page-level: it captures the live preview frames for the agent's visual
+  // feedback loop.
+  const unmountMcp = mountThemeEditorMcp(state, {
+    extraTools: [createScreenshotPreviewTool(() => previewManager)],
+  });
   window.addEventListener('beforeunload', unmountMcp);
+
+  // Mount the docked Theme Copilot — the live agent that drives the tools above.
+  initThemeCopilot();
 }
 
 // ─── Tabs ────────────────────────────────────────────────────────

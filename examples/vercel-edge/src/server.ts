@@ -149,11 +149,12 @@ const pageContextApp = createChatProxyApp({
   upstreamUrl
 });
 
-// Theme-assistant proxy — for the Persona Theme Editor's live, self-styling widget.
-// The Theme Editor registers its controls as WebMCP tools on document.modelContext;
-// the widget ships them as clientTools[] and the agent calls them (webmcp:*) to
-// restyle the very widget the user is chatting with. Tool-calling flow (not an
-// action envelope), so it relies on clientTools forwarding + /resume.
+// Theme-assistant proxy — for the Theme Editor's docked Theme Copilot.
+// The Theme Editor registers its controls (plus screenshot_preview) as WebMCP
+// tools on document.modelContext; the copilot widget ships them as clientTools[]
+// and the agent calls them (webmcp:*) to restyle the live theme preview.
+// Tool-calling flow (not an action envelope), so it relies on clientTools
+// forwarding + /resume — including image blocks in screenshot tool results.
 const themeAssistantApp = createChatProxyApp({
   path: "/api/chat/dispatch-theme",
   allowedOrigins,

@@ -8,17 +8,25 @@
  */
 
 import { createThemeEditorTools } from '@runtypelabs/persona/theme-editor';
-import type { ThemeEditorLike } from '@runtypelabs/persona/theme-editor';
+import type { ThemeEditorLike, WebMcpTool } from '@runtypelabs/persona/theme-editor';
 import { ensureModelContext } from './install';
 
-export function mountThemeEditorMcp(state: ThemeEditorLike): () => void {
+export interface MountThemeEditorMcpOptions {
+  /** Page-level tools registered alongside the theme tools (e.g. screenshot_preview). */
+  extraTools?: WebMcpTool[];
+}
+
+export function mountThemeEditorMcp(
+  state: ThemeEditorLike,
+  options?: MountThemeEditorMcpOptions
+): () => void {
   const controller = new AbortController();
 
   void (async () => {
     const modelContext = await ensureModelContext();
     if (!modelContext || controller.signal.aborted) return;
 
-    const tools = createThemeEditorTools(state);
+    const tools = [...createThemeEditorTools(state), ...(options?.extraTools ?? [])];
     for (const tool of tools) {
       modelContext.registerTool(tool, { signal: controller.signal });
     }
