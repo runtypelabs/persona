@@ -466,9 +466,11 @@ section[id] {
   position: absolute;
   top: 0;
   left: 0;
-  width: calc(50vw * 3);
-  height: calc(50vw * 1.6875);
-  transform: scale(0.3333);
+  /* Simulate a ~laptop-sized viewport (2x the card), not a 4K monitor, so
+     demo pages render at a readable size. Height = 2x the wrap's 16:9. */
+  width: calc(50vw * 2);
+  height: calc(50vw * 1.125);
+  transform: scale(0.5);
   transform-origin: top left;
   border: none;
   pointer-events: none;
