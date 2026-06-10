@@ -174,6 +174,7 @@
       }
 
       const logEl = document.getElementById("log");
+      const LATE_IMAGE_SRC = "/autoscroll-late-image.jpg";
       function log(msg, cls = "") {
         if (!logEl) return;
         const line = document.createElement("div");
@@ -890,7 +891,6 @@ Let me know if you need any additional help with the setup!`;
         await sleep(250);
 
         const msgId = nextId("img");
-        const seed = Math.random().toString(36).slice(2, 8);
         const words = "Here is a large photo — it loads after this text has already rendered, so the transcript grows without a new message:".split(" ");
         let acc = "";
         for (const word of words) {
@@ -899,9 +899,12 @@ Let me know if you need any additional help with the setup!`;
           controller.injectAssistantMessage({ id: msgId, content: acc, streaming: true });
           await sleep(40);
         }
+        // Keep the fixture repo-local and cache-bust per run so repeated
+        // clicks still exercise an image load/growth event.
+        const imageSrc = `${LATE_IMAGE_SRC}?run=${encodeURIComponent(msgId)}`;
         controller.injectAssistantMessage({
           id: msgId,
-          content: `${acc}\n\n![Random photo](https://picsum.photos/seed/${seed}/520/640)\n\n…and a line after the image so it lands mid-transcript.`,
+          content: `${acc}\n\n![Generated alpine lake image](${imageSrc})\n\n…and a line after the image so it lands mid-transcript.`,
           streaming: false,
         });
 
