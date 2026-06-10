@@ -468,6 +468,11 @@ function initHeroCarousel() {
 
     peeled.forEach((card, i) => {
       card.classList.remove('is-approaching');
+      // Hand off front-card status immediately — a peeling card must not keep
+      // the is-front affordance or sit in the tab order for the 700ms flight.
+      card.classList.remove('is-front');
+      const link = card.querySelector('.carousel-3d-card-link') as HTMLAnchorElement | null;
+      if (link) link.tabIndex = -1;
       const computed = getComputedStyle(card).transform;
       card.style.transform = computed;
       void card.offsetWidth;
