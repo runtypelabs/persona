@@ -167,6 +167,7 @@ The widget builds to multiple formats via tsup:
 - `dist/index.global.js` - IIFE (for script tag / CDN usage)
 - `dist/install.global.js` - IIFE installer bootstrap (reads `window.siteAgentConfig`; the script-tag entry point)
 - `dist/launcher.global.js` - IIFE critical launcher bundle (deferred-loading fast path; see "Deferred Launcher Loading")
+- `dist/webmcp-polyfill.js` - Self-contained ESM chunk with `@mcp-b/webmcp-polyfill`; lazy-imported by the IIFE bundle (which marks the polyfill external) only when `config.webmcp.enabled` is true and the page has no `document.modelContext`. URL is derived from the widget script's `src` by the loader registered in `index-global.ts`.
 - `dist/index.d.ts` - TypeScript declarations
 - `dist/widget.css` - Prefixed Tailwind CSS (for consumers who import styles separately)
 

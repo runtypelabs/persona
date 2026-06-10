@@ -31,6 +31,7 @@ import {
   isWebMcpToolName,
   stripWebMcpPrefix,
   computeClientToolsFingerprint,
+  setWebMcpPolyfillLoader,
 } from "./webmcp-bridge";
 import type { ClientToolDefinition } from "./types";
 
@@ -114,6 +115,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  // The loader is module-global (page-global in production); reset so a test
+  // that registers one can't leak into the default-import tests.
+  setWebMcpPolyfillLoader(null);
 });
 
 describe("stripWebMcpPrefix", () => {
@@ -150,6 +154,9 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
   });
 
   it("returns empty when initializeWebMCPPolyfill() throws", async () => {
+    // No pre-existing modelContext — otherwise install() short-circuits
+    // before importing the polyfill and the throwing init never runs.
+    vi.stubGlobal("document", {});
     polyfillMock.initThrows = true;
     const bridge = new WebMcpBridge({ enabled: true });
     expect(await bridge.snapshotForDispatch()).toEqual([]);
@@ -201,6 +208,59 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
       "foo",
       "bar",
     ]);
+  });
+});
+
+describe("setWebMcpPolyfillLoader", () => {
+  it("uses the registered loader instead of the bare import when no modelContext exists", async () => {
+    // Start with no modelContext so install() actually loads the polyfill;
+    // the loader's init then installs the registry, like the real one would.
+    const doc: { modelContext?: ReturnType<typeof makeModelContext> } = {};
+    vi.stubGlobal("document", doc);
+    registry.tools = [fakeTool({ name: "search" })];
+    const loader = vi.fn(async () => ({
+      initializeWebMCPPolyfill: () => {
+        doc.modelContext = makeModelContext();
+      },
+    }));
+    setWebMcpPolyfillLoader(loader);
+
+    const bridge = new WebMcpBridge({ enabled: true });
+    const snap = await bridge.snapshotForDispatch();
+
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(snap.map((t) => t.name)).toEqual(["search"]);
+    expect(bridge.isOperational()).toBe(true);
+  });
+
+  it("disables WebMCP (with a warning) when the loader rejects", async () => {
+    vi.stubGlobal("document", {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setWebMcpPolyfillLoader(() => Promise.reject(new Error("chunk 404")));
+
+    const bridge = new WebMcpBridge({ enabled: true });
+    expect(await bridge.snapshotForDispatch()).toEqual([]);
+    expect(bridge.isOperational()).toBe(false);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to load @mcp-b/webmcp-polyfill"),
+      expect.any(Error),
+    );
+    warn.mockRestore();
+  });
+
+  it("never invokes the loader when a compatible modelContext is already present", async () => {
+    // beforeEach stubs a compatible document.modelContext — the install
+    // short-circuit must win, so a failing loader is irrelevant.
+    registry.tools = [fakeTool({ name: "search" })];
+    const loader = vi.fn(() => Promise.reject(new Error("should not load")));
+    setWebMcpPolyfillLoader(loader);
+
+    const bridge = new WebMcpBridge({ enabled: true });
+    const snap = await bridge.snapshotForDispatch();
+
+    expect(loader).not.toHaveBeenCalled();
+    expect(snap.map((t) => t.name)).toEqual(["search"]);
+    expect(bridge.isOperational()).toBe(true);
   });
 });
 

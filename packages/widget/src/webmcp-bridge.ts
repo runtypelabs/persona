@@ -131,6 +131,28 @@ const log = {
   },
 };
 
+/** The slice of `@mcp-b/webmcp-polyfill` the bridge consumes on install. */
+export type WebMcpPolyfillModule = {
+  initializeWebMCPPolyfill: () => void;
+};
+
+/**
+ * Override how the polyfill module is obtained. By default the bridge does
+ * `import("@mcp-b/webmcp-polyfill")`, which bundlers resolve for npm
+ * consumers. The IIFE/CDN build can't resolve a bare specifier at runtime, so
+ * its entry (`index-global.ts`) registers a loader that imports the
+ * self-contained `webmcp-polyfill.js` chunk from a URL derived from the
+ * widget script's own `src`. Page-global, like `document.modelContext`
+ * itself. Pass `null` to restore the default (used by tests).
+ */
+let polyfillLoader: (() => Promise<WebMcpPolyfillModule>) | null = null;
+
+export const setWebMcpPolyfillLoader = (
+  loader: (() => Promise<WebMcpPolyfillModule>) | null,
+): void => {
+  polyfillLoader = loader;
+};
+
 /**
  * Compute a stable, order-independent fingerprint of a `ClientToolDefinition[]`
  * snapshot, for the diff-only / send-once dispatch path (client-token mode).
@@ -449,7 +471,18 @@ export class WebMcpBridge {
 
   private async install(): Promise<void> {
     try {
-      const mod = await import("@mcp-b/webmcp-polyfill");
+      // A compatible registry is already on the page (the host installed the
+      // polyfill, or a native impl) — initialize would no-op against it, so
+      // skip loading the module entirely. Pages that register tools before
+      // Persona's first dispatch always land here, because registering
+      // requires `document.modelContext` to exist.
+      if (this.getModelContext()) {
+        this.installed = true;
+        return;
+      }
+      const mod = polyfillLoader
+        ? await polyfillLoader()
+        : await import("@mcp-b/webmcp-polyfill");
       // Idempotent: no-ops if `document.modelContext` already exists (native or
       // a prior install by the host page).
       mod.initializeWebMCPPolyfill();
