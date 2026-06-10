@@ -1350,6 +1350,26 @@ export type AgentWidgetDockConfig = {
    *   it appears to emerge at full width like a floating widget.
    */
   reveal?: "resize" | "overlay" | "push" | "emerge";
+  /**
+   * Maximum height of the dock panel, applied as a viewport-overflow guard.
+   *
+   * The docked shell sizes itself with `height: 100%`, which only resolves when
+   * an ancestor (usually `html, body { height: 100% }`) provides a definite
+   * height. Without one, the dock column would otherwise grow with the
+   * conversation and scroll off the page. This cap clamps the panel to the
+   * viewport (and keeps the `resize`/`emerge` reveals pinned with
+   * `position: sticky`; `push`/`overlay` get the cap only, since their
+   * transform/absolute contexts defeat sticky) so a missing height chain
+   * degrades gracefully instead of breaking the chat.
+   *
+   * - Set a CSS length (e.g. `"600px"`, `"80vh"`) to override the cap.
+   * - Set `false` to disable the guard entirely (the panel then sizes purely
+   *   from the surrounding layout — make sure your page provides a definite
+   *   height all the way down to the dock target's parent).
+   *
+   * @default "100dvh"
+   */
+  maxHeight?: string | false;
 };
 
 /**

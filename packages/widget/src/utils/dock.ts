@@ -5,6 +5,7 @@ const DEFAULT_DOCK_CONFIG: Required<AgentWidgetDockConfig> = {
   width: "420px",
   animate: true,
   reveal: "resize",
+  maxHeight: "100dvh",
 };
 
 export const isDockedMountMode = (config?: AgentWidgetConfig): boolean =>
@@ -29,5 +30,6 @@ export const resolveDockConfig = (
     width: dock?.width ?? DEFAULT_DOCK_CONFIG.width,
     animate: dock?.animate ?? DEFAULT_DOCK_CONFIG.animate,
     reveal: dock?.reveal ?? DEFAULT_DOCK_CONFIG.reveal,
+    maxHeight: dock?.maxHeight ?? DEFAULT_DOCK_CONFIG.maxHeight,
   };
 };

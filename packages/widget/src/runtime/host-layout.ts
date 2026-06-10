@@ -1,5 +1,6 @@
 import type {
   AgentWidgetConfig,
+  AgentWidgetDockConfig,
   AgentWidgetStateSnapshot,
 } from "../types";
 import { isDockedMountMode, resolveDockConfig } from "../utils/dock";
@@ -24,6 +25,83 @@ const parseDockWidthToPx = (width: string, shellClientWidth: number): number => 
   const pct = /^(\d+(?:\.\d+)?)%$/i.exec(w);
   if (pct) return Math.max(0, (shellClientWidth * parseFloat(pct[1])) / 100);
   return 420;
+};
+
+/**
+ * Viewport-overflow guard. The docked shell sizes itself with `height: 100%`,
+ * which only resolves when an ancestor provides a definite height; without one
+ * the dock column would grow with the conversation and scroll off the page.
+ * Clamping the slot keeps the panel viewport-sized (messages scroll
+ * internally) even when the page's height chain is missing. `100vh` is set
+ * first as a fallback for engines without `dvh` support — an invalid value
+ * leaves the previous one in place.
+ */
+const applyDockSlotMaxHeight = (
+  dockSlot: HTMLElement,
+  maxHeight: string | false
+): void => {
+  if (maxHeight === false) {
+    dockSlot.style.maxHeight = "";
+    return;
+  }
+  dockSlot.style.maxHeight = "100vh";
+  dockSlot.style.maxHeight = maxHeight;
+};
+
+/**
+ * Sticky keeps the resize/emerge dock column pinned to the top of the viewport
+ * when the surrounding page is taller than the screen (e.g. a missing height
+ * chain or a deliberately scrolling page). With a properly sized shell it
+ * behaves exactly like the previous `position: relative`. Not used for push:
+ * there the slot lives inside the translated push track, and that transformed
+ * ancestor defeats sticky (verified in Chromium) — push gets the max-height
+ * cap only, like overlay.
+ */
+const applyInFlowDockSlotPosition = (
+  dockSlot: HTMLElement,
+  maxHeight: string | false
+): void => {
+  if (maxHeight === false) {
+    dockSlot.style.position = "relative";
+    dockSlot.style.top = "";
+  } else {
+    dockSlot.style.position = "sticky";
+    dockSlot.style.top = "0";
+  }
+};
+
+/**
+ * Warns once per docked mount when no ancestor of the dock target provides a
+ * definite height, which is the common misconfiguration behind a dock panel
+ * that grows past the viewport. Probes with a throwaway `height: 100%` child
+ * of the shell's parent; a fixed-height reference probe first checks the
+ * environment can measure at all (display: none subtrees and jsdom measure
+ * everything as 0, and must not produce a false warning).
+ */
+const warnIfDockHeightChainUnresolved = (
+  shell: HTMLElement,
+  dock: Required<AgentWidgetDockConfig>
+): void => {
+  const parent = shell.parentElement;
+  if (!parent) return;
+  const probe = shell.ownerDocument.createElement("div");
+  probe.style.cssText =
+    "width:0;height:1px;margin:0;padding:0;border:0;visibility:hidden;";
+  parent.appendChild(probe);
+  const measurable = probe.offsetHeight > 0;
+  probe.style.height = "100%";
+  const resolved = probe.offsetHeight > 0;
+  probe.remove();
+  if (!measurable || resolved) return;
+  console.warn(
+    "[AgentWidget] Docked mode: no ancestor of the dock target provides a definite height, " +
+      "so the dock panel cannot size to your layout." +
+      (dock.maxHeight === false
+        ? " The viewport guard is disabled (dock.maxHeight: false), so the panel will grow with the conversation and overflow the viewport."
+        : ` Falling back to clamping the panel to ${dock.maxHeight} (configurable via launcher.dock.maxHeight).`) +
+      " To size the panel from your layout instead, give the height chain a definite height " +
+      "(e.g. `html, body { height: 100% }`) down to the dock target's parent."
+  );
 };
 
 const setDirectHostStyles = (host: HTMLElement, config?: AgentWidgetConfig): void => {
@@ -53,6 +131,7 @@ const clearMobileFullscreenDockSlotStyles = (dockSlot: HTMLElement): void => {
   dockSlot.style.width = "";
   dockSlot.style.height = "";
   dockSlot.style.maxWidth = "";
+  dockSlot.style.maxHeight = "";
   dockSlot.style.minWidth = "";
   clearOverlayDockSlotStyles(dockSlot);
 };
@@ -227,6 +306,7 @@ const applyDockStyles = (
 
   shell.removeAttribute("data-persona-dock-mobile-fullscreen");
   clearMobileFullscreenDockSlotStyles(dockSlot);
+  applyDockSlotMaxHeight(dockSlot, dock.maxHeight);
 
   if (dock.reveal === "overlay") {
     shell.style.display = "flex";
@@ -315,6 +395,7 @@ const applyDockStyles = (
     dockSlot.style.minWidth = dock.width;
     dockSlot.style.maxWidth = dock.width;
     dockSlot.style.position = "relative";
+    dockSlot.style.top = "";
     dockSlot.style.overflow = "hidden";
     dockSlot.style.transition = "none";
     dockSlot.style.pointerEvents = expanded ? "auto" : "none";
@@ -348,7 +429,7 @@ const applyDockStyles = (
     dockSlot.style.maxWidth = width;
     dockSlot.style.minWidth = width;
     dockSlot.style.minHeight = "0";
-    dockSlot.style.position = "relative";
+    applyInFlowDockSlotPosition(dockSlot, dock.maxHeight);
     dockSlot.style.overflow =
       isEmerge ? "hidden" : collapsedClosed ? "hidden" : "visible";
     dockSlot.style.transition = dockTransition;
@@ -429,9 +510,22 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
     resizeObserver.observe(shell);
   };
 
+  let heightChainChecked = false;
+
   const layout = (): void => {
     applyDockStyles(shell, pushTrack, contentSlot, dockSlot, host, config, expanded);
     syncPushResizeObserver();
+    // Check the height chain once, the first time the panel is actually shown
+    // in a layout that depends on it (mobile fullscreen is fixed-position and
+    // doesn't — keep checking until a dependent layout comes around).
+    if (
+      expanded &&
+      !heightChainChecked &&
+      shell.dataset.personaDockMobileFullscreen !== "true"
+    ) {
+      heightChainChecked = true;
+      warnIfDockHeightChainUnresolved(shell, resolveDockConfig(config));
+    }
   };
 
   const ownerWindow = shell.ownerDocument.defaultView;

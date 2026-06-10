@@ -166,7 +166,7 @@ Controls the floating launcher button and panel.
 | `iconUrl` | `string?` | URL for the launcher icon image. |
 | `position` | `'bottom-right' \| 'bottom-left' \| 'top-right' \| 'top-left'?` | Screen corner position. |
 | `mountMode` | `'floating' \| 'docked'?` | Mount as the existing floating launcher or wrap the target with a docked side panel. Default: `'floating'`. |
-| `dock` | `{ side?, width?, animate?, reveal? }?` | Dock layout. Defaults: right / `420px` / `animate: true` / `reveal: 'resize'`. `reveal: 'emerge'` = content column animates like resize but the panel stays fixed `dock.width` (clip-in). `reveal: 'overlay'` = transform overlay; `reveal: 'push'` = sliding track. `animate: false` snaps without transition. |
+| `dock` | `{ side?, width?, animate?, reveal?, maxHeight? }?` | Dock layout. Defaults: right / `420px` / `animate: true` / `reveal: 'resize'` / `maxHeight: '100dvh'`. `reveal: 'emerge'` = content column animates like resize but the panel stays fixed `dock.width` (clip-in). `reveal: 'overlay'` = transform overlay; `reveal: 'push'` = sliding track. `animate: false` snaps without transition. `maxHeight` is the viewport guard (see note below the table) — set a CSS length to override the cap or `false` to disable it. |
 | `width` | `string?` | Width of the launcher button. |
 | `fullHeight` | `boolean?` | Fill the full height of the container. Default: `false`. |
 | `sidebarMode` | `boolean?` | Flush sidebar layout with no border-radius or margins. Default: `false`. |
@@ -178,6 +178,8 @@ Controls the floating launcher button and panel.
 | `collapsedMaxWidth` | `string?` | CSS `max-width` for the floating launcher pill when the panel is closed (title/subtitle truncate with ellipsis; full text in `title` tooltip). Does not affect the open panel (`width`). |
 
 In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because the widget fills the dock slot created around the target container.
+
+**Docked height contract.** The docked shell sizes itself with `height: 100%`, so the page must give it a definite height — usually `html, body { height: 100% }` (as in `docked-panel-demo.html`), or a fixed-height app-shell container around the dock target. When no ancestor provides one, the widget falls back to clamping the dock panel to `dock.maxHeight` (default `100dvh`; `resize`/`emerge` are additionally pinned with `position: sticky`, while `push`/`overlay` get the cap only since their transform/absolute contexts defeat sticky) so the chat stays viewport-sized and scrolls internally instead of growing with the conversation, and logs a console warning explaining the fix. Advanced layouts (e.g. a dock inside a deliberately taller scroll container) can override the cap with a CSS length or disable the guard entirely with `dock.maxHeight: false`.
 
 ### Layout
 

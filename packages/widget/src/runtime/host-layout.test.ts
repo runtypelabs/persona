@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createWidgetHostLayout } from "./host-layout";
 
@@ -194,6 +194,161 @@ describe("createWidgetHostLayout docked", () => {
     layout.destroy();
   });
 
+  it("clamps the dock slot to the viewport guard and pins resize/emerge sticky", () => {
+    for (const reveal of ["resize", "emerge"] as const) {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: false,
+          dock: { width: "320px", reveal },
+        },
+      });
+
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      expect(dockSlot?.style.maxHeight, reveal).not.toBe("");
+      expect(dockSlot?.style.position, reveal).toBe("sticky");
+      expect(dockSlot?.style.top, reveal).toBe("0px");
+
+      layout.destroy();
+      document.body.innerHTML = "";
+    }
+  });
+
+  it("clamps push and overlay dock slots without sticky (transform/absolute contexts)", () => {
+    // push: the slot lives inside the translated track, where a transformed
+    // ancestor defeats sticky — cap only. overlay: keeps absolute positioning.
+    const cases = [
+      { reveal: "push" as const, position: "relative" },
+      { reveal: "overlay" as const, position: "absolute" },
+    ];
+    for (const { reveal, position } of cases) {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: false,
+          dock: { width: "320px", reveal },
+        },
+      });
+
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      expect(dockSlot?.style.maxHeight, reveal).not.toBe("");
+      expect(dockSlot?.style.position, reveal).toBe(position);
+
+      layout.destroy();
+      document.body.innerHTML = "";
+    }
+  });
+
+  it("honors a custom dock.maxHeight and the false opt-out", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const target = document.createElement("div");
+    parent.appendChild(target);
+
+    const dockConfig = {
+      mountMode: "docked" as const,
+      autoExpand: false,
+      dock: { width: "320px", maxHeight: "600px" },
+    };
+    const layout = createWidgetHostLayout(target, { launcher: dockConfig });
+
+    const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+    expect(dockSlot?.style.maxHeight).toBe("600px");
+
+    layout.updateConfig({
+      launcher: { ...dockConfig, dock: { width: "320px", maxHeight: false } },
+    });
+    expect(dockSlot?.style.maxHeight).toBe("");
+    expect(dockSlot?.style.position).toBe("relative");
+    expect(dockSlot?.style.top).toBe("");
+
+    layout.destroy();
+  });
+
+  describe("height-chain warning", () => {
+    const withOffsetHeight = (impl: (el: HTMLElement) => number, fn: () => void): void => {
+      const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+      Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+        configurable: true,
+        get(this: HTMLElement) {
+          return impl(this);
+        },
+      });
+      try {
+        fn();
+      } finally {
+        if (original) {
+          Object.defineProperty(HTMLElement.prototype, "offsetHeight", original);
+        }
+      }
+    };
+
+    const mountDocked = () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+      return createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: true,
+          dock: { width: "320px" },
+        },
+      });
+    };
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("warns once when a percentage height does not resolve against the shell's parent", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      // Fixed-height probe measures (environment works); 100% probe collapses
+      // to 0 (no ancestor provides a definite height).
+      withOffsetHeight((el) => (el.style.height === "1px" ? 1 : 0), () => {
+        const layout = mountDocked();
+        layout.syncWidgetState({ open: false, launcherEnabled: true });
+        layout.syncWidgetState({ open: true, launcherEnabled: true });
+        layout.destroy();
+      });
+      const heightWarnings = warn.mock.calls.filter((c) =>
+        String(c[0]).includes("definite height")
+      );
+      expect(heightWarnings).toHaveLength(1);
+      expect(String(heightWarnings[0][0])).toContain("100dvh");
+    });
+
+    it("does not warn when the height chain resolves", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      withOffsetHeight(() => 1, () => {
+        const layout = mountDocked();
+        layout.destroy();
+      });
+      expect(
+        warn.mock.calls.filter((c) => String(c[0]).includes("definite height"))
+      ).toHaveLength(0);
+    });
+
+    it("does not warn when the environment cannot measure layout (jsdom default)", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const layout = mountDocked();
+      layout.destroy();
+      expect(
+        warn.mock.calls.filter((c) => String(c[0]).includes("definite height"))
+      ).toHaveLength(0);
+    });
+  });
+
   const withInnerWidth = (width: number, fn: () => void): void => {
     const prev = window.innerWidth;
     try {
@@ -277,7 +432,7 @@ describe("createWidgetHostLayout docked", () => {
 
       const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
       layout.syncWidgetState({ open: true, launcherEnabled: true });
-      expect(dockSlot?.style.position).toBe("relative");
+      expect(dockSlot?.style.position).toBe("sticky");
       expect(layout.shell?.dataset.personaDockMobileFullscreen).toBeUndefined();
 
       layout.destroy();
@@ -325,7 +480,7 @@ describe("createWidgetHostLayout docked", () => {
 
       const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
       layout.syncWidgetState({ open: false, launcherEnabled: true });
-      expect(dockSlot?.style.position).toBe("relative");
+      expect(dockSlot?.style.position).toBe("sticky");
 
       layout.destroy();
     });

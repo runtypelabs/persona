@@ -16,7 +16,7 @@ import type { OnChangeCallback, ControlResult } from './types';
 import * as state from './state';
 import { mountThemeEditorMcp } from './webmcp/register';
 import { createScreenshotPreviewTool } from './webmcp/screenshot-tool';
-import { initThemeCopilot } from './copilot';
+import { initThemeCopilot, isThemeCopilotEnabled } from './copilot';
 import { initSearchUI, pruneSearchIndex, registerCatalogSections, resetSearchIndex } from './search';
 import * as styleTab from './sections/appearance';
 import type { DrilldownView } from './sections/appearance';
@@ -231,8 +231,14 @@ function init(): void {
 
   // Mount the docked Theme Copilot — the live agent that drives the tools
   // above — only after registration completes, so its first dispatch always
-  // carries the full clientTools list.
-  void mcp.ready.then(() => initThemeCopilot());
+  // carries the full clientTools list. The copilot is opt-in (?copilot=on);
+  // when disabled, init runs synchronously so the toolbar toggle is removed
+  // before first paint instead of flashing until mcp.ready resolves.
+  if (isThemeCopilotEnabled()) {
+    void mcp.ready.then(() => initThemeCopilot());
+  } else {
+    initThemeCopilot();
+  }
 }
 
 // ─── Tabs ────────────────────────────────────────────────────────
