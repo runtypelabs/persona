@@ -363,15 +363,17 @@ if (modelContext) {
       },
       required: ["section"],
     },
-    annotations: { readOnlyHint: true },
+    // Mutates UI state (active nav item), so no readOnlyHint — but it stays in
+    // READ_ONLY_TOOLS above: pure navigation auto-approves at the gate.
+    annotations: { readOnlyHint: false },
     execute(args) {
       const requested = String(args.section ?? "").trim().toLowerCase();
       const items = navItems();
       const target = items.find((el) => sectionName(el).toLowerCase() === requested);
       if (!target) {
-        return {
-          error: `Unknown section "${args.section}". Available: ${items.map(sectionName).join(", ")}.`,
-        };
+        throw new Error(
+          `Unknown section "${args.section}". Available: ${items.map(sectionName).join(", ")}.`,
+        );
       }
       items.forEach((el) => {
         el.classList.toggle("is-active", el === target);
@@ -401,7 +403,7 @@ if (modelContext) {
     execute(args) {
       if (args.side !== undefined) {
         if (args.side !== "left" && args.side !== "right") {
-          return { error: `Invalid side "${args.side}" — use "left" or "right".` };
+          throw new Error(`Invalid side "${args.side}" — use "left" or "right".`);
         }
         sideSelect.value = args.side;
       }
@@ -409,14 +411,14 @@ if (modelContext) {
         const raw = String(args.width).trim();
         const width = /^\d+(\.\d+)?$/.test(raw) ? `${raw}px` : raw;
         if (!/^\d+(\.\d+)?(px|rem|em|vw|%)$/.test(width)) {
-          return { error: `Invalid width "${args.width}" — use a CSS length like "360px".` };
+          throw new Error(`Invalid width "${args.width}" — use a CSS length like "360px".`);
         }
         widthInput.value = width;
       }
       if (args.reveal !== undefined) {
         const reveal = String(args.reveal);
         if (!["resize", "emerge", "overlay", "push"].includes(reveal)) {
-          return { error: `Invalid reveal "${args.reveal}" — use resize, emerge, overlay, or push.` };
+          throw new Error(`Invalid reveal "${args.reveal}" — use resize, emerge, overlay, or push.`);
         }
         revealSelect.value = reveal;
       }
@@ -444,7 +446,7 @@ if (modelContext) {
     },
     execute(args) {
       const feed = document.querySelector(".workspace-feed");
-      if (!feed) return { error: "Activity feed not found on the page." };
+      if (!feed) throw new Error("Activity feed not found on the page.");
 
       // Built with textContent — agent-supplied strings never touch innerHTML.
       const item = document.createElement("div");

@@ -58,7 +58,7 @@ Treat the tool list you currently see as authoritative. Never invent slide ids, 
 
 - The canvas is 960 wide x 540 tall, origin at the top-left. Keep ~40px margins; slide titles sit around y 40-60 at fontSize 36-48.
 - Prefer theme tokens over literal colors and fonts: 'theme.text', 'theme.accent', 'theme.background', 'theme.surface', 'theme.accentText' for colors, 'theme.heading' / 'theme.body' for fonts. Token-styled elements restyle automatically when apply_theme runs — hex values do not.
-- Build slides with add_slide layouts first, then refine with update_element patches (one patch can move, resize, and restyle at once). Use align_elements / distribute_elements for clean composition instead of eyeballing coordinates.
+- Build slides with add_slide layouts first, then refine with update_element patches (one patch can move, resize, and restyle at once). Use align_elements (alignment and/or distribute) for clean composition instead of eyeballing coordinates.
 
 ## Style passes ("make it pop", "more modern", "punch it up")
 

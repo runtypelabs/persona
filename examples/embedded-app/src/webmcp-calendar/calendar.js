@@ -32,11 +32,8 @@ const EVENT_COLORS = {
 };
 
 const READ_ONLY_TOOL_NAMES = new Set([
-  'get_page_title',
   'get_calendar_state',
   'get_events',
-  'get_users',
-  'get_event_colors',
   'find_availability',
 ]);
 
@@ -134,7 +131,7 @@ const requireUser = (id) => {
   const user = USERS.find((candidate) => candidate.id === id);
   if (!user) {
     throw new Error(
-      `Unknown userId "${id}". Valid user IDs: ${USERS.map((candidate) => candidate.id).join(', ')} — call get_users.`,
+      `Unknown userId "${id}". Valid user IDs: ${USERS.map((candidate) => candidate.id).join(', ')} — call get_calendar_state.`,
     );
   }
   return user;
@@ -263,6 +260,9 @@ const getCalendarState = () => {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     eventCount: state.events.length,
     visibleEvents: weekEvents,
+    // The full (static) user roster rides along so the agent never needs a
+    // separate lookup tool to learn valid userIds for create/update.
+    users: USERS.map(({ id, name, role }) => ({ id, name, role })),
   };
 };
 
@@ -408,24 +408,10 @@ const registerCalendarTools = () => {
   registerTool(
     modelContext,
     {
-      name: 'get_page_title',
-      title: 'Get page title',
-      description: 'Get the current page title for this calendar example.',
-      inputSchema: { type: 'object', properties: {} },
-      async execute() {
-        return toolResult({ title: document.title }, document.title);
-      },
-    },
-    controller.signal,
-  );
-
-  registerTool(
-    modelContext,
-    {
       name: 'get_calendar_state',
       title: 'Read calendar state',
       description:
-        'Read the current calendar state: current local date-time, selected date, visible week, timezone, total event count, and visible events. Call this before creating or editing events. All event times are local wall-clock times in the calendar timezone.',
+        'Read the current calendar state: current local date-time, selected date, visible week, timezone, total event count, visible events, and the valid users (with the userIds create_event accepts). Call this before creating or editing events. All event times are local wall-clock times in the calendar timezone.',
       inputSchema: { type: 'object', properties: {} },
       annotations: { readOnlyHint: true },
       async execute() {
@@ -454,41 +440,6 @@ const registerCalendarTools = () => {
       async execute(args) {
         const events = filterEvents(args).map(publicEvent);
         return toolResult({ count: events.length, events }, `Found ${events.length} event${events.length === 1 ? '' : 's'}.`);
-      },
-    },
-    controller.signal,
-  );
-
-  registerTool(
-    modelContext,
-    {
-      name: 'get_users',
-      title: 'List calendar users',
-      description:
-        'Return valid calendar users/owners. Use one of these user IDs when creating an event.',
-      inputSchema: { type: 'object', properties: {} },
-      annotations: { readOnlyHint: true },
-      async execute() {
-        const text = USERS.map((user) => `${user.name} (${user.role}) — ID: ${user.id}`).join('\n');
-        return toolResult({ users: USERS }, text);
-      },
-    },
-    controller.signal,
-  );
-
-  registerTool(
-    modelContext,
-    {
-      name: 'get_event_colors',
-      title: 'List event colors',
-      description: 'Return the allowed event color names and their hex values.',
-      inputSchema: { type: 'object', properties: {} },
-      annotations: { readOnlyHint: true },
-      async execute() {
-        return toolResult(
-          { colors: Object.entries(EVENT_COLORS).map(([name, hex]) => ({ name, hex })) },
-          `Allowed colors: ${Object.keys(EVENT_COLORS).join(', ')}.`,
-        );
       },
     },
     controller.signal,
@@ -550,7 +501,7 @@ const registerCalendarTools = () => {
       name: 'create_event',
       title: 'Create event',
       description:
-        'Create a calendar event and render it on the page. startDate/endDate are LOCAL wall-clock times in the calendar timezone, formatted YYYY-MM-DDTHH:mm — never append "Z" or a UTC offset (any offset is ignored and the stated clock time is used as-is). Use a userId from get_users and a color from get_event_colors.',
+        'Create a calendar event and render it on the page. startDate/endDate are LOCAL wall-clock times in the calendar timezone, formatted YYYY-MM-DDTHH:mm — never append "Z" or a UTC offset (any offset is ignored and the stated clock time is used as-is). Use a userId from get_calendar_state.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -558,8 +509,8 @@ const registerCalendarTools = () => {
           description: { type: 'string', description: 'Optional event notes.' },
           startDate: { type: 'string', description: 'Event start as local wall-clock time, e.g. 2026-06-11T08:00. No "Z" or UTC offset.' },
           endDate: { type: 'string', description: 'Event end as local wall-clock time, e.g. 2026-06-11T09:00. No "Z" or UTC offset.' },
-          userId: { type: 'string', description: 'Owner/attendee user ID from get_users.' },
-          color: { type: 'string', description: 'Color name from get_event_colors.' },
+          userId: { type: 'string', description: 'Owner/attendee user ID from get_calendar_state.' },
+          color: { type: 'string', enum: Object.keys(EVENT_COLORS), description: 'Event color.' },
           location: { type: 'string', description: 'Optional location or video link.' },
         },
         required: ['title', 'startDate', 'endDate'],
@@ -588,8 +539,8 @@ const registerCalendarTools = () => {
           description: { type: 'string' },
           startDate: { type: 'string', description: 'Local wall-clock time, e.g. 2026-06-11T08:00. No "Z" or UTC offset.' },
           endDate: { type: 'string', description: 'Local wall-clock time, e.g. 2026-06-11T09:00. No "Z" or UTC offset.' },
-          userId: { type: 'string' },
-          color: { type: 'string' },
+          userId: { type: 'string', description: 'Owner/attendee user ID from get_calendar_state.' },
+          color: { type: 'string', enum: Object.keys(EVENT_COLORS) },
           location: { type: 'string' },
         },
         required: ['eventId'],
@@ -623,7 +574,7 @@ const registerCalendarTools = () => {
     controller.signal,
   );
 
-  setToolStatus('10 WebMCP tools registered for Chrome DevTools MCP and Persona.', 'ready');
+  setToolStatus('7 WebMCP tools registered for Chrome DevTools MCP and Persona.', 'ready');
 };
 
 const setToolStatus = (message, tone = 'ready') => {
