@@ -379,6 +379,69 @@ describe("WebMcpBridge.executeToolCall", () => {
     expect(r.isError).toBeUndefined();
   });
 
+  it("parses JSON-string nested object args when the tool schema expects an object", async () => {
+    const execute = vi.fn(() => ({ ok: true }));
+    const onConfirm = vi.fn(async () => true);
+    registry.tools = [
+      fakeTool({
+        name: "update_element",
+        inputSchema: {
+          type: "object",
+          properties: {
+            elementId: { type: "string" },
+            patch: {
+              type: "object",
+              properties: { y: { type: "number" } },
+            },
+          },
+        },
+        execute,
+      }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm });
+    const r = await bridge.executeToolCall("webmcp:update_element", {
+      elementId: "el-1",
+      patch: "{\"y\":460}",
+    });
+
+    expect(r.isError).toBeUndefined();
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: { elementId: "el-1", patch: { y: 460 } },
+      }),
+    );
+    expect(execute).toHaveBeenCalledWith(
+      { elementId: "el-1", patch: { y: 460 } },
+      expect.anything(),
+    );
+  });
+
+  it("does not parse JSON-looking strings when the tool schema expects a string", async () => {
+    const execute = vi.fn(() => ({ ok: true }));
+    registry.tools = [
+      fakeTool({
+        name: "set_text",
+        inputSchema: {
+          type: "object",
+          properties: {
+            text: { type: "string" },
+          },
+        },
+        execute,
+      }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:set_text", {
+      text: "{\"literal\":true}",
+    });
+
+    expect(r.isError).toBeUndefined();
+    expect(execute).toHaveBeenCalledWith(
+      { text: "{\"literal\":true}" },
+      expect.anything(),
+    );
+  });
+
   it("returns isError when the tool is not in the registry (unmount race)", async () => {
     registry.tools = [fakeTool({ name: "search" })];
     const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });

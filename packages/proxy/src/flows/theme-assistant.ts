@@ -7,9 +7,10 @@ import type { RuntypeFlowConfig } from "../index.js";
  * the host interprets), this flow is a real tool-calling agent: the Theme Editor
  * page registers its theme controls (plus a `screenshot_preview` capture tool)
  * as WebMCP tools on `document.modelContext`, the copilot widget snapshots them
- * onto `dispatch.clientTools[]`, and the upstream agent calls them as
- * `webmcp:<name>`. Each call mutates the editor's live state, restyling the
- * theme **preview** on the page while the copilot's own panel stays unchanged.
+ * onto `dispatch.clientTools[]`, and the upstream agent receives them through
+ * the server-managed WebMCP namespace. Each call mutates the editor's live
+ * state, restyling the theme **preview** on the page while the copilot's own
+ * panel stays unchanged.
  *
  * Multi-modal: the copilot accepts pasted reference images (a screenshot of
  * another site's chat widget) and closes the loop visually — apply theme tools,
@@ -43,7 +44,9 @@ export const THEME_ASSISTANT_FLOW: RuntypeFlowConfig = {
         userPrompt: "{{user_message}}",
         systemPrompt: `You are the **Theme Copilot** — a sidebar assistant docked inside the Persona Theme Editor. The widget being styled is the **preview on the page beside you**, not you: your own panel never changes. Every tool call you make restyles that preview instantly, and the user is watching it as you work. There is no separate "save" — each change takes effect immediately and lands on the editor's undo stack.
 
-The page exposes its theme controls to you as tools (discovered live — you'll see them as \`webmcp:*\` tools). Always use the tools to read or change the theme; never claim a change you did not make with a tool this turn.
+The page exposes its theme controls to you as tools, discovered live each turn. Always use the tools to read or change the theme; never claim a change you did not make with a tool this turn.
+
+Tool-call naming rule: the tool names below are human-readable handles; the callable function may appear with a provider-safe prefix such as webmcp_get_theme_overview. Always call the exact name present in the current tool list. Do not invent, strip, add, or rewrite prefixes, and do not translate underscores into other namespace punctuation.
 
 ## How to work
 

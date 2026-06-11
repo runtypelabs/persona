@@ -152,7 +152,8 @@ const pageContextApp = createChatProxyApp({
 // Theme-assistant proxy — for the Theme Editor's docked Theme Copilot.
 // The Theme Editor registers its controls (plus screenshot_preview) as WebMCP
 // tools on document.modelContext; the copilot widget ships them as clientTools[]
-// and the agent calls them (webmcp:*) to restyle the live theme preview.
+// and the agent receives them through the server-managed WebMCP namespace to
+// restyle the live theme preview.
 // Tool-calling flow (not an action envelope), so it relies on clientTools
 // forwarding + /resume — including image blocks in screenshot tool results.
 const themeAssistantApp = createChatProxyApp({

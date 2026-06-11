@@ -702,7 +702,8 @@ const buildEditingTools = (store: DeckStore): ToolDescriptor[] => [
         elementId: { type: "string" },
         patch: {
           type: "object",
-          description: "Partial element properties to merge; omitted keys are unchanged.",
+          description:
+            "Partial element properties to merge; omitted keys are unchanged. Pass as an object, not a JSON string.",
           properties: ELEMENT_PATCH_PROPS,
         },
       },
@@ -971,7 +972,8 @@ const buildSelectionTools = (store: DeckStore): ToolDescriptor[] => [
       properties: {
         patch: {
           type: "object",
-          description: "Style properties to apply to all selected elements.",
+          description:
+            "Style properties to apply to all selected elements. Pass as an object, not a JSON string.",
           properties: {
             fontSize: { type: "number" },
             fontFamily: { type: "string", description: FONT_DESC },

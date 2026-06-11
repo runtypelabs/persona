@@ -46,7 +46,9 @@ The editor exposes its own tools to you, and the set is dynamic:
 - While the user has 2 or more elements selected, extra selection tools appear (style_selection, align_selection) that act on the live selection without needing ids.
 - When the show starts (enter_presenter_mode), your editing tools are REPLACED by presentation controls (next_slide, prev_slide, jump_to_slide, exit_presenter_mode) until the show ends.
 
-Treat the tool list you currently see as authoritative. Never invent slide ids, element ids, or theme ids — read them from tool results. You can only affect the deck through tools — never claim an edit you did not make with a tool this turn.
+Treat the tool list you currently see as authoritative. The tool names mentioned below (for example, get_slide or update_element) are human-readable handles; the callable function name may be a provider-safe variant such as webmcp_get_slide or webmcp_update_element. Always call the exact name present in the current tool list. Do not invent, strip, add, or rewrite prefixes, and do not translate underscores into other namespace punctuation.
+
+Never invent slide ids, element ids, or theme ids — read them from tool results. You can only affect the deck through tools — never claim an edit you did not make with a tool this turn.
 
 ## Read before you write
 
@@ -58,7 +60,7 @@ Treat the tool list you currently see as authoritative. Never invent slide ids, 
 
 - The canvas is 960 wide x 540 tall, origin at the top-left. Keep ~40px margins; slide titles sit around y 40-60 at fontSize 36-48.
 - Prefer theme tokens over literal colors and fonts: 'theme.text', 'theme.accent', 'theme.background', 'theme.surface', 'theme.accentText' for colors, 'theme.heading' / 'theme.body' for fonts. Token-styled elements restyle automatically when apply_theme runs — hex values do not.
-- Build slides with add_slide layouts first, then refine with update_element patches (one patch can move, resize, and restyle at once). Use align_elements (alignment and/or distribute) for clean composition instead of eyeballing coordinates.
+- Build slides with add_slide layouts first, then refine with update_element patches (one patch can move, resize, and restyle at once). For update_element and style_selection, pass patch as an object like {"y": 460}, never as a quoted JSON string. Use align_elements (alignment and/or distribute) for clean composition instead of eyeballing coordinates.
 
 ## Style passes ("make it pop", "more modern", "punch it up")
 

@@ -384,6 +384,11 @@ export class WebMcpBridge {
       );
     }
 
+    const argsForExecute = normalizeArgsForSchema(
+      args,
+      parseSchema(info.inputSchema),
+    );
+
     // Bail before the confirm renders — a late approval after cancel() would
     // otherwise fire a host-page side effect with no matching /resume.
     if (signal?.aborted) {
@@ -395,7 +400,7 @@ export class WebMcpBridge {
     const displayTitle = getWebMcpToolDisplayTitle(bareName);
     const gateInfo: WebMcpConfirmInfo = {
       toolName: bareName,
-      args,
+      args: argsForExecute,
       description: info.description,
       ...(displayTitle ? { title: displayTitle } : {}),
       reason: "gate",
@@ -429,7 +434,7 @@ export class WebMcpBridge {
     }
 
     try {
-      const raw = await mc.executeTool(info, safeStringifyArgs(args), {
+      const raw = await mc.executeTool(info, safeStringifyArgs(argsForExecute), {
         signal: controller.signal,
       });
       return normalizeSerializedResult(raw);
@@ -599,6 +604,109 @@ const parseSchema = (raw: string | undefined): object | undefined => {
   } catch {
     return undefined;
   }
+};
+
+type JsonSchemaLike = Record<string, unknown>;
+
+const asJsonObject = (value: unknown): JsonSchemaLike | undefined =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonSchemaLike)
+    : undefined;
+
+const schemaAcceptsType = (
+  schema: JsonSchemaLike,
+  expected: "object" | "array",
+): boolean => {
+  const type = schema.type;
+  if (type === expected) return true;
+  if (Array.isArray(type) && type.includes(expected)) return true;
+  if (expected === "object" && asJsonObject(schema.properties)) return true;
+  if (expected === "array" && schema.items !== undefined) return true;
+
+  for (const key of ["anyOf", "oneOf", "allOf"] as const) {
+    const branches = schema[key];
+    if (
+      Array.isArray(branches) &&
+      branches.some((branch) => {
+        const branchSchema = asJsonObject(branch);
+        return branchSchema ? schemaAcceptsType(branchSchema, expected) : false;
+      })
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const tryParseJsonContainer = (
+  value: string,
+  schema: JsonSchemaLike,
+): unknown => {
+  const expectsObject = schemaAcceptsType(schema, "object");
+  const expectsArray = schemaAcceptsType(schema, "array");
+  if (!expectsObject && !expectsArray) return value;
+
+  try {
+    const parsed = JSON.parse(value);
+    if (expectsObject && asJsonObject(parsed)) return parsed;
+    if (expectsArray && Array.isArray(parsed)) return parsed;
+  } catch {
+    // Leave the original string in place so the page registry's schema
+    // validator returns the same actionable error it would have before.
+  }
+  return value;
+};
+
+/**
+ * Some models stringify nested JSON objects even when the advertised WebMCP
+ * schema expects an object (for example `{ patch: "{\"y\":460}" }`). The
+ * WebMCP polyfill validates before invoking the page tool, so normalize those
+ * obvious JSON-string containers before sending args to `executeTool`. Only
+ * properties whose schema expects an object/array are parsed; ordinary string
+ * fields are preserved verbatim.
+ */
+const normalizeArgsForSchema = (value: unknown, schema: unknown): unknown => {
+  const schemaObj = asJsonObject(schema);
+  if (!schemaObj) return value;
+
+  const current =
+    typeof value === "string" ? tryParseJsonContainer(value, schemaObj) : value;
+
+  if (Array.isArray(current)) {
+    const itemSchema = asJsonObject(schemaObj.items);
+    if (!itemSchema) return current;
+
+    let next: unknown[] | null = null;
+    current.forEach((item, index) => {
+      const normalized = normalizeArgsForSchema(item, itemSchema);
+      if (normalized !== item) {
+        next ??= [...current];
+        next[index] = normalized;
+      }
+    });
+    return next ?? current;
+  }
+
+  const record = asJsonObject(current);
+  if (!record) return current;
+
+  const properties = asJsonObject(schemaObj.properties);
+  const additionalProperties = asJsonObject(schemaObj.additionalProperties);
+  let next: JsonSchemaLike | null = null;
+
+  for (const [key, item] of Object.entries(record)) {
+    const propSchema = asJsonObject(properties?.[key]) ?? additionalProperties;
+    if (!propSchema) continue;
+
+    const normalized = normalizeArgsForSchema(item, propSchema);
+    if (normalized !== item) {
+      next ??= { ...record };
+      next[key] = normalized;
+    }
+  }
+
+  return next ?? current;
 };
 
 /**
