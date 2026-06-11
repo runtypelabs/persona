@@ -121,9 +121,9 @@ The action middleware example demonstrates:
 ### WebMCP Demo
 - **WebMCP page**: `http://localhost:5173/webmcp-demo.html`
   - Demonstrates the widget consuming **page-provided tools** via WebMCP (`document.modelContext`)
-  - The page registers `search_products` and `add_to_cart` on the polyfilled `document.modelContext` (`@mcp-b/webmcp-polyfill`); the widget snapshots them per turn and sends them to the agent as `clientTools[]`
-  - When the agent calls one, the widget executes it on the page (behind an `onConfirm` gate) and resumes the turn with the result
-  - The catalog (`webmcp-catalog.ts`) and the on-page **Cart** panel are the visible side effects: `search_products` filters the static catalog; `add_to_cart` updates the cart
+  - The page registers five storefront tools (`search_products`, `view_product`, `add_to_cart`, `remove_from_cart`, `apply_promo`) on the polyfilled `document.modelContext` (`@mcp-b/webmcp-polyfill`); the widget snapshots them per turn and sends them to the agent as `clientTools[]`
+  - When the agent calls one, the widget executes it on the page (behind an `onConfirm` gate for writes) and resumes the turn with the result
+  - The catalog (`webmcp-catalog.ts`), selected-product state, and on-page **Cart** panel are the visible side effects: `search_products` filters the static catalog, `view_product` focuses details, and cart/promo tools update the cart
 
 #### What the starter pills show
 
@@ -139,7 +139,7 @@ The action middleware example demonstrates:
 ### WebMCP Calendar Copilot
 - **Calendar page**: `http://localhost:5173/webmcp-calendar.html` (proxy mode — agent defined in code as `WEBMCP_CALENDAR_FLOW`, mounted at `/api/chat/dispatch-calendar`)
   - A hybrid "AI-native dashboard": a calendar with a manual **Quick Add** form *and* a conversational prompt bar; both drive the same state the WebMCP tools expose
-  - `src/webmcp-calendar/calendar.js` registers **ten tools** on `document.modelContext` via `@mcp-b/global` (create/update/delete events, availability search, state reads) — callable by the embedded Persona widget *and* by [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp/) against the same page
+  - `src/webmcp-calendar/calendar.js` registers **seven tools** on `document.modelContext` via `@mcp-b/global` (calendar/event reads, availability search, date selection, create/update/delete events) — callable by the embedded Persona widget *and* by [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp/) against the same page. Static lookup data such as users and event colors is intentionally baked into schemas/context instead of exposed as lookup-only tools.
   - Submitting the prompt bar slides Persona out as a **full-height docked copilot** and collapses the manual input surfaces; closing restores them. Append `?mode=pill` to mount the native composer-bar pill instead
   - Read-only tools auto-approve (`webmcp.autoApprove`); mutating tools show approval bubbles with friendly copy via tool `title`s + `approval.formatDescription`
   - Tool inputs/outputs use **local wall-clock times** (no UTC offsets) so "8am" lands at 8am on the visible calendar
@@ -147,19 +147,19 @@ The action middleware example demonstrates:
 
 #### Wiring — same pattern as the other demos
 
-Like the bakery and storefront demos, this demo runs entirely through the **local proxy** — there is no client token and no hosted Runtype agent. The agent that drives the storefront is defined **in code** as `WEBMCP_STOREFRONT_FLOW` (`packages/proxy/src/flows/webmcp-storefront.ts`) and mounted at `/api/chat/dispatch-webmcp` by the proxy server (`examples/vercel-edge/src/server.ts`). `webmcp-demo.ts` simply points its `apiUrl` at that path.
+Like the bakery and storefront demos, the WebMCP demos run entirely through the **local proxy** — there is no client token and no hosted Runtype agent. Each agent is defined **in code** (`WEBMCP_STOREFRONT_FLOW`, `WEBMCP_CALENDAR_FLOW`, `WEBMCP_SLIDES_FLOW`) and mounted by the proxy server (`examples/vercel-edge/src/server.ts`) at its matching route (`/api/chat/dispatch-webmcp`, `/api/chat/dispatch-calendar`, `/api/chat/dispatch-slides`). The page code simply points `apiUrl` at that route.
 
 How the page tools reach the agent: the page registers its tools on `document.modelContext`; the widget snapshots them every turn and sends them on the dispatch payload as `clientTools[]`; the proxy forwards `clientTools[]` upstream, where the Runtype runtime threads them into the flow's prompt step. When the model calls one, the widget executes it on the page and posts the result back via `/resume`. The agent definition, system prompt, and model (`claude-sonnet-4-6`, chosen because WebMCP needs reliable **native** tool calls) all live in the repo.
 
-`pnpm dev` starts this proxy automatically (port 43111). The page log at the top of the demo prints the resolved backend, e.g. `mode: proxy → http://localhost:43111/api/chat/dispatch-webmcp`.
+`pnpm dev` starts this proxy automatically (port 43111). The page log at the top of each WebMCP demo prints the resolved backend, e.g. `mode: proxy → http://localhost:43111/api/chat/dispatch-webmcp`.
 
-To run against your own Runtype flow instead of the in-code definition, set `FLOW_ID_WEBMCP` on the proxy (`examples/vercel-edge/src/server.ts`) — same override the other demos support.
+To run against your own Runtype flow instead of the in-code definitions, set the matching `FLOW_ID_*` override on the proxy (`FLOW_ID_WEBMCP`, `FLOW_ID_CALENDAR`, or `FLOW_ID_SLIDES` in `examples/vercel-edge/src/server.ts`).
 
 > **Note on parallel local tool calls.** "Add SHOE-001 and SHOE-007 at the same time" makes the model emit *parallel* local tool calls in one turn, which depends on **runtypelabs/core#3878** / **#3870** being deployed upstream; single-tool turns work regardless.
 
 ### WebMCP Slide-Deck Editor (Deck Copilot)
 - **Slides page**: `http://localhost:5173/webmcp-slides.html` (proxy mode — agent defined in code as `WEBMCP_SLIDES_FLOW`, mounted at `/api/chat/dispatch-slides`)
-  - A Keynote-lite editor (960×540 canvas, slide sorter, themes, presenter mode) where the human and the Persona agent **co-edit the same live canvas** — the richest WebMCP surface in the repo (~20 tools vs. the calendar's ten)
+  - A Keynote-lite editor (960×540 canvas, slide sorter, themes, presenter mode) where the human and the Persona agent **co-edit the same live canvas** — the richest WebMCP surface in the repo (roughly twenty tools vs. the calendar's seven)
   - `src/webmcp-slides/tools.ts` registers the tools on `document.modelContext`, and the tool set is **dynamic** — the demo's headline trick:
     - `style_selection` / `align_selection` exist only while the user has **2+ elements selected** (AbortController re-registration, debounced)
     - `enter_presenter_mode` **replaces the entire editing set** with show controls (`next_slide`, `prev_slide`, `jump_to_slide`, `exit_presenter_mode`) until the show ends

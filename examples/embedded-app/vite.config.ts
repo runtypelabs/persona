@@ -233,9 +233,11 @@ function serveWidgetDist(): Plugin {
 
 function llmsTxt(): Plugin {
   const llmsTxtPath = path.resolve(__dirname, "llms.txt");
-  const widgetDir = path.resolve(__dirname, "../../packages/widget");
+  const repoDir = path.resolve(__dirname, "../..");
+  const widgetDir = path.resolve(repoDir, "packages/widget");
   // Order matters: README first (overview), then the split reference docs,
-  // then the theme/token reference. Keep in sync with packages/widget/docs/.
+  // then examples/integration guides, then the theme/token reference.
+  // Keep in sync with packages/widget/docs/ and docs/.
   const widgetDocPaths = [
     "README.md",
     "docs/PROGRAMMATIC-CONTROL.md",
@@ -243,8 +245,17 @@ function llmsTxt(): Plugin {
     "docs/INSTALLATION-FRAMEWORKS.md",
     "docs/CONFIGURATION-REFERENCE.md",
     "docs/STREAM-PARSERS.md",
+    "docs/MESSAGE-INJECTION.md",
+    "docs/DYNAMIC-FORMS.md",
+    "docs/CODE-GENERATOR.md",
     "THEME-CONFIG.md",
   ].map((p) => path.resolve(widgetDir, p));
+  const integrationDocPaths = [
+    "docs/webmcp-without-runtype.md",
+  ].map((p) => path.resolve(repoDir, p));
+  const proxyDocPaths = [
+    "packages/proxy/README.md",
+  ].map((p) => path.resolve(repoDir, p));
 
   function buildLlmsTxt(): string {
     return fs.readFileSync(llmsTxtPath, "utf-8");
@@ -253,6 +264,8 @@ function llmsTxt(): Plugin {
   function buildLlmsFullTxt(): string {
     const overview = fs.readFileSync(llmsTxtPath, "utf-8");
     const widgetDocs = widgetDocPaths.map((p) => fs.readFileSync(p, "utf-8"));
+    const integrationDocs = integrationDocPaths.map((p) => fs.readFileSync(p, "utf-8"));
+    const proxyDocs = proxyDocPaths.map((p) => fs.readFileSync(p, "utf-8"));
     return [
       overview.replace(
         /^(> Full reference .*)$/m,
@@ -263,9 +276,21 @@ function llmsTxt(): Plugin {
       "",
       "# Widget Configuration Reference",
       "",
-      "The sections below are the complete widget documentation (initialization, programmatic control, UI components, config tables, parsers, proxy setup, framework guides) and the theme/token reference.",
+      "The sections below are the complete widget documentation (initialization, programmatic control, UI components, config tables, parsers, message injection, dynamic forms, code generation, proxy setup, framework guides), integration guides, and the theme/token reference.",
       "",
       widgetDocs.join("\n\n---\n\n"),
+      "",
+      "---",
+      "",
+      "# Integration Guides",
+      "",
+      integrationDocs.join("\n\n---\n\n"),
+      "",
+      "---",
+      "",
+      "# Proxy Documentation",
+      "",
+      proxyDocs.join("\n\n---\n\n"),
     ].join("\n");
   }
 

@@ -386,9 +386,7 @@ initAgentWidget({
 });
 ```
 
-`contextProviders` are honored on the **agent** send path (`buildAgentPayload` merges each
-provider's result into `payload.context` on every request). If you drive the legacy
-flow/`buildPayload` path, call `collectSmartDomContext()` yourself and inject the result.
+`contextProviders` are honored on both send paths: agent mode and flow/proxy dispatch mode merge each provider's result into `payload.context` on every request. `requestMiddleware` then receives that payload, so you can transform or template the collected context before it leaves the browser.
 
 You can also use the pieces directly:
 
@@ -545,7 +543,7 @@ Dispatched on `window` by the automatic installer script (`install.global.js`) w
 ```ts
 window.addEventListener('persona:chat-ready', (e) => {
   const handle = e.detail;
-  handle.on('message:sent', (msg) => console.log(msg));
+  handle.on('user:message', (msg) => console.log(msg));
   handle.open();
 });
 ```
@@ -576,6 +574,7 @@ The widget controller exposes an event system for reacting to chat events. Use `
 | `assistant:complete` | `AgentWidgetMessage` | Emitted when an assistant message finishes streaming |
 | `voice:state` | `AgentWidgetVoiceStateEvent` | Emitted when voice recognition state changes |
 | `action:detected` | `AgentWidgetActionEventPayload` | Emitted when an action is parsed from an assistant message |
+| `action:resubmit` | `AgentWidgetActionEventPayload` | Emitted when an action handler requests a follow-up/resubmit after injection |
 | `widget:opened` | `AgentWidgetStateEvent` | Emitted when the widget panel opens |
 | `widget:closed` | `AgentWidgetStateEvent` | Emitted when the widget panel closes |
 | `widget:state` | `AgentWidgetStateSnapshot` | Emitted on any widget state change |
@@ -583,6 +582,8 @@ The widget controller exposes an event system for reacting to chat events. Use `
 | `message:copy` | `AgentWidgetMessage` | Emitted when user copies a message |
 | `eventStream:opened` | `{ timestamp: number }` | Emitted when the event stream panel opens |
 | `eventStream:closed` | `{ timestamp: number }` | Emitted when the event stream panel closes |
+| `approval:requested` | `{ approval, message }` | Emitted when an approval bubble is created |
+| `approval:resolved` | `{ approval, decision }` | Emitted when an approval is approved/denied |
 
 ### Event Payload Types
 

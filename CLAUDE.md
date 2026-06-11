@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents (Claude Code, Codex, Cursor, etc
 
 ## Project Overview
 
-Persona is a pnpm monorepo containing a themeable, pluggable streaming chat widget for websites. It consists of two publishable packages and three example applications.
+Persona is a pnpm monorepo containing a themeable, pluggable streaming chat widget for websites. It consists of two publishable packages and four example applications.
 
 **Packages:**
 - `packages/widget` (`@runtypelabs/persona`) - The main chat widget library
@@ -12,6 +12,7 @@ Persona is a pnpm monorepo containing a themeable, pluggable streaming chat widg
 
 **Examples:**
 - `examples/embedded-app` - Vite demo with vanilla JS (35+ demo pages)
+- `examples/ai-sdk-webmcp` - Next.js / Vercel AI SDK WebMCP demo without Runtype
 - `examples/vercel-edge` - Node.js proxy for Vercel/Railway/Fly.io
 - `examples/cloudflare-workers` - Edge proxy for Cloudflare Workers
 
@@ -85,7 +86,7 @@ The widget uses a layered architecture:
 2. **Core Layer**
    - `client.ts` - HTTP client handling SSE streaming, message dispatch, and API communication
    - `session.ts` - Message state management, injection methods, client session handling
-   - `types.ts` - All TypeScript type definitions (~2900 lines; covers multi-modal content, agent loop config, tool config, theme types, request/response payloads)
+   - `types.ts` - All TypeScript type definitions (covers multi-modal content, agent loop config, tool/client-tool config, WebMCP, theme types, request/response payloads)
 
 3. **UI Layer** (`ui.ts` + `components/`)
    - `ui.ts` - Main UI controller, DOM rendering, event handling
@@ -101,6 +102,7 @@ The widget uses a layered architecture:
    - `tokens.ts` / `theme.ts` - Design tokens and theme utilities
    - `virtual-scroller.ts` - Performance optimization for long message lists
    - `event-stream-*.ts` - SSE event buffering, capture, control, and storage
+   - `ask-user-question-tool.ts` / `suggest-replies-tool.ts` - Built-in LOCAL client tool definitions advertised via `features.*.expose`
 
 5. **Voice** (`voice/`)
    - `browser-voice-provider.ts` - Web Audio API voice input
@@ -124,23 +126,28 @@ The widget uses a layered architecture:
 
 **DOM Updates:** Uses `idiomorph` for efficient DOM morphing/diffing.
 
-**Shadow DOM:** Widgets render inside a Shadow DOM by default, providing style isolation from the host page.
+**Shadow DOM:** Widgets can render inside a Shadow DOM for style isolation when `useShadowDom: true` is set. The default is `false` for CSS compatibility.
 
 **Theme System:** CSS custom properties (variables) + Tailwind with the `tvw-` prefix. The `tokens.ts` and `theme.ts` utilities manage runtime theme application. See `packages/widget/THEME-CONFIG.md` for the full theming reference.
 
 **HTML Sanitization:** All rendered markdown is sanitized via DOMPurify by default (`utils/sanitize.ts`). Configurable per-widget via the `sanitize` option: `true` (default), `false`, or a custom `(html: string) => string` function. When writing sanitization hooks, always compare URI schemes case-insensitively (e.g. `val.toLowerCase().startsWith("data:")`) per RFC 3986.
+
+**Built-in LOCAL client tools:** `features.askUserQuestion.expose` and `features.suggestReplies.expose` append SDK-origin `ClientToolDefinition`s to `dispatch.clientTools[]`. `ask_user_question` pauses for a user answer sheet; `suggest_replies` renders quick-reply chips and auto-resumes. Leave `expose` false when the flow already declares the tool server-side.
+
+**WebMCP page tools:** `webmcp.enabled` snapshots tools from `document.modelContext`, sends them as `clientTools[]`, executes returned `webmcp:<name>` calls in the browser with approval gating, and resumes via `${apiUrl}/resume`. `contextProviders` run on both agent and flow/proxy paths.
 
 **Deferred Launcher Loading:** For the common floating-launcher case, `install.ts` paints the real launcher from the tiny `launcher.global.js` (~13 KB brotli) at page load and defers the full `index.global.js` (~134 KB) until the user's first click. `shouldDeferPanel()` gates this — floating launcher, not auto-expanded, no restored/`onStateLoaded` open state, derivable launcher URL — and everything else eager-loads unchanged. The critical launcher is mount-then-destroyed at handoff and renders pixel-identically to the full widget's, so the swap is invisible. Installer lifecycle hooks (`onScriptLoad` / `onLauncherShown` / `onChatReady` / `onError`) and matching `persona:*` DOM events expose each stage; `onChatReady` (formerly `onReady`, now a deprecated alias) fires after first open in a deferred install. See the header comment in `launcher-global.ts` and the gate/handoff comments in `install.ts` for the invariants.
 
 ### Proxy Package (`packages/proxy/src/`)
 
 Hono-based server that proxies requests to the Runtype API:
-- `index.ts` - Main app factory (`createChatProxyApp()`) and route handlers
+- `index.ts` - Main app factory (`createChatProxyApp()`) and route handlers, including `${path}/resume` and feedback endpoints
 - `flows/` - Pre-configured flow definitions:
   - `conversational.ts` - Basic chat flow
   - `shopping-assistant.ts` - E-commerce flow
   - `scheduling.ts` - Calendar/scheduling flow
   - `bakery-assistant.ts` - Example specialized flow
+  - `webmcp-*.ts` / `theme-assistant.ts` / `page-context.ts` - WebMCP demo, theme copilot, and page-context flows
 
 **CORS / `NODE_ENV`:** The proxy only enables permissive CORS when `NODE_ENV` is **exactly** `"development"`. An unset `NODE_ENV` is treated as production (origins must match the `allowedOrigins` list). The root `pnpm dev` script sets `NODE_ENV=development` automatically. If you start the proxy directly (e.g. `pnpm dev:vercel`), set it yourself or configure it in your `.env` file.
 

@@ -1,12 +1,12 @@
 # Code Snippet Generation API
 
-The `generateCodeSnippet` function programmatically generates ready-to-use code snippets for embedding the widget. This is useful for building configuration tools, documentation generators, or automated setup workflows.
+The `generateCodeSnippet` function programmatically generates ready-to-use code snippets for embedding the widget. This is useful for building configuration tools, documentation generators, CLIs, or automated setup workflows. Prefer the server/Worker-safe `@runtypelabs/persona/codegen` subpath when you only need snippet generation; the package root also re-exports it for browser/bundler consumers already using the widget runtime.
 
 ## Basic Usage
 
 ```typescript
-import { generateCodeSnippet } from '@runtypelabs/persona';
-import type { CodeFormat, CodeGeneratorOptions } from '@runtypelabs/persona';
+import { generateCodeSnippet } from '@runtypelabs/persona/codegen';
+import type { CodeFormat, CodeGeneratorOptions } from '@runtypelabs/persona/codegen';
 
 const config = {
   apiUrl: '/api/chat/dispatch',
@@ -98,8 +98,9 @@ const code = generateCodeSnippet(config, 'esm', {
       }
     ],
 
-    // Custom message postprocessor
-    postprocessMessage: ({ text }) => DOMPurify.sanitize(text),
+    // Custom message postprocessor. Persona still sanitizes this HTML by default
+    // via config.sanitize (DOMPurify); provide config.sanitize for a custom allowlist.
+    postprocessMessage: ({ text }) => marked.parse(text),
 
     // Custom stream parser factory
     streamParser: () => createCustomParser()
@@ -152,7 +153,7 @@ import type {
   CodeFormat,
   CodeGeneratorHooks,
   CodeGeneratorOptions
-} from '@runtypelabs/persona';
+} from '@runtypelabs/persona/codegen';
 
 // CodeFormat options
 type CodeFormat =
@@ -181,13 +182,14 @@ type CodeGeneratorOptions = {
   hooks?: CodeGeneratorHooks;
   includeHookComments?: boolean;
   windowKey?: string; // Emit windowKey in generated initAgentWidget call (script formats only)
+  target?: string;    // CSS selector mount target; defaults to 'body'
 };
 ```
 
 ## Example: Building a Configuration UI
 
 ```typescript
-import { generateCodeSnippet, type CodeFormat } from '@runtypelabs/persona';
+import { generateCodeSnippet, type CodeFormat } from '@runtypelabs/persona/codegen';
 
 // User configures widget in a UI (palette swatches → semantic roles)
 const userConfig = {
@@ -222,7 +224,7 @@ const hooks = {
 };
 
 // Generate code snippet
-const code = generateCodeSnippet(userConfig, format, { hooks });
+const code = generateCodeSnippet(userConfig, format, { hooks, target: '#chat-root' });
 
 // Display in code editor
 codeEditor.setValue(code);
