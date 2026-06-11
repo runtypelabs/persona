@@ -1,5 +1,18 @@
 # @runtypelabs/persona-proxy
 
+## 3.33.0
+
+### Minor Changes
+
+- 1aeba66: Add `THEME_ASSISTANT_FLOW` — the tool-calling flow behind the Theme Editor's docked **Theme Copilot**. It drives the page's WebMCP theme tools (`webmcp:*`) to restyle the editor's live preview from chat, and supports an image-matching loop: paste a screenshot of another chat widget and the copilot extracts a style spec, applies it, then verifies the result via the page's `screenshot_preview` capture tool.
+
+### Patch Changes
+
+- 6d57356: Add "Asking instead of guessing" guidance to the WebMCP calendar and slides flow prompts: when an `ask_user_question` tool is available (e.g. via the widget's `features.askUserQuestion.expose` flag), the copilots now know to offer structured options for genuinely ambiguous requests — conflicting slots and multi-match events in the calendar, theme/content/style-direction forks in the deck editor — and to act directly otherwise.
+- dd03a60: Update the WebMCP calendar and slides flow prompts for the slimmed demo tool surfaces: the calendar demo dropped its lookup-only tools (`get_users`, `get_event_colors`, `get_page_title` — users now ride along on `get_calendar_state` and colors are schema enums), and the slides demo folded `distribute_elements` into `align_elements`.
+- ee8febd: Add "Acting vs. claiming" grounding rules to all WebMCP demo flow system prompts (calendar, storefront, slides, docked) so the model never confirms a calendar/cart/deck/workspace change without a same-turn tool call, and handles bare follow-ups like "do it" by executing or verifying instead of re-announcing a past action.
+- f3868fe: Ground the WebMCP slides flow for vague restyle requests ("make the title slide pop"): treat them as a small focused style pass (4-5 mutations, prefer update_element, at most one new decorative element, theme tokens only) ending in a summary, instead of an open-ended add_element spree that hits the runtime's per-turn tool-call cap and strands the user with "Stopped after calling a tool."
+
 ## 3.32.0
 
 ### Minor Changes
