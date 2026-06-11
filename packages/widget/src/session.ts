@@ -1708,6 +1708,26 @@ export class AgentWidgetSession {
     return Date.now();
   }
 
+  /**
+   * Persisted-resolution guard for `suggest_replies`. The in-memory dedupe
+   * sets (`webMcpInflightKeys` / `webMcpResolvedKeys`) are cleared by
+   * hydrateMessages/clearMessages/cancel, but `suggestRepliesResolved`
+   * survives on the stored message — so a stale `step_await` re-emit after a
+   * hydration must not re-POST `/resume` for an already-resolved call (the
+   * historical double-resume failure mode the batching work exists to avoid).
+   * Checks the LIVE message first; the handleEvent snapshot is a fresh wire
+   * skeleton whose metadata never carries the flag.
+   */
+  private isSuggestRepliesAlreadyResolved(
+    toolMessage: AgentWidgetMessage,
+  ): boolean {
+    if (toolMessage.toolCall?.name !== SUGGEST_REPLIES_TOOL_NAME) return false;
+    const stored = this.messages.find((m) => m.id === toolMessage.id);
+    return (
+      (stored ?? toolMessage).agentMetadata?.suggestRepliesResolved === true
+    );
+  }
+
   private markWebMcpToolRunning(
     toolMessage: AgentWidgetMessage,
   ): number {
@@ -1814,7 +1834,8 @@ export class AgentWidgetSession {
         const dedupeKey = `${executionId}:${callId}`;
         if (
           this.webMcpInflightKeys.has(dedupeKey) ||
-          this.webMcpResolvedKeys.has(dedupeKey)
+          this.webMcpResolvedKeys.has(dedupeKey) ||
+          this.isSuggestRepliesAlreadyResolved(toolMessage)
         ) {
           return null;
         }
@@ -2064,11 +2085,14 @@ export class AgentWidgetSession {
     }
 
     // Dedupe key scoped by executionId — see `webMcpInflightKeys` doc comment
-    // for the failure-recovery + cross-dispatch rationale.
+    // for the failure-recovery + cross-dispatch rationale. The persisted
+    // `suggestRepliesResolved` guard backs the in-memory sets across
+    // hydrations.
     const dedupeKey = `${executionId}:${toolCallId}`;
     if (
       this.webMcpInflightKeys.has(dedupeKey) ||
-      this.webMcpResolvedKeys.has(dedupeKey)
+      this.webMcpResolvedKeys.has(dedupeKey) ||
+      this.isSuggestRepliesAlreadyResolved(toolMessage)
     ) {
       return;
     }
@@ -2772,6 +2796,21 @@ export class AgentWidgetSession {
             : {}),
           // Keep awaiting flag false once resolved — never let a stale
           // re-emit flip us back to awaiting.
+          awaitingLocalTool: false,
+        };
+      }
+      // suggest_replies equivalent: preserve the persisted fire-and-forget
+      // resolution across re-emissions. It is the only dedupe signal that
+      // survives a hydration (the in-memory key sets are cleared), so a
+      // stale step_await re-emit must not wipe it before
+      // `isSuggestRepliesAlreadyResolved` checks it in the resolve path.
+      if (
+        existing.agentMetadata?.suggestRepliesResolved === true &&
+        withSequence.agentMetadata
+      ) {
+        merged.agentMetadata = {
+          ...(merged.agentMetadata ?? withSequence.agentMetadata),
+          suggestRepliesResolved: true,
           awaitingLocalTool: false,
         };
       }

@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/src/demo-shared.css">
     <link rel="icon" href="/favicon.ico" />
-    <title>Ask User Question - Persona</title>
+    <title>Ask User Question &amp; Suggested Replies - Persona</title>
   </head>
   <body>
     <main class="shell-main">
       <div class="stage">
         <aside class="stage-controls">
           <header class="demo-meta">
-            <h1>Ask User Question</h1>
-            <p>The <code>ask_user_question</code> local-tool sheet — built-in stacked layout vs. horizontal-pill plugin. Pick a preset to inject a simulated tool call.</p>
+            <h1>Ask User Question &amp; Suggested Replies</h1>
+            <p>The two built-in client tools: the <code>ask_user_question</code> answer sheet (blocking) and <code>suggest_replies</code> quick-reply chips (fire-and-forget). Pick a preset to inject a simulated tool call, or just send a message — every mocked reply ends with fresh chips.</p>
             <div class="mount-toolbar" data-mount-toolbar></div>
           </header>
 
@@ -72,6 +72,25 @@
               </div>
 
               <div class="section">
+                <label>Suggested-reply presets</label>
+                <div class="btn-group" id="suggest-preset-group">
+                  <button data-suggest-preset="three">Replies (3)</button>
+                  <button data-suggest-preset="four">Replies (4 — cap)</button>
+                  <button data-suggest-preset="longChips">Long labels</button>
+                </div>
+                <p class="hint">Injects a simulated <code>suggest_replies</code> call. The widget renders the chips and immediately auto-POSTs <code>/resume</code> (watch the event log) — tapping a chip sends it as your message.</p>
+              </div>
+
+              <div class="section">
+                <label>Chips after each reply</label>
+                <div class="mode-group" id="chips-loop-selector">
+                  <button class="mode-btn active" data-chipsloop="on">On</button>
+                  <button class="mode-btn" data-chipsloop="off">Off</button>
+                </div>
+                <p class="hint">When on, the mocked chat reply ends with a real <code>step_await</code> for <code>suggest_replies</code> — the full loop: send → reply → fresh chips → tap → repeat.</p>
+              </div>
+
+              <div class="section">
                 <label>Actions</label>
                 <div class="btn-row">
                   <button id="btn-reset">Reset transcript</button>
@@ -102,6 +121,16 @@
         <div class="notes-section">
           <h3 class="notes-section-title">Persistence</h3>
           <p>Off (default) passes <code>persistState: false</code> — nothing is written to <code>localStorage</code>, so reloading wipes any injected tool calls. On wires up a <code>storageAdapter</code> with a demo-scoped key, so the active question survives a reload. "Reset transcript" still clears either way.</p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Suggested replies — the fire-and-forget loop</h3>
+          <p>Where <code>ask_user_question</code> blocks the execution until you answer, <code>suggest_replies</code> resolves instantly: the chips render above the composer and the widget auto-POSTs <code>/resume</code> with a canned "shown" result so the agent's turn completes. Three ways to see it here:</p>
+          <ul>
+            <li><strong>Presets</strong> — inject a simulated call; the event log shows the immediate auto-resume.</li>
+            <li><strong>Chips loop</strong> — type anything (or tap a chip). The mocked reply ends with a real <code>step_await</code>, so fresh chips appear after every turn — the full send → reply → chips cycle.</li>
+            <li><strong>Soft dismiss</strong> — ignore the chips and type your own message: they clear the moment any user message lands. Latest call wins if several arrive in one turn.</li>
+          </ul>
         </div>
 
         <div class="notes-section">
@@ -171,9 +200,18 @@
       let resumeMockMode = "fast"; // "off" | "fast" | "slow" | "hang"
       const RESUME_MOCK_DELAYS = { off: 0, fast: 300, slow: 2000, hang: Infinity };
 
+      // When on, every mocked chat reply ends with a real `step_await` for
+      // `suggest_replies` — the widget renders chips and auto-resumes, so a
+      // chip tap (or any typed message) loops: send → reply → fresh chips.
+      let chipsLoop = true;
+      let simTurn = 0;
+
       // Wrap fetch once. We intercept any POST whose URL ends with `/resume`
       // (matches both the demo's noop apiUrl and any real proxy) when the mock
-      // is on; otherwise we pass straight through to the original implementation.
+      // is on, plus chat dispatches to the demo's noop apiUrl so typed
+      // messages and chip taps get a simulated reply instead of a network
+      // error; otherwise we pass straight through to the original
+      // implementation.
       const originalFetch = window.fetch.bind(window);
       window.fetch = (input, init) => {
         try {
@@ -182,11 +220,83 @@
           if (resumeMockMode !== "off" && method === "POST" && /\/resume(?:\?|$)/.test(url)) {
             return mockResumeResponse(init?.body);
           }
+          if (resumeMockMode !== "off" && method === "POST" && /noop\.test\/chat(?:\?|$)/.test(url)) {
+            return mockDispatchResponse(init?.body);
+          }
         } catch {
           // Any detection error → fall through to real fetch.
         }
         return originalFetch(input, init);
       };
+
+      // Simulated chat reply: echo the user's message, then (when the chips
+      // loop is on) pause the "execution" with a real suggest_replies
+      // step_await — exactly the wire shape a flow emits — so the widget's
+      // fire-and-forget auto-resume runs against the /resume mock above.
+      function mockDispatchResponse(body) {
+        let lastUserText = "";
+        try {
+          const parsed = typeof body === "string" ? JSON.parse(body) : null;
+          const userMsgs = (parsed?.messages ?? []).filter((m) => m.role === "user");
+          const last = userMsgs[userMsgs.length - 1];
+          lastUserText = typeof last?.content === "string" ? last.content : "";
+        } catch {}
+
+        const n = ++simTurn;
+        const replyText = `You said "${lastUserText}" — here's a simulated reply (turn ${n}).`;
+        const chips = [
+          "Tell me more",
+          `Show example #${n}`,
+          "What else can you do?",
+        ];
+        const events = [
+          `data: {"type":"step_chunk","id":"sim-step-${n}","name":"sim","executionType":"prompt","index":0,"text":${JSON.stringify(replyText)}}`,
+          ``,
+          `data: {"type":"step_complete","id":"sim-step-${n}","name":"sim","executionType":"prompt","index":0,"success":true,"result":{"promptId":"sim","promptName":"sim","response":${JSON.stringify(replyText)},"tokens":{"input":0,"output":0,"total":0},"cost":0,"executionTime":120,"order":0},"executionTime":120}`,
+          ``,
+        ];
+        if (chipsLoop) {
+          // Server pauses at step_await and closes the SSE — no flow_complete.
+          // The widget's auto-resume posts /resume (mocked above) to finish.
+          events.push(
+            `event: step_await`,
+            `data: ${JSON.stringify({
+              type: "step_await",
+              awaitReason: "local_tool_required",
+              id: `sim-await-${n}`,
+              name: "sim",
+              stepType: "prompt",
+              index: 1,
+              toolCallId: `sr-call-${n}`,
+              toolName: "suggest_replies",
+              executionId: `sim-exec-${n}`,
+              parameters: { suggestions: chips },
+            })}`,
+            ``,
+          );
+          log(`mock /chat → reply + suggest_replies step_await (turn ${n})`, "info");
+        } else {
+          events.push(
+            `data: {"type":"flow_complete","flowId":"sim-flow","success":true,"duration":120,"completedAt":${JSON.stringify(new Date().toISOString())},"totalTokensUsed":0}`,
+            ``,
+          );
+          log(`mock /chat → reply (turn ${n}, chips loop off)`, "info");
+        }
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(c) {
+            // The trailing "\n" matters: each SSE event must be terminated by
+            // a blank line, and the final step_await would otherwise be
+            // dropped as an unterminated partial when the stream closes.
+            c.enqueue(encoder.encode(events.join("\n") + "\n"));
+            c.close();
+          },
+        });
+        return Promise.resolve(new Response(stream, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }));
+      }
 
       function mockResumeResponse(body) {
         const delay = RESUME_MOCK_DELAYS[resumeMockMode] ?? 0;
@@ -195,6 +305,33 @@
           parsedBody = typeof body === "string" ? JSON.parse(body) : null;
         } catch {}
         const toolOutputs = parsedBody?.toolOutputs ?? {};
+
+        // suggest_replies auto-resume (fire-and-forget): keyed by the wire
+        // tool name for injected presets, or by the per-call `sr-call-*` id
+        // for chips-loop step_awaits. The agent "ends its turn" after
+        // suggesting, so reply with flow_complete only — no extra text.
+        const isSuggestResume = Object.keys(toolOutputs).some(
+          (k) => k === "suggest_replies" || k.startsWith("sr-call-"),
+        );
+        if (isSuggestResume) {
+          log(`mock /resume ← suggest_replies auto-resolve → flow_complete`, "answered");
+          const encoder = new TextEncoder();
+          const sse = [
+            `data: {"type":"flow_complete","flowId":"sim-flow","success":true,"duration":0,"completedAt":${JSON.stringify(new Date().toISOString())},"totalTokensUsed":0}`,
+            ``,
+          ].join("\n");
+          const stream = new ReadableStream({
+            start(c) {
+              c.enqueue(encoder.encode(sse));
+              c.close();
+            },
+          });
+          return Promise.resolve(new Response(stream, {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          }));
+        }
+
         const answer = toolOutputs.ask_user_question;
         const answerText = typeof answer === "object" && answer !== null
           ? Object.entries(answer).map(([q, v]) => `${q}: ${Array.isArray(v) ? v.join(", ") : v}`).join(" • ")
@@ -398,6 +535,9 @@
           plugins,
           features: {
             askUserQuestion: { groupedAutoAdvance: autoAdvance },
+            // expose only matters for real dispatch advertising (the mock
+            // ignores clientTools); set for config-inspector fidelity.
+            suggestReplies: { expose: true },
           },
           copy: {
             welcomeTitle: "Ask User Question Demo",
@@ -459,6 +599,62 @@
             agentMetadata: { awaitingLocalTool: true },
           },
           `injectTestMessage · preset: ${key}`,
+        );
+      }
+
+      const SUGGEST_PRESETS = {
+        three: ["Tell me more", "Show pricing", "Talk to a human"],
+        four: [
+          "Compare the plans",
+          "What's included?",
+          "Start a free trial",
+          "Book a demo",
+        ],
+        longChips: [
+          "Walk me through migrating an existing store step by step",
+          "What does the enterprise onboarding timeline look like?",
+          "Send me the full feature comparison for mid-market retailers",
+        ],
+      };
+
+      let suggestCounter = 0;
+      function triggerSuggestReplies(key) {
+        const suggestions = SUGGEST_PRESETS[key];
+        if (!suggestions || !controller) return;
+        const id = `demo-sr-${++suggestCounter}`;
+        controller.injectTestMessage({
+          type: "message",
+          message: {
+            id,
+            role: "assistant",
+            content: "",
+            createdAt: new Date().toISOString(),
+            streaming: false,
+            variant: "tool",
+            toolCall: {
+              id,
+              name: "suggest_replies",
+              status: "complete",
+              args: { suggestions },
+              chunks: [],
+            },
+            agentMetadata: {
+              executionId: `demo-sr-exec-${suggestCounter}`,
+              awaitingLocalTool: true,
+            },
+          },
+        });
+        // A real flow closes its SSE at step_await; the widget flushes the
+        // auto-resume batch on stream end. Simulate that end so the injected
+        // call actually fires its /resume (intercepted by the mock above).
+        controller.injectTestMessage({ type: "status", status: "idle" });
+        log(`Injected suggest_replies preset: ${key} (toolCallId=${id})`, "info");
+        configInspector.setScenario(
+          {
+            toolCall: { name: "suggest_replies", args: { suggestions } },
+            agentMetadata: { awaitingLocalTool: true },
+          },
+          `injectTestMessage · suggest preset: ${key}`,
         );
       }
 
@@ -538,6 +734,25 @@
         triggerQuestion(btn.dataset.preset);
       });
 
+      // Suggested-reply preset buttons.
+      document.getElementById("suggest-preset-group").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-suggest-preset]");
+        if (!btn) return;
+        triggerSuggestReplies(btn.dataset.suggestPreset);
+      });
+
+      // Chips-loop toggle. No re-mount needed — the dispatch mock reads
+      // `chipsLoop` on every call.
+      const chipsLoopSelector = document.getElementById("chips-loop-selector");
+      chipsLoopSelector.addEventListener("click", (e) => {
+        const btn = e.target.closest(".mode-btn");
+        if (!btn) return;
+        chipsLoopSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        chipsLoop = btn.dataset.chipsloop === "on";
+        log(`Chips after each reply → ${chipsLoop ? "on" : "off"}`, "info");
+      });
+
       // Reset. Clears the persisted key first so the freshly re-created widget
       // doesn't rehydrate the just-cleared transcript when persistence is on.
       document.getElementById("btn-reset").addEventListener("click", () => {
@@ -561,6 +776,14 @@
       window.addEventListener("persona:askUserQuestion:dismissed", (e) => {
         const { toolCallId } = e.detail ?? {};
         log(`dismissed (toolCallId=${toolCallId})`, "dismissed");
+      });
+      window.addEventListener("persona:suggestReplies:shown", (e) => {
+        const { suggestions } = e.detail ?? {};
+        log(`chips shown → ${JSON.stringify(suggestions)}`, "info");
+      });
+      window.addEventListener("persona:suggestReplies:selected", (e) => {
+        const { suggestion } = e.detail ?? {};
+        log(`chip selected → "${suggestion}"`, "answered");
       });
 
       // Initial mount. Sync the persist toggle to its stored preference before

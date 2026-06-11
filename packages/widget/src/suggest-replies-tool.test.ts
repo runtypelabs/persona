@@ -414,4 +414,32 @@ describe("AgentWidgetSession - suggest_replies fire-and-forget auto-resolve", ()
     await flushMicrotasks();
     expect(resumeSpy).not.toHaveBeenCalled();
   });
+
+  it("never re-resumes after hydration clears the in-memory dedupe keys (persisted flag wins)", async () => {
+    const { session, resumeSpy } = makeSession();
+    feed(session, suggestAwait("toolu_S"));
+    endStream(session);
+    await flushMicrotasks();
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+
+    // Hydration (e.g. storage restore) wipes webMcpInflightKeys /
+    // webMcpResolvedKeys — only the suggestRepliesResolved metadata persisted
+    // on the message survives to block a replayed step_await.
+    const resolved = (
+      session as unknown as { messages: AgentWidgetMessage[] }
+    ).messages;
+    session.hydrateMessages(resolved);
+    // Force-clear both dedupe sets so only the persisted flag can block.
+    const internals = session as unknown as {
+      webMcpInflightKeys: Set<string>;
+      webMcpResolvedKeys: Set<string>;
+    };
+    internals.webMcpInflightKeys.clear();
+    internals.webMcpResolvedKeys.clear();
+
+    feed(session, suggestAwait("toolu_S"));
+    endStream(session);
+    await flushMicrotasks();
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+  });
 });

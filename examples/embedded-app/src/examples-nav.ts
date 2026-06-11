@@ -78,8 +78,8 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
   {
     slug: "ask-user-question-demo",
     href: "/ask-user-question-demo.html",
-    title: "Ask User Question",
-    blurb: "Stacked answers and horizontal-pill question variants.",
+    title: "Ask User Question & Suggested Replies",
+    blurb: "Blocking answer sheets and fire-and-forget quick-reply chips.",
     tier: "patterns",
     tags: ["interaction", "forms"],
     modes: ["inline"],

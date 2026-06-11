@@ -160,6 +160,27 @@ describe("suggest_replies chips UI", () => {
     controller.destroy();
   });
 
+  it("keeps live agent chips through a config update", () => {
+    const { mount, controller } = makeController();
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+    expect(chipButtons(mount, "Tell me more")).toHaveLength(1);
+
+    // A display-only config update (e.g. theme tweak) re-renders the
+    // suggestions row — it must re-apply the agent-chips rule, not fall back
+    // to the static config chips (which are hidden mid-conversation).
+    controller.update({
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      suggestionChips: [],
+      copy: { title: "Updated title" },
+    } as unknown as Parameters<typeof controller.update>[0]);
+
+    expect(chipButtons(mount, "Tell me more")).toHaveLength(1);
+
+    controller.destroy();
+  });
+
   it("renders no chips and falls back to the tool bubble when disabled", () => {
     const { mount, controller } = makeController({
       features: { suggestReplies: { enabled: false } },
