@@ -1,5 +1,24 @@
 # @runtypelabs/persona
 
+## 3.33.0
+
+### Minor Changes
+
+- fcdd706: Built-in `ask_user_question` client tool, exposable via a config flag.
+
+  - **`features.askUserQuestion.expose: true`** advertises a built-in `ask_user_question` tool definition (model-facing description + JSON schema matching `AskUserQuestionPayload`) to the agent on every dispatch via `clientTools[]` — the same wire surface as WebMCP page tools. No server-side `runtimeTools` declaration needed; the server registers it as a bare-named LOCAL tool and the existing answer-pill sheet / `/resume` round-trip handles the call. Defaults to `false` (flows that already declare the tool server-side would otherwise present it twice), and is ignored when `enabled: false` so the agent is never offered a question tool the widget can't render an answer UI for.
+  - **Exports** `ASK_USER_QUESTION_CLIENT_TOOL`, `ASK_USER_QUESTION_PARAMETERS_SCHEMA`, and `builtInClientToolsForDispatch` so integrators who prefer the server-side `runtimeTools` declaration can reuse the same description and schema.
+  - **Fix:** `ClientToolDefinition.origin` is now typed `'webmcp' | 'sdk'` (was `'webmcp' | 'local'`). `'local'` was never accepted by the server's dispatch validation and would have failed the request with a 400.
+
+- c5eb722: Docked mode now guards against pages that don't provide a definite height. The dock panel is clamped to the new `launcher.dock.maxHeight` (default `100dvh`; `resize`/`emerge` reveals are additionally pinned with `position: sticky`) so a missing `html, body { height: 100% }` chain degrades to a viewport-sized, internally-scrolling panel instead of a sidebar that grows with the conversation and scrolls off the page. When the height chain is unresolved, a one-time console warning explains the proper fix. Advanced layouts can override the cap with any CSS length or disable the guard entirely with `dock.maxHeight: false`.
+- 287f675: Built-in `suggest_replies` client tool behind `features.suggestReplies.expose`. When exposed, the widget advertises the tool on every dispatch via `clientTools[]`; when the agent calls it, the widget renders the suggestions as tappable quick-reply chips above the composer (reusing the suggestion-chips surface and `suggestionChipsConfig` styling) and immediately auto-resumes the execution — fire-and-forget, no user input awaited. Tapping a chip sends its text verbatim as the user's next message; chips clear once any user message follows them. Exports `SUGGEST_REPLIES_CLIENT_TOOL`, `SUGGEST_REPLIES_PARAMETERS_SCHEMA`, `SUGGEST_REPLIES_TOOL_NAME`, `parseSuggestRepliesPayload`, and `latestAgentSuggestions` for integrators who declare the tool server-side. New DOM events: `persona:suggestReplies:shown` / `persona:suggestReplies:selected`.
+
+### Patch Changes
+
+- c5eb722: Theme-editor WebMCP tool results (set_brand_colors, get_theme_overview, etc.) now serialize compact JSON instead of 2-space pretty-print — the text block is consumed by the model, where indentation whitespace is pure token overhead. `structuredContent` is unchanged.
+- 1aeba66: Theme-editor WebMCP `ToolResult` now accepts MCP image content blocks (`ToolImageContent`), so host-registered tools (like the Theme Editor's `screenshot_preview`) can return rendered screenshots to the agent alongside text. Backwards-compatible: existing text-only results are unchanged.
+- 1aeba66: `controller.update()` now refreshes the widget in place when only display config changed (theme, copy, layout, suggestions, …) instead of always recreating the client. Connection/request-shaping changes (apiUrl, clientToken, webmcp, headers, parser, …) still trigger a full client rebuild. This keeps a live stream — and any in-flight WebMCP tool resolve — alive across a mid-turn UI update, so a `webmcp:*` tool that restyles the widget while the agent's turn is still streaming no longer aborts and strands that turn.
+
 ## 3.31.1
 
 ### Patch Changes
