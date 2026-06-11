@@ -24,6 +24,7 @@ import {
   WebMcpConfirmHandler
 } from "./types";
 import { WebMcpBridge, computeClientToolsFingerprint, isWebMcpToolName } from "./webmcp-bridge";
+import { builtInClientToolsForDispatch } from "./ask-user-question-tool";
 import {
   extractTextFromJson,
   createPlainTextParser,
@@ -1057,11 +1058,18 @@ export class AgentWidgetClient {
       }
     };
 
-    // WebMCP: snapshot the page tool registry per turn and ship as
-    // `clientTools[]`. The server merges these under the `webmcp:` namespace.
-    const webMcpSnapshot = await this.webMcpBridge?.snapshotForDispatch();
-    if (webMcpSnapshot && webMcpSnapshot.length > 0) {
-      payload.clientTools = webMcpSnapshot;
+    // Client tools: built-in widget tools (ask_user_question, when exposed)
+    // plus the per-turn WebMCP page-registry snapshot. Name collisions are
+    // impossible — WebMCP entries are `webmcp:`-prefixed server-side while
+    // `sdk`-origin built-ins keep bare names. Both kinds ride the same
+    // diff-only fingerprint path in client-token mode. Kept to a single await
+    // so dispatch microtask timing is unchanged.
+    const clientTools = [
+      ...builtInClientToolsForDispatch(this.config),
+      ...((await this.webMcpBridge?.snapshotForDispatch()) ?? []),
+    ];
+    if (clientTools.length > 0) {
+      payload.clientTools = clientTools;
     }
 
     // Add context from providers
@@ -1118,10 +1126,14 @@ export class AgentWidgetClient {
       ...(this.config.flowId && { flowId: this.config.flowId })
     };
 
-    // WebMCP: same per-turn snapshot as buildAgentPayload (flow-dispatch path).
-    const webMcpSnapshot = await this.webMcpBridge?.snapshotForDispatch();
-    if (webMcpSnapshot && webMcpSnapshot.length > 0) {
-      payload.clientTools = webMcpSnapshot;
+    // Client tools: same built-in + WebMCP merge as buildAgentPayload
+    // (flow-dispatch path).
+    const clientTools = [
+      ...builtInClientToolsForDispatch(this.config),
+      ...((await this.webMcpBridge?.snapshotForDispatch()) ?? []),
+    ];
+    if (clientTools.length > 0) {
+      payload.clientTools = clientTools;
     }
 
     if (this.contextProviders.length) {

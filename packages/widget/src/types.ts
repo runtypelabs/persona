@@ -231,8 +231,13 @@ export type ClientToolDefinition = {
   description: string;
   /** JSON Schema (per WebMCP spec) — passed through as-is. */
   parametersSchema?: object;
-  /** Set to `'webmcp'` for tools discovered via the polyfill. */
-  origin?: 'webmcp' | 'local';
+  /**
+   * `'webmcp'` for tools discovered via the polyfill (server prepends the
+   * `webmcp:` wire prefix); `'sdk'` for widget/SDK-provided tools (name stays
+   * bare on the wire). Matches the server's accepted enum — any other value
+   * fails dispatch validation.
+   */
+  origin?: 'webmcp' | 'sdk';
   /** Origin of the page that registered the tool — for server-side audit. */
   pageOrigin?: string;
   /**
@@ -1157,6 +1162,19 @@ export type AgentWidgetAskUserQuestionStyles = {
 export type AgentWidgetAskUserQuestionFeature = {
   /** Enable the feature. Defaults to true. When false, `ask_user_question` renders as a regular tool bubble. */
   enabled?: boolean;
+  /**
+   * Advertise the built-in `ask_user_question` tool to the agent on every
+   * dispatch via `clientTools[]` — no server-side `runtimeTools` declaration
+   * needed. The tool ships with a model-facing description and JSON schema
+   * matching {@link AskUserQuestionPayload}; when the model calls it, the
+   * existing answer-pill sheet renders and the answer resumes the execution.
+   *
+   * Defaults to `false`: flows that already declare `ask_user_question` via
+   * `runtimeTools` would otherwise present the tool to the model twice.
+   * Ignored when `enabled` is `false` — never offer the agent a question
+   * tool the widget can't render an answer UI for.
+   */
+  expose?: boolean;
   /** Slide-in animation duration in ms. Defaults to 180. */
   slideInMs?: number;
   /** Label for the free-text pill. Defaults to "Other…". */
