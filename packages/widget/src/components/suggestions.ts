@@ -9,29 +9,50 @@ export interface SuggestionButtons {
     session: AgentWidgetSession,
     textarea: HTMLTextAreaElement,
     messages?: AgentWidgetMessage[],
-    config?: AgentWidgetSuggestionChipsConfig
+    config?: AgentWidgetSuggestionChipsConfig,
+    opts?: SuggestionRenderOptions
   ) => void;
+}
+
+export interface SuggestionRenderOptions {
+  /**
+   * Chips pushed by the agent's `suggest_replies` tool rather than the
+   * static `suggestionChips` config. Skips the before-first-user-message
+   * gate (the caller already applied the latest-turn visibility rule) and
+   * dispatches `persona:suggestReplies:*` DOM events.
+   */
+  agentPushed?: boolean;
 }
 
 export const createSuggestions = (container: HTMLElement): SuggestionButtons => {
   const suggestionButtons: HTMLButtonElement[] = [];
+  // render() runs on every message change; only announce agent-pushed chips
+  // when the visible set actually changes, not on each re-render pass.
+  let lastAgentShownKey: string | null = null;
 
   const render = (
     chips: string[] | undefined,
     session: AgentWidgetSession,
     textarea: HTMLTextAreaElement,
     messages?: AgentWidgetMessage[],
-    chipsConfig?: AgentWidgetSuggestionChipsConfig
+    chipsConfig?: AgentWidgetSuggestionChipsConfig,
+    opts?: SuggestionRenderOptions
   ) => {
     container.innerHTML = "";
     suggestionButtons.length = 0;
+    const agentPushed = opts?.agentPushed === true;
+    if (!agentPushed) lastAgentShownKey = null;
     if (!chips || !chips.length) return;
 
-    // Hide suggestions after the first user message is sent
+    // Hide config suggestions after the first user message is sent.
+    // Agent-pushed chips skip this gate — their visibility is the caller's
+    // latest-turn rule (last suggest_replies call with no user message after).
     // Use provided messages or get from session
-    const messagesToCheck = messages ?? (session ? session.getMessages() : []);
-    const hasUserMessage = messagesToCheck.some((msg) => msg.role === "user");
-    if (hasUserMessage) return;
+    if (!agentPushed) {
+      const messagesToCheck = messages ?? (session ? session.getMessages() : []);
+      const hasUserMessage = messagesToCheck.some((msg) => msg.role === "user");
+      if (hasUserMessage) return;
+    }
 
     const fragment = document.createDocumentFragment();
     const streaming = session ? session.isStreaming() : false;
@@ -79,12 +100,34 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
       btn.addEventListener("click", () => {
         if (!session || session.isStreaming()) return;
         textarea.value = "";
+        if (agentPushed) {
+          container.dispatchEvent(
+            new CustomEvent("persona:suggestReplies:selected", {
+              detail: { suggestion: chip },
+              bubbles: true,
+              composed: true,
+            })
+          );
+        }
         session.sendMessage(chip);
       });
       fragment.appendChild(btn);
       suggestionButtons.push(btn);
     });
     container.appendChild(fragment);
+    if (agentPushed) {
+      const shownKey = JSON.stringify(chips);
+      if (shownKey !== lastAgentShownKey) {
+        lastAgentShownKey = shownKey;
+        container.dispatchEvent(
+          new CustomEvent("persona:suggestReplies:shown", {
+            detail: { suggestions: [...chips] },
+            bubbles: true,
+            composed: true,
+          })
+        );
+      }
+    }
   };
 
   return {

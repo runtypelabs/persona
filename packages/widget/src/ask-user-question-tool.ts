@@ -20,6 +20,10 @@ import {
   ASK_USER_QUESTION_MAX,
   ASK_USER_QUESTION_TOOL_NAME,
 } from "./components/ask-user-question-bubble";
+import {
+  SUGGEST_REPLIES_CLIENT_TOOL,
+  shouldExposeSuggestReplies,
+} from "./suggest-replies-tool";
 import type { AgentWidgetConfig, ClientToolDefinition } from "./types";
 
 /**
@@ -110,18 +114,25 @@ export const ASK_USER_QUESTION_CLIENT_TOOL: ClientToolDefinition = {
 
 /**
  * Built-in client tools to append to a dispatch's `clientTools[]` for the
- * given widget config. Today this is only `ask_user_question`; future built-in
- * local tools join here.
+ * given widget config: `ask_user_question` and `suggest_replies`; future
+ * built-in local tools join here.
  *
- * Gated on BOTH flags: `expose` opts the tool into the agent's catalog, and
- * `enabled !== false` guarantees the widget can actually render an answer UI
- * for it — exposing a question tool with the sheet disabled would park the
- * execution on a generic tool bubble with no way to answer.
+ * Each tool is gated on BOTH of its feature flags: `expose` opts the tool
+ * into the agent's catalog, and `enabled !== false` guarantees the widget can
+ * actually render UI (and, for fire-and-forget tools, auto-resume) for it —
+ * exposing a tool with its feature disabled would park the execution on a
+ * generic tool bubble with no way to advance.
  */
 export const builtInClientToolsForDispatch = (
   config: AgentWidgetConfig | undefined,
 ): ClientToolDefinition[] => {
-  const feature = config?.features?.askUserQuestion;
-  if (feature?.expose !== true || feature.enabled === false) return [];
-  return [ASK_USER_QUESTION_CLIENT_TOOL];
+  const tools: ClientToolDefinition[] = [];
+  const ask = config?.features?.askUserQuestion;
+  if (ask?.expose === true && ask.enabled !== false) {
+    tools.push(ASK_USER_QUESTION_CLIENT_TOOL);
+  }
+  if (shouldExposeSuggestReplies(config)) {
+    tools.push(SUGGEST_REPLIES_CLIENT_TOOL);
+  }
+  return tools;
 };

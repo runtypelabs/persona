@@ -1,6 +1,10 @@
 import { AgentWidgetClient, type SSEEventCallback } from "./client";
 import { isWebMcpToolName } from "./webmcp-bridge";
 import {
+  SUGGEST_REPLIES_TOOL_NAME,
+  suggestRepliesToolResult,
+} from "./suggest-replies-tool";
+import {
   AgentWidgetConfig,
   AgentWidgetEvent,
   AgentWidgetMessage,
@@ -133,6 +137,15 @@ const getWebMcpErrorMessage = (
   if (typeof error === "string" && error) return error;
   return fallback;
 };
+
+/**
+ * Tool names whose `step_await` the widget resolves automatically (no user
+ * pill click): `webmcp:*` page tools and the built-in fire-and-forget
+ * `suggest_replies`. These share the await-batch / dedupe / resume machinery;
+ * `ask_user_question` is NOT one of them — it blocks on the answer sheet.
+ */
+const isAutoResolvedLocalToolName = (name: string): boolean =>
+  isWebMcpToolName(name) || name === SUGGEST_REPLIES_TOOL_NAME;
 
 export class AgentWidgetSession {
   private client: AgentWidgetClient;
@@ -1593,7 +1606,8 @@ export class AgentWidgetSession {
   }
 
   /**
-   * Collect a `webmcp:*` LOCAL-tool `step_await` into a per-executionId batch
+   * Collect an auto-resolving LOCAL-tool `step_await` (`webmcp:*` page tools
+   * and the built-in `suggest_replies`) into a per-executionId batch
    * and schedule a single deferred flush. Parallel calls (core#3878) emit
    * several `step_await`s for ONE paused execution within the same stream tick;
    * buffering them and flushing once lets us post ONE `/resume` keyed by the
@@ -1724,6 +1738,9 @@ export class AgentWidgetSession {
     result: unknown,
     startedAt: number,
     completedAt = Date.now(),
+    extraMetadata?: Partial<
+      NonNullable<AgentWidgetMessage["agentMetadata"]>
+    >,
   ): void {
     // A teardown such as clearMessages()/hydrateMessages()/new send can remove
     // the bubble while an aborted WebMCP promise is settling. Never resurrect a
@@ -1735,6 +1752,7 @@ export class AgentWidgetSession {
       agentMetadata: {
         ...toolMessage.agentMetadata,
         awaitingLocalTool: false,
+        ...extraMetadata,
       },
       toolCall: toolMessage.toolCall
         ? {
@@ -1808,14 +1826,28 @@ export class AgentWidgetSession {
         // only means the server paused for a local tool; it is not completion.
         const startedAt = this.markWebMcpToolRunning(toolMessage);
 
-        const controller = new AbortController();
-        this.webMcpResolveControllers.add(controller);
-        controllers.push(controller);
-
         // Per-call id wins for resume keying; fall back to the wire tool name
         // for legacy servers that don't emit `webMcpToolCallId`.
         const resumeKey =
           toolMessage.agentMetadata?.webMcpToolCallId ?? wireToolName;
+
+        // Built-in fire-and-forget tool: no bridge, no confirm gate, no
+        // browser-side execution — the chips render from the message list and
+        // the canned output joins the batch's single /resume.
+        if (wireToolName === SUGGEST_REPLIES_TOOL_NAME) {
+          return {
+            dedupeKey,
+            resumeKey,
+            output: suggestRepliesToolResult(),
+            toolMessage,
+            startedAt,
+            completedAt: Date.now(),
+          };
+        }
+
+        const controller = new AbortController();
+        this.webMcpResolveControllers.add(controller);
+        controllers.push(controller);
 
         const execPromise = this.client.executeWebMcpToolCall(
           wireToolName,
@@ -1911,6 +1943,9 @@ export class AgentWidgetSession {
           r.output,
           r.startedAt,
           r.completedAt,
+          r.toolMessage.toolCall?.name === SUGGEST_REPLIES_TOOL_NAME
+            ? { suggestRepliesResolved: true }
+            : undefined,
         );
       }
       if (response.body) {
@@ -1950,12 +1985,16 @@ export class AgentWidgetSession {
   }
 
   /**
-   * Resolve a paused `webmcp:*` LOCAL tool call by executing it against the
-   * host page's tool registry and posting the result to `/resume`.
+   * Resolve a paused auto-resolving LOCAL tool call and post the result to
+   * `/resume`: `webmcp:*` calls execute against the host page's tool
+   * registry; the built-in `suggest_replies` skips execution entirely and
+   * resumes with a canned "shown" result (the chips render from the message
+   * list, not from this resolve).
    *
    * Triggered automatically from `handleEvent` when a `step_await`-derived
-   * message arrives with a `webmcp:` prefix — the user does not click a
-   * pill; the bridge's confirm-bubble gate is the only interactive surface.
+   * message arrives for such a tool — the user does not click a pill; the
+   * bridge's confirm-bubble gate (WebMCP only) is the only interactive
+   * surface.
    *
    * Idempotent on the message's `toolCall.id`: re-emits of the same step_await
    * (e.g. from message coalescing) won't double-fire `tool.execute`. Failure
@@ -1976,8 +2015,9 @@ export class AgentWidgetSession {
     //     via onError so an operator can react. This is a server-side
     //     wire-shape bug — Persona can't recover it from the client.
     //   - no wireToolName: defensive guard — handleEvent only calls us
-    //     when tc.name is a `webmcp:` prefix, so this path indicates a
-    //     direct caller misuse. Silent return.
+    //     for an auto-resolving local tool name (`webmcp:*` or
+    //     `suggest_replies`), so this path indicates a direct caller
+    //     misuse. Silent return.
     //   - no toolCallId: dedupe key falls apart, but the server can still
     //     advance if we post an isError for the wireToolName. Do that
     //     and bail before the dedupe path.
@@ -2057,21 +2097,27 @@ export class AgentWidgetSession {
     const { signal } = resolveController;
     this.setStreaming(true);
 
+    // Built-in fire-and-forget tool: no bridge, no confirm gate, no
+    // browser-side execution — the chips render from the message list and the
+    // canned output resumes the execution immediately. Branch BEFORE any
+    // bridge access so the missing-bridge error path can never fire for it.
+    const isSuggestReplies = wireToolName === SUGGEST_REPLIES_TOOL_NAME;
+
     const args = toolMessage.toolCall?.args;
     // Thread the signal INTO the bridge — short-circuits the confirm bubble
     // and the execute() race on cancel(), so a late confirm-approval after
     // cancel() cannot fire a host-page side effect with no matching /resume.
-    const execPromise = this.client.executeWebMcpToolCall(
-      wireToolName,
-      args,
-      signal,
-    );
+    const execPromise = isSuggestReplies
+      ? null
+      : this.client.executeWebMcpToolCall(wireToolName, args, signal);
 
     let phase: "execute" | "resume" = "execute";
     let completedAt = startedAt;
     try {
       let resumeOutput: unknown;
-      if (!execPromise) {
+      if (isSuggestReplies) {
+        resumeOutput = suggestRepliesToolResult();
+      } else if (!execPromise) {
         // Client has no bridge (config.webmcp.enabled !== true). Resume with
         // an error so the dispatch can advance instead of hanging.
         resumeOutput = {
@@ -2120,6 +2166,7 @@ export class AgentWidgetSession {
             resumeOutput,
             startedAt,
             completedAt,
+            isSuggestReplies ? { suggestRepliesResolved: true } : undefined,
           );
         },
         signal,
@@ -2438,10 +2485,13 @@ export class AgentWidgetSession {
     if (event.type === "message") {
       this.upsertMessage(event.message);
 
-      // WebMCP auto-resolve: when a step_await emits a tool-variant message
-      // for a `webmcp:*` tool, drive the bridge to execute it and post the
-      // result to /resume. Unlike ask_user_question, no user pill click is
-      // required — the bridge's confirm bubble is the only interactive surface.
+      // Local-tool auto-resolve: when a step_await emits a tool-variant
+      // message for a `webmcp:*` tool — or the built-in fire-and-forget
+      // `suggest_replies` — resolve it and post the result to /resume.
+      // Unlike ask_user_question, no user pill click is required; for WebMCP
+      // the bridge's confirm bubble is the only interactive surface, and
+      // suggest_replies resumes with a canned "shown" result while the chips
+      // render above the composer.
       //
       // Defer via `queueMicrotask` so handleEvent returns FIRST. The current
       // SSE consumer is still mid-loop; once we return, the dispatch's
@@ -2455,11 +2505,19 @@ export class AgentWidgetSession {
       // if the bridge is non-operational. Otherwise the dispatch stays paused
       // indefinitely — `resolveWebMcpToolCall` translates the missing-bridge
       // case into an isError result that resumes the flow cleanly.
+      // `suggest_replies`, by contrast, is gated on its feature flag: when
+      // `features.suggestReplies.enabled === false` the widget neither
+      // renders chips nor resumes — the same parked-execution posture as a
+      // server-declared ask_user_question with its sheet disabled.
       const tc = event.message.toolCall;
+      const autoResolvable =
+        !!tc?.name &&
+        (isWebMcpToolName(tc.name) ||
+          (tc.name === SUGGEST_REPLIES_TOOL_NAME &&
+            this.config.features?.suggestReplies?.enabled !== false));
       if (
         event.message.agentMetadata?.awaitingLocalTool === true &&
-        tc?.name &&
-        isWebMcpToolName(tc.name)
+        autoResolvable
       ) {
         // Collect the await into its executionId's batch instead of resolving
         // it on the spot. Parallel same-tool calls (core#3878) arrive as
@@ -2744,9 +2802,10 @@ export class AgentWidgetSession {
           parameters: incoming.parameters ?? prior.parameters,
         };
       }
-      // WebMCP equivalent: once a `webmcp:*` tool has started resolving
-      // (inflight) or resolved, a duplicate `step_await` re-emit must not
-      // flip `awaitingLocalTool` back to true and resurrect the "waiting on
+      // Auto-resolved local-tool equivalent (`webmcp:*` and the built-in
+      // `suggest_replies`): once such a tool has started resolving (inflight)
+      // or resolved, a duplicate `step_await` re-emit must not flip
+      // `awaitingLocalTool` back to true and resurrect the "waiting on
       // local tool" UI. It also must not overwrite an existing running or
       // completed toolCall with the fresh running skeleton emitted by client.ts
       // for every step_await. resolveWebMcpToolCall's dedupe path returns
@@ -2757,7 +2816,7 @@ export class AgentWidgetSession {
       const reTcId = withSequence.toolCall?.id;
       if (
         reTcName &&
-        isWebMcpToolName(reTcName) &&
+        isAutoResolvedLocalToolName(reTcName) &&
         reExecId &&
         reTcId &&
         withSequence.agentMetadata?.awaitingLocalTool === true
@@ -2770,7 +2829,7 @@ export class AgentWidgetSession {
           existing.agentMetadata?.executionId === reExecId &&
           existing.toolCall?.id === reTcId &&
           existingToolName !== undefined &&
-          isWebMcpToolName(existingToolName) &&
+          isAutoResolvedLocalToolName(existingToolName) &&
           existing.toolCall?.status === "complete";
         if (isInflight || isResolved || hasCompletedTool) {
           merged.agentMetadata = {

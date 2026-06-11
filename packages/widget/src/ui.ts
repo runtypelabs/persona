@@ -88,6 +88,10 @@ import {
   removeAskUserQuestionSheet,
   setCurrentAnswer,
 } from "./components/ask-user-question-bubble";
+import {
+  isSuggestRepliesMessage,
+  latestAgentSuggestions,
+} from "./suggest-replies-tool";
 import { formatElapsedMs } from "./utils/formatting";
 import { approvalDetailsExpansionState, createApprovalBubble, updateApprovalDetailsUI } from "./components/approval-bubble";
 import { createSuggestions } from "./components/suggestions";
@@ -3359,6 +3363,18 @@ export const createAgentExperience = (
         return;
       }
 
+      // suggest_replies renders no transcript bubble — the chips above the
+      // composer are the only UI, and the session auto-resumes the call.
+      // When the feature is disabled the message falls through to the generic
+      // tool bubble (and is never auto-resumed), keeping the parked execution
+      // visible instead of silently swallowed.
+      if (
+        isSuggestRepliesMessage(message) &&
+        config.features?.suggestReplies?.enabled !== false
+      ) {
+        return;
+      }
+
       if (
         isAskUserQuestionMessage(message) &&
         config.features?.askUserQuestion?.enabled !== false
@@ -4758,11 +4774,20 @@ export const createAgentExperience = (
       renderMessagesWithPlugins(messagesWrapper, messages, postprocess);
       // Start elapsed timer if any active tool has a live duration span
       ensureToolElapsedTimer();
-      // Re-render suggestions to hide them after first user message
+      // Re-render suggestions. Agent-pushed `suggest_replies` chips win when
+      // the latest-turn rule yields any (last suggest_replies tool message
+      // with no user message after it); otherwise the static config chips
+      // keep their before-first-user-message behavior.
       // Pass messages directly to avoid calling session.getMessages() during construction
       if (session) {
+        const agentChips =
+          config.features?.suggestReplies?.enabled !== false
+            ? latestAgentSuggestions(messages)
+            : null;
         const hasUserMessage = messages.some((msg) => msg.role === "user");
-        if (hasUserMessage) {
+        if (agentChips) {
+          suggestionsManager.render(agentChips, session, textarea, messages, config.suggestionChipsConfig, { agentPushed: true });
+        } else if (hasUserMessage) {
           // Hide suggestions if user message exists
           suggestionsManager.render([], session, textarea, messages);
         } else {

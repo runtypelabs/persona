@@ -402,6 +402,13 @@ export type AgentMessageMetadata = {
    * paginated stepper. Persists alongside `askUserQuestionAnswers`.
    */
   askUserQuestionIndex?: number;
+  /**
+   * Set to `true` once a `suggest_replies` tool call's fire-and-forget
+   * `/resume` has been accepted by the server. Persisted belt-and-suspenders
+   * mirror of the in-memory resolved-key dedupe, so hydration/re-emit paths
+   * never re-resume the call.
+   */
+  suggestRepliesResolved?: boolean;
 };
 
 export type AgentWidgetRequestMiddlewareContext = {
@@ -1097,6 +1104,38 @@ export type AgentWidgetFeatureFlags = {
    * pills + optional free-text input.
    */
   askUserQuestion?: AgentWidgetAskUserQuestionFeature;
+  /**
+   * Built-in `suggest_replies` quick-reply chips. When the assistant invokes
+   * the tool, the widget shows the suggestions as tappable chips above the
+   * composer (reusing the suggestion-chips surface) and immediately resumes
+   * the execution — fire-and-forget, no user input awaited.
+   */
+  suggestReplies?: AgentWidgetSuggestRepliesFeature;
+};
+
+/**
+ * Feature config for the built-in `suggest_replies` quick-reply chips.
+ * Chips render in the existing suggestions slot above the composer and are
+ * styled by the widget-level `suggestionChipsConfig`. A tapped chip is sent
+ * verbatim as the user's next message; chips clear once any user message
+ * follows them.
+ */
+export type AgentWidgetSuggestRepliesFeature = {
+  /**
+   * Enable the feature. Defaults to true. When false, `suggest_replies`
+   * renders as a regular tool bubble and is NOT auto-resumed — only set this
+   * with no server-side `suggest_replies` declaration, or the execution
+   * parks awaiting a resume that never comes.
+   */
+  enabled?: boolean;
+  /**
+   * Advertise the built-in `suggest_replies` tool to the agent on every
+   * dispatch via `clientTools[]` — no server-side `runtimeTools` declaration
+   * needed. Defaults to `false`: flows that already declare the tool via
+   * `runtimeTools` would otherwise present it to the model twice. Ignored
+   * when `enabled` is `false`.
+   */
+  expose?: boolean;
 };
 
 /**

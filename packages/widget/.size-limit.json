@@ -38,7 +38,7 @@
   {
     "name": "Opt-in · theme-editor subpath (theme-editor.js)",
     "path": "dist/theme-editor.js",
-    "limit": "151.5 kB",
+    "limit": "152 kB",
     "gzip": true
   },
   {

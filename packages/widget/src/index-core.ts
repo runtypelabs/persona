@@ -140,6 +140,15 @@ export {
   builtInClientToolsForDispatch
 } from "./ask-user-question-tool";
 
+export {
+  SUGGEST_REPLIES_TOOL_NAME,
+  SUGGEST_REPLIES_CLIENT_TOOL,
+  SUGGEST_REPLIES_PARAMETERS_SCHEMA,
+  isSuggestRepliesMessage,
+  parseSuggestRepliesPayload,
+  latestAgentSuggestions
+} from "./suggest-replies-tool";
+
 export { initAgentWidgetFn as initAgentWidget };
 export {
   createWidgetHostLayout,
