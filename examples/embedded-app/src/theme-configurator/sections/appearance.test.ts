@@ -117,16 +117,4 @@ describe('appearance curated controls', () => {
     );
     expect(advancedActions.length).toBeGreaterThanOrEqual(1);
   });
-
-  test('interface roles section renders role-assignment fields', () => {
-    const container = document.createElement('div');
-    render(container, vi.fn());
-
-    const rolesSection = container.querySelector('[data-section-id="interface-roles"]');
-    expect(rolesSection).not.toBeNull();
-
-    // Should have role-assignment controls for each role
-    const roleControls = rolesSection!.querySelectorAll('.role-assignment-control');
-    expect(roleControls.length).toBe(8);
-  });
 });

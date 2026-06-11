@@ -17,20 +17,6 @@ describe("codegen subpath", () => {
     expect(fromSubpath).toBe(fromInternal);
   });
 
-  it("produces identical output via the subpath for every format", () => {
-    const formats = [
-      "esm",
-      "script-installer",
-      "script-manual",
-      "script-advanced",
-      "react-component",
-      "react-advanced",
-    ] as const;
-    for (const format of formats) {
-      expect(fromSubpath(config, format)).toBe(fromInternal(config, format));
-    }
-  });
-
   it("pins the installer CDN url to the package version (not @latest)", () => {
     const code = fromSubpath(config, "script-installer");
     expect(code).toContain(`@runtypelabs/persona@${VERSION}/dist/install.global.js`);

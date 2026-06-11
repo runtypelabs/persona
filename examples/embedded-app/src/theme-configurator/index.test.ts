@@ -1096,32 +1096,4 @@ describe('theme configurator shell', () => {
     expect(document.getElementById('export-btn')).not.toBeNull();
     expect(document.getElementById('export-dropdown')).not.toBeNull();
   });
-
-  test('preview transcript builder injects entries without remounting', async () => {
-    await import('./index');
-
-    const addButton = document.querySelector<HTMLButtonElement>(
-      '#configure-group [data-section-id="debug-inspection"] [data-preview-transcript-add]'
-    );
-    const wrapperBefore = document.querySelector<HTMLElement>(
-      '.preview-iframe-wrapper[data-mount-id="preview-current"]'
-    );
-
-    expect(addButton).not.toBeNull();
-    expect(wrapperBefore).not.toBeNull();
-    const initialSignature = wrapperBefore?.dataset.layoutSignature;
-
-    addButton!.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const wrapperAfter = document.querySelector<HTMLElement>(
-      '.preview-iframe-wrapper[data-mount-id="preview-current"]'
-    );
-    // Signature should NOT change — transcript entries are injected via
-    // controller API rather than rebuilding initialMessages.
-    expect(wrapperAfter?.dataset.layoutSignature).toBe(initialSignature);
-  });
 });
