@@ -336,12 +336,15 @@ function previewEmbedCheck(): Plugin {
 }
 
 // Font sets used by the shared stylesheets. Kept in sync with the families each
-// CSS file expects: demo-shared.css (gallery/demo pages) and index.css (home,
-// theme, products).
+// CSS file expects: demo-shared.css (gallery/demo pages), home.css (the
+// redesigned home page), and index.css (theme, products, misc demo pages).
 const GALLERY_FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=Asap+Condensed:wght@400;600&family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500;600&display=swap";
 
 const HOME_FONTS_HREF =
+  "https://fonts.googleapis.com/css2?family=Bitcount+Prop+Single:wght@100..900&family=Geist:wght@400;500&family=JetBrains+Mono:wght@200;400;500;700&family=Syne:wght@400;500;700;800&display=swap";
+
+const SHARED_FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=Asap+Condensed:wght@400&family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;700&display=swap";
 
 // Load the gallery fonts via <link> in <head> rather than an `@import` inside the
@@ -356,9 +359,11 @@ function galleryFonts(): Plugin {
     transformIndexHtml(html) {
       const href = html.includes("demo-shared.css")
         ? GALLERY_FONTS_HREF
-        : html.includes("src/index.css")
+        : html.includes("src/home.css")
           ? HOME_FONTS_HREF
-          : null;
+          : html.includes("src/index.css")
+            ? SHARED_FONTS_HREF
+            : null;
       if (!href) return;
       const tags: HtmlTagDescriptor[] = [
         {

@@ -1,6 +1,5 @@
 import "@runtypelabs/persona/widget.css";
-import "./index.css";
-import "./App.css";
+import "./home.css";
 
 import {
   createAgentExperience,
@@ -8,6 +7,10 @@ import {
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
+import { initHomeBackground } from "./home-background";
+
+const bgCanvas = document.getElementById("bg-tunnel") as HTMLCanvasElement | null;
+if (bgCanvas) initHomeBackground(bgCanvas);
 
 /** Storage key scoped to this index demo so it does not collide with other demos. */
 const sharedWidgetStorage = createLocalStorageAdapter("persona-state-index-demo");
@@ -245,8 +248,7 @@ Keep answers concise. Use markdown formatting. When recommending a demo, briefly
 const homeDemoWelcomeTitle = "Welcome to Persona";
 const homeDemoWelcomeSubtitle =
   "I can help you learn about Persona and find the right demo for your use case.";
-const homeDemoInputPlaceholder =
-  "Ask about Persona features, theming, integrations…";
+const homeDemoInputPlaceholder = "Inquire…";
 
 /** Same Runtype agent, request options, and welcome copy for the inline embed. */
 const homeDemoSharedAssistant = {
@@ -293,6 +295,85 @@ const inlineController = createAgentExperience(inlineMount, {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
   ...homeDemoSharedAssistant,
+  // Match the page's editorial/terminal design: paper surfaces, square
+  // corners, ink text, teal accents, mono/Geist type. Raw values are allowed
+  // anywhere a token reference is — the resolver passes non-token strings
+  // through unchanged.
+  theme: {
+    palette: {
+      colors: {
+        primary: {
+          50: "#fef9f1",
+          100: "#f2ede5",
+          200: "#d4cfc4",
+          300: "#a39e93",
+          400: "#737067",
+          500: "#1d1c17",
+          600: "#000000",
+          700: "#000000",
+          800: "#000000",
+          900: "#000000",
+          950: "#000000",
+        },
+        gray: {
+          50: "#fef9f1",
+          100: "#f2ede5",
+          200: "#ddd6c9",
+          300: "#c4bdb0",
+          400: "#8a857a",
+          500: "#6f6b62",
+          600: "#55524a",
+          700: "#444239",
+          800: "#2e2c26",
+          900: "#1d1c17",
+          950: "#11100d",
+        },
+      },
+      radius: {
+        sm: "0px",
+        md: "0px",
+        lg: "0px",
+        xl: "0px",
+        "2xl": "0px",
+      },
+      typography: {
+        fontFamily: {
+          sans: "'Geist', -apple-system, BlinkMacSystemFont, sans-serif",
+          mono: "'JetBrains Mono', ui-monospace, SFMono-Regular, monospace",
+        },
+      },
+    },
+    semantic: {
+      colors: {
+        accent: "#006b5b",
+        surface: "#fef9f1",
+        background: "#fef9f1",
+        container: "#f2ede5",
+        text: "#1d1c17",
+        textMuted: "#6f6b62",
+        border: "rgba(29, 28, 23, 0.18)",
+        divider: "rgba(29, 28, 23, 0.1)",
+      },
+    },
+    components: {
+      button: {
+        primary: { background: "#26fedc", foreground: "#1d1c17" },
+      },
+      introCard: {
+        background: "#fef9f1",
+        borderRadius: "0px",
+        shadow: "none",
+      },
+      message: {
+        user: { background: "#fef9f1", text: "#1d1c17", borderRadius: "0px" },
+        assistant: { background: "#f2ede5", text: "#1d1c17", borderRadius: "0px" },
+      },
+      input: { background: "#fef9f1" },
+      panel: { border: "none", borderRadius: "0px", shadow: "none" },
+    },
+  },
+  // The chat rail supplies its own terminal-style header; hide the widget's.
+  layout: { showHeader: false },
   launcher: {
     ...DEFAULT_WIDGET_CONFIG.launcher,
     width: "100%",
@@ -315,6 +396,11 @@ const inlineController = createAgentExperience(inlineMount, {
   postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
 });
 setupCodeCopyHandler(inlineMount);
+
+// Rail header clear-chat button (the widget's own header is hidden).
+document
+  .querySelector<HTMLButtonElement>("[data-rail-clear]")
+  ?.addEventListener("click", () => inlineController.clearChat());
 
 // ---------------------------------------------------------------------------
 // Hero 3D Carousel
