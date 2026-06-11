@@ -247,8 +247,8 @@ Keep answers concise. Use markdown formatting. When recommending a demo, briefly
 
 const homeDemoWelcomeTitle = "Welcome to Persona";
 const homeDemoWelcomeSubtitle =
-  "I can help you learn about Persona and find the right demo for your use case.";
-const homeDemoInputPlaceholder = "Inquire…";
+  "This is a customized Persona instance that can chat about Persona. It's hooked up to our wiki.  Neat, right?";
+const homeDemoInputPlaceholder = "Ask away...";
 
 /** Same Runtype agent, request options, and welcome copy for the inline embed. */
 const homeDemoSharedAssistant = {
