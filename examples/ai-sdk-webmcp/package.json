@@ -7,14 +7,14 @@
     "dev": "next dev",
     "build": "pnpm --filter @runtypelabs/persona build && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@mcp-b/webmcp-polyfill": "^3.0.0",
     "@runtypelabs/persona": "workspace:^",
     "@vercel/functions": "^3.6.2",
     "ai": "^6.0.197",
-    "next": "^16.2.7",
+    "next": "^16.2.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
