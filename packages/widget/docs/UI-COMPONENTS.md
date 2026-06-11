@@ -397,6 +397,65 @@ For plugins that want to re-parse a tool message outside the hook context, the w
 2. **Built-in overlay sheet** — when the feature is enabled and no plugin handles it.
 3. **Generic tool bubble** — when `features.askUserQuestion.enabled` is `false`, the tool call renders through the normal `renderToolCall` path.
 
+## Suggested Replies
+
+The `suggest_replies` feature lets the agent offer tappable quick-reply chips for the user's next message. When the agent calls the `suggest_replies` tool, the widget renders the suggestions as chips above the composer (the same slot — and `suggestionChipsConfig` styling — as the static `suggestionChips`) and **immediately** resumes the paused execution with a canned "shown" result. Unlike `ask_user_question`, nothing blocks on the user: the agent's turn completes, and tapping a chip simply sends its text verbatim as the user's next message.
+
+This is the recommended pattern for follow-up discovery — teaching users what to ask next without forcing typing.
+
+### Exposing the tool to the agent
+
+```ts
+features: {
+  suggestReplies: { expose: true }
+}
+```
+
+`expose` defaults to `false` — flows that already declare the tool via `runtimeTools` would otherwise present it to the model twice. It is also ignored when `enabled: false`: a disabled feature neither renders chips nor auto-resumes, so exposing the tool alongside it would park the execution on a generic tool bubble forever. (The same applies to a server-declared `suggest_replies` with `enabled: false` — treat that combination as a configuration error.)
+
+For server-side declaration, the exported `SUGGEST_REPLIES_CLIENT_TOOL` / `SUGGEST_REPLIES_PARAMETERS_SCHEMA` constants provide the same description and schema to reuse in a flow's `runtimeTools`.
+
+### Tool schema
+
+```ts
+{
+  suggestions: string[]   // 1-4 items, each ≤60 chars, phrased in the user's voice
+}
+```
+
+### Lifecycle
+
+Chip visibility is derived from the transcript, not toggled imperatively: the widget shows the chips of the **last** `suggest_replies` tool message that has **no user message after it**. That one rule covers everything:
+
+- Chips soft-dismiss the moment any user message lands — typed, voice, or a chip tap (which itself sends a user message).
+- Chips survive panel close/reopen and page reload (the tool message persists in history and the rule re-evaluates on hydrate). If the page reloads before the automatic resume fired, the execution stays paused server-side; tapping a chip starts a fresh dispatch and the conversation recovers naturally.
+- When one turn carries several `suggest_replies` calls, every call is resumed but only the latest renders (latest wins).
+- Chips are disabled while a response is streaming, like all composer controls.
+
+No transcript bubble is rendered for the tool message — the chips are the entire UI. When `enabled: false`, the message falls through to the generic tool bubble instead.
+
+Note: integrators who replace the composer's suggestions slot via the composer layout API won't see agent-pushed chips — they render in the same container as `suggestionChips`.
+
+### Configuration
+
+```ts
+features: {
+  suggestReplies: {
+    enabled: true,   // default: true. When false, the tool falls through to the normal tool-bubble path and is NOT auto-resumed.
+    expose: false    // default: false. When true, advertises the built-in tool to the agent via clientTools[].
+  }
+}
+```
+
+Chip styling reuses the widget-level `suggestionChipsConfig` (font family/weight, padding).
+
+### DOM events
+
+| Event | Detail |
+|---|---|
+| `persona:suggestReplies:shown` | `{ suggestions: string[] }` — fires once per distinct chip set |
+| `persona:suggestReplies:selected` | `{ suggestion: string }` — fires before the chip text is sent |
+
 ## Dropdown Menu
 
 A reusable dropdown menu utility for building custom menus in plugins, custom components, or host-page UI that matches the widget's theme.

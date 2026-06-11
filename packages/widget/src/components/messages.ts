@@ -9,6 +9,7 @@ import {
   isAskUserQuestionMessage,
   removeAskUserQuestionSheet,
 } from "./ask-user-question-bubble";
+import { isSuggestRepliesMessage } from "../suggest-replies-tool";
 
 export const renderMessages = (
   container: HTMLElement,
@@ -39,6 +40,15 @@ export const renderMessages = (
         if (message.toolCall?.id) liveAskToolIds.add(message.toolCall.id);
         ensureAskUserQuestionSheet(message, config, composerOverlay ?? null);
       }
+      return;
+    } else if (
+      isSuggestRepliesMessage(message) &&
+      config?.features?.suggestReplies?.enabled !== false
+    ) {
+      // No transcript bubble — the chips above the composer are the only UI.
+      // When the feature is disabled the message falls through to the generic
+      // tool bubble below (and is never auto-resumed), making the parked
+      // execution visible instead of silently swallowed.
       return;
     } else if (message.variant === "tool" && message.toolCall) {
       if (!showToolCalls) return;

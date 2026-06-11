@@ -88,6 +88,10 @@ import {
   removeAskUserQuestionSheet,
   setCurrentAnswer,
 } from "./components/ask-user-question-bubble";
+import {
+  isSuggestRepliesMessage,
+  latestAgentSuggestions,
+} from "./suggest-replies-tool";
 import { formatElapsedMs } from "./utils/formatting";
 import { approvalDetailsExpansionState, createApprovalBubble, updateApprovalDetailsUI } from "./components/approval-bubble";
 import { createSuggestions } from "./components/suggestions";
@@ -2625,6 +2629,43 @@ export const createAgentExperience = (
   const suggestionsManager = createSuggestions(suggestions);
   let closeHandler: (() => void) | null = null;
   let session: AgentWidgetSession;
+
+  // Single render rule for the suggestions row, shared by the message-change,
+  // initial-paint, and config-update paths: agent-pushed `suggest_replies`
+  // chips win when the latest-turn rule yields any (last suggest_replies tool
+  // message with no user message after it); otherwise static config chips
+  // keep their before-first-user-message behavior. Config updates MUST route
+  // through here too — re-rendering with only `config.suggestionChips` would
+  // drop a live agent chip row until the next message change.
+  const renderSuggestions = (messages?: AgentWidgetMessage[]) => {
+    if (!session) return;
+    const current = messages ?? session.getMessages();
+    const agentChips =
+      config.features?.suggestReplies?.enabled !== false
+        ? latestAgentSuggestions(current)
+        : null;
+    if (agentChips) {
+      suggestionsManager.render(
+        agentChips,
+        session,
+        textarea,
+        current,
+        config.suggestionChipsConfig,
+        { agentPushed: true }
+      );
+    } else if (current.some((msg) => msg.role === "user")) {
+      // Hide suggestions once a user message exists.
+      suggestionsManager.render([], session, textarea, current);
+    } else {
+      suggestionsManager.render(
+        config.suggestionChips,
+        session,
+        textarea,
+        current,
+        config.suggestionChipsConfig
+      );
+    }
+  };
   let isStreaming = false;
   const messageCache = createMessageCache();
   // Tracks the last fingerprint we rendered a plugin-rendered ask_user_question
@@ -3356,6 +3397,18 @@ export const createAgentExperience = (
         lastAskBubbleFingerprint.delete(message.id);
         const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
         existing?.removeAttribute("data-preserve-runtime");
+        return;
+      }
+
+      // suggest_replies renders no transcript bubble — the chips above the
+      // composer are the only UI, and the session auto-resumes the call.
+      // When the feature is disabled the message falls through to the generic
+      // tool bubble (and is never auto-resumed), keeping the parked execution
+      // visible instead of silently swallowed.
+      if (
+        isSuggestRepliesMessage(message) &&
+        config.features?.suggestReplies?.enabled !== false
+      ) {
         return;
       }
 
@@ -4758,18 +4811,9 @@ export const createAgentExperience = (
       renderMessagesWithPlugins(messagesWrapper, messages, postprocess);
       // Start elapsed timer if any active tool has a live duration span
       ensureToolElapsedTimer();
-      // Re-render suggestions to hide them after first user message
+      // Re-render suggestions — agent chips vs config chips, one shared rule.
       // Pass messages directly to avoid calling session.getMessages() during construction
-      if (session) {
-        const hasUserMessage = messages.some((msg) => msg.role === "user");
-        if (hasUserMessage) {
-          // Hide suggestions if user message exists
-          suggestionsManager.render([], session, textarea, messages);
-        } else {
-          // Show suggestions if no user message yet
-          suggestionsManager.render(config.suggestionChips, session, textarea, messages, config.suggestionChipsConfig);
-        }
-      }
+      renderSuggestions(messages);
       scheduleAutoScroll(!isStreaming);
       trackMessages(messages);
 
@@ -5698,7 +5742,7 @@ export const createAgentExperience = (
     mount.appendChild(customLauncherElement);
   }
   updateOpenState();
-  suggestionsManager.render(config.suggestionChips, session, textarea, undefined, config.suggestionChipsConfig);
+  renderSuggestions();
   updateCopy();
   setComposerDisabled(session.isStreaming());
   if (getScrollMode() === "follow") {
@@ -6982,7 +7026,7 @@ export const createAgentExperience = (
         session.getMessages(),
         postprocess
       );
-      suggestionsManager.render(config.suggestionChips, session, textarea, undefined, config.suggestionChipsConfig);
+      renderSuggestions();
       updateCopy();
       setComposerDisabled(session.isStreaming());
       
