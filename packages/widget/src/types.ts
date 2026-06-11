@@ -145,12 +145,41 @@ export type AgentToolsConfig = {
   mcpServers?: Array<Record<string, unknown>>;
   /** Maximum number of tool invocations per execution */
   maxToolCalls?: number;
+  /** How the model is steered toward tools: let it decide, force a call, or disable */
+  toolCallStrategy?: "auto" | "required" | "none";
+  /** Per-tool invocation limits / requirements keyed by tool name */
+  perToolLimits?: Record<string, { maxCalls?: number; required?: boolean }>;
   /** Tool approval configuration for human-in-the-loop workflows */
   approval?: {
     /** Tool names/patterns to require approval for, or true for all tools */
     require: string[] | boolean;
     /** Approval timeout in milliseconds (default: 300000 / 5 minutes) */
     timeout?: number;
+    /** Ask the agent to state its intent alongside approval requests (default: true) */
+    requestReason?: boolean;
+  };
+  /**
+   * Enables the synthesized `spawn_subagent` tool: the model can spin up
+   * ad-hoc child agents at runtime, restricted to `toolPool` (tool IDs /
+   * runtime-tool names already granted to the parent agent).
+   */
+  subagentConfig?: {
+    toolPool: string[];
+    defaultMaxTurns?: number;
+    maxTurnsLimit?: number;
+    maxSpawnsPerRun?: number;
+    defaultModel?: string;
+    allowNesting?: boolean;
+    defaultTimeoutMs?: number;
+  };
+  /**
+   * Enables the synthesized `code_mode` tool: the model writes JS that calls
+   * pool tools inside a sandbox instead of issuing individual tool calls.
+   */
+  codeModeConfig?: {
+    toolPool: string[];
+    description?: string;
+    timeoutMs?: number;
   };
 };
 
