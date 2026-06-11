@@ -6,7 +6,7 @@ import { THEMES, getTheme } from "./themes";
 // WebMCP tool surface for the slide editor. Three tool sets share two
 // AbortController owners (the calendar demo's re-registration pattern):
 //
-//   1. the static editing set (18 tools) — registered while mode === 'edit';
+//   1. the static editing set (17 tools) — registered while mode === 'edit';
 //   2. the presenter set (4 tools) — replaces the editing set wholesale while
 //      mode === 'present', so the agent only sees show controls mid-show;
 //   3. the selection-scoped set (2 tools) — registered only while 2+ elements
@@ -36,6 +36,10 @@ export const APPROVAL_REQUIRED_TOOL_NAMES = new Set([
   "apply_theme",
 ]);
 
+// "Read-only" here is the approval-gate sense: true reads plus pure navigation
+// (goto_slide, the presenter controls). Navigation changes what's on screen but
+// never deck data, so it auto-approves; the descriptors carry the matching
+// readOnlyHint annotation.
 export const READ_ONLY_TOOL_NAMES = new Set([
   "get_deck_overview",
   "get_slide",
@@ -756,15 +760,20 @@ const buildEditingTools = (store: DeckStore): ToolDescriptor[] => [
     name: "align_elements",
     title: "Align elements",
     description:
-      "Align elements to the slide or to their shared bounding box. Returns the new positions.",
+      "Align elements to the slide or to their shared bounding box, and/or space them evenly along an axis (distribute needs 3+ elements; the first/last stay put). Same shape as align_selection. Returns the new positions.",
     inputSchema: {
       type: "object",
-      required: ["elementIds", "alignment"],
+      required: ["elementIds"],
       properties: {
         elementIds: { type: "array", items: { type: "string" }, minItems: 1 },
         alignment: {
           type: "string",
           enum: ["left", "center-x", "right", "top", "center-y", "bottom"],
+        },
+        distribute: {
+          type: "string",
+          enum: ["horizontal", "vertical"],
+          description: "Space the elements evenly along this axis; needs 3+ elements.",
         },
         relativeTo: {
           type: "string",
@@ -777,52 +786,28 @@ const buildEditingTools = (store: DeckStore): ToolDescriptor[] => [
     execute(args) {
       const ids = Array.isArray(args.elementIds) ? args.elementIds.map(String) : [];
       if (!ids.length) throw new Error("elementIds is required.");
+      if (!args.alignment && !args.distribute) {
+        throw new Error("Provide alignment and/or distribute.");
+      }
       const first = store.findElement(ids[0]);
       if (!first) throw new Error(`No element with id "${ids[0]}".`);
       store.commit((deck) => {
         const slide = deck.slides.find((s) => s.id === first.slide.id);
         if (!slide) return;
         const targets = slide.elements.filter((el) => ids.includes(el.id));
-        alignElements(
-          targets,
-          String(args.alignment) as Alignment,
-          args.relativeTo === "selection-bounds" ? "selection-bounds" : "slide",
-        );
-      });
-      flashAgentTouch(store, first.slide.id, ids);
-      const fresh = store.findSlide(first.slide.id);
-      return toolResult({
-        positions: positionsOf(
-          fresh?.elements.filter((el) => ids.includes(el.id)) ?? [],
-        ),
-      });
-    },
-  },
-  {
-    name: "distribute_elements",
-    title: "Distribute elements",
-    description:
-      "Space three or more elements evenly along an axis (their first/last stay put). Returns the new positions.",
-    inputSchema: {
-      type: "object",
-      required: ["elementIds", "axis"],
-      properties: {
-        elementIds: { type: "array", items: { type: "string" }, minItems: 3 },
-        axis: { type: "string", enum: ["horizontal", "vertical"] },
-      },
-    },
-    execute(args) {
-      const ids = Array.isArray(args.elementIds) ? args.elementIds.map(String) : [];
-      const first = store.findElement(ids[0] ?? "");
-      if (!first) throw new Error("elementIds must reference existing elements.");
-      store.commit((deck) => {
-        const slide = deck.slides.find((s) => s.id === first.slide.id);
-        if (!slide) return;
-        const targets = slide.elements.filter((el) => ids.includes(el.id));
-        distributeElements(
-          targets,
-          args.axis === "vertical" ? "vertical" : "horizontal",
-        );
+        if (args.alignment) {
+          alignElements(
+            targets,
+            String(args.alignment) as Alignment,
+            args.relativeTo === "selection-bounds" ? "selection-bounds" : "slide",
+          );
+        }
+        if (args.distribute) {
+          distributeElements(
+            targets,
+            args.distribute === "vertical" ? "vertical" : "horizontal",
+          );
+        }
       });
       flashAgentTouch(store, first.slide.id, ids);
       const fresh = store.findSlide(first.slide.id);
@@ -891,6 +876,7 @@ const buildEditingTools = (store: DeckStore): ToolDescriptor[] => [
         position: { type: "number", description: "1-based slide to start from; defaults to slide 1." },
       },
     },
+    annotations: { readOnlyHint: true },
     execute(args) {
       if (typeof args.position === "number") {
         store.setCurrentSlide(Math.round(args.position) - 1);

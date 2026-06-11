@@ -5,10 +5,11 @@ import type { RuntypeFlowConfig } from "../index.js";
  * (`examples/embedded-app/webmcp-calendar.html`).
  *
  * Like WEBMCP_STOREFRONT_FLOW, this agent owns **no** tools of its own. The
- * demo page registers ten calendar tools on `document.modelContext` via WebMCP
- * (`get_calendar_state`, `get_events`, `get_users`, `get_event_colors`,
- * `find_availability`, `select_date`, `create_event`, `update_event`,
- * `delete_event`, `get_page_title`); the widget snapshots them every turn and
+ * demo page registers seven calendar tools on `document.modelContext` via
+ * WebMCP (`get_calendar_state`, `get_events`, `find_availability`,
+ * `select_date`, `create_event`, `update_event`, `delete_event`; valid users
+ * ride along on `get_calendar_state` and colors are schema enums, so there are
+ * no lookup-only tools); the widget snapshots them every turn and
  * the proxy forwards them on the dispatch payload as `clientTools[]`. The
  * model calls them by name and the widget executes them **on the page**,
  * posting results back via `/resume` — so the calendar UI updates live.
@@ -46,7 +47,7 @@ The dashboard exposes its own calendar tools to you. Always **use the tools** to
 Rules:
 - Start by calling **get_calendar_state** to learn today's date, the current local time, the timezone, and the visible week before resolving relative dates like "tomorrow" or "Thursday".
 - All date-times are LOCAL wall-clock strings in the calendar's timezone, formatted \`YYYY-MM-DDTHH:mm\`. Never append "Z" or a UTC offset — write the clock time the user said.
-- Use a real userId from **get_users** and a color from **get_event_colors** when creating events. Do not guess IDs.
+- Use a real userId from **get_calendar_state**'s users list when creating events. Do not guess IDs.
 - Before proposing a meeting time, check **find_availability** for that date; the workday is 9am–5pm local.
 - To change or remove an event, find its eventId via **get_events** or **get_calendar_state** first.
 - After a mutation, confirm briefly what changed (title, day, time) — the page renders the calendar, so don't repeat the full schedule unless asked.
