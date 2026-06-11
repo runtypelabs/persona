@@ -35,43 +35,35 @@ export const ASK_USER_QUESTION_PARAMETERS_SCHEMA = {
       type: "array",
       minItems: 1,
       maxItems: ASK_USER_QUESTION_MAX,
-      description:
-        "Questions to ask the user. Prefer a single question; group up to " +
-        `${ASK_USER_QUESTION_MAX} only when the answers are genuinely related.`,
+      description: "Questions to ask the user. Prefer a single question.",
       items: {
         type: "object",
         properties: {
           question: {
             type: "string",
-            description:
-              "The complete question to ask the user. Clear, specific, and " +
-              "ending with a question mark.",
+            description: "The complete question, ending with a question mark.",
           },
           header: {
             type: "string",
             maxLength: 12,
-            description:
-              'Very short topic label for the question (max 12 chars), e.g. "Auth method".',
+            description: 'Short topic label, e.g. "Auth method".',
           },
           options: {
             type: "array",
             minItems: 2,
             maxItems: 4,
             description:
-              "2-4 distinct, mutually exclusive choices (unless multiSelect " +
-              'is true). Do NOT add an "Other" option — a free-text input is ' +
-              "provided automatically.",
+              '2-4 distinct choices. Do NOT add an "Other" option — free text is automatic.',
             items: {
               type: "object",
               properties: {
                 label: {
                   type: "string",
-                  description: "Concise display text for the choice (1-5 words).",
+                  description: "Concise choice text (1-5 words).",
                 },
                 description: {
                   type: "string",
-                  description:
-                    "What this option means or implies — trade-offs, context.",
+                  description: "What the option means or implies.",
                 },
               },
               required: ["label"],
@@ -80,14 +72,11 @@ export const ASK_USER_QUESTION_PARAMETERS_SCHEMA = {
           },
           multiSelect: {
             type: "boolean",
-            description:
-              "Allow selecting multiple options. Use when choices are not " +
-              "mutually exclusive. Default false.",
+            description: "Allow selecting multiple options. Default false.",
           },
           allowFreeText: {
             type: "boolean",
-            description:
-              "Show a free-text input alongside the options. Default true.",
+            description: "Show a free-text input. Default true.",
           },
         },
         required: ["question", "options"],
@@ -108,15 +97,12 @@ export const ASK_USER_QUESTION_PARAMETERS_SCHEMA = {
 export const ASK_USER_QUESTION_CLIENT_TOOL: ClientToolDefinition = {
   name: ASK_USER_QUESTION_TOOL_NAME,
   description:
-    "Ask the user one or more multiple-choice questions and wait for their " +
-    "answers. Use this when you are blocked on a decision that is genuinely " +
-    "the user's to make — a preference, a choice between valid approaches, or " +
-    "missing information you cannot infer from the conversation. Each question " +
-    "offers 2-4 options plus an automatic free-text input. The result maps " +
-    "each question to the user's answer (an array when multiSelect is true); " +
-    "a question absent from the result was skipped by the user. Do not use " +
-    "this for questions you can answer yourself or for confirmations the user " +
-    "has already given.",
+    "Ask the user multiple-choice questions and wait for their answers. Use " +
+    "only when blocked on a decision that is the user's to make — a " +
+    "preference, a choice between valid approaches, or information you " +
+    "cannot infer. Each question offers 2-4 options plus an automatic " +
+    "free-text input. The result maps each question to its answer (an array " +
+    "when multiSelect); a question absent from the result was skipped.",
   parametersSchema: ASK_USER_QUESTION_PARAMETERS_SCHEMA,
   origin: "sdk",
   annotations: { readOnlyHint: true },
