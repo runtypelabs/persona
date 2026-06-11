@@ -236,7 +236,13 @@ section[id] {
 }
 
 .site-nav-brand {
-  font-family: var(--font-serif);
+  font-family: "Bitcount Prop Single", var(--font-serif), system-ui;
+  font-optical-sizing: auto;
+  font-variation-settings:
+    "slnt" 0,
+    "CRSV" 0.5,
+    "ELSH" 0,
+    "ELXP" 0;
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -264,13 +270,22 @@ section[id] {
 }
 
 .site-nav-github {
-  padding: 7px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   color: var(--foreground) !important;
+}
+
+.site-nav-github svg {
+  display: block;
 }
 
 .site-nav-github:hover {
@@ -337,56 +352,6 @@ section[id] {
 
 .hero-panel .hero-features {
   justify-content: flex-start;
-}
-
-.hero-panel .hero-badges {
-  justify-content: flex-start;
-}
-
-/* Hero CTAs */
-.hero-cta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.hero-cta-primary,
-.hero-cta-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 18px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: var(--radius);
-  text-decoration: none;
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-}
-
-.hero-cta-primary {
-  color: var(--primary-foreground);
-  background: var(--primary);
-  border: 1px solid var(--primary);
-  box-shadow: 0 4px 14px -4px rgba(91, 46, 255, 0.45);
-}
-
-.hero-cta-primary:hover {
-  background: var(--primary-hover);
-  border-color: var(--primary-hover);
-  transform: translateY(-1px);
-}
-
-.hero-cta-secondary {
-  color: var(--foreground);
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.hero-cta-secondary:hover {
-  border-color: var(--foreground);
-  transform: translateY(-1px);
 }
 
 /* Card Stack — right side */
@@ -654,10 +619,6 @@ section[id] {
     justify-content: center;
   }
 
-  .hero-panel .hero-badges {
-    justify-content: center;
-  }
-
   .carousel-3d {
     min-height: 320px;
   }
@@ -703,14 +664,6 @@ section[id] {
     font-size: 12px;
   }
 
-  .hero-panel .hero-badges {
-    gap: 6px;
-  }
-
-  .hero-panel .hero-badges img {
-    height: 18px;
-  }
-
   .hero-panel .hero-byline {
     font-size: 12px;
   }
@@ -748,17 +701,6 @@ section[id] {
 
   .site-nav-brand {
     font-size: 19px;
-  }
-
-  .hero-cta {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
-  .hero-cta-primary,
-  .hero-cta-secondary {
-    padding: 9px 15px;
-    font-size: 13px;
   }
 
   .carousel-3d-hint {
@@ -836,22 +778,6 @@ section[id] {
   mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.2 3.2L13 5" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>') center / contain no-repeat;
 }
 
-.hero-badges {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.hero-badges a {
-  display: inline-flex;
-}
-
-.hero-badges img {
-  height: 20px;
-}
-
 /* Install command */
 .install-command {
   display: flex;
@@ -859,7 +785,7 @@ section[id] {
   gap: 12px;
   background: #050507;
   border-radius: var(--radius);
-  padding: 12px 16px;
+  padding: 8px 8px 8px 16px;
   font-family: var(--font-mono);
   font-size: 13px;
   color: #c9c9c9;
@@ -881,15 +807,25 @@ section[id] {
 
 .install-copy {
   margin-left: auto;
-  color: var(--muted-light);
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-family: var(--font-sans);
   font-size: 12px;
-  opacity: 0.6;
-  transition: opacity 0.2s ease;
+  font-weight: 600;
   user-select: none;
+  transition: background 0.2s ease;
 }
 
 .install-command:hover .install-copy {
-  opacity: 1;
+  background: var(--primary-hover);
+}
+
+.install-command.is-copied .install-copy {
+  background: var(--accent-lime);
+  color: var(--foreground);
 }
 
 .cta-row {
@@ -1863,7 +1799,7 @@ section[id] {
 
   .install-command {
     font-size: 12px;
-    padding: 10px 12px;
+    padding: 6px 6px 6px 12px;
   }
 
   .quick-start-step {
@@ -1980,7 +1916,7 @@ section[id] {
 @media (max-width: 640px) {
   .hero-install {
     font-size: 12px;
-    padding: 10px 12px;
+    padding: 6px 6px 6px 12px;
   }
 }
 

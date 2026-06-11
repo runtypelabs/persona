@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="/src/index.css">
-  <link rel="stylesheet" href="/src/App.css">
+  <link rel="stylesheet" href="/src/home.css">
   <link rel="icon" href="/favicon.ico" />
   <link rel="canonical" href="https://www.persona-chat.dev/" />
-  <title>Persona — AI Chat Widget by Runtype</title>
+  <title>Persona — The VanillaJS AI UI Library by Runtype</title>
   <meta name="description" content="Persona is an open-source, themeable AI chat widget you can add to any website in minutes. SSE streaming, agent loops, tool use, and style isolation — zero framework dependencies.">
-  <meta property="og:title" content="Persona — Open Source AI Chat Widget">
+  <meta property="og:title" content="Persona — Open-source AI UI Library in VanillaJS">
   <meta property="og:description" content="Add a streaming AI chat to any website, in minutes. Themeable, pluggable, zero framework dependencies.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.persona-chat.dev/">
@@ -21,275 +20,270 @@
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Persona — open source AI chat widget for websites">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Persona — Open Source AI Chat Widget">
-  <meta name="twitter:description" content="Add a streaming AI chat to any website, in minutes. Themeable, pluggable, zero framework dependencies.">
+  <meta name="twitter:title" content="Persona — Open-source AI UI Library in VanillaJS">
+  <meta name="twitter:description" content="Persona is an open-source, themeable AI chat widget you can add to any website in minutes. SSE streaming, agent loops, tool use, and style isolation — zero framework dependencies.">
   <meta name="twitter:image" content="https://www.persona-chat.dev/og-image.png">
-  <meta name="twitter:image:alt" content="Persona — open source AI chat widget for websites">
+  <meta name="twitter:image:alt" content="Persona — open-source AI UI Library in VanillaJS">
 </head>
 <body>
-  <div class="page">
-    <!-- Top nav -->
-    <header class="site-nav">
-      <a class="site-nav-brand" href="/">Persona</a>
-      <nav class="site-nav-links" aria-label="Page sections">
-        <a href="#try-it">Live demo</a>
-        <a href="#quick-start">Quick start</a>
-        <a href="#demos">Demos</a>
-        <a href="/theme.html">Theme editor</a>
-        <a class="site-nav-github" href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener">GitHub</a>
-      </nav>
-    </header>
+  <!-- Background layer: wireframe tunnel + paper grain -->
+  <div class="bg-layer" aria-hidden="true">
+    <div class="bg-grain"></div>
+    <canvas id="bg-tunnel"></canvas>
+  </div>
 
-    <!-- Hero — 3D Carousel Showcase -->
-    <section class="hero-split">
-      <div class="hero-split-inner">
-        <div class="hero-panel">
-          <span class="label">Open Source AI Chat Widget</span>
-          <h1 class="kern-tight">Add a streaming AI chat to any website, in minutes.</h1>
-          <p>Themeable, pluggable, zero framework dependencies. Style isolation, SSE streaming, agent loops, and tool use — all in one drop-in widget.</p>
-          <div class="hero-cta">
-            <a class="hero-cta-primary" href="#quick-start">Get started <span aria-hidden="true">→</span></a>
-            <a class="hero-cta-secondary" href="#try-it">Try it live</a>
+  <!-- Top navigation shell -->
+  <header class="site-header">
+    <a class="site-wordmark" href="/">PERSONA</a>
+    <nav class="site-nav" aria-label="Page sections">
+      <a href="#quick-start">Quick Start</a>
+      <a href="#webmcp">WebMCP</a>
+      <a href="#demos">Demos</a>
+      <a href="/theme.html">Theme Editor</a>
+    </nav>
+    <div class="site-actions">
+      <a class="btn-caps" href="#quick-start">Get Started</a>
+      <a class="site-github" href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener" aria-label="Persona on GitHub">
+        <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+        </svg>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main grid: editorial column + live chat rail -->
+  <div class="layout">
+    <main class="editorial">
+      <div class="editorial-inner">
+
+        <!-- Hero -->
+        <section class="hero">
+          <h1 class="hero-display">THE VANILLAJS<br><span class="display-accent">AI UI Library</span></h1>
+          <p class="hero-sub">Persona is the open-source, MIT-licensed chat widget that adds streaming AI to any website in minutes — framework-free, themeable, WebMCP-native.</p>
+          <div class="hero-install-row">
+            <code><span class="install-prefix">$</span>npx @runtypelabs/cli@latest persona init</code>
+            <button
+              type="button"
+              class="hero-copy-btn"
+              data-copy-text="npx @runtypelabs/cli@latest persona init"
+              data-copy-default="Copy"
+              data-copy-success="Copied"
+              aria-label="Copy Persona init command"
+            ><span data-copy-label>Copy</span></button>
           </div>
-          <button
-            type="button"
-            class="install-command hero-install"
-            data-copy-text="npx @runtypelabs/cli@latest persona init"
-            data-copy-default="Copy"
-            data-copy-success="Copied!"
-            aria-label="Copy Persona init command"
-          >
-            <span class="install-prefix">$</span>
-            <span>npx @runtypelabs/cli@latest persona init</span>
-            <span class="install-copy" data-copy-label>Copy</span>
-          </button>
-          <ul class="hero-features" aria-label="Why Persona">
-            <li>Agents that operate your page</li>
-            <li>Voice built in</li>
-            <li>Won't break your styles</li>
-            <li>Works with any backend</li>
-            <li>Themeable to your brand</li>
-            <li>No framework required</li>
-          </ul>
-          <div class="hero-badges">
-            <a href="https://www.npmjs.com/package/@runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/npm/v/@runtypelabs/persona?style=flat&color=5B2EFF&label=npm" alt="npm"></a>
-            <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener"><img src="https://img.shields.io/badge/GitHub-runtypelabs%2Fpersona-5B2EFF?style=flat&logo=github&logoColor=white" alt="GitHub"></a>
-            <a href="https://deepwiki.com/runtypelabs/persona" target="_blank" rel="noopener"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+          <div class="hero-meta" aria-label="Why Persona">
+            <span>MIT License</span>
+            <span>Zero Framework Deps</span>
+            <span>Voice Built In</span>
+            <span>Any Backend</span>
           </div>
-          <div class="hero-byline">
-            <span>Built by</span>
-            <a href="https://runtype.com" target="_blank" rel="noopener"><img src="/runtype-logo.svg" alt="Runtype" class="runtype-logo"></a>
-          </div>
-        </div>
-        <div class="carousel-3d" id="hero-carousel" role="region" aria-roledescription="carousel" aria-label="Live demo gallery">
-          <div class="carousel-3d-scene">
-            <div class="carousel-3d-card">
-              <a href="/webmcp-demo.html" class="carousel-3d-card-link">
-                <div class="carousel-3d-iframe-wrap">
-                  <iframe src="/webmcp-demo.html" tabindex="-1" title="WebMCP Storefront"></iframe>
-                </div>
-                <span class="carousel-3d-card-title">WebMCP Storefront</span>
-              </a>
-            </div>
-            <div class="carousel-3d-card">
-              <a href="/webmcp-calendar.html" class="carousel-3d-card-link">
-                <div class="carousel-3d-iframe-wrap">
-                  <iframe data-src="/webmcp-calendar.html" tabindex="-1" title="WebMCP Calendar"></iframe>
-                </div>
-                <span class="carousel-3d-card-title">WebMCP Calendar</span>
-              </a>
-            </div>
-            <div class="carousel-3d-card">
-              <a href="/webmcp-slides.html" class="carousel-3d-card-link">
-                <div class="carousel-3d-iframe-wrap">
-                  <iframe data-src="/webmcp-slides.html" tabindex="-1" title="WebMCP Slides"></iframe>
-                </div>
-                <span class="carousel-3d-card-title">WebMCP Slides</span>
-              </a>
-            </div>
-            <div class="carousel-3d-card">
-              <a href="/bakery.html" class="carousel-3d-card-link">
-                <div class="carousel-3d-iframe-wrap">
-                  <iframe data-src="/bakery.html" tabindex="-1" title="Bakery Assistant"></iframe>
-                </div>
-                <span class="carousel-3d-card-title">Bakery Assistant</span>
-              </a>
-            </div>
-            <div class="carousel-3d-card">
-              <a href="/fullscreen-assistant-demo.html" class="carousel-3d-card-link">
-                <div class="carousel-3d-iframe-wrap">
-                  <iframe data-src="/fullscreen-assistant-demo.html" tabindex="-1" title="Fullscreen Layout"></iframe>
-                </div>
-                <span class="carousel-3d-card-title">Fullscreen Layout</span>
-              </a>
-            </div>
-            <div class="carousel-3d-card">
-              <a href="/docked-panel-demo.html" class="carousel-3d-card-link">
-                <div class="carousel-3d-iframe-wrap">
-                  <iframe data-src="/docked-panel-demo.html" tabindex="-1" title="Docked Panel"></iframe>
-                </div>
-                <span class="carousel-3d-card-title">Docked Panel</span>
-              </a>
-            </div>
-            <div class="carousel-3d-card">
-              <a href="/action-middleware.html" class="carousel-3d-card-link">
-                <div class="carousel-3d-iframe-wrap">
-                  <iframe data-src="/action-middleware.html" tabindex="-1" title="Action Middleware"></iframe>
-                </div>
-                <span class="carousel-3d-card-title">Action Middleware</span>
-              </a>
-            </div>
-            <div class="carousel-3d-card">
-              <a href="/theme.html" class="carousel-3d-card-link">
-                <div class="carousel-3d-iframe-wrap">
-                  <iframe data-src="/theme.html" tabindex="-1" title="Theme Editor"></iframe>
-                </div>
-                <span class="carousel-3d-card-title">Theme Editor</span>
-              </a>
-            </div>
-            <div class="carousel-3d-card">
-              <a href="/launcher-demo.html" class="carousel-3d-card-link">
-                <div class="carousel-3d-iframe-wrap">
-                  <iframe data-src="/launcher-demo.html" tabindex="-1" title="Default Launcher"></iframe>
-                </div>
-                <span class="carousel-3d-card-title">Default Launcher</span>
-              </a>
-            </div>
-          </div>
-          <div class="carousel-3d-controls">
-            <button type="button" class="carousel-3d-nav" data-carousel-prev aria-label="Previous demo">&larr;</button>
-            <div class="carousel-3d-dots" data-carousel-dots></div>
-            <button type="button" class="carousel-3d-nav" data-carousel-next aria-label="Next demo">&rarr;</button>
-          </div>
-          <p class="carousel-3d-hint" aria-hidden="true">Click a card to open it full size</p>
-          <span class="visually-hidden" aria-live="polite" data-carousel-status></span>
-        </div>
-      </div>
-    </section>
+        </section>
 
-    <main class="shell">
-
-      <!-- Live Demo -->
-      <section class="card cardFull tryit-section reveal-el" id="try-it">
-        <span class="label">Live Demo</span>
-        <h2 class="card-title kern-tight" style="font-size: 24px;">Try it live</h2>
-        <p>Ask Persona anything — or pick a suggestion below to explore.</p>
-        <div class="tryit-backdrop">
-          <div class="tryit-smoke"></div>
-          <div class="tryit-grain"></div>
-          <div class="tryit-fade"></div>
-          <div class="tryit-widget-frame">
-            <div class="embedded-target" id="inline-widget"></div>
-          </div>
-        </div>
-      </section>
-
-
-      <!-- Quick Start -->
-      <section class="card cardFull quick-start-section reveal-el" id="quick-start">
-        <span class="label">Quick Start</span>
-        <h2 class="card-title kern-tight" style="font-size: 24px;">Choose your integration path</h2>
-        <p>Ship to prod with Runtype in minutes, or wire Persona into your own SSE backend.</p>
-
-        <div class="quick-start-tabs" role="tablist" aria-label="Quick start paths">
-          <button
-            type="button"
-            class="quick-start-tab"
-            id="quick-start-tab-runtype"
-            role="tab"
-            aria-selected="true"
-            aria-controls="quick-start-panel-runtype"
-            data-quick-start-tab="runtype"
-          >
-            Using Runtype
-          </button>
-          <button
-            type="button"
-            class="quick-start-tab"
-            id="quick-start-tab-sse"
-            role="tab"
-            aria-selected="false"
-            aria-controls="quick-start-panel-sse"
-            data-quick-start-tab="sse"
-            tabindex="-1"
-          >
-            Any SSE Backend
-          </button>
-        </div>
-
-        <div
-          class="quick-start-panel"
-          id="quick-start-panel-runtype"
-          role="tabpanel"
-          aria-labelledby="quick-start-tab-runtype"
-          data-quick-start-panel="runtype"
-        >
-          <div class="quick-start-steps">
-            <div class="quick-start-step">
-              <div class="quick-start-step-meta">
-                <span class="quick-start-step-index">01</span>
-                <div class="quick-start-step-copy">
-                  <h3 class="quick-start-step-title">Run the CLI setup</h3>
-                  <p>Create an agent, mint a client token, and get a paste-ready installer snippet.</p>
-                </div>
+        <!-- Showcase carousel -->
+        <section id="showcase">
+          <span class="label-caps">01 / Demos that make you [and your browser] happy</span>
+          <div class="carousel-3d" id="hero-carousel" role="region" aria-roledescription="carousel" aria-label="Live demo gallery">
+            <div class="carousel-3d-scene">
+              <div class="carousel-3d-card">
+                <a href="/webmcp-demo.html" class="carousel-3d-card-link">
+                  <div class="carousel-3d-iframe-wrap">
+                    <iframe src="/webmcp-demo.html" tabindex="-1" title="WebMCP Storefront"></iframe>
+                  </div>
+                  <span class="carousel-3d-card-title">WebMCP Storefront</span>
+                </a>
               </div>
-              <button
-                type="button"
-                class="install-command quick-start-install"
-                data-copy-text="npx @runtypelabs/cli@latest persona init"
-                data-copy-default="Copy"
-                data-copy-success="Copied!"
-                aria-label="Copy Persona init command"
-              >
-                <span class="install-prefix">$</span>
-                <span>npx @runtypelabs/cli@latest persona init</span>
-                <span class="install-copy" data-copy-label>Copy</span>
-              </button>
-              <p class="quick-start-step-note">Sign in when prompted — the CLI reveals your token and lets you copy the snippet.</p>
-              <div class="quick-start-note-actions">
+              <div class="carousel-3d-card">
+                <a href="/webmcp-calendar.html" class="carousel-3d-card-link">
+                  <div class="carousel-3d-iframe-wrap">
+                    <iframe data-src="/webmcp-calendar.html" tabindex="-1" title="WebMCP Calendar"></iframe>
+                  </div>
+                  <span class="carousel-3d-card-title">WebMCP Calendar</span>
+                </a>
+              </div>
+              <div class="carousel-3d-card">
+                <a href="/webmcp-slides.html" class="carousel-3d-card-link">
+                  <div class="carousel-3d-iframe-wrap">
+                    <iframe data-src="/webmcp-slides.html" tabindex="-1" title="WebMCP Slides"></iframe>
+                  </div>
+                  <span class="carousel-3d-card-title">WebMCP Slides</span>
+                </a>
+              </div>
+              <div class="carousel-3d-card">
+                <a href="/bakery.html" class="carousel-3d-card-link">
+                  <div class="carousel-3d-iframe-wrap">
+                    <iframe data-src="/bakery.html" tabindex="-1" title="Bakery Assistant"></iframe>
+                  </div>
+                  <span class="carousel-3d-card-title">Bakery Assistant</span>
+                </a>
+              </div>
+              <div class="carousel-3d-card">
+                <a href="/fullscreen-assistant-demo.html" class="carousel-3d-card-link">
+                  <div class="carousel-3d-iframe-wrap">
+                    <iframe data-src="/fullscreen-assistant-demo.html" tabindex="-1" title="Fullscreen Layout"></iframe>
+                  </div>
+                  <span class="carousel-3d-card-title">Fullscreen Layout</span>
+                </a>
+              </div>
+              <div class="carousel-3d-card">
+                <a href="/docked-panel-demo.html" class="carousel-3d-card-link">
+                  <div class="carousel-3d-iframe-wrap">
+                    <iframe data-src="/docked-panel-demo.html" tabindex="-1" title="Docked Panel"></iframe>
+                  </div>
+                  <span class="carousel-3d-card-title">Docked Panel</span>
+                </a>
+              </div>
+              <div class="carousel-3d-card">
+                <a href="/theme.html" class="carousel-3d-card-link">
+                  <div class="carousel-3d-iframe-wrap">
+                    <iframe data-src="/theme.html" tabindex="-1" title="Theme Editor"></iframe>
+                  </div>
+                  <span class="carousel-3d-card-title">Theme Editor</span>
+                </a>
+              </div>
+            </div>
+            <div class="carousel-3d-controls">
+              <button type="button" class="carousel-3d-nav" data-carousel-prev aria-label="Previous demo">&larr;</button>
+              <div class="carousel-3d-dots" data-carousel-dots></div>
+              <button type="button" class="carousel-3d-nav" data-carousel-next aria-label="Next demo">&rarr;</button>
+            </div>
+            <p class="carousel-3d-hint" aria-hidden="true">Click a card to open it full size</p>
+            <span class="visually-hidden" aria-live="polite" data-carousel-status></span>
+          </div>
+        </section>
+
+        <!-- Capability modules -->
+        <section id="capabilities" class="reveal-el">
+          <div class="modules-grid">
+            <div class="module">
+              <span class="label-caps">02 / Agentic</span>
+              <h3>Operates Your Page</h3>
+              <p>Expose page actions — search, carts, bookings, forms — as WebMCP tools and the agent drives them directly, with user approval built in. No backend integration required.</p>
+            </div>
+            <div class="module">
+              <span class="label-caps">03 / Isolation</span>
+              <h3>Won't Break Your Styles</h3>
+              <p>Shadow DOM rendering and prefixed CSS keep widget and host styles fully separate. Drop it into any page — nothing leaks in, nothing leaks out.</p>
+            </div>
+            <div class="module">
+              <span class="label-caps">04 / Transport</span>
+              <h3>Streams From Any Backend</h3>
+              <p>SSE streaming with pluggable parsers. Adapt any request or event shape with <code>customFetch</code> and <code>parseSSEEvent</code> — Runtype is the fast path, not a requirement.</p>
+            </div>
+            <div class="module">
+              <span class="label-caps">05 / Theming</span>
+              <h3>Yours, Down To The Token</h3>
+              <p>A three-layer token tree — palette, semantic, component — with dark mode and a live theme editor. Match your brand without forking the widget.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Quick start -->
+        <section id="quick-start" class="reveal-el">
+          <div class="section-head">
+            <span class="label-caps">06 / Quick Start</span>
+            <h2 class="editorial-h">Choose Your Integration Path</h2>
+            <p class="body-copy">Ship to prod with Runtype in minutes, or wire Persona into your own SSE backend.</p>
+          </div>
+
+          <div class="quick-start-tabs" role="tablist" aria-label="Quick start paths">
+            <button
+              type="button"
+              class="quick-start-tab"
+              id="quick-start-tab-runtype"
+              role="tab"
+              aria-selected="true"
+              aria-controls="quick-start-panel-runtype"
+              data-quick-start-tab="runtype"
+            >
+              Using Runtype
+            </button>
+            <button
+              type="button"
+              class="quick-start-tab"
+              id="quick-start-tab-sse"
+              role="tab"
+              aria-selected="false"
+              aria-controls="quick-start-panel-sse"
+              data-quick-start-tab="sse"
+              tabindex="-1"
+            >
+              Any SSE Backend
+            </button>
+          </div>
+
+          <div
+            class="quick-start-panel"
+            id="quick-start-panel-runtype"
+            role="tabpanel"
+            aria-labelledby="quick-start-tab-runtype"
+            data-quick-start-panel="runtype"
+          >
+            <div class="quick-start-steps">
+              <div class="quick-start-step">
+                <div class="quick-start-step-meta">
+                  <span class="quick-start-step-index">01</span>
+                  <div class="quick-start-step-copy">
+                    <h3 class="quick-start-step-title">Run the CLI setup</h3>
+                    <p>Create an agent, mint a client token, and get a paste-ready installer snippet.</p>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  class="quick-start-note-link"
-                  data-quick-start-flags-open
-                  aria-haspopup="dialog"
-                  aria-controls="quick-start-flags-dialog"
+                  class="install-command quick-start-install"
+                  data-copy-text="npx @runtypelabs/cli@latest persona init"
+                  data-copy-default="Copy"
+                  data-copy-success="Copied"
+                  aria-label="Copy Persona init command"
                 >
-                  Show all flags
+                  <span class="install-prefix">$</span>
+                  <span>npx @runtypelabs/cli@latest persona init</span>
+                  <span class="install-copy" data-copy-label>Copy</span>
                 </button>
-              </div>
-            </div>
-
-            <div class="quick-start-step">
-              <div class="quick-start-step-meta">
-                <span class="quick-start-step-index">02</span>
-                <div class="quick-start-step-copy">
-                  <h3 class="quick-start-step-title">Paste the installer snippet</h3>
-                  <p>Use the default script installer when you want the fastest path to a live widget.</p>
+                <p class="quick-start-step-note">Sign in when prompted — the CLI reveals your token and lets you copy the snippet.</p>
+                <div class="quick-start-note-actions">
+                  <button
+                    type="button"
+                    class="quick-start-note-link"
+                    data-quick-start-flags-open
+                    aria-haspopup="dialog"
+                    aria-controls="quick-start-flags-dialog"
+                  >
+                    Show all flags
+                  </button>
                 </div>
               </div>
-              <div class="code-showcase">
-                <pre><code>&lt;script
+
+              <div class="quick-start-step">
+                <div class="quick-start-step-meta">
+                  <span class="quick-start-step-index">02</span>
+                  <div class="quick-start-step-copy">
+                    <h3 class="quick-start-step-title">Paste the installer snippet</h3>
+                    <p>Use the default script installer when you want the fastest path to a live widget.</p>
+                  </div>
+                </div>
+                <div class="code-showcase">
+                  <pre><code>&lt;script
   src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"
   data-runtype-token="ct_test_..."
 &gt;&lt;/script&gt;</code></pre>
-              </div>
-              <p class="quick-start-step-note">The widget mounts on <code>body</code> by default. Need a specific container? Pass <code>--target-selector "#chat"</code> and the CLI will include a mount div and <code>data-config</code> in the snippet.</p>
-            </div>
-          </div>
-          <p class="quick-start-footnote">Need server-side flow control? Use <code>@runtypelabs/persona-proxy</code>.</p>
-          <dialog class="quick-start-dialog" id="quick-start-flags-dialog" data-quick-start-flags-dialog aria-labelledby="quick-start-flags-title">
-            <div class="quick-start-dialog-card">
-              <div class="quick-start-dialog-titlebar">
-                <div class="quick-start-dialog-dots">
-                  <span class="quick-start-dialog-dot"></span>
-                  <span class="quick-start-dialog-dot"></span>
-                  <span class="quick-start-dialog-dot"></span>
                 </div>
-                <span class="quick-start-dialog-titlebar-label" id="quick-start-flags-title">persona init --help</span>
-                <button type="button" class="quick-start-dialog-close" data-quick-start-flags-close aria-label="Close">esc</button>
+                <p class="quick-start-step-note">The widget mounts on <code>body</code> by default. Need a specific container? Pass <code>--target-selector "#chat"</code> and the CLI will include a mount div and <code>data-config</code> in the snippet.</p>
               </div>
-              <div class="quick-start-dialog-body">
-                <pre>
+            </div>
+            <p class="quick-start-footnote">Need server-side flow control? Use <code>@runtypelabs/persona-proxy</code>.</p>
+            <dialog class="quick-start-dialog" id="quick-start-flags-dialog" data-quick-start-flags-dialog aria-labelledby="quick-start-flags-title">
+              <div class="quick-start-dialog-card">
+                <div class="quick-start-dialog-titlebar">
+                  <div class="quick-start-dialog-dots">
+                    <span class="quick-start-dialog-dot"></span>
+                    <span class="quick-start-dialog-dot"></span>
+                    <span class="quick-start-dialog-dot"></span>
+                  </div>
+                  <span class="quick-start-dialog-titlebar-label" id="quick-start-flags-title">persona init --help</span>
+                  <button type="button" class="quick-start-dialog-close" data-quick-start-flags-close aria-label="Close">esc</button>
+                </div>
+                <div class="quick-start-dialog-body">
+                  <pre>
 <span class="term-heading">Usage</span>
   $ npx @runtypelabs/cli@latest persona init <span class="term-muted">[options]</span>
 
@@ -322,204 +316,199 @@
   <span class="term-muted"># ESM snippet for a bundled app</span>
   $ npx @runtypelabs/cli@latest persona init --format esm
 </pre>
+                </div>
               </div>
-            </div>
-          </dialog>
-        </div>
-
-        <div
-          class="quick-start-panel"
-          id="quick-start-panel-sse"
-          role="tabpanel"
-          aria-labelledby="quick-start-tab-sse"
-          data-quick-start-panel="sse"
-          hidden
-        >
-          <div class="quick-start-intro">
-            <strong>Bring your own backend:</strong> point Persona at any SSE endpoint and adapt the request or event format if needed.
+            </dialog>
           </div>
-          <div class="quick-start-steps">
-            <div class="quick-start-step">
-              <div class="quick-start-step-meta">
-                <span class="quick-start-step-index">01</span>
-                <div class="quick-start-step-copy">
-                  <h3 class="quick-start-step-title">Install Persona</h3>
-                  <p>Add the widget package to your app.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                class="install-command quick-start-install"
-                data-copy-text="npm install @runtypelabs/persona"
-                data-copy-default="Copy"
-                data-copy-success="Copied!"
-                aria-label="Copy npm install command"
-              >
-                <span class="install-prefix">$</span>
-                <span>npm install @runtypelabs/persona</span>
-                <span class="install-copy" data-copy-label>Copy</span>
-              </button>
-            </div>
 
-            <div class="quick-start-step">
-              <div class="quick-start-step-meta">
-                <span class="quick-start-step-index">02</span>
-                <div class="quick-start-step-copy">
-                  <h3 class="quick-start-step-title">Mount the widget</h3>
-                  <p>Import the stylesheet, initialize Persona, and point it at your SSE endpoint.</p>
+          <div
+            class="quick-start-panel"
+            id="quick-start-panel-sse"
+            role="tabpanel"
+            aria-labelledby="quick-start-tab-sse"
+            data-quick-start-panel="sse"
+            hidden
+          >
+            <div class="quick-start-intro">
+              <strong>Bring your own backend:</strong> point Persona at any SSE endpoint and adapt the request or event format if needed.
+            </div>
+            <div class="quick-start-steps">
+              <div class="quick-start-step">
+                <div class="quick-start-step-meta">
+                  <span class="quick-start-step-index">01</span>
+                  <div class="quick-start-step-copy">
+                    <h3 class="quick-start-step-title">Install Persona</h3>
+                    <p>Add the widget package to your app.</p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  class="install-command quick-start-install"
+                  data-copy-text="npm install @runtypelabs/persona"
+                  data-copy-default="Copy"
+                  data-copy-success="Copied"
+                  aria-label="Copy npm install command"
+                >
+                  <span class="install-prefix">$</span>
+                  <span>npm install @runtypelabs/persona</span>
+                  <span class="install-copy" data-copy-label>Copy</span>
+                </button>
               </div>
-              <div class="code-showcase">
-                <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
+
+              <div class="quick-start-step">
+                <div class="quick-start-step-meta">
+                  <span class="quick-start-step-index">02</span>
+                  <div class="quick-start-step-copy">
+                    <h3 class="quick-start-step-title">Mount the widget</h3>
+                    <p>Import the stylesheet, initialize Persona, and point it at your SSE endpoint.</p>
+                  </div>
+                </div>
+                <div class="code-showcase">
+                  <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
 <span class="code-keyword">import</span> { <span class="code-function">initAgentWidget</span> } <span class="code-keyword">from</span> <span class="code-string">"@runtypelabs/persona"</span>;
 
 <span class="code-function">initAgentWidget</span>({
   <span class="code-keyword">target</span>: <span class="code-string">"#chat"</span>,
   <span class="code-keyword">config</span>: { apiUrl: <span class="code-string">"https://your-api.com/chat"</span> },
 });</code></pre>
+                </div>
               </div>
             </div>
+            <p class="quick-start-footnote">If your backend uses a different request or event shape, customize <code>customFetch</code> or <code>parseSSEEvent</code> in the widget config.</p>
           </div>
-          <p class="quick-start-footnote">If your backend uses a different request or event shape, customize <code>customFetch</code> or <code>parseSSEEvent</code> in the widget config.</p>
-        </div>
-      </section>
+        </section>
 
-      <!-- Theme Editor -->
-      <!-- WebMCP -->
-      <section class="card cardFull webmcp-section reveal-el" id="webmcp">
-        <span class="label">Agentic</span>
-        <h2 class="card-title kern-tight" style="font-size: 24px;">Persona doesn't just chat — it operates your page</h2>
-        <p>Expose your page's actions as <a href="https://github.com/webmachinelearning/webmcp" target="_blank" rel="noopener">WebMCP</a> tools — search, carts, bookings, forms — and the agent drives them directly, with user approval built in. No backend integration required: the tools live in your page.</p>
-        <div class="webmcp-grid">
-          <a class="webmcp-demo-card" href="/webmcp-demo.html">
-            <span class="webmcp-demo-tag">Commerce</span>
-            <strong class="webmcp-demo-title">WebMCP Storefront</strong>
-            <p>The agent searches a live catalog, builds the cart, and walks checkout — every tool call visible in a wire log.</p>
-            <span class="webmcp-demo-cta">Open demo <span aria-hidden="true">→</span></span>
-          </a>
-          <a class="webmcp-demo-card" href="/webmcp-calendar.html">
-            <span class="webmcp-demo-tag">Scheduling</span>
-            <strong class="webmcp-demo-title">WebMCP Calendar</strong>
-            <p>A team calendar copilot — the agent reads availability, finds conflicts, and books events through page tools.</p>
-            <span class="webmcp-demo-cta">Open demo <span aria-hidden="true">→</span></span>
-          </a>
-          <div class="webmcp-code">
-            <div class="code-showcase">
-              <pre><code>// Your page registers a tool…
+        <!-- WebMCP highlight -->
+        <section id="webmcp" class="reveal-el">
+          <div class="webmcp-grid">
+            <div class="webmcp-code-frame">
+              <div class="code-showcase">
+                <pre><code><span class="code-comment">// Your page registers a tool…</span>
 document.modelContext.registerTool({
-  name: "search_products",
-  description: "Search the catalog by free-text query.",
+  name: <span class="code-string">"search_products"</span>,
+  description: <span class="code-string">"Search the catalog."</span>,
   inputSchema: {
-    type: "object",
-    properties: { query: { type: "string" } },
-    required: ["query"],
+    type: <span class="code-string">"object"</span>,
+    properties: {
+      query: { type: <span class="code-string">"string"</span> },
+    },
+    required: [<span class="code-string">"query"</span>],
   },
-  async execute({ query }) {
-    return searchCatalog(query);
+  <span class="code-keyword">async</span> <span class="code-function">execute</span>({ query }) {
+    <span class="code-keyword">return</span> searchCatalog(query);
   },
 });
 
-// …and the Persona agent can call it. That's the whole integration.</code></pre>
+<span class="code-comment">// …and the Persona agent can call
+// it. That's the whole integration.</span></code></pre>
+              </div>
+            </div>
+            <div class="webmcp-body">
+              <span class="label-caps">07 / Arch_Protocol</span>
+              <h3>The New Standard For Tool Use</h3>
+              <p class="body-copy">Persona isn't just a chat UI — it's a communication layer. By implementing the <a href="https://github.com/webmachinelearning/webmcp" target="_blank" rel="noopener">WebMCP</a> standard, it discovers and executes tools that live directly in your page — search, carts, bookings, forms — with user approval gating every call. No backend integration required.</p>
+              <div class="webmcp-actions">
+                <a class="btn-caps" href="/webmcp-demo.html">Open Storefront Demo</a>
+                <a class="btn-caps" href="/webmcp-calendar.html">Open Calendar Demo</a>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="card cardFull theme-editor-section reveal-el">
-        <span class="label">Customization</span>
-        <h2 class="card-title kern-tight">Theme Editor</h2>
-        <p>Customize every color, font, and layout token — then copy the config straight into your project.</p>
-        <a class="theme-editor-link" href="/theme.html">
-          <div class="theme-backdrop">
-            <div class="theme-smoke"></div>
-            <div class="theme-grain"></div>
-            <div class="theme-fade"></div>
-            <div class="theme-cta">
-              <span class="theme-cta-label">Open Theme Editor</span>
-              <span class="theme-cta-arrow">&rarr;</span>
-            </div>
+        <!-- Demos & patterns -->
+        <section id="demos" class="reveal-el">
+          <div class="section-head">
+            <span class="label-caps">08 / Demos &amp; Patterns</span>
+            <h2 class="editorial-h">See What Persona Can Do</h2>
+            <p class="body-copy">Agentic, layout, voice, and business scenarios — every demo is a working page you can open and inspect.</p>
           </div>
-        </a>
-      </section>
+          <div class="patterns-grid">
+            <a class="pattern-link" href="/webmcp-demo.html"><span>WebMCP Storefront</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/webmcp-calendar.html"><span>WebMCP Calendar</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/webmcp-slides.html"><span>WebMCP Slides</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/bakery.html"><span>Bakery Assistant</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/fullscreen-assistant-demo.html"><span>Fullscreen Assistant</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/docked-panel-demo.html"><span>Docked Panel</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/approval-demo.html"><span>Tool Approval</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/voice-integration-demo.html"><span>Voice Integration</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/artifact-demo.html"><span>Artifact Sidebar</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/custom-components.html"><span>Custom Components</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/stream-animations-demo.html"><span>Stream Animations</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/theme.html"><span>Theme Editor</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+          </div>
+          <div class="patterns-actions">
+            <a class="btn-caps" href="/advanced.html">Browse All Examples</a>
+            <a class="btn-caps" href="/standalone/sample.html">Standalone Script Samples</a>
+          </div>
+        </section>
 
-      <!-- Demos -->
-      <section class="card cardFull reveal-el" id="demos">
-        <span class="label">Demos</span>
-        <h2 class="card-title kern-tight">See what Persona can do</h2>
-        <p>A few favorites across agentic, layout, and business scenarios — or browse the full gallery.</p>
-        <div class="featured-grid">
-          <a class="example-item" href="/webmcp-demo.html">
-            <span class="example-item-tag">Agentic</span>
-            WebMCP Storefront
-            <span class="example-item-desc">The agent drives a live catalog, cart, and checkout</span>
-          </a>
-          <a class="example-item" href="/webmcp-calendar.html">
-            <span class="example-item-tag">Agentic</span>
-            WebMCP Calendar
-            <span class="example-item-desc">Reads availability and books events through page tools</span>
-          </a>
-          <a class="example-item" href="/bakery.html">
-            <span class="example-item-tag">Business</span>
-            Bakery Assistant
-            <span class="example-item-desc">Full business site with context-aware chat and checkout</span>
-          </a>
-          <a class="example-item" href="/fullscreen-assistant-demo.html">
-            <span class="example-item-tag">Layout</span>
-            Fullscreen Assistant
-            <span class="example-item-desc">Full-viewport dark split layout with artifacts</span>
-          </a>
-          <a class="example-item" href="/approval-demo.html">
-            <span class="example-item-tag">Agentic</span>
-            Tool Approval
-            <span class="example-item-desc">User confirmation before the agent executes a tool</span>
-          </a>
-          <a class="example-item" href="/voice-integration-demo.html">
-            <span class="example-item-tag">Voice</span>
-            Voice Integration
-            <span class="example-item-desc">Voice input powered by ElevenLabs</span>
-          </a>
-        </div>
-        <div class="advanced-cta-actions">
-          <a class="advanced-cta-link" href="/advanced.html">
-            Browse all examples
-            <span aria-hidden="true">→</span>
-          </a>
-          <a class="advanced-cta-link advanced-cta-link--secondary" href="/standalone/sample.html">
-            Standalone script samples
-            <span aria-hidden="true">→</span>
-          </a>
-        </div>
-      </section>
-
-      <!-- Footer -->
-      <footer class="footer">
-        <div class="footer-brand">
-          <a href="https://runtype.com" target="_blank" rel="noopener">
-            <img src="/runtype-logo.svg" alt="Runtype" style="height: 16px; width: auto; opacity: 0.55;">
-          </a>
-          <span class="footer-tagline">Where AI products are built</span>
-        </div>
-        <div class="footer-links">
-          <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener">GitHub</a>
-          <a href="https://www.npmjs.com/package/@runtypelabs/persona" target="_blank" rel="noopener">npm</a>
-          <a href="https://runtype.com" target="_blank" rel="noopener">Runtype</a>
-        </div>
-        <p class="footer-copy">&copy; 2026 Travrse Labs, Inc.</p>
-      </footer>
-
+      </div>
     </main>
 
-    <!-- Demo Lightbox -->
-    <dialog class="demo-lightbox" id="demo-lightbox">
-      <div class="demo-lightbox-chrome">
-        <button type="button" class="demo-lightbox-close" aria-label="Close demo preview">
-          <span aria-hidden="true">&times;</span>
-          <span class="demo-lightbox-hint">esc</span>
-        </button>
+    <!-- Live widget rail -->
+    <aside class="chat-rail" id="try-it" aria-label="Live Persona demo">
+      <div class="chat-rail-header">
+        <div class="chat-rail-title">
+          <svg class="status-glyph" aria-hidden="true" viewBox="0 0 16 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="8.75" y="1.25" width="6" height="6" stroke="currentColor" stroke-width="1.5" />
+            <path d="M8.75 4.25H3.5V12" stroke="currentColor" stroke-width="1.5" />
+            <path d="M1 9.75L3.5 12.25L6 9.75" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+          <span class="label-caps">Persona in action</span>
+        </div>
+        <div class="chat-rail-actions">
+          <span class="chat-rail-meta">DOCS_AGENT</span>
+          <button class="chat-rail-clear" type="button" data-rail-clear aria-label="Clear chat" title="Clear chat">
+            <svg viewBox="0 0 14 14" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2 3.75H12" stroke="currentColor" stroke-width="1.25" />
+              <path d="M5.25 3.75V2.25H8.75V3.75" stroke="currentColor" stroke-width="1.25" />
+              <path d="M3.5 3.75V11.75H10.5V3.75" stroke="currentColor" stroke-width="1.25" />
+              <path d="M5.75 6.25V9.75M8.25 6.25V9.75" stroke="currentColor" stroke-width="1.25" />
+            </svg>
+          </button>
+          <button class="chat-rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="inline-widget" aria-label="Collapse chat panel">
+            <svg viewBox="0 0 14 14" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2.5 2.5L7 7L2.5 11.5" stroke="currentColor" stroke-width="1.5" />
+              <path d="M7.5 2.5L12 7L7.5 11.5" stroke="currentColor" stroke-width="1.5" />
+            </svg>
+          </button>
+        </div>
       </div>
-      <iframe class="demo-lightbox-iframe" src="" title="Demo preview"></iframe>
-    </dialog>
+      <div class="chat-rail-body">
+        <div class="embedded-target" id="inline-widget"></div>
+      </div>
+    </aside>
   </div>
+
+  <!-- Footer shell -->
+  <footer class="site-footer">
+    <div class="footer-id">
+      <span class="label-caps">Persona OSS Project / 2026</span>
+      <p class="footer-copy">Built by <a href="https://runtype.com" target="_blank" rel="noopener" style="color: inherit;">Runtype</a> &middot; &copy; 2026 Travrse Labs, Inc.</p>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener">GITHUB</a>
+      <a href="https://www.npmjs.com/package/@runtypelabs/persona" target="_blank" rel="noopener">NPM</a>
+      <a class="footer-license" href="https://github.com/runtypelabs/persona/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>
+      <a href="https://deepwiki.com/runtypelabs/persona" target="_blank" rel="noopener">DEEPWIKI</a>
+      <a href="https://runtype.com" target="_blank" rel="noopener">RUNTYPE</a>
+    </div>
+    <div class="footer-status">
+      <span class="status-square" aria-hidden="true"></span>
+      <span>SYSTEM_STATUS: OPERATIONAL</span>
+    </div>
+  </footer>
+
+  <!-- Demo Lightbox -->
+  <dialog class="demo-lightbox" id="demo-lightbox">
+    <div class="demo-lightbox-chrome">
+      <button type="button" class="demo-lightbox-close" aria-label="Close demo preview">
+        <span aria-hidden="true">&times;</span>
+        <span class="demo-lightbox-hint">esc</span>
+      </button>
+    </div>
+    <iframe class="demo-lightbox-iframe" src="" title="Demo preview"></iframe>
+  </dialog>
 
   <!-- Scroll reveal & copy buttons -->
   <script>
@@ -613,6 +602,30 @@ document.modelContext.registerTool({
         });
       }
 
+      // Chat rail collapse
+      var chatRail = document.querySelector('.chat-rail');
+      var railToggle = document.querySelector('[data-rail-toggle]');
+      if (chatRail && railToggle) {
+        var RAIL_COLLAPSED_KEY = 'persona-home-rail-collapsed';
+
+        var setRailCollapsed = function(collapsed) {
+          chatRail.classList.toggle('is-collapsed', collapsed);
+          railToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+          railToggle.setAttribute('aria-label', collapsed ? 'Expand chat panel' : 'Collapse chat panel');
+          try {
+            localStorage.setItem(RAIL_COLLAPSED_KEY, collapsed ? '1' : '0');
+          } catch (e) { /* storage unavailable */ }
+        };
+
+        try {
+          if (localStorage.getItem(RAIL_COLLAPSED_KEY) === '1') setRailCollapsed(true);
+        } catch (e) { /* storage unavailable */ }
+
+        railToggle.addEventListener('click', function() {
+          setRailCollapsed(!chatRail.classList.contains('is-collapsed'));
+        });
+      }
+
       // Copy helper
       document.querySelectorAll('[data-copy-text]').forEach(function(trigger) {
         trigger.addEventListener('click', function() {
@@ -625,7 +638,11 @@ document.modelContext.registerTool({
             var successText = trigger.getAttribute('data-copy-success') || 'Copied!';
             if (label) {
               label.textContent = successText;
-              setTimeout(function() { label.textContent = defaultText; }, 2000);
+              trigger.classList.add('is-copied');
+              setTimeout(function() {
+                label.textContent = defaultText;
+                trigger.classList.remove('is-copied');
+              }, 2000);
             }
           });
         });
