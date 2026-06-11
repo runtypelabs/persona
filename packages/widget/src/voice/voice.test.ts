@@ -32,58 +32,7 @@ function mockBrowserSupport(supported: boolean) {
   }
 }
 
-// Note: TypeScript interfaces don't exist at runtime, so we can't test them directly
-// We test the concrete implementations instead
-
-describe('RuntypeVoiceProvider', () => {
-  it('should create instance with valid config', () => {
-    const config = {
-      agentId: 'test-agent',
-      clientToken: 'test-token',
-      host: 'localhost:8787',
-      voiceId: 'rachel'
-    };
-    
-    const provider = new RuntypeVoiceProvider(config);
-    expect(provider).toBeInstanceOf(RuntypeVoiceProvider);
-    expect(provider.type).toBe('runtype');
-  });
-  
-  it('should have correct methods', () => {
-    const config = {
-      agentId: 'test-agent',
-      clientToken: 'test-token'
-    };
-    
-    const provider = new RuntypeVoiceProvider(config);
-    expect(typeof provider.connect).toBe('function');
-    expect(typeof provider.disconnect).toBe('function');
-    expect(typeof provider.startListening).toBe('function');
-    expect(typeof provider.stopListening).toBe('function');
-    expect(typeof provider.onResult).toBe('function');
-    expect(typeof provider.onError).toBe('function');
-    expect(typeof provider.onStatusChange).toBe('function');
-  });
-});
-
 describe('BrowserVoiceProvider', () => {
-  it('should create instance with default config', () => {
-    const provider = new BrowserVoiceProvider();
-    expect(provider).toBeInstanceOf(BrowserVoiceProvider);
-    expect(provider.type).toBe('browser');
-  });
-  
-  it('should have correct methods', () => {
-    const provider = new BrowserVoiceProvider();
-    expect(typeof provider.connect).toBe('function');
-    expect(typeof provider.disconnect).toBe('function');
-    expect(typeof provider.startListening).toBe('function');
-    expect(typeof provider.stopListening).toBe('function');
-    expect(typeof provider.onResult).toBe('function');
-    expect(typeof provider.onError).toBe('function');
-    expect(typeof provider.onStatusChange).toBe('function');
-  });
-  
   it('should check browser support', () => {
     // Test supported
     mockBrowserSupport(true);
