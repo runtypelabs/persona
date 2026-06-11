@@ -258,6 +258,12 @@ if (dockTarget) {
         // auto-approve so the user can watch the agent assemble slides live.
         autoApprove: (info) => !APPROVAL_REQUIRED_TOOL_NAMES.has(info.toolName),
       },
+      features: {
+        ...DEFAULT_WIDGET_CONFIG.features,
+        // Advertise the built-in ask_user_question tool so Copilot can ask
+        // structured clarifying questions (answer-pill sheet) mid-task.
+        askUserQuestion: { expose: true },
+      },
       approval: {
         ...DEFAULT_WIDGET_CONFIG.approval,
         title: "Run deck tool?",
