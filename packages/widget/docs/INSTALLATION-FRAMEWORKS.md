@@ -83,8 +83,8 @@ The installer is fully asynchronous (it waits for framework hydration, then load
     clientToken: 'YOUR_TOKEN',
     windowKey: 'myChat',
     onChatReady(handle) {
-      handle.on('message:sent', (e) => console.log('sent:', e));
-      handle.on('message:received', (e) => console.log('received:', e));
+      handle.on('user:message', (message) => console.log('sent:', message));
+      handle.on('assistant:complete', (message) => console.log('received:', message));
     }
   };
 </script>
@@ -97,7 +97,7 @@ The installer is fully asynchronous (it waits for framework hydration, then load
 <script>
   window.addEventListener('persona:chat-ready', (e) => {
     const handle = e.detail;
-    handle.on('message:sent', (e) => console.log('sent:', e));
+    handle.on('user:message', (message) => console.log('sent:', message));
   });
 </script>
 

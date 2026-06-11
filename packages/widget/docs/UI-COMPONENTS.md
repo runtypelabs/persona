@@ -267,11 +267,16 @@ features: {
   askUserQuestion: {
     enabled: true,             // default: true. When false, the tool falls through to the normal tool-bubble path.
     expose: false,             // default: false. When true, advertises the built-in tool to the agent via clientTools[].
-    dismissible: true,         // default: true. Shows a × close button on the sheet.
+    layout: 'rows',            // default: 'rows'. Use 'pills' for the legacy compact wrap layout.
     slideInMs: 180,            // slide-in animation duration.
     freeTextLabel: 'Other…',
     freeTextPlaceholder: 'Type your answer…',
-    submitLabel: 'Send',
+    submitLabel: 'Send',       // submit label for free-text / multi-select.
+    nextLabel: 'Next',         // grouped (multi-question) payloads.
+    backLabel: 'Back',
+    submitAllLabel: 'Submit all',
+    skipLabel: 'Skip',
+    groupedAutoAdvance: true,  // single-select intermediate pages auto-advance.
     styles: {
       sheetBackground: '#ffffff',
       sheetBorder: '#e5e7eb',
@@ -287,7 +292,11 @@ features: {
 }
 ```
 
-The composer-overlay sheet is the only question UI — no transcript stub is rendered. After the user picks, the picked answer appears as a normal user bubble so the transcript reads naturally.
+The default `rows` layout renders full-width choices with descriptions always visible and an inline free-text row when `allowFreeText !== false`. `pills` preserves the older compact wrapped pills where descriptions surface as tooltips and the "Other…" pill expands into an input.
+
+A tool call may include 1–8 questions. Single-question payloads render as one sheet. Multi-question payloads render as a paginated "Question N of M" stepper with Back / Next / Skip / Submit-all controls; progress and partial answers persist on the tool message so a refresh can restore the user's place. On the final page, users always confirm with Submit-all — auto-advance never auto-submits the entire group.
+
+The composer-overlay sheet is the question UI. After the user answers, the picked answer (or grouped summary) appears as a normal user bubble so the transcript reads naturally; the answered tool message stores structured answers for review/re-rendering.
 
 ### DOM events
 
@@ -295,7 +304,7 @@ The widget dispatches two events on the mount element so the host page can react
 
 | Event | Detail |
 |---|---|
-| `persona:askUserQuestion:answered` | `{ toolUseId, answer, values, isFreeText, source }` where `source` is `'pick' \| 'multi' \| 'free-text'` |
+| `persona:askUserQuestion:answered` | `{ toolUseId, answer, answers?, values, isFreeText, source }` where `answers` is the structured question→answer map and `source` is `'pick' \| 'multi' \| 'free-text' \| 'submit-all'` |
 | `persona:askUserQuestion:dismissed` | `{ toolUseId }` |
 
 ```ts
@@ -364,18 +373,19 @@ initAgentWidget({
 type AskUserQuestionOption = {
   label: string;
   description?: string;
+  preview?: string; // reserved for future richer rendering
 };
 
 type AskUserQuestionPrompt = {
   question: string;
-  header?: string;           // short chip label, ≤12 chars
-  options: AskUserQuestionOption[];
-  multiSelect?: boolean;     // allow multiple picks with a Submit button
-  allowFreeText?: boolean;   // show an "Other…" free-text pill
+  header?: string;           // short group label, ≤12 chars
+  options: AskUserQuestionOption[]; // 2–4 options
+  multiSelect?: boolean;     // allow multiple picks with a Submit/Next action
+  allowFreeText?: boolean;   // show an "Other…" free-text input (default true)
 };
 
 type AskUserQuestionPayload = {
-  questions: AskUserQuestionPrompt[];
+  questions: AskUserQuestionPrompt[]; // 1–8 questions; extras are dropped with a warning
 };
 
 // Plugin hook signature

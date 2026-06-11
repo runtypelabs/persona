@@ -1,6 +1,6 @@
 ## Vanilla Agent Proxy
 
-Proxy server library for `@runtypelabs/persona` widget. Handles flow configuration and forwards requests to Runtype or other AI backends.
+Proxy server library for `@runtypelabs/persona` widget. Handles flow configuration, CORS, feedback collection, WebMCP/client-tool forwarding, `/resume` continuations, and secure forwarding to Runtype.
 
 ### Installation
 
@@ -10,7 +10,7 @@ npm install @runtypelabs/persona-proxy
 
 ### Usage
 
-The proxy server handles flow configuration and forwards requests to Runtype. You can configure it in three ways:
+The proxy server handles flow configuration and forwards requests to Runtype. It mounts both the dispatch endpoint (default `/api/chat/dispatch`) and a matching child resume endpoint (`/api/chat/dispatch/resume`) so browser-executed LOCAL tools such as WebMCP page tools, `ask_user_question`, and `suggest_replies` can resume a paused execution. You can configure dispatch in three ways:
 
 **Option 1: Use default flow (recommended for getting started)**
 
@@ -88,10 +88,28 @@ export default createVercelHandler({
 | `allowedOrigins` | `string[]` | CORS allowed origins |
 | `flowId` | `string` | Runtype flow ID to use |
 | `flowConfig` | `RuntypeFlowConfig` | Custom flow configuration |
+| `feedbackPath` | `string` | Message-feedback endpoint path. Default: `/api/feedback`. |
+| `onFeedback` | `(feedback) => Promise<void> \| void` | Optional handler for upvote/downvote payloads. |
+| `previewOriginPattern` | `RegExp \| false` | Additional dynamic preview-origin allowlist (defaults to `https://*.vercel.app`; disable with `false`). |
+
+### WebMCP and built-in client tools
+
+For flow-dispatch requests, the proxy preserves `clientTools[]` from the widget payload and forwards them upstream so Runtype can register browser-local tools for that turn. Tool results are sent by the widget to `${path}/resume`, and the proxy forwards that body to the upstream `/resume` endpoint using the same API key. Agent-mode payloads are forwarded as-is and also retain `clientTools[]`.
+
+### CORS behavior
+
+- If `allowedOrigins` is omitted or empty, the proxy reflects the request origin (or `*`).
+- If `allowedOrigins` is set, exact matches are allowed.
+- `NODE_ENV=development` reflects local dev origins even when they are not in `allowedOrigins`; an unset `NODE_ENV` is treated as production.
+- Vercel preview deployments (`VERCEL_ENV=preview`) and origins matching `previewOriginPattern` are reflected so per-branch preview URLs work without enumerating them.
+
+### Feedback endpoint
+
+`messageActions` feedback can POST to `feedbackPath` (default `/api/feedback`). The built-in handler validates `type` (`upvote`/`downvote`) and `messageId`, adds a timestamp, logs in development, and then calls `onFeedback` if provided.
 
 ### Environment Setup
 
-Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payload (including flow configuration) and streams the response back to the client.
+Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payload (including flow configuration/client tools) and streams the response back to the client.
 
 ### Building
 

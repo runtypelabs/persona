@@ -50,6 +50,8 @@ For detailed theme styling properties, see [THEME-CONFIG.md](../THEME-CONFIG.md)
 | `getHeaders` | `() => Record<string, string> \| Promise<...>` | Dynamic headers function called before each request. Use for auth tokens that may change. |
 | `customFetch` | `(url, init, payload) => Promise<Response>` | Replace the default `fetch` entirely. Receives URL, RequestInit, and the payload. |
 | `parseSSEEvent` | `(eventData) => { text?, done?, error? } \| null` | Transform non-standard SSE events into the expected format. Return `null` to ignore an event. |
+| `onSSEEvent` | `(eventType, payload) => void` | Observe every parsed SSE frame before Persona handles it. Useful for lightweight telemetry; does not replace native streaming. |
+| `errorMessage` | `string \| (error: Error) => string` | Override the fallback assistant bubble shown when a dispatch fails before streaming. Return an empty string to suppress the bubble while still firing `onError`. |
 
 ### Client Token Mode
 
@@ -91,6 +93,8 @@ Use agent loop execution instead of flow dispatch. Mutually exclusive with `flow
 | `model` | `string` | Model identifier (e.g. `'openai:gpt-4o-mini'`). |
 | `systemPrompt` | `string` | System prompt for the agent. |
 | `temperature` | `number?` | Temperature for model responses. |
+| `tools` | `AgentToolsConfig?` | Tool configuration for the agent (see below). |
+| `artifacts` | `ArtifactConfigPayload?` | Artifact-generation config for virtual-agent/API parity. |
 | `loopConfig` | `AgentLoopConfig?` | Loop behavior configuration (see below). |
 
 **`AgentLoopConfig`**
@@ -226,8 +230,9 @@ In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because 
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `postprocessMessage` | `(ctx: { text, message, streaming, raw? }) => string` | Transform message text before rendering (return HTML). |
+| `postprocessMessage` | `(ctx: { text, message, streaming, raw? }) => string` | Transform message text before rendering (return HTML). Output is still sanitized by `sanitize` unless disabled/replaced. |
 | `markdown` | `AgentWidgetMarkdownConfig` | Markdown rendering configuration (see sub-table). |
+| `sanitize` | `boolean \| (html: string) => string` | HTML sanitization for rendered message content. `true`/omitted uses the built-in DOMPurify sanitizer; `false` disables sanitization for fully trusted content only; a function supplies a custom sanitizer. |
 | `messageActions` | `AgentWidgetMessageActionsConfig` | Action buttons on assistant messages (see sub-table). |
 | `loadingIndicator` | `AgentWidgetLoadingIndicatorConfig` | Customize the loading indicator (see sub-table). |
 
@@ -390,12 +395,13 @@ config: {
 | `denyLabel` | `string?` | Label for the deny button. |
 | `detailsDisplay` | `'collapsed' \| 'expanded' \| 'hidden'?` | How the technical details (agent-facing tool description + raw parameters JSON) are presented. Default: `'collapsed'` (behind a "Show details" toggle). `'expanded'` shows them open; `'hidden'` never renders them. |
 | `showDetailsLabel`, `hideDetailsLabel` | `string?` | Labels for the details toggle. Defaults: `"Show details"` / `"Hide details"`. |
-| `formatDescription` | `(approval) => string \| undefined` | Build the user-facing summary line. Receives `{ toolName, toolType, description, parameters, displayTitle }`. Return a falsy value to fall back to the default copy for that approval. |
-| `backgroundColor`, `borderColor`, `titleColor`, `descriptionColor` | `string?` | Bubble styling. |
+| `formatDescription` | `(approval) => string \| undefined` | Build the user-facing summary line. Receives `{ toolName, toolType, description, parameters, displayTitle, reason }`. Return a falsy value to fall back to the default copy for that approval. If you include `reason`, keep it attributed to the agent. |
+| `backgroundColor`, `borderColor`, `shadow`, `titleColor`, `descriptionColor` | `string?` | Bubble styling; pass `shadow: "none"` to remove the default shadow. |
+| `reasonColor`, `reasonLabel` | `string?` | Styling/copy for the agent-authored reason line when an approval event includes `reason`. |
 | `approveButtonColor`, `approveButtonTextColor` | `string?` | Approve button styling. |
 | `denyButtonColor`, `denyButtonTextColor` | `string?` | Deny button styling. |
 | `parameterBackgroundColor`, `parameterTextColor` | `string?` | Parameters block styling. |
-| `onDecision` | `(data, decision) => Promise<Response \| ReadableStream \| void>?` | Custom approval handler. Return `void` for SDK auto-resolve. |
+| `onDecision` | `(data, decision, options?) => Promise<Response \| ReadableStream \| void>?` | Custom approval handler. Return `void` for SDK auto-resolve. `options.remember` is forwarded from custom "always allow" affordances. |
 
 **How the summary line is chosen.** A tool's wire `description` is written for the
 agent (usage rules, prompt prose), not for end users, so the bubble doesn't lead
@@ -425,6 +431,40 @@ initAgentWidget({
   },
 });
 ```
+
+### WebMCP Page Tools
+
+WebMCP lets the page register browser-local tools on `document.modelContext`. With `webmcp.enabled`, Persona snapshots those tools for each dispatch, sends them to the agent as `clientTools[]`, executes returned `webmcp:<name>` calls in the browser, and resumes the paused execution with the tool result.
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `webmcp` | `AgentWidgetWebMcpConfig` | Page-tool discovery/execution config. Default: disabled. |
+
+**`webmcp`** — `AgentWidgetWebMcpConfig`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `enabled` | `boolean?` | Install/use the WebMCP polyfill and include page-registered tools in dispatch payloads. Default: `false`. |
+| `allowlist` | `string[]?` | Glob-ish bare tool-name patterns to include client-side; `*` matches any chars except `:`. If omitted, all registered tools are included (subject to server-side policy). |
+| `autoApprove` | `(info: WebMcpConfirmInfo) => boolean` | Return `true` to skip the native approval bubble for safe tools (for example read-only searches). |
+| `onConfirm` | `(info: WebMcpConfirmInfo) => Promise<boolean>` | Override the native in-panel approval bubble with a custom confirmer. Receives bare `toolName`, `args`, optional `title`, annotations, and `reason: 'gate'`. |
+
+```ts
+initAgentWidget({
+  target: '#app',
+  config: {
+    apiUrl: '/api/chat/dispatch',
+    webmcp: {
+      enabled: true,
+      allowlist: ['search_*', 'add_to_cart'],
+      autoApprove: ({ annotations, toolName }) =>
+        annotations?.readOnlyHint === true || toolName.startsWith('search_'),
+    },
+  },
+});
+```
+
+For a direct AI SDK backend that translates WebMCP calls into Persona-compatible `step_await` / `/resume` traffic, see the repo-level [WebMCP without Runtype guide](../../../docs/webmcp-without-runtype.md).
 
 ### Suggestion Chips
 
@@ -473,8 +513,79 @@ initAgentWidget({
 | `showToolCalls` | `boolean?` | Show tool usage bubbles. Default: `true`. |
 | `showEventStreamToggle` | `boolean?` | Show the event stream inspector toggle in the header. Default: `false`. |
 | `composerHistory` | `boolean?` | `Up`/`Down` arrows in the composer navigate previously sent user messages for re-entry/editing (shell / Slack style). Entered only when the caret is at the start of the input, so multi-line cursor movement is preserved. Default: `true`. |
+| `scrollToBottom` | `AgentWidgetScrollToBottomFeature?` | Shared transcript/event-stream scroll-to-bottom affordance. Defaults: `enabled: true`, `iconName: "arrow-down"`, icon-only label. Shows a new-message count while scrolled away. |
+| `scrollBehavior` | `AgentWidgetScrollBehaviorFeature?` | Streaming transcript scroll mode. Defaults: `{ mode: "follow", anchorTopOffset: 16 }`. |
+| `toolCallDisplay` | `AgentWidgetToolCallDisplayFeature?` | Collapsed tool-call row behavior: summary mode, active preview, grouping, expandability, and loading animation. |
+| `reasoningDisplay` | `AgentWidgetReasoningDisplayFeature?` | Collapsed reasoning row behavior: active preview, expandability, and loading animation. |
+| `streamAnimation` | `AgentWidgetStreamAnimationFeature?` | Assistant text reveal animation while streaming (`none`, `typewriter`, `letter-rise`, `word-fade`, `wipe`, `glyph-cycle`, `pop-bubble`, or custom plugin). |
 | `eventStream` | `EventStreamConfig?` | Event stream inspector configuration: `badgeColors`, `timestampFormat`, `showSequenceNumbers`, `maxEvents`, `descriptionFields`, `classNames`. |
 | `artifacts` | `AgentWidgetArtifactsFeature?` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (see below). |
+| `askUserQuestion` | `AgentWidgetAskUserQuestionFeature?` | Built-in `ask_user_question` answer sheet. `enabled` defaults to `true`; set `expose: true` to advertise the LOCAL tool via `clientTools[]`. |
+| `suggestReplies` | `AgentWidgetSuggestRepliesFeature?` | Built-in `suggest_replies` chips. `enabled` defaults to `true`; set `expose: true` to advertise the LOCAL tool via `clientTools[]` and auto-resume when called. |
+
+**`features.scrollBehavior`** — `AgentWidgetScrollBehaviorFeature`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `mode` | `'follow' \| 'anchor-top' \| 'none'?` | `follow` keeps the latest content in view; `anchor-top` pins the sent user message near the top while the response streams; `none` disables streaming auto-scroll. Default: `'follow'`. |
+| `anchorTopOffset` | `number?` | Top gap in pixels for `anchor-top`. Default: `16`. |
+
+**`features.scrollToBottom`** — `AgentWidgetScrollToBottomFeature`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `enabled` | `boolean?` | Show the affordance when the user is away from the latest transcript/event-stream content. Default: `true`. |
+| `iconName` | `string?` | Lucide icon name. Default: `'arrow-down'`. |
+| `label` | `string?` | Optional text label; empty string renders icon-only. Default: `''`. |
+
+**`features.toolCallDisplay`** — `AgentWidgetToolCallDisplayFeature`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `collapsedMode` | `'tool-call' \| 'tool-name' \| 'tool-preview'?` | Summary shown while collapsed. Default: `'tool-call'`. |
+| `activePreview` | `boolean?` | Show a lightweight preview while a collapsed tool is running. Default: `false`. |
+| `activeMinHeight` | `string?` | Optional CSS min-height for active collapsed rows. |
+| `previewMaxLines` | `number?` | Max preview lines. Default: `3`. |
+| `grouped` | `boolean?` | Visually group consecutive tool-call rows. Default: `false`. |
+| `expandable` | `boolean?` | Allow users to expand details. Default: `true`. |
+| `loadingAnimation` | `'none' \| 'pulse' \| 'shimmer' \| 'shimmer-color' \| 'rainbow'?` | Header animation while active. Default: `'none'`. |
+
+**`features.reasoningDisplay`** — `AgentWidgetReasoningDisplayFeature`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `activePreview` | `boolean?` | Show a lightweight preview while reasoning is active. Default: `false`. |
+| `activeMinHeight` | `string?` | Optional CSS min-height for active collapsed rows. |
+| `previewMaxLines` | `number?` | Max preview lines. Default: `3`. |
+| `expandable` | `boolean?` | Allow users to expand details. Default: `true`. |
+| `loadingAnimation` | `'none' \| 'pulse' \| 'shimmer' \| 'shimmer-color' \| 'rainbow'?` | Header animation while active. Default: `'none'`. |
+
+**`features.streamAnimation`** — `AgentWidgetStreamAnimationFeature`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `type` | `string?` | Built-ins: `'none'`, `'typewriter'`, `'word-fade'`, `'letter-rise'`, `'glyph-cycle'`, `'wipe'`, `'pop-bubble'`; custom names are allowed after registering a plugin. Default: `'none'`. |
+| `placeholder` | `'none' \| 'skeleton'?` | Pre-first-token placeholder. Default: `'none'`. |
+| `speed` | `number?` | Per-unit animation duration for character/word plugins. Default: `120`. |
+| `duration` | `number?` | Container animation duration for `pop-bubble`/custom container plugins. Default: `1800`. |
+| `buffer` | `'none' \| 'word' \| 'line'?` | Trim incomplete streaming units before rendering. Default: `'none'`. |
+| `plugins` | `Record<string, StreamAnimationPlugin>?` | Instance-scoped animation plugins. |
+
+**`features.askUserQuestion`** — `AgentWidgetAskUserQuestionFeature`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `enabled` | `boolean?` | Render `ask_user_question` with the built-in answer sheet. Default: `true`. When `false`, it falls through to a generic tool bubble. |
+| `expose` | `boolean?` | Advertise the built-in LOCAL tool definition on `clientTools[]`. Default: `false`; leave off when the flow already declares the tool server-side. |
+| `layout` | `'rows' \| 'pills'?` | Option layout. `rows` is the default full-width layout; `pills` is the legacy compact wrap layout. |
+| `slideInMs`, `freeTextLabel`, `freeTextPlaceholder`, `submitLabel`, `nextLabel`, `backLabel`, `submitAllLabel`, `skipLabel`, `groupedAutoAdvance`, `styles` | various | Sheet animation, copy, multi-question navigation, and CSS variable overrides. See [UI Features & Components](./UI-COMPONENTS.md#ask-user-question). |
+
+**`features.suggestReplies`** — `AgentWidgetSuggestRepliesFeature`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `enabled` | `boolean?` | Render chips and auto-resume `suggest_replies`. Default: `true`. When `false`, it falls through to a generic tool bubble and does not auto-resume. |
+| `expose` | `boolean?` | Advertise the built-in LOCAL tool definition on `clientTools[]`. Default: `false`; leave off when the flow already declares the tool server-side. |
 
 **`features.artifacts`** — `AgentWidgetArtifactsFeature`
 

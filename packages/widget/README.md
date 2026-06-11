@@ -17,6 +17,8 @@ pnpm build
 - `dist/index.js` (ESM), `dist/index.cjs` (CJS), and `dist/index.global.js` (IIFE) provide different module formats.
 - `dist/widget.css` is the prefixed Tailwind bundle.
 - `dist/install.global.js` is the automatic installer script for easy script tag installation.
+- `dist/launcher.global.js` is the tiny critical launcher used by deferred script-tag installs before the full panel bundle loads.
+- `dist/webmcp-polyfill.js` is the lazy WebMCP polyfill chunk used by the IIFE bundle only when `config.webmcp.enabled` is true and the page has no `document.modelContext`.
 
 ### Using with modules
 
@@ -92,7 +94,7 @@ const docked = initAgentWidget({
 | --- | --- | --- |
 | `target` | `string \| HTMLElement` | CSS selector or element where widget mounts. |
 | `config` | `AgentWidgetConfig` | Widget configuration object (see the [Configuration Reference](./docs/CONFIGURATION-REFERENCE.md)). |
-| `useShadowDom` | `boolean` | Use Shadow DOM for style isolation (default: `true`). |
+| `useShadowDom` | `boolean` | Use Shadow DOM for style isolation (default: `false`). |
 | `onChatReady` | `() => void` | Callback fired when the widget is initialized and its API is callable. |
 | `onReady` | `() => void` | **Deprecated** alias of `onChatReady`; still works, removed in the next major. |
 | `windowKey` | `string` | If provided, stores the controller on `window[windowKey]` for global access. Automatically cleaned up on `destroy()`. |
@@ -107,20 +109,21 @@ With **`dock.reveal: 'resize'`** (default), a **closed** dock uses a **`0px`** c
 
 **Inner push/overlay:** With `reveal: 'push'` or `'overlay'`, only the wrapped node moves. Use a **narrow `target`** (e.g. a main canvas div). For **`dock.side: 'left'`**, place a persistent rail **in flow** next to the stage (e.g. flex `[nav | stage]`) so the dock doesn’t open **under** the sidebar. For a **right** dock, you can instead use a **full-width** stage with an **absolute** left rail if you want the canvas to translate **behind** that rail.
 
-> **Security note:** When you return HTML from `postprocessMessage`, make sure you sanitise it before injecting into the page. The provided postprocessors (`markdownPostprocessor`, `directivePostprocessor`) do not perform sanitisation.
+> **Security note:** Persona sanitizes rendered message HTML with DOMPurify by default (`sanitize: true`), including output returned from `postprocessMessage`, `markdownPostprocessor`, and `directivePostprocessor`. If your custom postprocessor intentionally returns tags or attributes outside the built-in allowlist, provide `sanitize: (html) => ...`; only set `sanitize: false` for fully trusted content.
 
 ### Documentation
 
 The full reference lives in [`docs/`](./docs/) and the theming guide:
 
 - [Programmatic Control & Events](./docs/PROGRAMMATIC-CONTROL.md) — controller API, message hooks and injection, enriched DOM context, WebMCP page tools, DOM and controller events, state loading
-- [UI Features & Components](./docs/UI-COMPONENTS.md) — message actions and feedback, loading indicators, ask-user-question, dropdown menus, button utilities, dynamic forms
-- [Script Tag Installation & Framework Integration](./docs/INSTALLATION-FRAMEWORKS.md) — automatic installer, manual script tag setup, React, Next.js, Remix, Gatsby, and Astro guides
-- [Configuration Reference](./docs/CONFIGURATION-REFERENCE.md) — every config option: core, client token mode, agent mode, UI & theme, launcher, layout, voice, tool calls, suggestion chips, state & storage
+- [UI Features & Components](./docs/UI-COMPONENTS.md) — message actions and feedback, loading/idle indicators, approvals, built-in `ask_user_question` and `suggest_replies` tools, dropdown menus, button utilities, dynamic forms
+- [Script Tag Installation & Framework Integration](./docs/INSTALLATION-FRAMEWORKS.md) — automatic installer, deferred launcher lifecycle hooks, manual script tag setup, React, Next.js, Remix, Gatsby, and Astro guides
+- [Configuration Reference](./docs/CONFIGURATION-REFERENCE.md) — every config option: core, client token mode, agent mode, UI & theme, launcher/docking, layout, voice, WebMCP, tool calls, features, suggestion chips, state & storage
 - [Stream Parser Configuration](./docs/STREAM-PARSERS.md) — JSON, XML, and plain-text stream parsers and custom parser factories
-- [THEME-CONFIG.md](./THEME-CONFIG.md) — the complete theme and design-token reference
 - [Message Injection](./docs/MESSAGE-INJECTION.md) — full injection and component-directive reference
 - [Dynamic Forms](./docs/DYNAMIC-FORMS.md) — field schema, form styles, and recipes
+- [Code Generator](./docs/CODE-GENERATOR.md) — `@runtypelabs/persona/codegen` options for CLI/server-side snippet generation
+- [THEME-CONFIG.md](./THEME-CONFIG.md) — the complete theme and design-token reference
 
 ### Optional proxy server
 
@@ -198,7 +201,9 @@ Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payl
 
 ### Development notes
 
-- The widget streams results using SSE and mirrors the backend `flow_complete`/`step_chunk` events.
-- Tailwind-esc classes are prefixed with `tvw-` and scoped to `[data-persona-root]`, so they won't collide with the host page.
-- Run `pnpm dev` from the repository root to boot the example proxy (`examples/proxy`) and the vanilla demo (`examples/embedded-app`).
+- The widget streams results using SSE and mirrors Runtype flow/agent events, including `step_await` local-tool pauses and `/resume` continuations.
+- Tailwind classes are prefixed with `tvw-` and scoped to `[data-persona-root]`, so they won't collide with the host page.
+- Run `pnpm dev` from the repository root to boot the example proxy (`examples/vercel-edge`) and the vanilla demo (`examples/embedded-app`).
 - The proxy prefers port `43111` but automatically selects the next free port if needed.
+- `features.askUserQuestion.expose` and `features.suggestReplies.expose` advertise built-in LOCAL client tools through `clientTools[]`; leave `expose` off if the flow already declares those tools server-side.
+- `webmcp: { enabled: true }` snapshots page-registered tools on `document.modelContext`, sends them as `clientTools[]`, executes returned `webmcp:*` calls in the browser, and resumes the paused execution.
