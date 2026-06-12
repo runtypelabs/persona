@@ -68,7 +68,7 @@ importers:
         specifier: ^5.4.5
         version: 5.9.3
       wrangler:
-        specifier: ^4.100.0
+        specifier: ^4.85.0
         version: 4.100.0(@cloudflare/workers-types@4.20260612.1)
 
   examples/embedded-app:
