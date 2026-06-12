@@ -89,8 +89,8 @@ importers:
         specifier: ^0.7.4
         version: 0.7.4
       jspaint:
-        specifier: github:runtypelabs/jspaint#53be67ab8c47cc0d2168899e7481bc04839c4c81
-        version: https://codeload.github.com/runtypelabs/jspaint/tar.gz/53be67ab8c47cc0d2168899e7481bc04839c4c81
+        specifier: github:runtypelabs/jspaint#61814a33efbd2021859caf37381f1005dfc25666
+        version: https://codeload.github.com/runtypelabs/jspaint/tar.gz/61814a33efbd2021859caf37381f1005dfc25666
       modern-screenshot:
         specifier: ^4.7.0
         version: 4.7.0
@@ -2173,8 +2173,8 @@ packages:
   jsonfile@4.0.0:
     resolution: {integrity: sha512-m6F1R3z8jjlf2imQHS2Qez5sjKWQzbuuhuJ/FKYFRZvPE3PuHcSMVZzfsLhGVOkfd20obL5SWEBew5ShlquNxg==}
 
-  jspaint@https://codeload.github.com/runtypelabs/jspaint/tar.gz/53be67ab8c47cc0d2168899e7481bc04839c4c81:
-    resolution: {tarball: https://codeload.github.com/runtypelabs/jspaint/tar.gz/53be67ab8c47cc0d2168899e7481bc04839c4c81}
+  jspaint@https://codeload.github.com/runtypelabs/jspaint/tar.gz/61814a33efbd2021859caf37381f1005dfc25666:
+    resolution: {tarball: https://codeload.github.com/runtypelabs/jspaint/tar.gz/61814a33efbd2021859caf37381f1005dfc25666}
     version: 1.1.0
     hasBin: true
 
@@ -4898,7 +4898,7 @@ snapshots:
     optionalDependencies:
       graceful-fs: 4.2.11
 
-  jspaint@https://codeload.github.com/runtypelabs/jspaint/tar.gz/53be67ab8c47cc0d2168899e7481bc04839c4c81:
+  jspaint@https://codeload.github.com/runtypelabs/jspaint/tar.gz/61814a33efbd2021859caf37381f1005dfc25666:
     dependencies:
       argparse: 2.0.1
       electron-squirrel-startup: 1.0.1
