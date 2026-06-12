@@ -169,6 +169,15 @@ To run against your own Runtype flow instead of the in-code definitions, set the
   - Theme tokens (`theme.accent`, `theme.heading`, …) resolve at render time, which is what makes `apply_theme` restyle the whole deck in one call
   - Try: *"What's in this deck?"* → *"Add a slide about pricing with three tiers"* → drag a box out of place, shift-select two others, *"align these and match their styles"* → *"Apply the Midnight theme"* (approval) → ⌘Z → *"Present the deck"*
 
+### WebMCP Paint (Paint Pal)
+- **Paint page**: `http://localhost:5173/webmcp-paint.html` (proxy mode — agent defined in code as `WEBMCP_PAINT_FLOW`, mounted at `/api/chat/dispatch-paint`)
+  - A real, **unmodified jspaint** (the MS Paint remake) embedded same-origin, driven by the Persona agent through operator-level WebMCP tools: `select_tool`, `set_colors`, `draw_stroke` (replayed as pointer events, so strokes animate live and land on jspaint's real undo stack), `flood_fill`, `undo`, `clear_canvas` (approval-gated), and `get_canvas_snapshot`
+  - **The headline trick is the visual loop**: `get_canvas_snapshot` returns the canvas as an MCP **image content block** through `/resume`, so the agent can look at what it painted and fix it — the only demo in the repo with a multimodal observe-act loop (the Theme Copilot's `screenshot_preview` pioneered the transport)
+  - jspaint ships as a pinned **git dependency** (`runtypelabs/jspaint` fork) served at `/jspaint/` by the `serveJsPaint` Vite plugin — nothing is vendored into this repo. Same-origin serving is load-bearing: `src/webmcp-paint/jspaint-host.ts` injects `public/jspaint-bridge.mjs` into the iframe (re-injected on every load — jspaint replaces its document during session bootstrap), which imports jspaint's own ES modules and reaches its lexical-global app state, something the iframe's CSP forbids doing via eval or inline scripts
+  - The widget wears a config-only **Windows 98 theme**: navy title bar, silver chrome, square corners, Tahoma, tooltip-yellow approvals, and Win95 bevels faked with inset box-shadows on the shadow tokens
+  - **Three game modes** ride on the same tools (see the suggestion chips): **Pictionary** (you draw — big, with the brush — and the agent snapshots and guesses), a **paint-along tutorial** (the agent demos each step on the left half, pauses with the built-in `ask_user_question` answer sheet, then snapshots to check your copy on the right), and **speedruns** (a stroke budget, then `render_replay_gif` opens jspaint's own Render-History-as-GIF window — the animated replay is the shareable trophy)
+  - Try: *"Draw a house with a sun in the sky"* → *"Look at the canvas and tell me what you see"* (watch it critique and fix its own drawing) → *"Speedrun the Mona Lisa in 20 strokes"* → *"Clear the canvas"* (approval)
+
 ### Custom Components Demo
 - **Components page**: `http://localhost:5173/custom-components.html`
   - Demonstrates custom component rendering from JSON directives

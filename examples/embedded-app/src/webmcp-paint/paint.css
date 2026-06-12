@@ -1,0 +1,80 @@
+/* Windows 98 page chrome, so the demo shell matches both jspaint and the
+   Win98-themed Persona panel: teal desktop, silver beveled surfaces, a navy
+   title-bar strip, and no rounded anything. */
+
+.paint-body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: Tahoma, "MS Sans Serif", "Segoe UI", sans-serif;
+  background: #008080; /* the desktop */
+  color: #000;
+}
+
+.paint-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px;
+  background: linear-gradient(90deg, #000080, #1084d0);
+  border: 2px outset #dfdfdf;
+  border-bottom-color: #808080;
+  flex: none;
+  margin: 3px 3px 0;
+}
+
+.paint-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.paint-logo {
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  letter-spacing: 0;
+}
+
+.paint-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: #c0c0c0;
+  border: 2px outset #dfdfdf;
+  color: #000;
+}
+
+.paint-tagline {
+  margin: 0;
+  font-size: 11px;
+  color: #cfe2ff;
+}
+
+.paint-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 3px;
+}
+
+.paint-editor {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 3px;
+}
+
+.paint-host {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  border: 2px inset #dfdfdf;
+}
+
+.paint-frame {
+  flex: 1;
+  border: 0;
+  width: 100%;
+  height: 100%;
+}
