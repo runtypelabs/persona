@@ -18,7 +18,7 @@
     "check:runtype-types": "pnpm --filter @runtypelabs/persona check:runtype-types"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.7",
+    "@changesets/cli": "^2.31.0",
     "concurrently": "^8.2.2"
   }
 }
