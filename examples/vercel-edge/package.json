@@ -11,13 +11,13 @@
     "@runtypelabs/persona-proxy": "workspace:^",
     "@hono/node-server": "^1.19.10",
     "dotenv": "^16.4.5",
-    "get-port": "^7.0.0",
-    "hono": "^4.12.7"
+    "get-port": "^7.2.0",
+    "hono": "^4.12.25"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
     "tsup": "^8.0.1",
-    "tsx": "^4.15.7",
+    "tsx": "^4.22.4",
     "typescript": "^5.4.5"
   }
 }
