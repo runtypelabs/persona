@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin, type HtmlTagDescriptor } from "vite";
 import path from "node:path";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 
 const proxyPort = Number(process.env.PROXY_PORT ?? 43111);
 const PREVIEW_EMBED_CHECK_TIMEOUT_MS = 5000;
@@ -231,6 +232,74 @@ function serveWidgetDist(): Plugin {
   };
 }
 
+// Serve jspaint (the WebMCP Paint demo's embedded app) at /jspaint/ from the
+// `jspaint` git dependency (runtypelabs/jspaint fork, pinned by SHA in
+// package.json) instead of vendoring ~60MB of static files into the repo.
+// jspaint is buildless, so serving its repo files verbatim is all it takes.
+// Same-origin serving is load-bearing: the demo injects a bridge module into
+// the iframe, which cross-origin embedding (e.g. the jspaint.app CDN) forbids.
+function serveJsPaint(): Plugin {
+  // realpath dereferences the pnpm symlink so the containment check and the
+  // recursive build copy both operate on the real package directory.
+  const jspaintDir = fs.realpathSync(
+    path.dirname(
+      createRequire(import.meta.url).resolve("jspaint/package.json", {
+        paths: [__dirname],
+      })
+    )
+  );
+  const MIME: Record<string, string> = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "application/javascript",
+    ".mjs": "application/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".jpg": "image/jpeg",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    ".webmanifest": "application/manifest+json",
+    ".mp3": "audio/mpeg",
+    ".woff2": "font/woff2",
+  };
+
+  function middleware(req: any, res: any, next: () => void): void {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    let rel = decodeURIComponent(url.pathname);
+    if (rel === "" || rel === "/") rel = "/index.html";
+    const filePath = path.join(jspaintDir, rel);
+    // Containment check — never serve outside the package directory.
+    if (!filePath.startsWith(jspaintDir + path.sep)) {
+      next();
+      return;
+    }
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      res.setHeader(
+        "Content-Type",
+        MIME[path.extname(filePath)] ?? "application/octet-stream"
+      );
+      fs.createReadStream(filePath).pipe(res);
+    } else {
+      next();
+    }
+  }
+
+  return {
+    name: "serve-jspaint",
+    configureServer(server) {
+      server.middlewares.use("/jspaint", middleware);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use("/jspaint", middleware);
+    },
+    writeBundle(options) {
+      const outDir = options.dir ?? path.resolve(__dirname, "dist");
+      fs.cpSync(jspaintDir, path.join(outDir, "jspaint"), { recursive: true });
+    },
+  };
+}
+
 function llmsTxt(): Plugin {
   const llmsTxtPath = path.resolve(__dirname, "llms.txt");
   const repoDir = path.resolve(__dirname, "../..");
@@ -389,7 +458,7 @@ function galleryFonts(): Plugin {
 
 export default defineConfig({
   base: './',
-  plugins: [serveWidgetDist(), llmsTxt(), previewEmbedCheck(), galleryFonts()],
+  plugins: [serveWidgetDist(), serveJsPaint(), llmsTxt(), previewEmbedCheck(), galleryFonts()],
   resolve: {
     alias: {
       "@runtypelabs/persona/theme-editor": path.resolve(
@@ -439,6 +508,8 @@ export default defineConfig({
         'webmcp-calendar': path.resolve(__dirname, 'webmcp-calendar.html'),
         // WebMCP — slide-deck editor (dynamic tool sets, selection context)
         'webmcp-slides': path.resolve(__dirname, 'webmcp-slides.html'),
+        // WebMCP — Paint Pal (drives an embedded jspaint; image snapshot loop)
+        'webmcp-paint': path.resolve(__dirname, 'webmcp-paint.html'),
         // Bakery demo pages
         'bakery': path.resolve(__dirname, 'bakery.html'),
         'bakery-story': path.resolve(__dirname, 'bakery-story.html'),

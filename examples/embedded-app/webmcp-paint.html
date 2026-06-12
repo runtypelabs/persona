@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>WebMCP Paint — Paint Pal</title>
+  </head>
+  <body class="paint-body">
+    <header class="paint-toolbar">
+      <div class="paint-brand">
+        <span class="paint-logo">Paint Pal</span>
+        <span class="paint-badge">WebMCP demo · jspaint</span>
+      </div>
+      <p class="paint-tagline">
+        The assistant paints in real MS Paint — same tools, same undo stack as you.
+      </p>
+    </header>
+
+    <main class="paint-main">
+      <!-- The docked Persona panel wraps this target and docks beside it,
+           shrinking the paint app — same pattern as webmcp-slides. -->
+      <div id="paint-dock-target" class="paint-editor">
+        <div id="jspaint-host" class="paint-host"></div>
+      </div>
+    </main>
+
+    <script type="module" src="/src/webmcp-paint/main.ts"></script>
+  </body>
+</html>

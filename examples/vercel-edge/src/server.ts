@@ -11,6 +11,7 @@ import {
   WEBMCP_STOREFRONT_FLOW,
   WEBMCP_CALENDAR_FLOW,
   WEBMCP_SLIDES_FLOW,
+  WEBMCP_PAINT_FLOW,
   WEBMCP_DOCKED_FLOW,
   PAGE_CONTEXT_FLOW,
   THEME_ASSISTANT_FLOW,
@@ -126,6 +127,18 @@ const webmcpSlidesApp = createChatProxyApp({
   upstreamUrl
 });
 
+// WebMCP paint proxy - for the Paint Pal jspaint demo. Same pattern as the
+// others, plus the visual loop: get_canvas_snapshot returns the canvas as an
+// MCP image content block through /resume (like the Theme Copilot's
+// screenshot_preview), so the flow's model must accept image tool results.
+const webmcpPaintApp = createChatProxyApp({
+  path: "/api/chat/dispatch-paint",
+  allowedOrigins,
+  flowId: process.env.FLOW_ID_PAINT || undefined,
+  flowConfig: process.env.FLOW_ID_PAINT ? undefined : WEBMCP_PAINT_FLOW,
+  upstreamUrl
+});
+
 // WebMCP docked-dashboard proxy - for the docked panel demo. Same pattern as
 // the storefront/calendar: the page registers four workspace tools on
 // document.modelContext, the widget forwards them as clientTools[], and the
@@ -172,6 +185,7 @@ app.route("/", storefrontApp);
 app.route("/", webmcpApp);
 app.route("/", webmcpCalendarApp);
 app.route("/", webmcpSlidesApp);
+app.route("/", webmcpPaintApp);
 app.route("/", webmcpDockedApp);
 app.route("/", pageContextApp);
 app.route("/", themeAssistantApp);

@@ -13,6 +13,7 @@
     "@runtypelabs/persona": "workspace:^",
     "handlebars": "^4.7.8",
     "idiomorph": "^0.7.4",
+    "jspaint": "github:runtypelabs/jspaint#53be67ab8c47cc0d2168899e7481bc04839c4c81",
     "modern-screenshot": "^4.7.0",
     "partial-json": "^0.1.7",
     "zod": "^3.25.76",

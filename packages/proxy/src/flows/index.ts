@@ -14,6 +14,7 @@ export { STOREFRONT_ASSISTANT_FLOW } from "./storefront-assistant.js";
 export { WEBMCP_STOREFRONT_FLOW } from "./webmcp-storefront.js";
 export { WEBMCP_CALENDAR_FLOW } from "./webmcp-calendar.js";
 export { WEBMCP_SLIDES_FLOW } from "./webmcp-slides.js";
+export { WEBMCP_PAINT_FLOW } from "./webmcp-paint.js";
 export { WEBMCP_DOCKED_FLOW } from "./webmcp-docked.js";
 export { PAGE_CONTEXT_FLOW } from "./page-context.js";
 export { THEME_ASSISTANT_FLOW } from "./theme-assistant.js";
