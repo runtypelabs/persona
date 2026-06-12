@@ -32,6 +32,7 @@ export type PaintBridge = {
   redo(): PaintState;
   clearCanvas(): PaintState;
   snapshot(): string;
+  renderHistoryGif(): PaintState;
 };
 
 const BRIDGE_READY_TIMEOUT_MS = 15_000;
@@ -110,5 +111,6 @@ export async function mountJsPaint(host: HTMLElement): Promise<PaintBridge> {
     redo: () => live().redo(),
     clearCanvas: () => live().clearCanvas(),
     snapshot: () => live().snapshot(),
+    renderHistoryGif: () => live().renderHistoryGif(),
   };
 }

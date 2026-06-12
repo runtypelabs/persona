@@ -18,6 +18,7 @@ import {
 	clear,
 	get_tool_by_id,
 	redo,
+	render_history_as_gif,
 	select_tool,
 	undo,
 } from "./jspaint/src/functions.js";
@@ -188,5 +189,13 @@ window.__paintBridge = {
 
 	snapshot() {
 		return main_canvas.toDataURL("image/png");
+	},
+
+	// Opens jspaint's own "Render History as GIF" window (Extras menu): an
+	// animated replay of the whole undo history with a Save button. The
+	// dialog lives inside the iframe; saving is the user's click, not ours.
+	renderHistoryGif() {
+		render_history_as_gif();
+		return this.getState();
 	},
 };

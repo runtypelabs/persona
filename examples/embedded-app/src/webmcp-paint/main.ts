@@ -216,9 +216,10 @@ function mountWidget(bridge: PaintBridge): void {
       suggestionChips: [
         "Draw a house with a sun in the sky",
         "Draw a red heart",
-        "Draw a smiley face",
+        "Let's play Pictionary — I'll draw, you guess",
+        "Teach me to draw a cat, step by step",
+        "Speedrun the Mona Lisa in 20 strokes",
         "Look at the canvas and tell me what you see",
-        "Draw a sailboat on the ocean",
       ],
       launcher: {
         ...DEFAULT_WIDGET_CONFIG.launcher,
@@ -243,6 +244,13 @@ function mountWidget(bridge: PaintBridge): void {
         // paint live; only canvas-wiping tools confirm (and ⌘Z reverses
         // everything anyway).
         autoApprove: (info) => !APPROVAL_REQUIRED_TOOL_NAMES.has(info.toolName),
+      },
+      features: {
+        ...DEFAULT_WIDGET_CONFIG.features,
+        // The paint-along tutorial pauses between steps with the built-in
+        // ask_user_question tool (answer-pill sheet): "Done — check my work" /
+        // "Show me again" / "Skip ahead".
+        askUserQuestion: { expose: true },
       },
       // Fresh canvas state rides along with every message so "make it bigger"
       // or "what color is selected" need no tool round-trip. The flow prompt

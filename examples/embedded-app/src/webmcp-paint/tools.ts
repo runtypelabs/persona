@@ -205,6 +205,19 @@ export function setupPaintTools(bridge: PaintBridge): void {
       },
     },
     {
+      name: "render_replay_gif",
+      title: "Replay the drawing as a GIF",
+      description:
+        "Open the paint app's 'Render History as GIF' window: an animated replay of every stroke since the canvas was last cleared, with a Save button the user can click to keep it. Call this once at the end of a finished drawing (especially a speedrun) — the replay is the shareable artifact.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: true },
+      execute: () =>
+        toolResult(
+          bridge.renderHistoryGif(),
+          "Replay GIF window opened — the user can hit Save to keep it.",
+        ),
+    },
+    {
       name: "undo",
       title: "Undo",
       description: "Undo the most recent change(s) on the canvas.",
