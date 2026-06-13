@@ -286,11 +286,11 @@ describe("createAgentExperience docked mode", () => {
     const closeButton = mount.querySelector<HTMLButtonElement>('[aria-label="Close chat"]');
 
     expect(pushTrack).not.toBeNull();
-    expect(pushTrack?.style.transform).toBe("translateX(-420px)");
+    expect(pushTrack?.style.marginLeft).toBe("-420px");
 
     closeButton!.click();
 
-    expect(pushTrack?.style.transform).toBe("translateX(0)");
+    expect(pushTrack?.style.marginLeft).toBe("0px");
 
     openUnsub();
     closeUnsub();

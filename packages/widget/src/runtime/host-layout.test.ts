@@ -108,7 +108,7 @@ describe("createWidgetHostLayout docked", () => {
     layout.destroy();
   });
 
-  it("push reveal translates a track; main column width stays fixed in px", () => {
+  it("push reveal offsets a track with margin (no transform); main column width stays fixed in px", () => {
     const parent = document.createElement("div");
     parent.style.width = "800px";
     document.body.appendChild(parent);
@@ -132,15 +132,20 @@ describe("createWidgetHostLayout docked", () => {
     expect(shell.dataset.personaDockReveal).toBe("push");
     expect(contentSlot?.style.width).toBe("800px");
     expect(pushTrack?.style.width).toBe("1120px");
-    expect(pushTrack?.style.transform).toBe("translateX(0)");
+    expect(pushTrack?.style.marginLeft).toBe("0px");
+    // The track must NOT carry a transform: a transformed ancestor becomes the
+    // containing block for `position: fixed` host chrome and pushes it
+    // off-screen (regression guard, see host-layout.ts push branch).
+    expect(pushTrack?.style.transform).toBe("");
 
     layout.syncWidgetState({ open: true, launcherEnabled: true });
-    expect(pushTrack?.style.transform).toBe("translateX(-320px)");
+    expect(pushTrack?.style.marginLeft).toBe("-320px");
+    expect(pushTrack?.style.transform).toBe("");
 
     layout.destroy();
   });
 
-  it("push reveal on the left uses negative translate when closed", () => {
+  it("push reveal on the left uses negative margin when closed", () => {
     const parent = document.createElement("div");
     parent.style.width = "600px";
     document.body.appendChild(parent);
@@ -159,10 +164,12 @@ describe("createWidgetHostLayout docked", () => {
     layout.updateConfig({ launcher: dockConfig });
 
     const pushTrack = shell.querySelector<HTMLElement>('[data-persona-dock-role="push-track"]');
-    expect(pushTrack?.style.transform).toBe("translateX(-200px)");
+    expect(pushTrack?.style.marginLeft).toBe("-200px");
+    expect(pushTrack?.style.transform).toBe("");
 
     layout.syncWidgetState({ open: true, launcherEnabled: true });
-    expect(pushTrack?.style.transform).toBe("translateX(0)");
+    expect(pushTrack?.style.marginLeft).toBe("0px");
+    expect(pushTrack?.style.transform).toBe("");
 
     layout.destroy();
   });
@@ -219,9 +226,9 @@ describe("createWidgetHostLayout docked", () => {
     }
   });
 
-  it("clamps push and overlay dock slots without sticky (transform/absolute contexts)", () => {
-    // push: the slot lives inside the translated track, where a transformed
-    // ancestor defeats sticky — cap only. overlay: keeps absolute positioning.
+  it("clamps push and overlay dock slots without sticky (in-flow/absolute contexts)", () => {
+    // push: the slot is an in-flow `position: relative` column — max-height cap
+    // only, no sticky. overlay: keeps absolute positioning.
     const cases = [
       { reveal: "push" as const, position: "relative" },
       { reveal: "overlay" as const, position: "absolute" },
