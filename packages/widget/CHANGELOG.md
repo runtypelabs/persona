@@ -1,5 +1,17 @@
 # @runtypelabs/persona
 
+## 3.34.0
+
+### Minor Changes
+
+- 76223e9: Model the full dispatch tool-config surface on `AgentToolsConfig`: `toolCallStrategy`, `perToolLimits`, `approval.requestReason`, `subagentConfig` (spawn_subagent orchestration), and `codeModeConfig`. The widget already passed these through verbatim at runtime; consumers no longer need a type cast to configure subagent orchestration.
+
+### Patch Changes
+
+- b380851: Fix push-dock reveal breaking `position: fixed` host chrome. The push track was offset with a CSS `transform`, which made it the containing block for any `position: fixed` descendant — so viewport-fixed elements rendered inside the pushed content (e.g. a host app's `fixed top-0 right-0` toolbar) resolved against the track and landed the panel width off-screen. The track now uses a `margin-left` offset, which produces the identical visual push without establishing a containing block, so fixed (and sticky) descendants resolve against the viewport again.
+- 2d06038: Follow-ups to the docked `reveal: 'push'` margin-offset fix (#287): reset the push track's `marginLeft` when entering mobile fullscreen so a stale desktop push offset can't shift the full-width track off-screen, and document that `position: fixed`/`sticky` content inside the wrapped target stays viewport-anchored (offset it with `[data-persona-dock-open="true"]` while the dock is open). Docs updated in README, THEME-CONFIG, and CONFIGURATION-REFERENCE to describe push sliding via margin rather than transform.
+- 279b173: Bump safe non-breaking dependencies.
+
 ## 3.33.0
 
 ### Minor Changes
