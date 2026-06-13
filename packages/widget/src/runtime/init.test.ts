@@ -424,11 +424,11 @@ describe("initAgentWidget docked mode", () => {
     const panelSlot = shell.querySelector<HTMLElement>('[data-persona-dock-role="panel"]')!;
     expect(pushTrack).not.toBeNull();
     expect(panelSlot.style.width).toBe("400px");
-    expect(pushTrack?.style.transform).toBe("translateX(-400px)");
+    expect(pushTrack?.style.marginLeft).toBe("-400px");
 
     handle.close();
     expect(panelSlot.style.width).toBe("400px");
-    expect(pushTrack?.style.transform).toBe("translateX(0)");
+    expect(pushTrack?.style.marginLeft).toBe("0px");
 
     handle.destroy();
     wrapper.remove();

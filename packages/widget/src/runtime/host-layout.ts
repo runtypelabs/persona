@@ -53,9 +53,10 @@ const applyDockSlotMaxHeight = (
  * when the surrounding page is taller than the screen (e.g. a missing height
  * chain or a deliberately scrolling page). With a properly sized shell it
  * behaves exactly like the previous `position: relative`. Not used for push:
- * there the slot lives inside the translated push track, and that transformed
- * ancestor defeats sticky (verified in Chromium) — push gets the max-height
- * cap only, like overlay.
+ * push gets the max-height cap only, like overlay, since the dock slot is an
+ * in-flow `position: relative` column there rather than a viewport-pinned one.
+ * (The push track itself is offset with `margin-left`, not a transform, so it
+ * no longer establishes a containing block for fixed/sticky descendants.)
  */
 const applyInFlowDockSlotPosition = (
   dockSlot: HTMLElement,
@@ -151,6 +152,7 @@ const clearPushTrackStyles = (pushTrack: HTMLElement): void => {
   pushTrack.style.alignItems = "";
   pushTrack.style.transition = "";
   pushTrack.style.transform = "";
+  pushTrack.style.marginLeft = "";
 };
 
 const resetContentSlotFlexSizing = (contentSlot: HTMLElement): void => {
@@ -359,15 +361,24 @@ const applyDockStyles = (
 
     const panelPx = parseDockWidthToPx(dock.width, shell.clientWidth);
     const contentPx = Math.max(0, shell.clientWidth);
-    const dockTransition = dock.animate ? "transform 180ms ease" : "none";
-    const translate =
+    const dockTransition = dock.animate ? "margin-left 180ms ease" : "none";
+    // Slide the wide track with a negative left margin rather than a CSS
+    // transform. A `transform` (even `translateX(0)`) turns the push track into
+    // the containing block for any `position: fixed` descendant, so host pages
+    // that render viewport-fixed chrome inside the pushed content (e.g. the
+    // dashboard editor's `fixed top-0 right-0` toolbar) resolve `right: 0`
+    // against the track's right edge — `panelPx` past the viewport, off-screen.
+    // `margin-left` produces the identical visual offset (the track is clipped
+    // by the overflow:hidden shell) without establishing a containing block for
+    // fixed OR absolutely-positioned descendants.
+    const marginOffsetPx =
       dock.side === "right"
         ? expanded
-          ? `translateX(-${panelPx}px)`
-          : "translateX(0)"
+          ? -panelPx
+          : 0
         : expanded
-          ? "translateX(0)"
-          : `translateX(-${panelPx}px)`;
+          ? 0
+          : -panelPx;
 
     pushTrack.style.display = "flex";
     pushTrack.style.flexDirection = "row";
@@ -378,7 +389,10 @@ const applyDockStyles = (
     pushTrack.style.height = "100%";
     pushTrack.style.width = `${contentPx + panelPx}px`;
     pushTrack.style.transition = dockTransition;
-    pushTrack.style.transform = translate;
+    pushTrack.style.marginLeft = `${marginOffsetPx}px`;
+    // Defensively clear any transform a previous reveal mode may have set —
+    // leaving one would re-establish the fixed-position containing block.
+    pushTrack.style.transform = "";
 
     contentSlot.style.flex = "0 0 auto";
     contentSlot.style.flexGrow = "0";
