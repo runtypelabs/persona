@@ -435,7 +435,9 @@ export type {
   VoiceProvider,
   VoiceResult,
   VoiceStatus,
-  VoiceConfig
+  VoiceConfig,
+  VoiceMetrics,
+  VoicePlaybackEngine
 } from "./types";
 
 export default initAgentWidgetFn;

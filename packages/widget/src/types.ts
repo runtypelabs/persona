@@ -1794,7 +1794,13 @@ export type AgentWidgetVoiceRecognitionConfig = {
   /** Button border color while speaking. Inherits idle borderColor if not set */
   speakingBorderColor?: string;
   autoResume?: boolean | "assistant";
-  
+
+  /**
+   * Called with per-turn latency metrics on the realtime (`runtype`) voice path.
+   * Fires once per turn after the reply completes.
+   */
+  onMetrics?: (metrics: VoiceMetrics) => void;
+
   // Voice provider configuration
   provider?: {
     type: 'browser' | 'runtype' | 'custom';
@@ -1804,12 +1810,20 @@ export type AgentWidgetVoiceRecognitionConfig = {
     };
     runtype?: {
       agentId: string;
-      clientToken: string;
+      /** Defaults to the widget's `clientToken` when omitted. */
+      clientToken?: string;
+      /** Defaults to the widget's `apiUrl` when omitted. */
       host?: string;
       voiceId?: string;
-      /** Duration of silence (ms) before auto-stopping recording. Default: 2000 */
+      /**
+       * Optional custom streaming playback engine. Defaults to the built-in
+       * `AudioPlaybackManager`. Import `createWorkletPlaybackEngine` from
+       * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
+       */
+      createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
+      /** @deprecated No-op on the realtime path — the server's STT owns turn-taking. */
       pauseDuration?: number;
-      /** RMS volume threshold below which counts as silence. Default: 0.01 */
+      /** @deprecated No-op on the realtime path — the server's STT owns turn-taking. */
       silenceThreshold?: number;
     };
     custom?: any;
@@ -1901,6 +1915,45 @@ export type VoiceStatus =
   | 'idle';
 
 /**
+ * Per-turn latency metrics emitted by the realtime voice path.
+ * The wire frame is snake_case (`metrics`); decoded to camelCase at the
+ * provider boundary before being surfaced through `onMetrics`.
+ */
+export type VoiceMetrics = {
+  /** LLM generation time (ms). */
+  llmMs?: number;
+  /** Text-to-speech synthesis time (ms). */
+  ttsMs?: number;
+  /** Time to first audio frame (ms). */
+  firstAudioMs?: number;
+  /** Total turn time (ms). */
+  totalMs?: number;
+};
+
+/**
+ * Streaming PCM playback engine used by the realtime voice provider.
+ *
+ * The provider feeds raw PCM16 LE mono @ 24kHz (WAV header already stripped)
+ * via `enqueue`, signals end-of-reply with `markStreamEnd`, and learns when
+ * playback has fully drained via `onFinished`. The default implementation is
+ * `AudioPlaybackManager`; an optional jitter-buffered AudioWorklet engine ships
+ * from `@runtypelabs/persona/voice-worklet-player` and can be injected via the
+ * `runtype.createPlaybackEngine` config hook.
+ */
+export interface VoicePlaybackEngine {
+  /** Enqueue a raw PCM16 LE mono @ 24kHz chunk (no WAV header). */
+  enqueue(pcm: Uint8Array): void;
+  /** Signal that no more chunks will arrive for the current reply. */
+  markStreamEnd(): void;
+  /** Immediately stop playback and discard queued audio. */
+  flush(): void;
+  /** Register a callback fired once all queued audio has finished playing. */
+  onFinished(callback: () => void): void;
+  /** Release all audio resources. */
+  destroy(): Promise<void> | void;
+}
+
+/**
  * Voice provider configuration
  * Determines which voice provider to use and its specific settings
  */
@@ -1912,15 +1965,23 @@ export type VoiceConfig = {
   };
   runtype?: {
     agentId: string;
-    clientToken: string;
+    /** Defaults to the widget's `clientToken` when omitted. */
+    clientToken?: string;
+    /** Defaults to the widget's `apiUrl` (as a ws(s):// base) when omitted. */
     host?: string;
     voiceId?: string;
-    /** Duration of silence (ms) before auto-stopping recording. Default: 2000 */
+    /**
+     * Optional custom streaming playback engine. Defaults to the built-in
+     * `AudioPlaybackManager`. Import `createWorkletPlaybackEngine` from
+     * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
+     */
+    createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
+    /** @deprecated No-op on the realtime path — the server's STT owns turn-taking. */
     pauseDuration?: number;
-    /** RMS volume threshold below which counts as silence. Default: 0.01 */
+    /** @deprecated No-op on the realtime path — the server's STT owns turn-taking. */
     silenceThreshold?: number;
   };
-  custom?: any;
+  custom?: VoiceProvider | (() => VoiceProvider);
 };
 
 /**
@@ -1941,6 +2002,20 @@ export interface VoiceProvider {
 
   /** Register a callback fired when recording stops and audio is about to be sent */
   onProcessingStart?(callback: () => void): void;
+
+  /**
+   * Register a callback for incremental transcript updates during a voice turn.
+   * `isFinal=false` is a live interim update (user partials, or assistant deltas
+   * on providers that stream them); `isFinal=true` finalizes that role's text.
+   * On the realtime `runtype` path, interim updates fire for the `user` only and
+   * the `assistant` arrives as a single final.
+   */
+  onTranscript?(
+    callback: (role: 'user' | 'assistant', text: string, isFinal: boolean) => void,
+  ): void;
+
+  /** Register a callback for per-turn latency metrics (realtime path). */
+  onMetrics?(callback: (metrics: VoiceMetrics) => void): void;
 
   /** Returns the current interruption mode (only meaningful for Runtype provider) */
   getInterruptionMode?(): "none" | "cancel" | "barge-in";

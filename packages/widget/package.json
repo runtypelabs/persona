@@ -37,6 +37,11 @@
       "import": "./dist/smart-dom-reader.js",
       "require": "./dist/smart-dom-reader.cjs"
     },
+    "./voice-worklet-player": {
+      "types": "./dist/voice-worklet-player.d.ts",
+      "import": "./dist/voice-worklet-player.js",
+      "require": "./dist/voice-worklet-player.cjs"
+    },
     "./plugin-kit": {
       "types": "./dist/plugin-kit.d.ts",
       "import": "./dist/plugin-kit.js",
@@ -59,11 +64,12 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:plugin-kit && pnpm run build:animations",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations",
     "build:plugin-kit": "tsup src/plugin-kit.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:theme-editor": "tsup src/theme-editor.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:testing": "tsup src/testing.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:smart-dom-reader": "tsup src/smart-dom-reader.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
+    "build:voice-worklet-player": "tsup src/voice-worklet-player.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:animations": "tsup src/animations/glyph-cycle.ts src/animations/wipe.ts --format esm,cjs --minify --dts --out-dir dist/animations --no-splitting",
     "build:theme-ref": "tsup src/theme-reference.ts --format esm,cjs --minify --dts",
     "build:codegen": "tsup src/codegen.ts --format esm,cjs --minify --dts",

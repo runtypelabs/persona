@@ -1,572 +1,392 @@
 // Runtype Voice Provider
-// WebSocket implementation for Runtype's voice service
+//
+// Real-time streaming voice client for Runtype's `/ws/agents/:agentId/voice`
+// endpoint. The "call" is a single WebSocket session:
+//
+//   - up:   continuous mic audio as raw PCM16 LE mono @ 16kHz (binary frames)
+//   - down: WAV-wrapped PCM16 LE mono @ 24kHz audio (binary frames) +
+//           JSON control frames (transcript_interim / transcript_final /
+//           audio_end / metrics).
+//
+// The server's STT owns turn-taking, so the client streams continuously and
+// has no client-side VAD, barge-in monitoring, or batch upload. Auth rides the
+// `Sec-WebSocket-Protocol` subprotocol (`['runtype.bearer', clientToken]`),
+// never the query string — the token is never placed in a URL or logged.
+//
+// A continuous always-hot mic is, in UX terms, a permanent barge-in session, so
+// `getInterruptionMode()` reports the constant `'barge-in'` and the existing
+// mic-button wiring (ui.ts) treats a click as "hang up at any state" unchanged.
 
 import type {
   VoiceProvider,
   VoiceResult,
   VoiceStatus,
   VoiceConfig,
+  VoiceMetrics,
+  VoicePlaybackEngine,
 } from "../types";
 import { AudioPlaybackManager } from "./audio-playback-manager";
-import { VoiceActivityDetector } from "./voice-activity-detector";
+
+const CAPTURE_SAMPLE_RATE = 16000;
+const PLAYBACK_SAMPLE_RATE = 24000;
+const CAPTURE_BUFFER_SIZE = 4096;
+const RIFF_MAGIC = 0x52494646; // "RIFF"
+
+/**
+ * Strip the canonical 44-byte WAV header (if present) and return the raw PCM16
+ * payload. The ElevenLabs realtime path WAV-wraps each frame; the Cloudflare DO
+ * path may send raw PCM — detect the RIFF magic and handle both.
+ */
+function stripWavHeader(buf: ArrayBuffer): Uint8Array {
+  if (buf.byteLength >= 44) {
+    const view = new DataView(buf);
+    if (view.getUint32(0, false) === RIFF_MAGIC) {
+      return new Uint8Array(buf, 44);
+    }
+  }
+  return new Uint8Array(buf);
+}
+
+/** Derive a ws(s):// base URL from a configured host (full URL or bare host). */
+function toWsBase(host: string): string {
+  const trimmed = host.replace(/\/+$/, "");
+  if (/^wss?:\/\//i.test(trimmed)) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/^http/i, "ws");
+  const secure =
+    typeof window !== "undefined" && window.location?.protocol === "https:";
+  return `${secure ? "wss:" : "ws:"}//${trimmed}`;
+}
 
 export class RuntypeVoiceProvider implements VoiceProvider {
   type: "runtype" = "runtype";
+
   private ws: WebSocket | null = null;
-  private audioContext: AudioContext | null = null;
-  private w: any = typeof window !== "undefined" ? window : undefined;
-  private mediaRecorder: MediaRecorder | null = null;
+  private captureContext: AudioContext | null = null;
+  private mediaStream: MediaStream | null = null;
+  private sourceNode: MediaStreamAudioSourceNode | null = null;
+  private processor: ScriptProcessorNode | null = null;
+  private playback: VoicePlaybackEngine | null = null;
+
+  // True while a call (WS session) is live — drives the idempotent start guard
+  // and `isBargeInActive()`.
+  private callLive = false;
+  private isSpeaking = false;
+
+  // Invalidates in-flight async work (playback-engine creation, late frames,
+  // status transitions) after a teardown/restart so a stale callback can't act
+  // on a newer call's resources. Bumped on every start and every cleanup.
+  private callGeneration = 0;
+
+  // Distinguishes a user-initiated close (code 1000) from a dropped connection.
+  private intentionalClose = false;
+
   private resultCallbacks: ((result: VoiceResult) => void)[] = [];
   private errorCallbacks: ((error: Error) => void)[] = [];
   private statusCallbacks: ((status: VoiceStatus) => void)[] = [];
-  private processingStartCallbacks: (() => void)[] = [];
-  private audioChunks: Blob[] = [];
-  private isProcessing = false;
-  private isSpeaking = false;
-
-  // Voice activity detection (silence auto-stop + barge-in speech detection)
-  private vad = new VoiceActivityDetector();
-  private mediaStream: MediaStream | null = null;
-
-  // Cancellation / interruption support
-  private currentAudio: HTMLAudioElement | null = null;
-  private currentAudioUrl: string | null = null;
-  private currentRequestId: string | null = null;
-  private interruptionMode: "none" | "cancel" | "barge-in" = "none";
-
-  // Streaming audio playback (PCM chunks)
-  private playbackManager: AudioPlaybackManager | null = null;
+  private transcriptCallbacks: ((
+    role: "user" | "assistant",
+    text: string,
+    isFinal: boolean,
+  ) => void)[] = [];
+  private metricsCallbacks: ((metrics: VoiceMetrics) => void)[] = [];
 
   constructor(private config: VoiceConfig["runtype"]) {}
 
-  /** Returns the current interruption mode received from the server */
-  getInterruptionMode(): "none" | "cancel" | "barge-in" {
-    return this.interruptionMode;
-  }
+  // --- VoiceProvider lifecycle ----------------------------------------------
 
-  /** Returns true if the barge-in mic stream is alive (hot mic between turns) */
-  isBargeInActive(): boolean {
-    return this.interruptionMode === "barge-in" && this.mediaStream !== null;
-  }
+  /** No-op: the WS session opens lazily in `startListening` (the "call"). */
+  async connect(): Promise<void> {}
 
-  /** Tear down the barge-in mic pipeline — "hang up" the always-on mic */
-  async deactivateBargeIn(): Promise<void> {
-    this.vad.stop();
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((track) => track.stop());
-      this.mediaStream = null;
-    }
-    if (this.audioContext) {
-      await this.audioContext.close();
-      this.audioContext = null;
-    }
-  }
+  /** Start the call: acquire mic, open the WS, stream PCM until hang-up. */
+  async startListening(): Promise<void> {
+    if (this.callLive) return; // idempotent — a call is already live
 
-  async connect() {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      return; // Already connected
-    }
+    const agentId = this.config?.agentId;
+    const token = this.config?.clientToken;
+    const host = this.config?.host;
+    if (!agentId) throw new Error("Runtype voice requires an agentId");
+    if (!token) throw new Error("Runtype voice requires a clientToken");
+    if (!host) throw new Error("Runtype voice requires a host (or widget apiUrl)");
+
+    const generation = ++this.callGeneration;
+    this.intentionalClose = false;
+    this.callLive = true;
+
     try {
-      // Ensure we're running in a browser environment
-      if (!this.w) {
-        throw new Error("Window object not available");
-      }
-
-      // Temporary workaround for TypeScript issues
-      const w: any = this.w;
-      if (!w || !w.location) {
-        throw new Error("Window object or location not available");
-      }
-      const protocol = w.location.protocol === "https:" ? "wss:" : "ws:";
-      const host = this.config?.host;
-      const agentId = this.config?.agentId;
-      const clientToken = this.config?.clientToken;
-      if (!agentId || !clientToken) {
-        throw new Error("agentId and clientToken are required");
-      }
-      if (!host) {
-        throw new Error(
-          "host must be provided in Runtype voice provider configuration",
-        );
-      }
-      const wsUrl = `${protocol}//${host}/ws/agents/${agentId}/voice?token=${clientToken}`;
-
-      this.ws = new WebSocket(wsUrl);
-      this.setupWebSocketHandlers();
-
-      // Wait for WebSocket to actually open before resolving
-      const safeUrl = `${protocol}//${host}/ws/agents/${agentId}/voice?token=...`;
-      const hint =
-        " Check: API running on port 8787? Valid client token? Agent voice enabled? Token allowedOrigins includes this page?";
-
-      await new Promise<void>((resolve, reject) => {
-        if (!this.ws) return reject(new Error("WebSocket not created"));
-        let rejected = false;
-        const doReject = (msg: string) => {
-          if (rejected) return;
-          rejected = true;
-          clearTimeout(timeout);
-          reject(new Error(msg));
-        };
-        const timeout = setTimeout(
-          () => doReject("WebSocket connection timed out." + hint),
-          10000
-        );
-        this.ws!.addEventListener(
-          "open",
-          () => {
-            if (!rejected) {
-              rejected = true;
-              clearTimeout(timeout);
-              resolve();
-            }
-          },
-          { once: true }
-        );
-        this.ws!.addEventListener(
-          "error",
-          () => {
-            doReject(
-              "WebSocket connection failed to " + safeUrl + "." + hint
-            );
-          },
-          { once: true }
-        );
-        this.ws!.addEventListener(
-          "close",
-          (evt) => {
-            if (!evt.wasClean && !rejected) {
-              const codeMsg =
-                evt.code !== 1006 ? ` (code ${evt.code})` : "";
-              doReject(
-                "WebSocket connection failed" + codeMsg + "." + hint
-              );
-            }
-          },
-          { once: true }
-        );
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: CAPTURE_SAMPLE_RATE,
+          channelCount: 1,
+          echoCancellation: true,
+        },
       });
-
-      // Send a ping immediately so the server replies with session_config
-      // (which includes interruptionMode). This ensures the client knows
-      // about barge-in mode before the first recording starts.
-      this.sendHeartbeat();
-    } catch (error) {
-      this.ws = null;
-      this.errorCallbacks.forEach((cb) => cb(error as Error));
-      this.statusCallbacks.forEach((cb) => cb("error"));
-      throw error;
-    }
-  }
-
-  private setupWebSocketHandlers() {
-    if (!this.ws) return;
-
-    this.ws.onopen = () => {
-      this.statusCallbacks.forEach((cb) => cb("connected"));
-    };
-
-    this.ws.onclose = () => {
-      this.statusCallbacks.forEach((cb) => cb("disconnected"));
-    };
-
-    this.ws.onerror = (_error) => {
-      this.errorCallbacks.forEach((cb) => cb(new Error("WebSocket error")));
-      this.statusCallbacks.forEach((cb) => cb("error"));
-    };
-
-    // Receive binary frames for streaming audio (set binaryType to arraybuffer)
-    this.ws.binaryType = "arraybuffer";
-
-    this.ws.onmessage = (event) => {
-      // Binary frame = raw PCM audio chunk for streaming playback
-      if (event.data instanceof ArrayBuffer) {
-        this.handleAudioChunk(new Uint8Array(event.data));
+      if (generation !== this.callGeneration) {
+        stream.getTracks().forEach((t) => t.stop());
         return;
       }
+      this.mediaStream = stream;
 
-      // Text frame = JSON control message
-      try {
-        const message = JSON.parse(event.data);
-        this.handleWebSocketMessage(message);
-      } catch (error) {
-        this.errorCallbacks.forEach((cb) =>
-          cb(new Error("Message parsing failed")),
-        );
-      }
-    };
-  }
-
-  private handleWebSocketMessage(message: any) {
-    switch (message.type) {
-      case "session_config":
-        // Server sends voice settings on session init
-        if (message.interruptionMode) {
-          this.interruptionMode = message.interruptionMode;
-        }
-        break;
-
-      case "voice_response":
-        // Deliver text result immediately
-        this.isProcessing = false;
-        this.resultCallbacks.forEach((cb) =>
-          cb({
-            text: message.response.agentResponseText || message.response.transcript,
-            transcript: message.response.transcript,
-            audio: message.response.audio,
-            confidence: 0.95,
-            provider: "runtype",
-          }),
-        );
-
-        // Batch path: play TTS audio if present in the response (backward compat)
-        if (message.response.audio?.base64) {
-          this.isSpeaking = true;
-          this.statusCallbacks.forEach((cb) => cb("speaking"));
-          this.playAudio(message.response.audio).catch((err) =>
-            this.errorCallbacks.forEach((cb) => cb(err instanceof Error ? err : new Error(String(err)))),
-          );
-        } else if (!message.response.audio?.base64) {
-          // Streaming path: text-only voice_response — audio will arrive as
-          // binary chunks followed by audio_end. Transition to speaking state
-          // once the first audio chunk arrives (see handleAudioChunk).
-          // Stay in processing state until then.
-        }
-        break;
-
-      case "audio_end":
-        // Guard: discard late audio_end from a cancelled request
-        if (message.requestId && message.requestId !== this.currentRequestId) break;
-        // All PCM chunks have been sent — signal the playback manager
-        if (this.playbackManager) {
-          this.playbackManager.markStreamEnd();
-        } else {
-          // No audio chunks arrived — go idle
-          this.isSpeaking = false;
-          this.isProcessing = false;
-          this.statusCallbacks.forEach((cb) => cb("idle"));
-        }
-        break;
-
-      case "cancelled":
-        // Server acknowledged cancellation — discard any late-arriving responses
-        this.isProcessing = false;
-        break;
-
-      case "error":
-        this.errorCallbacks.forEach((cb) => cb(new Error(message.error)));
-        this.statusCallbacks.forEach((cb) => cb("error"));
-        this.isProcessing = false;
-        break;
-
-      case "pong":
-        // Heartbeat response
-        break;
-    }
-  }
-
-  /**
-   * Handle a binary audio chunk (raw PCM 24kHz 16-bit LE) for streaming playback.
-   */
-  private handleAudioChunk(pcmData: Uint8Array): void {
-    if (pcmData.length === 0) return;
-    if (!this.currentRequestId) return; // discard late chunks after cancel
-
-    // Lazily create playback manager on first chunk
-    if (!this.playbackManager) {
-      this.playbackManager = new AudioPlaybackManager(24000);
-      this.playbackManager.onFinished(() => {
-        this.isSpeaking = false;
-        this.playbackManager = null;
-        this.vad.stop(); // stop speech monitoring — audio ended naturally
-        this.statusCallbacks.forEach((cb) => cb("idle"));
+      // Create + resume both contexts inside the click gesture (iOS autoplay).
+      const AudioCtx =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      const captureContext: AudioContext = new AudioCtx({
+        sampleRate: CAPTURE_SAMPLE_RATE,
       });
-    }
+      if (captureContext.state === "suspended") {
+        await captureContext.resume().catch(() => {});
+      }
+      this.captureContext = captureContext;
 
-    // Transition to speaking on first chunk
-    if (!this.isSpeaking) {
-      this.isSpeaking = true;
-      this.statusCallbacks.forEach((cb) => cb("speaking"));
-      this.startBargeInMonitoring().catch(() => {}); // no-op if not barge-in mode
-    }
+      const engine = this.config?.createPlaybackEngine
+        ? await this.config.createPlaybackEngine()
+        : new AudioPlaybackManager(PLAYBACK_SAMPLE_RATE);
+      if (generation !== this.callGeneration) {
+        // Torn down while async work was in flight — free what we acquired.
+        void engine.destroy();
+        stream.getTracks().forEach((t) => t.stop());
+        captureContext.close().catch(() => {});
+        return;
+      }
+      this.playback = engine;
+      engine.onFinished(() => {
+        if (generation !== this.callGeneration) return;
+        this.isSpeaking = false;
+        // Reply drained — the call stays open, so return to listening.
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.emitStatus("listening");
+        }
+      });
 
-    this.playbackManager.enqueue(pcmData);
-  }
+      const wsUrl = `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice`;
+      // Token rides the subprotocol; `runtype.bearer` is the marker the server
+      // echoes as the negotiated subprotocol (browsers fail the handshake if an
+      // offered subprotocol goes unanswered).
+      const ws = new WebSocket(wsUrl, ["runtype.bearer", token]);
+      ws.binaryType = "arraybuffer";
+      this.ws = ws;
 
-  /**
-   * Stop playback / cancel in-flight request and return to idle.
-   * This is the public "stop only" action — does NOT start recording.
-   */
-  stopPlayback(): void {
-    if (!this.isProcessing && !this.isSpeaking) return;
-    this.cancelCurrentPlayback();
-    this.statusCallbacks.forEach((cb) => cb("idle"));
-  }
+      ws.onopen = () => {
+        if (generation !== this.callGeneration) return;
+        this.emitStatus("listening");
+        this.startCapture(captureContext, stream, ws, generation);
+      };
 
-  /**
-   * Cancel the current playback and in-flight server request.
-   * Internal helper — does NOT fire status callbacks (caller decides next state).
-   */
-  private cancelCurrentPlayback(): void {
-    // Stop batch playback (Audio element)
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio.src = "";
-      this.currentAudio = null;
-    }
-    if (this.currentAudioUrl) {
-      URL.revokeObjectURL(this.currentAudioUrl);
-      this.currentAudioUrl = null;
-    }
+      ws.onmessage = (event) => this.handleMessage(event, generation);
 
-    // Stop streaming playback (AudioPlaybackManager)
-    if (this.playbackManager) {
-      this.playbackManager.flush();
-      this.playbackManager = null;
-    }
+      ws.onerror = () => {
+        if (generation !== this.callGeneration) return;
+        this.emitError(new Error("Voice connection failed"));
+        this.emitStatus("error");
+        this.cleanup();
+      };
 
-    // Tell server to abort the in-flight request
-    if (this.currentRequestId && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(
-        JSON.stringify({
-          type: "cancel",
-          requestId: this.currentRequestId,
-        }),
-      );
-    }
-
-    this.currentRequestId = null;
-    this.isProcessing = false;
-    this.isSpeaking = false;
-  }
-
-  async startListening() {
-    try {
-      if (this.isProcessing || this.isSpeaking) {
-        // If interruption is enabled, cancel current playback and proceed
-        if (this.interruptionMode !== "none") {
-          this.cancelCurrentPlayback();
-        } else {
-          // Mode is "none" — block mic while processing or speaking
+      ws.onclose = (evt) => {
+        if (this.intentionalClose) {
+          this.intentionalClose = false;
           return;
         }
-      }
-
-      // Reuse existing mic stream in barge-in mode (mic stays hot)
-      if (!this.mediaStream) {
-        const constraints =
-          this.interruptionMode === "barge-in"
-            ? { audio: { echoCancellation: true, noiseSuppression: true } }
-            : { audio: true };
-        this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      }
-      const w = this.w!;
-      if (!this.audioContext) {
-        this.audioContext = new (w.AudioContext || w.webkitAudioContext)();
-      }
-      const audioContext = this.audioContext!;
-
-      // VAD-based silence detection — fires once when user stops talking
-      const pauseDuration = this.config?.pauseDuration ?? 2000;
-      const silenceThreshold = this.config?.silenceThreshold ?? 0.01;
-      this.vad.start(
-        audioContext,
-        this.mediaStream,
-        "silence",
-        { threshold: silenceThreshold, duration: pauseDuration },
-        () => this.stopListening(),
-      );
-
-      this.mediaRecorder = new MediaRecorder(this.mediaStream);
-      this.audioChunks = [];
-
-      this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          this.audioChunks.push(event.data);
+        if (generation !== this.callGeneration) return;
+        if (evt.code !== 1000) {
+          const codeMsg = evt.code ? ` (code ${evt.code})` : "";
+          this.emitError(new Error(`Voice connection closed${codeMsg}`));
+          this.emitStatus("error");
+        } else {
+          this.emitStatus("idle");
         }
+        this.cleanup();
       };
-
-      this.mediaRecorder.onstop = async () => {
-        if (this.audioChunks.length > 0) {
-          this.isProcessing = true;
-          this.statusCallbacks.forEach((cb) => cb("processing"));
-          this.processingStartCallbacks.forEach((cb) => cb());
-
-          const mimeType =
-            this.mediaRecorder?.mimeType || "audio/webm";
-          const audioBlob = new Blob(this.audioChunks, { type: mimeType });
-          await this.sendAudio(audioBlob);
-          this.audioChunks = [];
-        }
-      };
-
-      this.mediaRecorder.start(1000);
-      this.statusCallbacks.forEach((cb) => cb("listening"));
     } catch (error) {
-      this.errorCallbacks.forEach((cb) => cb(error as Error));
-      this.statusCallbacks.forEach((cb) => cb("error"));
+      this.cleanup();
+      this.emitError(error as Error);
+      this.emitStatus("error");
       throw error;
     }
   }
 
-  async stopListening() {
-    this.vad.stop();
+  /** End the call (hang up). */
+  async stopListening(): Promise<void> {
+    this.cleanup();
+    this.emitStatus("idle");
+  }
 
-    if (this.mediaRecorder) {
-      if (this.interruptionMode !== "barge-in") {
-        this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+  /** Tear down the call and drop all callbacks (used by `cleanupVoice`). */
+  async disconnect(): Promise<void> {
+    this.cleanup();
+    this.emitStatus("disconnected");
+    this.resultCallbacks = [];
+    this.errorCallbacks = [];
+    this.statusCallbacks = [];
+    this.transcriptCallbacks = [];
+    this.metricsCallbacks = [];
+  }
+
+  /** Stop the spoken reply without ending the call. */
+  stopPlayback(): void {
+    if (this.playback) this.playback.flush();
+    this.isSpeaking = false;
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.emitStatus("listening");
+    }
+  }
+
+  // --- Barge-in surface (constants for the continuous hot-mic model) --------
+
+  /** A continuous call is a permanent barge-in session. */
+  getInterruptionMode(): "none" | "cancel" | "barge-in" {
+    return "barge-in";
+  }
+
+  /** True while the call (hot mic) is live. */
+  isBargeInActive(): boolean {
+    return this.callLive;
+  }
+
+  /** "Hang up" the always-on mic. */
+  async deactivateBargeIn(): Promise<void> {
+    this.cleanup();
+    this.emitStatus("idle");
+  }
+
+  // --- Capture ---------------------------------------------------------------
+
+  private startCapture(
+    context: AudioContext,
+    stream: MediaStream,
+    ws: WebSocket,
+    generation: number,
+  ): void {
+    const source = context.createMediaStreamSource(stream);
+    this.sourceNode = source;
+    const processor = context.createScriptProcessor(CAPTURE_BUFFER_SIZE, 1, 1);
+    this.processor = processor;
+
+    processor.onaudioprocess = (e) => {
+      if (generation !== this.callGeneration) return;
+      if (ws.readyState !== WebSocket.OPEN) return;
+      const input = e.inputBuffer.getChannelData(0);
+      const pcm16 = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
-      this.mediaRecorder.stop();
-      this.mediaRecorder = null;
-    }
+      ws.send(pcm16.buffer);
+    };
 
-    // Only tear down mic pipeline in non-barge-in modes
-    if (this.interruptionMode !== "barge-in") {
-      if (this.mediaStream) {
-        this.mediaStream.getTracks().forEach((track) => track.stop());
-        this.mediaStream = null;
-      }
-      if (this.audioContext) {
-        await this.audioContext.close();
-        this.audioContext = null;
-      }
-    }
-
-    this.statusCallbacks.forEach((cb) => cb("idle"));
+    source.connect(processor);
+    // The processor must be connected to the graph to run; it writes no output,
+    // so the destination receives silence (no mic echo).
+    processor.connect(context.destination);
   }
 
-  /**
-   * Start VAD in speech mode during agent playback — detects when the user
-   * starts talking so we can interrupt (barge-in). No-op in other modes.
-   * Acquires mic if needed (e.g., first response where stopListening tore it down).
-   */
-  private async startBargeInMonitoring(): Promise<void> {
-    if (this.interruptionMode !== "barge-in") return;
+  // --- Downstream ------------------------------------------------------------
 
-    // Acquire mic pipeline if not already available (first response scenario)
-    const w = this.w;
-    if (!this.mediaStream && w) {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
-    }
-    if (!this.audioContext && w) {
-      this.audioContext = new (w.AudioContext || w.webkitAudioContext)();
-    }
-    if (!this.audioContext || !this.mediaStream) return;
+  private handleMessage(event: MessageEvent, generation: number): void {
+    if (generation !== this.callGeneration) return;
 
-    const audioContext = this.audioContext!;
-    const speechThreshold = this.config?.silenceThreshold ?? 0.01;
-    const speechDebounce = 200; // 200ms sustained sound = real speech, not echo blip
-
-    this.vad.start(
-      audioContext,
-      this.mediaStream,
-      "speech",
-      { threshold: speechThreshold, duration: speechDebounce },
-      () => this.handleBargeIn(),
-    );
-  }
-
-  /**
-   * Handle a barge-in event: cancel playback and immediately start recording.
-   */
-  private handleBargeIn(): void {
-    this.cancelCurrentPlayback();
-    this.startListening().catch((err) => {
-      this.errorCallbacks.forEach((cb) =>
-        cb(err instanceof Error ? err : new Error(String(err))),
-      );
-    });
-  }
-
-  private generateRequestId(): string {
-    return "vreq_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-  }
-
-  private async sendAudio(audioBlob: Blob) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      this.errorCallbacks.forEach((cb) =>
-        cb(new Error("WebSocket not connected")),
-      );
-      this.statusCallbacks.forEach((cb) => cb("error"));
+    if (event.data instanceof ArrayBuffer) {
+      this.handleAudioFrame(event.data, generation);
       return;
     }
 
+    let msg: any;
     try {
-      const base64Audio = await this.blobToBase64(audioBlob);
-      const format = this.getFormatFromMimeType(audioBlob.type);
-      const requestId = this.generateRequestId();
-      this.currentRequestId = requestId;
-
-      this.ws.send(
-        JSON.stringify({
-          type: "audio_input",
-          audio: base64Audio,
-          format,
-          sampleRate: 16000,
-          voiceId: this.config?.voiceId,
-          requestId,
-        }),
-      );
-    } catch (error) {
-      this.errorCallbacks.forEach((cb) => cb(error as Error));
-      this.statusCallbacks.forEach((cb) => cb("error"));
+      msg = JSON.parse(event.data as string);
+    } catch {
+      return; // non-JSON, non-binary frame — ignore
     }
-  }
 
-  private getFormatFromMimeType(mimeType: string): string {
-    if (mimeType.includes("wav")) return "wav";
-    if (mimeType.includes("mpeg") || mimeType.includes("mp3")) return "mp3";
-    return "webm";
-  }
+    switch (msg.type) {
+      case "transcript_interim":
+        this.emitStatus("listening");
+        this.emitTranscript("user", msg.text ?? "", false);
+        break;
 
-  private blobToBase64(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove data URL prefix
-        const base64 = result.split(",")[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
-
-  /**
-   * Decode base64 audio and play it through the browser.
-   */
-  private async playAudio(audio: { base64: string; format?: string }): Promise<void> {
-    if (!audio.base64) return;
-    const byteString = atob(audio.base64);
-    const bytes = new Uint8Array(byteString.length);
-    for (let i = 0; i < byteString.length; i++) {
-      bytes[i] = byteString.charCodeAt(i);
-    }
-    const format = audio.format || "mp3";
-    const mimeType =
-      format === "mp3" ? "audio/mpeg" : `audio/${format}`;
-    const blob = new Blob([bytes], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const audioEl = new Audio(url);
-
-    // Store references so playback can be cancelled
-    this.currentAudio = audioEl;
-    this.currentAudioUrl = url;
-
-    audioEl.onended = () => {
-      URL.revokeObjectURL(url);
-      if (this.currentAudio === audioEl) {
-        this.currentAudio = null;
-        this.currentAudioUrl = null;
-        this.isSpeaking = false;
-        this.statusCallbacks.forEach((cb) => cb("idle"));
+      case "transcript_final": {
+        const role = msg.role === "assistant" ? "assistant" : "user";
+        // user final → agent is now thinking; assistant final → reply incoming.
+        this.emitStatus(role === "user" ? "processing" : "speaking");
+        this.emitTranscript(role, msg.text ?? "", true);
+        break;
       }
-    };
-    await audioEl.play();
+
+      case "audio_end":
+        if (this.playback) {
+          this.playback.markStreamEnd();
+        } else {
+          this.isSpeaking = false;
+          this.emitStatus("listening");
+        }
+        break;
+
+      case "metrics":
+        this.emitMetrics({
+          llmMs: msg.llm_ms,
+          ttsMs: msg.tts_ms,
+          firstAudioMs: msg.first_audio_ms,
+          totalMs: msg.total_ms,
+        });
+        break;
+
+      case "error":
+        this.emitError(new Error(msg.error || "Voice error"));
+        this.emitStatus("error");
+        break;
+    }
   }
+
+  private handleAudioFrame(buf: ArrayBuffer, generation: number): void {
+    if (generation !== this.callGeneration) return;
+    if (!this.playback) return;
+    const pcm = stripWavHeader(buf);
+    if (pcm.length === 0) return;
+    if (!this.isSpeaking) {
+      this.isSpeaking = true;
+      this.emitStatus("speaking");
+    }
+    this.playback.enqueue(pcm);
+  }
+
+  // --- Teardown --------------------------------------------------------------
+
+  private cleanup(): void {
+    // Invalidate any in-flight async continuation / late frames first.
+    this.callGeneration += 1;
+    this.callLive = false;
+    this.isSpeaking = false;
+
+    if (this.processor) {
+      this.processor.onaudioprocess = null;
+      this.processor.disconnect();
+      this.processor = null;
+    }
+    if (this.sourceNode) {
+      this.sourceNode.disconnect();
+      this.sourceNode = null;
+    }
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach((t) => t.stop());
+      this.mediaStream = null;
+    }
+    if (this.captureContext) {
+      this.captureContext.close().catch(() => {});
+      this.captureContext = null;
+    }
+    if (this.playback) {
+      void this.playback.destroy();
+      this.playback = null;
+    }
+    if (this.ws) {
+      this.intentionalClose = true;
+      try {
+        this.ws.close(1000, "client ended call");
+      } catch {
+        // ignore
+      }
+      this.ws = null;
+    }
+  }
+
+  // --- Callback registration + emit -----------------------------------------
 
   onResult(callback: (result: VoiceResult) => void): void {
     this.resultCallbacks.push(callback);
@@ -580,58 +400,33 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.statusCallbacks.push(callback);
   }
 
-  onProcessingStart(callback: () => void): void {
-    this.processingStartCallbacks.push(callback);
+  onTranscript(
+    callback: (role: "user" | "assistant", text: string, isFinal: boolean) => void,
+  ): void {
+    this.transcriptCallbacks.push(callback);
   }
 
-  async disconnect(): Promise<void> {
-    // Stop any playing audio (batch)
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio.src = "";
-      this.currentAudio = null;
-    }
-    if (this.currentAudioUrl) {
-      URL.revokeObjectURL(this.currentAudioUrl);
-      this.currentAudioUrl = null;
-    }
-    // Stop streaming playback
-    if (this.playbackManager) {
-      await this.playbackManager.destroy();
-      this.playbackManager = null;
-    }
-    this.currentRequestId = null;
-    this.isSpeaking = false;
-
-    this.vad.stop();
-    await this.stopListening();
-
-    // Force mic teardown (barge-in mode skips this in stopListening)
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((track) => track.stop());
-      this.mediaStream = null;
-    }
-    if (this.audioContext) {
-      await this.audioContext.close();
-      this.audioContext = null;
-    }
-
-    if (this.ws) {
-      try {
-        this.ws.close();
-      } catch (error) {
-        // Ignore errors during disconnect
-      }
-      this.ws = null;
-    }
-
-    this.statusCallbacks.forEach((cb) => cb("disconnected"));
+  onMetrics(callback: (metrics: VoiceMetrics) => void): void {
+    this.metricsCallbacks.push(callback);
   }
 
-  // Heartbeat functionality
-  sendHeartbeat() {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "ping" }));
-    }
+  private emitStatus(status: VoiceStatus): void {
+    this.statusCallbacks.forEach((cb) => cb(status));
+  }
+
+  private emitError(error: Error): void {
+    this.errorCallbacks.forEach((cb) => cb(error));
+  }
+
+  private emitTranscript(
+    role: "user" | "assistant",
+    text: string,
+    isFinal: boolean,
+  ): void {
+    this.transcriptCallbacks.forEach((cb) => cb(role, text, isFinal));
+  }
+
+  private emitMetrics(metrics: VoiceMetrics): void {
+    this.metricsCallbacks.forEach((cb) => cb(metrics));
   }
 }

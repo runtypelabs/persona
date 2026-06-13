@@ -1,3 +1,5 @@
+import type { VoicePlaybackEngine } from "../types";
+
 /**
  * AudioPlaybackManager
  *
@@ -7,8 +9,10 @@
  * playback using AudioBufferSourceNode.
  *
  * Works on all browsers including iOS Safari (no MediaSource dependency).
+ *
+ * This is the default `VoicePlaybackEngine` for the realtime voice provider.
  */
-export class AudioPlaybackManager {
+export class AudioPlaybackManager implements VoicePlaybackEngine {
   private ctx: AudioContext | null = null;
   private nextStartTime = 0;
   private activeSources: AudioBufferSourceNode[] = [];

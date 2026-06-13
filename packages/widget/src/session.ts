@@ -371,92 +371,103 @@ export class AgentWidgetSession {
 
       // Read configurable text from widget config
       const voiceRecognitionConfig = this.config.voiceRecognition ?? {};
-      const processingText = voiceRecognitionConfig.processingText ?? '\u{1F3A4} Processing voice...';
       const processingErrorText = voiceRecognitionConfig.processingErrorText ?? 'Voice processing failed. Please try again.';
 
-      // Phase A: When recording stops and audio is about to be sent,
-      // inject placeholder messages and show typing indicator immediately.
-      // Placeholders are tagged with voiceProcessing=true so consumers can
-      // detect them in messageTransform and render custom UI.
-      if (this.voiceProvider.onProcessingStart) {
-        this.voiceProvider.onProcessingStart(() => {
-          // Inject user message placeholder
-          const userMsg = this.injectMessage({
-            role: 'user',
-            content: processingText,
-            streaming: false,
-            voiceProcessing: true
-          });
-          this.pendingVoiceUserMessageId = userMsg.id;
-
-          // Inject empty assistant message with streaming=true for typing indicator
-          const assistantMsg = this.injectMessage({
-            role: 'assistant',
-            content: '',
-            streaming: true,
-            voiceProcessing: true
-          });
-          this.pendingVoiceAssistantMessageId = assistantMsg.id;
-
-          // Trigger typing indicator in the UI
-          this.setStreaming(true);
-        });
-      }
-
-      // Phase B: When server responds with transcript + agent response,
-      // upsert the placeholder messages with actual content and clear voiceProcessing flag
+      // Browser STT: deliver the final transcript as a normal user message
+      // (the agent then runs via the standard SSE chat path). The realtime
+      // `runtype` provider does not use onResult — it drives onTranscript below.
       this.voiceProvider.onResult((result) => {
         if (result.provider === 'browser') {
-          // Browser STT: send transcript as a user message (agent runs via normal chat)
           if (result.text && result.text.trim()) {
             this.sendMessage(result.text, { viaVoice: true });
           }
-        } else if (result.provider === 'runtype') {
-          // Runtype provider: agent already executed server-side, audio playback
-          // is handled by the provider itself. Update placeholders with actual content.
-          if (this.pendingVoiceUserMessageId && result.transcript?.trim()) {
-            this.upsertMessage({
-              id: this.pendingVoiceUserMessageId,
-              role: 'user',
-              content: result.transcript.trim(),
-              createdAt: new Date().toISOString(),
-              streaming: false,
-              voiceProcessing: false
-            });
-          } else if (result.transcript?.trim()) {
-            this.injectUserMessage({ content: result.transcript.trim() });
-          }
-
-          if (this.pendingVoiceAssistantMessageId && result.text?.trim()) {
-            this.upsertMessage({
-              id: this.pendingVoiceAssistantMessageId,
-              role: 'assistant',
-              content: result.text.trim(),
-              createdAt: new Date().toISOString(),
-              streaming: false,
-              voiceProcessing: false
-            });
-          } else if (result.text?.trim()) {
-            this.injectAssistantMessage({ content: result.text.trim() });
-          }
-
-          // Mark assistant message as already spoken so browser TTS doesn't
-          // double-speak. This covers both paths:
-          //   - Batch: audio.base64 is present in the voice_response
-          //   - Streaming: audio arrives as binary PCM chunks (no base64 here)
-          // In either case, the Runtype provider handles TTS — browser TTS must skip.
-          {
-            const spokenId = this.pendingVoiceAssistantMessageId
-              ?? [...this.messages].reverse().find(m => m.role === 'assistant')?.id;
-            if (spokenId) this.ttsSpokenMessageIds.add(spokenId);
-          }
-
-          // Clear streaming state and pending IDs
-          this.setStreaming(false);
-          this.pendingVoiceUserMessageId = null;
-          this.pendingVoiceAssistantMessageId = null;
         }
       });
+
+      // Realtime (runtype) voice: drive the chat thread from streaming
+      // transcript frames. Live interim user text grows in place; the user
+      // message finalizes immediately on transcript_final{user}; the assistant
+      // reply lands (a single block, synced with audio) on its final frame.
+      // In-flight bubbles carry voiceProcessing=true so consumers can style
+      // them via messageTransform; it clears once the text is final.
+      if (this.voiceProvider.onTranscript) {
+        this.voiceProvider.onTranscript((role, text, isFinal) => {
+          if (role === 'user') {
+            if (!this.pendingVoiceUserMessageId) {
+              const msg = this.injectMessage({
+                role: 'user',
+                content: text,
+                streaming: false,
+                voiceProcessing: !isFinal
+              });
+              this.pendingVoiceUserMessageId = msg.id;
+            } else {
+              this.upsertMessage({
+                id: this.pendingVoiceUserMessageId,
+                role: 'user',
+                content: text,
+                createdAt: new Date().toISOString(),
+                streaming: false,
+                voiceProcessing: !isFinal
+              });
+            }
+
+            if (isFinal) {
+              // User finished — the agent is now thinking. Release the user
+              // bubble (a new interim starts a fresh turn) and show a typing
+              // indicator in a fresh assistant placeholder.
+              this.pendingVoiceUserMessageId = null;
+              const assistantMsg = this.injectMessage({
+                role: 'assistant',
+                content: '',
+                streaming: true,
+                voiceProcessing: true
+              });
+              this.pendingVoiceAssistantMessageId = assistantMsg.id;
+              this.setStreaming(true);
+            }
+          } else {
+            // assistant — runtype sends a single final; the isFinal=false path
+            // is reserved for delta-streaming providers (future BYO).
+            if (this.pendingVoiceAssistantMessageId) {
+              this.upsertMessage({
+                id: this.pendingVoiceAssistantMessageId,
+                role: 'assistant',
+                content: text,
+                createdAt: new Date().toISOString(),
+                streaming: !isFinal,
+                voiceProcessing: !isFinal
+              });
+            } else {
+              const msg = this.injectMessage({
+                role: 'assistant',
+                content: text,
+                streaming: !isFinal,
+                voiceProcessing: !isFinal
+              });
+              this.pendingVoiceAssistantMessageId = msg.id;
+            }
+
+            if (isFinal) {
+              // The provider plays this reply's audio — mark it spoken so
+              // browser TTS doesn't double-speak when streaming ends. Must run
+              // BEFORE setStreaming(false), which triggers the TTS check.
+              if (this.pendingVoiceAssistantMessageId) {
+                this.ttsSpokenMessageIds.add(this.pendingVoiceAssistantMessageId);
+              }
+              this.setStreaming(false);
+              this.pendingVoiceAssistantMessageId = null;
+            }
+          }
+        });
+      }
+
+      // Surface per-turn latency metrics to the optional config hook.
+      if (this.voiceProvider.onMetrics) {
+        this.voiceProvider.onMetrics((metrics) => {
+          this.config.voiceRecognition?.onMetrics?.(metrics);
+        });
+      }
 
       this.voiceProvider.onError((error) => {
         console.error('Voice error:', error);
@@ -540,11 +551,12 @@ export class AgentWidgetSession {
           type: 'runtype',
           runtype: {
             agentId: providerConfig.runtype?.agentId || '',
-            clientToken: providerConfig.runtype?.clientToken || '',
-            host: providerConfig.runtype?.host,
+            // Default credentials/endpoint from the widget config so the minimum
+            // voice config collapses to just `agentId`.
+            clientToken: providerConfig.runtype?.clientToken ?? this.config.clientToken,
+            host: providerConfig.runtype?.host ?? this.config.apiUrl,
             voiceId: providerConfig.runtype?.voiceId,
-            pauseDuration: providerConfig.runtype?.pauseDuration,
-            silenceThreshold: providerConfig.runtype?.silenceThreshold
+            createPlaybackEngine: providerConfig.runtype?.createPlaybackEngine
           }
         };
       

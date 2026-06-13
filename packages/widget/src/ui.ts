@@ -4879,7 +4879,13 @@ export const createAgentExperience = (
 
       switch (status) {
         case 'listening':
-          // Recording styles are applied by toggleVoice() / startVoiceRecognition() flows
+          // A continuous realtime call re-enters `listening` after every spoken
+          // reply, so reassert the recording styles here (they were replaced by
+          // the `processing`/`speaking` states during the turn). The initial
+          // listen is also styled by the toggleVoice()/startVoiceRecognition()
+          // flows; reapplying is idempotent.
+          removeRuntypeMicStateStyles();
+          applyRuntypeMicRecordingStyles();
           break;
         case 'processing':
           removeRuntypeMicStateStyles();
