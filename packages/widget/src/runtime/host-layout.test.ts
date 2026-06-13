@@ -397,6 +397,41 @@ describe("createWidgetHostLayout docked", () => {
     });
   });
 
+  it("resets the push track margin when a desktop push offset enters mobile fullscreen", () => {
+    const parent = document.createElement("div");
+    parent.style.width = "800px";
+    document.body.appendChild(parent);
+    const target = document.createElement("div");
+    parent.appendChild(target);
+
+    const layout = createWidgetHostLayout(target, {
+      launcher: {
+        mountMode: "docked",
+        autoExpand: false,
+        dock: { width: "320px", reveal: "push" },
+      },
+    });
+    const pushTrack = layout.shell?.querySelector<HTMLElement>(
+      '[data-persona-dock-role="push-track"]',
+    );
+
+    // Desktop, expanded: track carries a negative margin offset.
+    withInnerWidth(800, () => {
+      layout.syncWidgetState({ open: true, launcherEnabled: true });
+    });
+    expect(pushTrack?.style.marginLeft).toBe("-320px");
+
+    // Same layout falls into mobile fullscreen (viewport resize): the stale
+    // margin must be cleared or the width:100% track renders 320px off-screen.
+    withInnerWidth(500, () => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(layout.shell?.dataset.personaDockMobileFullscreen).toBe("true");
+    expect(pushTrack?.style.marginLeft).toBe("0px");
+
+    layout.destroy();
+  });
+
   it("does not use fixed fullscreen above mobile breakpoint", () => {
     withInnerWidth(800, () => {
       const parent = document.createElement("div");
