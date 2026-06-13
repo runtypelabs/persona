@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 3.34.1
+
+### Patch Changes
+
+- ef7e489: Include the client token in feedback requests (thumbs up/down, copy, CSAT, NPS) so the API can scope feedback to the originating session.
+
 ## 3.34.0
 
 ### Minor Changes
