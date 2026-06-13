@@ -32,6 +32,20 @@ function mockBrowserSupport(supported: boolean) {
   }
 }
 
+/** Minimal VoiceProvider-shaped object for the bring-your-own (`custom`) tests. */
+function makeFakeProvider() {
+  return {
+    type: 'custom' as const,
+    connect: async () => {},
+    disconnect: async () => {},
+    startListening: async () => {},
+    stopListening: async () => {},
+    onResult: () => {},
+    onError: () => {},
+    onStatusChange: () => {},
+  };
+}
+
 describe('BrowserVoiceProvider', () => {
   it('should check browser support', () => {
     // Test supported
@@ -86,14 +100,43 @@ describe('Voice Factory', () => {
     expect(() => createVoiceProvider(config)).toThrow('Browser speech recognition not supported');
   });
   
-  it('should throw error for custom provider', () => {
+  it('should throw when a custom provider is configured without `custom`', () => {
     const config: VoiceConfig = {
       type: 'custom'
     };
 
-    expect(() => createVoiceProvider(config)).toThrow('Custom voice providers not yet implemented');
+    expect(() => createVoiceProvider(config)).toThrow('requires a `custom` provider');
   });
-  
+
+  it('should return a bring-your-own custom provider instance', () => {
+    const byo = makeFakeProvider();
+    const provider = createVoiceProvider({ type: 'custom', custom: byo });
+    expect(provider).toBe(byo);
+  });
+
+  it('should resolve a custom provider factory', () => {
+    const byo = makeFakeProvider();
+    let calls = 0;
+    const provider = createVoiceProvider({
+      type: 'custom',
+      custom: () => {
+        calls += 1;
+        return byo;
+      },
+    });
+    expect(provider).toBe(byo);
+    expect(calls).toBe(1);
+  });
+
+  it('should throw when a custom factory returns a non-provider', () => {
+    const config = {
+      type: 'custom' as const,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      custom: (() => ({})) as any,
+    };
+    expect(() => createVoiceProvider(config)).toThrow('must be a VoiceProvider');
+  });
+
   it('should throw error for unknown provider type', () => {
     const config = {
       type: 'unknown' as any

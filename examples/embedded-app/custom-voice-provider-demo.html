@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" />
+  <title>Bring-Your-Own Voice Provider</title>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Bring-Your-Own Voice</h1>
+          <p>Plug a custom speech engine into Persona via <code>voiceRecognition.provider.custom</code>. This demo wraps the browser's Web Speech API as a <code>VoiceProvider</code> and dictates messages through the composer mic.</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
+
+        <div class="info-section">
+          <h3>Status</h3>
+          <p id="support-status" class="hint">Checking Web Speech support…</p>
+        </div>
+
+        <div class="info-section">
+          <h3>How the slot works</h3>
+          <div class="code-block">
+            <span class="prop">voiceRecognition</span>: {
+              <span class="prop">enabled</span>: <span class="keyword">true</span>,
+              <span class="prop">provider</span>: {
+                <span class="prop">type</span>: <span class="string">'custom'</span>,
+                <span class="comment">// a VoiceProvider instance, or a () =&gt; VoiceProvider factory</span>
+                <span class="prop">custom</span>: () =&gt; <span class="prop">createWebSpeechVoiceProvider</span>(),
+              },
+            }
+          </div>
+          <p class="hint">The adapter emits each final transcript via <code>onResult</code>; Persona sends it as a user message and the assistant reply streams back over the normal chat path. See <code>src/custom-voice-provider.ts</code>.</p>
+          <p class="hint">Replies are spoken back with <code>textToSpeech: { enabled: true, provider: 'browser' }</code> — a separate subsystem that pairs with <em>any</em> input provider, so an STT-only custom provider still gets voice output for free.</p>
+        </div>
+
+        <div data-config-inspector></div>
+
+        <div class="info-section">
+          <h3>Log</h3>
+          <div class="event-log event-log--sm" id="log"></div>
+        </div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Implementing a provider</h3>
+        <p>A <code>VoiceProvider</code> needs <code>connect</code>/<code>disconnect</code>, <code>startListening</code>/<code>stopListening</code>, and the <code>onResult</code>/<code>onError</code>/<code>onStatusChange</code> registration methods. Report <code>'listening'</code>/<code>'processing'</code>/<code>'idle'</code> so the mic button reflects state.</p>
+        <p>STT-only providers (like this Web Speech adapter) deliver a final transcript via <code>onResult</code>. A full-duplex provider that also speaks replies can additionally drive <code>onTranscript</code> and <code>onMetrics</code>, the way the realtime <code>runtype</code> provider does.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Speech in vs. speech out</h3>
+        <p>Voice <em>input</em> (this custom provider) and voice <em>output</em> (<code>textToSpeech</code>) are independent. This demo pairs the custom STT provider with browser TTS so the reply is read aloud — the same <code>textToSpeech</code> block works with the <code>browser</code> or <code>runtype</code> input providers too.</p>
+        <p>A full-duplex provider (like <code>runtype</code>) instead streams its own spoken audio and skips browser TTS; in that case the provider owns playback via a <code>VoicePlaybackEngine</code>.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Requirements</h3>
+        <p>Needs the demo proxy running (<code>pnpm dev</code>) for the assistant reply, and a Chromium-based browser for Web Speech. The mic button renders even without Web Speech because the provider type is <code>custom</code>.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/custom-voice-provider-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("custom-voice-provider-demo");
+  </script>
+</body>
+</html>

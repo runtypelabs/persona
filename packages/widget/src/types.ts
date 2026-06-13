@@ -1826,7 +1826,15 @@ export type AgentWidgetVoiceRecognitionConfig = {
       /** @deprecated No-op on the realtime path — the server's STT owns turn-taking. */
       silenceThreshold?: number;
     };
-    custom?: any;
+    /**
+     * Bring-your-own voice provider. Set `type: 'custom'` and pass either a
+     * ready {@link VoiceProvider} instance or a `() => VoiceProvider` factory
+     * (the factory defers construction until voice is set up). STT-style
+     * providers deliver a final transcript via `onResult` (sent as a user
+     * message); full-duplex providers can drive `onTranscript`/`onMetrics` like
+     * the realtime `runtype` provider.
+     */
+    custom?: VoiceProvider | (() => VoiceProvider);
   };
 };
 
@@ -1981,6 +1989,12 @@ export type VoiceConfig = {
     /** @deprecated No-op on the realtime path — the server's STT owns turn-taking. */
     silenceThreshold?: number;
   };
+  /**
+   * Bring-your-own voice provider for `type: 'custom'` — either a ready
+   * {@link VoiceProvider} instance or a `() => VoiceProvider` factory. The
+   * factory form defers construction (WebSocket/AudioContext/etc.) until
+   * `createVoiceProvider` runs.
+   */
   custom?: VoiceProvider | (() => VoiceProvider);
 };
 

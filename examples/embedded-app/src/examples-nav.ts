@@ -49,6 +49,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline"],
   },
   {
+    slug: "custom-voice-provider-demo",
+    href: "/custom-voice-provider-demo.html",
+    title: "Bring-Your-Own Voice",
+    blurb: "Plug a custom speech provider in via provider.custom.",
+    tier: "patterns",
+    tags: ["voice", "audio", "integration"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "agent-demo",
     href: "/agent-demo.html",
     title: "Agent Loop",

@@ -373,11 +373,12 @@ export class AgentWidgetSession {
       const voiceRecognitionConfig = this.config.voiceRecognition ?? {};
       const processingErrorText = voiceRecognitionConfig.processingErrorText ?? 'Voice processing failed. Please try again.';
 
-      // Browser STT: deliver the final transcript as a normal user message
-      // (the agent then runs via the standard SSE chat path). The realtime
-      // `runtype` provider does not use onResult — it drives onTranscript below.
+      // STT-style providers (browser + bring-your-own `custom`) deliver a final
+      // transcript that we send as a normal user message — the agent then runs
+      // via the standard SSE chat path. Only the realtime `runtype` provider is
+      // excluded here: it owns the whole turn and drives onTranscript below.
       this.voiceProvider.onResult((result) => {
-        if (result.provider === 'browser') {
+        if (result.provider !== 'runtype') {
           if (result.text && result.text.trim()) {
             this.sendMessage(result.text, { viaVoice: true });
           }
@@ -568,7 +569,15 @@ export class AgentWidgetSession {
             continuous: providerConfig.browser?.continuous
           }
         };
-      
+
+      case 'custom':
+        // Bring-your-own provider: pass the instance/factory straight through
+        // to the factory, which resolves and validates it.
+        return {
+          type: 'custom',
+          custom: providerConfig.custom
+        };
+
       default:
         return undefined;
     }

@@ -5370,7 +5370,10 @@ export const createAgentExperience = (
       (typeof (window as any).webkitSpeechRecognition !== 'undefined' ||
        typeof (window as any).SpeechRecognition !== 'undefined');
     const hasRuntypeProvider = voiceConfig?.provider?.type === 'runtype';
-    const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider;
+    // Bring-your-own (`custom`) providers own their own input pipeline (cloud
+    // STT, etc.), so the mic should render regardless of Web Speech support.
+    const hasCustomProvider = voiceConfig?.provider?.type === 'custom';
+    const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider || hasCustomProvider;
 
     if (!hasVoiceInput) return null;
 

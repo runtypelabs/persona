@@ -19,9 +19,26 @@ export function createVoiceProvider(config: VoiceConfig): VoiceProvider {
       }
       return new BrowserVoiceProvider(config.browser || {});
     
-    case 'custom':
-      throw new Error('Custom voice providers not yet implemented');
-    
+    case 'custom': {
+      // Bring-your-own provider: `custom` is either a ready VoiceProvider
+      // instance or a `() => VoiceProvider` factory (deferred construction, so
+      // resources like a WebSocket or AudioContext are only created when voice
+      // is actually set up). Resolve and sanity-check the shape.
+      const custom = config.custom;
+      if (!custom) {
+        throw new Error(
+          'Custom voice provider requires a `custom` provider instance or factory'
+        );
+      }
+      const provider = typeof custom === 'function' ? custom() : custom;
+      if (!provider || typeof provider.startListening !== 'function') {
+        throw new Error(
+          'Custom voice provider `custom` must be a VoiceProvider (or a factory returning one)'
+        );
+      }
+      return provider;
+    }
+
     default:
       throw new Error(`Unknown voice provider type: ${config.type}`);
   }
@@ -29,11 +46,16 @@ export function createVoiceProvider(config: VoiceConfig): VoiceProvider {
 
 // Auto-select the best available provider
 export function createBestAvailableVoiceProvider(config?: Partial<VoiceConfig>): VoiceProvider {
+  // Honor an explicit bring-your-own provider before any built-in.
+  if (config?.type === 'custom' && config.custom) {
+    return createVoiceProvider({ type: 'custom', custom: config.custom });
+  }
+
   // Prefer Runtype if configured
   if (config?.type === 'runtype' && config.runtype) {
     return createVoiceProvider({ type: 'runtype', runtype: config.runtype });
   }
-  
+
   // Fall back to browser if supported
   if (BrowserVoiceProvider.isSupported()) {
     return createVoiceProvider({ 
