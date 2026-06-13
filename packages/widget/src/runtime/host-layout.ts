@@ -296,6 +296,11 @@ const applyDockStyles = (
       pushTrack.style.flex = "1 1 auto";
       pushTrack.style.alignItems = "stretch";
       pushTrack.style.transform = "none";
+      // Reset the desktop push offset: this fullscreen path applies styles
+      // inline without going through clearPushTrackStyles, so a stale negative
+      // marginLeft from a prior expanded desktop render would shift the now
+      // width:100% track off-screen on mobile.
+      pushTrack.style.marginLeft = "0";
       pushTrack.style.transition = "none";
       contentSlot.style.flex = "1 1 auto";
       contentSlot.style.width = "100%";
