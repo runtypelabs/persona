@@ -482,12 +482,21 @@ export class AgentWidgetClient {
       console.debug("[AgentWidgetClient] sending feedback", feedback);
     }
 
+    // Scope the feedback request to the caller's client token, sourced the same
+    // way as the chat/init requests. sendFeedback is client-token-mode only
+    // (guarded above), so clientToken is always present here and an API key can
+    // never leak into the body. Left undefined only when the embed has none.
+    const requestBody = {
+      ...feedback,
+      ...(this.config.clientToken && { token: this.config.clientToken }),
+    };
+
     const response = await fetch(this.getFeedbackApiUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(feedback),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

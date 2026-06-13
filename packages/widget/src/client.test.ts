@@ -4121,3 +4121,58 @@ describe('AgentWidgetClient - non-client-token paths always send full clientTool
     }
   });
 });
+
+describe('AgentWidgetClient - Feedback request builder', () => {
+  const INIT_RESPONSE = {
+    sessionId: 'sess_123',
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    flow: {},
+    config: { welcomeMessage: 'hi', placeholder: 'type…', theme: {} },
+  };
+
+  function mockInitAndFeedback() {
+    const feedbackBodies: Array<Record<string, unknown>> = [];
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: { body: string }) => {
+      if (typeof url === 'string' && url.endsWith('/v1/client/feedback')) {
+        feedbackBodies.push(JSON.parse(options.body));
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      // init request
+      return { ok: true, status: 200, json: async () => INIT_RESPONSE };
+    });
+    return feedbackBodies;
+  }
+
+  it('includes the client token in the feedback request body', async () => {
+    const feedbackBodies = mockInitAndFeedback();
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      clientToken: 'ct_live_abc123',
+    });
+    await client.initSession();
+
+    await client.sendFeedback({ sessionId: 'sess_123', messageId: 'm1', type: 'upvote' });
+
+    expect(feedbackBodies).toHaveLength(1);
+    expect(feedbackBodies[0]).toEqual({
+      sessionId: 'sess_123',
+      messageId: 'm1',
+      type: 'upvote',
+      token: 'ct_live_abc123',
+    });
+  });
+
+  it('sends the token on csat/nps submissions too', async () => {
+    const feedbackBodies = mockInitAndFeedback();
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      clientToken: 'ct_live_xyz789',
+    });
+    await client.initSession();
+
+    await client.sendFeedback({ sessionId: 'sess_123', type: 'csat', rating: 5 });
+
+    expect(feedbackBodies[0].token).toBe('ct_live_xyz789');
+    expect(feedbackBodies[0].rating).toBe(5);
+  });
+});
