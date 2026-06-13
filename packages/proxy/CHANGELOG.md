@@ -1,5 +1,15 @@
 # @runtypelabs/persona-proxy
 
+## 3.34.0
+
+### Minor Changes
+
+- 571f4c5: Add WEBMCP_PAINT_FLOW — the Paint Pal flow for the jspaint WebMCP demo, with a snapshot-and-look visual loop (image tool results through /resume).
+
+### Patch Changes
+
+- 279b173: Bump safe non-breaking dependencies.
+
 ## 3.33.0
 
 ### Minor Changes
