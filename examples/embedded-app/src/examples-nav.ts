@@ -1,3 +1,12 @@
+import "./command-palette.css";
+
+import {
+  createPersonaCommandItems,
+  installCommandPalette,
+  type CommandPaletteItem,
+} from "./command-palette";
+import { STANDALONE_EXAMPLES } from "./standalone-nav";
+
 export type Tier = "start" | "patterns" | "reference";
 export type Mode = "inline" | "launcher" | "fullscreen";
 
@@ -208,6 +217,10 @@ export function formatExampleIndex(index: number): string {
   return `${String(index + 1).padStart(2, "0")}/${String(total).padStart(2, "0")}`;
 }
 
+export type ExamplesShellOptions = {
+  onCommandSelect?: (href: string, item: CommandPaletteItem) => void;
+};
+
 /**
  * Mount the persistent top app bar with brand + demo picker + prev/next.
  * Idempotent: safe to call multiple times.
@@ -216,7 +229,10 @@ export function formatExampleIndex(index: number): string {
  * for the bar is reserved by demo-shared.css so first paint already accounts
  * for it (no jump when this runs).
  */
-export function renderExamplesShell(currentSlug?: string): void {
+export function renderExamplesShell(
+  currentSlug?: string,
+  options: ExamplesShellOptions = {},
+): void {
   const items = ADVANCED_EXAMPLES;
   const currentIndex = currentSlug
     ? items.findIndex((e) => e.slug === currentSlug)
@@ -234,28 +250,6 @@ export function renderExamplesShell(currentSlug?: string): void {
   const pickerBadge = current?.badge
     ? `<span class="nav-badge">${escapeHtml(current.badge)}</span>`
     : "";
-  const renderItem = (entry: AdvancedExample): string => {
-    const isCurrent = entry.slug === currentSlug;
-    const badge = entry.badge
-      ? `<span class="nav-badge">${escapeHtml(entry.badge)}</span>`
-      : "";
-    const index = formatExampleIndex(items.indexOf(entry));
-    return `<li class="shell-picker-item${isCurrent ? " is-current" : ""}">
-      <a href="${entry.href}" title="${escapeHtml(entry.blurb)}">
-        <span class="shell-picker-item-title"><span class="shell-picker-item-index">${index}</span>${escapeHtml(entry.title)}${badge}</span>
-        <span class="shell-picker-item-blurb">${escapeHtml(entry.blurb)}</span>
-      </a>
-    </li>`;
-  };
-
-  const sections = TIER_ORDER.map((tier) => {
-    const entries = items.filter((e) => e.tier === tier);
-    if (entries.length === 0) return "";
-    return `<li class="shell-picker-section">
-      <span class="shell-picker-section-heading">${escapeHtml(TIER_LABELS[tier])}</span>
-      <ul class="shell-picker-section-list">${entries.map(renderItem).join("")}</ul>
-    </li>`;
-  }).join("");
 
   const prevNext = current
     ? `<div class="shell-prevnext">
@@ -280,15 +274,10 @@ export function renderExamplesShell(currentSlug?: string): void {
     <a class="shell-crumb" href="/advanced.html">Advanced Examples</a>
     <span class="shell-sep" aria-hidden="true">/</span>
     <div class="shell-picker">
-      <button type="button" class="shell-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
+      <button type="button" class="shell-picker-trigger" aria-haspopup="dialog" aria-label="Search Persona examples">
         <span class="shell-picker-label">${escapeHtml(pickerLabel)}${pickerBadge}</span>
-        <svg class="shell-picker-chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path fill="currentColor" d="M2.3 4.3a1 1 0 0 1 1.4 0L6 6.6l2.3-2.3a1 1 0 1 1 1.4 1.4l-3 3a1 1 0 0 1-1.4 0l-3-3a1 1 0 0 1 0-1.4z"/></svg>
         <kbd class="shell-kbd" aria-hidden="true">⌘K</kbd>
       </button>
-      <div class="shell-picker-menu" role="listbox" hidden>
-        <a class="shell-picker-all" href="/advanced.html">▸ All examples</a>
-        <ul class="shell-picker-list">${sections}</ul>
-      </div>
     </div>
     ${prevNext}
   `;
@@ -299,49 +288,21 @@ export function renderExamplesShell(currentSlug?: string): void {
   // ready flag on the next frame to trigger the CSS transition.
   requestAnimationFrame(() => header.setAttribute("data-shell-ready", ""));
 
-  // Picker dropdown wiring
   const trigger = header.querySelector<HTMLButtonElement>(
     ".shell-picker-trigger",
   );
-  const menu = header.querySelector<HTMLDivElement>(".shell-picker-menu");
-  if (!trigger || !menu) return;
-
-  const setOpen = (open: boolean) => {
-    if (open) {
-      menu.hidden = false;
-      trigger.setAttribute("aria-expanded", "true");
-      const active = menu.querySelector<HTMLAnchorElement>(
-        ".shell-picker-item.is-current a",
-      );
-      (active ?? menu.querySelector<HTMLAnchorElement>("a"))?.focus({
-        preventScroll: true,
-      });
-    } else {
-      menu.hidden = true;
-      trigger.setAttribute("aria-expanded", "false");
-    }
-  };
-
-  trigger.addEventListener("click", (e) => {
-    e.stopPropagation();
-    setOpen(menu.hidden);
+  const commandItems = createPersonaCommandItems({
+    advancedExamples: items,
+    standaloneExamples: STANDALONE_EXAMPLES,
+    currentPath: current?.href,
   });
 
-  document.addEventListener("click", (e) => {
-    if (menu.hidden) return;
-    if (!header.contains(e.target as Node)) setOpen(false);
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !menu.hidden) {
-      setOpen(false);
-      trigger.focus();
-      return;
-    }
-    // ⌘K / Ctrl+K opens the example picker (spec-sheet jump-to).
-    if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
-      e.preventDefault();
-      setOpen(menu.hidden);
-    }
+  installCommandPalette({
+    trigger,
+    items: commandItems,
+    title: "Search Persona",
+    subtitle: "Jump between Persona pages, demos, and examples.",
+    placeholder: "Search examples, pages, or topics...",
+    onCommandSelect: options.onCommandSelect,
   });
 }

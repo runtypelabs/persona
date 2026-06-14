@@ -455,9 +455,34 @@ function galleryFonts(): Plugin {
   };
 }
 
+function commandPaletteEntry(): Plugin {
+  return {
+    name: "persona-command-palette-entry",
+    transformIndexHtml(html) {
+      if (html.includes("/src/command-palette-entry.ts")) return;
+      const isHome = html.includes('src="/src/main.ts"') || html.includes("src/home.css");
+      if (isHome) return;
+      return [
+        {
+          tag: "script",
+          attrs: { type: "module", src: "/src/command-palette-entry.ts" },
+          injectTo: "body",
+        },
+      ] satisfies HtmlTagDescriptor[];
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [serveWidgetDist(), serveJsPaint(), llmsTxt(), previewEmbedCheck(), galleryFonts()],
+  plugins: [
+    serveWidgetDist(),
+    serveJsPaint(),
+    llmsTxt(),
+    previewEmbedCheck(),
+    galleryFonts(),
+    commandPaletteEntry(),
+  ],
   resolve: {
     alias: {
       "@runtypelabs/persona/theme-editor": path.resolve(

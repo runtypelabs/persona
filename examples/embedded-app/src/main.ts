@@ -1,5 +1,6 @@
 import "@runtypelabs/persona/widget.css";
 import "./home.css";
+import "./command-palette.css";
 
 import {
   createAgentExperience,
@@ -7,10 +8,29 @@ import {
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
+import {
+  createPersonaCommandItems,
+  installCommandPalette,
+} from "./command-palette";
+import { ADVANCED_EXAMPLES } from "./examples-nav";
 import { initHomeBackground } from "./home-background";
+import { STANDALONE_EXAMPLES } from "./standalone-nav";
 
 const bgCanvas = document.getElementById("bg-tunnel") as HTMLCanvasElement | null;
 if (bgCanvas) initHomeBackground(bgCanvas);
+
+installCommandPalette({
+  trigger: document.querySelector<HTMLElement>("[data-command-palette-trigger]"),
+  items: createPersonaCommandItems({
+    advancedExamples: ADVANCED_EXAMPLES,
+    standaloneExamples: STANDALONE_EXAMPLES,
+    currentPath: window.location.pathname,
+    includeHomeSections: true,
+  }),
+  title: "Search Persona",
+  subtitle: "Jump to pages, demos, examples, and homepage sections.",
+  placeholder: "Search Persona...",
+});
 
 /** Storage key scoped to this index demo so it does not collide with other demos. */
 const sharedWidgetStorage = createLocalStorageAdapter("persona-state-index-demo");

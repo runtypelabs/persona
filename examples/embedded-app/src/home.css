@@ -209,6 +209,38 @@ section[id], aside[id] {
   gap: 18px;
 }
 
+.site-command-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 38px;
+  padding: 0 12px 0 15px;
+  border: 1px solid var(--black);
+  background: rgba(254, 249, 241, 0.44);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+.site-command-trigger:hover {
+  background: var(--teal);
+  border-color: var(--teal-ink);
+}
+
+.site-command-trigger kbd {
+  border: 1px solid currentColor;
+  border-bottom-width: 2px;
+  padding: 1px 5px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
 .btn-caps {
   display: inline-flex;
   align-items: center;
@@ -1649,6 +1681,14 @@ section[id], aside[id] {
 
   .site-wordmark {
     font-size: 22px;
+  }
+
+  .site-command-trigger span {
+    display: none;
+  }
+
+  .site-command-trigger {
+    padding: 0 10px;
   }
 
   .btn-caps {

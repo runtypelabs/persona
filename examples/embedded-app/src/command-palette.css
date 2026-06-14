@@ -1,0 +1,283 @@
+.persona-command-palette {
+  --persona-command-bg: #0c0c0a;
+  --persona-command-fg: #d8d3c8;
+  --persona-command-muted: #7c7a70;
+  --persona-command-soft: #9a968b;
+  --persona-command-line: rgba(255, 255, 255, 0.12);
+  --persona-command-line-strong: rgba(255, 255, 255, 0.3);
+  --persona-command-accent: var(--teal-dim, var(--primary, #26fedc));
+  --persona-command-blue: #7eb1ff;
+
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: grid;
+  place-items: start center;
+  padding: clamp(24px, 8vh, 72px) 16px 24px;
+  color: var(--persona-command-fg);
+  font-family: var(--font-mono, "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.persona-command-palette[hidden] {
+  display: none;
+}
+
+.persona-command-palette-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(29, 28, 23, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.persona-command-palette-panel {
+  position: relative;
+  width: min(760px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--persona-command-border, #000);
+  border-radius: 0;
+  background: var(--persona-command-bg);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.42);
+}
+
+.persona-command-palette-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--persona-command-line);
+}
+
+.persona-command-palette-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.persona-command-palette-dots span {
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+}
+
+.persona-command-palette-titlebar-label {
+  color: var(--persona-command-fg);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.persona-command-palette-close {
+  appearance: none;
+  margin-left: auto;
+  border: 1px solid var(--persona-command-line-strong);
+  background: transparent;
+  color: var(--persona-command-fg);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.persona-command-palette-close:hover {
+  border-color: var(--persona-command-accent);
+  color: var(--persona-command-accent);
+}
+
+.persona-command-palette-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  min-height: 78px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--persona-command-line);
+}
+
+.persona-command-palette-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--persona-command-soft);
+}
+
+.persona-command-palette-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--persona-command-fg);
+  font: inherit;
+  font-size: clamp(18px, 2.2vw, 22px);
+  line-height: 1.2;
+}
+
+.persona-command-palette-search input::placeholder {
+  color: var(--persona-command-muted);
+}
+
+.persona-command-palette-meta span,
+.persona-command-palette-footer span,
+.persona-command-palette-item-shortcut {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.persona-command-palette-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 28px 10px;
+}
+
+.persona-command-palette-meta h2 {
+  margin: 0;
+  color: var(--persona-command-accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.persona-command-palette-meta p {
+  margin: 6px 0 0;
+  color: var(--persona-command-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.persona-command-palette-meta span {
+  align-self: start;
+  border: 1px solid var(--persona-command-line);
+  color: var(--persona-command-muted);
+  padding: 4px 8px;
+}
+
+.persona-command-palette-results {
+  max-height: min(56vh, 520px);
+  overflow: auto;
+  padding: 6px 26px 14px;
+  scroll-padding: 6px;
+}
+
+.persona-command-palette-results::-webkit-scrollbar {
+  width: 3px;
+}
+
+.persona-command-palette-results::-webkit-scrollbar-thumb {
+  background: var(--persona-command-muted);
+}
+
+.persona-command-palette-section {
+  padding: 14px 0 6px;
+  color: var(--persona-command-muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.persona-command-palette-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 46px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  color: var(--persona-command-fg);
+  text-decoration: none;
+}
+
+.persona-command-palette-item:hover,
+.persona-command-palette-item.is-active {
+  border-color: color-mix(in srgb, var(--persona-command-accent) 58%, transparent);
+  background: rgba(38, 254, 220, 0.08);
+}
+
+.persona-command-palette-item-body {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.persona-command-palette-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--persona-command-fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.persona-command-palette-item-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--persona-command-soft);
+  font-size: 11px;
+}
+
+.persona-command-palette-item-shortcut {
+  color: var(--persona-command-muted);
+  text-transform: lowercase;
+}
+
+.persona-command-palette-empty {
+  padding: 28px 22px 38px;
+  color: var(--persona-command-soft);
+  text-align: center;
+  font-size: 13px;
+}
+
+.persona-command-palette-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 18px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--persona-command-line);
+  color: var(--persona-command-muted);
+}
+
+body.persona-command-palette-open {
+  overflow: hidden;
+}
+
+@media (max-width: 560px) {
+  .persona-command-palette {
+    padding-top: 12px;
+  }
+
+  .persona-command-palette-panel {
+    width: calc(100vw - 24px);
+  }
+
+  .persona-command-palette-search {
+    min-height: 66px;
+    padding: 0 16px;
+  }
+
+  .persona-command-palette-meta,
+  .persona-command-palette-footer {
+    display: none;
+  }
+
+  .persona-command-palette-results {
+    max-height: calc(100vh - 120px);
+  }
+
+  .persona-command-palette-item {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 44px;
+  }
+
+  .persona-command-palette-item-shortcut {
+    display: none;
+  }
+}
