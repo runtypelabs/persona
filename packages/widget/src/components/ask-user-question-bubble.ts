@@ -60,7 +60,7 @@ const resolveFeature = (config?: AgentWidgetConfig): AgentWidgetAskUserQuestionF
 
 /**
  * Parse an `ask_user_question` tool-variant message into a partial payload.
- * Safe to call mid-stream — will walk the tool call's `chunks` via
+ * Safe to call mid-stream: will walk the tool call's `chunks` via
  * `partial-json` and return `{ payload: null, complete: false }` when there
  * isn't enough data yet. `complete` flips to `true` once the tool call
  * reports status `"complete"`.
@@ -570,7 +570,7 @@ const syncNavState = (sheet: HTMLElement): void => {
   );
   if (next) next.disabled = !hasAnswer;
 
-  // Multi-select submit (1-question mode) — keep existing behavior.
+  // Multi-select submit (1-question mode): keep existing behavior.
   const multi = sheet.querySelector<HTMLButtonElement>('[data-ask-user-action="submit-multi"]');
   if (multi) {
     const labels = Array.from(
@@ -625,7 +625,7 @@ const renderCurrentPage = (
     pillList.replaceWith(fresh);
   }
 
-  // Free-text row — re-build to clear stale input value across pages.
+  // Free-text row: re-build to clear stale input value across pages.
   // Only present in pills (legacy) mode; in rows mode the input lives inside
   // the Other row of the pill list, which is rebuilt above.
   if (layout !== "rows") {
@@ -633,7 +633,7 @@ const renderCurrentPage = (
     if (oldFree) oldFree.replaceWith(buildFreeTextRow(feature, layout));
   }
 
-  // Multi-select action row — only relevant in 1-question mode.
+  // Multi-select action row: only relevant in 1-question mode.
   const oldMulti = sheet.querySelector<HTMLElement>('[data-ask-multi-actions="true"]');
   if (!grouped && multiSelect && !oldMulti) {
     sheet.appendChild(buildMultiSelectActions(feature));
@@ -698,7 +698,7 @@ const buildSheet = (
 
   // Header: question text (flex-1) + compact "N/M" stepper indicator on the
   // right (grouped only). Skip in the nav row is the canonical escape hatch
-  // — plugins that want a different escape model render their own UX.
+  //: plugins that want a different escape model render their own UX.
   const header = createElement(
     "div",
     "persona-ask-sheet-header persona-flex persona-items-center persona-gap-3"
@@ -721,7 +721,7 @@ const buildSheet = (
 
   sheet.appendChild(header);
 
-  // Skeleton placeholders — these get replaced wholesale by renderCurrentPage.
+  // Skeleton placeholders: these get replaced wholesale by renderCurrentPage.
   const skeletonClass =
     layout === "rows"
       ? "persona-ask-pills persona-ask-pills--rows persona-flex persona-flex-col persona-gap-2"
@@ -768,7 +768,7 @@ const syncSheetFromMessage = (
 
 /**
  * Create the small in-transcript stub for an `ask_user_question` tool call.
- * The stub is passive — the interactive sheet is mounted separately into
+ * The stub is passive: the interactive sheet is mounted separately into
  * the composer overlay via `ensureAskUserQuestionSheet`.
  */
 export const createAskUserQuestionBubble = (
@@ -796,7 +796,7 @@ export const createAskUserQuestionBubble = (
 
 /**
  * Mount or update the interactive answer-pill sheet for a given message.
- * Idempotent — if a sheet already exists for the tool-call id, it is hydrated
+ * Idempotent: if a sheet already exists for the tool-call id, it is hydrated
  * in-place instead of remounted, so streaming updates don't flicker.
  */
 export const ensureAskUserQuestionSheet = (
@@ -812,7 +812,7 @@ export const ensureAskUserQuestionSheet = (
 
   const toolCallId = message.toolCall!.id;
 
-  // Only keep the latest sheet in the overlay — clear any stale siblings.
+  // Only keep the latest sheet in the overlay: clear any stale siblings.
   const siblings = overlay.querySelectorAll<HTMLElement>(`[${SHEET_SENTINEL}]`);
   siblings.forEach((el) => {
     if (el.getAttribute(SHEET_SENTINEL) !== toolCallId) {
@@ -916,7 +916,7 @@ export const refreshNavState = (sheet: HTMLElement): void => {
 };
 
 /**
- * Test seam — reset the one-shot truncation warning so each test can assert
+ * Test seam: reset the one-shot truncation warning so each test can assert
  * the warn fires exactly once.
  */
 export const __resetTruncateWarn = (): void => {

@@ -166,7 +166,7 @@ describe("CORS preview origins", () => {
   });
 });
 
-describe("dispatch — WebMCP clientTools forwarding", () => {
+describe("dispatch: WebMCP clientTools forwarding", () => {
   const realFetch = globalThis.fetch;
 
   afterEach(() => {

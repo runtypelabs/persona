@@ -19,7 +19,7 @@ Persona is a pnpm monorepo containing a themeable, pluggable streaming chat widg
 ## Requirements
 
 - **Node.js** ≥20 (see `.nvmrc`)
-- **pnpm** — managed via corepack (`corepack enable` then `corepack install`)
+- **pnpm**: managed via corepack (`corepack enable` then `corepack install`)
 
 ## Common Commands
 
@@ -39,7 +39,7 @@ pnpm build:proxy        # Build proxy only
 pnpm lint               # Lint both packages
 pnpm typecheck          # Type check both packages
 
-# Testing (widget package only — run from repo root or packages/widget)
+# Testing (widget package only: run from repo root or packages/widget)
 pnpm --filter @runtypelabs/persona test:run   # Run tests once
 pnpm --filter @runtypelabs/persona test       # Run tests in watch mode
 pnpm --filter @runtypelabs/persona test:ui    # Run tests with browser UI (http://localhost:51204)
@@ -52,7 +52,7 @@ pnpm release            # Publish to npm
 
 ## Changesets Requirement
 
-All changes that affect published packages **must** include a changeset. This is enforced in CI — PRs without a changeset for affected packages will fail.
+All changes that affect published packages **must** include a changeset. This is enforced in CI: PRs without a changeset for affected packages will fail.
 
 Create one by adding a markdown file in `.changeset/` (e.g. `.changeset/my-change-name.md`) with the following format:
 
@@ -136,7 +136,7 @@ The widget uses a layered architecture:
 
 **WebMCP page tools:** `webmcp.enabled` snapshots tools from `document.modelContext`, sends them as `clientTools[]`, executes returned `webmcp:<name>` calls in the browser with approval gating, and resumes via `${apiUrl}/resume`. `contextProviders` run on both agent and flow/proxy paths.
 
-**Deferred Launcher Loading:** For the common floating-launcher case, `install.ts` paints the real launcher from the tiny `launcher.global.js` (~13 KB brotli) at page load and defers the full `index.global.js` (~134 KB) until the user's first click. `shouldDeferPanel()` gates this — floating launcher, not auto-expanded, no restored/`onStateLoaded` open state, derivable launcher URL — and everything else eager-loads unchanged. The critical launcher is mount-then-destroyed at handoff and renders pixel-identically to the full widget's, so the swap is invisible. Installer lifecycle hooks (`onScriptLoad` / `onLauncherShown` / `onChatReady` / `onError`) and matching `persona:*` DOM events expose each stage; `onChatReady` (formerly `onReady`, now a deprecated alias) fires after first open in a deferred install. See the header comment in `launcher-global.ts` and the gate/handoff comments in `install.ts` for the invariants.
+**Deferred Launcher Loading:** For the common floating-launcher case, `install.ts` paints the real launcher from the tiny `launcher.global.js` (~13 KB brotli) at page load and defers the full `index.global.js` (~134 KB) until the user's first click. `shouldDeferPanel()` gates this: floating launcher, not auto-expanded, no restored/`onStateLoaded` open state, derivable launcher URL , and everything else eager-loads unchanged. The critical launcher is mount-then-destroyed at handoff and renders pixel-identically to the full widget's, so the swap is invisible. Installer lifecycle hooks (`onScriptLoad` / `onLauncherShown` / `onChatReady` / `onError`) and matching `persona:*` DOM events expose each stage; `onChatReady` (formerly `onReady`, now a deprecated alias) fires after first open in a deferred install. See the header comment in `launcher-global.ts` and the gate/handoff comments in `install.ts` for the invariants.
 
 ### Proxy Package (`packages/proxy/src/`)
 
@@ -153,16 +153,16 @@ Hono-based server that proxies requests to the Runtype API:
 
 ### Adding a proxy route for a new demo
 
-The proxy has **two entry points that must be kept in sync** — this has caused production 404s more than once, because a demo works locally but its route was never added to the deployed entry:
+The proxy has **two entry points that must be kept in sync**: this has caused production 404s more than once, because a demo works locally but its route was never added to the deployed entry:
 
-- `examples/vercel-edge/src/server.ts` — the **local dev** server (`pnpm dev`)
-- `examples/vercel-edge/api/index.ts` — the **deployed** proxy (Vercel serverless entry behind `https://proxy.persona-chat.dev`)
+- `examples/vercel-edge/src/server.ts`: the **local dev** server (`pnpm dev`)
+- `examples/vercel-edge/api/index.ts`: the **deployed** proxy (Vercel serverless entry behind `https://proxy.persona-chat.dev`)
 
 Checklist for a new demo flow:
 
-1. Define the flow in `packages/proxy/src/flows/<name>.ts` and export it from `packages/proxy/src/flows/index.ts` (this is a `packages/proxy` change — **changeset required**).
+1. Define the flow in `packages/proxy/src/flows/<name>.ts` and export it from `packages/proxy/src/flows/index.ts` (this is a `packages/proxy` change: **changeset required**).
 2. Mount it in **BOTH** `src/server.ts` and `api/index.ts`: import the flow, add a `createChatProxyApp({ path: "/api/chat/dispatch-<name>", … })` block (follow the existing `FLOW_ID_*` env-override pattern), and add the `app.route("/", …)` line. If you only touched `src/server.ts`, the demo will 404 in production.
-3. Run `pnpm build:proxy` before testing locally — both entries import the **built** `@runtypelabs/persona-proxy`, so a new flow isn't visible to the dev server until the package is rebuilt.
+3. Run `pnpm build:proxy` before testing locally: both entries import the **built** `@runtypelabs/persona-proxy`, so a new flow isn't visible to the dev server until the package is rebuilt.
 4. Point the demo page's `apiUrl` at the new route (see any `src/webmcp-*/main.*` in `examples/embedded-app` for the proxy-port pattern).
 5. After merging, verify the route on the deployed proxy: `curl -X OPTIONS https://proxy.persona-chat.dev/api/chat/dispatch-<name>` should not 404.
 
@@ -208,6 +208,6 @@ All five checks must pass before a PR can be merged.
 
 - **CSS classes:** `tvw-` prefix on all Tailwind utility classes (prevents collisions with host page styles)
 - **Filenames:** kebab-case (`component-name.ts`, `my-util.ts`)
-- **Linting:** ESLint + Prettier — run `pnpm lint` before committing; CI enforces this
+- **Linting:** ESLint + Prettier: run `pnpm lint` before committing; CI enforces this
 - **Type safety:** Avoid `any`; prefer explicit types from `types.ts`
 - **Exports:** Named exports preferred; only use default exports where a clear single-export module pattern applies

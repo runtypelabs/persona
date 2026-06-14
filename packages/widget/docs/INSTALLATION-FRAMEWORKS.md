@@ -51,7 +51,7 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 - `useShadowDom` - Use Shadow DOM for style isolation (default: `false`)
 - `windowKey` - If provided, stores the widget handle on `window[windowKey]` for programmatic access
 - `onScriptLoad` - Fired as soon as the installer script executes, before it loads or gates anything (diagnostics / timing); signature: `({ version }) => void`
-- `onLauncherShown` - Fired when the floating launcher is painted on the page (page-load time — for "widget appeared" analytics); signature: `({ deferred, element? }) => void`
+- `onLauncherShown` - Fired when the floating launcher is painted on the page (page-load time: for "widget appeared" analytics); signature: `({ deferred, element? }) => void`
 - `onChatReady` - Fired when the widget is initialized and its controller API is callable (after first open in a deferred install); signature: `(handle) => void`
 - `onError` - Fired when a load step fails (`css` / `bundle` / `init`), so ad-blocked / timed-out installs don't fail silently; signature: `({ phase, error }) => void`
 - `onReady` - **Deprecated** alias of `onChatReady`; still works, removed in the next major; signature: `(handle) => void`
@@ -75,7 +75,7 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 
 The installer is fully asynchronous (it waits for framework hydration, then loads CSS and JS). To interact with the widget after it initializes, use one of these approaches:
 
-**`onChatReady` callback** — best when config and access logic live in the same script:
+**`onChatReady` callback**: best when config and access logic live in the same script:
 
 ```html
 <script>
@@ -91,7 +91,7 @@ The installer is fully asynchronous (it waits for framework hydration, then load
 <script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
 ```
 
-**`persona:chat-ready` event** — best for decoupled integration (e.g. tag managers, separate scripts):
+**`persona:chat-ready` event**: best for decoupled integration (e.g. tag managers, separate scripts):
 
 ```html
 <script>
@@ -108,7 +108,7 @@ The installer is fully asynchronous (it waits for framework hydration, then load
 <script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
 ```
 
-**`windowKey`** — stores the handle on `window[windowKey]` for persistent global access. Combine with `onChatReady` or `persona:chat-ready` to know when it's available:
+**`windowKey`**: stores the handle on `window[windowKey]` for persistent global access. Combine with `onChatReady` or `persona:chat-ready` to know when it's available:
 
 ```html
 <script>

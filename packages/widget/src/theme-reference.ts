@@ -1,5 +1,5 @@
 /**
- * Theme Reference — Structured documentation and examples for the Persona v2 theme system.
+ * Theme Reference: Structured documentation and examples for the Persona v2 theme system.
  *
  * Exported via the `@runtypelabs/persona/theme-reference` entry point so it stays
  * out of the IIFE widget bundle. Intended for AI/MCP tool consumption.
@@ -14,7 +14,7 @@ import type { DeepPartial, PersonaTheme } from './types/theme'
 
 export const THEME_TOKEN_DOCS = {
   overview:
-    'Persona uses a three-layer design token system: palette → semantic → components. Most themes only need palette.colors overrides — semantic and component layers auto-derive from palette values. Config also accepts non-theme appearance options (launcher, sendButton, toolCall, etc.).',
+    'Persona uses a three-layer design token system: palette → semantic → components. Most themes only need palette.colors overrides: semantic and component layers auto-derive from palette values. Config also accepts non-theme appearance options (launcher, sendButton, toolCall, etc.).',
 
   layers: {
     palette: {
@@ -24,9 +24,9 @@ export const THEME_TOKEN_DOCS = {
         description:
           '7 color scales, each with shades 50 (lightest) to 950 (darkest). Override only the shades you need.',
         scales: {
-          gray: 'Neutrals — backgrounds, text, borders. Key shades: 50 (lightest bg), 100 (secondary bg), 200 (borders), 500 (muted text), 900 (primary text).',
+          gray: 'Neutrals: backgrounds, text, borders. Key shades: 50 (lightest bg), 100 (secondary bg), 200 (borders), 500 (muted text), 900 (primary text).',
           primary:
-            'Brand color — buttons, links, interactive elements. Key shades: 500 (default), 600 (hover).',
+            'Brand color: buttons, links, interactive elements. Key shades: 500 (default), 600 (hover).',
           accent: 'Secondary highlight. Key shades: 500 (default), 600 (hover).',
           secondary: 'Tertiary color scale.',
           success: 'Positive feedback (default: green).',
@@ -65,17 +65,17 @@ export const THEME_TOKEN_DOCS = {
       description:
         'Design intent tokens. Auto-derived from palette by default. Override to redirect token resolution. Values are token reference strings like "palette.colors.primary.500".',
       colors: {
-        primary: 'palette.colors.primary.500 — Primary brand color.',
-        secondary: 'palette.colors.gray.500 — Secondary color.',
-        accent: 'palette.colors.primary.600 — Accent/interactive color.',
-        surface: 'palette.colors.gray.50 — Panel/card backgrounds.',
-        background: 'palette.colors.gray.50 — Page background.',
-        container: 'palette.colors.gray.100 — Container backgrounds.',
-        text: 'palette.colors.gray.900 — Primary text.',
-        textMuted: 'palette.colors.gray.500 — Muted/secondary text.',
-        textInverse: 'palette.colors.gray.50 — Text on dark backgrounds.',
-        border: 'palette.colors.gray.200 — Default border color.',
-        divider: 'palette.colors.gray.200 — Divider lines.',
+        primary: 'palette.colors.primary.500: Primary brand color.',
+        secondary: 'palette.colors.gray.500: Secondary color.',
+        accent: 'palette.colors.primary.600: Accent/interactive color.',
+        surface: 'palette.colors.gray.50: Panel/card backgrounds.',
+        background: 'palette.colors.gray.50: Page background.',
+        container: 'palette.colors.gray.100: Container backgrounds.',
+        text: 'palette.colors.gray.900: Primary text.',
+        textMuted: 'palette.colors.gray.500: Muted/secondary text.',
+        textInverse: 'palette.colors.gray.50: Text on dark backgrounds.',
+        border: 'palette.colors.gray.200: Default border color.',
+        divider: 'palette.colors.gray.200: Divider lines.',
         interactive: {
           default: 'palette.colors.primary.500',
           hover: 'palette.colors.primary.600',
@@ -93,7 +93,7 @@ export const THEME_TOKEN_DOCS = {
       spacing:
         'xs (0.25rem), sm (0.5rem), md (1rem), lg (1.5rem), xl (2rem), 2xl (2.5rem).',
       typography:
-        'fontFamily, fontSize, fontWeight, lineHeight — reference palette typography tokens.',
+        'fontFamily, fontSize, fontWeight, lineHeight: reference palette typography tokens.',
     },
 
     components: {
@@ -140,16 +140,16 @@ export const THEME_TOKEN_DOCS = {
       attachment: 'image (background, border).',
       scrollToBottom:
         'Floating scroll-to-bottom affordance shared by transcript and event stream: background, foreground, border, size, borderRadius, shadow, padding, gap, fontSize, iconSize.',
-      toolBubble: 'shadow — tool call row box-shadow.',
-      reasoningBubble: 'shadow — reasoning/thinking row box-shadow.',
-      composer: 'shadow — message input form box-shadow.',
+      toolBubble: 'shadow: tool call row box-shadow.',
+      reasoningBubble: 'shadow: reasoning/thinking row box-shadow.',
+      composer: 'shadow: message input form box-shadow.',
       artifact:
         'toolbar (icon styling, copy menu), tab (background, active states), pane (background, toolbarBackground).',
     },
   },
 
   colorScheme:
-    '"dark" merges darkTheme overrides on top of theme. "auto" detects system preference or <html class="dark">. "light" is default. colorScheme does NOT auto-invert colors — provide dark palette and semantic overrides yourself.',
+    '"dark" merges darkTheme overrides on top of theme. "auto" detects system preference or <html class="dark">. "light" is default. colorScheme does NOT auto-invert colors: provide dark palette and semantic overrides yourself.',
 
   plugins: {
     description:
@@ -246,7 +246,7 @@ export const THEME_TOKEN_DOCS = {
         'enabled, provider ("browser" | "runtype"), browserFallback, voice, rate, pitch.',
     },
     suggestionChips:
-      'string[] — Suggested prompts shown to the user.',
+      'string[]: Suggested prompts shown to the user.',
     messageActions: {
       description: 'Message action buttons (copy, upvote, downvote).',
       properties:
@@ -264,8 +264,8 @@ export const THEME_TOKEN_DOCS = {
     },
     layout: {
       description: 'Layout configuration.',
-      showHeader: 'boolean — show/hide the header section entirely.',
-      showFooter: 'boolean — show/hide the footer/composer section entirely.',
+      showHeader: 'boolean: show/hide the header section entirely.',
+      showFooter: 'boolean: show/hide the footer/composer section entirely.',
       contentMaxWidth:
         'CSS width value for centering content (e.g. "720px", "90ch").',
       header:
@@ -277,7 +277,7 @@ export const THEME_TOKEN_DOCS = {
       description: 'Status text shown below the composer.',
       properties: {
         visible: 'Show/hide the status indicator.',
-        align: '"left" | "center" | "right" — text alignment (default: "right").',
+        align: '"left" | "center" | "right": text alignment (default: "right").',
         idleText: 'Text shown when idle (default: "Online").',
         idleLink: 'URL to open when idle text is clicked (wraps text in a link).',
         connectingText: 'Text shown while connecting (default: "Connecting…").',
@@ -306,7 +306,7 @@ export interface ThemeExample {
 export const THEME_EXAMPLES: Record<string, ThemeExample> = {
   darkIndigo: {
     description:
-      'Dark mode with indigo accent — override grays for dark backgrounds and semantic tokens for inverted text/surface',
+      'Dark mode with indigo accent: override grays for dark backgrounds and semantic tokens for inverted text/surface',
     theme: {
       palette: {
         colors: {
@@ -359,7 +359,7 @@ export const THEME_EXAMPLES: Record<string, ThemeExample> = {
   },
   neonCyberpunk: {
     description:
-      'Neon on dark with monospace font — full semantic override for dark background',
+      'Neon on dark with monospace font: full semantic override for dark background',
     theme: {
       palette: {
         colors: {

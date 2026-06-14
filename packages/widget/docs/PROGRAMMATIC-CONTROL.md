@@ -323,7 +323,7 @@ const pageContext = formatEnrichedContext(elements);
 
 Pass `formatEnrichedContext(elements, { mode: 'simple' })` to ignore any `formattedSummary` fields on elements (for example when re-formatting data collected earlier).
 
-**Where things live:** `defaultParseRules` and the rule/config types are part of the public package API — import them from `@runtypelabs/persona` (same entry as `collectEnrichedPageContext`). Exported names you will use most often:
+**Where things live:** `defaultParseRules` and the rule/config types are part of the public package API: import them from `@runtypelabs/persona` (same entry as `collectEnrichedPageContext`). Exported names you will use most often:
 
 | Export | Role |
 | --- | --- |
@@ -361,11 +361,11 @@ The default reader above is a zero-dependency `TreeWalker` and **does not pierce
 DOM**. For pages built from web components, an optional provider backed by a
 vendored copy of [`@mcp-b/smart-dom-reader`](https://github.com/WebMCP-org/npm-packages/tree/main/packages/smart-dom-reader)
 ships as a **separate entry point**, `@runtypelabs/persona/smart-dom-reader`. It is **not**
-imported by the main bundle, so consumers who never import this subpath pay nothing — no
+imported by the main bundle, so consumers who never import this subpath pay nothing: no
 extra install, no bundle weight, no IIFE/CDN impact.
 
 It adds, over the default reader: **Shadow-DOM piercing**, form grouping, and page
-landmarks/state — while still emitting Persona's `EnrichedPageElement[]` shape so it
+landmarks/state: while still emitting Persona's `EnrichedPageElement[]` shape so it
 formats and flows through the same pipeline.
 
 ```ts
@@ -376,7 +376,7 @@ initAgentWidget({
   // ...config
   contextProviders: [
     createSmartDomReaderContextProvider({
-      // 'interactive' (default) | 'full' — full adds semantic content AND is required
+      // 'interactive' (default) | 'full': full adds semantic content AND is required
       // for shadow-DOM piercing (shadow descendants surface only in full mode).
       mode: 'full',
       contextKey: 'pageContext',            // key under payload.context (default)
@@ -402,7 +402,7 @@ const pageContext = formatEnrichedContext(collectSmartDomContext({ mode: 'full' 
 
 Both `collectSmartDomContext()` and `createSmartDomReaderContextProvider()` accept a
 `root` element to scope extraction to a subtree (parity with `collectEnrichedPageContext`'s
-`root`) — useful to read only your main content region and skip nav/sidebars. Shadow DOM
+`root`): useful to read only your main content region and skip nav/sidebars. Shadow DOM
 inside the subtree is still pierced.
 
 > **Actionability caveat.** Persona's click loop (`utils/actions.ts`) drives
@@ -412,7 +412,7 @@ inside the subtree is still pierced.
 > through the current `message_and_click` handler.
 
 > **Why vendored, not a dependency.** Every published version of `@mcp-b/smart-dom-reader`
-> (2.3.1–3.0.0) is mis-published — its `package.json` points to `dist/index.js` /
+> (2.3.1–3.0.0) is mis-published: its `package.json` points to `dist/index.js` /
 > `dist/index.d.ts` while the build only ships `.mjs` / `.d.mts`, so it cannot be imported
 > by name in Node or any bundler. The library (MIT, zero-dep) is therefore vendored under
 > `packages/widget/src/vendor/smart-dom-reader/`; see that directory's `README.md` for
@@ -454,10 +454,10 @@ document.modelContext.registerTool({
 
 Tools without a `title` get a label derived from their name
 (`add_to_cart` → "Add to cart"). The agent-facing `description` is never shown
-as the headline — it sits behind the approval bubble's "Show details" toggle.
+as the headline: it sits behind the approval bubble's "Show details" toggle.
 See [Tool Calls & Approvals](./CONFIGURATION-REFERENCE.md#tool-calls--approvals) for the full summary-line
 resolution order and `approval.formatDescription` for parameter-aware copy.
-(The legacy `annotations.title` is *not* read — the polyfill's consumer surface
+(The legacy `annotations.title` is *not* read: the polyfill's consumer surface
 doesn't expose annotations; use top-level `title`.)
 
 **Using WebMCP against a non-Runtype backend (e.g. the Vercel AI SDK)?** The
@@ -517,7 +517,7 @@ window.dispatchEvent(new CustomEvent('persona:showEventStream', {
 window.dispatchEvent(new CustomEvent('persona:showEventStream', {
   detail: { instanceId: 'wrong-id' }
 }))
-// ^ No effect — no widget has this instanceId
+// ^ No effect: no widget has this instanceId
 ```
 
 ### `persona:focusInput`
@@ -534,7 +534,7 @@ window.dispatchEvent(new CustomEvent('persona:focusInput', {
 }))
 ```
 
-**Instance scoping:** Same as `persona:showEventStream` — use `detail.instanceId` to target a specific widget. Without `instanceId`, all instances receive the event.
+**Instance scoping:** Same as `persona:showEventStream`: use `detail.instanceId` to target a specific widget. Without `instanceId`, all instances receive the event.
 
 ### `persona:chat-ready`
 
@@ -705,7 +705,7 @@ initAgentWidget({
 
 The `onStateLoaded` hook is called after state is loaded from the storage adapter, but before the widget initializes. Use this to transform or inject messages based on external state (e.g., navigation flags, checkout returns).
 
-Returning `{ state, open: true }` also tells the widget to open the panel after initialization — useful when injecting a post-navigation message that the user should immediately see.
+Returning `{ state, open: true }` also tells the widget to open the panel after initialization: useful when injecting a post-navigation message that the user should immediately see.
 
 ```ts
 // Plain state transform

@@ -1,12 +1,11 @@
 /**
- * Theme Copilot — the docked sidebar agent that styles the theme preview.
+ * Theme Copilot: the docked sidebar agent that styles the theme preview.
  *
  * The copilot is a second, independent Persona widget on the editor page (the
  * preview widgets inside the iframes stay a passive showcase). It dispatches to
  * the theme-assistant flow through the local proxy, discovers the editor's
  * WebMCP theme tools from the parent page's `document.modelContext`, and
- * restyles the preview live while its own panel keeps Persona defaults —
- * theming is per-mount, so the user watches the preview change, not the
+ * restyles the preview live while its own panel keeps Persona defaults: * theming is per-mount, so the user watches the preview change, not the
  * copilot.
  *
  * Multi-modal loop: attachments are enabled so the user can paste a screenshot
@@ -31,7 +30,7 @@ const MB = 1024 * 1024;
 // Proxy (dispatch) mode, like the other WebMCP demos: the copilot dispatches to
 // the local theme-assistant flow (THEME_ASSISTANT_FLOW in
 // @runtypelabs/persona-proxy), which forwards the page's clientTools[] upstream
-// and proxies the /resume round-trip — including the image blocks from
+// and proxies the /resume round-trip: including the image blocks from
 // screenshot_preview. To back it with a hosted Runtype flow instead, set
 // FLOW_ID_THEME_ASSISTANT on the proxy (examples/vercel-edge/src/server.ts).
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
@@ -41,7 +40,7 @@ const proxyUrl = import.meta.env.VITE_PROXY_URL
 
 // The editor registers its controls as WebMCP tools on the parent page's
 // `document.modelContext` (theme-configurator/webmcp/register.ts), which is
-// exactly where the copilot's bridge looks — no cross-frame transport needed.
+// exactly where the copilot's bridge looks: no cross-frame transport needed.
 // Every tool is a safe, local, undoable edit to the preview (and
 // screenshot_preview is a pure read), so all are auto-approved for a
 // frictionless "chat to restyle" loop instead of a confirm per color change.
@@ -94,7 +93,7 @@ export function initThemeCopilot(): AgentWidgetInitHandle | null {
         ...DEFAULT_WIDGET_CONFIG.copy,
         welcomeTitle: 'Theme Copilot',
         welcomeSubtitle:
-          'Describe a look — or paste a screenshot of a chat widget you like — and I will restyle the preview to match.',
+          'Describe a look, or paste a screenshot of a chat widget you like, and I will restyle the preview to match.',
         inputPlaceholder: 'e.g. "Deep teal, rounded corners, friendly tone"',
       },
       suggestionChips: [
@@ -139,8 +138,8 @@ export function initThemeCopilot(): AgentWidgetInitHandle | null {
       statusIndicator: {
         ...DEFAULT_WIDGET_CONFIG.statusIndicator,
         visible: true,
-        idleText: 'Copilot edits the preview — undo anytime (or ask it to undo).',
-        connectedText: 'Copilot edits the preview — undo anytime (or ask it to undo).',
+        idleText: 'Copilot edits the preview: undo anytime (or ask it to undo).',
+        connectedText: 'Copilot edits the preview: undo anytime (or ask it to undo).',
         connectingText: 'Connecting Theme Copilot…',
         errorText: 'Theme Copilot connection error',
       },

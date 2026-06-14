@@ -137,7 +137,7 @@ describe("AgentWidgetClient - built-in ask_user_question exposure", () => {
 
   it("changes the clientTools fingerprint when toggled (diff-only resend)", () => {
     // In client-token mode the widget only resends the full clientTools[]
-    // when the fingerprint changes — toggling expose must change it so the
+    // when the fingerprint changes: toggling expose must change it so the
     // server actually learns about (or forgets) the built-in tool.
     const webMcpOnly = [{ name: "search", description: "s" }];
     const withBuiltIn = [ASK_USER_QUESTION_CLIENT_TOOL, ...webMcpOnly];

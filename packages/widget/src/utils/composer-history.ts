@@ -36,7 +36,7 @@ export interface ComposerHistoryInput {
 export interface ComposerHistoryResult {
   /** Whether the key was consumed (caller should preventDefault). */
   handled: boolean;
-  /** New textarea value to apply — only present when it should change. */
+  /** New textarea value to apply: only present when it should change. */
   value?: string;
   /** Next navigation state. */
   state: ComposerHistoryState;
@@ -86,7 +86,7 @@ export function navigateComposerHistory(
       };
     }
 
-    // Already at the oldest entry — consume the key but don't change.
+    // Already at the oldest entry: consume the key but don't change.
     return { handled: true, state };
   }
 
@@ -104,7 +104,7 @@ export function navigateComposerHistory(
     };
   }
 
-  // Stepped past the newest entry — restore the saved draft and exit.
+  // Stepped past the newest entry: restore the saved draft and exit.
   return {
     handled: true,
     value: state.draft,

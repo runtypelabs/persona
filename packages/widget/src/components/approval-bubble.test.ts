@@ -280,7 +280,7 @@ describe("createApprovalBubble agent reason", () => {
     expect(reasonLine.textContent).toContain(
       "Adds the <b>large</b> blue tee to your cart as you asked."
     );
-    // Plain text rendering — markup in the agent-authored string must not
+    // Plain text rendering: markup in the agent-authored string must not
     // become elements (prompt-injection surface).
     expect(reasonLine.querySelector("b")).toBeNull();
   });

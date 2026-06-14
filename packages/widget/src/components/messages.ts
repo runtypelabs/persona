@@ -34,7 +34,7 @@ export const renderMessages = (
       if (!showReasoning) return;
       bubble = createReasoningBubble(message, config);
     } else if (isAskUserQuestionMessage(message)) {
-      // No transcript bubble — the overlay sheet is the only question UI.
+      // No transcript bubble: the overlay sheet is the only question UI.
       if (config?.features?.askUserQuestion?.enabled === false) return;
       if (!message.agentMetadata?.askUserQuestionAnswered) {
         if (message.toolCall?.id) liveAskToolIds.add(message.toolCall.id);
@@ -45,7 +45,7 @@ export const renderMessages = (
       isSuggestRepliesMessage(message) &&
       config?.features?.suggestReplies?.enabled !== false
     ) {
-      // No transcript bubble — the chips above the composer are the only UI.
+      // No transcript bubble: the chips above the composer are the only UI.
       // When the feature is disabled the message falls through to the generic
       // tool bubble below (and is never auto-resumed), making the parked
       // execution visible instead of silently swallowed.

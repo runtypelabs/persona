@@ -107,7 +107,7 @@ Set these in the Vercel dashboard (Settings → Environment Variables):
 > runs as a preview deployment (`VERCEL_ENV === "preview"`) it reflects the
 > caller's origin, and (2) it reflects any origin matching `PREVIEW_ORIGIN_PATTERN`
 > (default `https://*.vercel.app`) so a production proxy still accepts calls from
-> a matching preview site — set this env var to allow your own preview domain.
+> a matching preview site: set this env var to allow your own preview domain.
 > Pass `previewOriginPattern: false` to `createChatProxyApp` to lock this down to
 > the exact allowlist only.
 

@@ -25,14 +25,14 @@ export interface CreateCloseButtonOptions {
   /**
    * Explicit button-size override that wins over `launcher.closeButtonSize`.
    * Use when the call site has its own opinion about the size that should
-   * take precedence over the global launcher config — e.g. composer-bar's
+   * take precedence over the global launcher config: e.g. composer-bar's
    * minimal close icon, where size is part of the mode's UX, not something
    * that should inherit from the floating launcher's button size.
    */
   buttonSize?: string;
   /**
    * Override the rendered icon size (default: "28px"). Pair with
-   * `buttonSize` when scaling the whole control down — otherwise the
+   * `buttonSize` when scaling the whole control down: otherwise the
    * 28px icon will overflow a smaller button.
    */
   iconSize?: string;

@@ -35,7 +35,7 @@
             }
           </div>
           <p class="hint">The adapter emits each final transcript via <code>onResult</code>; Persona sends it as a user message and the assistant reply streams back over the normal chat path. See <code>src/custom-voice-provider.ts</code>.</p>
-          <p class="hint">Replies are spoken back with <code>textToSpeech: { enabled: true, provider: 'browser' }</code> — a separate subsystem that pairs with <em>any</em> input provider, so an STT-only custom provider still gets voice output for free.</p>
+          <p class="hint">Replies are spoken back with <code>textToSpeech: { enabled: true, provider: 'browser' }</code>: a separate subsystem that pairs with <em>any</em> input provider, so an STT-only custom provider still gets voice output for free.</p>
         </div>
 
         <div data-config-inspector></div>
@@ -60,7 +60,7 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">Speech in vs. speech out</h3>
-        <p>Voice <em>input</em> (this custom provider) and voice <em>output</em> (<code>textToSpeech</code>) are independent. This demo pairs the custom STT provider with browser TTS so the reply is read aloud — the same <code>textToSpeech</code> block works with the <code>browser</code> or <code>runtype</code> input providers too.</p>
+        <p>Voice <em>input</em> (this custom provider) and voice <em>output</em> (<code>textToSpeech</code>) are independent. This demo pairs the custom STT provider with browser TTS so the reply is read aloud: the same <code>textToSpeech</code> block works with the <code>browser</code> or <code>runtype</code> input providers too.</p>
         <p>A full-duplex provider (like <code>runtype</code>) instead streams its own spoken audio and skips browser TTS; in that case the provider owns playback via a <code>VoicePlaybackEngine</code>.</p>
       </div>
 

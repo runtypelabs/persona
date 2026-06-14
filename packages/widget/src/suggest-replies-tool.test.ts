@@ -331,11 +331,11 @@ describe("AgentWidgetSession - suggest_replies fire-and-forget auto-resolve", ()
     for (let i = 0; i < 6; i++) await Promise.resolve();
   };
 
-  it("auto-POSTs ONE /resume with the canned output after stream idle — no bridge, no WebMCP config", async () => {
+  it("auto-POSTs ONE /resume with the canned output after stream idle: no bridge, no WebMCP config", async () => {
     const { session, executeSpy, resumeSpy } = makeSession();
 
     feed(session, suggestAwait("toolu_S"));
-    // Not resolved at step_await receipt — only after the stream ends.
+    // Not resolved at step_await receipt: only after the stream ends.
     expect(resumeSpy).not.toHaveBeenCalled();
 
     endStream(session);
@@ -423,7 +423,7 @@ describe("AgentWidgetSession - suggest_replies fire-and-forget auto-resolve", ()
     expect(resumeSpy).toHaveBeenCalledTimes(1);
 
     // Hydration (e.g. storage restore) wipes webMcpInflightKeys /
-    // webMcpResolvedKeys — only the suggestRepliesResolved metadata persisted
+    // webMcpResolvedKeys: only the suggestRepliesResolved metadata persisted
     // on the message survives to block a replayed step_await.
     const resolved = (
       session as unknown as { messages: AgentWidgetMessage[] }

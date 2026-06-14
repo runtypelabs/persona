@@ -1,18 +1,18 @@
 /**
- * IIFE entry point — bundled for `<script>` tag consumers.
+ * IIFE entry point: bundled for `<script>` tag consumers.
  *
  * This file re-exports everything from the main entry AND side-imports all
  * built-in subpath animations so they register automatically. Script-tag
  * users who include the global build don't need extra script tags or
- * registration calls — setting `features.streamAnimation.type` to any
+ * registration calls: setting `features.streamAnimation.type` to any
  * built-in name just works.
  *
  * npm consumers continue to import from the main entry (`import ... from
- * "@runtypelabs/persona"`) — those animations stay in their subpath
+ * "@runtypelabs/persona"`): those animations stay in their subpath
  * modules so bundlers can tree-shake them.
  */
 
-// Re-export the full public API — from `index-core` (NOT `index`) so the
+// Re-export the full public API: from `index-core` (NOT `index`) so the
 // dev-only helpers (`generateCodeSnippet`, `createDemoCarousel`) stay out of the
 // CDN/IIFE bundle. npm consumers still get them via the `index.ts` barrel.
 export * from "./index-core";
@@ -35,7 +35,7 @@ export type { StreamAnimationPlugin, StreamAnimationContext } from "./types";
 // ---------------------------------------------------------------------------
 // Deferred WebMCP polyfill loading.
 //
-// This bundle is built with `@mcp-b/webmcp-polyfill` external — the bridge's
+// This bundle is built with `@mcp-b/webmcp-polyfill` external: the bridge's
 // default `import("@mcp-b/webmcp-polyfill")` is a bare specifier no browser
 // can resolve, so register a loader that imports the self-contained
 // `webmcp-polyfill.js` chunk from a sibling URL instead. Mirrors how
@@ -44,7 +44,7 @@ export type { StreamAnimationPlugin, StreamAnimationContext } from "./types";
 
 import { setWebMcpPolyfillLoader } from "./webmcp-bridge";
 
-// Capture at module-evaluation time — `document.currentScript` is null once
+// Capture at module-evaluation time: `document.currentScript` is null once
 // execution leaves the script's initial synchronous run.
 const widgetScriptSrc: string | null =
   typeof document !== "undefined"

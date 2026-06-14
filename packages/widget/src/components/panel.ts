@@ -16,8 +16,7 @@ export interface PanelWrapper {
   /**
    * Composer-bar mode only: viewport-fixed sibling of `wrapper` that owns
    * the persistent pill (`footer`) and peek banner. Lives outside the
-   * wrapper so it never inherits the wrapper's geometry transitions —
-   * critical for modal mode where the wrapper is `transform: translate(-50%, -50%)`
+   * wrapper so it never inherits the wrapper's geometry transitions:   * critical for modal mode where the wrapper is `transform: translate(-50%, -50%)`
    * (a transformed ancestor establishes a containing block for `position: fixed`
    * descendants, which would trap the pill inside the wrapper otherwise).
    */
@@ -32,7 +31,7 @@ export const createWrapper = (config?: AgentWidgetConfig): PanelWrapper => {
   if (composerBarMode) {
     const cb = config?.launcher?.composerBar ?? {};
     // Geometry (left/transform/bottom/top/width/max-width) is intentionally
-    // NOT set here — it's owned entirely by `applyComposerBarGeometry()` in
+    // NOT set here: it's owned entirely by `applyComposerBarGeometry()` in
     // ui.ts so that collapsed → expanded transitions can clear the previous
     // state's inline styles cleanly. Setting geometry here would persist
     // across state changes and override the per-state values, which
@@ -55,7 +54,7 @@ export const createWrapper = (config?: AgentWidgetConfig): PanelWrapper => {
     panel.style.width = "100%";
     wrapper.appendChild(panel);
 
-    // Pill lives in a separate viewport-fixed sibling — see PanelWrapper
+    // Pill lives in a separate viewport-fixed sibling: see PanelWrapper
     // docs above. ui.ts appends `peekBanner` and `footer` here, then
     // appends pillRoot to `mount` immediately after the wrapper.
     const pillRoot = createElement("div", "persona-widget-pill-root");
@@ -182,7 +181,7 @@ export interface PanelElements {
 /**
  * Composer-bar panel: minimal close-only header (× in the top-right of the
  * chat chrome). The pill (`footer`) and `peekBanner` are NOT children of
- * the panel — caller (`ui.ts`) appends them to the `pillRoot` returned by
+ * the panel: caller (`ui.ts`) appends them to the `pillRoot` returned by
  * `createWrapper`, which is a viewport-fixed sibling of the wrapper.
  * This decouples the pill from the wrapper's geometry transitions (so the
  * pill stays anchored at the viewport bottom regardless of expanded mode).
@@ -200,7 +199,7 @@ const buildComposerBarPanel = (
   );
   container.setAttribute("data-persona-theme-zone", "container");
 
-  // Minimal header — just an absolutely-positioned close button.
+  // Minimal header: just an absolutely-positioned close button.
   // The wrapper uses inline styles (top/right/z-index values) because the
   // widget's hand-authored CSS doesn't ship every Tailwind utility.
   // Composer-bar's defaults are roughly half the floating-launcher's
@@ -220,7 +219,7 @@ const buildComposerBarPanel = (
   closeButtonWrapper.style.right = "8px";
   closeButtonWrapper.style.zIndex = "10";
 
-  // Clear / "start over" button — sits immediately to the left of the close
+  // Clear / "start over" button: sits immediately to the left of the close
   // button in the panel chrome's top-right corner. Same minimal sizing as
   // the close icon (16px button, 14px icon) so the two read as a paired
   // action group rather than a header strip. Wired by `setupClearChatButton()`
@@ -246,13 +245,13 @@ const buildComposerBarPanel = (
   }
   // Placeholder header element so PanelElements.header exists (some downstream
   // code reads it). It carries `data-persona-widget-header` for plugin /
-  // selector parity but renders nothing visible — the close button is the only
+  // selector parity but renders nothing visible: the close button is the only
   // header chrome in composer-bar mode.
   const headerPlaceholder = createElement("span", "persona-widget-header");
   headerPlaceholder.setAttribute("data-persona-theme-zone", "header");
   headerPlaceholder.style.display = "none";
 
-  // Body — extra top padding (set inline so the hand-authored widget.css
+  // Body: extra top padding (set inline so the hand-authored widget.css
   // doesn't need a `pt-12` utility) so the absolute close button doesn't
   // overlap the welcome card / first message.
   const body = createElement(
@@ -309,7 +308,7 @@ const buildComposerBarPanel = (
 
   // Composer overlay (interactive sheets like ask_user_question slide up here).
   // Anchored to the bottom of the container (which is `position: relative`),
-  // so sheets render at the bottom of the chat chrome — just above the gap +
+  // so sheets render at the bottom of the chat chrome: just above the gap +
   // pill that sit below the container.
   const composerOverlay = createElement(
     "div",
@@ -322,10 +321,10 @@ const buildComposerBarPanel = (
   composerOverlay.style.bottom = "0";
   composerOverlay.style.zIndex = "20";
 
-  // Pill composer — caller appends as a sibling of container in the panel.
+  // Pill composer: caller appends as a sibling of container in the panel.
   const composerElements: ComposerElements = buildPillComposer({ config });
 
-  // Peek banner — caller inserts as a sibling of container/footer between
+  // Peek banner: caller inserts as a sibling of container/footer between
   // them in the panel. Hidden by default; ui.ts toggles visibility.
   const { root: peekBanner, textNode: peekTextNode } = buildPillPeekBanner();
 
@@ -473,7 +472,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
   // above the composer so sheets (e.g. the ask_user_question answer-pill sheet)
   // can slide up without reflowing the chat transcript above. Uses inline
   // styles for left/right/bottom because widget.css is hand-authored and
-  // doesn't ship `.persona-left-0` / `.persona-right-0` rules — without
+  // doesn't ship `.persona-left-0` / `.persona-right-0` rules: without
   // them the overlay shrink-wraps to content and collapses the sheet width.
   const composerOverlay = createElement(
     "div",

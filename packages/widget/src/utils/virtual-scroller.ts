@@ -55,7 +55,7 @@ export class VirtualScroller {
   setTotalCount(count: number): void {
     this.totalCount = count;
     this.spacer.style.height = `${count * this.rowHeight}px`;
-    // Always invalidate cached rows — data may have changed even at the same count
+    // Always invalidate cached rows: data may have changed even at the same count
     for (const [, el] of this.visibleRows) {
       el.remove();
     }

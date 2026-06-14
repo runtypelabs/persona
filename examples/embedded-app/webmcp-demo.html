@@ -72,11 +72,11 @@
     <section class="notes">
       <h2 class="notes-heading">Try it</h2>
       <ol>
-        <li><strong>Browse (read-only):</strong> <em>"find a waterproof trail shoe under $170"</em> — the agent calls <code>search_products</code>. It's annotated <code>readOnlyHint: true</code>, so the gate auto-approves it (no bubble) and matching cards light up.</li>
-        <li><strong>Inspect (read-only):</strong> <em>"tell me about SHOE-005"</em> — the agent calls <code>view_product</code>; the card flashes and scrolls into view. Still read-only → still no bubble.</li>
-        <li><strong>Add (mutating):</strong> <em>"add SHOE-001 to my cart"</em> — <code>add_to_cart</code> is mutating, so Persona's native approval bubble opens; approve it and the <strong>Cart</strong> updates.</li>
-        <li><strong>Parallel (the headline):</strong> <em>"add SHOE-001 and SHOE-007 at the same time"</em> — the model emits two <code>add_to_cart</code> calls in one turn. Each gets its <em>own</em> approval bubble; approve both and the widget batches the two results into a <strong>single <code>/resume</code></strong>, keyed by per-call id (runtypelabs/core#3878). Watch the orange <strong>batched /resume</strong> row in the wire log show both ids at once.</li>
-        <li><strong>Promo &amp; remove (mutating):</strong> <em>"apply code TRAIL10 and drop the socks"</em> — <code>apply_promo</code> + <code>remove_from_cart</code>, both gated. The cart shows the discount line and the item leaves.</li>
+        <li><strong>Browse (read-only):</strong> <em>"find a waterproof trail shoe under $170"</em>: the agent calls <code>search_products</code>. It's annotated <code>readOnlyHint: true</code>, so the gate auto-approves it (no bubble) and matching cards light up.</li>
+        <li><strong>Inspect (read-only):</strong> <em>"tell me about SHOE-005"</em>: the agent calls <code>view_product</code>; the card flashes and scrolls into view. Still read-only → still no bubble.</li>
+        <li><strong>Add (mutating):</strong> <em>"add SHOE-001 to my cart"</em>: <code>add_to_cart</code> is mutating, so Persona's native approval bubble opens; approve it and the <strong>Cart</strong> updates.</li>
+        <li><strong>Parallel (the headline):</strong> <em>"add SHOE-001 and SHOE-007 at the same time"</em>: the model emits two <code>add_to_cart</code> calls in one turn. Each gets its <em>own</em> approval bubble; approve both and the widget batches the two results into a <strong>single <code>/resume</code></strong>, keyed by per-call id (runtypelabs/core#3878). Watch the orange <strong>batched /resume</strong> row in the wire log show both ids at once.</li>
+        <li><strong>Promo &amp; remove (mutating):</strong> <em>"apply code TRAIL10 and drop the socks"</em>: <code>apply_promo</code> + <code>remove_from_cart</code>, both gated. The cart shows the discount line and the item leaves.</li>
       </ol>
       <p>
         The gate policy splits read-only from mutating: the storefront

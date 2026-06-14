@@ -8,7 +8,7 @@ import { renderSlide } from "./render";
 // scaled to fit the available space with a CSS transform, and layers an
 // interaction overlay (selection outlines + resize handles) on top of the
 // pure-rendered slide. Drags and resizes mutate the DOM directly for live
-// feedback and commit ONCE at pointerup — one gesture, one undo step.
+// feedback and commit ONCE at pointerup: one gesture, one undo step.
 
 type ResizeDir = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 const RESIZE_DIRS: ResizeDir[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
@@ -68,7 +68,7 @@ export const createCanvas = (
       box.style.width = `${el.w}px`;
       box.style.height = `${el.h}px`;
       if (el.rotation) box.style.transform = `rotate(${el.rotation}deg)`;
-      // Resize handles only on a single selection — multi-select gets
+      // Resize handles only on a single selection: multi-select gets
       // outlines, and group operations belong to align/style tools.
       if (selected.length === 1) {
         for (const dir of RESIZE_DIRS) {
@@ -86,7 +86,7 @@ export const createCanvas = (
   // ---- rendering ---------------------------------------------------------
 
   const render = (): void => {
-    if (editing) return; // modal text session — re-render on commit/cancel
+    if (editing) return; // modal text session: re-render on commit/cancel
     const theme = getTheme(store.deck.themeId);
     const fresh = renderSlide(store.currentSlide, theme);
     if (slideNode) slideNode.remove();

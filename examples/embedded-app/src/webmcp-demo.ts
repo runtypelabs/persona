@@ -14,7 +14,7 @@ import type { Mode } from "./examples-nav";
 import { CATALOG, searchCatalog, findBySku, type CatalogProduct } from "./webmcp-catalog";
 
 // ===========================================================================
-// "Switchback" — a tiny trail/road running storefront that exposes its own
+// "Switchback": a tiny trail/road running storefront that exposes its own
 // page tools via WebMCP. The page renders a live catalog + cart + a wire log;
 // Persona drives the tools and every round-trip is visible on the page.
 //
@@ -22,7 +22,7 @@ import { CATALOG, searchCatalog, findBySku, type CatalogProduct } from "./webmcp
 //
 // `@mcp-b/webmcp-polyfill` polyfills the strict standard surface on
 // `document.modelContext` (registerTool / getTools / executeTool). We call
-// `initializeWebMCPPolyfill()` explicitly so the order is obvious — it is
+// `initializeWebMCPPolyfill()` explicitly so the order is obvious: it is
 // idempotent and no-ops if a native `document.modelContext` is already present.
 // The widget also lazily installs it from its WebMCP bridge, but the *producer*
 // page should install it first so the global exists by the time we register.
@@ -37,7 +37,7 @@ interface RegisterableModelContext {
   registerTool(
     tool: {
       name: string;
-      /** User-facing label (WebMCP `ToolDescriptor.title`) — shown in Persona's approval bubble. */
+      /** User-facing label (WebMCP `ToolDescriptor.title`): shown in Persona's approval bubble. */
       title?: string;
       description: string;
       inputSchema?: object;
@@ -52,7 +52,7 @@ interface RegisterableModelContext {
 }
 
 // ---------------------------------------------------------------------------
-// Tiny escaping helper — everything we render with innerHTML below mixes static
+// Tiny escaping helper: everything we render with innerHTML below mixes static
 // catalog data with agent-supplied args (query, sku, promo code), so escape any
 // dynamic value before it lands in the DOM.
 // ---------------------------------------------------------------------------
@@ -86,14 +86,14 @@ const simulateToolLatency = async (toolName: DemoToolName): Promise<number> => {
 const formatLatency = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
 // ===========================================================================
-// 2. Wire log — make the round-trip legible.
+// 2. Wire log: make the round-trip legible.
 //
 // Two honest sources feed it:
 //   • page-side events we own directly (tool registration, the approval-gate
 //     decision, and each page-tool execution), and
 //   • the *actual outgoing request bodies*, captured by a thin fetch wrapper:
 //     the dispatch turn carries `clientTools[]`, and the resume turn carries
-//     `toolOutputs` keyed by per-call id — which is exactly where parallel calls
+//     `toolOutputs` keyed by per-call id: which is exactly where parallel calls
 //     show up batched into ONE /resume.
 // ===========================================================================
 
@@ -121,7 +121,7 @@ const shortId = (id: string): string =>
 
 /**
  * Wrap `window.fetch` once so we can read the request bodies Persona sends for
- * dispatch/resume/init. We never touch the response — just observe the body and
+ * dispatch/resume/init. We never touch the response: just observe the body and
  * pass the call straight through.
  */
 const installWireTap = (): void => {
@@ -146,7 +146,7 @@ const installWireTap = (): void => {
             "resume",
             "batched /resume",
             `<b>${ids.length}</b> tool output${ids.length === 1 ? "" : "s"} → ` +
-              `${ids.map((id) => `<b>${esc(shortId(id))}</b>`).join(", ") || "—"}` +
+              `${ids.map((id) => `<b>${esc(shortId(id))}</b>`).join(", ") || ": "}` +
               (parsed.executionId ? ` · exec ${esc(shortId(parsed.executionId))}` : ""),
           );
         } else if (/\/(chat|dispatch)(\b|$)/.test(url)) {
@@ -178,7 +178,7 @@ const installWireTap = (): void => {
 installWireTap();
 
 // ===========================================================================
-// 3. Storefront state — catalog grid + cart, the visible side effects.
+// 3. Storefront state: catalog grid + cart, the visible side effects.
 // ===========================================================================
 
 // Named colors → swatch hex for the catalog grid. Curated outdoor-gear tones
@@ -197,9 +197,9 @@ const COLOR_HEX: Record<string, string> = {
 
 // Promo codes the storefront honors (apply_promo validates against this).
 const PROMOS: Record<string, { rate: number; label: string }> = {
-  TRAIL10: { rate: 0.1, label: "10% off — TRAIL10" },
-  TRAILVIP: { rate: 0.15, label: "15% off — TRAILVIP" },
-  SUMMIT20: { rate: 0.2, label: "20% off — SUMMIT20" },
+  TRAIL10: { rate: 0.1, label: "10% off: TRAIL10" },
+  TRAILVIP: { rate: 0.15, label: "15% off: TRAILVIP" },
+  SUMMIT20: { rate: 0.2, label: "20% off: SUMMIT20" },
 };
 
 interface CartLine {
@@ -325,7 +325,7 @@ const renderCart = (): void => {
   if (!cartRoot) return;
   const summary = cartSummary();
   if (summary.items.length === 0) {
-    cartRoot.innerHTML = `<p class="shop-cart-empty">Your cart is empty — ask the assistant to add something.</p>`;
+    cartRoot.innerHTML = `<p class="shop-cart-empty">Your cart is empty: ask the assistant to add something.</p>`;
     if (cartMeta) cartMeta.textContent = "";
     syncCatalogCartState();
     return;
@@ -403,7 +403,7 @@ const modelContext = (
 ).modelContext;
 
 if (!modelContext) {
-  logWire("reg", "register", "document.modelContext unavailable — tools NOT registered");
+  logWire("reg", "register", "document.modelContext unavailable: tools NOT registered");
 } else {
   const ac = new AbortController();
 
@@ -480,7 +480,7 @@ if (!modelContext) {
         logWire(
           "exec",
           "view_product",
-          `<b>${esc(product.sku)}</b> — ${esc(product.title)} <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
+          `<b>${esc(product.sku)}</b>: ${esc(product.title)} <span class="wire-time">(+${esc(formatLatency(latency))})</span>`,
         );
         return {
           found: true,
@@ -565,7 +565,7 @@ if (!modelContext) {
         const latency = await simulateToolLatency("remove_from_cart");
         const { sku, quantity } = input as { sku: string; quantity?: number };
         // Resolve the SKU the same way add_to_cart/view_product do (trimmed,
-        // case-insensitive) — the cart is keyed by the canonical product.sku, so
+        // case-insensitive): the cart is keyed by the canonical product.sku, so
         // a raw `cart.get(sku)` would miss on different casing/spacing.
         const product = findBySku(sku);
         if (!product) {
@@ -594,7 +594,7 @@ if (!modelContext) {
           };
         }
         // Only a positive partial quantity decrements; anything else (omitted,
-        // ≤0, or ≥ the line qty) removes the whole line — so a negative quantity
+        // ≤0, or ≥ the line qty) removes the whole line, so a negative quantity
         // can't subtract-a-negative and inflate the cart.
         const partial =
           typeof quantity === "number" && quantity >= 1 && quantity < line.quantity;
@@ -672,7 +672,7 @@ if (!modelContext) {
 // 5. Mount Persona with WebMCP enabled, themed as the Switchback storefront.
 // ===========================================================================
 
-// Wiring: proxy mode only — like the other example demos. The agent that
+// Wiring: proxy mode only: like the other example demos. The agent that
 // drives this storefront is defined entirely in code as WEBMCP_STOREFRONT_FLOW
 // (packages/proxy/src/flows/webmcp-storefront.ts); the local proxy forwards the
 // page's clientTools[] upstream and proxies the /resume round-trip. No hosted
@@ -686,7 +686,7 @@ const proxyApiUrl = import.meta.env.VITE_PROXY_URL
 // Tools the storefront treats as read-only (safe to run without approval). We
 // gate by name rather than by the registered `readOnlyHint` annotation because
 // @mcp-b/webmcp-polyfill@3.0.0's `getTools()` does NOT echo annotations back to
-// consumers, so the widget can't populate `WebMcpConfirmInfo.annotations` — the
+// consumers, so the widget can't populate `WebMcpConfirmInfo.annotations`: the
 // page is the authority on which of *its own* tools mutate state. (The tools
 // still carry `readOnlyHint` for spec-correctness and the server snapshot.)
 const READ_ONLY_TOOLS = new Set(["search_products", "view_product"]);
@@ -696,17 +696,17 @@ logWire("send", "mode", `proxy → ${esc(proxyApiUrl)}`);
 // --- Switchback brand theme (mirrors webmcp-shop.css; both follow the OS
 //     light/dark preference via colorScheme:'auto').
 //
-//     "Pine & Blaze" — deep pine green primary + trail-blaze orange accent on
+//     "Pine & Blaze": deep pine green primary + trail-blaze orange accent on
 //     warm granite paper; dark mode is a night forest where lichen green takes
 //     over as the interactive primary and the blaze glows brighter.
 //
 //     This block is intentionally a tour of Persona's three theming layers:
-//       1. palette   — raw brand scales + the fonts the page already loads
-//       2. semantic  — role colors (surface/text/interactive/feedback) derived
+//       1. palette: raw brand scales + the fonts the page already loads
+//       2. semantic: role colors (surface/text/interactive/feedback) derived
 //                      from the palette
-//       3. components — per-surface overrides where the brand needs a specific
+//       3. components: per-surface overrides where the brand needs a specific
 //                       read (header bar, bubbles, the approval gate, markdown)
-//     Everything below is plain config — no custom CSS, no plugins.
+//     Everything below is plain config: no custom CSS, no plugins.
 //
 //     Contrast anchors: paper on pine #1f3d2b ≈ 11:1; blaze #d9531e fails AA
 //     for small text on white, so text-safe #a63a14 (~6:1) carries links and
@@ -745,7 +745,7 @@ const shopTheme: NonNullable<AgentWidgetConfig["theme"]> = {
     },
     typography: {
       // Reuse the fonts the gallery already loads (gallery-fonts Vite plugin
-      // injects the <link> in <head>) — the widget needs no extra requests.
+      // injects the <link> in <head>): the widget needs no extra requests.
       fontFamily: {
         sans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         serif: "'Newsreader', Georgia, 'Times New Roman', serif",
@@ -814,7 +814,7 @@ const shopTheme: NonNullable<AgentWidgetConfig["theme"]> = {
       placeholder: "#8b9286",
       focus: { border: "#1f3d2b", ring: "rgba(31, 61, 43, 0.25)" },
     },
-    // The approval gate is this demo's headline surface — every mutating
+    // The approval gate is this demo's headline surface: every mutating
     // page-tool call (add_to_cart, apply_promo, …) lands here. Parchment
     // bubble with a blaze-tinted frame; approve is a solid pine button, deny
     // stays a neutral ghost.
@@ -912,7 +912,7 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
   },
   components: {
     panel: { borderRadius: "0" },
-    // Header stays a pine bar at night too — deepest pine instead of flipping
+    // Header stays a pine bar at night too: deepest pine instead of flipping
     // to lichen, with the blaze chip glowing against it.
     header: {
       borderRadius: "0",
@@ -924,7 +924,7 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
       actionIconForeground: "#b9c8bc",
     },
     // The widget's component defaults back these surfaces with `gray.50`, which
-    // this dark palette keeps light (#e8eee7) — so without explicit overrides
+    // this dark palette keeps light (#e8eee7), so without explicit overrides
     // the assistant bubbles, composer input, tool-call chrome, and inline code
     // would render as bright chalk cards on the night-forest panel. Pin them to
     // the dark surface set (and flip their default dark `gray.900` text to light).
@@ -956,7 +956,7 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
     },
     collapsibleWidget: {
       container: "#1d2420", // tool/reasoning bubble chrome
-      surface: "#0e120f", // inset args/code box — reads as a dark terminal panel
+      surface: "#0e120f", // inset args/code box: reads as a dark terminal panel
       border: "#2c352d",
     },
     toolBubble: { shadow: "none" },
@@ -985,13 +985,13 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       ...DEFAULT_WIDGET_CONFIG.copy,
       welcomeTitle: "Switchback Assistant",
       welcomeSubtitle:
-        "I can search the catalog, pull up a product, and manage your cart — using this page's own tools. Try one of the prompts below.",
+        "I can search the catalog, pull up a product, and manage your cart: using this page's own tools. Try one of the prompts below.",
       inputPlaceholder: "Find me a trail shoe…",
     },
     // Starter pills, ordered to walk through the gate policy and tool surface:
     //   1. read-only search (auto-approved, cards light up)
     //   2. read-only detail view (auto-approved, card flashes)
-    //   3. PARALLEL mutating add — two add_to_cart calls in one turn, each with
+    //   3. PARALLEL mutating add: two add_to_cart calls in one turn, each with
     //      its own approval bubble, batched into ONE /resume (core#3878)
     //   4. mutating promo (approval bubble → discount line in the cart)
     suggestionChips: [
@@ -1011,7 +1011,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
         logWire(
           "gate",
           "gate",
-          `${esc(info.toolName)} — ${readOnly ? "read-only → <b>auto-approve</b>" : "mutating → <b>approval bubble</b>"}`,
+          `${esc(info.toolName)}: ${readOnly ? "read-only → <b>auto-approve</b>" : "mutating → <b>approval bubble</b>"}`,
         );
         return readOnly;
       },

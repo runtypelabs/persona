@@ -1,8 +1,8 @@
-# ai-sdk-webmcp — Persona + WebMCP on a direct AI SDK backend
+# ai-sdk-webmcp: Persona + WebMCP on a direct AI SDK backend
 
 A Next.js port of the **Switchback** WebMCP storefront demo that drives the
 **real Persona widget** against a **direct [Vercel AI SDK](https://ai-sdk.dev)
-backend** — **no Runtype**.
+backend**: **no Runtype**.
 
 **Live demo:** [ai-sdk-webmcp.persona-chat.dev](https://ai-sdk-webmcp.persona-chat.dev)
 
@@ -27,27 +27,27 @@ talking to Runtype.
 - **You add:** the shim (`app/api/chat/shim.ts`). The dispatch pause and the
   later `/resume` are separate requests that can hit different serverless
   instances, so the in-flight conversation is held in a small store
-  (`app/api/chat/execution-store.ts`) keyed by `executionId` — backed by the
+  (`app/api/chat/execution-store.ts`) keyed by `executionId`: backed by the
   **Vercel Runtime Cache** (`@vercel/functions`), with an in-memory fallback for
-  local dev. ⚠️ The Runtime Cache is an **ephemeral, region-scoped cache** — fine
+  local dev. ⚠️ The Runtime Cache is an **ephemeral, region-scoped cache**: fine
   for a demo/preview, but **swap it for a durable store (Redis/Upstash, Vercel
   KV, a DB, or a Durable Object) in production**. The store interface is one tiny
   file so the backend is a one-place change.
 
 > Prefer **not** to use the widget UI? You can instead reuse just
 > `WebMcpBridge` from `@runtypelabs/persona` and drive the loop with the AI SDK's
-> native client-tool model (`useChat` + `onToolCall`) — no shim, no `/resume`.
+> native client-tool model (`useChat` + `onToolCall`): no shim, no `/resume`.
 > See `docs/webmcp-without-runtype.md` at the repo root.
 
 ## Run
 
 Model calls route through the **Vercel AI Gateway** (the shim uses a bare
 `nvidia/nemotron-3-ultra-550b-a55b` model id). On Vercel this authenticates
-automatically via the deployment's OIDC token — **no key to set**. For local dev
+automatically via the deployment's OIDC token: **no key to set**. For local dev
 you need an `AI_GATEWAY_API_KEY`:
 
 ```bash
-# from the repo root — builds the workspace widget the example imports
+# from the repo root: builds the workspace widget the example imports
 pnpm --filter @runtypelabs/persona build
 
 cp examples/ai-sdk-webmcp/.env.local.example examples/ai-sdk-webmcp/.env.local
@@ -81,18 +81,18 @@ pnpm --filter ai-sdk-webmcp dev
 | Widget expects (SSE `event`) | Shim emits from `streamText` |
 | --- | --- |
 | `step_chunk` `{text}` | `text-delta` parts |
-| `step_await` `{toolName:"webmcp:<bare>", toolCallId, parameters, executionId}` | `tool-call` parts (paused — no `flow_complete`) |
+| `step_await` `{toolName:"webmcp:<bare>", toolCallId, parameters, executionId}` | `tool-call` parts (paused: no `flow_complete`) |
 | `step_complete` + `flow_complete` | end of a turn with no tool calls |
 | POST `/resume` `{executionId, toolOutputs}` | tool-result message appended → `streamText` continues |
 
 ## Deploy on Vercel
 
-There's no Vercel project for this example in-repo — to get a PR preview, create
+There's no Vercel project for this example in-repo: to get a PR preview, create
 a Vercel project pointed at this subdirectory:
 
 - **Root Directory:** `examples/ai-sdk-webmcp`
 - **Build Command:** `pnpm --filter @runtypelabs/persona build && next build`
-- **Env:** none required — model calls go through the AI Gateway, authenticated
+- **Env:** none required: model calls go through the AI Gateway, authenticated
   automatically by the deployment's OIDC token. (Locally you set
   `AI_GATEWAY_API_KEY`; on Vercel you don't.)
 
@@ -101,17 +101,17 @@ Notes that matter for the WebMCP tool loop:
 - The paused-execution store uses the **Vercel Runtime Cache**, which is
   **region-scoped**. Keep the project on a **single function region** so the
   dispatch pause and the `/resume` that follows share the same cache. The cache
-  is also **ephemeral** — a long delay before resuming (or an eviction) yields an
+  is also **ephemeral**: a long delay before resuming (or an eviction) yields an
   "unknown executionId" error. Fine for a demo; use a durable store for prod
   (see `app/api/chat/execution-store.ts`).
 
 ## Files
 
-- `app/lib/catalog.ts` — product catalog + search (ported verbatim).
-- `app/lib/store.ts` — observable cart/highlight/wire store (React + tools share it).
-- `app/lib/webmcp-tools.ts` — registers the 5 page tools on `document.modelContext`.
-- `app/lib/widget.ts` — Switchback theme + widget config (proxy mode → local shim).
-- `app/page.tsx` — storefront UI + widget mount.
-- `app/api/chat/shim.ts` — the Runtype-proxy-protocol shim over the AI SDK.
-- `app/api/chat/execution-store.ts` — paused-execution store (Runtime Cache; **swap for a durable store in prod**).
-- `app/api/chat/dispatch/route.ts`, `.../resume/route.ts` — the two endpoints.
+- `app/lib/catalog.ts`: product catalog + search (ported verbatim).
+- `app/lib/store.ts`: observable cart/highlight/wire store (React + tools share it).
+- `app/lib/webmcp-tools.ts`: registers the 5 page tools on `document.modelContext`.
+- `app/lib/widget.ts`: Switchback theme + widget config (proxy mode → local shim).
+- `app/page.tsx`: storefront UI + widget mount.
+- `app/api/chat/shim.ts`: the Runtype-proxy-protocol shim over the AI SDK.
+- `app/api/chat/execution-store.ts`: paused-execution store (Runtime Cache; **swap for a durable store in prod**).
+- `app/api/chat/dispatch/route.ts`, `.../resume/route.ts`: the two endpoints.

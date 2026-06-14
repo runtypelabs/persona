@@ -8,7 +8,7 @@
  * imports this chunk from a URL derived from the widget script's own `src`
  * (see the loader registered in `index-global.ts`).
  *
- * Built self-contained (`--no-external`) — it must work standalone on a CDN
+ * Built self-contained (`--no-external`): it must work standalone on a CDN
  * with no module resolution. npm/bundler consumers never load this file;
  * their bundlers resolve the bare `import("@mcp-b/webmcp-polyfill")` in
  * `webmcp-bridge.ts` directly.

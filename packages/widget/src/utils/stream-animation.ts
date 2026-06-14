@@ -42,11 +42,11 @@ export const resolveStreamAnimation = (
    ============================================================ */
 
 /**
- * Built-in animations ship with the core widget — CSS lives in widget.css
+ * Built-in animations ship with the core widget: CSS lives in widget.css
  * and no subpath import is required. They register automatically.
  *
  * Other animations (`letter-rise`, `word-fade`, `wipe`, `glyph-cycle`) are
- * tree-shakeable subpath plugins — consumers import them from
+ * tree-shakeable subpath plugins: consumers import them from
  * `@runtypelabs/persona/animations/<name>` and they auto-register on load.
  */
 const BUILTIN_PLUGINS: StreamAnimationPlugin[] = [
@@ -268,7 +268,7 @@ const wrapTextNodeWords = (
  *
  * Each wrapped span carries a stable `id` (`stream-c-{messageId}-{N}` or
  * `stream-w-{messageId}-{N}`) so idiomorph preserves existing spans across
- * token-by-token re-renders — animations on already-streamed characters never
+ * token-by-token re-renders: animations on already-streamed characters never
  * restart.
  */
 export const wrapStreamAnimation = (
@@ -297,7 +297,7 @@ export const wrapStreamAnimation = (
   // `startIndex` lets callers number spans by their absolute position in a
   // larger string, even when only a slice is being wrapped. The peek banner
   // uses this so per-char span IDs stay stable as the trailing-100-char
-  // window shifts each chunk — idiomorph then preserves animations on
+  // window shifts each chunk: idiomorph then preserves animations on
   // already-revealed chars instead of restarting them.
   const counterRef = { value: options?.startIndex ?? 0 };
   const wrap = mode === "char" ? wrapTextNodeChars : wrapTextNodeWords;
@@ -326,7 +326,7 @@ export const createStreamCaret = (doc: Document = document): HTMLElement => {
 };
 
 /**
- * Shimmer placeholder shown before the first token arrives — and, when the
+ * Shimmer placeholder shown before the first token arrives, and, when the
  * `"line"` buffer strategy is active, reshown between lines. A single
  * full-width bar; we don't know ahead of time how wide the next line will be,
  * so committing to one width avoids implying structure the stream won't match.
@@ -415,7 +415,7 @@ export const detachAllPlugins = (root: HTMLElement | ShadowRoot): void => {
 
 /**
  * Ensure the plugin's one-time side effects (style injection, onAttach) have
- * run for this widget root. Idempotent — safe to call on every render.
+ * run for this widget root. Idempotent: safe to call on every render.
  */
 export const ensurePluginActive = (
   plugin: StreamAnimationPlugin,

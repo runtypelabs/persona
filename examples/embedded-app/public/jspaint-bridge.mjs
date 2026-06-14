@@ -1,8 +1,8 @@
-// Paint Bridge — injected into the same-origin jspaint iframe by the parent
+// Paint Bridge: injected into the same-origin jspaint iframe by the parent
 // demo page (src/webmcp-paint/jspaint-host.ts). jspaint keeps its app state in
 // global *lexical* bindings (classic-script `let`/`const` in app-state.js) and
 // its functions in ES modules, so neither is reachable as a `contentWindow`
-// property — and the iframe's CSP (`script-src 'self'`) rules out eval. A
+// property, and the iframe's CSP (`script-src 'self'`) rules out eval. A
 // same-origin module script is allowed, though: this file imports jspaint's
 // own modules (singletons, so we share the app's live instances) and reads the
 // lexical globals as bare identifiers, exposing one clean API object on the
@@ -42,7 +42,7 @@ const TOOL_NAMES = Object.fromEntries(
 	Object.entries(TOOL_IDS).map(([name, id]) => [id, name]),
 );
 
-// Mirrors triggerMouseEvent in jspaint's simulate-random-gestures.js — same
+// Mirrors triggerMouseEvent in jspaint's simulate-random-gestures.js: same
 // event shape, same jQuery trigger path, so it hits the same handlers.
 function triggerPointerEvent(type, clientX, clientY) {
 	const event = new $.Event(type, {
@@ -136,7 +136,7 @@ window.__paintBridge = {
 	/**
 	 * Replay a stroke through the selected tool: pointerdown at the first
 	 * point, paced pointermoves along the (densified) path, pointerup at the
-	 * last. Pacing makes the drawing visibly animate — that IS the demo.
+	 * last. Pacing makes the drawing visibly animate: that IS the demo.
 	 */
 	async drawStroke(rawPoints, { durationMs = 800 } = {}) {
 		if (!Array.isArray(rawPoints) || rawPoints.length === 0) {

@@ -1,4 +1,4 @@
-/** Configure tab — content, layout, widget, features, and developer settings */
+/** Configure tab: content, layout, widget, features, and developer settings */
 
 import type { SectionDef, OnChangeCallback, ControlResult } from '../types';
 import { renderSection } from '../controls';
@@ -114,7 +114,7 @@ export function render(
         wrapper.style.display = isCollapsed ? 'none' : '';
       });
 
-      // Toggle starts collapsed — flip the class off so the first toggle opens it
+      // Toggle starts collapsed: flip the class off so the first toggle opens it
       divider.classList.add('subgroup-collapsed');
       container.appendChild(divider);
       allControls.push(...renderSections(wrapper, onChange, group.sections as SectionDef[], TAB_ID));

@@ -40,7 +40,7 @@ Each field in the "fields" array should have:
 - type (optional): "text", "email", "tel", "date", "time", "textarea", "number" (defaults to "text")
 - placeholder (optional): Placeholder text
 - required (optional): true/false
-- width (optional): "full" or "half" — pair short related fields side-by-side with "half" (e.g. Phone + Company, City + Zip, First + Last name); use "full" or omit for everything else (especially textareas, emails, and standalone fields). Two consecutive "half" fields render in one row.
+- width (optional): "full" or "half": pair short related fields side-by-side with "half" (e.g. Phone + Company, City + Zip, First + Last name); use "full" or omit for everything else (especially textareas, emails, and standalone fields). Two consecutive "half" fields render in one row.
 
 EXAMPLES:
 

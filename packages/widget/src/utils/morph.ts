@@ -33,7 +33,7 @@ export const morphMessages = (
           // Plugins actively mutating a node (e.g. glyph-cycle's tick loop)
           // opt out of morph entirely via this attribute. Unlike
           // `data-preserve-animation`, this is honored regardless of whether
-          // the new DOM carries the attribute — it's a runtime-only marker.
+          // the new DOM carries the attribute: it's a runtime-only marker.
           if (oldNode.hasAttribute("data-preserve-runtime")) {
             return false;
           }

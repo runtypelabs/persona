@@ -38,7 +38,7 @@ const directiveMessage = (
   });
 };
 
-describe("component directive bubble — listener preservation across morphs", () => {
+describe("component directive bubble: listener preservation across morphs", () => {
   beforeEach(() => {
     // The component registry is a singleton; clear it between tests so each
     // test starts from a clean slate.
@@ -89,7 +89,7 @@ describe("component directive bubble — listener preservation across morphs", (
     const formBefore = mount.querySelector<HTMLFormElement>('[data-test-id="test-form-el"]');
     expect(formBefore).not.toBeNull();
 
-    // Force another render pass — this is what triggered the bug pre-fix:
+    // Force another render pass: this is what triggered the bug pre-fix:
     // Idiomorph would replace the form via innerHTML serialization, dropping
     // the addEventListener-attached submit handler.
     controller.injectTestMessage({
@@ -103,7 +103,7 @@ describe("component directive bubble — listener preservation across morphs", (
       },
     });
 
-    // The form node should be the SAME instance — preserved by the live
+    // The form node should be the SAME instance: preserved by the live
     // wrapper's `data-preserve-runtime` and the post-morph hydrate skipping
     // when fingerprint is unchanged.
     const formAfter = mount.querySelector<HTMLFormElement>('[data-test-id="test-form-el"]');
@@ -145,7 +145,7 @@ describe("component directive bubble — listener preservation across morphs", (
     });
     expect(mount.querySelector('[data-test-id="test-badge"]')?.textContent).toBe("first");
 
-    // Same id, new props — fingerprint changes, so renderer should be invoked
+    // Same id, new props: fingerprint changes, so renderer should be invoked
     // again and the new element hydrated into the live wrapper.
     directiveMessage(controller, {
       id: "badge-1",

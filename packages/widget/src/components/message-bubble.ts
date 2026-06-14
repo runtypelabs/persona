@@ -28,7 +28,7 @@ import {
  * Default copy for the inline notice rendered when a turn ends with a
  * non-natural stop reason. Deployers override per-reason via
  * `config.copy.stopReasonNotice`. Returns `null` for natural completions
- * (`end_turn`) and uninformative reasons (`unknown`) — those never render
+ * (`end_turn`) and uninformative reasons (`unknown`): those never render
  * an affordance.
  */
 export const getDefaultStopReasonNoticeCopy = (
@@ -62,7 +62,7 @@ export const resolveStopReasonNoticeText = (
 ): string | null => {
   if (!stopReason) return null;
   const fallback = getDefaultStopReasonNoticeCopy(stopReason);
-  // Reasons without a default (end_turn, unknown) never render — overrides
+  // Reasons without a default (end_turn, unknown) never render: overrides
   // for those keys are intentionally ignored.
   if (fallback === null) return null;
   const override = overrides?.[stopReason];
@@ -768,7 +768,7 @@ export const createStandardBubble = (
       ? resolveStreamAnimationPlugin(streamAnimation.type, streamPluginOverrides)
       : null;
   // Stay in "streaming-animated" mode while the plugin reports in-flight
-  // work for this message — e.g. glyph-cycle's tick loops still walking
+  // work for this message: e.g. glyph-cycle's tick loops still walking
   // through the tail after the last token arrived. Without this, the final
   // non-animated render rips out the cycling spans mid-animation.
   const pluginStillAnimating =
@@ -930,7 +930,7 @@ export const createStandardBubble = (
       : null;
 
   // Add typing indicator (or skeleton placeholder) for streaming assistant
-  // messages. Check the buffered content — a plugin's `bufferContent` may
+  // messages. Check the buffered content: a plugin's `bufferContent` may
   // hold back the first N chars (e.g. glyph-cycle waits for 50 chars), during
   // which the bubble would otherwise appear empty.
   //

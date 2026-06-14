@@ -101,9 +101,9 @@ const docked = initAgentWidget({
 
 When `config.launcher.mountMode` is `'docked'`, `target` is treated as the page container that Persona should wrap. Use a concrete element such as `#workspace-main`; `body` and `html` are rejected.
 
-**Height contract:** the docked shell sizes itself with `height: 100%`, so give it a definite height — usually `html, body { height: 100% }` or a fixed-height app-shell container around the target. If no ancestor provides one, the panel is clamped to `dock.maxHeight` (default `100dvh`; `resize`/`emerge` are also sticky-pinned — `push`/`overlay` get the cap only) so it stays viewport-sized and scrolls internally, and a console warning explains the fix. Override the cap with a CSS length or disable the guard with `dock.maxHeight: false`.
+**Height contract:** the docked shell sizes itself with `height: 100%`, so give it a definite height: usually `html, body { height: 100% }` or a fixed-height app-shell container around the target. If no ancestor provides one, the panel is clamped to `dock.maxHeight` (default `100dvh`; `resize`/`emerge` are also sticky-pinned : `push`/`overlay` get the cap only) so it stays viewport-sized and scrolls internally, and a console warning explains the fix. Override the cap with a CSS length or disable the guard with `dock.maxHeight: false`.
 
-With **`dock.reveal: 'resize'`** (default), a **closed** dock uses a **`0px`** column. **`'emerge'`** uses the same **column width** animation (content reflows) but the chat panel stays **`dock.width`** wide and is **clipped** by the growing slot—like a normal-width widget emerging from the edge. **`'overlay'`** overlays with `transform`. **`'push'`** uses a sliding track (Shopify-style). The built-in launcher stays hidden in docked mode—open with **`controller.open()`** (or your own chrome).
+With **`dock.reveal: 'resize'`** (default), a **closed** dock uses a **`0px`** column. **`'emerge'`** uses the same **column width** animation (content reflows) but the chat panel stays **`dock.width`** wide and is **clipped** by the growing slot: like a normal-width widget emerging from the edge. **`'overlay'`** overlays with `transform`. **`'push'`** uses a sliding track (Shopify-style). The built-in launcher stays hidden in docked mode: open with **`controller.open()`** (or your own chrome).
 
 **Rounded / card layout:** `initAgentWidget` inserts a flex **shell** as the **direct child** of your target’s **parent**, with your `target` in the content column and the dock beside it. Put border-radius, border, and `overflow: hidden` on that **parent** (or an ancestor that wraps only the shell) so the dock column sits inside the same visual card as your content.
 
@@ -115,15 +115,15 @@ With **`dock.reveal: 'resize'`** (default), a **closed** dock uses a **`0px`** c
 
 The full reference lives in [`docs/`](./docs/) and the theming guide:
 
-- [Programmatic Control & Events](./docs/PROGRAMMATIC-CONTROL.md) — controller API, message hooks and injection, enriched DOM context, WebMCP page tools, DOM and controller events, state loading
-- [UI Features & Components](./docs/UI-COMPONENTS.md) — message actions and feedback, loading/idle indicators, approvals, built-in `ask_user_question` and `suggest_replies` tools, dropdown menus, button utilities, dynamic forms
-- [Script Tag Installation & Framework Integration](./docs/INSTALLATION-FRAMEWORKS.md) — automatic installer, deferred launcher lifecycle hooks, manual script tag setup, React, Next.js, Remix, Gatsby, and Astro guides
-- [Configuration Reference](./docs/CONFIGURATION-REFERENCE.md) — every config option: core, client token mode, agent mode, UI & theme, launcher/docking, layout, voice, WebMCP, tool calls, features, suggestion chips, state & storage
-- [Stream Parser Configuration](./docs/STREAM-PARSERS.md) — JSON, XML, and plain-text stream parsers and custom parser factories
-- [Message Injection](./docs/MESSAGE-INJECTION.md) — full injection and component-directive reference
-- [Dynamic Forms](./docs/DYNAMIC-FORMS.md) — field schema, form styles, and recipes
-- [Code Generator](./docs/CODE-GENERATOR.md) — `@runtypelabs/persona/codegen` options for CLI/server-side snippet generation
-- [THEME-CONFIG.md](./THEME-CONFIG.md) — the complete theme and design-token reference
+- [Programmatic Control & Events](./docs/PROGRAMMATIC-CONTROL.md): controller API, message hooks and injection, enriched DOM context, WebMCP page tools, DOM and controller events, state loading
+- [UI Features & Components](./docs/UI-COMPONENTS.md): message actions and feedback, loading/idle indicators, approvals, built-in `ask_user_question` and `suggest_replies` tools, dropdown menus, button utilities, dynamic forms
+- [Script Tag Installation & Framework Integration](./docs/INSTALLATION-FRAMEWORKS.md): automatic installer, deferred launcher lifecycle hooks, manual script tag setup, React, Next.js, Remix, Gatsby, and Astro guides
+- [Configuration Reference](./docs/CONFIGURATION-REFERENCE.md): every config option: core, client token mode, agent mode, UI & theme, launcher/docking, layout, voice, WebMCP, tool calls, features, suggestion chips, state & storage
+- [Stream Parser Configuration](./docs/STREAM-PARSERS.md): JSON, XML, and plain-text stream parsers and custom parser factories
+- [Message Injection](./docs/MESSAGE-INJECTION.md): full injection and component-directive reference
+- [Dynamic Forms](./docs/DYNAMIC-FORMS.md): field schema, form styles, and recipes
+- [Code Generator](./docs/CODE-GENERATOR.md): `@runtypelabs/persona/codegen` options for CLI/server-side snippet generation
+- [THEME-CONFIG.md](./THEME-CONFIG.md): the complete theme and design-token reference
 
 ### Optional proxy server
 

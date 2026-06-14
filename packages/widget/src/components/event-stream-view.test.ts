@@ -815,7 +815,7 @@ describe("createEventStreamView", () => {
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
-      // Initial render (Path A — first render)
+      // Initial render (Path A: first render)
       update();
 
       const eventsList = getEventsList(element);
@@ -825,7 +825,7 @@ describe("createEventStreamView", () => {
       const row1Ref = eventsList.children[0];
       const row2Ref = eventsList.children[1];
 
-      // Add a new event and update (Path C — incremental append)
+      // Add a new event and update (Path C: incremental append)
       vi.advanceTimersByTime(150);
       buffer.push(makeEvent("step_chunk", 3));
       update();
@@ -1173,7 +1173,7 @@ describe("createEventStreamView", () => {
       // Wait past the throttle interval
       vi.advanceTimersByTime(150);
 
-      // Add event and update — should render immediately since 150ms > 100ms
+      // Add event and update: should render immediately since 150ms > 100ms
       buffer.push(makeEvent("flow_complete", 2));
       update();
 
@@ -1223,7 +1223,7 @@ describe("createEventStreamView", () => {
       const filterSelect = getFilterSelect(element);
       const copyAllBtn = getCopyAllBtn(element);
 
-      // Immediately change filter — this should bypass throttle (uses updateNow internally)
+      // Immediately change filter: this should bypass throttle (uses updateNow internally)
       filterSelect.value = "step_chunk";
       filterSelect.__fireEvent("change");
 
@@ -1237,17 +1237,17 @@ describe("createEventStreamView", () => {
       const buffer = createMockBuffer([makeEvent("step_chunk", 1)]);
       const { update, destroy } = createEventStreamView({ buffer: buffer as any });
 
-      // First update — immediate
+      // First update: immediate
       update();
 
       // Schedule a throttled update
       buffer.push(makeEvent("step_chunk", 2));
       update();
 
-      // Destroy before rAF fires — should not throw
+      // Destroy before rAF fires: should not throw
       expect(() => destroy()).not.toThrow();
 
-      // Advancing timers to flush rAF — should not throw even though view is destroyed
+      // Advancing timers to flush rAF: should not throw even though view is destroyed
       vi.advanceTimersByTime(20);
       vi.useRealTimers();
     });

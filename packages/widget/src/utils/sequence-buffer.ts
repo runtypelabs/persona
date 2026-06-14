@@ -19,7 +19,7 @@ export class SequenceReorderBuffer {
     //   - `agentContext.seq`: tool_start, tool_delta, tool_complete (agent loop)
     const seq = payload?.seq ?? payload?.sequenceIndex ?? payload?.agentContext?.seq;
 
-    // No seq field — emit immediately (backward compat).
+    // No seq field: emit immediately (backward compat).
     // If there are buffered events waiting for a gap to fill, flush them
     // first: the server sending an unsequenced event means it has moved on
     // and the missing seq numbers are not coming.
@@ -49,17 +49,17 @@ export class SequenceReorderBuffer {
       return;
     }
 
-    // If seq < nextExpected, it's a duplicate or late arrival — emit anyway (don't drop)
+    // If seq < nextExpected, it's a duplicate or late arrival: emit anyway (don't drop)
     if (seq < this.nextExpectedSeq!) {
       this.emitter(payloadType, payload);
       return;
     }
 
-    // seq > nextExpected — buffer it and start gap timer.
+    // seq > nextExpected: buffer it and start gap timer.
     // If another event with the same seq is already buffered, the server
     // broke its "seq is unique per stream" invariant. Rather than silently
     // overwrite (losing one event) or swallow the new one, emit the prior
-    // event immediately — out of order, but better than dropping it — and
+    // event immediately, out of order, but better than dropping it, and
     // warn so the issue is visible.
     const existing = this.buffer.get(seq);
     if (existing !== undefined) {

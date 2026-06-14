@@ -1,5 +1,5 @@
 /**
- * userAction — per-message record of a finalized user interaction with a
+ * userAction: per-message record of a finalized user interaction with a
  * component the AI rendered into the conversation. Generic across forms,
  * polls, approvals, quizzes, etc.
  *

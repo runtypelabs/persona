@@ -2,11 +2,11 @@
  * Built-in `suggest_replies` client tool.
  *
  * The widget can advertise this tool to the agent on every dispatch via
- * `clientTools[]` (set `features.suggestReplies.expose: true`) — the same
+ * `clientTools[]` (set `features.suggestReplies.expose: true`): the same
  * wire surface as `ask_user_question` and WebMCP page tools. When the model
  * calls it, the execution pauses with a `step_await`
  * (`awaitReason: "local_tool_required"`); unlike `ask_user_question`, the
- * widget resolves it FIRE-AND-FORGET — it renders the suggestions as tappable
+ * widget resolves it FIRE-AND-FORGET: it renders the suggestions as tappable
  * chips above the composer and immediately resumes the execution with a
  * canned "shown" result, so the agent's turn completes without waiting on the
  * user. Tapping a chip sends its text verbatim as the user's next message.
@@ -26,7 +26,7 @@ import type {
 
 export const SUGGEST_REPLIES_TOOL_NAME = "suggest_replies";
 
-/** Renderer cap — payloads beyond this are truncated with a console warning. */
+/** Renderer cap: payloads beyond this are truncated with a console warning. */
 export const SUGGEST_REPLIES_MAX = 4;
 
 /**
@@ -64,7 +64,7 @@ export const SUGGEST_REPLIES_CLIENT_TOOL: ClientToolDefinition = {
     "complete. Each suggestion is sent verbatim as the user's next message, " +
     'so phrase suggestions in the user\'s voice (e.g. "Tell me more about ' +
     'pricing"). Keep them short and distinct. The result only confirms the ' +
-    "suggestions were shown — do not add further commentary after calling " +
+    "suggestions were shown: do not add further commentary after calling " +
     "this tool; end your turn.",
   parametersSchema: SUGGEST_REPLIES_PARAMETERS_SCHEMA,
   origin: "sdk",
@@ -141,7 +141,7 @@ export const latestAgentSuggestions = (
 /**
  * Gate for advertising the tool: `expose` opts it into the agent's catalog,
  * and `enabled !== false` guarantees the widget will actually auto-resolve
- * and render chips for it — exposing the tool with the feature disabled
+ * and render chips for it: exposing the tool with the feature disabled
  * would park the execution on a generic tool bubble with no resume coming.
  */
 export const shouldExposeSuggestReplies = (

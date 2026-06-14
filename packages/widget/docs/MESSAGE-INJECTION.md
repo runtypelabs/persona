@@ -152,7 +152,7 @@ widgetHandle.injectAssistantMessage({
 
 ## Component Directive Injection
 
-When you have a renderer registered via `componentRegistry.register(...)`, you can inject an assistant message that renders that component — exactly the same path Persona uses for streamed `{ "text": "...", "component": "...", "props": {...} }` directives.
+When you have a renderer registered via `componentRegistry.register(...)`, you can inject an assistant message that renders that component: exactly the same path Persona uses for streamed `{ "text": "...", "component": "...", "props": {...} }` directives.
 
 This is useful for:
 
@@ -212,7 +212,7 @@ widget.injectAssistantMessage({
 `hasComponentDirective` and `extractComponentDirectiveFromMessage` look at `rawContent` first; if it's missing, they fall back to parsing `content` when it looks like JSON. So either of these forms also works:
 
 ```javascript
-// Pass the directive JSON via rawContent (preferred — keeps `content` clean)
+// Pass the directive JSON via rawContent (preferred: keeps `content` clean)
 widget.injectAssistantMessage({
   content: 'Booking form',
   rawContent: JSON.stringify({ text: 'Booking form', component: 'DynamicForm', props: {} })

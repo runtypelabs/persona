@@ -4,11 +4,11 @@
    downloads, which loads the fonts late and brings back the font-swap flash. */
 
 /* ════════════════════════════════════════════════════════════════════════
-   Persona Examples — design system
+   Persona Examples: design system
    Inherits the Runtype marketing identity from the homepage (index.css):
    cool off-white paper, the Runtype violet accent, Newsreader serif headings,
    Inter body, Asap Condensed uppercase labels, JetBrains Mono code. Refined
-   and calm — not loud.
+   and calm: not loud.
 
    This stylesheet is the single source of truth for every gallery example.
    Pages author only their per-demo *content*; all chrome + control primitives
@@ -32,7 +32,7 @@
   --faint: #8a8f9c;
   --accent: #eee9ff;         /* light violet fill */
 
-  /* ── Accent (was "signal") — the Runtype violet ── */
+  /* ── Accent (was "signal"): the Runtype violet ── */
   --signal: #5b2eff;
   --signal-ink: #ffffff;
   --signal-soft: rgba(91, 46, 255, 0.08);
@@ -88,7 +88,7 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: var(--background);
-  /* Faint paper grid — matches the homepage, fixed so content floats above it. */
+  /* Faint paper grid: matches the homepage, fixed so content floats above it. */
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
@@ -175,7 +175,7 @@ a {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Shell — persistent top bar
+   Shell: persistent top bar
    ════════════════════════════════════════════════════════════════════════ */
 
 .shell-header {
@@ -526,7 +526,7 @@ a {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Preview — simulated host-page viewport
+   Preview: simulated host-page viewport
    ════════════════════════════════════════════════════════════════════════ */
 
 .preview {
@@ -591,10 +591,10 @@ a {
   min-height: 32px;
 }
 .preview-toolbar-variants [data-variant-toolbar]:empty { display: none; }
-/* Mount-toolbar lives in the preview toolbar now — drop its left-rail margins. */
+/* Mount-toolbar lives in the preview toolbar now: drop its left-rail margins. */
 .preview-toolbar-variants .mount-toolbar { margin: 0; min-height: 0; }
 
-/* Preview body — swaps between the live widget and the code pane in place. */
+/* Preview body: swaps between the live widget and the code pane in place. */
 .preview-body {
   flex: 1;
   min-height: 0;
@@ -664,7 +664,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 }
 .btn:disabled:hover { background: var(--paper); border-color: var(--border); transform: none; }
 
-/* Signature CTA — signal-filled.
+/* Signature CTA: signal-filled.
    Variants use the doubled `.btn.btn-x` form so they outrank the base
    `.btn-group button` / `.btn-row button` descendant selectors (0,1,1) that
    would otherwise win over a single-class variant inside a group. */
@@ -733,7 +733,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .btn-row:not(:last-child) { margin-bottom: 0.5rem; }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Segmented control — replaces every per-page .mode-group / .mode-btn pill set
+   Segmented control: replaces every per-page .mode-group / .mode-btn pill set
    ════════════════════════════════════════════════════════════════════════ */
 
 .mode-group,
@@ -1053,7 +1053,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .stat-card.copies .stat-value, .satisfaction-stats .stat-card.nps .stat-value { color: var(--info); }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Event logs — one readout style, several sizes
+   Event logs: one readout style, several sizes
    (.event-log / .log / .log-panel / .feedback-log + #log via added class)
    ════════════════════════════════════════════════════════════════════════ */
 
@@ -1108,7 +1108,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Notes — flat reference section
+   Notes: flat reference section
    ════════════════════════════════════════════════════════════════════════ */
 
 .notes {
@@ -1226,7 +1226,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .notes-rail-body[hidden] { display: none; }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Panels (legacy compat — kept for any page that still uses them)
+   Panels (legacy compat: kept for any page that still uses them)
    ════════════════════════════════════════════════════════════════════════ */
 
 .panel {
@@ -1246,7 +1246,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .panel-content { padding: 1.5rem; }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Code blocks — instrument readout
+   Code blocks: instrument readout
    ════════════════════════════════════════════════════════════════════════ */
 
 .code-block {

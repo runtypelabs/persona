@@ -1,5 +1,5 @@
 /**
- * Critical-path launcher entry — built to `launcher.global.js` (IIFE).
+ * Critical-path launcher entry: built to `launcher.global.js` (IIFE).
  *
  * Ships ONLY the real collapsed launcher (`createLauncherButton`) plus the full
  * theme system, so the launcher paints pixel-identically to the full widget from
@@ -24,7 +24,7 @@ import type { AgentWidgetConfig } from "./types";
 export interface AgentWidgetLauncherMountOptions {
   /** Where to mount. Defaults to `document.body` (the floating launcher is `position: fixed`). */
   target?: string | HTMLElement;
-  /** The same widget config the full widget will receive — drives theme, icons, position, copy. */
+  /** The same widget config the full widget will receive: drives theme, icons, position, copy. */
   config?: AgentWidgetConfig;
   /** Called when the launcher is clicked; the installer loads the full widget and opens the panel. */
   onOpen: () => void;

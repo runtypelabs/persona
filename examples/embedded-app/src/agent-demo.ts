@@ -126,7 +126,7 @@ setupMountMode({
   },
 });
 
-// Iteration toggle — wired once. Reads `activeController` lazily so swapping
+// Iteration toggle: wired once. Reads `activeController` lazily so swapping
 // modes doesn't disconnect the control.
 const iterationToggle = document.getElementById("iteration-toggle") as HTMLInputElement | null;
 const iterationStatus = document.getElementById("iteration-status");

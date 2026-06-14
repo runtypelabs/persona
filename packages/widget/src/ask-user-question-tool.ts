@@ -2,7 +2,7 @@
  * Built-in `ask_user_question` client tool.
  *
  * The widget can advertise this tool to the agent on every dispatch via
- * `clientTools[]` (set `features.askUserQuestion.expose: true`) — the same
+ * `clientTools[]` (set `features.askUserQuestion.expose: true`): the same
  * wire surface WebMCP page tools ride. The server registers it as a LOCAL
  * tool under its bare name (`origin: 'sdk'` tools are not `webmcp:`-prefixed),
  * so when the model calls it the execution pauses with a `step_await`
@@ -13,7 +13,7 @@
  * This replaces the previous integrator burden of hand-declaring the tool in
  * a flow's `runtimeTools` and keeping that schema in sync with the renderer.
  * Flows that already declare `ask_user_question` server-side should leave
- * `expose` off — the model would otherwise see the tool twice.
+ * `expose` off: the model would otherwise see the tool twice.
  */
 
 import {
@@ -28,8 +28,7 @@ import type { AgentWidgetConfig, ClientToolDefinition } from "./types";
 
 /**
  * JSON Schema for the tool's parameters. Mirrors {@link AskUserQuestionPayload}
- * — the shape `parseAskUserQuestionPayload` hydrates the answer sheet from —
- * so the schema the model is held to and the schema the renderer expects can
+ *, the shape `parseAskUserQuestionPayload` hydrates the answer sheet from,  * so the schema the model is held to and the schema the renderer expects can
  * never drift.
  */
 export const ASK_USER_QUESTION_PARAMETERS_SCHEMA = {
@@ -57,7 +56,7 @@ export const ASK_USER_QUESTION_PARAMETERS_SCHEMA = {
             minItems: 2,
             maxItems: 4,
             description:
-              '2-4 distinct choices. Do NOT add an "Other" option — free text is automatic.',
+              '2-4 distinct choices. Do NOT add an "Other" option: free text is automatic.',
             items: {
               type: "object",
               properties: {
@@ -102,7 +101,7 @@ export const ASK_USER_QUESTION_CLIENT_TOOL: ClientToolDefinition = {
   name: ASK_USER_QUESTION_TOOL_NAME,
   description:
     "Ask the user multiple-choice questions and wait for their answers. Use " +
-    "only when blocked on a decision that is the user's to make — a " +
+    "only when blocked on a decision that is the user's to make: a " +
     "preference, a choice between valid approaches, or information you " +
     "cannot infer. Each question offers 2-4 options plus an automatic " +
     "free-text input. The result maps each question to its answer (an array " +
@@ -119,8 +118,7 @@ export const ASK_USER_QUESTION_CLIENT_TOOL: ClientToolDefinition = {
  *
  * Each tool is gated on BOTH of its feature flags: `expose` opts the tool
  * into the agent's catalog, and `enabled !== false` guarantees the widget can
- * actually render UI (and, for fire-and-forget tools, auto-resume) for it —
- * exposing a tool with its feature disabled would park the execution on a
+ * actually render UI (and, for fire-and-forget tools, auto-resume) for it: * exposing a tool with its feature disabled would park the execution on a
  * generic tool bubble with no way to advance.
  */
 export const builtInClientToolsForDispatch = (

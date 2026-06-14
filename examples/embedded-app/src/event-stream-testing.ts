@@ -33,7 +33,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       ...DEFAULT_WIDGET_CONFIG.copy,
       welcomeTitle: "Event stream demo",
       welcomeSubtitle:
-        "Try the controls in the left panel — toggle the event stream inspector on this widget.",
+        "Try the controls in the left panel: toggle the event stream inspector on this widget.",
       inputPlaceholder: "Message is optional for API testing…",
     },
     features: { showEventStreamToggle: true },
@@ -112,7 +112,7 @@ document.getElementById("es-win-show-wrong")?.addEventListener("click", () => {
   window.dispatchEvent(
     new CustomEvent("persona:showEventStream", { detail: { instanceId: "wrong-id" } }),
   );
-  alert('Dispatched persona:showEventStream with instanceId "wrong-id" — nothing should open.');
+  alert('Dispatched persona:showEventStream with instanceId "wrong-id": nothing should open.');
 });
 
 const esLogEl = document.getElementById("es-log");

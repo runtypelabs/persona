@@ -1,4 +1,4 @@
-/** @runtypelabs/persona/theme-editor — Headless theme editor core */
+/** @runtypelabs/persona/theme-editor: Headless theme editor core */
 
 // Types
 export type {

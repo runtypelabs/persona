@@ -19,9 +19,9 @@ The v2 theme system uses a **three-layer token architecture**:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- **Palette** — Raw design values (color scales, spacing, typography, shadows, radii)
-- **Semantic** — Intent-based tokens that reference palette values (e.g., `primary`, `surface`, `text`)
-- **Components** — Component-specific tokens that reference semantic or palette values
+- **Palette**: Raw design values (color scales, spacing, typography, shadows, radii)
+- **Semantic**: Intent-based tokens that reference palette values (e.g., `primary`, `surface`, `text`)
+- **Components**: Component-specific tokens that reference semantic or palette values
 
 Token references are resolved at runtime:
 
@@ -540,9 +540,9 @@ Common tokens have short aliases for easier use in custom CSS:
 | `dock.animate` | `true` | When `false`, open/close snaps with no CSS transition (`resize`: width; `overlay`: transform on the panel; `push`: margin on the track) |
 | `dock.reveal` | `"resize"` | `"resize"`: flex column `0` ↔ `width` (panel fills the slot, so it stretches during the animation). `"emerge"`: same column animation and **content reflow**, but the chat UI stays **`dock.width`** wide and is **clipped** by the slot (full-width floating-style entrance). `"overlay"`: overlay + `transform`. `"push"`: sliding track (Shopify-style) |
 
-When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target container and renders Persona in a sibling dock slot. `body` and `html` are not valid targets. `position`, `fullHeight`, and `sidebarMode` are ignored in docked mode. With `dock.reveal: "resize"`, a closed dock uses a **`0px`** column; `"overlay"` and `"push"` slide instead of shrinking the main column during the animation (`overlay`: transform on the panel; `push`: margin on the track — never a transform, which would hijack the containing block of `position: fixed`/`sticky` content inside the wrapped target). The floating launcher stays hidden in docked mode—use `controller.open()` or your own trigger.
+When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target container and renders Persona in a sibling dock slot. `body` and `html` are not valid targets. `position`, `fullHeight`, and `sidebarMode` are ignored in docked mode. With `dock.reveal: "resize"`, a closed dock uses a **`0px`** column; `"overlay"` and `"push"` slide instead of shrinking the main column during the animation (`overlay`: transform on the panel; `push`: margin on the track: never a transform, which would hijack the containing block of `position: fixed`/`sticky` content inside the wrapped target). The floating launcher stays hidden in docked mode: use `controller.open()` or your own trigger.
 
-**Scoping push/overlay:** Only the subtree under `target` is wrapped. Put **headers, sidebars, or settings chrome** *outside* that element (siblings in your layout) when you want them fixed; point `target` at the inner column or canvas that should move with the dock (see `examples/embedded-app` docked demo: `#workspace-dock-target`). For **`dock.side: "left"`**, keep the rail **in normal flow beside the dock stage** (e.g. flex row `[nav | stage]`) so the panel does not paint **under** a floating rail. For a **right** dock, an optional **full-width stage** with an **absolutely positioned** left rail can let push translate the canvas **behind** a persistent sidebar (Shopify-style). The embedded dock demo toggles between those two chrome layouts using `data-dock-side` on `#workspace-main`. `position: fixed`/`sticky` content inside the wrapped target stays viewport-anchored (it is **not** pushed with the canvas), so a `right: 0` fixed element will sit under an open right-side panel — offset it while the dock is open via the shell attribute, e.g. `[data-persona-dock-open="true"] .my-fixed-bar { right: 420px; }`, or move it outside the target.
+**Scoping push/overlay:** Only the subtree under `target` is wrapped. Put **headers, sidebars, or settings chrome** *outside* that element (siblings in your layout) when you want them fixed; point `target` at the inner column or canvas that should move with the dock (see `examples/embedded-app` docked demo: `#workspace-dock-target`). For **`dock.side: "left"`**, keep the rail **in normal flow beside the dock stage** (e.g. flex row `[nav | stage]`) so the panel does not paint **under** a floating rail. For a **right** dock, an optional **full-width stage** with an **absolutely positioned** left rail can let push translate the canvas **behind** a persistent sidebar (Shopify-style). The embedded dock demo toggles between those two chrome layouts using `data-dock-side` on `#workspace-main`. `position: fixed`/`sticky` content inside the wrapped target stays viewport-anchored (it is **not** pushed with the canvas), so a `right: 0` fixed element will sit under an open right-side panel: offset it while the dock is open via the shell attribute, e.g. `[data-persona-dock-open="true"] .my-fixed-bar { right: 420px; }`, or move it outside the target.
 
 **Breaking change:** `dock.collapsedWidth` was removed; a collapsed rail is no longer configurable.
 
@@ -669,8 +669,8 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 ### Text Templates
 | Property | Default | Description |
 |----------|---------|-------------|
-| `activeTextTemplate` | — | Header text while tool is running. Placeholders: `{toolName}`, `{duration}` (live-updating) |
-| `completeTextTemplate` | — | Header text when tool is complete. Placeholders: `{toolName}`, `{duration}` |
+| `activeTextTemplate` |: | Header text while tool is running. Placeholders: `{toolName}`, `{duration}` (live-updating) |
+| `completeTextTemplate` |: | Header text when tool is complete. Placeholders: `{toolName}`, `{duration}` |
 
 Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, `**bold text**`. These are parsed at render time and rendered as styled spans. They compose with all animation modes.
 
@@ -681,7 +681,7 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 |----------|---------|-------------|
 | `collapsedMode` | `"tool-call"` | What collapsed rows show: `"tool-call"` \| `"tool-name"` \| `"tool-preview"` |
 | `activePreview` | `false` | Show a lightweight preview block on active collapsed tool calls |
-| `activeMinHeight` | — | CSS min-height for active collapsed rows (e.g. `"100px"`) |
+| `activeMinHeight` |: | CSS min-height for active collapsed rows (e.g. `"100px"`) |
 | `previewMaxLines` | `3` | Maximum preview lines for collapsed active tool calls |
 | `grouped` | `false` | Visually group consecutive tool call rows |
 | `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
@@ -706,7 +706,7 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 | Property | Default | Description |
 |----------|---------|-------------|
 | `activePreview` | `false` | Show a lightweight preview block on active collapsed reasoning rows |
-| `activeMinHeight` | — | CSS min-height for active collapsed rows (e.g. `"100px"`) |
+| `activeMinHeight` |: | CSS min-height for active collapsed rows (e.g. `"100px"`) |
 | `previewMaxLines` | `3` | Maximum preview lines for collapsed active reasoning rows |
 | `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
 | `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
@@ -714,8 +714,8 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 ### Text Templates
 | Property | Default | Description |
 |----------|---------|-------------|
-| `activeTextTemplate` | — | Header text while reasoning is active. Placeholder: `{duration}` (live-updating) |
-| `completeTextTemplate` | — | Header text when reasoning is complete. Placeholder: `{duration}` |
+| `activeTextTemplate` |: | Header text while reasoning is active. Placeholder: `{duration}` (live-updating) |
+| `completeTextTemplate` |: | Header text when reasoning is complete. Placeholder: `{duration}` |
 
 Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, `**bold text**`. Same syntax as tool call templates.
 

@@ -180,7 +180,7 @@ export class AgentWidgetClient {
   private lastSentClientToolsFingerprint: string | null = null;
   private clientToolsFingerprintSessionId: string | null = null;
 
-  // WebMCP — page-discovered tool consumption (see ./webmcp-bridge).
+  // WebMCP: page-discovered tool consumption (see ./webmcp-bridge).
   // Constructed lazily: null when `config.webmcp?.enabled !== true`.
   private readonly webMcpBridge: WebMcpBridge | null;
 
@@ -206,8 +206,8 @@ export class AgentWidgetClient {
    * Refresh config in place WITHOUT tearing down the live connection or the
    * WebMCP bridge. `AgentWidgetSession.updateConfig` calls this when only
    * connection-irrelevant fields changed (theme, copy, layout, suggestions, …),
-   * so a UI update that lands mid-turn — e.g. a `webmcp:*` tool restyling the
-   * widget while the agent's turn is still streaming — doesn't abandon the
+   * so a UI update that lands mid-turn: e.g. a `webmcp:*` tool restyling the
+   * widget while the agent's turn is still streaming: doesn't abandon the
    * in-flight stream/resume. Connection or request-shaping changes (apiUrl,
    * clientToken, webmcp, headers, parser, …) take the full client rebuild path
    * in the session instead, which is the only place the bridge is recreated.
@@ -215,7 +215,7 @@ export class AgentWidgetClient {
    * Only the live-read `config` is refreshed (e.g. `iterationDisplay`); the
    * constructor-derived request-shaping fields (apiUrl, headers, parser,
    * contextProviders, middleware, …) are left untouched because the session
-   * routes any change to those down the full-rebuild path instead — so they are
+   * routes any change to those down the full-rebuild path instead, so they are
    * guaranteed unchanged here. The `webMcpBridge` instance and its
    * installed-polyfill memo are deliberately preserved, which keeps any
    * in-flight resolve alive.
@@ -254,7 +254,7 @@ export class AgentWidgetClient {
    * WebMCP: execute a returned `webmcp:<name>` tool call against the page's
    * registry and return the normalized MCP-shaped result for `/resume`. The
    * bridge handles confirm-bubble gating, the 30s timeout, error
-   * normalization, and `signal`-driven abort — callers never see throws.
+   * normalization, and `signal`-driven abort: callers never see throws.
    *
    * Returns `null` when WebMCP is not enabled on this client (signal to the
    * session that it should fall back to the legacy local-tool resume path,
@@ -701,7 +701,7 @@ export class AgentWidgetClient {
             this.lastSentClientToolsFingerprint = null;
             continue;
           }
-          // Some other 409 — keep the parsed body for the handler below.
+          // Some other 409: keep the parsed body for the handler below.
           errorData = body ?? { error: 'Chat request failed' };
         }
         break;
@@ -971,10 +971,10 @@ export class AgentWidgetClient {
    * Routes by mode:
    *  - **client-token mode**: POST `${apiBase}/v1/client/resume` (the
    *    session-authenticated sibling of `/v1/client/chat`; runtypelabs/core#3889),
-   *    with the active `sessionId` in the body and no Bearer key — a browser
+   *    with the active `sessionId` in the body and no Bearer key: a browser
    *    client-token page holds no secret. `clientTools` are already persisted
    *    server-side from the dispatch turn, so only `toolOutputs` is re-sent.
-   *  - **dispatch / proxy mode**: POST `${apiUrl}/resume` — Runtype mounts
+   *  - **dispatch / proxy mode**: POST `${apiUrl}/resume`: Runtype mounts
    *    resume as a child of `/v1/dispatch`, so the URL is `${apiUrl}/resume`,
    *    and proxies follow the same shape (`/api/chat/dispatch/resume`).
    *
@@ -998,8 +998,8 @@ export class AgentWidgetClient {
     // The client-token resume route authenticates the session, not a Bearer
     // key. A WebMCP approval can sit awaiting user input for a long time, so by
     // the time we resume the original session may have expired. Re-validate (and
-    // silently re-init if needed) via initSession() — which returns the live
-    // session when `new Date() < expiresAt`, else mints a fresh one — instead of
+    // silently re-init if needed) via initSession(): which returns the live
+    // session when `new Date() < expiresAt`, else mints a fresh one: instead of
     // trusting the possibly-stale `this.clientSession`. (core#3889; BugBot
     // PR #214 r3367875360.)
     let resumeSessionId: string | undefined;
@@ -1069,7 +1069,7 @@ export class AgentWidgetClient {
 
     // Client tools: built-in widget tools (ask_user_question, when exposed)
     // plus the per-turn WebMCP page-registry snapshot. Name collisions are
-    // impossible — WebMCP entries are `webmcp:`-prefixed server-side while
+    // impossible: WebMCP entries are `webmcp:`-prefixed server-side while
     // `sdk`-origin built-ins keep bare names. Both kinds ride the same
     // diff-only fingerprint path in client-token mode. Kept to a single await
     // so dispatch microtask timing is unchanged.
@@ -1185,7 +1185,7 @@ export class AgentWidgetClient {
           // dropping `clientTools` accidentally; the WebMCP wire surface
           // is invisible to them. The integrator can still set
           // `clientTools: []` or `clientTools: undefined` explicitly to
-          // strip them on purpose — we only fall back when the field is
+          // strip them on purpose: we only fall back when the field is
           // entirely absent from the returned object.
           if (
             payload.clientTools !== undefined &&
@@ -1258,7 +1258,7 @@ export class AgentWidgetClient {
           createNewAssistant(result.partId);
         }
 
-        // Update partId tracking (only when partId is provided — backward compatible)
+        // Update partId tracking (only when partId is provided: backward compatible)
         if (result.partId !== undefined) {
           partIdState.current = result.partId;
         }
@@ -1381,7 +1381,7 @@ export class AgentWidgetClient {
     // Messages produced by steps inside a nested flow executed as a tool.
     // Keyed by `${parentToolId}::${nestedStepId}::${partId}` so each nested
     // step (send-stream, prompt) gets its own assistant message, and prompts
-    // with inner tool calls split into one message per text segment — still
+    // with inner tool calls split into one message per text segment: still
     // attributable to the parent tool call.
     const nestedStepMessages = new Map<string, AgentWidgetMessage>();
     // Most-recent partId seen for a given `${toolId}::${stepId}` scope, used
@@ -1406,7 +1406,7 @@ export class AgentWidgetClient {
     ) => `${toolId}::${stepId}::${partId}`;
 
     // Prefix used to sweep every nested message belonging to a single
-    // (toolId, stepId) scope — needed on step_complete to seal any segments
+    // (toolId, stepId) scope: needed on step_complete to seal any segments
     // that are still streaming.
     const getNestedStepPrefix = (toolId: string, stepId: string) =>
       `${toolId}::${stepId}::`;
@@ -1728,7 +1728,7 @@ export class AgentWidgetClient {
         const cur = msg.content ?? "";
         if (mergedDisplay.trim() === "") return;
         // Only replace when empty, or when the stream left a strict prefix of the
-        // authoritative final (truncation). Do not use length alone — multi-segment
+        // authoritative final (truncation). Do not use length alone: multi-segment
         // flows can have a short last bubble whose content is not a prefix of the
         // full step response.
         if (
@@ -1810,7 +1810,7 @@ export class AgentWidgetClient {
     // Declared here so scheduleReadyQueueDrain can reference it; assigned
     // after all handler-scoped variables are initialised (before the SSE loop).
     let drainReadyQueue: () => void;
-    // Two drain paths — both are intentional, do not remove either:
+    // Two drain paths: both are intentional, do not remove either:
     //   1. Microtask drain (scheduleReadyQueueDrain): required when the
     //      buffer's emitter fires from the gap-timeout setTimeout callback,
     //      because there is no surrounding synchronous drain site there.
@@ -1931,7 +1931,7 @@ export class AgentWidgetClient {
           const toolId =
             resolveToolId(payload, true) ?? `tool-${nextSequence()}`;
           const toolName = payload.toolName ?? payload.name;
-          // Suppress tool UI for artifact emit tools — artifacts are handled via artifact_* events
+          // Suppress tool UI for artifact emit tools: artifacts are handled via artifact_* events
           if (isArtifactEmitToolName(toolName)) {
             artifactToolCallIds.add(toolId);
             continue;
@@ -2056,7 +2056,7 @@ export class AgentWidgetClient {
           // Key the message by the per-call `toolCallId` (provider `toolu_…`;
           // core#3878) when present. Two PARALLEL calls to the SAME tool in one
           // turn collapse to an identical `toolId` (`runtime_webmcp:<name>_<ms>`)
-          // and `index: 0` — only `toolCallId` distinguishes them. Keying on it
+          // and `index: 0`: only `toolCallId` distinguishes them. Keying on it
           // (a) keeps the two awaits as DISTINCT messages with their own args
           // instead of the second clobbering the first, and (b) merges each
           // await into the matching `tool_start` bubble (also keyed by
@@ -2105,7 +2105,7 @@ export class AgentWidgetClient {
           emitMessage(toolMessage);
         } else if (payloadType === "text_start") {
           // Lifecycle event: a new text segment is beginning (emitted at tool boundaries).
-          // When toolContext is present this fired inside a nested flow — it must not
+          // When toolContext is present this fired inside a nested flow: it must not
           // seal or rotate the outer assistant message. Nested prompt segmentation is
           // handled via nestedStepMessages keyed by (toolId, stepId).
           if ((payload as any).toolContext?.toolId) {
@@ -2127,7 +2127,7 @@ export class AgentWidgetClient {
           }
         } else if (payloadType === "text_end") {
           // Lifecycle event: current text segment ended (tool call about to start).
-          // When toolContext is present the boundary belongs to a nested flow — leave
+          // When toolContext is present the boundary belongs to a nested flow: leave
           // outer assistant state alone so the outer stream is never interrupted by
           // nested activity.
           if ((payload as any).toolContext?.toolId) {
@@ -2155,7 +2155,7 @@ export class AgentWidgetClient {
           // originated inside a nested flow executed as a tool. Surface it as
           // its own assistant message keyed by the nested step id, so authors
           // who add send-stream / prompt steps inside their flow see them as
-          // real messages in the timeline, in order — rather than merging
+          // real messages in the timeline, in order: rather than merging
           // into the outer assistant bubble or getting buried in the tool
           // card. Each nested step id gets its own message; the parent tool
           // bubble continues to represent the invocation via tool_* events.
@@ -2304,7 +2304,7 @@ export class AgentWidgetClient {
                 const text = typeof result === 'string' ? result : result?.text ?? null;
                 
                 if (text !== null && text.trim() !== "") {
-                  // Parser successfully extracted text — update the chunk's assistant
+                  // Parser successfully extracted text: update the chunk's assistant
                   // (not assistantMessage; text_end may have cleared that ref before microtasks run)
                   assistant.content = text;
                   emitMessage(assistant);
@@ -2478,14 +2478,14 @@ export class AgentWidgetClient {
 
           // Capture optional per-step stopReason emitted by the runtime
           // (e.g. `'max_tool_calls'`, `'length'`). This is the dispatch-mode
-          // fallback — `agent_turn_complete` will overwrite it later in
+          // fallback: `agent_turn_complete` will overwrite it later in
           // agent-loop streams.
           const stepStopReason = (payload as any).stopReason as
             | StopReasonKind
             | undefined;
 
           if (didSplitByPartId) {
-            // Sealed segment(s) — do not create a second bubble from step_complete.
+            // Sealed segment(s): do not create a second bubble from step_complete.
             // Merge authoritative final response into the last sealed segment (fixes async lag).
             if (assistantMessage !== null) {
               const msg: AgentWidgetMessage = assistantMessage;
@@ -2635,7 +2635,7 @@ export class AgentWidgetClient {
         } else if (payloadType === "flow_complete") {
           const finalContent = payload.result?.response;
           if (didSplitByPartId) {
-            // Content was split into multiple assistant messages — the full response
+            // Content was split into multiple assistant messages: the full response
             // in flow_complete would overwrite the last segment. Just finalize streaming.
             if (assistantMessage !== null) {
               const msg: AgentWidgetMessage = assistantMessage;
@@ -2808,8 +2808,7 @@ export class AgentWidgetClient {
           }
 
           // Attach the turn-level stopReason to the assistant message
-          // produced by this turn. Only overwrite the current message —
-          // prior turns already sealed their own stopReason via step_complete.
+          // produced by this turn. Only overwrite the current message:          // prior turns already sealed their own stopReason via step_complete.
           // Falls back to lastAssistantInTurn when the current bubble was
           // sealed at a tool-call boundary mid-turn, so the notice still
           // attaches to the final visible text segment.
@@ -2895,7 +2894,7 @@ export class AgentWidgetClient {
         } else if (payloadType === "agent_media") {
           // A tool produced media (image / audio / video / file). Render it
           // as a synthetic assistant message inserted at the point the tool
-          // completed — between the tool bubble and the next text turn.
+          // completed: between the tool bubble and the next text turn.
           //
           // Wire format is the AI SDK–aligned `MediaContentPart` from
           // @runtypelabs/shared:
@@ -2922,7 +2921,7 @@ export class AgentWidgetClient {
               const data = typeof rec.data === "string" ? rec.data : undefined;
               if (!data) continue;
               // Empty/missing mediaType yields `data:;base64,...` which RFC 2397
-              // resolves to `text/plain` — stamp a default so the data URI is
+              // resolves to `text/plain`: stamp a default so the data URI is
               // well-formed and the part lands in the file bucket.
               mediaType = rawMediaType.length > 0 ? rawMediaType : "application/octet-stream";
               src = `data:${mediaType};base64,${data}`;
@@ -2999,7 +2998,7 @@ export class AgentWidgetClient {
 
             // Seal any in-flight assistant text bubble before splitting the
             // stream. Without this, an orphan bubble retains `streaming: true`
-            // forever — `agent_complete` only finalizes the latest
+            // forever: `agent_complete` only finalizes the latest
             // `assistantMessage`, so the typing/caret indicator would stay on
             // the prior bubble even though no more deltas will arrive.
             const prevAssistant = assistantMessage as AgentWidgetMessage | null;

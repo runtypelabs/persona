@@ -82,7 +82,7 @@ export type {
   AgentWidgetApproval,
   AgentWidgetApprovalConfig,
   AgentWidgetApprovalDecisionOptions,
-  // WebMCP — page-discovered tool consumption
+  // WebMCP: page-discovered tool consumption
   AgentWidgetWebMcpConfig,
   ClientToolDefinition,
   WebMcpConfirmHandler,
@@ -245,7 +245,7 @@ export type { AgentWidgetInitHandle };
 export type { AgentWidgetPlugin } from "./plugins/types";
 export { pluginRegistry } from "./plugins/registry";
 
-// Stream animation plugin API — lets consumers register custom animations
+// Stream animation plugin API: lets consumers register custom animations
 // that match the built-in surface (typewriter, pop-bubble) and subpath
 // modules (letter-rise, word-fade, wipe, glyph-cycle).
 export {
@@ -263,7 +263,7 @@ export type {
   AgentWidgetStreamAnimationPlaceholder,
 } from "./types";
 
-// Action system types — needed to type the `actionHandlers` / `actionParsers`
+// Action system types: needed to type the `actionHandlers` / `actionParsers`
 // config options and to author custom handlers/parsers.
 export type {
   AgentWidgetActionHandler,

@@ -1,7 +1,7 @@
 /**
  * Imperative preview renderer for the theme editor.
  * Manages iframe-based widget previews with device frames, zoom, scenes, and compare mode.
- * No external DOM dependencies — only needs a container element to mount into.
+ * No external DOM dependencies: only needs a container element to mount into.
  *
  * For advanced preview needs (background URLs, inline editing, contrast checking),
  * use the lifecycle hooks in `ThemePreviewOptions` and import shared building blocks

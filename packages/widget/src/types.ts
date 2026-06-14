@@ -206,7 +206,7 @@ export type AgentConfig = {
   temperature?: number;
   /** Tool configuration for the agent */
   tools?: AgentToolsConfig;
-  /** Persona artifacts — sibling of tools (virtual agent / API parity) */
+  /** Persona artifacts: sibling of tools (virtual agent / API parity) */
   artifacts?: ArtifactConfigPayload;
   /** Loop configuration for multi-turn execution */
   loopConfig?: AgentLoopConfig;
@@ -236,7 +236,7 @@ export type AgentWidgetAgentRequestPayload = {
   context?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   /**
-   * Per-turn page-discovered tools (WebMCP) — same shape as
+   * Per-turn page-discovered tools (WebMCP): same shape as
    * `AgentWidgetRequestPayload.clientTools`.
    */
   clientTools?: ClientToolDefinition[];
@@ -250,7 +250,7 @@ export type AgentWidgetAgentRequestPayload = {
  * Wire shape for a single client-discovered tool sent on `dispatch.clientTools[]`.
  *
  * Mirrors the SDK's `ClientToolDefinition` in `@runtypelabs/sdk`. Only the
- * JSON-serializable surface of a WebMCP tool — the `execute` function stays
+ * JSON-serializable surface of a WebMCP tool: the `execute` function stays
  * client-side; the server merges these into the agent's tool catalog under
  * the `webmcp:` namespace.
  */
@@ -258,16 +258,16 @@ export type ClientToolDefinition = {
   /** Bare tool name; the server prepends `webmcp:` on the wire. */
   name: string;
   description: string;
-  /** JSON Schema (per WebMCP spec) — passed through as-is. */
+  /** JSON Schema (per WebMCP spec): passed through as-is. */
   parametersSchema?: object;
   /**
    * `'webmcp'` for tools discovered via the polyfill (server prepends the
    * `webmcp:` wire prefix); `'sdk'` for widget/SDK-provided tools (name stays
-   * bare on the wire). Matches the server's accepted enum — any other value
+   * bare on the wire). Matches the server's accepted enum: any other value
    * fails dispatch validation.
    */
   origin?: 'webmcp' | 'sdk';
-  /** Origin of the page that registered the tool — for server-side audit. */
+  /** Origin of the page that registered the tool: for server-side audit. */
   pageOrigin?: string;
   /**
    * WebMCP `Tool.annotations` (spec). Not used for gating server-side; the
@@ -300,7 +300,7 @@ export type WebMcpConfirmInfo = {
     untrustedContentHint?: boolean;
   };
   /**
-   * Why the confirm was requested. Currently always `'gate'` — the default
+   * Why the confirm was requested. Currently always `'gate'`: the default
    * confirm-by-default gate that fires before every `webmcp:*` call. (The
    * `@mcp-b/webmcp-polyfill` owns the spec's `requestUserInteraction` callback
    * internally, so Persona no longer surfaces a nested in-tool confirm.)
@@ -333,7 +333,7 @@ export type WebMcpToolResult = {
 /**
  * Widget-level WebMCP configuration. Set `enabled: true` to opt in. The
  * surface's server-side `webmcp` policy is the source of truth for which
- * tools are accepted — these client-side options are convenience filters.
+ * tools are accepted: these client-side options are convenience filters.
  */
 export type AgentWidgetWebMcpConfig = {
   /** Master switch. Default: `false` (widget never installs the polyfill). */
@@ -349,7 +349,7 @@ export type AgentWidgetWebMcpConfig = {
    * `webmcp:*` call; return `true` to approve immediately and skip the
    * confirmation UI entirely. Use this to auto-allow read-only tools (e.g.
    * a catalog search) while still gating mutating ones. Only consulted on
-   * the default-UI path — a custom `onConfirm` takes full control instead.
+   * the default-UI path: a custom `onConfirm` takes full control instead.
    */
   autoApprove?: (info: WebMcpConfirmInfo) => boolean;
   /**
@@ -408,7 +408,7 @@ export type AgentMessageMetadata = {
    * `flow_await` events for a LOCAL tool (core#3878). Present only when the
    * server emits it. Two PARALLEL calls to the same tool in one turn share a
    * `toolName` (and a collapsed `toolId`) but get DISTINCT `webMcpToolCallId`s,
-   * so this is the key the widget batches a single `/resume` on — preferred
+   * so this is the key the widget batches a single `/resume` on: preferred
    * over tool name, which collides for same-tool parallel calls. Absent →
    * fall back to the legacy name-keyed resume contract.
    */
@@ -685,8 +685,8 @@ export type AgentWidgetArtifactsLayoutConfig = {
   resizableMaxWidth?: string;
   /**
    * Visual treatment for the artifact column in split mode.
-   * - `'panel'` — bordered sidebar with left border, gap, and shadow (default).
-   * - `'seamless'` — flush with chat: no border or shadow, container background, zero gap.
+   * - `'panel'`: bordered sidebar with left border, gap, and shadow (default).
+   * - `'seamless'`: flush with chat: no border or shadow, container background, zero gap.
    * @default 'panel'
    */
   paneAppearance?: "panel" | "seamless";
@@ -700,7 +700,7 @@ export type AgentWidgetArtifactsLayoutConfig = {
    */
   paneBorder?: string;
   /**
-   * `border-left` shorthand only — typical for split view next to chat (with or without resizer).
+   * `border-left` shorthand only: typical for split view next to chat (with or without resizer).
    * Ignored if `paneBorder` is set. Example: `"1px solid #cccccc"`.
    */
   paneBorderLeft?: string;
@@ -727,8 +727,8 @@ export type AgentWidgetArtifactsLayoutConfig = {
   panePadding?: string;
   /**
    * Toolbar layout preset.
-   * - `default` — "Artifacts" title, horizontal tabs, text close.
-   * - `document` — view/source toggle, document title, copy / refresh / close; tab strip hidden when only one artifact.
+   * - `default`: "Artifacts" title, horizontal tabs, text close.
+   * - `document`: view/source toggle, document title, copy / refresh / close; tab strip hidden when only one artifact.
    * @default 'default'
    */
   toolbarPreset?: "default" | "document";
@@ -740,7 +740,7 @@ export type AgentWidgetArtifactsLayoutConfig = {
    * When `toolbarPreset` is `document`, show a small chevron after the copy control (e.g. menu affordance).
    */
   documentToolbarShowCopyChevron?: boolean;
-  /** Document toolbar icon buttons (view, code, copy, refresh, close) — CSS color. Sets `--persona-artifact-doc-toolbar-icon-color` on the widget root. */
+  /** Document toolbar icon buttons (view, code, copy, refresh, close): CSS color. Sets `--persona-artifact-doc-toolbar-icon-color` on the widget root. */
   documentToolbarIconColor?: string;
   /** Active view/source toggle background. Sets `--persona-artifact-doc-toggle-active-bg`. */
   documentToolbarToggleActiveBackground?: string;
@@ -896,11 +896,11 @@ export type AgentWidgetToolCallDisplayFeature = {
   expandable?: boolean;
   /**
    * Animation mode applied to the tool call header text while the tool is active.
-   * - "none" — static text, no animation
-   * - "pulse" — opacity pulse on the entire header text
-   * - "shimmer" — monochrome opacity sweep per character
-   * - "shimmer-color" — color gradient sweep per character
-   * - "rainbow" — rainbow color cycle per character
+   * - "none": static text, no animation
+   * - "pulse": opacity pulse on the entire header text
+   * - "shimmer": monochrome opacity sweep per character
+   * - "shimmer-color": color gradient sweep per character
+   * - "rainbow": rainbow color cycle per character
    * @default "none"
    */
   loadingAnimation?: AgentWidgetToolCallLoadingAnimation;
@@ -930,11 +930,11 @@ export type AgentWidgetReasoningDisplayFeature = {
   /**
    * Animation mode applied to the reasoning header text while reasoning is active.
    * Reuses the same modes as tool call animations.
-   * - "none" — static text, no animation
-   * - "pulse" — opacity pulse on the entire header text
-   * - "shimmer" — monochrome opacity sweep per character
-   * - "shimmer-color" — color gradient sweep per character
-   * - "rainbow" — rainbow color cycle per character
+   * - "none": static text, no animation
+   * - "pulse": opacity pulse on the entire header text
+   * - "shimmer": monochrome opacity sweep per character
+   * - "shimmer-color": color gradient sweep per character
+   * - "rainbow": rainbow color cycle per character
    * @default "none"
    */
   loadingAnimation?: AgentWidgetToolCallLoadingAnimation;
@@ -944,16 +944,16 @@ export type AgentWidgetReasoningDisplayFeature = {
  * Reveal animation applied to assistant message text while it is streaming.
  *
  * Built-in types always available:
- * - `none` — text appears as tokens arrive (default).
- * - `typewriter` — characters fade in with a blinking caret.
- * - `pop-bubble` — the bubble scales in; text streams normally afterward.
- * - `letter-rise` — per-char translateY + fade reveal.
- * - `word-fade` — per-word blur + translateY fade-in.
+ * - `none`: text appears as tokens arrive (default).
+ * - `typewriter`: characters fade in with a blinking caret.
+ * - `pop-bubble`: the bubble scales in; text streams normally afterward.
+ * - `letter-rise`: per-char translateY + fade reveal.
+ * - `word-fade`: per-word blur + translateY fade-in.
  *
  * Subpath plugins (import from `@runtypelabs/persona/animations/*` to register):
  * - `wipe`, `glyph-cycle`.
  *
- * Custom types are allowed — register a plugin with any string name and
+ * Custom types are allowed: register a plugin with any string name and
  * reference it by that name in `type`.
  */
 export type AgentWidgetStreamAnimationBuiltinType =
@@ -971,19 +971,19 @@ export type AgentWidgetStreamAnimationType =
 
 /**
  * Placeholder shown inside a streaming assistant bubble before the first token arrives.
- * - `none` — use the default typing-dots indicator (existing behavior).
- * - `skeleton` — shimmer bars, replaced by streaming content once it starts.
+ * - `none`: use the default typing-dots indicator (existing behavior).
+ * - `skeleton`: shimmer bars, replaced by streaming content once it starts.
  */
 export type AgentWidgetStreamAnimationPlaceholder = "none" | "skeleton";
 
 /**
  * How much of the accumulated streaming content to display while tokens are
  * still arriving. Trimming to a boundary means in-progress words or lines
- * stay hidden until they complete — useful for animations that benefit from
+ * stay hidden until they complete: useful for animations that benefit from
  * unit-complete reveals (e.g. wipe, glyph-cycle).
- * - `none` — show every character as it arrives (default).
- * - `word` — trim to the last whitespace boundary.
- * - `line` — trim to the last newline boundary.
+ * - `none`: show every character as it arrives (default).
+ * - `word`: trim to the last whitespace boundary.
+ * - `line`: trim to the last newline boundary.
  */
 export type AgentWidgetStreamAnimationBuffer = "none" | "word" | "line";
 
@@ -1016,7 +1016,7 @@ export type StreamAnimationContext = {
  *   widget's style host.
  * - For each streaming assistant message whose `type` matches `name`, the
  *   widget applies `containerClass` / `bubbleClass`, wraps text per `wrap`,
- *   and — if `useCaret` is true — appends a blinking caret.
+ *   and, if `useCaret` is true, appends a blinking caret.
  * - Hooks fire after the live DOM is morphed; plugins use stable element IDs
  *   and `data-preserve-animation` to safely mutate per-char or per-word spans
  *   without idiomorph clobbering in-flight work.
@@ -1032,7 +1032,7 @@ export type StreamAnimationPlugin = {
   wrap?: "none" | "char" | "word";
   /**
    * HTML tags whose descendant text is skipped during wrapping. Defaults to
-   * `["pre", "code", "a", "script", "style"]` — useful for keeping code
+   * `["pre", "code", "a", "script", "style"]`: useful for keeping code
    * blocks legible and link click-targets intact. Plugins that want to
    * animate characters inside inline code (e.g. `glyph-cycle`) can narrow
    * the list.
@@ -1061,8 +1061,7 @@ export type StreamAnimationPlugin = {
   /**
    * Report whether the plugin still has in-flight animation work for a
    * message. When `true`, the widget keeps rendering the message in its
-   * "streaming-animated" mode even after `message.streaming` flips false —
-   * preventing the final non-animated render from yanking the rug out from
+   * "streaming-animated" mode even after `message.streaming` flips false:   * preventing the final non-animated render from yanking the rug out from
    * under unfinished per-char cycles or reveals.
    */
   isAnimating?: (message: AgentWidgetMessage) => boolean;
@@ -1076,7 +1075,7 @@ export type AgentWidgetStreamAnimationFeature = {
   /**
    * Per-unit animation duration (ms) for `typewriter`, `letter-rise`, `word-fade`,
    * and per-unit plugin animations. Each arriving character/word animates from
-   * invisible to visible over this duration, independent of its position — the
+   * invisible to visible over this duration, independent of its position: the
    * streaming cadence itself provides the visible stagger.
    * @default 120
    */
@@ -1137,7 +1136,7 @@ export type AgentWidgetFeatureFlags = {
    * Built-in `suggest_replies` quick-reply chips. When the assistant invokes
    * the tool, the widget shows the suggestions as tappable chips above the
    * composer (reusing the suggestion-chips surface) and immediately resumes
-   * the execution — fire-and-forget, no user input awaited.
+   * the execution: fire-and-forget, no user input awaited.
    */
   suggestReplies?: AgentWidgetSuggestRepliesFeature;
 };
@@ -1152,14 +1151,14 @@ export type AgentWidgetFeatureFlags = {
 export type AgentWidgetSuggestRepliesFeature = {
   /**
    * Enable the feature. Defaults to true. When false, `suggest_replies`
-   * renders as a regular tool bubble and is NOT auto-resumed — only set this
+   * renders as a regular tool bubble and is NOT auto-resumed: only set this
    * with no server-side `suggest_replies` declaration, or the execution
    * parks awaiting a resume that never comes.
    */
   enabled?: boolean;
   /**
    * Advertise the built-in `suggest_replies` tool to the agent on every
-   * dispatch via `clientTools[]` — no server-side `runtimeTools` declaration
+   * dispatch via `clientTools[]`: no server-side `runtimeTools` declaration
    * needed. Defaults to `false`: flows that already declare the tool via
    * `runtimeTools` would otherwise present it to the model twice. Ignored
    * when `enabled` is `false`.
@@ -1176,7 +1175,7 @@ export type AskUserQuestionOption = {
   label: string;
   /** Optional long-form description (shown as a subtitle on tap-hover). */
   description?: string;
-  /** Optional rich preview — reserved for future rendering; ignored in v1. */
+  /** Optional rich preview: reserved for future rendering; ignored in v1. */
   preview?: string;
 };
 
@@ -1232,14 +1231,14 @@ export type AgentWidgetAskUserQuestionFeature = {
   enabled?: boolean;
   /**
    * Advertise the built-in `ask_user_question` tool to the agent on every
-   * dispatch via `clientTools[]` — no server-side `runtimeTools` declaration
+   * dispatch via `clientTools[]`: no server-side `runtimeTools` declaration
    * needed. The tool ships with a model-facing description and JSON schema
    * matching {@link AskUserQuestionPayload}; when the model calls it, the
    * existing answer-pill sheet renders and the answer resumes the execution.
    *
    * Defaults to `false`: flows that already declare `ask_user_question` via
    * `runtimeTools` would otherwise present the tool to the model twice.
-   * Ignored when `enabled` is `false` — never offer the agent a question
+   * Ignored when `enabled` is `false`: never offer the agent a question
    * tool the widget can't render an answer UI for.
    */
   expose?: boolean;
@@ -1260,17 +1259,17 @@ export type AgentWidgetAskUserQuestionFeature = {
   /**
    * In grouped (multi-question) mode, auto-advance to the next page after a
    * single-select pill pick or free-text submit on intermediate pages.
-   * Defaults to `true`. The final page never auto-submits — users always
+   * Defaults to `true`. The final page never auto-submits: users always
    * confirm with an explicit "Submit all" click. Multi-select pages always
    * require an explicit Next regardless of this setting.
    */
   groupedAutoAdvance?: boolean;
   /**
    * Visual layout for the option list.
-   * - `"rows"` (default) — full-width stacked rows with always-visible
+   * - `"rows"` (default): full-width stacked rows with always-visible
    *   descriptions, right-edge number badges (single-select) or checkboxes
    *   (multi-select), and an always-visible inline "Other" input.
-   * - `"pills"` — legacy compact pill list with horizontal wrap; description
+   * - `"pills"`: legacy compact pill list with horizontal wrap; description
    *   surfaces as a tooltip and the "Other…" pill expands on click.
    */
   layout?: "rows" | "pills";
@@ -1450,7 +1449,7 @@ export type AgentWidgetDockConfig = {
    *
    * - Set a CSS length (e.g. `"600px"`, `"80vh"`) to override the cap.
    * - Set `false` to disable the guard entirely (the panel then sizes purely
-   *   from the surrounding layout — make sure your page provides a definite
+   *   from the surrounding layout: make sure your page provides a definite
    *   height all the way down to the dock target's parent).
    *
    * @default "100dvh"
@@ -1525,7 +1524,7 @@ export type AgentWidgetComposerBarConfig = {
    */
   modalMaxHeight?: string;
   /**
-   * Configuration for the "peek" banner — the chrome-less row above the
+   * Configuration for the "peek" banner: the chrome-less row above the
    * collapsed pill that previews the most recent assistant message.
    */
   peek?: AgentWidgetComposerBarPeekConfig;
@@ -1541,7 +1540,7 @@ export type AgentWidgetComposerBarConfig = {
  * - Otherwise the peek inherits from `features.streamAnimation`.
  *
  * Per-surface carve-outs:
- * - `bubbleClass` from a plugin (used by `pop-bubble`) is ignored — the peek
+ * - `bubbleClass` from a plugin (used by `pop-bubble`) is ignored: the peek
  *   has no bubble analog.
  * - `containerClass`, `wrap` ("char" | "word"), `useCaret`, `placeholder`
  *   ("skeleton"), `buffer` ("word" | "line"), `speed`, `duration`, and
@@ -1821,9 +1820,9 @@ export type AgentWidgetVoiceRecognitionConfig = {
        * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
        */
       createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
-      /** @deprecated No-op on the realtime path — the server's STT owns turn-taking. */
+      /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
       pauseDuration?: number;
-      /** @deprecated No-op on the realtime path — the server's STT owns turn-taking. */
+      /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
       silenceThreshold?: number;
     };
     /**
@@ -1858,8 +1857,8 @@ export type TextToSpeechConfig = {
   enabled: boolean;
   /**
    * TTS provider.
-   * - `'browser'` — Use the Web Speech API for all assistant messages (default).
-   * - `'runtype'` — Server handles TTS for voice interactions.
+   * - `'browser'`: Use the Web Speech API for all assistant messages (default).
+   * - `'runtype'`: Server handles TTS for voice interactions.
    *   Set `browserFallback: true` to also speak text-typed responses via the browser.
    */
   provider?: 'browser' | 'runtype';
@@ -1984,13 +1983,13 @@ export type VoiceConfig = {
      * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
      */
     createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
-    /** @deprecated No-op on the realtime path — the server's STT owns turn-taking. */
+    /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
     pauseDuration?: number;
-    /** @deprecated No-op on the realtime path — the server's STT owns turn-taking. */
+    /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
     silenceThreshold?: number;
   };
   /**
-   * Bring-your-own voice provider for `type: 'custom'` — either a ready
+   * Bring-your-own voice provider for `type: 'custom'`: either a ready
    * {@link VoiceProvider} instance or a `() => VoiceProvider` factory. The
    * factory form defers construction (WebSocket/AudioContext/etc.) until
    * `createVoiceProvider` runs.
@@ -2037,7 +2036,7 @@ export interface VoiceProvider {
   /** Returns true if the barge-in mic stream is alive (hot mic between turns) */
   isBargeInActive?(): boolean;
 
-  /** Tear down the barge-in mic pipeline — "hang up" the always-on mic */
+  /** Tear down the barge-in mic pipeline: "hang up" the always-on mic */
   deactivateBargeIn?(): Promise<void>;
 
   /** Stop playback / cancel in-flight request without starting recording */
@@ -2052,7 +2051,7 @@ export type AgentWidgetApprovalDecisionOptions = {
   /**
    * The user chose a "remember this" affordance (e.g. an "Always allow"
    * button) rather than a one-time decision. The widget resolves the *current*
-   * approval identically whether or not this is set — an approval bubble is a
+   * approval identically whether or not this is set: an approval bubble is a
    * single binary gate (`approved`/`denied`). Persisting a don't-ask-again
    * policy for *future* approvals (auto-resolving them, or not surfacing them)
    * is the integrator's responsibility, typically inside `onDecision`.
@@ -2107,9 +2106,9 @@ export type AgentWidgetApprovalConfig = {
   /**
    * How the technical details (the tool's agent-facing description and the
    * raw parameters JSON) are presented:
-   * - `"collapsed"` (default) — hidden behind a "Show details" toggle
-   * - `"expanded"` — visible, with the toggle available to hide them
-   * - `"hidden"` — never rendered
+   * - `"collapsed"` (default): hidden behind a "Show details" toggle
+   * - `"expanded"`: visible, with the toggle available to hide them
+   * - `"hidden"`: never rendered
    */
   detailsDisplay?: "collapsed" | "expanded" | "hidden";
   /** Label for the toggle that reveals the technical details */
@@ -2131,7 +2130,7 @@ export type AgentWidgetApprovalConfig = {
     displayTitle?: string;
     /**
      * Agent-authored justification for this specific call, when the agent
-     * provided one. It is the agent's own claim — if you fold it into the
+     * provided one. It is the agent's own claim: if you fold it into the
      * summary, keep it attributed to the agent.
      */
     reason?: string;
@@ -2237,7 +2236,7 @@ export type AgentWidgetToolCallConfig = {
    *
    * **Placeholders:** `{toolName}` (tool name), `{duration}` (live-updating elapsed time).
    *
-   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**` — parsed at render time and
+   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**`: parsed at render time and
    * applied as styled `<span>` elements. Works with all animation modes.
    *
    * When not set, falls back to the current `collapsedMode` behavior.
@@ -2250,7 +2249,7 @@ export type AgentWidgetToolCallConfig = {
    *
    * **Placeholders:** `{toolName}` (tool name), `{duration}` (final elapsed time).
    *
-   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**` — same syntax as `activeTextTemplate`.
+   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**`: same syntax as `activeTextTemplate`.
    *
    * When not set, falls back to the existing "Used tool for X seconds" text.
    * @example "Finished {toolName} ~{duration}~"
@@ -2312,7 +2311,7 @@ export type AgentWidgetReasoningConfig = {
    *
    * **Placeholders:** `{duration}` (live-updating elapsed time).
    *
-   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**` — parsed at render time.
+   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**`: parsed at render time.
    *
    * When not set, falls back to the default "Thinking..." text.
    * @example "Thinking... ~{duration}~"
@@ -2323,7 +2322,7 @@ export type AgentWidgetReasoningConfig = {
    *
    * **Placeholders:** `{duration}` (final elapsed time).
    *
-   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**` — same syntax as `activeTextTemplate`.
+   * **Inline formatting:** `~dim~`, `*italic*`, `**bold**`: same syntax as `activeTextTemplate`.
    *
    * When not set, falls back to the default "Thought for X seconds" text.
    * @example "Thought for ~{duration}~"
@@ -2434,7 +2433,7 @@ export type AgentWidgetSSEEventResult = {
   done?: boolean;
   /** Error message if an error occurred */
   error?: string;
-  /** Text segment identity — when this changes, a new assistant message bubble is created */
+  /** Text segment identity: when this changes, a new assistant message bubble is created */
   partId?: string;
 } | null;
 
@@ -2522,7 +2521,7 @@ export type ClientChatRequest = {
   /** Per-turn inputs for Runtype prompt templates (e.g. {{page_url}}). */
   inputs?: Record<string, unknown>;
   context?: Record<string, unknown>;
-  /** WebMCP page-discovered tools — same shape as `dispatch.clientTools[]`. */
+  /** WebMCP page-discovered tools: same shape as `dispatch.clientTools[]`. */
   clientTools?: ClientToolDefinition[];
   /**
    * Diff-only / send-once: order-independent fingerprint of the client tool set.
@@ -3542,7 +3541,7 @@ export type AgentWidgetConfig = {
      * Per-stop-reason copy for the inline notice rendered on assistant
      * bubbles when the runtime reports a non-natural stop (e.g. the agent
      * loop hit `max_tool_calls` and was cut off mid-loop). Each key is
-     * optional — keys you omit fall back to the built-in defaults. Set a
+     * optional: keys you omit fall back to the built-in defaults. Set a
      * key to an empty string to suppress the notice for that reason.
      */
     stopReasonNotice?: Partial<Record<StopReasonKind, string>>;
@@ -3635,12 +3634,12 @@ export type AgentWidgetConfig = {
    */
   approval?: AgentWidgetApprovalConfig | false;
   /**
-   * WebMCP — consume page-registered tools (`document.modelContext.registerTool`).
+   * WebMCP: consume page-registered tools (`document.modelContext.registerTool`).
    * When `enabled`, the widget installs `@mcp-b/webmcp-polyfill`, snapshots the
    * registry on every dispatch, ships it as `clientTools[]`, and executes
    * returned `webmcp:*` tool calls with confirm-by-default gating.
    *
-   * Server-side policy on the chat surface is the source of truth — these
+   * Server-side policy on the chat surface is the source of truth: these
    * fields layer on top.
    *
    * @example
@@ -3674,7 +3673,7 @@ export type AgentWidgetConfig = {
    * This hook runs synchronously and must return the (potentially modified) state.
    *
    * Returning `{ state, open: true }` also signals that the widget panel should
-   * open after initialization — useful when injecting a post-navigation message
+   * open after initialization: useful when injecting a post-navigation message
    * that the user should immediately see.
    *
    * @example
@@ -3997,7 +3996,7 @@ export type AgentWidgetConfig = {
    * Setting this to `false` is the explicit kill-switch: it disables UI-state
    * persistence **and** message-history persistence. When `false`, any
    * `storageAdapter` you configure is ignored and the default localStorage
-   * adapter is not created — no chat history is read or written. Pass `true`
+   * adapter is not created: no chat history is read or written. Pass `true`
    * (or omit) to keep the default behavior of persisting messages via the
    * configured `storageAdapter` (or the built-in localStorage adapter).
    *
@@ -4026,7 +4025,7 @@ export type AgentWidgetConfig = {
    *
    * @example
    * ```typescript
-   * // Ephemeral widget — no message history written anywhere
+   * // Ephemeral widget: no message history written anywhere
    * config: {
    *   persistState: false
    * }
@@ -4098,7 +4097,7 @@ export type AgentWidgetApproval = {
    * Agent-authored justification for this specific call (the agent's own
    * claim about its intent, extracted server-side from the reserved
    * `_approvalReason` parameter). Render it attributed to the agent and as
-   * plain text — it is approver context, not a system statement.
+   * plain text: it is approver context, not a system statement.
    */
   reason?: string;
   parameters?: unknown;
@@ -4110,16 +4109,16 @@ export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool" | "ap
 /**
  * Per-turn / per-step stop reason emitted by the runtime on
  * `agent_turn_complete` and `step_complete` SSE events. The vocabulary is
- * owned by the upstream Runtype API — do not extend without coordination.
+ * owned by the upstream Runtype API: do not extend without coordination.
  *
- * - `end_turn` — natural completion (no affordance needed)
- * - `max_tool_calls` — agent loop tripped the configured tool-call ceiling
- * - `length` — provider hit max output tokens
- * - `content_filter` — provider content filter intervened
- * - `error` — provider/runtime error (prefer existing error rendering)
- * - `unknown` — explicitly reported but uninformative
+ * - `end_turn`: natural completion (no affordance needed)
+ * - `max_tool_calls`: agent loop tripped the configured tool-call ceiling
+ * - `length`: provider hit max output tokens
+ * - `content_filter`: provider content filter intervened
+ * - `error`: provider/runtime error (prefer existing error rendering)
+ * - `unknown`: explicitly reported but uninformative
  *
- * Absent (`undefined`) means "not reported" — distinct from `'unknown'`.
+ * Absent (`undefined`) means "not reported": distinct from `'unknown'`.
  */
 export type StopReasonKind = RuntypeStopReasonKind;
 
@@ -4304,7 +4303,7 @@ export type InjectMessageOptions = {
 
   /**
    * Raw structured payload (typically a JSON string) representing the
-   * full directive that produced this message — e.g. `{ "text": "...",
+   * full directive that produced this message: e.g. `{ "text": "...",
    * "component": "Foo", "props": {...} }`.
    *
    * Mirrors the field populated by stream parsers during normal LLM
@@ -4340,7 +4339,7 @@ export type InjectSystemMessageOptions = Omit<InjectMessageOptions, "role">;
 
 /**
  * Options for injecting an assistant message that renders as a component
- * directive — sugar over `injectAssistantMessage` for the common case of
+ * directive: sugar over `injectAssistantMessage` for the common case of
  * "render this registered component, same as if the LLM had emitted it".
  *
  * Equivalent to calling `injectAssistantMessage({ content: text, rawContent:

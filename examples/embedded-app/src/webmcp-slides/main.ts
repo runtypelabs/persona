@@ -1,4 +1,4 @@
-// WebMCP slide-deck editor ("Deckmate") — a Keynote-lite editor where the
+// WebMCP slide-deck editor ("Deckmate"): a Keynote-lite editor where the
 // embedded Persona widget and the human co-edit the same live canvas through
 // the page's WebMCP tools. See tools.ts for the tool surface (static editing
 // set, selection-scoped dynamic set, presenter-mode swap).
@@ -87,7 +87,7 @@ const syncChrome = (): void => {
   }
   if (undoButton) undoButton.disabled = !store.canUndo;
   if (redoButton) redoButton.disabled = !store.canRedo;
-  document.title = `${store.deck.title} — WebMCP Slides`;
+  document.title = `${store.deck.title}: WebMCP Slides`;
 };
 store.subscribe(syncChrome);
 syncChrome();
@@ -98,7 +98,7 @@ setupSlidesTools(store);
 
 // ---- Persona widget --------------------------------------------------------
 
-// Proxy mode, like the other example demos — the agent is defined in code as
+// Proxy mode, like the other example demos: the agent is defined in code as
 // WEBMCP_SLIDES_FLOW (packages/proxy/src/flows/webmcp-slides.ts) and the local
 // proxy mounts it at /api/chat/dispatch-slides (see
 // examples/vercel-edge/src/server.ts). No hosted agent or client token needed.
@@ -229,7 +229,7 @@ if (dockTarget) {
         ...DEFAULT_WIDGET_CONFIG.copy,
         welcomeTitle: "Ask Deck Copilot",
         welcomeSubtitle:
-          "I edit this deck live through the page's WebMCP tools — slides, elements, alignment, themes, even presenting.",
+          "I edit this deck live through the page's WebMCP tools: slides, elements, alignment, themes, even presenting.",
         inputPlaceholder: "Ask Copilot to build, restyle, or align slides…",
       },
       suggestionChips: [

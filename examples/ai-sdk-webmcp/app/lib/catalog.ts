@@ -142,9 +142,9 @@ export const CATALOG: CatalogProduct[] = [
 
 // Promo codes the storefront honors (apply_promo validates against this).
 export const PROMOS: Record<string, { rate: number; label: string }> = {
-  TRAIL10: { rate: 0.1, label: "10% off — TRAIL10" },
-  TRAILVIP: { rate: 0.15, label: "15% off — TRAILVIP" },
-  SUMMIT20: { rate: 0.2, label: "20% off — SUMMIT20" },
+  TRAIL10: { rate: 0.1, label: "10% off: TRAIL10" },
+  TRAILVIP: { rate: 0.15, label: "15% off: TRAILVIP" },
+  SUMMIT20: { rate: 0.2, label: "20% off: SUMMIT20" },
 };
 
 // Named colors → swatch hex for the catalog grid. Curated outdoor-gear tones
@@ -166,8 +166,7 @@ const STOPWORDS = new Set([
   "i", "want", "need", "show", "find", "please", "buy", "get",
 ]);
 
-// Query tokens that describe price intent rather than the product itself —
-// dropped before matching so "waterproof trail shoe under $170" still matches on
+// Query tokens that describe price intent rather than the product itself:// dropped before matching so "waterproof trail shoe under $170" still matches on
 // "waterproof/trail/shoe" (the agent reasons over the returned prices itself).
 const PRICE_WORDS = new Set([
   "under", "below", "over", "above", "cheap", "cheapest", "budget", "than",

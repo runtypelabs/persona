@@ -134,7 +134,7 @@
         <h2>Live event log</h2>
         <div class="log" id="log" aria-live="polite"></div>
         <p class="hint">
-          Each lifecycle moment is logged <strong>twice on purpose</strong> — to show both ways to
+          Each lifecycle moment is logged <strong>twice on purpose</strong>: to show both ways to
           subscribe. Line one names the subscription: the <code>onX()</code> config
           <strong>callback</strong> vs the <code>persona:*</code> <strong>DOM event</strong> on
           <code>window</code>. The grey sub-line explains what that moment means.
@@ -145,7 +145,7 @@
         <h2>What you're seeing</h2>
         <ol class="step-list">
           <li>
-            <strong><code>persona:script-load</code></strong> fires immediately — the installer ran.
+            <strong><code>persona:script-load</code></strong> fires immediately: the installer ran.
           </li>
           <li>
             <strong><code>persona:launcher-shown</code></strong> (<code>deferred: true</code>) fires at
@@ -181,7 +181,7 @@
       var statusEl = document.getElementById("status");
 
       var META = {
-        "script-load": { dot: "dot-script", name: "name-script", label: "persona:script-load", cb: "onScriptLoad", meaning: "the installer script executed — fires before any loading or gating" },
+        "script-load": { dot: "dot-script", name: "name-script", label: "persona:script-load", cb: "onScriptLoad", meaning: "the installer script executed: fires before any loading or gating" },
         "launcher-shown": { dot: "dot-launcher", name: "name-launcher", label: "persona:launcher-shown", cb: "onLauncherShown", meaning: "the real launcher was painted (deferred: true = from the ~13 KB critical bundle)" },
         "chat-ready": { dot: "dot-chat", name: "name-chat", label: "persona:chat-ready", cb: "onChatReady", meaning: "the full widget is initialized and its controller API is now callable" },
         "error": { dot: "dot-error", name: "name-error", label: "persona:error", cb: "onError", meaning: "a load step failed (css / bundle / init)" }
@@ -230,7 +230,7 @@
         var sub = document.createElement("div");
         sub.className = "log-sub";
         sub.textContent = isDom
-          ? 'same moment — any code can subscribe via window.addEventListener("' + meta.label + '")'
+          ? 'same moment: any code can subscribe via window.addEventListener("' + meta.label + '")'
           : meta.meaning;
 
         row.appendChild(line);
@@ -242,7 +242,7 @@
       // On localhost, point the installer at the LOCAL widget build so the
       // deferred launcher (launcher.global.js) actually loads. The published CDN
       // @latest does not ship launcher.global.js yet, so without this its fetch
-      // 404s and the installer silently falls back to the eager path — you'd see
+      // 404s and the installer silently falls back to the eager path: you'd see
       // `deferred: false` and launcher-shown + chat-ready at the same timestamp.
       // Setting cssUrl/jsUrl is also exactly how a self-hosted deploy opts into
       // the optimization: the installer derives the sibling launcher.global.js
@@ -279,7 +279,7 @@
           statusEl.classList.add("ready");
         },
         onError: function (info) {
-          logEvent("error", "phase: " + info.phase + " — " + (info.error && info.error.message || info.error));
+          logEvent("error", "phase: " + info.phase + ": " + (info.error && info.error.message || info.error));
         }
       };
 
@@ -306,7 +306,7 @@
       document.getElementById("config-snippet").textContent =
         "window.siteAgentConfig = {\n" +
         "  target: \"body\",\n" +
-        "  // localhost only — load the unreleased launcher bundle from the local\n" +
+        "  // localhost only: load the unreleased launcher bundle from the local\n" +
         "  // build; in production omit these two and the CDN is used:\n" +
         "  cssUrl: \"/widget-dist/widget.css\",\n" +
         "  jsUrl:  \"/widget-dist/index.global.js\",\n" +

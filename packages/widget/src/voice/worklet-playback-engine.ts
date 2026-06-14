@@ -24,7 +24,7 @@ class RuntypePcmPlayerProcessor extends AudioWorkletProcessor {
     this.buffered = 0
     this.waiting = true
     // 'drained' must mean "the reply finished playing", not "momentary
-    // underrun" — a jitter gap empties the buffer mid-reply too, and firing
+    // underrun": a jitter gap empties the buffer mid-reply too, and firing
     // there would flap the UI status and race the audio_end handler. Only
     // report drained once eos has been signalled.
     this.eosSeen = false

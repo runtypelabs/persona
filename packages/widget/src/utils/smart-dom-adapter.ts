@@ -2,8 +2,8 @@
  * Pure mapper: `@mcp-b/smart-dom-reader` output → Persona's {@link EnrichedPageElement}[].
  *
  * This module imports the smart-dom-reader types with `import type` ONLY, so the
- * library's runtime value is never pulled in here. That keeps the mapper — and its
- * unit test — free of any DOM and free of the (vendored) library at runtime; the
+ * library's runtime value is never pulled in here. That keeps the mapper, and its
+ * unit test: free of any DOM and free of the (vendored) library at runtime; the
  * types are erased during compilation.
  *
  * The smart-dom-reader returns a structured {@link SmartDOMResult} JSON object with
@@ -43,8 +43,7 @@ export interface SmartDomAdapterOptions {
 
 /**
  * Candidate selector types that resolve through `document.querySelector` (plain CSS).
- * Everything else smart-dom-reader can emit — `xpath` and text pseudo-selectors —
- * is not actionable via the current click loop, so it is skipped here.
+ * Everything else smart-dom-reader can emit, `xpath` and text pseudo-selectors,  * is not actionable via the current click loop, so it is skipped here.
  */
 const PLAIN_CSS_CANDIDATE_TYPES: ReadonlySet<ElementSelectorCandidate["type"]> =
   new Set(["id", "data-testid", "role-aria", "name", "class-path", "css-path"]);
@@ -119,7 +118,7 @@ function collectAttributes(el: ExtractedElement): Record<string, string> {
  * Returns true when the element sits under `excludeSelector` (e.g. the widget host).
  * smart-dom-reader has no exclude option and pierces shadow DOM by default, so this
  * guards against the widget reading its own UI. The check is a substring match across
- * the element's candidate selectors and ancestor chain — robust for the default
+ * the element's candidate selectors and ancestor chain: robust for the default
  * `.persona-host` class guard.
  */
 function isExcluded(el: ExtractedElement, excludeSelector: string): boolean {

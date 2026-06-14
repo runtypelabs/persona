@@ -94,7 +94,7 @@ const storefrontApp = createChatProxyApp({
 // The demo page registers its tools on document.modelContext; the widget sends
 // them as clientTools[] each turn and the proxy forwards them upstream (and
 // proxies the /resume round-trip). The agent definition lives entirely in code
-// as WEBMCP_STOREFRONT_FLOW — no hosted Runtype agent / client token needed.
+// as WEBMCP_STOREFRONT_FLOW: no hosted Runtype agent / client token needed.
 const webmcpApp = createChatProxyApp({
   path: "/api/chat/dispatch-webmcp",
   allowedOrigins,
@@ -106,7 +106,7 @@ const webmcpApp = createChatProxyApp({
 // WebMCP calendar proxy - for the calendar copilot demo. Same pattern as the
 // storefront: the page registers ten calendar tools on document.modelContext,
 // the widget forwards them as clientTools[], and the in-code
-// WEBMCP_CALENDAR_FLOW drives them — no hosted Runtype agent / client token.
+// WEBMCP_CALENDAR_FLOW drives them: no hosted Runtype agent / client token.
 const webmcpCalendarApp = createChatProxyApp({
   path: "/api/chat/dispatch-calendar",
   allowedOrigins,
@@ -142,7 +142,7 @@ const webmcpPaintApp = createChatProxyApp({
 // WebMCP docked-dashboard proxy - for the docked panel demo. Same pattern as
 // the storefront/calendar: the page registers four workspace tools on
 // document.modelContext, the widget forwards them as clientTools[], and the
-// in-code WEBMCP_DOCKED_FLOW drives them — no hosted Runtype agent / client token.
+// in-code WEBMCP_DOCKED_FLOW drives them: no hosted Runtype agent / client token.
 const webmcpDockedApp = createChatProxyApp({
   path: "/api/chat/dispatch-docked",
   allowedOrigins,
@@ -162,12 +162,12 @@ const pageContextApp = createChatProxyApp({
   upstreamUrl
 });
 
-// Theme-assistant proxy — for the Theme Editor's docked Theme Copilot.
+// Theme-assistant proxy: for the Theme Editor's docked Theme Copilot.
 // The Theme Editor registers its controls (plus screenshot_preview) as WebMCP
 // tools on document.modelContext; the copilot widget ships them as clientTools[]
 // and the agent calls them (webmcp:*) to restyle the live theme preview.
 // Tool-calling flow (not an action envelope), so it relies on clientTools
-// forwarding + /resume — including image blocks in screenshot tool results.
+// forwarding + /resume: including image blocks in screenshot tool results.
 const themeAssistantApp = createChatProxyApp({
   path: "/api/chat/dispatch-theme",
   allowedOrigins,

@@ -173,7 +173,7 @@ export const createApprovalBubble = (
   bubble.id = `bubble-${message.id}`;
   bubble.setAttribute("data-message-id", message.id);
 
-  // Apply styling — use semantic tokens with config overrides
+  // Apply styling: use semantic tokens with config overrides
   bubble.style.backgroundColor = approvalConfig?.backgroundColor ?? "var(--persona-approval-bg, #fefce8)";
   bubble.style.borderColor = approvalConfig?.borderColor ?? "var(--persona-approval-border, #fef08a)";
   bubble.style.boxShadow =
@@ -242,7 +242,7 @@ export const createApprovalBubble = (
 
   // User-facing summary line. The wire `description` is the tool's
   // agent-facing description (prompt prose, usage rules), so it is not shown
-  // here — it lives in the collapsible details section below. Label priority:
+  // here: it lives in the collapsible details section below. Label priority:
   // formatDescription → declared WebMCP `title` → humanized tool name →
   // raw description (no tool name at all).
   const isWebMcpTool =
@@ -276,7 +276,7 @@ export const createApprovalBubble = (
 
   // Agent-authored justification for this specific call. It is the agent's
   // own claim about its intent (attacker-writable under prompt injection), so
-  // it is rendered as plain text via textContent — never markdown/HTML — and
+  // it is rendered as plain text via textContent, never markdown/HTML, and
   // explicitly attributed to the agent rather than spoken in system voice.
   if (approval.reason) {
     const reasonLine = createElement("p", "persona-text-sm persona-mt-1 persona-text-persona-muted");

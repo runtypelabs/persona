@@ -133,7 +133,7 @@ function withoutLayoutArtifactPaneBackground(config: AgentWidgetConfig): AgentWi
 }
 
 /**
- * In dark mode the widget uses `createDarkTheme(deepMerge(theme, darkTheme))` — `darkTheme` wins.
+ * In dark mode the widget uses `createDarkTheme(deepMerge(theme, darkTheme))`: `darkTheme` wins.
  * Theme-only presets update `theme` (light slot) via `currentTheme`; a stale `config.darkTheme` from
  * localStorage or the Style editor would override the preset and can force light surfaces.
  */

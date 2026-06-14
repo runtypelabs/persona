@@ -117,7 +117,7 @@ document.getElementById("dynamic-form-preview")?.addEventListener("click", () =>
   previewIndex += 1;
   const props = {
       title: "Schedule a demo",
-      description: "Share your details — we'll follow up to confirm.",
+      description: "Share your details: we'll follow up to confirm.",
       fields: [
         { label: "First Name", type: "text", required: true, width: "half" },
         { label: "Last Name", type: "text", required: true, width: "half" },
@@ -147,7 +147,7 @@ document.getElementById("dynamic-form-preview")?.addEventListener("click", () =>
 });
 
 // ---------------------------------------------------------------------------
-// Layout variants — same form, three formStyles presets. Each variant is a
+// Layout variants: same form, three formStyles presets. Each variant is a
 // fresh widget with `injectComponentDirective` to render the form on mount,
 // no LLM round-trip required.
 // ---------------------------------------------------------------------------

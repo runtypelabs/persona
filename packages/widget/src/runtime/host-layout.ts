@@ -33,7 +33,7 @@ const parseDockWidthToPx = (width: string, shellClientWidth: number): number => 
  * the dock column would grow with the conversation and scroll off the page.
  * Clamping the slot keeps the panel viewport-sized (messages scroll
  * internally) even when the page's height chain is missing. `100vh` is set
- * first as a fallback for engines without `dvh` support — an invalid value
+ * first as a fallback for engines without `dvh` support: an invalid value
  * leaves the previous one in place.
  */
 const applyDockSlotMaxHeight = (
@@ -372,7 +372,7 @@ const applyDockStyles = (
     // the containing block for any `position: fixed` descendant, so host pages
     // that render viewport-fixed chrome inside the pushed content (e.g. the
     // dashboard editor's `fixed top-0 right-0` toolbar) resolve `right: 0`
-    // against the track's right edge — `panelPx` past the viewport, off-screen.
+    // against the track's right edge: `panelPx` past the viewport, off-screen.
     // `margin-left` produces the identical visual offset (the track is clipped
     // by the overflow:hidden shell) without establishing a containing block for
     // fixed OR absolutely-positioned descendants.
@@ -395,8 +395,7 @@ const applyDockStyles = (
     pushTrack.style.width = `${contentPx + panelPx}px`;
     pushTrack.style.transition = dockTransition;
     pushTrack.style.marginLeft = `${marginOffsetPx}px`;
-    // Defensively clear any transform a previous reveal mode may have set —
-    // leaving one would re-establish the fixed-position containing block.
+    // Defensively clear any transform a previous reveal mode may have set:    // leaving one would re-establish the fixed-position containing block.
     pushTrack.style.transform = "";
 
     contentSlot.style.flex = "0 0 auto";
@@ -536,7 +535,7 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
     syncPushResizeObserver();
     // Check the height chain once, the first time the panel is actually shown
     // in a layout that depends on it (mobile fullscreen is fixed-position and
-    // doesn't — keep checking until a dependent layout comes around).
+    // doesn't: keep checking until a dependent layout comes around).
     if (
       expanded &&
       !heightChainChecked &&

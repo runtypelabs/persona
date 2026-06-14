@@ -1,4 +1,4 @@
-/** Color utilities — re-exported from @runtypelabs/persona/theme-editor headless core */
+/** Color utilities: re-exported from @runtypelabs/persona/theme-editor headless core */
 
 export {
   parseCssValue,

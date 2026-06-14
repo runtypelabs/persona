@@ -1,4 +1,4 @@
-/** Tab 2: Components — panel, header, messages, input, launcher, buttons, voice, approval */
+/** Tab 2: Components: panel, header, messages, input, launcher, buttons, voice, approval */
 
 import type { OnChangeCallback, ControlResult, SectionDef } from '../types';
 import { renderSection } from '../controls';

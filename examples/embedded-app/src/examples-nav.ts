@@ -210,7 +210,7 @@ export function formatExampleIndex(index: number): string {
 
 /**
  * Mount the persistent top app bar with brand + demo picker + prev/next.
- * Idempotent — safe to call multiple times.
+ * Idempotent: safe to call multiple times.
  *
  * Visual contract: a fixed 56px bar at the top of the viewport. Body padding
  * for the bar is reserved by demo-shared.css so first paint already accounts

@@ -62,7 +62,7 @@ const injectSuggestReplies = (
         args: { suggestions },
         chunks: [],
       },
-      // No executionId/awaitingLocalTool — rendering is driven purely by the
+      // No executionId/awaitingLocalTool: rendering is driven purely by the
       // message list; the auto-resume path is covered in
       // suggest-replies-tool.test.ts.
     },
@@ -167,7 +167,7 @@ describe("suggest_replies chips UI", () => {
     expect(chipButtons(mount, "Tell me more")).toHaveLength(1);
 
     // A display-only config update (e.g. theme tweak) re-renders the
-    // suggestions row — it must re-apply the agent-chips rule, not fall back
+    // suggestions row: it must re-apply the agent-chips rule, not fall back
     // to the static config chips (which are hidden mid-conversation).
     controller.update({
       apiUrl: "https://api.example.com/chat",

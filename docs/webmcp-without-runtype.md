@@ -4,7 +4,7 @@ Persona's WebMCP support lets the agent call **page-defined tools** (registered
 on `document.modelContext`). A common question: can that work against a **direct
 [Vercel AI SDK](https://ai-sdk.dev) backend** instead of the Runtype API?
 
-Yes — and there are two paths depending on whether you keep the Persona widget UI.
+Yes, and there are two paths depending on whether you keep the Persona widget UI.
 
 ---
 
@@ -13,7 +13,7 @@ Yes — and there are two paths depending on whether you keep the Persona widget
 The widget owns the WebMCP loop internally: it snapshots page tools into
 `clientTools[]`, and when the agent calls one it executes the tool on the page
 and posts the result back. That loop is **bound to Runtype's proxy wire
-protocol** — a `step_await` SSE event pauses the run, and the widget POSTs the
+protocol**: a `step_await` SSE event pauses the run, and the widget POSTs the
 tool output to `${apiUrl}/resume` to continue. The control events
 (`step_await` / `executionId` / `/resume`) are hard-coded to Runtype's field
 names; `parseSSEEvent` / `customFetch` can adapt *content* framing but cannot
@@ -28,11 +28,11 @@ So:
 
 ---
 
-## Path A — keep the widget, shim the protocol (recommended for "drop-in")
+## Path A: keep the widget, shim the protocol (recommended for "drop-in")
 
 A runnable example lives at [`examples/ai-sdk-webmcp/`](../examples/ai-sdk-webmcp/)
 (live at [ai-sdk-webmcp.persona-chat.dev](https://ai-sdk-webmcp.persona-chat.dev))
-— the Switchback storefront with the real Persona widget, backed by two AI SDK
+The Switchback storefront with the real Persona widget, backed by two AI SDK
 route handlers. Point the widget at your own endpoint in **proxy mode**:
 
 ```ts
@@ -73,8 +73,7 @@ POST ${apiUrl}/resume
 
 `toolOutputs` is keyed by the `toolCallId` you emitted in `step_await` (falling
 back to `toolName`). A `WebMcpToolResult` is `{content:[{type:"text",text}], isError?}`.
-The resume response streams the continued turn with the **same** SSE protocol —
-including another `step_await` if the model calls another tool.
+The resume response streams the continued turn with the **same** SSE protocol: including another `step_await` if the model calls another tool.
 
 ### Mapping to `streamText`
 
@@ -83,7 +82,7 @@ is small:
 
 - Build the widget's `clientTools[]` into an AI SDK `ToolSet` with `tool({
   description, inputSchema: jsonSchema(parametersSchema) })` and **no `execute`**
-  — no-execute tools are client-side, so the model's call streams out and the
+  No-execute tools are client-side, so the model's call streams out and the
   turn stops.
 - Iterate `result.fullStream`: `text-delta` → `step_chunk`; `tool-call` →
   `step_await` (prefix the name, reuse the model's `toolCallId`), then pause.
@@ -96,7 +95,7 @@ is small:
 State between dispatch and resume must outlive a single request and be reachable
 from a different instance (the two are separate HTTP requests). The example keys
 it by `executionId` in the **Vercel Runtime Cache** (`@vercel/functions`), with an
-in-memory fallback for local dev — but that cache is **ephemeral and
+in-memory fallback for local dev, but that cache is **ephemeral and
 region-scoped**, so production should use a durable store (Redis/Upstash, Vercel
 KV, a DB, or a Durable Object). The widget's resume request only sends
 `{executionId, toolOutputs}` (not the message history), so server-side shared
@@ -104,7 +103,7 @@ state is required regardless of backend.
 
 ---
 
-## Path B — reuse just the bridge (no widget UI)
+## Path B: reuse just the bridge (no widget UI)
 
 If you're building your own UI, skip the protocol entirely. `WebMcpBridge` is a
 public export and imports nothing Runtype-specific:

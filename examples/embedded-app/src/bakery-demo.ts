@@ -452,7 +452,7 @@ function positionCartBadge(): void {
 
     if (widgetIsOpen) {
       if (isMobile) {
-        // On mobile the widget is fullscreen — pin badge to top-left corner
+        // On mobile the widget is fullscreen: pin badge to top-left corner
         badge.style.inset = '5px auto auto 5px';
       } else {
         // Position on top-left of the chat panel container (the white card)
@@ -656,7 +656,7 @@ function updateIntroCard(): void {
 // Page Context Provider
 // ============================================================================
 
-/** Keys referenced by `BAKERY_ASSISTANT_FLOW` — keep in sync with `packages/proxy/src/flows/bakery-assistant.ts`. */
+/** Keys referenced by `BAKERY_ASSISTANT_FLOW`: keep in sync with `packages/proxy/src/flows/bakery-assistant.ts`. */
 const pageContextProvider = () => {
   const elements = collectEnrichedPageContext({
     options: {
@@ -1130,7 +1130,7 @@ const config: AgentWidgetConfig = {
   ],
   storageAdapter: createBakeryStorageAdapter(),
   contextProviders: [pageContextProvider],
-  // Bakery flow substitutes only **inputs** (see BAKERY_ASSISTANT_FLOW) — no duplicate metadata.
+  // Bakery flow substitutes only **inputs** (see BAKERY_ASSISTANT_FLOW): no duplicate metadata.
   requestMiddleware: ({ payload }) => {
     if (!payload.context) {
       return payload;

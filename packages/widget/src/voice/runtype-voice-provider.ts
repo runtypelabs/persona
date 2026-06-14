@@ -11,7 +11,7 @@
 // The server's STT owns turn-taking, so the client streams continuously and
 // has no client-side VAD, barge-in monitoring, or batch upload. Auth rides the
 // `Sec-WebSocket-Protocol` subprotocol (`['runtype.bearer', clientToken]`),
-// never the query string — the token is never placed in a URL or logged.
+// never the query string: the token is never placed in a URL or logged.
 //
 // A continuous always-hot mic is, in UX terms, a permanent barge-in session, so
 // `getInterruptionMode()` reports the constant `'barge-in'` and the existing
@@ -35,7 +35,7 @@ const RIFF_MAGIC = 0x52494646; // "RIFF"
 /**
  * Strip the canonical 44-byte WAV header (if present) and return the raw PCM16
  * payload. The ElevenLabs realtime path WAV-wraps each frame; the Cloudflare DO
- * path may send raw PCM — detect the RIFF magic and handle both.
+ * path may send raw PCM: detect the RIFF magic and handle both.
  */
 function stripWavHeader(buf: ArrayBuffer): Uint8Array {
   if (buf.byteLength >= 44) {
@@ -67,7 +67,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private processor: ScriptProcessorNode | null = null;
   private playback: VoicePlaybackEngine | null = null;
 
-  // True while a call (WS session) is live — drives the idempotent start guard
+  // True while a call (WS session) is live: drives the idempotent start guard
   // and `isBargeInActive()`.
   private callLive = false;
   private isSpeaking = false;
@@ -99,7 +99,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   /** Start the call: acquire mic, open the WS, stream PCM until hang-up. */
   async startListening(): Promise<void> {
-    if (this.callLive) return; // idempotent — a call is already live
+    if (this.callLive) return; // idempotent: a call is already live
 
     const agentId = this.config?.agentId;
     const token = this.config?.clientToken;
@@ -141,7 +141,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         ? await this.config.createPlaybackEngine()
         : new AudioPlaybackManager(PLAYBACK_SAMPLE_RATE);
       if (generation !== this.callGeneration) {
-        // Torn down while async work was in flight — free what we acquired.
+        // Torn down while async work was in flight: free what we acquired.
         void engine.destroy();
         stream.getTracks().forEach((t) => t.stop());
         captureContext.close().catch(() => {});
@@ -151,7 +151,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       engine.onFinished(() => {
         if (generation !== this.callGeneration) return;
         this.isSpeaking = false;
-        // Reply drained — the call stays open, so return to listening.
+        // Reply drained: the call stays open, so return to listening.
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.emitStatus("listening");
         }
@@ -292,7 +292,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     try {
       msg = JSON.parse(event.data as string);
     } catch {
-      return; // non-JSON, non-binary frame — ignore
+      return; // non-JSON, non-binary frame: ignore
     }
 
     switch (msg.type) {

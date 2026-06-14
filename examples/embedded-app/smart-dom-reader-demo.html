@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/src/demo-shared.css" />
     <link rel="icon" href="/favicon.ico" />
-    <title>Shadow-aware Page Context — Persona</title>
+    <title>Shadow-aware Page Context: Persona</title>
 
     <style>
       /* Scope shop styles to the preview pane so they don't leak into the rail. */
@@ -307,7 +307,7 @@
             <p style="font-size: 0.8rem;">
               The <strong>Featured drop</strong> products render inside a
               <strong>shadow root</strong>. Run each reader and watch those products flip
-              from missed to found — then open the launcher and ask the assistant about
+              from missed to found: then open the launcher and ask the assistant about
               them.
             </p>
             <div class="btn-row">
@@ -349,7 +349,7 @@
 
           <div class="shop-body">
             <h2 class="shop-section-title">Everyday picks</h2>
-            <p class="shop-section-sub">Standard light-DOM products — every reader sees these.</p>
+            <p class="shop-section-sub">Standard light-DOM products: every reader sees these.</p>
             <div class="products-grid">
               <div class="product-card" data-product="mug">
                 <div class="product-thumb">☕</div>
@@ -382,7 +382,7 @@
             </h2>
             <p class="shop-section-sub">
               These cards render inside a <strong>shadow root</strong>. The default
-              TreeWalker reader cannot see them; smart-dom-reader (full) can — so the
+              TreeWalker reader cannot see them; smart-dom-reader (full) can, so the
               assistant can too.
             </p>
             <!-- The demo script attaches an open shadow root here and renders the
@@ -408,13 +408,13 @@
           <p>
             Grouping by section (rather than the default reader's flat
             interactivity buckets) is what lets the assistant reliably answer
-            <em>"what's in the featured drop?"</em> — the heading and its products stay
+            <em>"what's in the featured drop?"</em>: the heading and its products stay
             together instead of scattering across the prompt.
           </p>
           <p>
             Use the <strong>Assistant's page reader</strong> toggle in the rail to switch
-            the <em>live</em> method the launcher sends — Default, smart-dom-reader, or
-            section-grouped — and watch the assistant gain (or lose) sight of the Featured
+            the <em>live</em> method the launcher sends: Default, smart-dom-reader, or
+            section-grouped, and watch the assistant gain (or lose) sight of the Featured
             drop and the ability to add it to the cart. The <strong>Compare readers</strong>
             buttons below it show the same readers' raw output side by side:
             <code>smart-dom-reader</code> (full mode) is the general-purpose library that
@@ -426,7 +426,7 @@
         <div class="notes-section">
           <h3 class="notes-section-title">Acting across the shadow boundary</h3>
           <p>
-            The assistant doesn't just describe the shop — it can add products to the
+            The assistant doesn't just describe the shop: it can add products to the
             cart. It replies with a small JSON envelope
             (<code>{"action": "add_to_cart", "product": "headphones", "text": "…"}</code>);
             the host's handler resolves that <code>product</code> id to its Add-to-cart
@@ -434,7 +434,7 @@
           </p>
           <p>
             Persona's default click loop uses <code>document.querySelector</code>, which
-            cannot pierce shadow roots — so the Featured-drop buttons would be
+            cannot pierce shadow roots, so the Featured-drop buttons would be
             unreachable. This demo's handler crosses the boundary with
             <code>host.shadowRoot.querySelector('.buy-&lt;id&gt;')</code>, so even the
             shadow-DOM products are clickable. Try <em>"add the Studio Headphones"</em>.

@@ -1,4 +1,4 @@
-// WebMCP Paint ("Paint Pal") — the embedded Persona widget drives a real,
+// WebMCP Paint ("Paint Pal"): the embedded Persona widget drives a real,
 // unmodified jspaint (https://github.com/1j01/jspaint) through operator-level
 // WebMCP tools: select a tool, set colors, replay strokes as pointer events,
 // flood fill, and snapshot the canvas back to the agent as an image. See
@@ -29,7 +29,7 @@ if (!host || !dockTarget) {
   throw new Error("[Paint] Missing mount points in webmcp-paint.html");
 }
 
-// Proxy mode, like the other example demos — the agent is defined in code as
+// Proxy mode, like the other example demos: the agent is defined in code as
 // WEBMCP_PAINT_FLOW (packages/proxy/src/flows/webmcp-paint.ts) and the local
 // proxy mounts it at /api/chat/dispatch-paint (see
 // examples/vercel-edge/src/server.ts). No hosted agent or client token needed.
@@ -210,13 +210,13 @@ function mountWidget(bridge: PaintBridge): void {
         ...DEFAULT_WIDGET_CONFIG.copy,
         welcomeTitle: "Ask Paint Pal",
         welcomeSubtitle:
-          "I paint in this very real MS Paint with the same tools you'd click — and I can look at the canvas to check my work.",
+          "I paint in this very real MS Paint with the same tools you'd click, and I can look at the canvas to check my work.",
         inputPlaceholder: "Ask for a drawing…",
       },
       suggestionChips: [
         "Draw a house with a sun in the sky",
         "Draw a red heart",
-        "Let's play Pictionary — I'll draw, you guess",
+        "Let's play Pictionary: I'll draw, you guess",
         "Teach me to draw a cat, step by step",
         "Speedrun the Mona Lisa in 20 strokes",
         "Look at the canvas and tell me what you see",
@@ -248,7 +248,7 @@ function mountWidget(bridge: PaintBridge): void {
       features: {
         ...DEFAULT_WIDGET_CONFIG.features,
         // The paint-along tutorial pauses between steps with the built-in
-        // ask_user_question tool (answer-pill sheet): "Done — check my work" /
+        // ask_user_question tool (answer-pill sheet): "Done: check my work" /
         // "Show me again" / "Skip ahead".
         askUserQuestion: { expose: true },
       },
@@ -291,7 +291,7 @@ function mountWidget(bridge: PaintBridge): void {
   });
 }
 
-// No top-level await — Vite's default build target predates it.
+// No top-level await: Vite's default build target predates it.
 void mountJsPaint(host).then((bridge) => {
   setupPaintTools(bridge);
   mountWidget(bridge);

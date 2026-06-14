@@ -7,15 +7,14 @@
 //
 // Supports grouped (multi-question) payloads with an internal stepper: shows
 // "Question N of M", auto-advances on single-select pick, and submits a
-// structured `{ [questionText]: answer }` payload on the final page —
-// matching the schema the agent receives back. Set the payload's `multiSelect`
+// structured `{ [questionText]: answer }` payload on the final page:// matching the schema the agent receives back. Set the payload's `multiSelect`
 // per-question to allow multi-pick (Next button replaces auto-advance).
 //
 // Once the user answers, the widget suppresses the original tool message
 // entirely from the transcript and injects assistant/user bubble pairs
 // (one per question + one per answer; skipped questions become an italic
 // `*Skipped*` user bubble) so the transcript reads as a normal conversation.
-// Plugins do NOT render the answered state — only the interactive sheet.
+// Plugins do NOT render the answered state: only the interactive sheet.
 //
 // Copy this file into your own app; its only dependency is the widget's
 // plugin-kit subpath (used for Shadow-DOM-safe style injection).
@@ -164,13 +163,13 @@ const STYLE_CSS = `
     }
   `;
 
-// IMPORTANT — event-delegation pattern.
+// IMPORTANT: event-delegation pattern.
 //
 // The widget re-renders messages by morphing DOM via idiomorph. To stay
 // robust, this plugin attaches a SINGLE delegated click/keydown handler at
 // the root element and dispatches by `data-action` attribute. All cross-
 // render state lives in `data-*` attributes on the root (current question
-// index, accumulated answers JSON), not in closure refs — so re-renders
+// index, accumulated answers JSON), not in closure refs, so re-renders
 // reading from `e.currentTarget` see the live state.
 //
 // Plugin authors writing their own `renderAskUserQuestion` should follow the
@@ -310,7 +309,7 @@ const renderBody = (root, questions) => {
         ? Array.isArray(currentAnswer) && currentAnswer.length > 0
         : currentAnswer != null && currentAnswer !== "";
       // For the last page in single-Q mode (total === 1), the user picks a
-      // pill which auto-resolves — Submit-all only matters when grouped.
+      // pill which auto-resolves: Submit-all only matters when grouped.
       if (total > 1 || isMulti) next.disabled = !hasAnswer;
       footer.appendChild(next);
     }
@@ -344,7 +343,7 @@ export const horizontalPillsAskPlugin = {
   id: "example-horizontal-pills",
 
   renderAskUserQuestion: ({ message, payload, complete, resolve, dismiss, config }) => {
-    // Answered state is handled entirely by the widget — the original tool
+    // Answered state is handled entirely by the widget: the original tool
     // message is suppressed from transcript and Q→A pair bubbles are injected
     // in its place. Plugins only render the interactive sheet.
     if (message?.agentMetadata?.askUserQuestionAnswered === true) {
@@ -374,7 +373,7 @@ export const horizontalPillsAskPlugin = {
 
     renderBody(root, questions);
 
-    // Single delegated listener — survives morph passes. Always read state
+    // Single delegated listener: survives morph passes. Always read state
     // from `e.currentTarget` (the live root) rather than captured refs.
     root.addEventListener("click", (e) => {
       const liveRoot = e.currentTarget;

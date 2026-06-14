@@ -239,7 +239,7 @@ describe("EventStreamBuffer", () => {
     expect(buf.getAll()).toEqual([]);
     expect(store.clear).toHaveBeenCalled();
 
-    // Simulate new session sending events — buffer should accept them
+    // Simulate new session sending events: buffer should accept them
     const newEvt = makeEvent("c", 3);
     buf.push(newEvt);
     expect(buf.getSize()).toBe(1);
@@ -253,7 +253,7 @@ describe("EventStreamBuffer", () => {
     buf.push(makeEvent("session1_a", 1));
     buf.push(makeEvent("session1_b", 2));
 
-    // Session reset happens (no clear called — buffer persists)
+    // Session reset happens (no clear called: buffer persists)
     // Session 2 events
     buf.push(makeEvent("session2_a", 3));
 

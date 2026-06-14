@@ -297,7 +297,7 @@ describe('theme utils', () => {
           toolBubble: { shadow: '0 1px 2px rgba(255,0,0,0.5)' },
         },
       },
-      // config.toolCall.shadow no longer rewrites the root variable — the
+      // config.toolCall.shadow no longer rewrites the root variable: the
       // override is applied inline by createToolBubble (see tool-bubble tests).
       toolCall: { shadow: 'none' },
     });

@@ -1380,7 +1380,7 @@ function generateScriptInstallerCode(config: any, options?: CodeGeneratorOptions
   // branch hoists every sibling key (Object.assign(scriptConfig, parsed)), while
   // a flat payload becomes the widget config wholesale and its siblings are
   // ignored. So whenever either is set we emit the nested `{ config, ...}` form
-  // with the option as a SIBLING of `config` — nesting `target` inside the
+  // with the option as a SIBLING of `config`: nesting `target` inside the
   // widget config would leave the widget mounted on `body`.
   const needsWrapper = Boolean(options?.windowKey || options?.target);
   const payload = needsWrapper

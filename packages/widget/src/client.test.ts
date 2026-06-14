@@ -2348,7 +2348,7 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
           };
           e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
           e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // No seq field — should append in arrival order
+          // No seq field: should append in arrival order
           e({ type: 'step_delta', id: 's1', text: 'Hello ' });
           e({ type: 'step_delta', id: 's1', text: 'world' });
           e({ type: 'step_delta', id: 's1', text: '!' });
@@ -2386,7 +2386,7 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
           };
           e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
           e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // seq=3 arrives first (leading gap — seq 1 and 2 arrive later)
+          // seq=3 arrives first (leading gap: seq 1 and 2 arrive later)
           e({ type: 'step_delta', id: 's1', text: 'c', partId: 'text_0', seq: 3 });
           e({ type: 'step_delta', id: 's1', text: 'a', partId: 'text_0', seq: 1 });
           e({ type: 'step_delta', id: 's1', text: 'b', partId: 'text_0', seq: 2 });
@@ -2425,7 +2425,7 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
           };
           e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
           e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // reason_delta uses sequenceIndex, step_delta uses seq — same counter
+          // reason_delta uses sequenceIndex, step_delta uses seq: same counter
           e({ type: 'reason_start', reasoningId: 'r1', hidden: false, done: false });
           e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'thinking', hidden: false, done: false, sequenceIndex: 1 });
           e({ type: 'reason_complete', reasoningId: 'r1', hidden: false, done: true });
@@ -2518,7 +2518,7 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
           };
           e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
           e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // Only a seq=3 event arrives — seq=1 and seq=2 are never delivered.
+          // Only a seq=3 event arrives: seq=1 and seq=2 are never delivered.
           // Without the end-of-stream flush, this event would be stranded in
           // the reorder buffer and never emitted.
           e({ type: 'step_delta', id: 's1', text: 'tail', partId: 'text_0', seq: 3 });
@@ -2607,7 +2607,7 @@ describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
           };
           e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          // Only sequenced event — but seq > 1 so it would be buffered.
+          // Only sequenced event, but seq > 1 so it would be buffered.
           e({ type: 'error', error: 'boom', seq: 2 });
           controller.close();
         },
@@ -2767,7 +2767,7 @@ describe('AgentWidgetClient - stopReason propagation', () => {
 });
 
 // ============================================================================
-// Within-turn text/tool interleaving — assistant text bubbles must seal at
+// Within-turn text/tool interleaving: assistant text bubbles must seal at
 // each agent_tool_start so the chronological text→tool→text→tool sequence
 // renders as distinct timeline entries instead of one merged bubble that
 // appears below all the tool cards.
@@ -3004,7 +3004,7 @@ describe('AgentWidgetClient - agent_turn text/tool interleaving', () => {
 // step_await (LOCAL tool pause) + resumeFlow
 // ============================================================================
 
-describe('AgentWidgetClient — step_await parsing', () => {
+describe('AgentWidgetClient: step_await parsing', () => {
   const buildStepAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
     const encoder = new TextEncoder();
     const body = `event: step_await\ndata: ${JSON.stringify({ type: 'step_await', ...payload })}\n\n`;
@@ -3196,7 +3196,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
 
     await client.resumeFlow('exec_xyz', { toolu_A: { ok: true } });
 
-    // Session-authed sibling of /v1/client/chat — no Bearer key, sessionId in body.
+    // Session-authed sibling of /v1/client/chat: no Bearer key, sessionId in body.
     expect(capturedUrl).toBe('https://api.runtype.com/v1/client/resume');
     expect(capturedBody).toEqual({
       executionId: 'exec_xyz',
@@ -3239,7 +3239,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
       clientToken: 'ct_live_demo',
       apiUrl: 'https://api.runtype.com',
     });
-    // A stale session that has already expired — a long WebMCP approval wait can
+    // A stale session that has already expired: a long WebMCP approval wait can
     // outlive it, so resumeFlow must not trust this.clientSession directly.
     (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
       sessionId: 'cs_stale',
@@ -3647,7 +3647,7 @@ describe('AgentWidgetClient - agent_media events', () => {
       sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
       sseEvent('agent_turn_start', { executionId: execId, iteration: 1, turnIndex: 0, role: 'assistant', turnId: 'turn_1', seq: 3 }),
       sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: 'Streaming...', contentType: 'text', turnId: 'turn_1', seq: 4 }),
-      // Media arrives mid-stream — earlier text bubble is still streaming.
+      // Media arrives mid-stream: earlier text bubble is still streaming.
       sseEvent('agent_media', {
         executionId: execId, iteration: 1, toolCallId: 'tc_seal', toolName: 'shot',
         media: [{ type: 'media', data: 'PNG', mediaType: 'image/png' }],
@@ -3755,7 +3755,7 @@ describe('AgentWidgetClient - agent_media events', () => {
       sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
       sseEvent('agent_media', {
         executionId: execId, iteration: 1, toolCallId: 'tc_blob', toolName: 'opaque',
-        // mediaType is empty — should not produce a malformed `data:;base64,...` URI.
+        // mediaType is empty: should not produce a malformed `data:;base64,...` URI.
         media: [{ type: 'media', data: 'AAAA', mediaType: '' }],
         seq: 3,
       }),
@@ -4004,7 +4004,7 @@ describe('AgentWidgetClient - diff-only clientTools (client-token)', () => {
       return sse();
     });
     const client = makeClient(TOOLS);
-    // Pre-seed the cache so the first attempt would be fingerprint-only — the
+    // Pre-seed the cache so the first attempt would be fingerprint-only: the
     // server then forces a resend.
     (client as unknown as { lastSentClientToolsFingerprint: string | null; clientToolsFingerprintSessionId: string | null }).lastSentClientToolsFingerprint =
       'stale';

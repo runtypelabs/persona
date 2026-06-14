@@ -103,11 +103,11 @@ describe("ensureAskUserQuestionSheet", () => {
     expect(sheet).not.toBeNull();
     const pills = sheet!.querySelectorAll('[data-ask-user-action="pick"]');
     expect(pills.length).toBe(3);
-    // Default rows layout — label is in `.persona-ask-row-label`, alongside
+    // Default rows layout: label is in `.persona-ask-row-label`, alongside
     // a number-badge affordance. Read the dedicated label slot.
     const firstLabel = pills[0].querySelector(".persona-ask-row-label");
     expect(firstLabel?.textContent).toBe("Hobbyists");
-    // Free-text affordance present by default — rows mode embeds the input
+    // Free-text affordance present by default: rows mode embeds the input
     // inside the Other row via `focus-free-text` (digit shortcut + click chrome).
     const custom = sheet!.querySelector('[data-ask-user-action="focus-free-text"]');
     expect(custom).not.toBeNull();
@@ -144,7 +144,7 @@ describe("ensureAskUserQuestionSheet", () => {
     });
     ensureAskUserQuestionSheet(msg, {} as AgentWidgetConfig, overlay);
 
-    // Simulate more chunks arriving — options now parseable
+    // Simulate more chunks arriving: options now parseable
     msg.toolCall!.chunks = ['{"questions":[{"question":"X","options":[{"label":"A"},{"label":"B"}'];
     ensureAskUserQuestionSheet(msg, {} as AgentWidgetConfig, overlay);
 
@@ -155,7 +155,7 @@ describe("ensureAskUserQuestionSheet", () => {
     expect(pills[1].querySelector(".persona-ask-row-label")?.textContent).toBe("B");
   });
 
-  it("is idempotent — re-invoking does not duplicate sheets", () => {
+  it("is idempotent: re-invoking does not duplicate sheets", () => {
     const overlay = makeOverlay();
     ensureAskUserQuestionSheet(makeMessage(), {} as AgentWidgetConfig, overlay);
     ensureAskUserQuestionSheet(makeMessage(), {} as AgentWidgetConfig, overlay);
@@ -163,7 +163,7 @@ describe("ensureAskUserQuestionSheet", () => {
     expect(sheets.length).toBe(1);
   });
 
-  it("respects enabled: false — sheet is not mounted", () => {
+  it("respects enabled: false: sheet is not mounted", () => {
     const overlay = makeOverlay();
     ensureAskUserQuestionSheet(
       makeMessage(),
@@ -192,7 +192,7 @@ describe("ensureAskUserQuestionSheet", () => {
     expect(sheet.getAttribute("data-multi-select")).toBe("true");
   });
 
-  it("does not render a dismiss button — Skip in the nav row is the canonical escape", () => {
+  it("does not render a dismiss button: Skip in the nav row is the canonical escape", () => {
     const overlay = makeOverlay();
     ensureAskUserQuestionSheet(makeMessage(), {} as AgentWidgetConfig, overlay);
     const sheet = overlay.querySelector('[data-persona-ask-sheet-for="tool-1"]')!;
@@ -221,7 +221,7 @@ describe("removeAskUserQuestionSheet", () => {
     ensureAskUserQuestionSheet(makeMessage(), {} as AgentWidgetConfig, overlay);
     expect(overlay.querySelector('[data-persona-ask-sheet-for="tool-1"]')).not.toBeNull();
     removeAskUserQuestionSheet(overlay, "tool-1");
-    // The implementation defers removal with setTimeout — flush it.
+    // The implementation defers removal with setTimeout: flush it.
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(overlay.querySelector('[data-persona-ask-sheet-for="tool-1"]')).toBeNull();
   });
@@ -249,7 +249,7 @@ const makeGroupedMessage = (
 const sheetFor = (overlay: Element, toolCallId: string): HTMLElement =>
   overlay.querySelector<HTMLElement>(`[data-persona-ask-sheet-for="${toolCallId}"]`)!;
 
-describe("grouped questions — stepper UI", () => {
+describe("grouped questions: stepper UI", () => {
   it("renders 'Question 1 of N' chip and Back/Next nav row when N > 1", () => {
     const overlay = makeOverlay();
     const msg = makeGroupedMessage([
@@ -384,7 +384,7 @@ describe("grouped questions — stepper UI", () => {
     });
   });
 
-  it("hydrates from agentMetadata — restores index and prior answers on a fresh mount", () => {
+  it("hydrates from agentMetadata: restores index and prior answers on a fresh mount", () => {
     const overlay = makeOverlay();
     const msg = makeGroupedMessage(
       [
@@ -464,7 +464,7 @@ describe("rows layout (default)", () => {
     expect(firstRow.querySelector(".persona-ask-row-description")?.textContent).toBe(
       "Real Discord invite to link"
     );
-    // No title-attr fallback in rows layout — description is inline.
+    // No title-attr fallback in rows layout: description is inline.
     expect(firstRow.getAttribute("title")).toBeNull();
   });
 
@@ -507,11 +507,11 @@ describe("rows layout (default)", () => {
     expect(rows[0].querySelector(".persona-ask-row-badge")).toBeNull();
   });
 
-  it("embeds the free-text input INSIDE the Other row (rows mode) — no separate row, no Send button", () => {
+  it("embeds the free-text input INSIDE the Other row (rows mode): no separate row, no Send button", () => {
     const overlay = makeOverlay();
     ensureAskUserQuestionSheet(makeMessage(), {} as AgentWidgetConfig, overlay);
     const sheet = overlay.querySelector('[data-persona-ask-sheet-for="tool-1"]')!;
-    // No standalone free-text row in rows mode — input lives inside the Other row.
+    // No standalone free-text row in rows mode: input lives inside the Other row.
     expect(sheet.querySelector('[data-ask-free-text-row="true"]')).toBeNull();
     const otherRow = sheet.querySelector<HTMLElement>('[data-ask-other-row="true"]')!;
     expect(otherRow).not.toBeNull();
@@ -520,12 +520,12 @@ describe("rows layout (default)", () => {
     expect(otherRow.querySelector('[data-ask-user-action="submit-free-text"]')).toBeNull();
     // Other row carries the focus-free-text action (digit shortcut + click chrome).
     expect(otherRow.getAttribute("data-ask-user-action")).toBe("focus-free-text");
-    // Number badge for the Other row (N+1 — 3 real options + Other = 4).
+    // Number badge for the Other row (N+1: 3 real options + Other = 4).
     const badge = otherRow.querySelector<HTMLElement>(".persona-ask-row-badge");
     expect(badge?.textContent).toBe("4");
   });
 
-  it("respects layout: 'pills' opt-out — no row affordances, free-text starts hidden, Send button still rendered", () => {
+  it("respects layout: 'pills' opt-out: no row affordances, free-text starts hidden, Send button still rendered", () => {
     const overlay = makeOverlay();
     const config = {
       features: { askUserQuestion: { layout: "pills" } },

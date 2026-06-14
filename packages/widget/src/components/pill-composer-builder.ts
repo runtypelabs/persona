@@ -12,7 +12,7 @@ import {
 
 export interface PillPeekBanner {
   /**
-   * The peek button itself — a chrome-less row that floats above the pill,
+   * The peek button itself: a chrome-less row that floats above the pill,
    * showing a chat-bubble icon, a trailing-100-char preview of the most
    * recent assistant message, and a chevron-up. Rendered hidden by default
    * (opacity 0, pointer-events none); ui.ts toggles
@@ -25,8 +25,7 @@ export interface PillPeekBanner {
 
 /**
  * Build the peek banner for `launcher.mountMode: "composer-bar"`. The peek
- * is the user's path back into the expanded chat from the collapsed pill —
- * it fades in during streaming OR on composer hover, and clicking it opens
+ * is the user's path back into the expanded chat from the collapsed pill: * it fades in during streaming OR on composer hover, and clicking it opens
  * the panel. ui.ts owns visibility + content updates via
  * `syncComposerBarPeek`; this factory just produces the inert DOM shell.
  *
@@ -61,7 +60,7 @@ export const buildPillPeekBanner = (): PillPeekBanner => {
 /**
  * Single-row pill composer for `launcher.mountMode: "composer-bar"`.
  *
- * Same control factories as `buildComposer` — the only difference is the
+ * Same control factories as `buildComposer`: the only difference is the
  * layout shell + className. The form ships with `persona-pill-composer`
  * (no `persona-flex-col` / `persona-rounded-2xl` baggage), so the CSS
  * layout rules apply at normal specificity without `!important` fights.
@@ -71,7 +70,7 @@ export const buildPillPeekBanner = (): PillPeekBanner => {
  *
  * Suggestions row + status text are built (so plugin code that mutates
  * them keeps working and `bindComposerRefsFromFooter` finds them) but are
- * `display: none` by default — pill UX is just textarea + 3 buttons.
+ * `display: none` by default: pill UX is just textarea + 3 buttons.
  *
  * Attachment previews float ABOVE the pill in their own row when
  * AttachmentManager toggles the previews container's `display` property
@@ -154,7 +153,7 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
 
   // The pill flattens left/right into the form's grid; there's no separate
   // wrapper. Surface the form itself as `actionsRow` to satisfy the
-  // ComposerElements contract — downstream code only treats it as an
+  // ComposerElements contract: downstream code only treats it as an
   // opaque ref. `bindComposerRefsFromFooter` queries for the legacy
   // `.persona-flex.persona-items-center.persona-justify-between` class
   // selector and won't find one in pill mode; that lookup writes to

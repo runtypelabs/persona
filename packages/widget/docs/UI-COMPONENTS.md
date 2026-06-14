@@ -248,7 +248,7 @@ This is the recommended pattern for human-in-the-loop clarifying questions.
 
 ### Exposing the tool to the agent
 
-The simplest setup is `expose: true` — the widget advertises a built-in `ask_user_question` tool definition (model-facing description + JSON schema) on every dispatch via `clientTools[]`, the same wire surface WebMCP page tools use. No server-side declaration needed; the server registers it as a LOCAL tool under its bare name and any flow's agent can call it.
+The simplest setup is `expose: true`: the widget advertises a built-in `ask_user_question` tool definition (model-facing description + JSON schema) on every dispatch via `clientTools[]`, the same wire surface WebMCP page tools use. No server-side declaration needed; the server registers it as a LOCAL tool under its bare name and any flow's agent can call it.
 
 ```ts
 features: {
@@ -256,7 +256,7 @@ features: {
 }
 ```
 
-`expose` defaults to `false` — flows that already declare the tool would otherwise present it to the model twice. It is also ignored when `enabled: false`, so the agent is never offered a question tool the widget can't render an answer UI for.
+`expose` defaults to `false`: flows that already declare the tool would otherwise present it to the model twice. It is also ignored when `enabled: false`, so the agent is never offered a question tool the widget can't render an answer UI for.
 
 The alternative is declaring the tool server-side in your `RuntypeFlowConfig` (a `runtimeTools` LOCAL tool entry); the exported `ASK_USER_QUESTION_CLIENT_TOOL` / `ASK_USER_QUESTION_PARAMETERS_SCHEMA` constants give you the same description and schema to reuse there. Either way, pair your proxy with a `POST` handler that forwards to the upstream `/resume` endpoint (see `@runtypelabs/persona-proxy` and your deployment’s `resume` route).
 
@@ -294,7 +294,7 @@ features: {
 
 The default `rows` layout renders full-width choices with descriptions always visible and an inline free-text row when `allowFreeText !== false`. `pills` preserves the older compact wrapped pills where descriptions surface as tooltips and the "Other…" pill expands into an input.
 
-A tool call may include 1–8 questions. Single-question payloads render as one sheet. Multi-question payloads render as a paginated "Question N of M" stepper with Back / Next / Skip / Submit-all controls; progress and partial answers persist on the tool message so a refresh can restore the user's place. On the final page, users always confirm with Submit-all — auto-advance never auto-submits the entire group.
+A tool call may include 1–8 questions. Single-question payloads render as one sheet. Multi-question payloads render as a paginated "Question N of M" stepper with Back / Next / Skip / Submit-all controls; progress and partial answers persist on the tool message so a refresh can restore the user's place. On the final page, users always confirm with Submit-all: auto-advance never auto-submits the entire group.
 
 The composer-overlay sheet is the question UI. After the user answers, the picked answer (or grouped summary) appears as a normal user bubble so the transcript reads naturally; the answered tool message stores structured answers for review/re-rendering.
 
@@ -316,7 +316,7 @@ mount.addEventListener('persona:askUserQuestion:answered', (event) => {
 
 ### Custom UI via the `renderAskUserQuestion` plugin hook
 
-For full control over the question UI — a modal, a sidebar form, a command palette, whatever — register a plugin with `renderAskUserQuestion`. Returning a non-null `HTMLElement` renders inline in the transcript and suppresses the built-in overlay sheet. Returning `null` falls through to the default sheet.
+For full control over the question UI, a modal, a sidebar form, a command palette, whatever, register a plugin with `renderAskUserQuestion`. Returning a non-null `HTMLElement` renders inline in the transcript and suppresses the built-in overlay sheet. Returning `null` falls through to the default sheet.
 
 ```ts
 import type { AgentWidgetPlugin } from '@runtypelabs/persona';
@@ -325,7 +325,7 @@ const customAskPlugin: AgentWidgetPlugin = {
   id: 'custom-ask',
   renderAskUserQuestion: ({ payload, complete, resolve, dismiss }) => {
     const prompt = payload?.questions?.[0];
-    if (!prompt) return null; // streaming — wait for more data, or show a skeleton
+    if (!prompt) return null; // streaming: wait for more data, or show a skeleton
 
     const root = document.createElement('div');
     root.className = 'my-question-card';
@@ -403,15 +403,15 @@ For plugins that want to re-parse a tool message outside the hook context, the w
 
 ### Priority chain
 
-1. **Plugin hook** (`renderAskUserQuestion` returning a non-null element) — fully owns the UI; built-in overlay is suppressed.
-2. **Built-in overlay sheet** — when the feature is enabled and no plugin handles it.
-3. **Generic tool bubble** — when `features.askUserQuestion.enabled` is `false`, the tool call renders through the normal `renderToolCall` path.
+1. **Plugin hook** (`renderAskUserQuestion` returning a non-null element): fully owns the UI; built-in overlay is suppressed.
+2. **Built-in overlay sheet**: when the feature is enabled and no plugin handles it.
+3. **Generic tool bubble**: when `features.askUserQuestion.enabled` is `false`, the tool call renders through the normal `renderToolCall` path.
 
 ## Suggested Replies
 
-The `suggest_replies` feature lets the agent offer tappable quick-reply chips for the user's next message. When the agent calls the `suggest_replies` tool, the widget renders the suggestions as chips above the composer (the same slot — and `suggestionChipsConfig` styling — as the static `suggestionChips`) and **immediately** resumes the paused execution with a canned "shown" result. Unlike `ask_user_question`, nothing blocks on the user: the agent's turn completes, and tapping a chip simply sends its text verbatim as the user's next message.
+The `suggest_replies` feature lets the agent offer tappable quick-reply chips for the user's next message. When the agent calls the `suggest_replies` tool, the widget renders the suggestions as chips above the composer (the same slot, and `suggestionChipsConfig` styling, as the static `suggestionChips`) and **immediately** resumes the paused execution with a canned "shown" result. Unlike `ask_user_question`, nothing blocks on the user: the agent's turn completes, and tapping a chip simply sends its text verbatim as the user's next message.
 
-This is the recommended pattern for follow-up discovery — teaching users what to ask next without forcing typing.
+This is the recommended pattern for follow-up discovery: teaching users what to ask next without forcing typing.
 
 ### Exposing the tool to the agent
 
@@ -421,7 +421,7 @@ features: {
 }
 ```
 
-`expose` defaults to `false` — flows that already declare the tool via `runtimeTools` would otherwise present it to the model twice. It is also ignored when `enabled: false`: a disabled feature neither renders chips nor auto-resumes, so exposing the tool alongside it would park the execution on a generic tool bubble forever. (The same applies to a server-declared `suggest_replies` with `enabled: false` — treat that combination as a configuration error.)
+`expose` defaults to `false`: flows that already declare the tool via `runtimeTools` would otherwise present it to the model twice. It is also ignored when `enabled: false`: a disabled feature neither renders chips nor auto-resumes, so exposing the tool alongside it would park the execution on a generic tool bubble forever. (The same applies to a server-declared `suggest_replies` with `enabled: false` : treat that combination as a configuration error.)
 
 For server-side declaration, the exported `SUGGEST_REPLIES_CLIENT_TOOL` / `SUGGEST_REPLIES_PARAMETERS_SCHEMA` constants provide the same description and schema to reuse in a flow's `runtimeTools`.
 
@@ -437,14 +437,14 @@ For server-side declaration, the exported `SUGGEST_REPLIES_CLIENT_TOOL` / `SUGGE
 
 Chip visibility is derived from the transcript, not toggled imperatively: the widget shows the chips of the **last** `suggest_replies` tool message that has **no user message after it**. That one rule covers everything:
 
-- Chips soft-dismiss the moment any user message lands — typed, voice, or a chip tap (which itself sends a user message).
+- Chips soft-dismiss the moment any user message lands: typed, voice, or a chip tap (which itself sends a user message).
 - Chips survive panel close/reopen and page reload (the tool message persists in history and the rule re-evaluates on hydrate). If the page reloads before the automatic resume fired, the execution stays paused server-side; tapping a chip starts a fresh dispatch and the conversation recovers naturally.
 - When one turn carries several `suggest_replies` calls, every call is resumed but only the latest renders (latest wins).
 - Chips are disabled while a response is streaming, like all composer controls.
 
-No transcript bubble is rendered for the tool message — the chips are the entire UI. When `enabled: false`, the message falls through to the generic tool bubble instead.
+No transcript bubble is rendered for the tool message: the chips are the entire UI. When `enabled: false`, the message falls through to the generic tool bubble instead.
 
-Note: integrators who replace the composer's suggestions slot via the composer layout API won't see agent-pushed chips — they render in the same container as `suggestionChips`.
+Note: integrators who replace the composer's suggestions slot via the composer layout API won't see agent-pushed chips: they render in the same container as `suggestionChips`.
 
 ### Configuration
 
@@ -463,8 +463,8 @@ Chip styling reuses the widget-level `suggestionChipsConfig` (font family/weight
 
 | Event | Detail |
 |---|---|
-| `persona:suggestReplies:shown` | `{ suggestions: string[] }` — fires once per distinct chip set |
-| `persona:suggestReplies:selected` | `{ suggestion: string }` — fires before the chip text is sent |
+| `persona:suggestReplies:shown` | `{ suggestions: string[] }`: fires once per distinct chip set |
+| `persona:suggestReplies:selected` | `{ suggestion: string }`: fires before the chip text is sent |
 
 ## Dropdown Menu
 
@@ -508,7 +508,7 @@ const dropdown = createDropdownMenu({
   position: 'bottom-right',
   portal: document.querySelector('[data-persona-root]')!,
 });
-// No need to append — portal mode appends automatically
+// No need to append: portal mode appends automatically
 ```
 
 ### Header dropdown menus
@@ -744,11 +744,11 @@ The AI responds with JSON like:
 
 **Demos and reference:**
 
-- [`examples/embedded-app/dynamic-form.html`](../../../examples/embedded-app/dynamic-form.html) — primary demo with three layout variants (Compact / Spacious / Branded) showing how `formStyles` scales between visual languages.
-- [`examples/embedded-app/dynamic-form-fields.html`](../../../examples/embedded-app/dynamic-form-fields.html) — every field type, layout width, helper-text, required marking, and sensitive-masking pattern in one page.
-- [`docs/DYNAMIC-FORMS.md`](./DYNAMIC-FORMS.md) — full reference: field schema, `formStyles` tokens, layout patterns, recipes, and how to extend the example component (new field types, sections, conditional fields).
+- [`examples/embedded-app/dynamic-form.html`](../../../examples/embedded-app/dynamic-form.html): primary demo with three layout variants (Compact / Spacious / Branded) showing how `formStyles` scales between visual languages.
+- [`examples/embedded-app/dynamic-form-fields.html`](../../../examples/embedded-app/dynamic-form-fields.html): every field type, layout width, helper-text, required marking, and sensitive-masking pattern in one page.
+- [`docs/DYNAMIC-FORMS.md`](./DYNAMIC-FORMS.md): full reference: field schema, `formStyles` tokens, layout patterns, recipes, and how to extend the example component (new field types, sections, conditional fields).
 
-The shipped `DynamicForm` is an **example** in [`examples/embedded-app/src/components.ts`](../../../examples/embedded-app/src/components.ts) — copy it into your app and customize. It supports text/email/tel/url/number/date/time/textarea, half-width pairs, auto-grow textareas, required-asterisk marking, inline validation, a success recap card with sensitive-field masking, and edit-after-submit. See [DYNAMIC-FORMS.md](./DYNAMIC-FORMS.md) for the full surface area.
+The shipped `DynamicForm` is an **example** in [`examples/embedded-app/src/components.ts`](../../../examples/embedded-app/src/components.ts): copy it into your app and customize. It supports text/email/tel/url/number/date/time/textarea, half-width pairs, auto-grow textareas, required-asterisk marking, inline validation, a success recap card with sensitive-field masking, and edit-after-submit. See [DYNAMIC-FORMS.md](./DYNAMIC-FORMS.md) for the full surface area.
 
 ## Directive postprocessor (Deprecated)
 

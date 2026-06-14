@@ -25,7 +25,7 @@
             <button class="mode-btn" data-variant="plugin">Plugin (alternative)</button>
           </div>
           <div id="icon-mode-row" style="margin-top: 0.85rem; display: none;">
-            <p style="margin: 0 0 0.4rem; font-size: 0.85rem;">Source icon — explicit <code>icons</code> map vs. Google favicon service vs. the built-in default tool icon.</p>
+            <p style="margin: 0 0 0.4rem; font-size: 0.85rem;">Source icon: explicit <code>icons</code> map vs. Google favicon service vs. the built-in default tool icon.</p>
             <div class="mode-group" id="icon-selector">
               <button class="mode-btn active" data-icon="map">Square icon</button>
               <button class="mode-btn" data-icon="google">Google favicon</button>
@@ -80,7 +80,7 @@
       <div class="notes-section">
         <h3 class="notes-section-title">Plugin renderer (alternative)</h3>
         <p>Switch the <strong>Renderer</strong> to <em>Plugin</em> to swap the built-in bubble for a <code>renderApproval</code> plugin that shows an alternative permission prompt: an expandable "BotName wants to use <em>{tool}</em>" header and a split <strong>Always allow ⏎ / Allow once ⌘⏎</strong> control plus <strong>Deny Esc</strong>, with keyboard shortcuts.</p>
-        <p>A fully custom renderer resolves the approval via the <code>approve</code> / <code>deny</code> callbacks passed into the hook. An approval is a single binary gate, so "Always allow" is just <code>approve({ remember: true })</code> — the current approval resolves the same as "Allow once", and the <code>remember</code> flag is forwarded to <code>onDecision</code> so your app can persist a don't-ask-again policy for future approvals. See <code>src/plugins/approval-actions-plugin.js</code>.</p>
+        <p>A fully custom renderer resolves the approval via the <code>approve</code> / <code>deny</code> callbacks passed into the hook. An approval is a single binary gate, so "Always allow" is just <code>approve({ remember: true })</code>: the current approval resolves the same as "Allow once", and the <code>remember</code> flag is forwarded to <code>onDecision</code> so your app can persist a don't-ask-again policy for future approvals. See <code>src/plugins/approval-actions-plugin.js</code>.</p>
       </div>
 
       <div class="notes-section">

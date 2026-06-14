@@ -2,7 +2,7 @@
  * npm package entry (`@runtypelabs/persona`).
  *
  * This is a thin barrel over `index-core.ts` (the shared public API) that adds
- * back the **dev/config-tool-only** helpers — `generateCodeSnippet` and
+ * back the **dev/config-tool-only** helpers: `generateCodeSnippet` and
  * `createDemoCarousel`. Those are kept out of `index-core.ts` so the IIFE/CDN
  * build (`index-global.ts`, which re-exports from `index-core.ts`) doesn't ship
  * them: a running widget never needs them, only build-time/demo tooling does.

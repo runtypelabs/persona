@@ -56,7 +56,7 @@ export interface WebMcpTool {
 
 /**
  * Wrap a JSON-serializable payload in the MCP tool-result envelope. Compact
- * JSON (no indentation) — the text is consumed by a model, where pretty-print
+ * JSON (no indentation): the text is consumed by a model, where pretty-print
  * whitespace is pure token overhead.
  */
 export function toolResult(payload: unknown): ToolResult {
@@ -71,7 +71,7 @@ export function toolResult(payload: unknown): ToolResult {
 /**
  * Structural subset of `ThemeEditorState` (and the example app's `state`
  * module) that the tools require. Anything satisfying this shape can be wired
- * to the tools — the headless `ThemeEditorState`, or a host's stateful wrapper
+ * to the tools: the headless `ThemeEditorState`, or a host's stateful wrapper
  * that also drives a live preview (e.g. a Persona widget styling itself).
  */
 export interface ThemeEditorLike {

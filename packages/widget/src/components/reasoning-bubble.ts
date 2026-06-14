@@ -114,7 +114,7 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
   const defaultSummary = "Thinking...";
   const reasoningConfig = config?.reasoning ?? {};
 
-  // Elapsed helpers — defined early so they're available to renderCollapsedSummary
+  // Elapsed helpers: defined early so they're available to renderCollapsedSummary
   const startedAt = String(reasoning.startedAt ?? Date.now());
 
   const createElapsedSpan = (): HTMLElement => {
@@ -144,7 +144,7 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
     headerContent.appendChild(title);
   }
 
-  // Status span — used in the legacy (no-template) path
+  // Status span: used in the legacy (no-template) path
   const status = createElement("span", "persona-text-xs persona-text-persona-primary");
   status.textContent = describeReasonStatus(reasoning);
   headerContent.appendChild(status);

@@ -1,11 +1,11 @@
 /**
- * `screenshot_preview` — example-local WebMCP tool that captures the rendered
+ * `screenshot_preview`: example-local WebMCP tool that captures the rendered
  * theme preview and returns it to the agent as MCP image content blocks.
  *
  * Lives in the example (not the widget package's tool factory) on purpose: the
  * factory is headless and DOM-free, while this tool needs the live preview
  * manager and the `modern-screenshot` dependency. It closes the visual loop
- * for the Theme Copilot — apply theme tools, screenshot, compare against the
+ * for the Theme Copilot: apply theme tools, screenshot, compare against the
  * user's reference image, refine.
  */
 
@@ -19,7 +19,7 @@ export function createScreenshotPreviewTool(
     name: 'screenshot_preview',
     title: 'Screenshot the preview',
     description:
-      'Capture the current rendered state of the theme preview as an image — exactly what the user sees. ' +
+      'Capture the current rendered state of the theme preview as an image: exactly what the user sees. ' +
       'Returns one JPEG per visible preview frame (two when a compare mode is active, labeled e.g. Light/Dark). ' +
       'Call after applying a batch of theme changes to verify the visual result, especially when matching a reference image.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },

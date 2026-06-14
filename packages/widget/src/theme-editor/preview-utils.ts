@@ -212,9 +212,9 @@ export type PreviewTranscriptEntryPreset =
 const PREVIEW_TRANSCRIPT_PRESET_LABELS: Record<PreviewTranscriptEntryPreset, string> = {
   'user-message': 'User message',
   'assistant-message': 'Assistant message',
-  'assistant-code-block': 'Assistant — code block',
-  'assistant-markdown-table': 'Assistant — markdown table',
-  'assistant-image': 'Assistant — image',
+  'assistant-code-block': 'Assistant: code block',
+  'assistant-markdown-table': 'Assistant: markdown table',
+  'assistant-image': 'Assistant: image',
   'reasoning-streaming': 'Reasoning (streaming)',
   'reasoning-complete': 'Reasoning (complete)',
   'tool-running': 'Tool call (running)',
@@ -290,7 +290,7 @@ export function createPreviewTranscriptEntry(
         id: `preview-seq-assistant-image-${suffix}`,
         role: 'assistant',
         content: [
-          "Here's the reference diagram you asked for — let me know if you'd like a different view:",
+          "Here's the reference diagram you asked for: let me know if you'd like a different view:",
           '',
           '![Stream animation reference](https://placehold.co/320x200/png?text=Stream+Animation)',
           '',

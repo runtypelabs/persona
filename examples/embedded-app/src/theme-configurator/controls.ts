@@ -812,7 +812,7 @@ function createRoleAssignmentControl(
   // Row 2: family dots + intensity toggle
   const pickerRow = el('div', { className: 'role-picker-row' });
 
-  // Family picker — circle swatches with tooltips
+  // Family picker: circle swatches with tooltips
   const familyPicker = el('div', { className: 'role-family-picker' });
   const familyButtons = new Map<RoleFamily, HTMLButtonElement>();
 
@@ -844,7 +844,7 @@ function createRoleAssignmentControl(
   }
   pickerRow.appendChild(familyPicker);
 
-  // Intensity toggle — segmented
+  // Intensity toggle: segmented
   const intensityToggle = el('div', { className: 'role-intensity-toggle' });
   const intensityButtons = new Map<string, HTMLButtonElement>();
 
@@ -931,7 +931,7 @@ function createRoleAssignmentControl(
           const badge = el('span', {
             className: `role-contrast-badge ${pass ? 'role-contrast-pass' : 'role-contrast-fail'}`,
           }, [`${ratio.toFixed(1)}:1`]);
-          badge.title = pass ? 'WCAG AA pass' : 'WCAG AA fail — contrast too low';
+          badge.title = pass ? 'WCAG AA pass' : 'WCAG AA fail: contrast too low';
           previewRow.appendChild(swatch);
           previewRow.appendChild(badge);
           return;

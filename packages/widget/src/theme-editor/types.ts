@@ -1,4 +1,4 @@
-/** Field definition types for the declarative configurator system (headless — no DOM) */
+/** Field definition types for the declarative configurator system (headless: no DOM) */
 
 import type { DeepPartial, PersonaTheme } from '../types/theme';
 import type { AgentWidgetConfig } from '../types';

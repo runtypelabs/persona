@@ -1,4 +1,4 @@
-/** Colors & Style — palette scales and semantic tokens for drill-down views */
+/** Colors & Style: palette scales and semantic tokens for drill-down views */
 
 import type { SectionDef, OnChangeCallback, ControlResult } from '../types';
 import { renderSection } from '../controls';

@@ -1,5 +1,5 @@
 /**
- * VENDORED type declarations — @mcp-b/smart-dom-reader v2.3.1 (MIT).
+ * VENDORED type declarations: @mcp-b/smart-dom-reader v2.3.1 (MIT).
  * Copied verbatim from upstream dist/index.d.mts (only the trailing sourceMappingURL
  * comment removed). See ./index.js and ./README.md for why this is vendored.
  */

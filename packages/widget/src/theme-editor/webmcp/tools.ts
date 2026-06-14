@@ -4,8 +4,8 @@
  * `createThemeEditorTools(state)` returns transport-agnostic tool definitions
  * designed for Agent Experience: intent-level operations (set brand colors,
  * assign a color role, set roundness…) rather than a 1:1 mapping of the ~150
- * editor fields. Two altitudes — high-level semantic tools plus a low-level
- * escape hatch (`set_theme_fields`) — keep the catalog small without losing
+ * editor fields. Two altitudes: high-level semantic tools plus a low-level
+ * escape hatch (`set_theme_fields`): keep the catalog small without losing
  * coverage. Every mutation returns a compact summary + contrast warnings.
  */
 
@@ -205,7 +205,7 @@ export function createThemeEditorTools(
           tags: p.tags ?? [],
         })),
         tools: [
-          { tool: 'set_brand_colors', hint: 'Recolor the palette (primary/secondary/accent) — auto-generates shade scales.' },
+          { tool: 'set_brand_colors', hint: 'Recolor the palette (primary/secondary/accent): auto-generates shade scales.' },
           { tool: 'assign_color_role', hint: 'Recolor a region (header, user/assistant messages, actions, input, links, borders, surfaces, scroll) with a family + intensity.' },
           { tool: 'set_typography', hint: 'Set font family, size, weight, line height.' },
           { tool: 'set_roundness', hint: 'Set corner roundness (sharp/default/rounded/pill) or granular radii.' },
@@ -415,7 +415,7 @@ export function createThemeEditorTools(
     name: 'set_color_scheme',
     title: 'Set color scheme',
     description:
-      'Set the shipped widget color scheme (light, dark, or auto/follow-system). Optionally set `editTarget` to choose which theme variant subsequent styling edits write to (light, dark, or both — default both).',
+      'Set the shipped widget color scheme (light, dark, or auto/follow-system). Optionally set `editTarget` to choose which theme variant subsequent styling edits write to (light, dark, or both: default both).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -607,7 +607,7 @@ export function createThemeEditorTools(
     name: 'set_theme_fields',
     title: 'Set theme fields by id or path (advanced)',
     description:
-      'Advanced escape hatch: set individual editor fields by field id (see get_theme_overview verbosity:"full") — theme field ids follow the current edit target (light/dark/both) — or by raw dot-path (theme.* / darkTheme.* / a config path), which is written as-is. Use only when a higher-level tool does not cover the need. Values are validated against the field metadata.',
+      'Advanced escape hatch: set individual editor fields by field id (see get_theme_overview verbosity:"full"), theme field ids follow the current edit target (light/dark/both), or by raw dot-path (theme.* / darkTheme.* / a config path), which is written as-is. Use only when a higher-level tool does not cover the need. Values are validated against the field metadata.',
     inputSchema: {
       type: 'object',
       properties: {

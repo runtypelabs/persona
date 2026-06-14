@@ -2,7 +2,7 @@ import type { Slide, SlideElement, Theme } from "./types";
 import { SLIDE_H, SLIDE_W } from "./types";
 import { resolveColor, resolveFont } from "./themes";
 
-// Pure slide rendering — no event listeners, no store access. Reused by three
+// Pure slide rendering: no event listeners, no store access. Reused by three
 // consumers: the editor canvas (which layers an interaction overlay on top),
 // the sorter rail (scaled down with a CSS transform), and presenter mode
 // (scaled to the viewport). Full re-render on every store change is cheap:

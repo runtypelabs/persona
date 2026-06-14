@@ -19,7 +19,7 @@ export interface MountThemeEditorMcpOptions {
 export interface ThemeEditorMcpHandle {
   /**
    * Resolves once every tool is registered on `document.modelContext` (or
-   * registration was skipped — no model context / already unmounted). Gate
+   * registration was skipped: no model context / already unmounted). Gate
    * agent mounting on this so a first dispatch never races the registration
    * and ships an empty clientTools list.
    */

@@ -6,7 +6,7 @@ import { ALL_SUPPORTED_MIME_TYPES } from "../utils/content";
 /**
  * Low-level composer control factories. Both `buildComposer` (full,
  * column-stacked card) and `buildPillComposer` (single-row pill) consume
- * these — the only meaningful difference between the two composers is the
+ * these: the only meaningful difference between the two composers is the
  * layout shell + className. No DOM assembly here; each factory returns the
  * element plus any handles the caller needs.
  *
@@ -61,7 +61,7 @@ export const createComposerTextarea = (config?: AgentWidgetConfig): ComposerText
     });
   };
 
-  // Strip browser default focus rings — the composer wraps the textarea in
+  // Strip browser default focus rings: the composer wraps the textarea in
   // its own surface, so the textarea itself must be visually transparent.
   textarea.style.border = "none";
   textarea.style.outline = "none";
@@ -218,7 +218,7 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
     if (useIcon) {
       if (sendIcon && stopIcon) {
         const next = mode === "stop" ? stopIcon : sendIcon;
-        // Replace whatever icon is currently mounted — the button only ever
+        // Replace whatever icon is currently mounted: the button only ever
         // holds the single active icon. We use replaceChildren(next) rather
         // than replaceChild(next, prev) against a captured `prev` reference:
         // an external re-render/morph can swap the live icon child out from

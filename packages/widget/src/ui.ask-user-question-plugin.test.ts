@@ -127,7 +127,7 @@ describe("renderAskUserQuestion plugin hook", () => {
     injectAskUserQuestion(controller);
     expect(mount.querySelector("[data-persona-ask-sheet-for]")).toBeNull();
 
-    // Force a re-render by injecting a second message — the ask_user_question
+    // Force a re-render by injecting a second message: the ask_user_question
     // wrapper now goes through the render path again. The built-in overlay
     // sheet must NOT appear; the plugin still owns the UI.
     controller.injectTestMessage({
@@ -158,7 +158,7 @@ describe("renderAskUserQuestion plugin hook", () => {
         btn.type = "button";
         btn.setAttribute("data-test-id", "click-pill");
         btn.textContent = "Pick me";
-        // Single delegated listener at root — pattern recommended for plugins.
+        // Single delegated listener at root: pattern recommended for plugins.
         root.addEventListener("click", (e) => {
           if ((e.target as HTMLElement).getAttribute("data-test-id") === "click-pill") {
             resolve("Pick me");
@@ -190,7 +190,7 @@ describe("renderAskUserQuestion plugin hook", () => {
 
     injectAskUserQuestion(controller);
 
-    // Force a re-render before the click — this is exactly the scenario
+    // Force a re-render before the click: this is exactly the scenario
     // where innerHTML-based morph used to drop listeners on the freshly-built
     // plugin root.
     controller.injectTestMessage({
@@ -226,7 +226,7 @@ describe("renderAskUserQuestion plugin hook", () => {
 
     // Plugin renders an interactive card while the question is awaiting an
     // answer. Once answered, the widget suppresses the original tool message
-    // entirely — the plugin renderer is invoked but returns null — and the
+    // entirely, the plugin renderer is invoked but returns null, and the
     // session injects Q→A pair messages (assistant question + user answer)
     // that render through the standard transcript pipeline.
     const plugin: AgentWidgetPlugin = {
@@ -350,7 +350,7 @@ describe("renderAskUserQuestion plugin hook", () => {
     (sheet.querySelector('[data-option-label="A"]') as HTMLElement).click();
     expect(sheet.getAttribute("data-ask-current-index")).toBe("1");
 
-    // Final page: pick should NOT auto-submit — Submit-all button still present.
+    // Final page: pick should NOT auto-submit: Submit-all button still present.
     (sheet.querySelector('[data-option-label="C"]') as HTMLElement).click();
     expect(sheet.getAttribute("data-ask-current-index")).toBe("2");
     (sheet.querySelector('[data-option-label="E"]') as HTMLElement).click();
@@ -519,12 +519,12 @@ describe("renderAskUserQuestion plugin hook", () => {
     expect(sheet.getAttribute("data-ask-layout")).toBe("rows");
     expect(sheet.getAttribute("data-ask-current-index")).toBe("0");
 
-    // Focus on body — no element inside the overlay subtree is focused.
+    // Focus on body: no element inside the overlay subtree is focused.
     if (document.activeElement && document.activeElement !== document.body) {
       (document.activeElement as HTMLElement).blur?.();
     }
 
-    // Dispatch the digit keypress on `mount` — the listener on `mount`
+    // Dispatch the digit keypress on `mount`: the listener on `mount`
     // catches it regardless of focus location. In grouped single-select mode,
     // a successful pick auto-advances to the next page (default behavior).
     mount.dispatchEvent(
@@ -564,7 +564,7 @@ describe("renderAskUserQuestion plugin hook", () => {
       new KeyboardEvent("keydown", { key: "2", bubbles: true })
     );
 
-    // No row should have been picked — input is the focused target so the
+    // No row should have been picked: input is the focused target so the
     // mount-level handler bails out.
     const beta = sheet.querySelector<HTMLElement>('[data-option-label="Beta"]')!;
     expect(beta.getAttribute("aria-pressed")).toBe("false");
@@ -572,7 +572,7 @@ describe("renderAskUserQuestion plugin hook", () => {
     controller.destroy();
   });
 
-  it("respects groupedAutoAdvance: false — pick stays on current page", () => {
+  it("respects groupedAutoAdvance: false: pick stays on current page", () => {
     const mount = createMount();
     const controller = createAgentExperience(mount, {
       apiUrl: "https://api.example.com/chat",

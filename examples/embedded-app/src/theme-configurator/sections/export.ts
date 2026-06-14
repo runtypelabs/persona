@@ -1,4 +1,4 @@
-/** Actions — toolbar dropdown with export, import, presets, and reset utilities. */
+/** Actions: toolbar dropdown with export, import, presets, and reset utilities. */
 
 import type { OnChangeCallback, ControlResult } from '../types';
 import { setSearchContext } from '../search';

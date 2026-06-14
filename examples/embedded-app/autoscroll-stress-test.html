@@ -110,7 +110,7 @@
     <h1>Auto-Scroll Stress Test</h1>
     <p class="subtitle">
       Uses the floating launcher (bottom-right). The panel opens automatically. Run a scenario and watch the
-      message list — it should stay pinned to the bottom unless you scroll up inside the chat.
+      message list: it should stay pinned to the bottom unless you scroll up inside the chat.
     </p>
 
     <div class="layout">
@@ -126,9 +126,9 @@
         <div class="btn-group">
           <label>Scroll mode</label>
           <select id="scroll-mode">
-            <option value="follow" selected>follow — stick to bottom (default)</option>
-            <option value="anchor-top">anchor-top — pin sent message to top</option>
-            <option value="none">none — never auto-scroll</option>
+            <option value="follow" selected>follow: stick to bottom (default)</option>
+            <option value="anchor-top">anchor-top: pin sent message to top</option>
+            <option value="none">none: never auto-scroll</option>
           </select>
         </div>
 
@@ -245,7 +245,7 @@
         controller.update(buildWidgetConfig(mode));
         log(`Scroll mode → ${mode}`, "info");
         if (mode === "anchor-top") {
-          log("Run 'Simulate Streaming' or type a message — the sent message should pin near the top while the reply streams below.", "info");
+          log("Run 'Simulate Streaming' or type a message: the sent message should pin near the top while the reply streams below.", "info");
         }
       });
 
@@ -266,7 +266,7 @@
         const { open } = controller.getState();
         if (!open) {
           dot.className = "status-dot idle";
-          label.textContent = "Panel closed — open the chat to see scroll state";
+          label.textContent = "Panel closed: open the chat to see scroll state";
           requestAnimationFrame(pollFollowState);
           return;
         }
@@ -301,11 +301,11 @@
       const LONG_PARAGRAPHS = [
         "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the English alphabet at least once, making it a pangram. Pangrams are often used to display typefaces and test keyboards.",
         "Artificial intelligence has made remarkable strides in recent years, transforming industries from healthcare to transportation. Machine learning models can now process natural language, recognize images, generate creative content, and even write code. The implications for society are both exciting and challenging.",
-        "In software engineering, maintaining clean code is not just about aesthetics — it directly impacts a team's velocity, the frequency of production incidents, and how quickly new developers can onboard. Code that is easy to read is easy to reason about, and code that is easy to reason about is easy to change safely.",
+        "In software engineering, maintaining clean code is not just about aesthetics: it directly impacts a team's velocity, the frequency of production incidents, and how quickly new developers can onboard. Code that is easy to read is easy to reason about, and code that is easy to reason about is easy to change safely.",
       ];
 
       const MARKDOWN_BLOCKS = [
-        "## Search Results\n\nHere are the top results:\n\n1. **Product A** — $29.99\n   - In stock, ships tomorrow\n   - Rating: ★★★★☆\n2. **Product B** — $49.99\n   - Limited availability\n   - Rating: ★★★★★\n3. **Product C** — $19.99\n   - Backordered until next week\n   - Rating: ★★★☆☆\n\n> *Prices may vary by region.*",
+        "## Search Results\n\nHere are the top results:\n\n1. **Product A**, $29.99\n   - In stock, ships tomorrow\n   - Rating: ★★★★☆\n2. **Product B**, $49.99\n   - Limited availability\n   - Rating: ★★★★★\n3. **Product C**: $19.99\n   - Backordered until next week\n   - Rating: ★★★☆☆\n\n> *Prices may vary by region.*",
 
         "### Steps to Complete\n\n- [x] Initialize the project\n- [x] Set up the database\n- [ ] Build the API endpoints\n- [ ] Write integration tests\n- [ ] Deploy to staging\n\nWe're making good progress! The first two steps are done.",
 
@@ -322,7 +322,7 @@
         "What's the status of my order?",
         "How do I set up the project?",
         "Thanks, that's really helpful!",
-        "One more question — do you support SSO?",
+        "One more question: do you support SSO?",
       ];
 
       function injectReasoningMessage({ id, status = "streaming", chunks = [] }) {
@@ -512,7 +512,7 @@ Let me know if you need any additional help with the setup!`;
 
         const exchanges = [
           { role: "user", content: "Hi! I'm looking for a good laptop for software development." },
-          { role: "assistant", content: "I'd be happy to help you find the right laptop for development! To give you the best recommendations, I have a few questions:\n\n1. **Budget range** — What's your price range?\n2. **Primary use** — What kind of development? (web, mobile, ML/AI, etc.)\n3. **OS preference** — macOS, Windows, or Linux?\n4. **Portability** — Do you need something lightweight for travel?" },
+          { role: "assistant", content: "I'd be happy to help you find the right laptop for development! To give you the best recommendations, I have a few questions:\n\n1. **Budget range**, What's your price range?\n2. **Primary use**, What kind of development? (web, mobile, ML/AI, etc.)\n3. **OS preference**, macOS, Windows, or Linux?\n4. **Portability**, Do you need something lightweight for travel?" },
           { role: "user", content: "Budget is around $2000, mostly web development and some Docker work. I prefer macOS but open to Linux." },
           { role: "assistant", content: MARKDOWN_BLOCKS[0].replace(/Product/g, "Laptop").replace(/\$\d+\.\d+/g, (m, i) => ["$1,799", "$1,999", "$1,599"][i] || m) },
           { role: "user", content: "The second one sounds good. What about the specs?" },
@@ -704,7 +704,7 @@ Let me know if you need any additional help with the setup!`;
 
         controller.injectAssistantMessage({
           id: nextId("burst-short"),
-          content: "Yes — I'll compare the quickest approaches and keep a running trace below.",
+          content: "Yes: I'll compare the quickest approaches and keep a running trace below.",
         });
         await sleep(90);
         if (token.cancelled) return finish();
@@ -880,7 +880,7 @@ Let me know if you need any additional help with the setup!`;
       }
 
       // Late image load: in follow mode the transcript should re-pin to the
-      // bottom when the image finishes loading and grows the content — even
+      // bottom when the image finishes loading and grows the content: even
       // though no message render fires at that moment.
       async function lateImageLoad() {
         setAllButtons(true);
@@ -891,7 +891,7 @@ Let me know if you need any additional help with the setup!`;
         await sleep(250);
 
         const msgId = nextId("img");
-        const words = "Here is a large photo — it loads after this text has already rendered, so the transcript grows without a new message:".split(" ");
+        const words = "Here is a large photo: it loads after this text has already rendered, so the transcript grows without a new message:".split(" ");
         let acc = "";
         for (const word of words) {
           if (cancelToken.cancelled) break;
@@ -910,7 +910,7 @@ Let me know if you need any additional help with the setup!`;
 
         document.getElementById("btn-image").classList.remove("running");
         setAllButtons(false);
-        log("Done: Late Image Load — watch for the re-pin when the image pops in.");
+        log("Done: Late Image Load: watch for the re-pin when the image pops in.");
       }
 
       // ── wire buttons ────────────────────────────────────────────

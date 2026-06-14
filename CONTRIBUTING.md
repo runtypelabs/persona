@@ -28,7 +28,7 @@ pnpm test           # watch mode
 
 1. Fork the repo and create a branch from `main`.
 2. Make your changes and ensure `pnpm lint`, `pnpm typecheck`, and tests all pass.
-3. **Create a changeset** — this is required for any change to a published package:
+3. **Create a changeset**: this is required for any change to a published package:
    ```bash
    pnpm changeset
    ```

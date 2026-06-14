@@ -1,4 +1,4 @@
-/** Style tab — outcome-oriented controls: Theme, Brand Palette, Interface Roles, Status Colors, Advanced Tokens */
+/** Style tab: outcome-oriented controls: Theme, Brand Palette, Interface Roles, Status Colors, Advanced Tokens */
 
 import type { SectionDef, OnChangeCallback, ControlResult } from '../types';
 import { renderSection } from '../controls';
@@ -274,7 +274,7 @@ export function render(
   // Status Colors
   allControls.push(...renderSections(container, onChange, [STATUS_COLORS_SECTION as SectionDef]));
 
-  // Advanced Tokens (entry point — no fields, just drilldown links)
+  // Advanced Tokens (entry point: no fields, just drilldown links)
   allControls.push(...renderSections(container, onChange, [ADVANCED_TOKENS_SECTION as SectionDef]));
 
   renderSectionHeaderMetadata(container);

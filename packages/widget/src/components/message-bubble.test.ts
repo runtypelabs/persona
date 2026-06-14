@@ -155,7 +155,7 @@ describe("resolveStopReasonNoticeText", () => {
   });
 });
 
-describe("createStandardBubble — stopReason notice", () => {
+describe("createStandardBubble: stopReason notice", () => {
   const renderWithStopReason = (
     overrides: Partial<AgentWidgetMessage>,
     widgetConfig?: Partial<AgentWidgetConfig>
@@ -333,7 +333,7 @@ describe("isSafeMediaSrc", () => {
   });
 });
 
-describe("createStandardBubble — audio/video/file content parts", () => {
+describe("createStandardBubble: audio/video/file content parts", () => {
   it("renders an <audio> element with controls for an audio content part", () => {
     const bubble = createStandardBubble(
       makeMessage({

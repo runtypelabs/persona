@@ -19,15 +19,15 @@
  * with no MCP-B-only extensions. The spec standardizes the *producer* side;
  * Persona is an in-page *consumer*, so it reads the registry via the
  * producer-facing preview API:
- *   - `getTools()` — async; returns `{ name, description, inputSchema }` where
+ *   - `getTools()`: async; returns `{ name, description, inputSchema }` where
  *     `inputSchema` is a JSON *string*. Annotations are not exposed here.
- *   - `executeTool(toolInfo, inputArgsJson, { signal })` — async; validates args
+ *   - `executeTool(toolInfo, inputArgsJson, { signal })`: async; validates args
  *     against the tool's schema, runs `execute()`, and returns the raw result as
  *     a JSON *string* (or `null` for `undefined`). Honors `signal` for abort.
  *
  * The polyfill auto-installs `document.modelContext` at module-evaluation time,
  * so it is imported *dynamically* and only when `config.webmcp.enabled === true`
- * — a static import would install the global for every widget consumer,
+ *: a static import would install the global for every widget consumer,
  * including those that never opted into WebMCP.
  *
  * Confirm model: every `webmcp:*` call goes through one confirm gate before
@@ -49,7 +49,7 @@ import type {
  * Persona waits before telling the agent the tool failed, keeping a misbehaving
  * tool from pinning the agent indefinitely. The timeout aborts the polyfill's
  * `executeTool` via an `AbortSignal`, so the page's work is asked to stop too
- * (cooperatively — a tool that ignores the signal may still complete).
+ * (cooperatively: a tool that ignores the signal may still complete).
  */
 const DEFAULT_TOOL_TIMEOUT_MS = 30_000;
 
@@ -70,7 +70,7 @@ interface ModelContextToolInfo {
    * Display title declared on the tool (`ToolDescriptor.title` in the WebMCP
    * spec). The polyfill returns `""` when the tool didn't declare one. Note:
    * `annotations` (incl. the legacy `annotations.title`) are NOT exposed on
-   * this strict consumer surface — top-level `title` is the only display-name
+   * this strict consumer surface: top-level `title` is the only display-name
    * channel available to us.
    */
   title?: string;
@@ -97,7 +97,7 @@ const webMcpToolDisplayTitles = new Map<string, string>();
 
 /**
  * Record declared display titles from a fresh `getTools()` read. The map is
- * rebuilt from scratch — callers always pass the FULL registry snapshot — so
+ * rebuilt from scratch, callers always pass the FULL registry snapshot, so
  * a tool that unregistered or dropped its title can't leave a stale label
  * behind. Exported for tests; production callers are the bridge's registry
  * reads.
@@ -160,16 +160,15 @@ export const setWebMcpPolyfillLoader = (
  * The widget caches "the fingerprint of the tool set last sent in full" for the
  * current session; an unchanged set on a follow-up turn lets it ship only the
  * fingerprint instead of the whole array. Per-tool strings are sorted so tool
- * ordering does not affect the result. `pageOrigin` is deliberately excluded —
- * it is audit metadata, not part of the tool contract.
+ * ordering does not affect the result. `pageOrigin` is deliberately excluded: * it is audit metadata, not part of the tool contract.
  *
  * This is a fast, non-cryptographic content key. The canonical per-tool content
  * is hashed down to a short, fixed-length digest so the result fits the server's
  * `clientToolsFingerprint` wire field (`z.string().max(128)`) regardless of how
- * many tools the page registers — sending the raw concatenated content would
+ * many tools the page registers: sending the raw concatenated content would
  * overflow that bound and be rejected with a 400. The server stores and compares
  * the widget's fingerprint verbatim, so cross-implementation byte-equality is NOT
- * required — only self-consistency across this widget's turns.
+ * required: only self-consistency across this widget's turns.
  */
 export function computeClientToolsFingerprint(
   tools: ClientToolDefinition[],
@@ -190,7 +189,7 @@ export function computeClientToolsFingerprint(
 }
 
 /**
- * cyrb53 — a fast, well-distributed non-cryptographic string hash. Returns a
+ * cyrb53: a fast, well-distributed non-cryptographic string hash. Returns a
  * 53-bit value (safe-integer range). Two independent seeds are combined by the
  * caller for a ~106-bit digest, which makes accidental collisions across a
  * single conversation's handful of tool-set variants infeasible.
@@ -252,7 +251,7 @@ export class WebMcpBridge {
 
   /**
    * `true` when the bridge can both snapshot the registry AND execute returned
-   * tool calls — i.e. the polyfill is installed and `document.modelContext`
+   * tool calls: i.e. the polyfill is installed and `document.modelContext`
    * exposes the consumer surface (`getTools` / `executeTool`). Native browsers
    * that ship `document.modelContext` satisfy this too.
    *
@@ -268,7 +267,7 @@ export class WebMcpBridge {
 
   /**
    * Per-turn snapshot for `dispatch.clientTools[]`. Returns the JSON-only
-   * surface — `execute` stays client-side, reached later via `executeToolCall`.
+   * surface: `execute` stays client-side, reached later via `executeToolCall`.
    *
    * Async because the strict polyfill's `getTools()` is async. Both payload
    * builders in `client.ts` already `await`, so this adds no new ceremony.
@@ -284,7 +283,7 @@ export class WebMcpBridge {
     try {
       infos = await mc.getTools();
     } catch (err) {
-      log.warn("getTools() threw — shipping an empty WebMCP snapshot.", err);
+      log.warn("getTools() threw: shipping an empty WebMCP snapshot.", err);
       return [];
     }
     recordWebMcpToolDisplayTitles(infos);
@@ -310,7 +309,7 @@ export class WebMcpBridge {
    * Execute a `webmcp:<name>` tool call returned by the agent and return the
    * normalized MCP-shaped result for `/resume`.
    *
-   * Failure modes — all return `{ isError: true, content: [...] }` rather than
+   * Failure modes: all return `{ isError: true, content: [...] }` rather than
    * throwing, so the dispatch can resume cleanly:
    *   - bridge not operational
    *   - tool not in registry (e.g. unmounted between snapshot and call)
@@ -374,7 +373,7 @@ export class WebMcpBridge {
 
     // Re-apply the client-side allowlist at execute time. `snapshotForDispatch`
     // already filters it for `clientTools[]`, but the agent could request a
-    // tool that the integrator excluded — e.g. a `webmcp:` call replayed from
+    // tool that the integrator excluded: e.g. a `webmcp:` call replayed from
     // history, a server bug, or a page that re-registered a previously-hidden
     // tool. The server is the trust boundary; this is a defense-in-depth
     // convenience check to keep us symmetric with the snapshot.
@@ -384,7 +383,7 @@ export class WebMcpBridge {
       );
     }
 
-    // Bail before the confirm renders — a late approval after cancel() would
+    // Bail before the confirm renders: a late approval after cancel() would
     // otherwise fire a host-page side effect with no matching /resume.
     if (signal?.aborted) {
       return errorResult("Aborted by cancel()");
@@ -413,7 +412,7 @@ export class WebMcpBridge {
 
     // Drive both the 30s timeout and the caller's `signal` through a single
     // AbortController passed to `executeTool`. The polyfill races the page's
-    // `execute()` against this signal, so abort is cooperative — a tool that
+    // `execute()` against this signal, so abort is cooperative: a tool that
     // ignores the signal may still complete on the page after the agent gets
     // an `isError` result. Side-effectful tools should bound their own work.
     const controller = new AbortController();
@@ -457,7 +456,7 @@ export class WebMcpBridge {
    * widget consumers that never enable WebMCP.
    *
    * Producer pages should still install the polyfill themselves (or import it)
-   * before registering tools — Persona's install is a fallback, and a page that
+   * before registering tools: Persona's install is a fallback, and a page that
    * registers tools at load before Persona's first dispatch needs the global to
    * already exist.
    */
@@ -472,7 +471,7 @@ export class WebMcpBridge {
   private async install(): Promise<void> {
     try {
       // A compatible registry is already on the page (the host installed the
-      // polyfill, or a native impl) — initialize would no-op against it, so
+      // polyfill, or a native impl): initialize would no-op against it, so
       // skip loading the module entirely. Pages that register tools before
       // Persona's first dispatch always land here, because registering
       // requires `document.modelContext` to exist.
@@ -489,7 +488,7 @@ export class WebMcpBridge {
       this.installed = true;
     } catch (err) {
       log.warn(
-        "Failed to load @mcp-b/webmcp-polyfill — WebMCP consumption disabled.",
+        "Failed to load @mcp-b/webmcp-polyfill: WebMCP consumption disabled.",
         err,
       );
       this.installed = false;
@@ -504,7 +503,7 @@ export class WebMcpBridge {
     if (typeof document === "undefined") return null;
     const mc = (document as Document & { modelContext?: unknown }).modelContext;
     if (!mc || typeof mc !== "object") {
-      // Absent (not yet installed, or no WebMCP on this page) — not an error,
+      // Absent (not yet installed, or no WebMCP on this page): not an error,
       // and not worth warning about; the snapshot/execute paths fall back to a
       // clean "not operational" result.
       return null;
@@ -517,13 +516,13 @@ export class WebMcpBridge {
       // A `document.modelContext` IS present but doesn't expose the strict-core
       // surface we consume (`getTools` / `executeTool`). This usually means a
       // different or older WebMCP polyfill (or a native impl on a divergent
-      // draft) installed the global first — which `@mcp-b/webmcp-polyfill`
+      // draft) installed the global first: which `@mcp-b/webmcp-polyfill`
       // correctly declines to overwrite. Warn once so integrators understand
       // why WebMCP is inert instead of seeing a silent no-op.
       if (!this.incompatibleContextWarned) {
         this.incompatibleContextWarned = true;
         log.warn(
-          "document.modelContext is present but does not expose getTools()/executeTool() — " +
+          "document.modelContext is present but does not expose getTools()/executeTool(): " +
             "WebMCP consumption is disabled. Another (incompatible or older) WebMCP polyfill " +
             "likely installed document.modelContext before Persona. Remove it, or use a polyfill " +
             "implementing the strict standard surface (e.g. @mcp-b/webmcp-polyfill).",
@@ -618,7 +617,7 @@ const normalizeSerializedResult = (raw: string | null): WebMcpToolResult => {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    // Not valid JSON (shouldn't happen — the polyfill stringifies) — surface
+    // Not valid JSON (shouldn't happen, the polyfill stringifies), surface
     // the raw string as text rather than dropping it.
     return { content: [{ type: "text", text: raw }] };
   }

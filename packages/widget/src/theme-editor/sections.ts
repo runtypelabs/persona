@@ -1,4 +1,4 @@
-/** Declarative section/field definitions for the theme editor (pure data — no DOM, no render logic) */
+/** Declarative section/field definitions for the theme editor (pure data: no DOM, no render logic) */
 
 import type { SectionDef, TabDef, SubGroupDef, FieldDef } from './types';
 import {
@@ -19,7 +19,7 @@ import {
 } from './role-mappings';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// STYLE TAB — brand colors, chat colors, typography, shape, etc.
+// STYLE TAB: brand colors, chat colors, typography, shape, etc.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 const themeModeSectionDef: SectionDef = {
@@ -209,7 +209,7 @@ export const STYLE_SECTIONS: SectionDef[] = [
 ];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// COLORS & STYLE TAB — palette scales, semantic tokens
+// COLORS & STYLE TAB: palette scales, semantic tokens
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function buildPaletteSectionDef(): SectionDef {
@@ -269,7 +269,7 @@ export const COLORS_SECTIONS: SectionDef[] = [
 ];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// DESIGN SYSTEM TAB — component shapes, colors, layout
+// DESIGN SYSTEM TAB: component shapes, colors, layout
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 const panelLayoutSectionDef: SectionDef = {
@@ -510,7 +510,7 @@ export const COMPONENTS_SECTIONS: SectionDef[] = [
 ];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// CONFIGURE TAB — content, layout, widget, features, developer
+// CONFIGURE TAB: content, layout, widget, features, developer
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 const MB = 1024 * 1024;
@@ -768,9 +768,9 @@ const streamAnimationSectionDef: SectionDef = {
       path: 'features.streamAnimation.buffer',
       defaultValue: 'none',
       options: [
-        { value: 'none', label: 'None — stream every character' },
-        { value: 'word', label: 'Word — hold until whitespace' },
-        { value: 'line', label: 'Line — hold until newline' },
+        { value: 'none', label: 'None: stream every character' },
+        { value: 'word', label: 'Word: hold until whitespace' },
+        { value: 'line', label: 'Line: hold until newline' },
       ],
     },
     {
@@ -781,12 +781,12 @@ const streamAnimationSectionDef: SectionDef = {
       path: 'features.streamAnimation.speed',
       defaultValue: 120,
       options: [
-        { value: '40', label: '40ms — snappy' },
+        { value: '40', label: '40ms: snappy' },
         { value: '80', label: '80ms' },
         { value: '120', label: '120ms (default)' },
         { value: '200', label: '200ms' },
         { value: '320', label: '320ms' },
-        { value: '480', label: '480ms — slow' },
+        { value: '480', label: '480ms: slow' },
       ],
       formatValue: (v: unknown) => String(v ?? 120),
       parseValue: (v: unknown) => Number(v),
@@ -803,7 +803,7 @@ const streamAnimationSectionDef: SectionDef = {
         { value: '1200', label: '1200ms' },
         { value: '1800', label: '1800ms (default)' },
         { value: '2400', label: '2400ms' },
-        { value: '3600', label: '3600ms — slow' },
+        { value: '3600', label: '3600ms: slow' },
       ],
       formatValue: (v: unknown) => String(v ?? 1800),
       parseValue: (v: unknown) => Number(v),
@@ -894,10 +894,10 @@ export const CONFIGURE_SUB_GROUPS: SubGroupDef[] = [
 export const CONFIGURE_SECTIONS: SectionDef[] = CONFIGURE_SUB_GROUPS.flatMap(g => g.sections);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// STYLE TAB V2 — outcome-oriented editor structure
+// STYLE TAB V2: outcome-oriented editor structure
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** Section 1: Theme — color mode selection */
+/** Section 1: Theme: color mode selection */
 export const THEME_SECTION: SectionDef = {
   id: 'theme-mode-v2',
   title: 'Theme',
@@ -919,7 +919,7 @@ export const THEME_SECTION: SectionDef = {
   ],
 };
 
-/** Section 2: Brand Palette — primary colors + collapsed status colors */
+/** Section 2: Brand Palette: primary colors + collapsed status colors */
 export const BRAND_PALETTE_SECTION: SectionDef = {
   id: 'brand-palette-v2',
   title: 'Brand Palette',
@@ -933,7 +933,7 @@ export const BRAND_PALETTE_SECTION: SectionDef = {
   ],
 };
 
-/** Section 2b: Status palette — collapsed under Brand Palette */
+/** Section 2b: Status palette: collapsed under Brand Palette */
 export const STATUS_PALETTE_SECTION: SectionDef = {
   id: 'status-palette',
   title: 'Status Palette',
@@ -947,7 +947,7 @@ export const STATUS_PALETTE_SECTION: SectionDef = {
   ],
 };
 
-/** Section 3: Interface Roles — the main theming surface */
+/** Section 3: Interface Roles: the main theming surface */
 export const INTERFACE_ROLES_SECTION: SectionDef = {
   id: 'interface-roles',
   title: 'Interface Roles',
@@ -1020,7 +1020,7 @@ export const INTERFACE_ROLES_SECTION: SectionDef = {
   ],
 };
 
-/** Section 4: Status Colors — feedback semantic tokens */
+/** Section 4: Status Colors: feedback semantic tokens */
 export const STATUS_COLORS_SECTION: SectionDef = {
   id: 'status-colors',
   title: 'Status Colors',
@@ -1034,7 +1034,7 @@ export const STATUS_COLORS_SECTION: SectionDef = {
   ],
 };
 
-/** Section 5: Advanced Tokens — entry point for drill-downs (no fields) */
+/** Section 5: Advanced Tokens: entry point for drill-downs (no fields) */
 export const ADVANCED_TOKENS_SECTION: SectionDef = {
   id: 'advanced-tokens',
   title: 'Advanced Tokens',
@@ -1043,7 +1043,7 @@ export const ADVANCED_TOKENS_SECTION: SectionDef = {
   fields: [],
 };
 
-/** V2 Style tab sections — outcome-oriented editor */
+/** V2 Style tab sections: outcome-oriented editor */
 export const STYLE_SECTIONS_V2: SectionDef[] = [
   THEME_SECTION,
   BRAND_PALETTE_SECTION,
@@ -1064,7 +1064,7 @@ export const ALL_TABS: TabDef[] = [
 ];
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// HELPERS — light/dark scoping for dual-mode editing
+// HELPERS: light/dark scoping for dual-mode editing
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 type ThemeScope = 'theme' | 'darkTheme';

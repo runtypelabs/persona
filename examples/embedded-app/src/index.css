@@ -1,5 +1,5 @@
 /* Fonts load via a <link> in <head>, injected by the gallery-fonts Vite plugin
-   (vite.config.ts). Do NOT re-add an `@import` here — it loads the fonts late
+   (vite.config.ts). Do NOT re-add an `@import` here: it loads the fonts late
    and causes a font-swap flash on first paint. */
 
 :root {
@@ -299,7 +299,7 @@ section[id] {
 }
 
 /* ======================================================================
-   Hero Split — 3D Carousel Layout
+   Hero Split: 3D Carousel Layout
    ====================================================================== */
 
 .hero-split {
@@ -316,7 +316,7 @@ section[id] {
   gap: 3vw;
 }
 
-/* Floating glass panel — left side */
+/* Floating glass panel: left side */
 .hero-panel {
   flex: 0 0 clamp(280px, 24vw, 420px);
   display: flex;
@@ -354,7 +354,7 @@ section[id] {
   justify-content: flex-start;
 }
 
-/* Card Stack — right side */
+/* Card Stack: right side */
 .carousel-3d {
   flex: 1;
   perspective: 1200px;
@@ -452,7 +452,7 @@ section[id] {
   letter-spacing: 0.01em;
 }
 
-/* Carousel controls — arrows + dots */
+/* Carousel controls: arrows + dots */
 .carousel-3d-controls {
   display: flex;
   align-items: center;
@@ -582,14 +582,14 @@ section[id] {
   }
 }
 
-/* Hero responsive — tablet (vw handles card scaling, just tweak panel) */
+/* Hero responsive: tablet (vw handles card scaling, just tweak panel) */
 @media (max-width: 1080px) {
   .hero-panel h1 {
     font-size: clamp(24px, 2.5vw, 32px);
   }
 }
 
-/* Hero responsive — small tablet / large phone */
+/* Hero responsive: small tablet / large phone */
 @media (max-width: 960px) {
   .hero-split {
     padding: 76px 16px 0;
@@ -624,7 +624,7 @@ section[id] {
   }
 }
 
-/* Hero responsive — phone */
+/* Hero responsive: phone */
 @media (max-width: 640px) {
   .hero-split {
     padding: 64px 10px 0;
@@ -837,7 +837,7 @@ section[id] {
 }
 
 /*
- * Demo chrome only — scoped to `.page` (index.html) so other pages that import this file
+ * Demo chrome only: scoped to `.page` (index.html) so other pages that import this file
  * (theme.html, bakery, json, etc.) are not affected. The widget mounts in the light DOM by
  * default (`useShadowDom` is opt-in), so a bare `button { padding: 10px 18px }` applies to
  * the header close control. With `width`/`height` 32px and `box-sizing: border-box`,

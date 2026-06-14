@@ -15,14 +15,14 @@
 //
 // This adapter wraps the browser's Web Speech API as a *speech-to-text only*
 // provider. That's the simplest BYO shape: it emits a final transcript via
-// `onResult`, and Persona sends it as a normal user message — the assistant
+// `onResult`, and Persona sends it as a normal user message: the assistant
 // reply then streams back over the usual chat path. (A full-duplex provider
 // that also produces spoken replies would additionally drive `onTranscript`
 // and `onMetrics`, like the realtime `runtype` provider.)
 //
 // Speech OUT is a separate subsystem: voice *input* (this provider) and voice
 // *output* (`textToSpeech`) are independent. To hear replies, pair this with
-// browser TTS — it works with any input provider, so an STT-only adapter still
+// browser TTS: it works with any input provider, so an STT-only adapter still
 // gets a spoken reply for free:
 //
 //   textToSpeech: { enabled: true, provider: 'browser' }
@@ -30,14 +30,14 @@
 // (The custom-voice-provider demo does exactly this to close the voice loop.)
 //
 // The contract the widget relies on:
-//   • startListening()  — begin capturing; resolve once recognition is running.
-//   • stopListening()   — stop capturing (a final result may still arrive).
-//   • onResult(cb)      — deliver `{ text, provider: 'custom' }` for each final.
-//   • onStatusChange(cb)— report 'listening' | 'processing' | 'idle' | 'error'
+//   • startListening(): begin capturing; resolve once recognition is running.
+//   • stopListening(): stop capturing (a final result may still arrive).
+//   • onResult(cb): deliver `{ text, provider: 'custom' }` for each final.
+//   • onStatusChange(cb): report 'listening' | 'processing' | 'idle' | 'error'
 //                         so the mic button reflects the right visual state.
-//   • onError(cb)       — surface failures (permission denied, no-speech, …).
+//   • onError(cb): surface failures (permission denied, no-speech, …).
 //
-// Everything here is plain DOM/Web Speech — no Persona internals — so it doubles
+// Everything here is plain DOM/Web Speech, no Persona internals, so it doubles
 // as a copy-paste template for wrapping a cloud STT service instead.
 
 import type {
@@ -115,7 +115,7 @@ class WebSpeechVoiceProvider implements VoiceProvider {
     this.language = options.language ?? "en-US";
   }
 
-  // The Web Speech API has no separate connection step — it spins up on
+  // The Web Speech API has no separate connection step: it spins up on
   // start(). connect()/disconnect() are no-ops here so the lifecycle still
   // matches the interface (a networked provider would open/close a socket).
   async connect(): Promise<void> {}
@@ -217,7 +217,7 @@ class WebSpeechVoiceProvider implements VoiceProvider {
   }
 }
 
-/** Factory for the BYO Web Speech provider — pass to `provider.custom`. */
+/** Factory for the BYO Web Speech provider: pass to `provider.custom`. */
 export function createWebSpeechVoiceProvider(
   options: WebSpeechVoiceProviderOptions = {},
 ): VoiceProvider {

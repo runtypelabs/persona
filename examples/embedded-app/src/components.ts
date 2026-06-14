@@ -445,7 +445,7 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
 
   const messageId = context.message?.id || "form";
 
-  // Restore prior submission (if any) — set after wrappers + helpers are built.
+  // Restore prior submission (if any): set after wrappers + helpers are built.
   const previousAction = getUserAction<Record<string, string>>(messageId);
   const hasPreviousSubmission =
     previousAction?.type === "submit"
@@ -527,7 +527,7 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
     `;
     label.textContent = field.label;
     // Modern convention: mark required fields with a red asterisk rather
-    // than tagging optional ones — quieter for forms with many optional
+    // than tagging optional ones: quieter for forms with many optional
     // fields and the asterisk is a near-universal "required" signal.
     if (field.required) {
       const star = document.createElement("span");
@@ -1107,7 +1107,7 @@ export const DynamicForm: ComponentRenderer = (props, context) => {
   }
 
   function swapToForm() {
-    // Edit doesn't clear the stored userAction — the prior successful submission
+    // Edit doesn't clear the stored userAction: the prior successful submission
     // stays canonical until the user re-submits, so a refresh mid-edit returns
     // them to the last recorded success state rather than losing the data.
     successWrapper.style.display = "none";

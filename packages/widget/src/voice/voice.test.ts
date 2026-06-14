@@ -423,7 +423,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     provider.onMetrics((m) => metrics.push(m));
     await provider.startListening();
     lastWs().triggerOpen();
-    // Raw JSON string — the wire frame is snake_case (decoded to camelCase by
+    // Raw JSON string: the wire frame is snake_case (decoded to camelCase by
     // the provider); a literal avoids the no-snake_case-property lint rule.
     lastWs().triggerMessage(
       '{"type":"metrics","llm_ms":120,"tts_ms":80,"first_audio_ms":200,"total_ms":400}',

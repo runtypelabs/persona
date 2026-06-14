@@ -40,7 +40,7 @@ const supported = isWebSpeechSupported();
 const supportEl = document.getElementById("support-status");
 if (supportEl) {
   supportEl.textContent = supported
-    ? "✅ Web Speech API available — click the mic and speak; the reply is read back via browser TTS."
+    ? "✅ Web Speech API available: click the mic and speak; the reply is read back via browser TTS."
     : "⚠️ Web Speech API not available in this browser (try Chrome/Edge). The mic still renders because the provider is custom.";
   supportEl.style.color = supported ? "var(--ok, #10b981)" : "var(--warn, #f59e0b)";
 }
@@ -56,7 +56,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     // The bring-your-own provider: `type: 'custom'` plus a factory that returns
     // our Web Speech adapter. Persona calls the factory when it sets up voice,
     // wires the mic button to it, and sends each final transcript as a user
-    // message — no special-casing of the provider type anywhere else.
+    // message: no special-casing of the provider type anywhere else.
     voiceRecognition: {
       enabled: true,
       processingText: "🎤 Transcribing…",
@@ -66,7 +66,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       },
     },
     // Speech back: textToSpeech is a separate subsystem from voice input, so it
-    // pairs with any provider — including our STT-only custom one. Browser TTS
+    // pairs with any provider: including our STT-only custom one. Browser TTS
     // reads each assistant reply aloud (via speechSynthesis) when streaming
     // ends, closing the loop: talk in → custom STT → agent → spoken reply out.
     textToSpeech: {

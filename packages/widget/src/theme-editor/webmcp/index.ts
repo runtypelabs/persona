@@ -4,7 +4,7 @@
  * Transport-agnostic: `createThemeEditorTools(state)` returns plain tool
  * definitions. Host code (e.g. an example app or a self-styling widget) is
  * responsible for obtaining a `document.modelContext` and calling
- * `registerTool` for each — this module has no polyfill dependency.
+ * `registerTool` for each: this module has no polyfill dependency.
  */
 
 export { createThemeEditorTools } from './tools';

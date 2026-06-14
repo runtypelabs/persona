@@ -70,7 +70,7 @@ function provideLauncherBundle() {
 /**
  * Force the next dynamically-inserted <script> to error. jsdom never fires
  * load/error on injected scripts, so we trigger `onerror` on a fake timer that
- * `runAllTimersAsync()` flushes — deterministic under fake timers.
+ * `runAllTimersAsync()` flushes: deterministic under fake timers.
  */
 function failNextScriptLoad() {
   const head = document.head;
@@ -137,15 +137,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("install.ts — onScriptLoad beacon", () => {
+describe("install.ts: onScriptLoad beacon", () => {
   it("fires synchronously on script execution, before any loading or gating", async () => {
     const events = recordEvents();
     const onScriptLoad = vi.fn();
 
-    // No config at all — the beacon must still fire (diagnostics: "did my embed run").
+    // No config at all: the beacon must still fire (diagnostics: "did my embed run").
     await install({ onScriptLoad });
 
-    // Fired during module evaluation — no timer flush needed.
+    // Fired during module evaluation: no timer flush needed.
     expect(onScriptLoad).toHaveBeenCalledTimes(1);
     expect(onScriptLoad).toHaveBeenCalledWith({ version: "latest" });
     expect(events.types()[0]).toBe("persona:script-load");
@@ -160,7 +160,7 @@ describe("install.ts — onScriptLoad beacon", () => {
   });
 });
 
-describe("install.ts — deferred launcher path", () => {
+describe("install.ts: deferred launcher path", () => {
   it("mounts the critical launcher, fires onLauncherShown, and defers onChatReady until open", async () => {
     markCssLoaded();
     provideFullBundle(); // so loadJS resolves instantly when the user opens
@@ -186,7 +186,7 @@ describe("install.ts — deferred launcher path", () => {
     expect(launcherMount).toHaveBeenCalledTimes(1);
     expect(onLauncherShown).toHaveBeenCalledTimes(1);
     expect(onLauncherShown).toHaveBeenCalledWith({ deferred: true, element: launcherElement });
-    // The full widget has NOT been initialized yet — that waits for first open.
+    // The full widget has NOT been initialized yet: that waits for first open.
     expect(initAgentWidget).not.toHaveBeenCalled();
     expect(onChatReady).not.toHaveBeenCalled();
 
@@ -230,7 +230,7 @@ describe("install.ts — deferred launcher path", () => {
   });
 });
 
-describe("install.ts — eager path", () => {
+describe("install.ts: eager path", () => {
   it("non-floating (launcher disabled) eager-loads, fires onChatReady, and does NOT fire onLauncherShown", async () => {
     markCssLoaded();
     provideFullBundle();
@@ -272,7 +272,7 @@ describe("install.ts — eager path", () => {
   });
 });
 
-describe("install.ts — deferral gate", () => {
+describe("install.ts: deferral gate", () => {
   async function expectDecision(config: any, { defers }: { defers: boolean }) {
     markCssLoaded();
     provideFullBundle();
@@ -345,7 +345,7 @@ describe("install.ts — deferral gate", () => {
   });
 });
 
-describe("install.ts — onReady deprecation alias", () => {
+describe("install.ts: onReady deprecation alias", () => {
   it("still calls the deprecated onReady and warns once", async () => {
     markCssLoaded();
     provideFullBundle();
@@ -376,7 +376,7 @@ describe("install.ts — onReady deprecation alias", () => {
   });
 });
 
-describe("install.ts — onError", () => {
+describe("install.ts: onError", () => {
   it("fires onError with phase 'init' and dispatches persona:error when initialization throws", async () => {
     markCssLoaded();
     provideFullBundle();
@@ -420,7 +420,7 @@ describe("install.ts — onError", () => {
   });
 });
 
-describe("install.ts — lifecycle callback safety", () => {
+describe("install.ts: lifecycle callback safety", () => {
   it("a throwing onScriptLoad callback does not break the rest of installation", async () => {
     markCssLoaded();
     provideFullBundle();

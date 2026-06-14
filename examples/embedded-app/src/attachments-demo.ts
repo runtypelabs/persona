@@ -87,7 +87,7 @@ let currentMode: Mode = "inline";
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const isLauncher = mode === "launcher";
   const attachments = readAttachmentsConfig();
-  log(`Mounted (${mode}) — maxFiles=${attachments.maxFiles}, maxSize=${(attachments.maxFileSize ?? 0) / MB}MB, icon=${attachments.buttonIconName}`);
+  log(`Mounted (${mode}): maxFiles=${attachments.maxFiles}, maxSize=${(attachments.maxFileSize ?? 0) / MB}MB, icon=${attachments.buttonIconName}`);
   return {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,

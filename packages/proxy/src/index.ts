@@ -88,8 +88,7 @@ const isDevelopmentRuntime = (): boolean =>
 /**
  * True when this proxy is itself running as a Vercel **preview** deployment
  * (`VERCEL_ENV === "preview"`). Vercel sets `NODE_ENV=production` for both
- * production and preview, so `isDevelopmentRuntime()` can't distinguish them —
- * `VERCEL_ENV` is the only signal. Preview deployments get per-branch, dynamic
+ * production and preview, so `isDevelopmentRuntime()` can't distinguish them: * `VERCEL_ENV` is the only signal. Preview deployments get per-branch, dynamic
  * URLs (`*-git-<branch>-<team>.vercel.app`) that can't be enumerated in a
  * static `allowedOrigins` list, so for CORS we treat a preview runtime like
  * development and reflect the caller's origin. Safe when `process` is missing.
@@ -128,7 +127,7 @@ const resolvePreviewOriginPattern = (
     try {
       return new RegExp(envPattern);
     } catch {
-      // Invalid env regex — fall back to the default rather than throwing at
+      // Invalid env regex: fall back to the default rather than throwing at
       // app-construction time.
     }
   }
@@ -418,7 +417,7 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
     });
   });
 
-  // Resume endpoint — forwards client-executed (LOCAL) tool results back to
+  // Resume endpoint: forwards client-executed (LOCAL) tool results back to
   // the Runtype upstream so a paused flow execution can continue. Mounted as
   // a child of the dispatch path so the widget can derive its URL by
   // appending "/resume" to whatever `apiUrl` it was configured with.

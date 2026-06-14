@@ -1,4 +1,4 @@
-/** Preview Transcript Builder — simple menu dropdown in the preview toolbar trail. */
+/** Preview Transcript Builder: simple menu dropdown in the preview toolbar trail. */
 
 import * as state from './state';
 import {

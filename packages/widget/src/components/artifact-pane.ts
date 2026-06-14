@@ -36,7 +36,7 @@ export function createArtifactPane(
   config: AgentWidgetConfig,
   options: {
     onSelect: (id: string) => void;
-    /** User closed the pane (mobile drawer or split sidebar) — parent should persist “hidden until reopened”. */
+    /** User closed the pane (mobile drawer or split sidebar): parent should persist “hidden until reopened”. */
     onDismiss?: () => void;
   }
 ): ArtifactPaneApi {
@@ -203,7 +203,7 @@ export function createArtifactPane(
   });
 
   if (copyMenuChevronBtn && copyMenuItems?.length) {
-    // Resolve the portal target — widget root for CSS var inheritance, escaping overflow: hidden
+    // Resolve the portal target: widget root for CSS var inheritance, escaping overflow: hidden
     const resolvePortal = (): HTMLElement => shell.closest("[data-persona-root]") as HTMLElement ?? document.body;
 
     const initDropdown = () => {
@@ -414,7 +414,7 @@ export function createArtifactPane(
         backdrop.classList.add("persona-hidden");
         shell.classList.remove("persona-artifact-drawer-open");
       } else {
-        // isMobile && !(has && mobileOpen): e.g. dismissed drawer — keep closed chrome in sync
+        // isMobile && !(has && mobileOpen): e.g. dismissed drawer: keep closed chrome in sync
         backdrop.classList.add("persona-hidden");
         shell.classList.remove("persona-artifact-drawer-open");
       }

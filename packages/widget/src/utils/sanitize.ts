@@ -41,7 +41,7 @@ const DEFAULT_PURIFY_CONFIG: DOMPurify.Config = {
   ],
 };
 
-/** Raster image data URI pattern — blocks SVG and other non-image types. */
+/** Raster image data URI pattern: blocks SVG and other non-image types. */
 const SAFE_DATA_URI = /^data:image\/(?:png|jpe?g|gif|webp|bmp|x-icon|avif)/i;
 
 /**

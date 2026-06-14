@@ -379,8 +379,7 @@ describe('AgentWidgetSession - cancel()', () => {
 
   it('aborts the in-flight dispatch and flips streaming/status back to idle', async () => {
     let capturedSignal: AbortSignal | null = null;
-    // Fetch returns a promise that only settles when the AbortSignal fires —
-    // modeling a dispatch that's still receiving SSE tokens.
+    // Fetch returns a promise that only settles when the AbortSignal fires:    // modeling a dispatch that's still receiving SSE tokens.
     global.fetch = vi.fn().mockImplementation((_url: string, options: any) => {
       capturedSignal = options.signal as AbortSignal;
       return new Promise((_resolve, reject) => {
@@ -403,7 +402,7 @@ describe('AgentWidgetSession - cancel()', () => {
       }
     );
 
-    // Kick off the dispatch but don't await — we want it in-flight when we cancel.
+    // Kick off the dispatch but don't await: we want it in-flight when we cancel.
     const dispatchPromise = session.sendMessage('Hello');
     // Let the session set up the AbortController and call fetch.
     await Promise.resolve();
@@ -554,7 +553,7 @@ describe('AgentWidgetSession.resolveAskUserQuestion', () => {
 
     vi.spyOn(session, 'connectStream').mockResolvedValue(undefined);
 
-    // Capture the flag state at the exact moment fetch is called — this is
+    // Capture the flag state at the exact moment fetch is called: this is
     // the "before the POST fires" assertion. The flag must be flipped BEFORE
     // any network I/O so the subsequent stream-driven renders skip the sheet.
     let flagAtFetch: { awaiting?: boolean; answered?: boolean } | undefined;
@@ -666,7 +665,7 @@ describe('AgentWidgetSession.resolveAskUserQuestion', () => {
 
     vi.spyOn(session, 'connectStream').mockResolvedValue(undefined);
 
-    // Kick off — don't await.
+    // Kick off: don't await.
     const resolvePromise = session.resolveAskUserQuestion(awaiting, 'Hobbyists');
 
     // Yield a microtask so synchronous setup (markResolved → setStreaming(true)
@@ -920,7 +919,7 @@ describe('AgentWidgetSession - approval context across agent_approval_complete',
       }
     );
 
-    // `agent_approval_complete` carries only the resolution — none of the
+    // `agent_approval_complete` carries only the resolution: none of the
     // context fields from `agent_approval_start`. The session merge must keep
     // them so a full re-render of the resolved bubble (morph, virtual-scroll
     // re-mount, storage restore) still shows the tool, description, and the

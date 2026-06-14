@@ -1,5 +1,5 @@
 // Data model for the WebMCP slide-deck editor demo. All element geometry is in
-// logical slide units on a fixed 960x540 stage — the canvas scales the stage
+// logical slide units on a fixed 960x540 stage: the canvas scales the stage
 // with a CSS transform, so coordinates never depend on viewport size.
 
 export const SLIDE_W = 960;

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/src/demo-shared.css" />
     <link rel="icon" href="/favicon.ico" />
-    <title>Stream Animations — Persona</title>
+    <title>Stream Animations: Persona</title>
     <style>
       .preview-hint {
         display: flex;
@@ -133,11 +133,11 @@
 
       // Subpath plugins: each import auto-registers the plugin. Removing any
       // of these `import` lines drops that animation from the bundle.
-      // (`letter-rise` and `word-fade` are core built-ins — no import needed.)
+      // (`letter-rise` and `word-fade` are core built-ins: no import needed.)
       import "@runtypelabs/persona/animations/wipe";
       import "@runtypelabs/persona/animations/glyph-cycle";
 
-      // Custom inline plugin — shows how a consumer can extend the widget
+      // Custom inline plugin: shows how a consumer can extend the widget
       // with their own per-char reveal effect. Registered globally, so any
       // widget instance can reference it by name.
       const RAINBOW_STYLES = `
@@ -187,12 +187,12 @@
       let msgCounter = 0;
       const nextId = (p) => `${p}-${++msgCounter}`;
 
-      // Canned replies — cover the content shapes that stress-test the
+      // Canned replies: cover the content shapes that stress-test the
       // wrapper + markdown pipeline: inline emphasis, fenced code blocks
       // (the wrapper skips `<pre>` descendants), GFM tables, and images.
       const PRESETS = {
         default:
-          "Here's what I found — the quiet revolution in interface design continues, with **bold** moments and `small` touches that add up.",
+          "Here's what I found: the quiet revolution in interface design continues, with **bold** moments and `small` touches that add up.",
         code: `Here's a quick TypeScript snippet for you:
 
 \`\`\`ts
@@ -202,7 +202,7 @@ const greet = (name: string) => {
 };
 \`\`\`
 
-Call it with \`greet("world")\` — notice the **template literal** inside the body.`,
+Call it with \`greet("world")\`: notice the **template literal** inside the body.`,
         table: `Here's a quick comparison of the top options:
 
 | Option | Speed | Memory | Notes |
@@ -292,7 +292,7 @@ Both were captured at *golden hour*.`,
         playBtn.disabled = true;
         createWidget();
         await sleep(100);
-        log(`Playing stream — type=${currentType}, placeholder=${currentPlaceholder}`);
+        log(`Playing stream: type=${currentType}, placeholder=${currentPlaceholder}`);
 
         controller.injectUserMessage({
           id: nextId("user"),
@@ -399,7 +399,7 @@ Both were captured at *golden hour*.`,
           };
         },
       });
-      log("Ready — pick a type and click Replay.");
+      log("Ready: pick a type and click Replay.");
     </script>
     <script type="module">
       import { renderExamplesShell } from "/src/examples-nav.ts";

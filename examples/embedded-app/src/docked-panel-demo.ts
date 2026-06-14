@@ -12,7 +12,7 @@ import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 
 // The docked Copilot is WebMCP-powered: this page registers four workspace
 // tools on document.modelContext (see "WebMCP page tools" at the bottom) and
-// the dispatch-docked flow drives them — read the dashboard, switch sections,
+// the dispatch-docked flow drives them: read the dashboard, switch sections,
 // log activity, and even move the assistant's own dock.
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const apiUrl =
@@ -75,7 +75,7 @@ function getDockConfig() {
   };
 }
 
-/** Full launcher object — use on init and on Apply so shallow inner `controller.update` keeps titles, breakpoint, etc. */
+/** Full launcher object: use on init and on Apply so shallow inner `controller.update` keeps titles, breakpoint, etc. */
 function getDemoLauncher() {
   return {
     ...DEFAULT_WIDGET_CONFIG.launcher,
@@ -188,7 +188,7 @@ function createController(): AgentWidgetInitHandle {
         ...DEFAULT_WIDGET_CONFIG.copy,
         welcomeTitle: "Ask Copilot",
         welcomeSubtitle:
-          "I can read this dashboard, switch sections, log activity, and even move my own panel — using the page's own tools.",
+          "I can read this dashboard, switch sections, log activity, and even move my own panel: using the page's own tools.",
         inputPlaceholder: "Ask a question or describe what you need…",
       },
       // Ordered to walk the tool surface: read-only overview (auto-approved),
@@ -363,7 +363,7 @@ if (modelContext) {
       },
       required: ["section"],
     },
-    // Mutates UI state (active nav item), so no readOnlyHint — but it stays in
+    // Mutates UI state (active nav item), so no readOnlyHint, but it stays in
     // READ_ONLY_TOOLS above: pure navigation auto-approves at the gate.
     annotations: { readOnlyHint: false },
     execute(args) {
@@ -385,7 +385,7 @@ if (modelContext) {
     },
   });
 
-  // -- set_dock_layout (mutating — the assistant repositions itself) --
+  // -- set_dock_layout (mutating: the assistant repositions itself) --
   modelContext.registerTool({
     name: "set_dock_layout",
     title: "Move the assistant dock",
@@ -403,7 +403,7 @@ if (modelContext) {
     execute(args) {
       if (args.side !== undefined) {
         if (args.side !== "left" && args.side !== "right") {
-          throw new Error(`Invalid side "${args.side}" — use "left" or "right".`);
+          throw new Error(`Invalid side "${args.side}": use "left" or "right".`);
         }
         sideSelect.value = args.side;
       }
@@ -411,14 +411,14 @@ if (modelContext) {
         const raw = String(args.width).trim();
         const width = /^\d+(\.\d+)?$/.test(raw) ? `${raw}px` : raw;
         if (!/^\d+(\.\d+)?(px|rem|em|vw|%)$/.test(width)) {
-          throw new Error(`Invalid width "${args.width}" — use a CSS length like "360px".`);
+          throw new Error(`Invalid width "${args.width}": use a CSS length like "360px".`);
         }
         widthInput.value = width;
       }
       if (args.reveal !== undefined) {
         const reveal = String(args.reveal);
         if (!["resize", "emerge", "overlay", "push"].includes(reveal)) {
-          throw new Error(`Invalid reveal "${args.reveal}" — use resize, emerge, overlay, or push.`);
+          throw new Error(`Invalid reveal "${args.reveal}": use resize, emerge, overlay, or push.`);
         }
         revealSelect.value = reveal;
       }
@@ -430,7 +430,7 @@ if (modelContext) {
     },
   });
 
-  // -- log_activity (mutating — visible feed update) --
+  // -- log_activity (mutating: visible feed update) --
   modelContext.registerTool({
     name: "log_activity",
     title: "Log activity",
@@ -448,7 +448,7 @@ if (modelContext) {
       const feed = document.querySelector(".workspace-feed");
       if (!feed) throw new Error("Activity feed not found on the page.");
 
-      // Built with textContent — agent-supplied strings never touch innerHTML.
+      // Built with textContent: agent-supplied strings never touch innerHTML.
       const item = document.createElement("div");
       item.className = "feed-item";
       const meta = document.createElement("span");

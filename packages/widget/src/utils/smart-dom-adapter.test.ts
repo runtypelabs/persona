@@ -1,4 +1,4 @@
-// Pure mapper test — no DOM, no installed/vendored library at runtime (types only).
+// Pure mapper test: no DOM, no installed/vendored library at runtime (types only).
 import { describe, it, expect } from "vitest";
 import { smartDomResultToEnriched } from "./smart-dom-adapter";
 import { formatEnrichedContext } from "./dom-context";

@@ -2,14 +2,14 @@
  * Enriched DOM context collection for providing richer page information to AI.
  *
  * Captures interactive elements, stable CSS selectors, ARIA roles, data attributes,
- * and visibility state — giving the LLM much better context than basic className/innerText.
+ * and visibility state: giving the LLM much better context than basic className/innerText.
  *
  * ## Modes
  *
  * - **structured** (default): collects candidates, scores them with optional {@link ParseRule}
  *   hooks, then applies `maxElements`. Rich containers (e.g. product cards) can surface
  *   before unrelated static noise.
- * - **simple**: legacy behavior — cap during traversal, interactive-first ordering, no rule
+ * - **simple**: legacy behavior: cap during traversal, interactive-first ordering, no rule
  *   scoring or {@link EnrichedPageElement.formattedSummary}.
  */
 
@@ -44,7 +44,7 @@ export type DomContextMode = "simple" | "structured";
 export interface ParseOptionsConfig {
   /**
    * `structured` (default): score candidates with rules, then apply `maxElements`.
-   * `simple`: legacy traversal cap and ordering only — rules are ignored (with a warning
+   * `simple`: legacy traversal cap and ordering only: rules are ignored (with a warning
    * if `rules` was passed on {@link DomContextOptions}).
    */
   mode?: DomContextMode;
@@ -294,9 +294,9 @@ export const defaultParseRules: ParseRule[] = [
       const ctas = extractCtaLabels(el);
       const head =
         href && title
-          ? `[${title}](${href})${price ? ` — ${price}` : ""}`
+          ? `[${title}](${href})${price ? `: ${price}` : ""}`
           : title
-            ? `${title}${price ? ` — ${price}` : ""}`
+            ? `${title}${price ? `: ${price}` : ""}`
             : price || enriched.text.trim().slice(0, 120);
       const lines = [
         head,
@@ -443,7 +443,7 @@ function isElementVisible(el: HTMLElement): boolean {
     if (style.display === "none") return false;
     if (style.visibility === "hidden") return false;
   } catch {
-    // getComputedStyle can fail in some environments — assume visible
+    // getComputedStyle can fail in some environments: assume visible
   }
 
   if (el.style.display === "none") return false;
@@ -801,7 +801,7 @@ function collectSimple(
  * - **Default (structured):** walks up to `maxCandidates` nodes, scores with
  *   {@link defaultParseRules} (or `rules`), suppresses redundant descendants when a
  *   formatting rule matches, then keeps the top `maxElements` by score (DOM order tie-break).
- * - **simple:** legacy path — stops once `maxElements` nodes are collected during traversal
+ * - **simple:** legacy path: stops once `maxElements` nodes are collected during traversal
  *   and sorts interactive before static.
  *
  * Pass `options: { mode: "simple" }` to disable rules. If `mode` is `simple` and `rules` is
