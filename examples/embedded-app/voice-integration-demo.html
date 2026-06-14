@@ -710,6 +710,24 @@
       // Voice provider instance
       let voiceProvider = null;
       let widgetSession = null;
+      // Whether the sidebar's standalone provider has a live call. The realtime
+      // call is continuous (listening ↔ processing ↔ speaking), so we track "is
+      // the call up?" explicitly instead of inferring it from the current
+      // status. That's what makes Stop work at any point in a turn.
+      let sidebarCallLive = false;
+
+      // Reflect call state on the sidebar Start/Stop button + feedback line.
+      function setSidebarListeningUI(isLive) {
+        if (!toggleVoiceBtn) return;
+        toggleVoiceBtn.textContent = isLive ? "Stop Listening" : "Start Listening";
+        toggleVoiceBtn.classList.toggle("listening", isLive);
+        if (voiceFeedback) {
+          voiceFeedback.textContent = isLive
+            ? "Listening... Speak now"
+            : 'Click "Start Listening" to begin';
+          voiceFeedback.style.color = isLive ? "#f59e0b" : "#10b981";
+        }
+      }
 
       // Initialize the widget
       async function initWidget() {
@@ -860,46 +878,92 @@
               return;
             }
 
-            // Set up event handlers
+            // Set up event handlers.
+            //
+            // Two transcript contracts, one per provider family:
+            //   • browser STT     → fires onResult once, with a final transcript.
+            //   • runtype realtime → streams via onTranscript (interim + final,
+            //     user + assistant) and never fires onResult.
+            // Register both so the panel works for either provider.
             voiceProvider.onResult((result) => {
               console.log("Voice result:", result);
 
-              // Show transcription in sidebar
+              // Browser-provider path: a single final transcript.
               if (transcriptionResults) {
                 const resultElement = document.createElement("div");
                 resultElement.style.marginBottom = "0.5rem";
                 resultElement.style.padding = "0.5rem";
-                resultElement.style.background = "rgba(56, 189, 248, 0.1)";
+                resultElement.style.background = "rgba(56, 189, 248, 0.12)";
                 resultElement.style.borderLeft = "3px solid #38bdf8";
                 resultElement.innerHTML = `<strong>You:</strong> ${result.transcript || result.text}`;
                 transcriptionResults.prepend(resultElement);
               }
 
-              // The widget session handles injecting both the user transcript and agent
-              // response into the chat for the Runtype provider: no sendMessage needed.
-
               updateStatus("idle", "Transcription received");
             });
 
+            // Realtime (runtype) path: live interim/final transcripts for both
+            // speakers. The user entry grows in place while you speak and freezes
+            // on its final frame; each assistant reply is appended once.
+            // NOTE: this sidebar uses its OWN provider instance, independent of
+            // the widget's composer mic — turns render here in the panel, not in
+            // the chat thread.
+            let sidebarUserEntry = null;
+            if (voiceProvider.onTranscript) {
+              voiceProvider.onTranscript((role, text, isFinal) => {
+                if (!transcriptionResults) return;
+                if (role === "user") {
+                  if (!sidebarUserEntry) {
+                    sidebarUserEntry = document.createElement("div");
+                    sidebarUserEntry.style.marginBottom = "0.5rem";
+                    sidebarUserEntry.style.padding = "0.5rem";
+                    sidebarUserEntry.style.background = "rgba(56, 189, 248, 0.12)";
+                    sidebarUserEntry.style.borderLeft = "3px solid #38bdf8";
+                    transcriptionResults.prepend(sidebarUserEntry);
+                  }
+                  sidebarUserEntry.innerHTML = `<strong>You${isFinal ? "" : "…"}:</strong> ${text}`;
+                  if (isFinal) sidebarUserEntry = null; // next interim starts a fresh turn
+                } else {
+                  const replyEl = document.createElement("div");
+                  replyEl.style.marginBottom = "0.5rem";
+                  replyEl.style.padding = "0.5rem";
+                  replyEl.style.background = "rgba(168, 139, 250, 0.14)";
+                  replyEl.style.borderLeft = "3px solid #a78bfa";
+                  replyEl.innerHTML = `<strong>Assistant:</strong> ${text}`;
+                  transcriptionResults.prepend(replyEl);
+                }
+              });
+            }
+
             voiceProvider.onError((error) => {
               console.error("Voice error:", error);
+              sidebarCallLive = false;
               updateStatus("error", "Voice error: " + error.message);
+              setSidebarListeningUI(false);
               voiceFeedback.textContent = error.message;
               voiceFeedback.style.color = "#ef4444";
             });
 
+            // The realtime call is continuous: it cycles listening → processing
+            // → speaking → listening without ending, so treat ALL of those as
+            // "call is live" and keep the button a working Stop. Only a terminal
+            // status (idle / disconnected / error) ends the call and reverts the
+            // button to Start. Driving the button off live-state (not the old
+            // `status === "listening"` check) is what makes Stop reliable —
+            // before, the button flipped to "Start" mid-turn and a click became
+            // a no-op restart instead of a hang-up.
             voiceProvider.onStatusChange((status) => {
               console.log("Voice status:", status);
               updateStatus(status, getStatusText(status));
 
-              if (status === "listening") {
-                toggleVoiceBtn.textContent = "Stop Listening";
-                toggleVoiceBtn.classList.add("listening");
-                voiceFeedback.textContent = "Listening... Speak now";
-                voiceFeedback.style.color = "#f59e0b";
+              const liveStatuses = ["listening", "processing", "speaking"];
+              if (liveStatuses.includes(status)) {
+                sidebarCallLive = true;
+                setSidebarListeningUI(true);
               } else {
-                toggleVoiceBtn.textContent = "Start Listening";
-                toggleVoiceBtn.classList.remove("listening");
+                // idle / disconnected / error / connected → not in a live turn
+                sidebarCallLive = false;
+                setSidebarListeningUI(false);
               }
             });
 
@@ -945,7 +1009,10 @@
         return texts[status] || status;
       }
 
-      // Toggle voice listening
+      // Toggle voice listening. Start vs. stop is decided by the explicit
+      // sidebarCallLive flag, not by reading the button label (which could lag a
+      // status callback mid-turn). The flag is flipped up-front in each branch
+      // so a buffered status frame can't race the button into the wrong state.
       async function toggleVoice() {
         if (!voiceProvider) {
           voiceFeedback.textContent = "Voice provider not initialized";
@@ -954,16 +1021,22 @@
         }
 
         try {
-          if (toggleVoiceBtn.textContent.includes("Start")) {
-            // Start listening
+          if (!sidebarCallLive) {
+            sidebarCallLive = true;
+            setSidebarListeningUI(true);
             await voiceProvider.connect();
             await voiceProvider.startListening();
           } else {
-            // Stop listening
+            // Hang up: drop the flag first so any in-flight "listening" frame
+            // can't immediately re-mark the call live, then tear down.
+            sidebarCallLive = false;
+            setSidebarListeningUI(false);
             await voiceProvider.stopListening();
           }
         } catch (error) {
           console.error("Failed to toggle voice:", error);
+          sidebarCallLive = false;
+          setSidebarListeningUI(false);
           voiceFeedback.textContent = "Failed: " + error.message;
           voiceFeedback.style.color = "#ef4444";
           updateStatus("error", error.message);
@@ -984,10 +1057,12 @@
           voiceFeedback.textContent = "Testing connection...";
           voiceFeedback.style.color = "#f59e0b";
 
-          // Connect and immediately disconnect to test
+          // Open then tear the call back down. Use stopListening (not
+          // disconnect) so the registered callbacks survive — disconnect drops
+          // them, which would leave the next "Start Listening" silent.
           await voiceProvider.connect();
           await new Promise((resolve) => setTimeout(resolve, 1000));
-          await voiceProvider.disconnect();
+          await voiceProvider.stopListening();
 
           voiceFeedback.textContent = "Connection test successful!";
           voiceFeedback.style.color = "#10b981";
