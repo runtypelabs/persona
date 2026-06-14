@@ -437,7 +437,8 @@ export type {
   VoiceStatus,
   VoiceConfig,
   VoiceMetrics,
-  VoicePlaybackEngine
+  VoicePlaybackEngine,
+  AgentWidgetVoiceStatusEvent
 } from "./types";
 
 export default initAgentWidgetFn;

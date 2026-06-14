@@ -522,6 +522,17 @@ export type AgentWidgetVoiceStateEvent = {
   timestamp: number;
 };
 
+/**
+ * Fired on every voice `VoiceStatus` transition (listening / processing /
+ * speaking / idle / …). Unlike `voice:state` (a coarse active on/off), this
+ * exposes the granular status so consumers can render their own per-state UI
+ * (e.g. a listening/speaking status dock).
+ */
+export type AgentWidgetVoiceStatusEvent = {
+  status: VoiceStatus;
+  timestamp: number;
+};
+
 export type AgentWidgetActionEventPayload = {
   action: AgentWidgetParsedAction;
   message: AgentWidgetMessage;
@@ -632,6 +643,7 @@ export type AgentWidgetControllerEventMap = {
   "assistant:message": AgentWidgetMessage;
   "assistant:complete": AgentWidgetMessage;
   "voice:state": AgentWidgetVoiceStateEvent;
+  "voice:status": AgentWidgetVoiceStatusEvent;
   "action:detected": AgentWidgetActionEventPayload;
   "action:resubmit": AgentWidgetActionEventPayload;
   "widget:opened": AgentWidgetStateEvent;

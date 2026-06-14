@@ -4875,6 +4875,10 @@ export const createAgentExperience = (
       syncComposerBarPeek();
     },
     onVoiceStatusChanged(status: VoiceStatus) {
+      // Surface the granular status publicly so consumers can render their own
+      // per-state UI (e.g. a listening/speaking status dock). Fires for every
+      // provider; the mic-button styling below is runtype-specific.
+      eventBus.emit("voice:status", { status, timestamp: Date.now() });
       if (config.voiceRecognition?.provider?.type !== 'runtype') return;
 
       switch (status) {

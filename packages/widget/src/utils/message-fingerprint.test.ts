@@ -47,6 +47,15 @@ describe("computeMessageFingerprint", () => {
     expect(fp1).not.toBe(fp2);
   });
 
+  it("changes when voiceProcessing flips with identical text (transcript finalize)", () => {
+    // On transcript finalize, voiceProcessing goes true→false with the SAME
+    // text. The fingerprint must change so the live transcribing/thinking
+    // bubble is replaced by the finalized one instead of served from cache.
+    const fp1 = computeMessageFingerprint(makeMessage({ content: "hello there", voiceProcessing: true }), 0);
+    const fp2 = computeMessageFingerprint(makeMessage({ content: "hello there", voiceProcessing: false }), 0);
+    expect(fp1).not.toBe(fp2);
+  });
+
   it("changes when role changes", () => {
     const fp1 = computeMessageFingerprint(makeMessage({ role: "assistant" }), 0);
     const fp2 = computeMessageFingerprint(makeMessage({ role: "user" }), 0);

@@ -22,6 +22,69 @@
         border-color: var(--warn);
         color: var(--paper);
       }
+
+      /* Floating voice-status dock — the two states that aren't message bubbles
+         (listening / speaking) plus a thinking mirror. Shares the indicator
+         plugin's visual language: sky = listening, violet = agent. */
+      .stage-widget { position: relative; }
+      .voice-dock {
+        position: absolute;
+        top: 94px; /* clears the ~82px panel header so the pill floats over messages */
+        left: 50%;
+        transform: translateX(-50%) translateY(-6px);
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.5rem 0.9rem;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.82);
+        color: #f8fafc;
+        font-size: 0.85rem;
+        font-weight: 500;
+        box-shadow: 0 14px 30px -12px rgba(2, 6, 23, 0.6);
+        backdrop-filter: blur(8px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease, transform 0.25s ease;
+        z-index: 5;
+        --accent: #38bdf8;
+      }
+      .voice-dock[data-state="visible"] {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      .voice-dock--listening { --accent: #38bdf8; }
+      .voice-dock--thinking,
+      .voice-dock--speaking { --accent: #a78bfa; }
+      .voice-dock-viz { display: inline-flex; align-items: center; gap: 3px; height: 14px; }
+      .voice-dock-wave i {
+        width: 3px;
+        height: 100%;
+        border-radius: 2px;
+        background: var(--accent);
+        transform-origin: center;
+        animation: vd-wave 1s ease-in-out infinite;
+      }
+      .voice-dock-wave i:nth-child(2) { animation-delay: 0.12s; }
+      .voice-dock-wave i:nth-child(3) { animation-delay: 0.24s; }
+      .voice-dock-wave i:nth-child(4) { animation-delay: 0.36s; }
+      .voice-dock-wave i:nth-child(5) { animation-delay: 0.48s; }
+      .voice-dock-wave i:nth-child(6) { animation-delay: 0.6s; }
+      .voice-dock-wave i:nth-child(7) { animation-delay: 0.72s; }
+      .voice-dock-dots i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: vd-dot 1.2s ease-in-out infinite;
+      }
+      .voice-dock-dots i:nth-child(2) { animation-delay: 0.18s; }
+      .voice-dock-dots i:nth-child(3) { animation-delay: 0.36s; }
+      @keyframes vd-wave { 0%, 100% { transform: scaleY(0.35); opacity: 0.6; } 50% { transform: scaleY(1); opacity: 1; } }
+      @keyframes vd-dot { 0%, 100% { transform: translateY(0); opacity: 0.5; } 50% { transform: translateY(-3px); opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) {
+        .voice-dock-wave i, .voice-dock-dots i { animation: none; }
+      }
     </style>
   </head>
   <body>
@@ -169,14 +232,17 @@
           </div>
 
           <div style="margin-top: 1rem">
-            <h4 class="control-label">Custom Processing UI</h4>
+            <h4 class="control-label">Voice Indicator Plugin</h4>
             <label class="checkbox-label">
               <input type="checkbox" id="customProcessingUIToggle" />
-              Enable custom <code>postprocessMessage</code> for voice placeholders
+              Polished voice indicator (<code>renderMessage</code> plugin)
             </label>
             <p class="hint">
-              When enabled, voice processing placeholders use a custom animated component
-              via the <code>voiceProcessing</code> message flag instead of plain text.
+              When enabled, registers <code>plugins: [createVoiceIndicatorPlugin()]</code>,
+              which renders the live <em>transcribing</em> &amp; <em>thinking</em> bubbles as
+              real animated components (no sanitizer stripping, markdown preserved).
+              <em>Listening</em> &amp; <em>speaking</em> appear in the status dock over the
+              chat, driven by the <code>voice:status</code> event.
             </p>
           </div>
 
@@ -301,6 +367,7 @@
       } from "./src/demo-config-inspector.ts";
       import { renderDemoScaffold } from "./src/demo-scaffold.ts";
       import { setupMountMode, squareInlinePanel } from "./src/mount-mode.ts";
+      import { createVoiceIndicatorPlugin } from "./src/plugins/voice-indicator-plugin.js";
 
       renderDemoScaffold({ slug: "voice-integration-demo" });
 
@@ -376,27 +443,12 @@
             },
           },
 
-          // Custom postprocessMessage for voice processing placeholders
+          // Polished voice indicators via a renderMessage plugin. Unlike a
+          // postprocessMessage HTML string (whose inline styles get sanitized
+          // away), the plugin returns real elements and falls through to the
+          // default renderer for normal messages, so markdown is preserved.
           ...(currentConfig.customProcessingUI ? {
-            postprocessMessage: ({ text, message, streaming }) => {
-              if (message.voiceProcessing) {
-                if (message.role === 'user') {
-                  return `<div style="display:flex;align-items:center;gap:8px">
-                    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#38bdf8;animation:pulse 1.2s ease-in-out infinite"></span>
-                    <span style="color:#64748b;font-style:italic">Transcribing your voice...</span>
-                  </div>`;
-                }
-                if (message.role === 'assistant' && streaming) {
-                  return `<div style="display:flex;align-items:center;gap:6px">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;animation:pulse 1s ease-in-out infinite"></span>
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;animation:pulse 1s ease-in-out 0.2s infinite"></span>
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a78bfa;animation:pulse 1s ease-in-out 0.4s infinite"></span>
-                    <span style="color:#64748b;font-style:italic;margin-left:4px">Agent is thinking...</span>
-                  </div>`;
-                }
-              }
-              return text;
-            }
+            plugins: [createVoiceIndicatorPlugin()]
           } : {}),
 
           // Text-to-speech configuration
@@ -837,6 +889,51 @@
             console.error("Widget error:", error);
             updateStatus("error", "Widget error: " + error.message);
           });
+
+          // Floating voice-status dock for the two states that are NOT message
+          // bubbles — listening & speaking — driven by the public `voice:status`
+          // event. (Transcribing & thinking render in-thread via the plugin.)
+          // Gated on the same toggle so it pairs with the indicator plugin.
+          if (currentConfig.customProcessingUI) {
+            const stage = document.querySelector(".stage-widget");
+            if (stage) {
+              let dock = stage.querySelector(".voice-dock");
+              if (!dock) {
+                dock = document.createElement("div");
+                dock.className = "voice-dock";
+                dock.setAttribute("data-state", "hidden");
+                dock.innerHTML =
+                  '<span class="voice-dock-viz"></span><span class="voice-dock-label"></span>';
+                stage.appendChild(dock);
+              }
+              const viz = dock.querySelector(".voice-dock-viz");
+              const label = dock.querySelector(".voice-dock-label");
+              // The dock covers the two states that are NOT message bubbles —
+              // listening & speaking. Thinking renders in-thread (plugin), so
+              // it's intentionally omitted here to avoid a duplicate indicator.
+              const DOCK_MAP = {
+                listening: { cls: "listening", label: "Listening…", bars: 5, dots: false },
+                speaking: { cls: "speaking", label: "Speaking…", bars: 7, dots: false },
+              };
+              widget.on("voice:status", (e) => {
+                const m = DOCK_MAP[e.status];
+                if (!m) {
+                  dock.setAttribute("data-state", "hidden");
+                  return;
+                }
+                if (dock.dataset.variant !== m.cls) {
+                  dock.dataset.variant = m.cls;
+                  dock.className = "voice-dock voice-dock--" + m.cls;
+                  viz.className =
+                    "voice-dock-viz " + (m.dots ? "voice-dock-dots" : "voice-dock-wave");
+                  viz.innerHTML = "";
+                  for (let i = 0; i < m.bars; i++) viz.appendChild(document.createElement("i"));
+                }
+                label.textContent = m.label;
+                dock.setAttribute("data-state", "visible");
+              });
+            }
+          }
         } catch (error) {
           console.error("Failed to initialize widget:", error);
           updateStatus("error", "Initialization failed: " + error.message);

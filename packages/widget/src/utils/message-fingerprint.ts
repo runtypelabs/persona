@@ -12,6 +12,7 @@ export type FingerprintableMessage = {
   role: string;
   content: string;
   streaming?: boolean;
+  voiceProcessing?: boolean;
   variant?: string;
   rawContent?: string;
   llmContent?: string;
@@ -49,6 +50,10 @@ export function computeMessageFingerprint(
     message.content?.length ?? 0,
     message.content?.slice(-32) ?? "",
     message.streaming ? "1" : "0",
+    // voiceProcessing flips true→false on transcript finalize, usually with the
+    // SAME text — so without it the cache would reuse the live transcribing/
+    // thinking bubble (waveform/dots) for the finalized message.
+    message.voiceProcessing ? "1" : "0",
     message.variant ?? "",
     message.rawContent?.length ?? 0,
     message.llmContent?.length ?? 0,
