@@ -31,12 +31,18 @@ import type {
   VoiceProvider,
   VoiceStatus,
   VoiceConfig,
-  TextToSpeechConfig
+  ReadAloudState,
+  SpeechEngine
 } from "./types";
 import {
   createVoiceProvider,
-  isVoiceSupported
+  isVoiceSupported,
+  BrowserSpeechEngine,
+  pickBestVoice,
+  ReadAloudController,
+  type ReadAloudListener
 } from "./voice";
+import { resolveSpeakableText } from "./utils/speech-text";
 
 export type AgentWidgetSessionStatus =
   | "idle"
@@ -356,6 +362,20 @@ export class AgentWidgetSession {
   // Track message IDs where the Runtype provider already played TTS audio
   // so browser TTS doesn't double-speak them
   private ttsSpokenMessageIds = new Set<string>();
+
+  // Owns the per-message "Read aloud" action and the auto-speak path: which
+  // message is active, its play/pause state, and the speech engine. The engine
+  // is resolved lazily on first playback (inside the user gesture) so a hosted
+  // engine via `textToSpeech.createEngine` plugs in without changing this class.
+  private readAloud = new ReadAloudController(() => this.createSpeechEngine());
+
+  /** Resolve the speech engine: a configured hosted engine, else the browser. */
+  private createSpeechEngine(): SpeechEngine | Promise<SpeechEngine> | null {
+    const tts = this.config.textToSpeech;
+    if (tts?.createEngine) return tts.createEngine();
+    if (!BrowserSpeechEngine.isSupported()) return null;
+    return new BrowserSpeechEngine({ pickVoice: tts?.pickVoice });
+  }
 
   /**
    * Setup voice recognition with the given configuration
@@ -2693,84 +2713,65 @@ export class AgentWidgetSession {
       return;
     }
 
-    const text = lastAssistant.content;
+    const text = resolveSpeakableText(lastAssistant.content);
     if (!text.trim()) return;
 
-    this.speak(text, ttsConfig);
-  }
-
-  /**
-   * Speak text using the Web Speech API.
-   * Cancels any in-progress speech before starting.
-   */
-  private speak(text: string, config: TextToSpeechConfig) {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
-    const synth = window.speechSynthesis;
-    synth.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = synth.getVoices();
-
-    if (config.voice) {
-      const match = voices.find(v => v.name === config.voice);
-      if (match) utterance.voice = match;
-    } else if (voices.length > 0) {
-      // Use custom picker if provided, otherwise auto-detect
-      utterance.voice = config.pickVoice
-        ? config.pickVoice(voices)
-        : AgentWidgetSession.pickBestVoice(voices);
-    }
-
-    if (config.rate !== undefined) utterance.rate = config.rate;
-    if (config.pitch !== undefined) utterance.pitch = config.pitch;
-
-    // Chrome bug: cancel() immediately followed by speak() can ignore
-    // rate/pitch. A microtask delay lets the engine reset properly.
-    setTimeout(() => synth.speak(utterance), 50);
+    // Route auto-speak through the same controller as the "Read aloud" button
+    // so there's a single owner of the speech engine and the button reflects
+    // playback state (and a single message can't be spoken by two paths at once).
+    void this.readAloud.play(lastAssistant.id, {
+      text,
+      voice: ttsConfig.voice,
+      rate: ttsConfig.rate,
+      pitch: ttsConfig.pitch,
+    });
   }
 
   /**
    * Pick the best available English voice from a list of SpeechSynthesisVoices.
    * Prefers high-quality remote/natural voices, then enhanced local voices,
-   * then standard local voices.
+   * then standard local voices. Retained for backwards compatibility; delegates
+   * to the browser speech engine's picker.
    */
   static pickBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice {
-    // Priority list: high-quality voices across browsers/platforms
-    const preferred = [
-      // Edge Online Natural (highest quality)
-      'Microsoft Jenny Online (Natural) - English (United States)',
-      'Microsoft Aria Online (Natural) - English (United States)',
-      'Microsoft Guy Online (Natural) - English (United States)',
-      // Google remote (good quality, cross-platform in Chrome)
-      'Google US English',
-      'Google UK English Female',
-      // Apple premium/enhanced (macOS)
-      'Ava (Premium)',
-      'Evan (Enhanced)',
-      'Samantha (Enhanced)',
-      // Apple standard (macOS/iOS)
-      'Samantha',
-      'Daniel',
-      'Karen',
-      // Windows SAPI
-      'Microsoft David Desktop - English (United States)',
-      'Microsoft Zira Desktop - English (United States)',
-    ];
-
-    for (const name of preferred) {
-      const match = voices.find(v => v.name === name);
-      if (match) return match;
-    }
-
-    // Fallback: any English voice, then first available
-    return voices.find(v => v.lang.startsWith('en')) ?? voices[0];
+    return pickBestVoice(voices);
   }
 
   /**
-   * Stop any in-progress text-to-speech playback.
+   * Toggle the per-message "Read aloud" action: play → pause → resume (or
+   * play → stop when the engine can't pause). Speaks the assistant message's
+   * text via the configured speech engine (browser Web Speech API by default,
+   * or a hosted engine from `textToSpeech.createEngine`).
+   */
+  public toggleReadAloud(messageId: string): void {
+    const message = this.messages.find(m => m.id === messageId);
+    if (!message || message.role !== 'assistant') return;
+    const text = resolveSpeakableText(message.content || '');
+    if (!text.trim()) return;
+    const tts = this.config.textToSpeech;
+    this.readAloud.toggle(messageId, {
+      text,
+      voice: tts?.voice,
+      rate: tts?.rate,
+      pitch: tts?.pitch,
+    });
+  }
+
+  /** Current read-aloud playback state for a message (`idle` unless active). */
+  public getReadAloudState(messageId: string): ReadAloudState {
+    return this.readAloud.stateFor(messageId);
+  }
+
+  /** Subscribe to read-aloud state changes. Returns an unsubscribe function. */
+  public onReadAloudChange(listener: ReadAloudListener): () => void {
+    return this.readAloud.onChange(listener);
+  }
+
+  /**
+   * Stop any in-progress text-to-speech / read-aloud playback.
    */
   public stopSpeaking() {
+    this.readAloud.stop();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }

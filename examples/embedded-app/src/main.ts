@@ -187,7 +187,8 @@ When a user asks what they can customize, cover these areas (all set via the con
 - **Composer & buttons**: \`sendButton\`, \`statusIndicator\` (idle text/link/alignment), \`autoFocusInput\`.
 - **Message rendering**: \`postprocessMessage\` hook to transform rendered HTML (e.g. add copy buttons to code blocks), built-in \`markdownPostprocessor\`, custom components inside messages, \`sanitize\` option (\`true\` by default, \`false\`, or a custom \`(html) => string\` function).
 - **Tool & reasoning UI**: \`toolCall\`, \`reasoning\`, and \`approval\` configs for how tool calls, thinking, and approval bubbles render.
-- **Voice & speech**: \`voiceRecognition\` (browser or ElevenLabs-powered providers) and \`textToSpeech\` (Web Speech API: voice, rate, pitch).
+- **Message actions**: \`messageActions\` toggles for per-message buttons — \`showCopy\`, \`showUpvote\`/\`showDownvote\` (feedback), and \`showReadAloud\` (a "Read aloud" text-to-speech button with play/pause/resume; emits the \`message:read-aloud\` event).
+- **Voice & speech**: \`voiceRecognition\` (browser or ElevenLabs-powered providers) and \`textToSpeech\` (auto-speak + the read-aloud button; voice, rate, pitch, or a hosted engine via \`createEngine\`).
 - **Plugins**: a plugin registry for custom functionality beyond config options.
 
 ## Setting Up Persona With an AI Coding Agent
@@ -387,6 +388,12 @@ const inlineController = createAgentExperience(inlineMount, {
   },
   features: {
     showEventStreamToggle: true
+  },
+  // Per-message "Read aloud" (text-to-speech) alongside the copy action. Votes
+  // stay off (they need a backend); read-aloud uses the browser Web Speech API.
+  messageActions: {
+    ...DEFAULT_WIDGET_CONFIG.messageActions,
+    showReadAloud: true,
   },
   persistState: {
     keyPrefix: homeDemoPersistKeyPrefix

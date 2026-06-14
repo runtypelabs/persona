@@ -35,13 +35,18 @@ const h = vi.hoisted(() => {
   return { state, fakeProvider };
 });
 
-vi.mock('./voice', () => ({
-  createVoiceProvider: () => h.fakeProvider,
-  createBestAvailableVoiceProvider: () => h.fakeProvider,
-  isVoiceSupported: () => true,
-  RuntypeVoiceProvider: class {},
-  BrowserVoiceProvider: class {},
-}));
+vi.mock('./voice', async (importOriginal) => {
+  // Keep the real exports (ReadAloudController, BrowserSpeechEngine, …) and
+  // override only the provider factories so the realtime voice flow uses the
+  // fake provider.
+  const actual = await importOriginal<typeof import('./voice')>();
+  return {
+    ...actual,
+    createVoiceProvider: () => h.fakeProvider,
+    createBestAvailableVoiceProvider: () => h.fakeProvider,
+    isVoiceSupported: () => true,
+  };
+});
 
 import { AgentWidgetSession } from './session';
 

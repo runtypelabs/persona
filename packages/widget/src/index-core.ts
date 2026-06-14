@@ -98,6 +98,7 @@ export type {
   EventStreamPayloadRenderContext,
   // Controller event map
   AgentWidgetControllerEventMap,
+  AgentWidgetReadAloudEvent,
   // Ask-user-question (built-in answer-pill sheet) types
   AskUserQuestionPayload,
   AskUserQuestionPrompt,
@@ -438,7 +439,21 @@ export type {
   VoiceConfig,
   VoiceMetrics,
   VoicePlaybackEngine,
-  AgentWidgetVoiceStatusEvent
+  AgentWidgetVoiceStatusEvent,
+  ReadAloudState,
+  SpeechEngine,
+  SpeechRequest,
+  SpeechCallbacks
 } from "./types";
+
+export {
+  BrowserSpeechEngine,
+  pickBestVoice,
+  ReadAloudController
+} from "./voice";
+export type {
+  BrowserSpeechEngineOptions,
+  ReadAloudListener
+} from "./voice";
 
 export default initAgentWidgetFn;

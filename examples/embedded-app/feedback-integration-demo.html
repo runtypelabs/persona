@@ -30,6 +30,9 @@
               <label class="checkbox-label">
                 <input type="checkbox" id="cfg-downvote" checked> Downvote
               </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="cfg-read-aloud" checked> Read aloud
+              </label>
             </div>
             <div class="field-grid">
               <label class="field">
@@ -60,7 +63,7 @@
 
         <div class="info-section">
           <h3>Message feedback</h3>
-          <div class="stats">
+          <div class="stats" style="grid-template-columns: repeat(2, 1fr);">
             <div class="stat-card upvotes">
               <div class="stat-value" id="upvote-count">0</div>
               <div class="stat-label">Upvotes</div>
@@ -72,6 +75,10 @@
             <div class="stat-card copies">
               <div class="stat-value" id="copy-count">0</div>
               <div class="stat-label">Copies</div>
+            </div>
+            <div class="stat-card read-alouds">
+              <div class="stat-value" id="readaloud-count">0</div>
+              <div class="stat-label">Read alouds</div>
             </div>
           </div>
         </div>

@@ -464,6 +464,16 @@
                 }
               : undefined,
 
+          // Per-message "Read aloud" button (play / pause / resume) next to the
+          // copy/feedback actions. Speaks via the browser Web Speech API by
+          // default; supply a hosted engine via textToSpeech.createEngine to use
+          // server-side voices. Voice/rate/pitch come from textToSpeech above.
+          messageActions: {
+            showCopy: true,
+            showReadAloud: true,
+            visibility: "always",
+          },
+
            // Basic widget configuration
            apiUrl: window.location.hostname.includes("localhost")
              ? "http://localhost:8787"

@@ -613,6 +613,7 @@ const messageActionsSectionDef: SectionDef = {
     { id: 'msg-actions-copy', label: 'Show Copy', type: 'toggle', path: 'messageActions.showCopy', defaultValue: true },
     { id: 'msg-actions-upvote', label: 'Show Upvote', type: 'toggle', path: 'messageActions.showUpvote', defaultValue: true },
     { id: 'msg-actions-downvote', label: 'Show Downvote', type: 'toggle', path: 'messageActions.showDownvote', defaultValue: true },
+    { id: 'msg-actions-read-aloud', label: 'Show Read Aloud', type: 'toggle', path: 'messageActions.showReadAloud', defaultValue: false },
     { id: 'msg-actions-visibility', label: 'Visibility', type: 'select', path: 'messageActions.visibility', defaultValue: 'hover', options: [{ value: 'hover', label: 'On Hover' }, { value: 'always', label: 'Always Visible' }] },
     { id: 'msg-actions-align', label: 'Alignment', type: 'select', path: 'messageActions.align', defaultValue: 'right', options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },
     { id: 'msg-actions-layout', label: 'Layout', type: 'select', path: 'messageActions.layout', defaultValue: 'pill-inside', options: [{ value: 'pill-inside', label: 'Pill' }, { value: 'row-inside', label: 'Row' }] },

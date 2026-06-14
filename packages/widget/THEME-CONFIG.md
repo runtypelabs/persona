@@ -643,6 +643,29 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 | `showRecordingIndicator` | Show recording indicator |
 | `autoResume` | `boolean \| "assistant"` - Auto-resume listening |
 
+## Text-to-Speech (`config.textToSpeech.*`)
+
+Controls spoken playback of assistant messages. Two entry points share this config: **auto-speak** (read each assistant reply automatically when `enabled` is `true`) and the per-message **"Read aloud" button** (enabled separately via `messageActions.showReadAloud` — see [Message Actions](#message-actions-configmessageactions)). Both speak through a pluggable `SpeechEngine`: the browser Web Speech API by default, or a hosted engine returned from `createEngine`.
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `enabled` | `false` | Auto-speak assistant replies as they complete. (The "Read aloud" button works independently of this, via `messageActions.showReadAloud`.) |
+| `provider` | `"browser"` | `"browser"` uses the Web Speech API for all assistant messages; `"runtype"` lets the realtime voice service handle TTS for voice interactions |
+| `browserFallback` | `false` | When `provider: "runtype"`, also speak text-typed responses via the browser (no effect for `"browser"`) |
+| `voice` | — | Voice name for browser TTS (e.g. `"Google US English"`). Falls back to auto-detect if not found |
+| `pickVoice` | — | Custom voice picker used when `voice` is unset: `(voices: SpeechSynthesisVoice[]) => SpeechSynthesisVoice` |
+| `rate` | `1` | Speech rate (browser range `0.1`–`10`) |
+| `pitch` | `1` | Speech pitch (browser range `0`–`2`) |
+| `createEngine` | — | Factory for a custom/hosted `SpeechEngine` used by both auto-speak and the read-aloud button: `() => SpeechEngine \| Promise<SpeechEngine>`. May be async (resolved on first playback, inside the user gesture). A server engine (e.g. Runtype TTS) can stream audio through the realtime voice `VoicePlaybackEngine` |
+
+**Read-aloud control & events.** When `messageActions.showReadAloud` is on, each assistant message gets a play/pause/resume button. Drive or observe it programmatically:
+
+- `widget.toggleReadAloud(messageId)` — play → pause → resume (or play → stop when the engine can't pause)
+- `widget.stopReadAloud()` — stop any playback
+- `widget.getReadAloudState(messageId)` — `'idle' \| 'loading' \| 'playing' \| 'paused'`
+- `widget.onReadAloudChange((messageId, state) => …)` — subscribe to every transition
+- `widget.on('message:read-aloud', (e) => …)` — controller event fired on every transition (`e.messageId`, `e.message`, `e.state`, `e.timestamp`), parallel to `message:copy` / `message:feedback`
+
 ## Status Indicator (`config.statusIndicator.*`)
 
 | Property | Default | Description |
@@ -742,6 +765,7 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 | `showCopy` | `true` | Show copy button |
 | `showUpvote` | `false` | Show upvote button (requires backend) |
 | `showDownvote` | `false` | Show downvote button (requires backend) |
+| `showReadAloud` | `false` | Show "Read aloud" (text-to-speech) button. Uses the browser Web Speech API by default, or a hosted engine via `textToSpeech.createEngine`; voice/rate/pitch come from `textToSpeech` |
 
 ### Appearance
 | Property | Default | Description |

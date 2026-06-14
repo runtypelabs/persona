@@ -33,6 +33,7 @@ pnpm-debug.log*
 examples/standalone-widget/
 .npmrc
 .planning/
+.debug/
 # Local generated API contract cache
 packages/widget/openapi/runtype-public-openapi.local.json
 .claude/

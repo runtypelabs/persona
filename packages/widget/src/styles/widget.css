@@ -1948,6 +1948,18 @@
   opacity: 0.9;
 }
 
+/* Read-aloud loading state: spin the loader icon while audio is prepared
+   (near-instant for browser TTS; visible for a hosted/server engine fetch). */
+.persona-message-action-btn.persona-message-action-loading svg {
+  animation: persona-voice-processing-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-message-action-btn.persona-message-action-loading svg {
+    animation: none;
+  }
+}
+
 /* Vote pop animation */
 @keyframes persona-vote-pop {
   0% { transform: scale(1); }

@@ -893,6 +893,12 @@ body.demo-code-active [data-persona-root] { display: none; }
   color: var(--foreground);
   cursor: pointer;
 }
+/* Allow checkbox groups to wrap to a second line when they grow (e.g. the
+   Copy / Upvote / Downvote / Read aloud row) instead of overflowing the panel. */
+.checkbox-row {
+  flex-wrap: wrap;
+  row-gap: 0.6rem;
+}
 .checkbox-row input[type="checkbox"],
 .checkbox-label input[type="checkbox"] {
   width: 1rem;
@@ -1051,6 +1057,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .stat-card.upvotes .stat-value, .satisfaction-stats .stat-card.csat .stat-value { color: var(--ok); }
 .stat-card.downvotes .stat-value { color: var(--danger); }
 .stat-card.copies .stat-value, .satisfaction-stats .stat-card.nps .stat-value { color: var(--info); }
+.stat-card.read-alouds .stat-value { color: #b794f4; }
 
 /* ════════════════════════════════════════════════════════════════════════
    Event logs: one readout style, several sizes
@@ -1090,6 +1097,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .log-entry.downvote { border-left-color: var(--danger); color: #f4a99a; }
 .log-entry.copy,
 .log-entry.info     { border-left-color: var(--info);   color: #a9c4f4; }
+.log-entry.read-aloud { border-left-color: #b794f4;     color: #d6c2f7; }
 .log-entry.answered { border-left-color: var(--ok);     color: #9fe0b5; }
 .log-entry.dismissed{ border-left-color: var(--warn);   color: #f4cf9a; }
 /* Feedback-demo classification colors. */

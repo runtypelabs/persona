@@ -27,21 +27,24 @@ const apiUrl = import.meta.env.VITE_API_URL || "https://api.runtype.com";
 const cfgCopy = document.getElementById("cfg-copy") as HTMLInputElement;
 const cfgUpvote = document.getElementById("cfg-upvote") as HTMLInputElement;
 const cfgDownvote = document.getElementById("cfg-downvote") as HTMLInputElement;
+const cfgReadAloud = document.getElementById("cfg-read-aloud") as HTMLInputElement;
 const cfgVisibility = document.getElementById("cfg-visibility") as HTMLSelectElement;
 const cfgLayout = document.getElementById("cfg-layout") as HTMLSelectElement;
 const cfgAlign = document.getElementById("cfg-align") as HTMLSelectElement;
 
-const stats = { upvotes: 0, downvotes: 0, copies: 0, csat: null as number | null, nps: null as number | null };
+const stats = { upvotes: 0, downvotes: 0, copies: 0, readAlouds: 0, csat: null as number | null, nps: null as number | null };
 
 function updateStats() {
   const upvoteEl = document.getElementById("upvote-count");
   const downvoteEl = document.getElementById("downvote-count");
   const copyEl = document.getElementById("copy-count");
+  const readAloudEl = document.getElementById("readaloud-count");
   const csatEl = document.getElementById("csat-rating");
   const npsEl = document.getElementById("nps-rating");
   if (upvoteEl) upvoteEl.textContent = String(stats.upvotes);
   if (downvoteEl) downvoteEl.textContent = String(stats.downvotes);
   if (copyEl) copyEl.textContent = String(stats.copies);
+  if (readAloudEl) readAloudEl.textContent = String(stats.readAlouds);
   if (csatEl) csatEl.textContent = stats.csat !== null ? `${stats.csat}/5` : "-";
   if (npsEl) npsEl.textContent = stats.nps !== null ? `${stats.nps}/10` : "-";
 }
@@ -74,6 +77,7 @@ function getMessageActionsConfig() {
     showCopy: cfgCopy.checked,
     showUpvote: cfgUpvote.checked,
     showDownvote: cfgDownvote.checked,
+    showReadAloud: cfgReadAloud.checked,
     visibility: cfgVisibility.value as "always" | "hover",
     layout: cfgLayout.value as "pill-inside" | "row-inside",
     align: cfgAlign.value as "left" | "center" | "right",
@@ -156,6 +160,16 @@ setupMountMode({
     controller.on("message:feedback", (feedback) => {
       console.log("[Event] message:feedback -", feedback.type, "for", feedback.messageId);
     });
+    controller.on("message:read-aloud", (e) => {
+      console.log("[Event] message:read-aloud -", e.state, "for", e.messageId);
+      // Count each fresh playback start (the "loading" press); resume reuses
+      // "playing" without re-entering "loading", so it isn't double-counted.
+      if (e.state === "loading") {
+        stats.readAlouds++;
+        updateStats();
+      }
+      addLogEntry("read-aloud", `${e.state}${e.messageId ? ` - ID: ${e.messageId}` : ""}`);
+    });
     return () => {
       teardown();
       activeController = null;
@@ -163,7 +177,7 @@ setupMountMode({
   },
 });
 
-for (const el of [cfgCopy, cfgUpvote, cfgDownvote, cfgVisibility, cfgLayout, cfgAlign]) {
+for (const el of [cfgCopy, cfgUpvote, cfgDownvote, cfgReadAloud, cfgVisibility, cfgLayout, cfgAlign]) {
   el.addEventListener("change", () => {
     activeController?.update({ messageActions: getMessageActionsConfig() });
     reportDemoConfig(configInspector, {

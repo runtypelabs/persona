@@ -24,6 +24,7 @@ import {
   LoadingIndicatorRenderContext,
   IdleIndicatorRenderContext,
   VoiceStatus,
+  ReadAloudState,
   PersonaArtifactRecord,
   PersonaArtifactManualUpsert
 } from "./types";
@@ -340,6 +341,13 @@ type Controller = {
   // State query methods
   isOpen: () => boolean;
   isVoiceActive: () => boolean;
+  // Read-aloud (text-to-speech) methods
+  toggleReadAloud: (messageId: string) => void;
+  stopReadAloud: () => void;
+  getReadAloudState: (messageId: string) => ReadAloudState;
+  onReadAloudChange: (
+    listener: (activeId: string | null, state: ReadAloudState) => void
+  ) => () => void;
   getState: () => AgentWidgetStateSnapshot;
   // Feedback methods (CSAT/NPS)
   showCSATFeedback: (options?: Partial<CSATFeedbackOptions>) => void;
@@ -1310,6 +1318,47 @@ export const createAgentExperience = (
   // This handles clicks even after idiomorph morphs the DOM and strips inline listeners
   const messageVoteState = new Map<string, "upvote" | "downvote">();
 
+  // Read-aloud (text-to-speech) button state. The ReadAloudController in the
+  // session is the source of truth; these mirror its last-known state so the
+  // button visuals can be re-applied after every render/morph (which would
+  // otherwise revert the swapped icon to the default "volume-2").
+  let readAloudActiveId: string | null = null;
+  let readAloudActiveState: ReadAloudState = "idle";
+
+  const READ_ALOUD_ICONS: Record<ReadAloudState, { icon: string; label: string }> = {
+    idle: { icon: "volume-2", label: "Read aloud" },
+    loading: { icon: "loader-circle", label: "Loading…" },
+    playing: { icon: "pause", label: "Pause" },
+    paused: { icon: "play", label: "Resume" },
+  };
+
+  const applyReadAloudButton = (btn: HTMLElement, state: ReadAloudState) => {
+    const { icon, label } = READ_ALOUD_ICONS[state];
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+    btn.setAttribute("aria-pressed", state === "idle" ? "false" : "true");
+    btn.classList.toggle("persona-message-action-active", state !== "idle");
+    btn.classList.toggle("persona-message-action-loading", state === "loading");
+    const svg = renderLucideIcon(icon, 14, "currentColor", 2);
+    if (svg) {
+      btn.innerHTML = "";
+      btn.appendChild(svg);
+    }
+  };
+
+  // Re-apply the current read-aloud state to every read-aloud button in the
+  // thread. Called on state change and after each render so a button that is
+  // playing/paused keeps its icon across DOM morphs.
+  const refreshReadAloudButtons = () => {
+    const buttons = messagesWrapper.querySelectorAll<HTMLElement>('[data-action="read-aloud"]');
+    buttons.forEach((btn) => {
+      const container = btn.closest("[data-actions-for]");
+      const id = container?.getAttribute("data-actions-for") ?? null;
+      const state: ReadAloudState = id && id === readAloudActiveId ? readAloudActiveState : "idle";
+      applyReadAloudButton(btn, state);
+    });
+  };
+
   messagesWrapper.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     const actionBtn = target.closest('.persona-message-action-btn[data-action]') as HTMLElement;
@@ -1356,6 +1405,10 @@ export const createAgentExperience = (
         });
         messageActionCallbacks.onCopy(message);
       }
+    } else if (action === 'read-aloud') {
+      // Toggle play/pause/resume; ReadAloudController drives the engine and
+      // notifies onReadAloudChange, which refreshes the button icon.
+      session.toggleReadAloud(messageId);
     } else if (action === 'upvote' || action === 'downvote') {
       const currentVote = messageVoteState.get(messageId) ?? null;
       const wasActive = currentVote === action;
@@ -4082,8 +4135,17 @@ export const createAgentExperience = (
     }
   };
 
-  // Alias for clarity - the implementation handles flicker prevention via typing indicator logic
-  const renderMessagesWithPlugins = renderMessagesWithPluginsImpl;
+  // Alias for clarity - the implementation handles flicker prevention via typing indicator logic.
+  // Re-apply read-aloud button state after each render so a playing/paused
+  // message keeps its icon across idiomorph DOM morphs.
+  const renderMessagesWithPlugins = (
+    container: HTMLElement,
+    messages: AgentWidgetMessage[],
+    transform: MessageTransform
+  ) => {
+    renderMessagesWithPluginsImpl(container, messages, transform);
+    refreshReadAloudButtons();
+  };
 
   /**
    * Composer-bar outside-click dismiss. While the chat is expanded, clicking
@@ -4923,6 +4985,30 @@ export const createAgentExperience = (
   });
 
   sessionRef.current = session;
+
+  // Mirror read-aloud playback state into the action buttons, and surface it as
+  // a controller event (parallel to message:copy / message:feedback).
+  let lastReadAloudId: string | null = null;
+  session.onReadAloudChange((activeId, state) => {
+    readAloudActiveId = activeId;
+    readAloudActiveState = state;
+    refreshReadAloudButtons();
+
+    // On the terminal `idle` transition activeId is null, so fall back to the
+    // last active id to identify the message that just finished/stopped.
+    const messageId = activeId ?? lastReadAloudId;
+    if (activeId) lastReadAloudId = activeId;
+    const message = messageId
+      ? session.getMessages().find((m) => m.id === messageId) ?? null
+      : null;
+    eventBus.emit("message:read-aloud", {
+      messageId,
+      message,
+      state,
+      timestamp: Date.now(),
+    });
+    if (state === "idle") lastReadAloudId = null;
+  });
 
   // The constructor only emits onMessagesChanged when it has initial
   // messages, so seed send-detection explicitly for the empty-session case:  // otherwise the user's very first send would be mistaken for the seed.
@@ -7841,6 +7927,28 @@ export const createAgentExperience = (
     },
     isVoiceActive(): boolean {
       return voiceState.active;
+    },
+    /**
+     * Toggle "Read aloud" for an assistant message: play → pause → resume (or
+     * play → stop when the engine can't pause). Speaks via the configured
+     * speech engine (browser Web Speech API by default).
+     */
+    toggleReadAloud(messageId: string): void {
+      session.toggleReadAloud(messageId);
+    },
+    /** Stop any in-progress read-aloud / text-to-speech playback. */
+    stopReadAloud(): void {
+      session.stopSpeaking();
+    },
+    /** Current read-aloud playback state for a message (`idle` unless active). */
+    getReadAloudState(messageId: string): ReadAloudState {
+      return session.getReadAloudState(messageId);
+    },
+    /** Subscribe to read-aloud state changes. Returns an unsubscribe function. */
+    onReadAloudChange(
+      listener: (activeId: string | null, state: ReadAloudState) => void
+    ): () => void {
+      return session.onReadAloudChange(listener);
     },
     getState(): AgentWidgetStateSnapshot {
       return {

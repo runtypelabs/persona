@@ -629,9 +629,10 @@ export const createMessageActions = (
   const showCopy = actionsConfig.showCopy ?? true;
   const showUpvote = actionsConfig.showUpvote ?? true;
   const showDownvote = actionsConfig.showDownvote ?? true;
+  const showReadAloud = actionsConfig.showReadAloud ?? false;
 
   // Don't render the container at all when no actions are visible
-  if (!showCopy && !showUpvote && !showDownvote) {
+  if (!showCopy && !showUpvote && !showDownvote && !showReadAloud) {
     const empty = createElement("div");
     empty.style.display = "none";
     empty.id = `actions-${message.id}`;
@@ -684,6 +685,12 @@ export const createMessageActions = (
   // Copy button
   if (showCopy) {
     container.appendChild(createActionButton("copy", "Copy message", "copy"));
+  }
+
+  // Read-aloud button. Click handling and play/pause/resume state are managed
+  // in ui.ts (event delegation + ReadAloudController) so they survive morphs.
+  if (showReadAloud) {
+    container.appendChild(createActionButton("volume-2", "Read aloud", "read-aloud"));
   }
 
   // Upvote button

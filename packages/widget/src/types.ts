@@ -539,6 +539,22 @@ export type AgentWidgetActionEventPayload = {
 };
 
 /**
+ * Fired on every "Read aloud" (text-to-speech) state transition for a message:
+ * `loading` (press) → `playing` → `paused`/`playing` → `idle` (finished or
+ * stopped). On the terminal `idle` transition, `messageId`/`message` still
+ * identify the message that just stopped.
+ */
+export type AgentWidgetReadAloudEvent = {
+  /** The message being read aloud (or that just finished/stopped), if known. */
+  messageId: string | null;
+  /** The message object, when still present in the thread. */
+  message: AgentWidgetMessage | null;
+  /** The new playback state for this message. */
+  state: ReadAloudState;
+  timestamp: number;
+};
+
+/**
  * Feedback event payload for upvote/downvote actions on messages
  */
 export type AgentWidgetMessageFeedback = {
@@ -590,6 +606,14 @@ export type AgentWidgetMessageActionsConfig = {
    * @default false
    */
   showDownvote?: boolean;
+  /**
+   * Show a "Read aloud" button that speaks the assistant message via
+   * text-to-speech (play / pause / resume). Uses the browser Web Speech API by
+   * default, or a hosted engine supplied via `textToSpeech.createEngine`.
+   * Voice, rate and pitch are read from the `textToSpeech` config.
+   * @default false
+   */
+  showReadAloud?: boolean;
   /**
    * Visibility mode: 'always' shows buttons always, 'hover' shows on hover only
    * @default 'hover'
@@ -651,6 +675,7 @@ export type AgentWidgetControllerEventMap = {
   "widget:state": AgentWidgetStateSnapshot;
   "message:feedback": AgentWidgetMessageFeedback;
   "message:copy": AgentWidgetMessage;
+  "message:read-aloud": AgentWidgetReadAloudEvent;
   "eventStream:opened": { timestamp: number };
   "eventStream:closed": { timestamp: number };
   "approval:requested": { approval: AgentWidgetApproval; message: AgentWidgetMessage };
@@ -1899,7 +1924,77 @@ export type TextToSpeechConfig = {
   rate?: number;
   /** Speech pitch (0 - 2). Default: 1 */
   pitch?: number;
+  /**
+   * Factory for a custom {@link SpeechEngine}, used by both the auto-speak path
+   * and the per-message "Read aloud" action. When omitted, the browser Web
+   * Speech API engine is used. Return a hosted engine here to use server-side
+   * TTS (e.g. Runtype) — such an engine can stream audio through the realtime
+   * voice {@link VoicePlaybackEngine}. May be async (it is resolved on first
+   * playback, inside the user gesture).
+   */
+  createEngine?: () => SpeechEngine | Promise<SpeechEngine>;
 };
+
+/**
+ * Playback state of the per-message "Read aloud" action.
+ * - `idle`: not reading this message.
+ * - `loading`: the engine is preparing audio (e.g. a hosted TTS fetch). Browser
+ *   engines pass through this state almost instantly.
+ * - `playing`: audio is playing.
+ * - `paused`: playback is paused and resumable.
+ */
+export type ReadAloudState = "idle" | "loading" | "playing" | "paused";
+
+/** A unit of speech handed to a {@link SpeechEngine}. */
+export interface SpeechRequest {
+  /** Plain text to speak. The widget strips Markdown before calling the engine. */
+  text: string;
+  /** Preferred voice identifier (engine-specific; browser = voice name). */
+  voice?: string;
+  /** Speech rate (engine-specific range; browser: 0.1–10, default 1). */
+  rate?: number;
+  /** Speech pitch (engine-specific range; browser: 0–2, default 1). */
+  pitch?: number;
+}
+
+/** Lifecycle callbacks a {@link SpeechEngine} invokes during playback. */
+export interface SpeechCallbacks {
+  /** Audio has started playing. */
+  onStart?: () => void;
+  /** Playback finished naturally (or was canceled). */
+  onEnd?: () => void;
+  /** Playback failed. */
+  onError?: (error: Error) => void;
+}
+
+/**
+ * Pluggable text-to-speech engine behind the "Read aloud" message action.
+ *
+ * The widget ships a browser Web Speech API engine by default. Provide a hosted
+ * engine (Runtype TTS, ElevenLabs, a server proxy, …) by implementing this
+ * interface and returning it from {@link TextToSpeechConfig.createEngine}; a
+ * server engine can stream audio into the realtime voice
+ * {@link VoicePlaybackEngine}.
+ */
+export interface SpeechEngine {
+  /** Stable identifier, e.g. `"browser"`, `"runtype"`, or a custom id. */
+  readonly id: string;
+  /**
+   * Whether {@link pause}/{@link resume} are supported. When `false`, the UI
+   * offers play/stop only (tapping a playing message stops it).
+   */
+  readonly supportsPause: boolean;
+  /** Begin speaking. Drives the lifecycle through `callbacks`. */
+  speak(request: SpeechRequest, callbacks: SpeechCallbacks): void;
+  /** Pause playback (no-op if unsupported). */
+  pause(): void;
+  /** Resume paused playback (no-op if unsupported). */
+  resume(): void;
+  /** Stop playback and discard any queued audio. */
+  stop(): void;
+  /** Optional teardown of engine resources. */
+  destroy?(): void;
+}
 
 // ============================================================================
 // Voice Provider Types
