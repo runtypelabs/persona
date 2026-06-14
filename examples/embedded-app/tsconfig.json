@@ -6,6 +6,7 @@
     "paths": {
       "@runtypelabs/persona/theme-editor": ["../../packages/widget/src/theme-editor"],
       "@runtypelabs/persona/testing": ["../../packages/widget/src/testing"],
+      "@runtypelabs/persona/voice-worklet-player": ["../../packages/widget/src/voice-worklet-player"],
       "@runtypelabs/persona": ["../../packages/widget/src"],
       "@runtypelabs/persona-proxy": ["../../packages/proxy/src"]
     }

@@ -439,6 +439,7 @@ export type {
   VoiceConfig,
   VoiceMetrics,
   VoicePlaybackEngine,
+  PcmStreamPlayer,
   AgentWidgetVoiceStatusEvent,
   ReadAloudState,
   SpeechEngine,

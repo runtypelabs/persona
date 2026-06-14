@@ -67,6 +67,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "server-tts-demo",
+    href: "/server-tts-demo.html",
+    title: "Server TTS (streaming)",
+    blurb: "Read aloud with hosted voices via a streaming SpeechEngine.",
+    tier: "patterns",
+    tags: ["voice", "audio", "integration"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "agent-demo",
     href: "/agent-demo.html",
     title: "Agent Loop",

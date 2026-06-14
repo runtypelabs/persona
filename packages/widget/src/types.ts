@@ -2068,6 +2068,30 @@ export interface VoicePlaybackEngine {
 }
 
 /**
+ * A {@link VoicePlaybackEngine} that also supports pause/resume. Returned by
+ * `createPcmStreamPlayer` (`@runtypelabs/persona/voice-worklet-player`): a
+ * jitter-buffered AudioWorklet player for raw PCM16 / 24 kHz / mono streams.
+ * Reuse it inside a hosted {@link SpeechEngine} to get gapless playback with a
+ * configurable prebuffer and graceful underrun handling — feed each streamed
+ * chunk to {@link VoicePlaybackEngine.enqueue} and the worklet does the rest.
+ */
+export interface PcmStreamPlayer extends VoicePlaybackEngine {
+  /** Pause playback; the audio clock suspends and {@link resume} continues in place. */
+  pause(): void;
+  /** Resume playback after {@link pause}. */
+  resume(): void;
+  /**
+   * Register a callback fired once audible playback actually begins — i.e. the
+   * prebuffer waterline filled and the first sample reached the output. Use this
+   * (rather than "first chunk enqueued") to flip a UI from loading to playing, so
+   * the spinner holds through the prebuffer. Fires once per playback session
+   * (cleared by {@link VoicePlaybackEngine.flush}); a mid-reply underrun re-buffer
+   * does not re-fire it.
+   */
+  onStarted(callback: () => void): void;
+}
+
+/**
  * Voice provider configuration
  * Determines which voice provider to use and its specific settings
  */
