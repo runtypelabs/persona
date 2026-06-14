@@ -1,10 +1,10 @@
 /**
  * Critical-path launcher entry: built to `launcher.global.js` (IIFE).
  *
- * Ships ONLY the real collapsed launcher (`createLauncherButton`) plus the full
- * theme system, so the launcher paints pixel-identically to the full widget from
- * a tiny bundle (~13 KB brotli vs ~134 KB for `index.global.js`). The heavy
- * conversation panel is deferred until first open by the installer (Phase 2).
+ * Ships ONLY the real collapsed launcher (`createLauncherButton`) plus the
+ * theme application path, so the launcher paints pixel-identically to the full
+ * widget from a tiny bundle. The heavy conversation panel is deferred until
+ * first open by the installer (Phase 2).
  *
  * The full Lucide icon registry is kept on purpose: any *supported* icon a site
  * configures (`launcher.agentIconName` / `callToActionIconName`) must render at
@@ -18,7 +18,7 @@
  */
 import { createLauncherButton } from "./components/launcher";
 import { applyThemeVariables } from "./utils/theme";
-import { mergeWithDefaults } from "./defaults";
+import { DEFAULT_LAUNCHER_CONFIG } from "./defaults";
 import type { AgentWidgetConfig } from "./types";
 
 export interface AgentWidgetLauncherMountOptions {
@@ -56,6 +56,20 @@ const resolveTarget = (target?: string | HTMLElement): HTMLElement => {
   return document.body;
 };
 
+const mergeCriticalLauncherConfig = (
+  config?: AgentWidgetConfig
+): AgentWidgetConfig => ({
+  ...config,
+  launcher: {
+    ...DEFAULT_LAUNCHER_CONFIG,
+    ...config?.launcher,
+    dock: {
+      ...DEFAULT_LAUNCHER_CONFIG.dock,
+      ...config?.launcher?.dock,
+    },
+  },
+});
+
 /**
  * Mount the real collapsed launcher from the critical bundle.
  *
@@ -77,12 +91,9 @@ export const mount = (
   const { onOpen } = options;
   const target = resolveTarget(options.target);
 
-  // Render from the SAME effective config the full widget uses: `ui.ts` runs
-  // `mergeWithDefaults(config)` before building the launcher (ui.ts:495). Without
-  // this, the critical launcher misses launcher defaults like
-  // `callToActionIconPadding` and `agentIconName`, so it looks subtly different
-  // from the full widget that replaces it on open.
-  const config = mergeWithDefaults(options.config) as AgentWidgetConfig;
+  // Render from the same launcher defaults the full widget uses without pulling
+  // the full widget default object into the critical bundle.
+  const config = mergeCriticalLauncherConfig(options.config);
 
   const root = document.createElement("div");
   root.setAttribute("data-persona-root", "true");
@@ -97,7 +108,7 @@ export const mount = (
     root,
     element: launcher.element,
     update: (next: AgentWidgetConfig) => {
-      const merged = mergeWithDefaults(next) as AgentWidgetConfig;
+      const merged = mergeCriticalLauncherConfig(next);
       applyThemeVariables(root, merged);
       launcher.update(merged);
     },

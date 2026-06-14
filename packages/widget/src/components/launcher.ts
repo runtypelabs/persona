@@ -41,7 +41,7 @@ export const createLauncherButton = (
 
     const subtitleEl = button.querySelector("[data-role='launcher-subtitle']");
     if (subtitleEl) {
-      const s = launcher.subtitle ?? "Get answers fast";
+      const s = launcher.subtitle ?? "Here to help you get answers fast";
       subtitleEl.textContent = s;
       subtitleEl.setAttribute("title", s);
     }

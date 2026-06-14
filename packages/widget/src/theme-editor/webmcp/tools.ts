@@ -176,7 +176,7 @@ export function createThemeEditorTools(
     name: 'get_theme_overview',
     title: 'Get current theme & what is editable',
     description:
-      'Read the current widget theme (brand colors, per-role color assignments, typography, roundness, color scheme, undo/redo state), the available presets, and the high-level levers you can change. Call this FIRST before editing.',
+      'Read theme summary, presets, and editable levers. Call before editing.',
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: 'object',
@@ -184,7 +184,7 @@ export function createThemeEditorTools(
         verbosity: {
           type: 'string',
           enum: ['summary', 'full'],
-          description: "Use 'full' to also include the field-id index for set_theme_fields.",
+          description: "'full' includes the field-id index.",
         },
       },
       additionalProperties: false,
@@ -205,16 +205,16 @@ export function createThemeEditorTools(
           tags: p.tags ?? [],
         })),
         tools: [
-          { tool: 'set_brand_colors', hint: 'Recolor the palette (primary/secondary/accent): auto-generates shade scales.' },
-          { tool: 'assign_color_role', hint: 'Recolor a region (header, user/assistant messages, actions, input, links, borders, surfaces, scroll) with a family + intensity.' },
+          { tool: 'set_brand_colors', hint: 'Recolor primary/secondary/accent and generate shade scales.' },
+          { tool: 'assign_color_role', hint: 'Recolor a widget region with family + intensity.' },
           { tool: 'set_typography', hint: 'Set font family, size, weight, line height.' },
-          { tool: 'set_roundness', hint: 'Set corner roundness (sharp/default/rounded/pill) or granular radii.' },
-          { tool: 'set_color_scheme', hint: 'Set light/dark/auto and which variant edits target.' },
-          { tool: 'apply_preset', hint: 'Apply a complete built-in preset.' },
+          { tool: 'set_roundness', hint: 'Set corner roundness or granular radii.' },
+          { tool: 'set_color_scheme', hint: 'Set light/dark/auto and edit target.' },
+          { tool: 'apply_preset', hint: 'Apply a built-in preset.' },
           { tool: 'configure_widget', hint: 'Toggle launcher position, features, and layout.' },
           { tool: 'set_copy_and_suggestions', hint: 'Set welcome copy, placeholder, and suggestion chips.' },
-          { tool: 'set_theme_fields', hint: 'Advanced escape hatch: set any field by id or dot-path.' },
-          { tool: 'check_contrast', hint: 'Audit WCAG contrast across key text/background pairs.' },
+          { tool: 'set_theme_fields', hint: 'Set any field by id or dot-path.' },
+          { tool: 'check_contrast', hint: 'Audit WCAG contrast.' },
           { tool: 'manage_session', hint: 'Undo, redo, reset, or export the theme.' },
         ],
       };
@@ -236,13 +236,13 @@ export function createThemeEditorTools(
     name: 'set_brand_colors',
     title: 'Set brand colors',
     description:
-      'Set one or more brand colors (primary, secondary, accent). Each color auto-generates a full 50–950 shade scale and applies to the light and dark themes (per the current edit target). Accepts hex ("#2563eb", "2563eb", "#18f"), rgb()/rgba() ("rgb(37, 99, 235)"), or CSS color names ("blue", "slateblue").',
+      'Set primary, secondary, and/or accent colors. Generates shade scales and accepts hex, rgb/rgba, or CSS names.',
     inputSchema: {
       type: 'object',
       properties: {
-        primary: { type: 'string', description: 'Hex, rgb()/rgba(), or CSS color name.' },
-        secondary: { type: 'string', description: 'Hex, rgb()/rgba(), or CSS color name.' },
-        accent: { type: 'string', description: 'Hex, rgb()/rgba(), or CSS color name.' },
+        primary: { type: 'string', description: 'Hex, rgb/rgba, or CSS name.' },
+        secondary: { type: 'string', description: 'Hex, rgb/rgba, or CSS name.' },
+        accent: { type: 'string', description: 'Hex, rgb/rgba, or CSS name.' },
       },
       additionalProperties: false,
     },
@@ -282,13 +282,13 @@ export function createThemeEditorTools(
     name: 'assign_color_role',
     title: 'Assign a color family to an interface role',
     description:
-      'Recolor a semantic region of the widget by choosing a palette family and intensity. One call writes all related tokens (background, text, border, icon) consistently. Roles: header, user-messages, assistant-messages, primary-actions, input, links, borders, surfaces, scroll-to-bottom. Families: primary, secondary, accent, neutral. Intensity: solid (bold) or soft (tinted).',
+      'Recolor a widget region by role, palette family, and intensity.',
     inputSchema: {
       type: 'object',
       properties: {
-        role: { type: 'string', description: 'Interface role, e.g. "header" or "user-messages".' },
+        role: { type: 'string', description: 'Role, e.g. header or user-messages.' },
         family: { type: 'string', enum: ROLE_FAMILY_NAMES },
-        intensity: { type: 'string', enum: ['solid', 'soft'], description: "Defaults to 'solid'." },
+        intensity: { type: 'string', enum: ['solid', 'soft'], description: 'Default: solid.' },
       },
       required: ['role', 'family'],
       additionalProperties: false,
@@ -315,7 +315,7 @@ export function createThemeEditorTools(
     name: 'set_typography',
     title: 'Set typography',
     description:
-      'Set font family, base size, weight, and line height in one call. fontFamily: sans|serif|mono. fontSize: xs|sm|base|lg|xl. fontWeight: normal|medium|semibold|bold (or 400–700). lineHeight: tight|normal|relaxed (or 1.25/1.5/1.625).',
+      'Set font family, size, weight, and line height.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -358,14 +358,14 @@ export function createThemeEditorTools(
     name: 'set_roundness',
     title: 'Set corner roundness',
     description:
-      'Set overall corner roundness with a keyword (sharp, default, rounded, pill) which maps the full radius scale, OR pass granular radius values. Provide at least one of `style` or `radius`.',
+      'Set roundness by style or granular radius values.',
     inputSchema: {
       type: 'object',
       properties: {
         style: { type: 'string', enum: ['sharp', 'default', 'rounded', 'pill'] },
         radius: {
           type: 'object',
-          description: 'Granular overrides (px number or CSS length).',
+          description: 'Granular px or CSS length overrides.',
           properties: {
             sm: { type: ['string', 'number'] },
             md: { type: ['string', 'number'] },
@@ -415,7 +415,7 @@ export function createThemeEditorTools(
     name: 'set_color_scheme',
     title: 'Set color scheme',
     description:
-      'Set the shipped widget color scheme (light, dark, or auto/follow-system). Optionally set `editTarget` to choose which theme variant subsequent styling edits write to (light, dark, or both: default both).',
+      'Set light/dark/auto color scheme and optional edit target.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -481,7 +481,7 @@ export function createThemeEditorTools(
     name: 'configure_widget',
     title: 'Configure launcher, features, and layout',
     description:
-      'Toggle non-theme widget configuration. launcherPosition: bottom-right|bottom-left|top-right|top-left. features: { voice, artifacts, attachments, toolCalls, reasoning, feedback } booleans. layout: { avatars, timestamps, showHeader } booleans and messageStyle: bubble|flat|minimal.',
+      'Toggle launcher position, feature flags, and message layout.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -563,7 +563,7 @@ export function createThemeEditorTools(
     name: 'set_copy_and_suggestions',
     title: 'Set welcome copy and suggestion chips',
     description:
-      'Set the widget welcome copy and suggestion chips. title/subtitle are the welcome card text; placeholder is the input placeholder; sendLabel is the send button label; suggestions is an array of suggestion-chip strings (replaces the existing list).',
+      'Set welcome copy, input placeholder, send label, and suggestion chips.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -607,7 +607,7 @@ export function createThemeEditorTools(
     name: 'set_theme_fields',
     title: 'Set theme fields by id or path (advanced)',
     description:
-      'Advanced escape hatch: set individual editor fields by field id (see get_theme_overview verbosity:"full"), theme field ids follow the current edit target (light/dark/both), or by raw dot-path (theme.* / darkTheme.* / a config path), which is written as-is. Use only when a higher-level tool does not cover the need. Values are validated against the field metadata.',
+      'Advanced escape hatch: set fields by id or raw dot-path. Values are validated when metadata exists.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -616,7 +616,7 @@ export function createThemeEditorTools(
           items: {
             type: 'object',
             properties: {
-              field: { type: 'string', description: 'Field id or dot-path.' },
+              field: { type: 'string', description: 'Field id or path.' },
               value: { type: ['string', 'number', 'boolean'] },
             },
             required: ['field', 'value'],
@@ -686,13 +686,13 @@ export function createThemeEditorTools(
     name: 'check_contrast',
     title: 'Check accessibility contrast',
     description:
-      'Run WCAG contrast checks over the key text/background pairs (message text, header title, input/body text, primary button). Returns each ratio, whether it passes, and a suggested foreground shade for failures.',
+      'Run WCAG checks over key text/background pairs.',
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: 'object',
       properties: {
-        level: { type: 'string', enum: ['AA', 'AAA'], description: "Defaults to 'AA'." },
-        variant: { type: 'string', enum: ['light', 'dark', 'both'], description: "Defaults to 'both'." },
+        level: { type: 'string', enum: ['AA', 'AAA'], description: 'Default: AA.' },
+        variant: { type: 'string', enum: ['light', 'dark', 'both'], description: 'Default: both.' },
       },
       additionalProperties: false,
     },
@@ -716,7 +716,7 @@ export function createThemeEditorTools(
     name: 'manage_session',
     title: 'Undo, redo, reset, or export the theme',
     description:
-      'Session action. "undo"/"redo" step through edit history; "reset" restores defaults; "export" returns the embeddable theme snapshot (config + theme JSON) with no side effects.',
+      'Undo, redo, reset defaults, or export the theme snapshot.',
     inputSchema: {
       type: 'object',
       properties: { action: { type: 'string', enum: ['undo', 'redo', 'reset', 'export'] } },

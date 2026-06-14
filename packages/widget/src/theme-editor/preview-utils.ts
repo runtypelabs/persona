@@ -600,22 +600,30 @@ export interface PreviewConfigOptions {
   appendedMessages?: AgentWidgetMessage[];
 }
 
-export function buildPreviewConfig(
+function buildPreviewBaseConfig(
   options: PreviewConfigOptions,
   shellModeOverride?: 'light' | 'dark'
 ): AgentWidgetConfig {
   const theme = options.theme ? createTheme(options.theme, { validate: false }) : createTheme();
-  const scene = options.scene ?? 'conversation';
-
-  const base = {
+  return {
     ...DEFAULT_WIDGET_CONFIG,
     ...options.config,
     theme,
     darkTheme: options.darkTheme,
     colorScheme: shellModeOverride ?? (options.config?.colorScheme as string) ?? 'light',
   } as AgentWidgetConfig;
+}
 
-  return applySceneConfig(base, scene, options.appendedMessages ?? []);
+export function buildPreviewConfig(
+  options: PreviewConfigOptions,
+  shellModeOverride?: 'light' | 'dark'
+): AgentWidgetConfig {
+  const scene = options.scene ?? 'conversation';
+  return applySceneConfig(
+    buildPreviewBaseConfig(options, shellModeOverride),
+    scene,
+    options.appendedMessages ?? []
+  );
 }
 
 export function buildPreviewConfigWithMessages(
@@ -623,16 +631,10 @@ export function buildPreviewConfigWithMessages(
   messages: AgentWidgetMessage[],
   shellModeOverride?: 'light' | 'dark'
 ): AgentWidgetConfig {
-  const theme = options.theme ? createTheme(options.theme, { validate: false }) : createTheme();
   const scene = options.scene ?? 'conversation';
-
-  const base = {
-    ...DEFAULT_WIDGET_CONFIG,
-    ...options.config,
-    theme,
-    darkTheme: options.darkTheme,
-    colorScheme: shellModeOverride ?? (options.config?.colorScheme as string) ?? 'light',
-  } as AgentWidgetConfig;
-
-  return applySceneConfig(base, scene, messages);
+  return applySceneConfig(
+    buildPreviewBaseConfig(options, shellModeOverride),
+    scene,
+    messages
+  );
 }
