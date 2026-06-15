@@ -1,0 +1,410 @@
+/* Skylark Air — WebMCP flight-booking demo page chrome.
+   The Copilot and the on-page controls drive the same BookingStore, so the UI
+   renders identically whoever made the change. */
+
+:root {
+  --sk-chrome-bg: #eef2f8;
+  --sk-surface: #ffffff;
+  --sk-border: #d9e0ec;
+  --sk-text: #0f1f3a;
+  --sk-text-muted: #5b6b86;
+  --sk-accent: #1d4ed8;
+  --sk-accent-soft: #e8efff;
+  --sk-agent: #1d4ed8;
+  --sk-ok: #047857;
+  --sk-warn: #b45309;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body.sk-body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--sk-chrome-bg);
+  color: var(--sk-text);
+  font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+/* ---- toolbar ---- */
+
+.sk-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  background: var(--sk-surface);
+  border-bottom: 1px solid var(--sk-border);
+  flex: 0 0 auto;
+}
+
+.sk-logo {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.sk-logo span {
+  color: var(--sk-accent);
+}
+
+.sk-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--sk-accent);
+  background: var(--sk-accent-soft);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+/* ---- main / dock layout ---- */
+
+.sk-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* Persona's docked mount wraps #booking-dock-target in a generated
+   [data-persona-host-layout="docked"] flex row and docks the panel beside it —
+   the page shrinks to make room (same pattern as webmcp-slides). */
+.sk-app {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  gap: 14px;
+}
+
+[data-persona-host-layout="docked"] {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: none;
+}
+
+/* ---- search bar ---- */
+
+.sk-search-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  background: var(--sk-surface);
+  border: 1px solid var(--sk-border);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.sk-field {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--sk-border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--sk-text);
+  background: #fff;
+  min-width: 88px;
+}
+
+.sk-field-num {
+  width: 64px;
+  min-width: 0;
+}
+
+.sk-arrow {
+  color: var(--sk-text-muted);
+  font-size: 16px;
+}
+
+/* ---- columns ---- */
+
+.sk-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .sk-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sk-results,
+.sk-trip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sk-h {
+  margin: 4px 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sk-text-muted);
+}
+
+.sk-empty,
+.sk-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sk-text-muted);
+}
+
+/* ---- flight cards ---- */
+
+.sk-flight {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--sk-surface);
+  border: 1px solid var(--sk-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.sk-flight.is-selected {
+  border-color: var(--sk-accent);
+  box-shadow: 0 0 0 1px var(--sk-accent) inset;
+}
+
+.sk-flight-time {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.sk-flight-meta {
+  font-size: 12px;
+  color: var(--sk-text-muted);
+  margin-top: 2px;
+}
+
+.sk-flight-side {
+  text-align: right;
+}
+
+.sk-flight-price {
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.sk-flight-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* ---- buttons ---- */
+
+.sk-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border: 1px solid var(--sk-border);
+  background: #fff;
+  color: var(--sk-text);
+}
+
+.sk-btn-primary {
+  background: var(--sk-accent);
+  border-color: var(--sk-accent);
+  color: #fff;
+}
+
+.sk-btn-ghost {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.sk-btn-ghost:hover {
+  border-color: var(--sk-accent);
+  color: var(--sk-accent);
+}
+
+/* ---- trip blocks ---- */
+
+.sk-block {
+  background: var(--sk-surface);
+  border: 1px solid var(--sk-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sk-trip-leg {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sk-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sk-accent);
+  background: var(--sk-accent-soft);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.sk-pax {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--sk-chrome-bg);
+}
+
+.sk-pax.is-incomplete {
+  background: #fff7ed;
+  color: var(--sk-warn);
+}
+
+.sk-pax-dob {
+  color: var(--sk-text-muted);
+  font-size: 12px;
+}
+
+/* ---- seat map ---- */
+
+.sk-seatmap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sk-seatmap-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sk-text-muted);
+  margin-bottom: 2px;
+}
+
+.sk-seat-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sk-seat-row.is-exit {
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--sk-warn);
+}
+
+.sk-seat-head .sk-seat-col {
+  width: 26px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sk-text-muted);
+}
+
+.sk-seat-rownum {
+  width: 22px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--sk-text-muted);
+  padding-right: 2px;
+}
+
+.sk-seat {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--sk-border);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: default;
+  padding: 0;
+}
+
+.sk-seat.is-open {
+  background: #fff;
+  border-color: #b9c6dd;
+  color: var(--sk-text-muted);
+}
+
+.sk-seat.is-taken {
+  background: #e2e8f0;
+  color: #aab6c8;
+  border-color: #e2e8f0;
+}
+
+.sk-seat.is-assigned {
+  background: var(--sk-accent);
+  border-color: var(--sk-accent);
+  color: #fff;
+}
+
+/* ---- review ---- */
+
+.sk-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 15px;
+}
+
+.sk-total strong {
+  font-size: 18px;
+}
+
+.sk-confirmed {
+  font-weight: 700;
+  color: var(--sk-ok);
+}
+
+/* ---- agent-touch flash ---- */
+
+@keyframes sk-agent-pulse {
+  0% {
+    outline-color: rgba(29, 78, 216, 0.9);
+    outline-offset: 1px;
+  }
+  100% {
+    outline-color: rgba(29, 78, 216, 0);
+    outline-offset: 6px;
+  }
+}
+
+.sk-agent-flash {
+  outline: 3px solid rgba(29, 78, 216, 0.9);
+  animation: sk-agent-pulse 1.2s ease-out forwards;
+  border-radius: 8px;
+}
+
+/* ---- footer ---- */
+
+.sk-footer {
+  flex: 0 0 auto;
+  padding: 8px 18px;
+  font-size: 12px;
+  color: var(--sk-text-muted);
+  background: var(--sk-surface);
+  border-top: 1px solid var(--sk-border);
+}
