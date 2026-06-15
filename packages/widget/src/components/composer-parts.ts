@@ -1,4 +1,4 @@
-import { createElement } from "../utils/dom";
+import { createElement, createNode } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
 import { ALL_SUPPORTED_MIME_TYPES } from "../utils/content";
@@ -355,10 +355,12 @@ export const createAttachmentControls = (config?: AgentWidgetConfig): Attachment
     "div",
     "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2"
   );
+  previewsContainer.setAttribute("data-persona-composer-attachment-previews", "");
   previewsContainer.style.display = "none";
 
   const input = createElement("input") as HTMLInputElement;
   input.type = "file";
+  input.setAttribute("data-persona-composer-attachment-input", "");
   input.accept = (attachmentsConfig.allowedTypes ?? ALL_SUPPORTED_MIME_TYPES).join(",");
   input.multiple = (attachmentsConfig.maxFiles ?? 4) > 1;
   input.style.display = "none";
@@ -370,6 +372,7 @@ export const createAttachmentControls = (config?: AgentWidgetConfig): Attachment
     "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button"
   ) as HTMLButtonElement;
   button.type = "button";
+  button.setAttribute("data-persona-composer-attachment-button", "");
   button.setAttribute("aria-label", attachmentsConfig.buttonTooltipText ?? "Attach file");
 
   const attachIconName = attachmentsConfig.buttonIconName ?? "paperclip";
@@ -452,4 +455,7 @@ export const createStatusText = (config?: AgentWidgetConfig): HTMLElement => {
 };
 
 export const createSuggestionsRow = (): HTMLElement =>
-  createElement("div", "persona-mb-3 persona-flex persona-flex-wrap persona-gap-2");
+  createNode("div", {
+    className: "persona-mb-3 persona-flex persona-flex-wrap persona-gap-2",
+    attrs: { "data-persona-composer-suggestions": "" },
+  });

@@ -65,8 +65,9 @@ import {
 import { syncOverlayHostStacking } from "./utils/overlay-host-stacking";
 import { acquireScrollLock } from "./utils/scroll-lock";
 import { isComposerBarMountMode, isDockedMountMode, resolveDockConfig } from "./utils/dock";
-import { createLauncherButton } from "./components/launcher";
-import { createWrapper, buildPanel, buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
+import { LauncherButton } from "./components/launcher";
+import { buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
+import { createWidgetView, resolveLauncher } from "./components/widget-view";
 import { HEADER_THEME_CSS } from "./components/header-builder";
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
@@ -766,8 +767,13 @@ export const createAgentExperience = (
     }
   }
 
-  const { wrapper, panel, pillRoot } = createWrapper(config);
-  const panelElements = buildPanel(config, isPanelToggleable());
+  // The view layer (`components/widget-view.ts`) owns the one-time structural
+  // assembly (shell + panel) and groups the resulting refs into named regions.
+  // Behavior stays here in ui.ts; the locals below mirror the grouped refs so
+  // the surrounding orchestration code keeps its existing variable names.
+  const view = createWidgetView({ config, showClose: isPanelToggleable() });
+  const { wrapper, panel, pillRoot } = view.shell;
+  const panelElements = view.panelElements;
   let {
     container,
     body,
@@ -890,6 +896,9 @@ export const createAgentExperience = (
       if (existingHeader) {
         existingHeader.replaceWith(customHeader);
         header = customHeader;
+        // Keep the view's tracked header element in sync so a later
+        // header-layout rebuild (view.replaceHeader) targets the mounted node.
+        view.header.element = customHeader;
       }
     }
   }
@@ -993,12 +1002,15 @@ export const createAgentExperience = (
   const ensureComposerAttachmentSurface = (rootFooter: HTMLElement) => {
     const att = config.attachments;
     if (!att?.enabled) return;
-    let previews = rootFooter.querySelector<HTMLElement>(".persona-attachment-previews");
+    let previews =
+      rootFooter.querySelector<HTMLElement>("[data-persona-composer-attachment-previews]") ??
+      rootFooter.querySelector<HTMLElement>(".persona-attachment-previews");
     if (!previews) {
       previews = createElement(
         "div",
         "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2"
       );
+      previews.setAttribute("data-persona-composer-attachment-previews", "");
       previews.style.display = "none";
       const form = rootFooter.querySelector("[data-persona-composer-form]");
       if (form?.parentNode) {
@@ -1007,9 +1019,13 @@ export const createAgentExperience = (
         rootFooter.insertBefore(previews, rootFooter.firstChild);
       }
     }
-    if (!rootFooter.querySelector<HTMLInputElement>('input[type="file"]')) {
+    const hasFileInput =
+      rootFooter.querySelector<HTMLInputElement>("[data-persona-composer-attachment-input]") ??
+      rootFooter.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!hasFileInput) {
       const fileIn = createElement("input") as HTMLInputElement;
       fileIn.type = "file";
+      fileIn.setAttribute("data-persona-composer-attachment-input", "");
       fileIn.accept = (att.allowedTypes ?? ALL_SUPPORTED_MIME_TYPES).join(",");
       fileIn.multiple = (att.maxFiles ?? 4) > 1;
       fileIn.style.display = "none";
@@ -1071,13 +1087,24 @@ export const createAgentExperience = (
           : undefined
     });
     if (customComposer) {
-      // Replace the default footer with custom composer
-      footer.replaceWith(customComposer);
-      footer = customComposer;
+      // Replace the default footer with custom composer (keeps view.composer.footer in sync).
+      view.replaceComposer(customComposer);
+      footer = view.composer.footer;
     }
   }
 
   const bindComposerRefsFromFooter = (rootFooter: HTMLElement) => {
+    // Prefer stable `data-persona-composer-*` refs (set by the default and
+    // pill builders); fall back to the legacy class selectors so custom
+    // plugin composers built before these refs existed still bind.
+    const pick = <T extends HTMLElement>(...selectors: string[]): T | null => {
+      for (const selector of selectors) {
+        const found = rootFooter.querySelector<T>(selector);
+        if (found) return found;
+      }
+      return null;
+    };
+
     const form = rootFooter.querySelector<HTMLFormElement>("[data-persona-composer-form]");
     const ta = rootFooter.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]");
     const sb = rootFooter.querySelector<HTMLButtonElement>("[data-persona-composer-submit]");
@@ -1091,18 +1118,31 @@ export const createAgentExperience = (
       micButtonWrapper = mic.parentElement as HTMLElement | null;
     }
     if (st) statusText = st;
-    const sug = rootFooter.querySelector<HTMLElement>(
+    const sug = pick<HTMLElement>(
+      "[data-persona-composer-suggestions]",
       ".persona-mb-3.persona-flex.persona-flex-wrap.persona-gap-2"
     );
     if (sug) suggestions = sug;
-    const attBtn = rootFooter.querySelector<HTMLButtonElement>(".persona-attachment-button");
+    const attBtn = pick<HTMLButtonElement>(
+      "[data-persona-composer-attachment-button]",
+      ".persona-attachment-button"
+    );
     if (attBtn) {
       attachmentButton = attBtn;
       attachmentButtonWrapper = attBtn.parentElement as HTMLElement | null;
     }
-    attachmentInput = rootFooter.querySelector<HTMLInputElement>('input[type="file"]');
-    attachmentPreviewsContainer = rootFooter.querySelector<HTMLElement>(".persona-attachment-previews");
-    const ar = rootFooter.querySelector<HTMLElement>(".persona-widget-composer .persona-flex.persona-items-center.persona-justify-between");
+    attachmentInput = pick<HTMLInputElement>(
+      "[data-persona-composer-attachment-input]",
+      'input[type="file"]'
+    );
+    attachmentPreviewsContainer = pick<HTMLElement>(
+      "[data-persona-composer-attachment-previews]",
+      ".persona-attachment-previews"
+    );
+    const ar = pick<HTMLElement>(
+      "[data-persona-composer-actions]",
+      ".persona-widget-composer .persona-flex.persona-items-center.persona-justify-between"
+    );
     if (ar) _actionsRow = ar;
   };
   ensureComposerAttachmentSurface(footer);
@@ -5807,31 +5847,17 @@ export const createAgentExperience = (
   };
 
   // Plugin hook: renderLauncher - allow plugins to provide custom launcher
-  let launcherButtonInstance: ReturnType<typeof createLauncherButton> | null = null;
+  let launcherButtonInstance: LauncherButton | null = null;
   let customLauncherElement: HTMLElement | null = null;
   
   // Composer-bar mode is launcher-less by design: the persistent pill IS the
   // entry point, so skip creating any launcher button (default or plugin).
   if (launcherEnabled && !isComposerBar()) {
-    const launcherPlugin = plugins.find(p => p.renderLauncher);
-    if (launcherPlugin?.renderLauncher) {
-      const customLauncher = launcherPlugin.renderLauncher({
-        config,
-        defaultRenderer: () => {
-          const btn = createLauncherButton(config, toggleOpen);
-          return btn.element;
-        },
-        onToggle: toggleOpen
-      });
-      if (customLauncher) {
-        customLauncherElement = customLauncher;
-      }
-    }
-
-    // Use custom launcher if provided, otherwise use default
-    if (!customLauncherElement) {
-      launcherButtonInstance = createLauncherButton(config, toggleOpen);
-    }
+    const { instance, element } = resolveLauncher({ config, plugins, onToggle: toggleOpen });
+    launcherButtonInstance = instance;
+    // A plugin-provided launcher returns no controller instance; track its
+    // element separately so the update path can manage it.
+    if (!instance) customLauncherElement = element;
   }
 
   if (launcherButtonInstance) {
@@ -6436,26 +6462,11 @@ export const createAgentExperience = (
       }
 
       if (config.launcher?.enabled !== false && !launcherButtonInstance && !customLauncherElement) {
-        // Check for launcher plugin when re-enabling
-        const launcherPlugin = plugins.find(p => p.renderLauncher);
-        if (launcherPlugin?.renderLauncher) {
-          const customLauncher = launcherPlugin.renderLauncher({
-            config,
-            defaultRenderer: () => {
-              const btn = createLauncherButton(config, toggleOpen);
-              return btn.element;
-            },
-            onToggle: toggleOpen
-          });
-          if (customLauncher) {
-            customLauncherElement = customLauncher;
-            mount.appendChild(customLauncherElement);
-          }
-        }
-        if (!customLauncherElement) {
-          launcherButtonInstance = createLauncherButton(config, toggleOpen);
-          mount.appendChild(launcherButtonInstance.element);
-        }
+        // Resolve the launcher again when re-enabling (honors renderLauncher plugin).
+        const { instance, element } = resolveLauncher({ config, plugins, onToggle: toggleOpen });
+        launcherButtonInstance = instance;
+        if (!instance) customLauncherElement = element;
+        mount.appendChild(element);
       }
 
       if (launcherButtonInstance) {
@@ -6488,15 +6499,15 @@ export const createAgentExperience = (
               onClose: () => setOpenState(false, "user")
             });
 
-        // Replace the old header with the new one
-        header.replaceWith(newHeaderElements.header);
+        // Replace the old header with the new one (keeps view.header in sync).
+        view.replaceHeader(newHeaderElements);
 
-        // Update references
-        header = newHeaderElements.header;
-        iconHolder = newHeaderElements.iconHolder;
-        headerTitle = newHeaderElements.headerTitle;
-        headerSubtitle = newHeaderElements.headerSubtitle;
-        closeButton = newHeaderElements.closeButton;
+        // Mirror the view's refreshed header refs into the local bindings.
+        header = view.header.element;
+        iconHolder = view.header.iconHolder;
+        headerTitle = view.header.headerTitle;
+        headerSubtitle = view.header.headerSubtitle;
+        closeButton = view.header.closeButton;
 
         prevHeaderLayout = headerLayoutConfig?.layout;
       } else if (headerLayoutConfig) {
