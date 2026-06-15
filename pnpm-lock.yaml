@@ -15,6 +15,43 @@ importers:
         specifier: ^8.2.2
         version: 8.2.2
 
+  examples/adapter-sdk-minimal:
+    dependencies:
+      '@ai-sdk/openai':
+        specifier: ^3.0.71
+        version: 3.0.71(zod@4.1.11)
+      '@runtypelabs/persona':
+        specifier: workspace:^
+        version: link:../../packages/widget
+      ai:
+        specifier: ^6.0.203
+        version: 6.0.204(zod@4.1.11)
+      next:
+        specifier: ^16.2.9
+        version: 16.2.9(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      openai:
+        specifier: ^6.10.0
+        version: 6.42.0(ws@8.20.1)(zod@4.1.11)
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.7
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   examples/ai-sdk-webmcp:
     dependencies:
       '@mcp-b/webmcp-polyfill':
@@ -253,6 +290,12 @@ packages:
 
   '@ai-sdk/gateway@3.0.130':
     resolution: {integrity: sha512-qenRdpoYM+2y8Ibj3Y7XngvfcG4NIpejaM+YqAKWXi3/N1qZYeIelrm19jxhIwQW0W/g7WUz0L2Agl7+FnwrQA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai@3.0.71':
+    resolution: {integrity: sha512-j6eBAa5oHFZ4U5CxpIV3T4zXNM/BviodNCZCL1qHkA4aqkwK9iQ18TWYz2DZcXpw4BO5pikKzqpXORxb1EnZGA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -2358,6 +2401,17 @@ packages:
     resolution: {integrity: sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg==}
     engines: {node: '>=6'}
 
+  openai@6.42.0:
+    resolution: {integrity: sha512-1WFEt/uXMXOLhYRNkgJWo08Y2YNvNwpVU72K7ibrWgWpNOXd4VojXLbe6SQ4bLiUQ3Y8jz4IiyVkylJCL1DtZg==}
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -3148,6 +3202,12 @@ snapshots:
       '@ai-sdk/provider': 3.0.10
       '@ai-sdk/provider-utils': 4.0.29(zod@4.1.11)
       '@vercel/oidc': 3.2.0
+      zod: 4.1.11
+
+  '@ai-sdk/openai@3.0.71(zod@4.1.11)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.10
+      '@ai-sdk/provider-utils': 4.0.29(zod@4.1.11)
       zod: 4.1.11
 
   '@ai-sdk/provider-utils@4.0.29(zod@4.1.11)':
@@ -5064,6 +5124,11 @@ snapshots:
   onetime@5.1.2:
     dependencies:
       mimic-fn: 2.1.0
+
+  openai@6.42.0(ws@8.20.1)(zod@4.1.11):
+    optionalDependencies:
+      ws: 8.20.1
+      zod: 4.1.11
 
   optionator@0.9.4:
     dependencies:
