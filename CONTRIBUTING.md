@@ -22,7 +22,27 @@ pnpm typecheck      # type check
 cd packages/widget
 pnpm test:run       # run once
 pnpm test           # watch mode
+pnpm test:ui        # browser UI (http://localhost:51204)
 ```
+
+## Generated API types
+
+The widget's request/response types are generated from Runtype's public OpenAPI
+spec into `packages/widget/src/generated/runtype-openapi-contract.ts`, which is
+committed to the repo.
+
+`pnpm typecheck` re-fetches the live spec and **fails if the committed contract
+is out of date** — so if typecheck reports a contract mismatch (and you didn't
+touch the generated file), regenerate it:
+
+```bash
+pnpm generate:runtype-types   # fetch spec + rewrite the contract, then commit it
+pnpm check:runtype-types      # verify-only (what CI runs)
+```
+
+This requires network access to `api.runtype.com`. The fetched spec is cached at
+`packages/widget/openapi/*.local.json` (gitignored); only the generated `.ts`
+contract is committed.
 
 ## Submitting changes
 
