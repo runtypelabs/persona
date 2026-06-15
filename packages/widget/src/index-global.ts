@@ -70,3 +70,35 @@ setWebMcpPolyfillLoader(() => {
   // leaves it untouched (and must not try to bundle it).
   return import(/* @vite-ignore */ chunkUrl);
 });
+
+// ---------------------------------------------------------------------------
+// Deferred Runtype TTS engine loading.
+//
+// This bundle is built with `./runtype-speech-engine` external (see
+// `tsup.global.config.ts`): the hosted read-aloud engine + the
+// AudioPlaybackManager it bundles are kept out of the CDN payload. Register a
+// loader that imports the self-contained `runtype-tts.js` chunk from a sibling
+// URL; the session prefetches it at init when `textToSpeech.provider:'runtype'`
+// is set, so it's warm before the first click. Same pattern as the WebMCP
+// polyfill above.
+// ---------------------------------------------------------------------------
+
+import { setRuntypeTtsLoader } from "./voice/runtype-tts-loader";
+
+setRuntypeTtsLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "runtype-tts.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the runtype-tts.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host runtype-tts.js alongside it, or set " +
+          "textToSpeech.createEngine to supply a speech engine directly.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});

@@ -409,8 +409,19 @@ const inlineController = createAgentExperience(inlineMount, {
   features: {
     showEventStreamToggle: true
   },
-  // Per-message "Read aloud" (text-to-speech) alongside the copy action. Votes
-  // stay off (they need a backend); read-aloud uses the browser Web Speech API.
+  // Read aloud uses Runtype-hosted TTS (provider: 'runtype'): the button
+  // streams audio from Runtype's per-agent `/speak` endpoint. This demo talks
+  // to a proxy with no clientToken/agentId, so `browserFallback` transparently
+  // speaks with the OS voice today and auto-upgrades to the Runtype voice once a
+  // real clientToken + agentId (and the endpoint) are wired in. `enabled: false`
+  // keeps auto-speak off — only the per-message button uses the engine.
+  textToSpeech: {
+    enabled: false,
+    provider: "runtype",
+    browserFallback: true,
+  },
+  // Per-message "Read aloud" alongside the copy action. Votes stay off (they
+  // need a backend).
   messageActions: {
     ...DEFAULT_WIDGET_CONFIG.messageActions,
     showReadAloud: true,

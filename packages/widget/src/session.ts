@@ -43,6 +43,7 @@ import {
   type ReadAloudListener
 } from "./voice";
 import { resolveSpeakableText } from "./utils/speech-text";
+import { loadRuntypeTts } from "./voice/runtype-tts-loader";
 
 export type AgentWidgetSessionStatus =
   | "idle"
@@ -265,6 +266,29 @@ export class AgentWidgetSession {
       this.emitArtifactsState();
     }
     this.callbacks.onStatusChanged(this.status);
+    this.prefetchRuntypeTts();
+  }
+
+  /**
+   * Warm the deferred Runtype TTS engine chunk at init so it's resolved before
+   * the first "Read aloud" click. Module fetch only — no AudioContext (that
+   * still waits for the user gesture on first playback). In the IIFE/CDN build
+   * this fetches the standalone `runtype-tts.js`; in bundler builds the module
+   * is already inlined, so this is a cheap no-op. Errors are swallowed: a failed
+   * prefetch just means the chunk loads on first click instead (or, on a hard
+   * failure, the browser-voice fallback kicks in).
+   */
+  private prefetchRuntypeTts(): void {
+    const tts = this.config.textToSpeech;
+    if (tts?.provider !== "runtype" || tts.createEngine) return;
+    // Only warm the chunk when the engine will actually be built (same gate as
+    // createSpeechEngine) — an incomplete config (e.g. a proxy demo with no
+    // clientToken) falls back to the browser voice, so the fetch would be wasted.
+    const host = tts.host ?? this.config.apiUrl;
+    const agentId =
+      tts.agentId ?? this.config.voiceRecognition?.provider?.runtype?.agentId;
+    if (!host || !agentId || !this.config.clientToken) return;
+    void loadRuntypeTts().catch(() => {});
   }
 
   /**
@@ -369,12 +393,76 @@ export class AgentWidgetSession {
   // engine via `textToSpeech.createEngine` plugs in without changing this class.
   private readAloud = new ReadAloudController(() => this.createSpeechEngine());
 
-  /** Resolve the speech engine: a configured hosted engine, else the browser. */
+  /**
+   * Resolve the speech engine behind read-aloud (and auto-speak):
+   *   1. An explicit `textToSpeech.createEngine` always wins (full BYO control).
+   *   2. `provider: 'runtype'` builds the hosted {@link RuntypeSpeechEngine}
+   *      from the widget config (host = `apiUrl`, `agentId`, `clientToken`),
+   *      wrapped in a browser {@link FallbackSpeechEngine} unless
+   *      `browserFallback: false` — so a missing endpoint or transient failure
+   *      degrades to the browser voice instead of erroring, and auto-upgrades to
+   *      Runtype voices the day the endpoint ships.
+   *   3. Otherwise the browser Web Speech API engine.
+   */
   private createSpeechEngine(): SpeechEngine | Promise<SpeechEngine> | null {
     const tts = this.config.textToSpeech;
     if (tts?.createEngine) return tts.createEngine();
-    if (!BrowserSpeechEngine.isSupported()) return null;
-    return new BrowserSpeechEngine({ pickVoice: tts?.pickVoice });
+
+    const browser = BrowserSpeechEngine.isSupported()
+      ? new BrowserSpeechEngine({ pickVoice: tts?.pickVoice })
+      : null;
+
+    if (tts?.provider === "runtype") {
+      const host = tts.host ?? this.config.apiUrl;
+      const agentId =
+        tts.agentId ?? this.config.voiceRecognition?.provider?.runtype?.agentId;
+      const clientToken = this.config.clientToken;
+      const wantFallback = tts.browserFallback !== false;
+
+      if (host && agentId && clientToken) {
+        // Lazy-load the Runtype engine through the deferred loader: the IIFE/CDN
+        // build serves it from the standalone `runtype-tts.js` chunk (kept out of
+        // `index.global.js`), while bundler consumers get it inlined. Resolved on
+        // first playback (inside the user gesture); `createSpeechEngine` may
+        // return a Promise. Prefetched at init (see `prefetchRuntypeTts`) so the
+        // chunk is warm before the first click.
+        return loadRuntypeTts().then(
+          ({ RuntypeSpeechEngine, FallbackSpeechEngine }) => {
+            const runtype = new RuntypeSpeechEngine({
+              host,
+              agentId,
+              clientToken,
+              voice: tts.voice,
+              prebufferMs: tts.prebufferMs,
+              createPlaybackEngine: tts.createPlaybackEngine,
+            });
+            return wantFallback && browser
+              ? new FallbackSpeechEngine(runtype, browser, {
+                  onFallback: (error) =>
+                    console.warn(
+                      `[persona] Runtype read-aloud failed; using browser voice. ${error.message}`,
+                    ),
+                })
+              : runtype;
+          },
+        );
+      }
+
+      // Runtype was requested but the config is incomplete (no agentId/token —
+      // e.g. a proxy-backed demo). Never break the button: use the browser
+      // voice. Only warn when intent is clear (a clientToken is present) so a
+      // plain proxy demo stays quiet.
+      if (wantFallback && browser) {
+        if (clientToken) {
+          console.warn(
+            "[persona] textToSpeech.provider 'runtype' is missing an agentId; using the browser voice. Set textToSpeech.agentId (or voiceRecognition.provider.runtype.agentId).",
+          );
+        }
+        return browser;
+      }
+    }
+
+    return browser;
   }
 
   /**

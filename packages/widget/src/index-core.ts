@@ -454,7 +454,14 @@ export {
 } from "./voice";
 export type {
   BrowserSpeechEngineOptions,
-  ReadAloudListener
+  ReadAloudListener,
+  FallbackSpeechEngineOptions
 } from "./voice";
+// RuntypeSpeechEngine + FallbackSpeechEngine ship from the
+// `@runtypelabs/persona/voice-worklet-player` subpath, not here: keeping the
+// hosted read-aloud engine out of the main bundle lets the IIFE/CDN build defer
+// it to the `runtype-tts.js` chunk (loaded only for `provider: 'runtype'`). The
+// blessed way to use it is `textToSpeech: { provider: 'runtype' }` — no import
+// needed.
 
 export default initAgentWidgetFn;

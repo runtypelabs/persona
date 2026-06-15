@@ -64,5 +64,11 @@
     "path": "dist/webmcp-polyfill.js",
     "limit": "11 kB",
     "gzip": true
+  },
+  {
+    "name": "Lazy · Runtype TTS engine chunk (runtype-tts.js)",
+    "path": "dist/runtype-tts.js",
+    "limit": "4 kB",
+    "gzip": true
   }
 ]

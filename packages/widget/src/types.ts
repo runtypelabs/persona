@@ -1895,17 +1895,67 @@ export type TextToSpeechConfig = {
   /**
    * TTS provider.
    * - `'browser'`: Use the Web Speech API for all assistant messages (default).
-   * - `'runtype'`: Server handles TTS for voice interactions.
-   *   Set `browserFallback: true` to also speak text-typed responses via the browser.
+   * - `'runtype'`: Use Runtype-hosted TTS. The realtime voice path speaks
+   *   replies during a voice call, and the per-message "Read aloud" button (and
+   *   auto-speak of text-typed replies) stream from Runtype's
+   *   `POST {host}/v1/agents/:agentId/speak` endpoint via the built-in
+   *   {@link SpeechEngine}. `host`/`agentId`/`clientToken` are derived from the
+   *   widget config (see `agentId`/`host` below); unless `browserFallback` is
+   *   `false`, a missing endpoint or transient failure falls back to the browser
+   *   voice so the button is never broken.
    */
   provider?: 'browser' | 'runtype';
   /**
-   * When `provider` is `'runtype'`, fall back to browser TTS for assistant
-   * messages that the server didn't already speak (e.g. text-typed messages).
+   * When `provider` is `'runtype'`:
+   * - Read-aloud / auto-speak: acts as a safety net — if Runtype TTS is
+   *   unreachable (no endpoint yet, network/auth failure) or the Runtype config
+   *   is incomplete, speech falls back to the browser Web Speech API instead of
+   *   erroring. Set to `false` to surface Runtype errors instead. **Defaults to
+   *   on for this path.**
+   * - Auto-speak of text-typed replies also requires this to be truthy (the
+   *   realtime voice path already speaks voice-call replies).
+   *
    * Has no effect when provider is `'browser'` (browser TTS is always used).
-   * @default false
    */
   browserFallback?: boolean;
+  /**
+   * When `provider` is `'runtype'`, the agent whose configured voice synthesizes
+   * read-aloud / auto-speak audio. Falls back to
+   * `voiceRecognition.provider.runtype.agentId` when omitted. Required (here or
+   * there) for Runtype TTS to activate; without it the browser voice is used.
+   */
+  agentId?: string;
+  /**
+   * When `provider` is `'runtype'`, the Runtype API host (e.g.
+   * `https://api.runtype.com`). Defaults to the widget's `apiUrl`.
+   */
+  host?: string;
+  /**
+   * When `provider` is `'runtype'`, audio (ms) the streaming player buffers
+   * before the first sample and after an underrun. Lower = snappier start;
+   * higher = rides out delivery hiccups. Default 200. Applies to the default
+   * in-bundle player; a custom `createPlaybackEngine` manages its own prebuffer.
+   */
+  prebufferMs?: number;
+  /**
+   * When `provider` is `'runtype'`, an optional factory for the streaming PCM
+   * player that synthesizes read-aloud / auto-speak audio. Defaults to the
+   * in-bundle, main-thread `AudioPlaybackManager` (smooth for steady Runtype
+   * streams, no AudioWorklet — keeps the widget bundle lean).
+   *
+   * For the higher-quality, jitter-buffered AudioWorklet player, import
+   * `createPcmStreamPlayer` from `@runtypelabs/persona/voice-worklet-player` and
+   * pass it here — it then ships in your bundle, not Persona's:
+   *
+   * @example
+   * import { createPcmStreamPlayer } from '@runtypelabs/persona/voice-worklet-player'
+   * textToSpeech: {
+   *   enabled: true,
+   *   provider: 'runtype',
+   *   createPlaybackEngine: () => createPcmStreamPlayer({ prebufferMs: 400 }),
+   * }
+   */
+  createPlaybackEngine?: () => PcmStreamPlayer | Promise<PcmStreamPlayer>;
   /** Voice name to use for browser TTS (e.g., 'Google US English'). If not found, uses auto-detect. */
   voice?: string;
   /**
