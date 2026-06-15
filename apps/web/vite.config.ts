@@ -544,6 +544,8 @@ export default defineConfig({
         'webmcp-slides': path.resolve(__dirname, 'webmcp-slides.html'),
         // WebMCP: Paint Pal (drives an embedded jspaint; image snapshot loop)
         'webmcp-paint': path.resolve(__dirname, 'webmcp-paint.html'),
+        // WebMCP — Skylark Air (multi-step booking form; array-of-arrays seat map)
+        'webmcp-flights': path.resolve(__dirname, 'webmcp-flights.html'),
         // Bakery demo pages
         'bakery': path.resolve(__dirname, 'bakery.html'),
         'bakery-story': path.resolve(__dirname, 'bakery-story.html'),
