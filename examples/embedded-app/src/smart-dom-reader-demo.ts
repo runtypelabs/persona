@@ -30,7 +30,7 @@ const configInspector = createDemoConfigInspector({
 });
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
-// Read-only, markdown page-context flow (PAGE_CONTEXT_FLOW): its prompt injects
+// Read-only page-context server agent (PAGE_CONTEXT_AGENT): its prompt receives
 // {{pageContext}}. Unlike the JSON-action demos, this one only answers about the page.
 const proxyUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-page-context`
@@ -292,9 +292,8 @@ const config: AgentWidgetConfig = {
   // dispatches add_to_cart to the handler below.
   streamParser: () => createFlexibleJsonStreamParser(),
   actionHandlers: [defaultActionHandlers.message, addToCartHandler],
-  // The provider's output lands in `payload.context`, but the proxy only forwards
-  // `inputs`/`metadata` to the flow. Move it into `inputs` so {{pageContext}} resolves
-  // in PAGE_CONTEXT_FLOW's prompt.
+  // The provider's output lands in `payload.context`. Move it into `inputs` too
+  // so {{pageContext}} resolves in PAGE_CONTEXT_AGENT's prompt.
   requestMiddleware: ({ payload }) => {
     const ctx = payload.context;
     if (!ctx) return payload;

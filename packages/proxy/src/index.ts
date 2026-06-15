@@ -16,6 +16,61 @@ export type RuntypeFlowConfig = {
   steps: RuntypeFlowStep[];
 };
 
+export type AgentLoopConfig = {
+  maxTurns: number;
+  maxCost?: number;
+  enableReflection?: boolean;
+  reflectionInterval?: number;
+};
+
+export type AgentToolsConfig = {
+  toolIds?: string[];
+  toolConfigs?: Record<string, Record<string, unknown>>;
+  runtimeTools?: Array<Record<string, unknown>>;
+  mcpServers?: Array<Record<string, unknown>>;
+  maxToolCalls?: number;
+  toolCallStrategy?: "auto" | "required" | "none";
+  perToolLimits?: Record<string, { maxCalls?: number; required?: boolean }>;
+  approval?: {
+    require: string[] | boolean;
+    timeout?: number;
+    requestReason?: boolean;
+  };
+  subagentConfig?: {
+    toolPool: string[];
+    defaultMaxTurns?: number;
+    maxTurnsLimit?: number;
+    maxSpawnsPerRun?: number;
+    defaultModel?: string;
+    allowNesting?: boolean;
+    defaultTimeoutMs?: number;
+  };
+  codeModeConfig?: {
+    toolPool: string[];
+    description?: string;
+    timeoutMs?: number;
+  };
+};
+
+export type PersonaArtifactKind = "markdown" | "component";
+
+export type ArtifactConfigPayload = {
+  enabled: true;
+  types: PersonaArtifactKind[];
+};
+
+export type AgentConfig = {
+  name: string;
+  model: string;
+  systemPrompt: string;
+  responseFormat?: string;
+  reasoning?: boolean;
+  temperature?: number;
+  tools?: AgentToolsConfig;
+  artifacts?: ArtifactConfigPayload;
+  loopConfig?: AgentLoopConfig;
+};
+
 type RuntimeEnv = Record<string, string | undefined>;
 
 /**
@@ -51,6 +106,18 @@ export type ChatProxyOptions = {
    * caller's origin when the proxy itself is a preview deployment.
    */
   previewOriginPattern?: RegExp | false;
+  /**
+   * Hosted Runtype agent ID. Mutually exclusive with flowId/flowConfig and
+   * agentConfig.
+   */
+  agentId?: string;
+  /**
+   * Server-pinned agent definition. When set, the proxy builds an agent-mode
+   * upstream payload using this config and only client messages/clientTools/
+   * metadata/context. The client cannot override model, prompt, tools, or loop
+   * config.
+   */
+  agentConfig?: AgentConfig;
   flowId?: string;
   flowConfig?: RuntypeFlowConfig;
   /**
@@ -160,6 +227,26 @@ const DEFAULT_FLOW: RuntypeFlowConfig = {
   ]
 };
 
+type ProxyMessage = {
+  role: string;
+  content: unknown;
+  createdAt?: string;
+};
+
+const sortAndFormatMessages = (value: unknown) => {
+  const messages = Array.isArray(value) ? (value as ProxyMessage[]) : [];
+  return [...messages]
+    .sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeA - timeB;
+    })
+    .map((message) => ({
+      role: message.role,
+      content: message.content
+    }));
+};
+
 const withCors =
   (allowedOrigins: string[] | undefined, previewOriginPattern: RegExp | null) =>
     async (c: Context, next: () => Promise<void>) => {
@@ -220,6 +307,17 @@ const withCors =
     };
 
 export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
+  if ((options.agentConfig || options.agentId) && (options.flowConfig || options.flowId)) {
+    throw new Error(
+      "createChatProxyApp: agentConfig/agentId cannot be combined with flowConfig/flowId."
+    );
+  }
+  if (options.agentConfig && options.agentId) {
+    throw new Error(
+      "createChatProxyApp: agentConfig and agentId are mutually exclusive."
+    );
+  }
+
   const app = new Hono();
   const path = options.path ?? DEFAULT_PATH;
   const feedbackPath = options.feedbackPath ?? "/api/feedback";
@@ -307,26 +405,60 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
 
     const isDevelopment = isDevelopmentRuntime();
 
-    // Detect agent mode: if the payload contains an `agent` field, forward it directly
-    const isAgentMode = !!clientPayload.agent;
+    let mode: "server-agent" | "flow";
+    if (options.agentConfig || options.agentId) {
+      mode = "server-agent";
+    } else if (clientPayload.agent) {
+      // The old "client-agent" passthrough forwarded a browser-supplied agent
+      // config verbatim to the upstream API on the deployer's key — an open
+      // relay. Pin the agent server-side with `agentConfig`/`agentId` instead.
+      // Reject loudly rather than silently falling through to flow mode.
+      return c.json(
+        {
+          error:
+            "A client-supplied `agent` is not accepted by this proxy. Pin the agent server-side with `agentConfig`/`agentId`, or point the widget at a backend authorized to accept a client-supplied agent.",
+        },
+        400
+      );
+    } else {
+      mode = "flow";
+    }
 
     let runtypePayload: Record<string, unknown>;
 
-    if (isAgentMode) {
-      // Agent dispatch - forward the payload as-is to the upstream API
-      runtypePayload = clientPayload;
+    if (mode === "server-agent") {
+      const formattedMessages = sortAndFormatMessages(clientPayload.messages);
+
+      runtypePayload = {
+        agent: options.agentId ? { id: options.agentId } : options.agentConfig,
+        messages: formattedMessages,
+        options: {
+          streamResponse: true,
+          recordMode: "virtual"
+        }
+      };
+
+      if (clientPayload.metadata && typeof clientPayload.metadata === "object") {
+        runtypePayload.metadata = clientPayload.metadata;
+      }
+
+      if (
+        Array.isArray(clientPayload.clientTools) &&
+        clientPayload.clientTools.length > 0
+      ) {
+        runtypePayload.clientTools = clientPayload.clientTools;
+      }
+
+      if (clientPayload.context && typeof clientPayload.context === "object") {
+        runtypePayload.context = clientPayload.context;
+      }
+
+      if (clientPayload.inputs && typeof clientPayload.inputs === "object") {
+        runtypePayload.inputs = clientPayload.inputs;
+      }
     } else {
       // Flow dispatch - build the Runtype flow payload
-      const messages = (clientPayload.messages ?? []) as Array<{ role: string; content: string; createdAt?: string }>;
-      const sortedMessages = [...messages].sort((a, b) => {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return timeA - timeB;
-      });
-      const formattedMessages = sortedMessages.map((message) => ({
-        role: message.role,
-        content: message.content
-      }));
+      const formattedMessages = sortAndFormatMessages(clientPayload.messages);
 
       const flowId = (clientPayload.flowId as string | undefined) ?? options.flowId;
       const flowConfig = options.flowConfig ?? DEFAULT_FLOW;
@@ -361,9 +493,9 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       // can call them. The widget snapshots `document.modelContext` per turn and
       // ships them as `clientTools[]`; the flow-dispatch payload is rebuilt from
       // scratch above, so without this they'd be silently dropped and the agent
-      // would never see the page tools. (Agent mode forwards the payload as-is,
-      // so it already carries `clientTools`.) The matching results come back via
-      // the `${path}/resume` endpoint below.
+      // would never see the page tools. (Server-agent mode forwards `clientTools`
+      // explicitly when building its payload above.) The matching results come
+      // back via the `${path}/resume` endpoint below.
       if (
         Array.isArray(clientPayload.clientTools) &&
         clientPayload.clientTools.length > 0
@@ -374,7 +506,7 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
 
     // Development only: do not log key material or full bodies in production.
     if (isDevelopment) {
-      console.log(`\n=== Runtype Proxy Request (${isAgentMode ? "agent" : "flow"}) ===`);
+      console.log(`\n=== Runtype Proxy Request (${mode}) ===`);
       console.log("URL:", upstream);
       console.log("API Key Used:", apiKey ? "Yes" : "No");
       console.log("API Key (first 12 chars):", apiKey ? apiKey.substring(0, 12) : "N/A");
@@ -486,6 +618,9 @@ export const createVercelHandler = (options?: ChatProxyOptions) =>
 
 // Export pre-configured flows
 export * from "./flows/index.js";
+
+// Export pre-configured agent templates
+export * from "./agents/index.js";
 
 // Export utility functions
 export * from "./utils/index.js";

@@ -148,8 +148,11 @@ Hono-based server that proxies requests to the Runtype API:
   - `scheduling.ts` - Calendar/scheduling flow
   - `bakery-assistant.ts` - Example specialized flow
   - `webmcp-*.ts` / `theme-assistant.ts` / `page-context.ts` - WebMCP demo, theme copilot, and page-context flows
+- `agents/` - Pre-configured server-pinned `AgentConfig` definitions for single-agent proxy routes such as WebMCP storefront, theme copilot, and page context
 
 **CORS / `NODE_ENV`:** The proxy only enables permissive CORS when `NODE_ENV` is **exactly** `"development"`. An unset `NODE_ENV` is treated as production (origins must match the `allowedOrigins` list). The root `pnpm dev` script sets `NODE_ENV=development` automatically. If you start the proxy directly (e.g. `pnpm dev:vercel`), set it yourself or configure it in your `.env` file.
+
+**Server-pinned agents:** `createChatProxyApp()` supports `agentConfig` and `agentId` for agent-shaped routes with server-side security. These options are mutually exclusive with `flowId` / `flowConfig`; the proxy builds the upstream agent payload itself and ignores any client-supplied `agent`. The old client-agent passthrough still exists when a widget sends `config.agent`, but that mode is browser-controlled and should be treated as an open relay unless the surrounding deployment has separate auth/rate limits.
 
 ### Adding a proxy route for a new demo
 
@@ -158,10 +161,10 @@ The proxy has **two entry points that must be kept in sync**: this has caused pr
 - `examples/vercel-edge/src/server.ts`: the **local dev** server (`pnpm dev`)
 - `examples/vercel-edge/api/index.ts`: the **deployed** proxy (Vercel serverless entry behind `https://proxy.persona-chat.dev`)
 
-Checklist for a new demo flow:
+Checklist for a new demo flow or server-pinned agent:
 
-1. Define the flow in `packages/proxy/src/flows/<name>.ts` and export it from `packages/proxy/src/flows/index.ts` (this is a `packages/proxy` change: **changeset required**).
-2. Mount it in **BOTH** `src/server.ts` and `api/index.ts`: import the flow, add a `createChatProxyApp({ path: "/api/chat/dispatch-<name>", … })` block (follow the existing `FLOW_ID_*` env-override pattern), and add the `app.route("/", …)` line. If you only touched `src/server.ts`, the demo will 404 in production.
+1. Define the flow in `packages/proxy/src/flows/<name>.ts` or the agent in `packages/proxy/src/agents/<name>.ts`, then export it from that directory's `index.ts` (this is a `packages/proxy` change: **changeset required**).
+2. Mount it in **BOTH** `src/server.ts` and `api/index.ts`: import the flow/agent, add a `createChatProxyApp({ path: "/api/chat/dispatch-<name>", … })` block (follow the existing `FLOW_ID_*` / `AGENT_ID_*` env-override pattern), and add the `app.route("/", …)` line. If you only touched `src/server.ts`, the demo will 404 in production.
 3. Run `pnpm build:proxy` before testing locally: both entries import the **built** `@runtypelabs/persona-proxy`, so a new flow isn't visible to the dev server until the package is rebuilt.
 4. Point the demo page's `apiUrl` at the new route (see any `src/webmcp-*/main.*` in `examples/embedded-app` for the proxy-port pattern).
 5. After merging, verify the route on the deployed proxy: `curl -X OPTIONS https://proxy.persona-chat.dev/api/chat/dispatch-<name>` should not 404.

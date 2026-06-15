@@ -1,6 +1,6 @@
 ## Vanilla Agent Proxy
 
-Proxy server library for `@runtypelabs/persona` widget. Handles flow configuration, CORS, feedback collection, WebMCP/client-tool forwarding, `/resume` continuations, and secure forwarding to Runtype.
+Proxy server library for `@runtypelabs/persona` widget. Handles flow and server-pinned agent configuration, CORS, feedback collection, WebMCP/client-tool forwarding, `/resume` continuations, and secure forwarding to Runtype.
 
 ### Installation
 
@@ -10,7 +10,7 @@ npm install @runtypelabs/persona-proxy
 
 ### Usage
 
-The proxy server handles flow configuration and forwards requests to Runtype. It mounts both the dispatch endpoint (default `/api/chat/dispatch`) and a matching child resume endpoint (`/api/chat/dispatch/resume`) so browser-executed LOCAL tools such as WebMCP page tools, `ask_user_question`, and `suggest_replies` can resume a paused execution. You can configure dispatch in three ways:
+The proxy server handles server-side flow/agent configuration and forwards requests to Runtype. It mounts both the dispatch endpoint (default `/api/chat/dispatch`) and a matching child resume endpoint (`/api/chat/dispatch/resume`) so browser-executed LOCAL tools such as WebMCP page tools, `ask_user_question`, and `suggest_replies` can resume a paused execution. You can configure dispatch in five ways:
 
 **Option 1: Use default flow (recommended for getting started)**
 
@@ -67,6 +67,35 @@ export default createChatProxyApp({
 });
 ```
 
+**Option 4: Reference a Runtype agent ID**
+
+```ts
+import { createChatProxyApp } from '@runtypelabs/persona-proxy';
+
+export default createChatProxyApp({
+  path: '/api/chat/dispatch',
+  allowedOrigins: ['https://www.example.com'],
+  agentId: 'agent_abc123'
+});
+```
+
+**Option 5: Define a server-pinned agent**
+
+```ts
+import { createChatProxyApp } from '@runtypelabs/persona-proxy';
+
+export default createChatProxyApp({
+  path: '/api/chat/dispatch',
+  allowedOrigins: ['https://www.example.com'],
+  agentConfig: {
+    name: 'Shopping Assistant',
+    model: 'nemotron-3-ultra-550b-a55b',
+    systemPrompt: 'You are a concise shopping assistant.',
+    loopConfig: { maxTurns: 6 }
+  }
+});
+```
+
 **Hosting on Vercel:**
 
 ```ts
@@ -91,10 +120,14 @@ export default createVercelHandler({
 | `feedbackPath` | `string` | Message-feedback endpoint path. Default: `/api/feedback`. |
 | `onFeedback` | `(feedback) => Promise<void> \| void` | Optional handler for upvote/downvote payloads. |
 | `previewOriginPattern` | `RegExp \| false` | Additional dynamic preview-origin allowlist (defaults to `https://*.vercel.app`; disable with `false`). |
+| `agentId` | `string` | Runtype agent ID to use. Mutually exclusive with `flowId`, `flowConfig`, and `agentConfig`. |
+| `agentConfig` | `AgentConfig` | Server-pinned agent configuration. Mutually exclusive with `flowId`, `flowConfig`, and `agentId`. |
 
 ### WebMCP and built-in client tools
 
-For flow-dispatch requests, the proxy preserves `clientTools[]` from the widget payload and forwards them upstream so Runtype can register browser-local tools for that turn. Tool results are sent by the widget to `${path}/resume`, and the proxy forwards that body to the upstream `/resume` endpoint using the same API key. Agent-mode payloads are forwarded as-is and also retain `clientTools[]`.
+For flow-dispatch and server-agent requests, the proxy preserves `clientTools[]` from the widget payload and forwards them upstream so Runtype can register browser-local tools for that turn. Tool results are sent by the widget to `${path}/resume`, and the proxy forwards that body to the upstream `/resume` endpoint using the same API key. Client-agent payloads, where the browser sends its own `agent`, are forwarded as-is for compatibility.
+
+Server-agent routes (`agentId` or `agentConfig`) ignore any client-supplied `agent` field. The browser can contribute messages, `clientTools[]`, `metadata`, `context`, and `inputs`; the model, system prompt, tools, and loop config stay pinned on the server.
 
 ### CORS behavior
 
@@ -121,4 +154,3 @@ This generates:
 - `dist/index.js` (ESM)
 - `dist/index.cjs` (CJS)
 - Type definitions in `dist/index.d.ts`
-

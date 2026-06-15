@@ -28,11 +28,11 @@ import type {
 const MB = 1024 * 1024;
 
 // Proxy (dispatch) mode, like the other WebMCP demos: the copilot dispatches to
-// the local theme-assistant flow (THEME_ASSISTANT_FLOW in
+// the local server-pinned theme agent (THEME_ASSISTANT_AGENT in
 // @runtypelabs/persona-proxy), which forwards the page's clientTools[] upstream
 // and proxies the /resume round-trip: including the image blocks from
-// screenshot_preview. To back it with a hosted Runtype flow instead, set
-// FLOW_ID_THEME_ASSISTANT on the proxy (examples/vercel-edge/src/server.ts).
+// screenshot_preview. To back it with a hosted Runtype agent instead, set
+// AGENT_ID_THEME_ASSISTANT on the proxy (examples/vercel-edge/src/server.ts).
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-theme`

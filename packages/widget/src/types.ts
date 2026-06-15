@@ -3588,6 +3588,11 @@ export type AgentWidgetConfig = {
    * When provided, the widget uses agent loop execution instead of flow dispatch.
    * Mutually exclusive with `flowId`.
    *
+   * Note: `@runtypelabs/persona-proxy` rejects a client-supplied `agent` (it was
+   * an open relay). This option is only for endpoints authorized to accept a
+   * client agent — your own backend, or token-scoped direct-to-Runtype dispatch.
+   * For the proxy, pin the agent server-side with `agentConfig`/`agentId`.
+   *
    * @example
    * ```typescript
    * config: {

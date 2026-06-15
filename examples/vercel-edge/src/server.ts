@@ -8,13 +8,16 @@ import {
   COMPONENT_FLOW,
   BAKERY_ASSISTANT_FLOW,
   STOREFRONT_ASSISTANT_FLOW,
-  WEBMCP_STOREFRONT_FLOW,
+  WEBMCP_STOREFRONT_AGENT,
   WEBMCP_CALENDAR_FLOW,
   WEBMCP_SLIDES_FLOW,
   WEBMCP_PAINT_FLOW,
   WEBMCP_DOCKED_FLOW,
-  PAGE_CONTEXT_FLOW,
-  THEME_ASSISTANT_FLOW,
+  PAGE_CONTEXT_AGENT,
+  THEME_ASSISTANT_AGENT,
+  TRAVEL_PLANNER_AGENT,
+  DOCS_ASSISTANT_AGENT,
+  CHAT_ASSISTANT_AGENT,
   createCheckoutSession
 } from "@runtypelabs/persona-proxy";
 
@@ -92,14 +95,20 @@ const storefrontApp = createChatProxyApp({
 
 // WebMCP storefront proxy - for the "Switchback" WebMCP demo.
 // The demo page registers its tools on document.modelContext; the widget sends
-// them as clientTools[] each turn and the proxy forwards them upstream (and
-// proxies the /resume round-trip). The agent definition lives entirely in code
-// as WEBMCP_STOREFRONT_FLOW: no hosted Runtype agent / client token needed.
+// them as clientTools[] each turn and the proxy attaches the server-pinned
+// WEBMCP_STOREFRONT_AGENT, then proxies the /resume round-trip. FLOW_ID_WEBMCP
+// is kept as a compatibility fallback for deployments already using a hosted flow.
 const webmcpApp = createChatProxyApp({
   path: "/api/chat/dispatch-webmcp",
   allowedOrigins,
-  flowId: process.env.FLOW_ID_WEBMCP || undefined,
-  flowConfig: process.env.FLOW_ID_WEBMCP ? undefined : WEBMCP_STOREFRONT_FLOW,
+  ...(process.env.FLOW_ID_WEBMCP
+    ? { flowId: process.env.FLOW_ID_WEBMCP, flowConfig: undefined }
+    : {
+        agentId: process.env.AGENT_ID_WEBMCP || undefined,
+        agentConfig: process.env.AGENT_ID_WEBMCP
+          ? undefined
+          : WEBMCP_STOREFRONT_AGENT,
+      }),
   upstreamUrl
 });
 
@@ -152,27 +161,69 @@ const webmcpDockedApp = createChatProxyApp({
 });
 
 // Page-context proxy - read-only, markdown answers about the current page.
-// Used by the smart-dom-reader demo: the widget sends live page context (including
-// shadow-DOM elements) as `inputs`, and this flow injects it via {{pageContext}}.
+// Used by the smart-dom-reader demo: the widget sends live page context
+// (including shadow-DOM elements), and the server-pinned agent handles the turn.
+// FLOW_ID_PAGE_CONTEXT remains a compatibility fallback for hosted-flow deploys.
 const pageContextApp = createChatProxyApp({
   path: "/api/chat/dispatch-page-context",
   allowedOrigins,
-  flowId: process.env.FLOW_ID_PAGE_CONTEXT || undefined,
-  flowConfig: process.env.FLOW_ID_PAGE_CONTEXT ? undefined : PAGE_CONTEXT_FLOW,
+  ...(process.env.FLOW_ID_PAGE_CONTEXT
+    ? { flowId: process.env.FLOW_ID_PAGE_CONTEXT, flowConfig: undefined }
+    : {
+        agentId: process.env.AGENT_ID_PAGE_CONTEXT || undefined,
+        agentConfig: process.env.AGENT_ID_PAGE_CONTEXT
+          ? undefined
+          : PAGE_CONTEXT_AGENT,
+      }),
   upstreamUrl
 });
 
 // Theme-assistant proxy: for the Theme Editor's docked Theme Copilot.
 // The Theme Editor registers its controls (plus screenshot_preview) as WebMCP
 // tools on document.modelContext; the copilot widget ships them as clientTools[]
-// and the agent calls them (webmcp:*) to restyle the live theme preview.
-// Tool-calling flow (not an action envelope), so it relies on clientTools
-// forwarding + /resume: including image blocks in screenshot tool results.
+// and the server-pinned agent calls them (webmcp:*) to restyle the live theme
+// preview. FLOW_ID_THEME_ASSISTANT remains a compatibility fallback.
 const themeAssistantApp = createChatProxyApp({
   path: "/api/chat/dispatch-theme",
   allowedOrigins,
-  flowId: process.env.FLOW_ID_THEME_ASSISTANT || undefined,
-  flowConfig: process.env.FLOW_ID_THEME_ASSISTANT ? undefined : THEME_ASSISTANT_FLOW,
+  ...(process.env.FLOW_ID_THEME_ASSISTANT
+    ? { flowId: process.env.FLOW_ID_THEME_ASSISTANT, flowConfig: undefined }
+    : {
+        agentId: process.env.AGENT_ID_THEME_ASSISTANT || undefined,
+        agentConfig: process.env.AGENT_ID_THEME_ASSISTANT
+          ? undefined
+          : THEME_ASSISTANT_AGENT,
+      }),
+  upstreamUrl
+});
+
+// Agent Loop proxy - for the agent-demo Travel Planner demo. Server-pinned
+// replacement for the demo's former browser-supplied `config.agent`.
+const agentLoopApp = createChatProxyApp({
+  path: "/api/chat/dispatch-agent-loop",
+  allowedOrigins,
+  agentId: process.env.AGENT_ID_AGENT_LOOP || undefined,
+  agentConfig: process.env.AGENT_ID_AGENT_LOOP ? undefined : TRAVEL_PLANNER_AGENT,
+  upstreamUrl
+});
+
+// Docs-assistant proxy - for the home demo's Persona Documentation Assistant.
+// Server-pinned replacement for the demo's former browser-supplied `config.agent`.
+const docsAssistantApp = createChatProxyApp({
+  path: "/api/chat/dispatch-docs",
+  allowedOrigins,
+  agentId: process.env.AGENT_ID_DOCS || undefined,
+  agentConfig: process.env.AGENT_ID_DOCS ? undefined : DOCS_ASSISTANT_AGENT,
+  upstreamUrl
+});
+
+// Fullscreen-assistant proxy - for the fullscreen-assistant Chat Assistant demo.
+// Server-pinned replacement for the demo's former browser-supplied `config.agent`.
+const chatAssistantApp = createChatProxyApp({
+  path: "/api/chat/dispatch-assistant",
+  allowedOrigins,
+  agentId: process.env.AGENT_ID_ASSISTANT || undefined,
+  agentConfig: process.env.AGENT_ID_ASSISTANT ? undefined : CHAT_ASSISTANT_AGENT,
   upstreamUrl
 });
 
@@ -189,6 +240,9 @@ app.route("/", webmcpPaintApp);
 app.route("/", webmcpDockedApp);
 app.route("/", pageContextApp);
 app.route("/", themeAssistantApp);
+app.route("/", agentLoopApp);
+app.route("/", docsAssistantApp);
+app.route("/", chatAssistantApp);
 
 // --- Streaming text-to-speech proxy (OpenAI) ---
 // Streams raw 24 kHz / 16-bit / mono PCM from OpenAI straight to the browser,

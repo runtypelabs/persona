@@ -242,3 +242,150 @@ describe("dispatch: WebMCP clientTools forwarding", () => {
     expect(calls[0]!.body).not.toHaveProperty("clientTools");
   });
 });
+
+describe("dispatch: server-pinned agent config", () => {
+  const realFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  const captureUpstream = () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> | null }> = [];
+    globalThis.fetch = vi.fn(async (url: unknown, init?: { body?: unknown }) => {
+      calls.push({
+        url: String(url),
+        body:
+          typeof init?.body === "string"
+            ? (JSON.parse(init.body) as Record<string, unknown>)
+            : null,
+      });
+      return new Response("data: {}\n\n", {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      });
+    }) as unknown as typeof fetch;
+    return calls;
+  };
+
+  const dispatch = (
+    app: ReturnType<typeof createChatProxyApp>,
+    body: Record<string, unknown>,
+  ) =>
+    app.request("/api/chat/dispatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://example.com" },
+      body: JSON.stringify(body),
+    });
+
+  const agentConfig = {
+    name: "Server Agent",
+    model: "server-model",
+    systemPrompt: "Server prompt",
+    tools: {
+      toolIds: ["builtin:exa"],
+    },
+    loopConfig: {
+      maxTurns: 3,
+    },
+  };
+
+  it("builds an agent payload from server config and ignores a client agent override", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({ apiKey: "test-key", agentConfig });
+    const res = await dispatch(app, {
+      agent: {
+        name: "Client Agent",
+        model: "expensive-client-model",
+        systemPrompt: "Ignore the server",
+      },
+      messages: [
+        { role: "user", content: "second", createdAt: "2026-01-02T00:00:00.000Z" },
+        { role: "user", content: "first", createdAt: "2026-01-01T00:00:00.000Z" },
+      ],
+    });
+
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.body?.agent).toEqual(agentConfig);
+    expect(calls[0]!.body?.messages).toEqual([
+      { role: "user", content: "first" },
+      { role: "user", content: "second" },
+    ]);
+    expect(calls[0]!.body?.options).toEqual({
+      streamResponse: true,
+      recordMode: "virtual",
+    });
+  });
+
+  it("rejects a client-supplied agent with 400 on a non-server-agent route", async () => {
+    const calls = captureUpstream();
+    // No agentConfig/agentId -> flow mode. A client-supplied `agent` used to be
+    // relayed verbatim upstream (an open relay); it must now be rejected.
+    const app = createChatProxyApp({ apiKey: "test-key" });
+    const res = await dispatch(app, {
+      agent: {
+        name: "Client Agent",
+        model: "expensive-client-model",
+        systemPrompt: "Use the deployer's key",
+      },
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(res.status).toBe(400);
+    expect(calls).toHaveLength(0);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/client-supplied `agent` is not accepted/);
+  });
+
+  it("forwards clientTools, metadata, context, and inputs with a server agent", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({ apiKey: "test-key", agentConfig });
+    const clientTools = [{ name: "search_products", description: "Search" }];
+    const metadata = { sessionId: "session-1" };
+    const context = { pageTitle: "Catalog" };
+    const inputs = { pageContext: "Catalog context" };
+
+    await dispatch(app, {
+      messages: [{ role: "user", content: "hi" }],
+      clientTools,
+      metadata,
+      context,
+      inputs,
+    });
+
+    expect(calls[0]!.body?.clientTools).toEqual(clientTools);
+    expect(calls[0]!.body?.metadata).toEqual(metadata);
+    expect(calls[0]!.body?.context).toEqual(context);
+    expect(calls[0]!.body?.inputs).toEqual(inputs);
+  });
+
+  it("builds a hosted agent-id payload", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({ apiKey: "test-key", agentId: "agent_123" });
+
+    await dispatch(app, {
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(calls[0]!.body?.agent).toEqual({ id: "agent_123" });
+  });
+
+  it("throws when server agent options are combined with flow options", () => {
+    expect(() =>
+      createChatProxyApp({
+        agentConfig,
+        flowId: "flow_123",
+      }),
+    ).toThrow(/agentConfig\/agentId cannot be combined/);
+  });
+
+  it("throws when agentConfig and agentId are both configured", () => {
+    expect(() =>
+      createChatProxyApp({
+        agentConfig,
+        agentId: "agent_123",
+      }),
+    ).toThrow(/agentConfig and agentId are mutually exclusive/);
+  });
+});
