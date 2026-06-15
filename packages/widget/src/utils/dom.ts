@@ -35,7 +35,12 @@ export interface CreateNodeOptions {
   text?: string;
   /** Attribute name → value pairs applied via `setAttribute`. */
   attrs?: Record<string, string>;
-  /** Inline styles applied via `Object.assign(element.style, style)`. */
+  /**
+   * Inline styles. Nullish (`undefined`/`null`) values are skipped so callers
+   * can inline conditionals (e.g. `borderColor: cfg.borderColor`) without an
+   * `if` per property. Note this only *sets* values, it never clears them, so
+   * prefer it for constructing fresh elements rather than re-styling live ones.
+   */
   style?: Partial<CSSStyleDeclaration>;
 }
 
@@ -67,7 +72,14 @@ export const createNode = <K extends keyof HTMLElementTagNameMap>(
     }
   }
   if (options.style) {
-    Object.assign(element.style, options.style);
+    const style = element.style as unknown as Record<string, string>;
+    const source = options.style as Record<string, string | null | undefined>;
+    for (const property of Object.keys(source)) {
+      const value = source[property];
+      if (value != null) {
+        style[property] = value;
+      }
+    }
   }
 
   const appendable = children.filter(
@@ -79,6 +91,17 @@ export const createNode = <K extends keyof HTMLElementTagNameMap>(
 
   return element;
 };
+
+/**
+ * Join truthy class-name fragments into a single space-separated string
+ * (the clsx / classnames pattern). Falsy fragments
+ * (`false` / `null` / `undefined` / `""`) are dropped, so conditional classes
+ * read inline as `cond && "persona-foo"` instead of imperative
+ * `classList.add(...)` branches.
+ */
+export const cx = (
+  ...parts: Array<string | false | null | undefined>
+): string => parts.filter(Boolean).join(" ");
 
 
 

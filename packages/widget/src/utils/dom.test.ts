@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import { createNode } from "./dom";
+import { createNode, cx } from "./dom";
 
 describe("createNode", () => {
   it("applies className, text, attributes, and inline styles", () => {
@@ -35,5 +35,33 @@ describe("createNode", () => {
     expect(el.tagName).toBe("DIV");
     expect(el.className).toBe("");
     expect(el.childNodes.length).toBe(0);
+  });
+
+  it("skips nullish style values so conditionals can be inlined", () => {
+    const el = createNode("div", {
+      style: { display: "none", color: undefined, width: "10px" },
+    });
+    expect(el.style.display).toBe("none");
+    expect(el.style.width).toBe("10px");
+    // An undefined value must not be written (no literal "undefined").
+    expect(el.style.color).toBe("");
+  });
+});
+
+describe("cx", () => {
+  it("joins truthy fragments and drops falsy ones", () => {
+    expect(cx("a", false, "b", null, undefined, "", "c")).toBe("a b c");
+  });
+
+  it("supports inline conditional classes", () => {
+    const active = true;
+    const disabled = false;
+    expect(cx("base", active && "is-active", disabled && "is-disabled")).toBe(
+      "base is-active"
+    );
+  });
+
+  it("returns an empty string when every fragment is falsy", () => {
+    expect(cx(false, null, undefined, "")).toBe("");
   });
 });

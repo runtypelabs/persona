@@ -1,4 +1,4 @@
-import { createElement, createNode } from "../utils/dom";
+import { createElement, createNode, cx } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
 import { ALL_SUPPORTED_MIME_TYPES } from "../utils/content";
@@ -112,36 +112,47 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
 
   const wrapper = createElement("div", "persona-send-button-wrapper");
 
-  const button = createElement(
-    "button",
-    useIcon
-      ? "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer"
-      : "persona-rounded-button persona-bg-persona-accent persona-px-4 persona-py-2 persona-text-sm persona-font-semibold disabled:persona-opacity-50 persona-cursor-pointer"
-  ) as HTMLButtonElement;
-
-  button.type = "submit";
-  button.setAttribute("data-persona-composer-submit", "");
+  const button = createNode("button", {
+    className: cx(
+      "persona-rounded-button disabled:persona-opacity-50 persona-cursor-pointer",
+      useIcon
+        ? "persona-flex persona-items-center persona-justify-center"
+        : "persona-bg-persona-accent persona-px-4 persona-py-2 persona-text-sm persona-font-semibold",
+      // Icon mode without an explicit background falls back to the primary bg
+      // class; text mode without an explicit color falls back to white text.
+      useIcon && !backgroundColor && "persona-bg-persona-primary",
+      !useIcon && !textColor && "persona-text-white"
+    ),
+    attrs: { type: "submit", "data-persona-composer-submit": "" },
+    style: {
+      // Sizing is icon-mode-only (text mode is sized by its padding classes).
+      width: useIcon ? buttonSize : undefined,
+      height: useIcon ? buttonSize : undefined,
+      minWidth: useIcon ? buttonSize : undefined,
+      minHeight: useIcon ? buttonSize : undefined,
+      fontSize: useIcon ? "18px" : undefined,
+      lineHeight: useIcon ? "1" : undefined,
+      // Icon mode always sets a color; text mode only when textColor is given.
+      color: useIcon
+        ? textColor || "var(--persona-button-primary-fg, #ffffff)"
+        : textColor || undefined,
+      // backgroundColor is honored in icon mode only.
+      backgroundColor: useIcon ? backgroundColor || undefined : undefined,
+      borderWidth: sendButtonConfig.borderWidth || undefined,
+      borderStyle: sendButtonConfig.borderWidth ? "solid" : undefined,
+      borderColor: sendButtonConfig.borderColor || undefined,
+      paddingLeft: sendButtonConfig.paddingX || undefined,
+      paddingRight: sendButtonConfig.paddingX || undefined,
+      paddingTop: sendButtonConfig.paddingY || undefined,
+      paddingBottom: sendButtonConfig.paddingY || undefined,
+    },
+  });
 
   // Both icons are pre-rendered so setMode can swap cheaply.
   let sendIcon: SVGElement | null = null;
   let stopIcon: SVGElement | null = null;
 
   if (useIcon) {
-    button.style.width = buttonSize;
-    button.style.height = buttonSize;
-    button.style.minWidth = buttonSize;
-    button.style.minHeight = buttonSize;
-    button.style.fontSize = "18px";
-    button.style.lineHeight = "1";
-
-    button.innerHTML = "";
-
-    if (textColor) {
-      button.style.color = textColor;
-    } else {
-      button.style.color = "var(--persona-button-primary-fg, #ffffff)";
-    }
-
     const iconSize = parseFloat(buttonSize) || 24;
     const iconColor = textColor?.trim() || "currentColor";
 
@@ -157,42 +168,8 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
     }
 
     stopIcon = renderLucideIcon(stopIconName, iconSize, iconColor, 2);
-
-    if (backgroundColor) {
-      button.style.backgroundColor = backgroundColor;
-    } else {
-      button.classList.add("persona-bg-persona-primary");
-    }
   } else {
     button.textContent = sendLabel;
-    if (textColor) {
-      button.style.color = textColor;
-    } else {
-      button.classList.add("persona-text-white");
-    }
-  }
-
-  if (sendButtonConfig.borderWidth) {
-    button.style.borderWidth = sendButtonConfig.borderWidth;
-    button.style.borderStyle = "solid";
-  }
-  if (sendButtonConfig.borderColor) {
-    button.style.borderColor = sendButtonConfig.borderColor;
-  }
-
-  if (sendButtonConfig.paddingX) {
-    button.style.paddingLeft = sendButtonConfig.paddingX;
-    button.style.paddingRight = sendButtonConfig.paddingX;
-  } else {
-    button.style.paddingLeft = "";
-    button.style.paddingRight = "";
-  }
-  if (sendButtonConfig.paddingY) {
-    button.style.paddingTop = sendButtonConfig.paddingY;
-    button.style.paddingBottom = sendButtonConfig.paddingY;
-  } else {
-    button.style.paddingTop = "";
-    button.style.paddingBottom = "";
   }
 
   let tooltip: HTMLElement | null = null;
@@ -259,36 +236,40 @@ export const createMicButton = (config?: AgentWidgetConfig): MicButtonParts | nu
   if (!hasVoiceInput) return null;
 
   const buttonSize = config?.sendButton?.size ?? "40px";
-  const wrapper = createElement("div", "persona-send-button-wrapper");
-  const button = createElement(
-    "button",
-    "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer"
-  ) as HTMLButtonElement;
-
-  button.type = "button";
-  button.setAttribute("data-persona-composer-mic", "");
-  button.setAttribute("aria-label", "Start voice recognition");
-
   const micIconName = voiceRecognitionConfig.iconName ?? "mic";
   const micIconSize = voiceRecognitionConfig.iconSize ?? buttonSize;
   const micIconSizeNum = parseFloat(micIconSize) || 24;
-
   const micBackgroundColor =
     voiceRecognitionConfig.backgroundColor ?? config?.sendButton?.backgroundColor;
   const micIconColor = voiceRecognitionConfig.iconColor ?? config?.sendButton?.textColor;
 
-  button.style.width = micIconSize;
-  button.style.height = micIconSize;
-  button.style.minWidth = micIconSize;
-  button.style.minHeight = micIconSize;
-  button.style.fontSize = "18px";
-  button.style.lineHeight = "1";
-
-  if (micIconColor) {
-    button.style.color = micIconColor;
-  } else {
-    button.style.color = "var(--persona-text, #111827)";
-  }
+  const wrapper = createElement("div", "persona-send-button-wrapper");
+  const button = createNode("button", {
+    className:
+      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer",
+    attrs: {
+      type: "button",
+      "data-persona-composer-mic": "",
+      "aria-label": "Start voice recognition",
+    },
+    style: {
+      width: micIconSize,
+      height: micIconSize,
+      minWidth: micIconSize,
+      minHeight: micIconSize,
+      fontSize: "18px",
+      lineHeight: "1",
+      color: micIconColor || "var(--persona-text, #111827)",
+      backgroundColor: micBackgroundColor || undefined,
+      borderWidth: voiceRecognitionConfig.borderWidth || undefined,
+      borderStyle: voiceRecognitionConfig.borderWidth ? "solid" : undefined,
+      borderColor: voiceRecognitionConfig.borderColor || undefined,
+      paddingLeft: voiceRecognitionConfig.paddingX || undefined,
+      paddingRight: voiceRecognitionConfig.paddingX || undefined,
+      paddingTop: voiceRecognitionConfig.paddingY || undefined,
+      paddingBottom: voiceRecognitionConfig.paddingY || undefined,
+    },
+  });
 
   const iconColorValue = micIconColor || "currentColor";
   const micIconSvg = renderLucideIcon(micIconName, micIconSizeNum, iconColorValue, 1.5);
@@ -296,27 +277,6 @@ export const createMicButton = (config?: AgentWidgetConfig): MicButtonParts | nu
     button.appendChild(micIconSvg);
   } else {
     button.textContent = "🎤";
-  }
-
-  if (micBackgroundColor) {
-    button.style.backgroundColor = micBackgroundColor;
-  }
-
-  if (voiceRecognitionConfig.borderWidth) {
-    button.style.borderWidth = voiceRecognitionConfig.borderWidth;
-    button.style.borderStyle = "solid";
-  }
-  if (voiceRecognitionConfig.borderColor) {
-    button.style.borderColor = voiceRecognitionConfig.borderColor;
-  }
-
-  if (voiceRecognitionConfig.paddingX) {
-    button.style.paddingLeft = voiceRecognitionConfig.paddingX;
-    button.style.paddingRight = voiceRecognitionConfig.paddingX;
-  }
-  if (voiceRecognitionConfig.paddingY) {
-    button.style.paddingTop = voiceRecognitionConfig.paddingY;
-    button.style.paddingBottom = voiceRecognitionConfig.paddingY;
   }
 
   wrapper.appendChild(button);
@@ -366,31 +326,34 @@ export const createAttachmentControls = (config?: AgentWidgetConfig): Attachment
   input.style.display = "none";
   input.setAttribute("aria-label", "Attach files");
 
-  const wrapper = createElement("div", "persona-send-button-wrapper");
-  const button = createElement(
-    "button",
-    "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button"
-  ) as HTMLButtonElement;
-  button.type = "button";
-  button.setAttribute("data-persona-composer-attachment-button", "");
-  button.setAttribute("aria-label", attachmentsConfig.buttonTooltipText ?? "Attach file");
-
   const attachIconName = attachmentsConfig.buttonIconName ?? "paperclip";
   const attachIconSize = buttonSize;
   const buttonSizeNum = parseFloat(attachIconSize) || 40;
   const attachIconSizeNum = Math.round(buttonSizeNum * 0.6);
 
-  button.style.width = attachIconSize;
-  button.style.height = attachIconSize;
-  button.style.minWidth = attachIconSize;
-  button.style.minHeight = attachIconSize;
-  button.style.fontSize = "18px";
-  button.style.lineHeight = "1";
-  button.style.backgroundColor = "transparent";
-  button.style.color = "var(--persona-primary, #111827)";
-  button.style.border = "none";
-  button.style.borderRadius = "6px";
-  button.style.transition = "background-color 0.15s ease";
+  const wrapper = createElement("div", "persona-send-button-wrapper");
+  const button = createNode("button", {
+    className:
+      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button",
+    attrs: {
+      type: "button",
+      "data-persona-composer-attachment-button": "",
+      "aria-label": attachmentsConfig.buttonTooltipText ?? "Attach file",
+    },
+    style: {
+      width: attachIconSize,
+      height: attachIconSize,
+      minWidth: attachIconSize,
+      minHeight: attachIconSize,
+      fontSize: "18px",
+      lineHeight: "1",
+      backgroundColor: "transparent",
+      color: "var(--persona-primary, #111827)",
+      border: "none",
+      borderRadius: "6px",
+      transition: "background-color 0.15s ease",
+    },
+  });
 
   button.addEventListener("mouseenter", () => {
     button.style.backgroundColor = "var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.05))";

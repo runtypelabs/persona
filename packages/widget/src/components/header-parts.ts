@@ -1,4 +1,4 @@
-import { createElement, createElementInDocument } from "../utils/dom";
+import { createElement, createElementInDocument, createNode, cx } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
 import { PORTALED_OVERLAY_Z_INDEX } from "../utils/constants";
@@ -85,24 +85,41 @@ export const createCloseButton = (
 
   const wrapper = createElement("div", wrapperClassName);
 
-  const button = createElement(
-    "button",
-    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
-  ) as HTMLButtonElement;
-  button.style.height = closeButtonSize;
-  button.style.width = closeButtonSize;
-  button.type = "button";
-
   const closeButtonTooltipText = launcher.closeButtonTooltipText ?? "Close chat";
   const closeButtonShowTooltip = launcher.closeButtonShowTooltip ?? true;
-
-  button.setAttribute("aria-label", closeButtonTooltipText);
-  button.style.display = showClose ? "" : "none";
-
   const closeButtonIconName = launcher.closeButtonIconName ?? "x";
   const closeButtonIconText = launcher.closeButtonIconText ?? "×";
-  button.style.color =
-    launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
+  // hover-bg / border-none / rounded-full are default utility classes that
+  // apply only when the matching style override is absent; an override sets
+  // the inline style instead (cx omits the class).
+  const hasCloseBorder = Boolean(
+    launcher.closeButtonBorderWidth || launcher.closeButtonBorderColor
+  );
+
+  const button = createNode("button", {
+    className: cx(
+      "persona-inline-flex persona-items-center persona-justify-center persona-cursor-pointer",
+      !launcher.closeButtonBackgroundColor && "hover:persona-bg-gray-100",
+      !hasCloseBorder && "persona-border-none",
+      !launcher.closeButtonBorderRadius && "persona-rounded-full"
+    ),
+    attrs: { type: "button", "aria-label": closeButtonTooltipText },
+    style: {
+      height: closeButtonSize,
+      width: closeButtonSize,
+      display: showClose ? undefined : "none",
+      color: launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor,
+      backgroundColor: launcher.closeButtonBackgroundColor || undefined,
+      border: hasCloseBorder
+        ? `${launcher.closeButtonBorderWidth || "0px"} solid ${launcher.closeButtonBorderColor || "transparent"}`
+        : undefined,
+      borderRadius: launcher.closeButtonBorderRadius || undefined,
+      paddingLeft: launcher.closeButtonPaddingX || undefined,
+      paddingRight: launcher.closeButtonPaddingX || undefined,
+      paddingTop: launcher.closeButtonPaddingY || undefined,
+      paddingBottom: launcher.closeButtonPaddingY || undefined,
+    },
+  });
 
   // The X glyph's paths occupy only the middle 50% of its 24x24 viewBox
   // (from 6,6 to 18,18), while other header icons (e.g. refresh-cw) span
@@ -116,47 +133,6 @@ export const createCloseButton = (
     button.appendChild(closeIconSvg);
   } else {
     button.textContent = closeButtonIconText;
-  }
-
-  if (launcher.closeButtonBackgroundColor) {
-    button.style.backgroundColor = launcher.closeButtonBackgroundColor;
-    button.classList.remove("hover:persona-bg-gray-100");
-  } else {
-    button.style.backgroundColor = "";
-    button.classList.add("hover:persona-bg-gray-100");
-  }
-
-  if (launcher.closeButtonBorderWidth || launcher.closeButtonBorderColor) {
-    const borderWidth = launcher.closeButtonBorderWidth || "0px";
-    const borderColor = launcher.closeButtonBorderColor || "transparent";
-    button.style.border = `${borderWidth} solid ${borderColor}`;
-    button.classList.remove("persona-border-none");
-  } else {
-    button.style.border = "";
-    button.classList.add("persona-border-none");
-  }
-
-  if (launcher.closeButtonBorderRadius) {
-    button.style.borderRadius = launcher.closeButtonBorderRadius;
-    button.classList.remove("persona-rounded-full");
-  } else {
-    button.style.borderRadius = "";
-    button.classList.add("persona-rounded-full");
-  }
-
-  if (launcher.closeButtonPaddingX) {
-    button.style.paddingLeft = launcher.closeButtonPaddingX;
-    button.style.paddingRight = launcher.closeButtonPaddingX;
-  } else {
-    button.style.paddingLeft = "";
-    button.style.paddingRight = "";
-  }
-  if (launcher.closeButtonPaddingY) {
-    button.style.paddingTop = launcher.closeButtonPaddingY;
-    button.style.paddingBottom = launcher.closeButtonPaddingY;
-  } else {
-    button.style.paddingTop = "";
-    button.style.paddingBottom = "";
   }
 
   wrapper.appendChild(button);
@@ -259,46 +235,39 @@ export const createClearChatButton = (
 
   const wrapper = createElement("div", wrapperClassName);
 
-  const button = createElement(
-    "button",
-    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
-  ) as HTMLButtonElement;
-  button.style.height = clearChatSize;
-  button.style.width = clearChatSize;
-  button.type = "button";
-  button.setAttribute("aria-label", clearChatTooltipText);
-  button.style.color = clearChatIconColor || HEADER_THEME_CSS.actionIconColor;
+  // hover-bg / border-none / rounded-full are default utility classes that
+  // apply only when the matching style override is absent; an override sets
+  // the inline style instead (cx omits the class).
+  const hasClearChatBorder = Boolean(clearChatBorderWidth || clearChatBorderColor);
+
+  const button = createNode("button", {
+    className: cx(
+      "persona-inline-flex persona-items-center persona-justify-center persona-cursor-pointer",
+      !clearChatBgColor && "hover:persona-bg-gray-100",
+      !hasClearChatBorder && "persona-border-none",
+      !clearChatBorderRadius && "persona-rounded-full"
+    ),
+    attrs: { type: "button", "aria-label": clearChatTooltipText },
+    style: {
+      height: clearChatSize,
+      width: clearChatSize,
+      color: clearChatIconColor || HEADER_THEME_CSS.actionIconColor,
+      backgroundColor: clearChatBgColor || undefined,
+      border: hasClearChatBorder
+        ? `${clearChatBorderWidth || "0px"} solid ${clearChatBorderColor || "transparent"}`
+        : undefined,
+      borderRadius: clearChatBorderRadius || undefined,
+      paddingLeft: clearChatPaddingX || undefined,
+      paddingRight: clearChatPaddingX || undefined,
+      paddingTop: clearChatPaddingY || undefined,
+      paddingBottom: clearChatPaddingY || undefined,
+    },
+  });
 
   const iconSvg = renderLucideIcon(clearChatIconName, iconSize, "currentColor", 1);
   if (iconSvg) {
     iconSvg.style.display = "block";
     button.appendChild(iconSvg);
-  }
-
-  if (clearChatBgColor) {
-    button.style.backgroundColor = clearChatBgColor;
-    button.classList.remove("hover:persona-bg-gray-100");
-  }
-
-  if (clearChatBorderWidth || clearChatBorderColor) {
-    const borderWidth = clearChatBorderWidth || "0px";
-    const borderColor = clearChatBorderColor || "transparent";
-    button.style.border = `${borderWidth} solid ${borderColor}`;
-    button.classList.remove("persona-border-none");
-  }
-
-  if (clearChatBorderRadius) {
-    button.style.borderRadius = clearChatBorderRadius;
-    button.classList.remove("persona-rounded-full");
-  }
-
-  if (clearChatPaddingX) {
-    button.style.paddingLeft = clearChatPaddingX;
-    button.style.paddingRight = clearChatPaddingX;
-  }
-  if (clearChatPaddingY) {
-    button.style.paddingTop = clearChatPaddingY;
-    button.style.paddingBottom = clearChatPaddingY;
   }
 
   wrapper.appendChild(button);
