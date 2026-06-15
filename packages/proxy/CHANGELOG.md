@@ -1,5 +1,32 @@
 # @runtypelabs/persona-proxy
 
+## 3.35.0
+
+### Patch Changes
+
+- ## 02d9183: Reduce em dash sentence constructions across package source and documentation.
+
+  "@runtypelabs/persona": patch
+  "@runtypelabs/persona-proxy": patch
+
+  ***
+
+  ## Reduce em dash sentence constructions across package source and documentation.
+
+  "@runtypelabs/persona": patch
+  "@runtypelabs/persona-proxy": patch
+
+  ***
+
+  ## Reduce em dash sentence constructions across package source and documentation.
+
+  "@runtypelabs/persona": patch
+  "@runtypelabs/persona-proxy": patch
+
+  ***
+
+  Normalize em dash punctuation to ASCII hyphen separators across package source and documentation.
+
 ## 3.34.0
 
 ### Minor Changes

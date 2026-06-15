@@ -1,5 +1,74 @@
 # @runtypelabs/persona
 
+## 3.35.0
+
+### Minor Changes
+
+- 9f65d05: Add `createPcmStreamPlayer` — a reusable, jitter-buffered AudioWorklet player for raw PCM16 / 24 kHz / mono streams, exported from `@runtypelabs/persona/voice-worklet-player` alongside the new `PcmStreamPlayer` type. It's the same worklet engine that backs the realtime voice provider, now generalized: a configurable `prebufferMs` waterline, graceful underrun handling (a late chunk produces brief silence and a re-buffer rather than a click), `pause()`/`resume()` via the AudioContext, and an `onStarted` callback that fires when audible playback actually begins (so a UI can hold a loading state through the prebuffer instead of flipping to "playing" on the first byte).
+
+  This is the recommended way to play streamed audio inside a hosted `SpeechEngine` (the per-message "Read aloud" / auto-speak seam). A server TTS engine that streams PCM — OpenAI, ElevenLabs, Azure, etc. — can feed each chunk to the player and get gapless playback with the right latency↔smoothness trade-off for bursty HTTP-delivered audio, instead of hand-scheduling `AudioBufferSourceNode`s (which clicks under jitter). See `examples/embedded-app/src/server-tts-engine.ts` for a complete streaming engine built on it.
+
+  `createWorkletPlaybackEngine` (the realtime voice provider's `createPlaybackEngine` injection) is unchanged — it's now a thin alias of `createPcmStreamPlayer` with the default prebuffer.
+
+- 253c7b1: Add a per-message "Read aloud" action button (text-to-speech) to assistant messages, next to copy/feedback. Enable via `messageActions.showReadAloud: true`. Clicking cycles play → pause → resume (or play → stop when the engine can't pause); the button icon reflects state and survives DOM morphs.
+
+  Speech is produced by a pluggable `SpeechEngine`. The browser Web Speech API engine (`BrowserSpeechEngine`) is the zero-backend default; supply a hosted engine (e.g. Runtype TTS, ElevenLabs, a server proxy) via `textToSpeech.createEngine` to use server-side voices — such an engine can stream audio through the realtime voice `VoicePlaybackEngine`. Voice, rate and pitch come from the existing `textToSpeech` config. The spoken text is resolved from the message body: an action-format envelope (`{"action":"message","text":"…"}`, optionally fenced) speaks its `text` field, otherwise Markdown is stripped to plain prose.
+
+  New public API: controller methods `widget.toggleReadAloud(id)`, `widget.stopReadAloud()`, `widget.getReadAloudState(id)`, `widget.onReadAloudChange(cb)`; a `message:read-aloud` controller event (`widget.on('message:read-aloud', e => …)`, parallel to `message:copy`/`message:feedback`) that fires on every state transition — `loading` (press) → `playing` → `paused`/`playing` → `idle` — with the message id preserved even on the terminal `idle`; exported types `ReadAloudState`, `SpeechEngine`, `SpeechRequest`, `SpeechCallbacks`, `AgentWidgetReadAloudEvent`; exported `BrowserSpeechEngine`, `ReadAloudController`, `pickBestVoice`. The existing auto-speak path (`textToSpeech.enabled`) now routes through the same controller, so a message can't be double-spoken and the button reflects auto-speak playback.
+
+  The theme editor (`@runtypelabs/persona/theme-editor`) gains a "Show Read Aloud" toggle in its Message Actions section.
+
+- a67af86: Rewrite the `runtype` voice provider to the streaming realtime protocol so it actually speaks. It now connects to `/ws/agents/:agentId/voice` with subprotocol auth (`['runtype.bearer', token]`, never a query-string token), streams continuous PCM16 mic audio, and plays back streamed audio replies, replacing the dead legacy turn-based path.
+
+  - **Live transcripts (Option B):** new optional `VoiceProvider.onTranscript(role, text, isFinal)` drives the chat thread from streaming transcript frames: interim user text grows live, the user message finalizes immediately, and the assistant reply lands in sync with its audio.
+  - **Pluggable playback:** the default `AudioPlaybackManager` is used unless you inject a custom engine via `voiceRecognition.provider.runtype.createPlaybackEngine`. A jitter-buffered AudioWorklet engine ships from the optional subpath `@runtypelabs/persona/voice-worklet-player`.
+  - **Latency metrics:** new optional `VoiceProvider.onMetrics` plus a `voiceRecognition.onMetrics` config hook surface per-turn latency.
+  - **Bring-your-own provider:** `voiceRecognition.provider` now accepts `type: 'custom'` with a `custom` field: either a `VoiceProvider` instance or a `() => VoiceProvider` factory. STT-style custom providers deliver a final transcript via `onResult` (sent as a user message); the composer mic now renders for custom providers regardless of Web Speech support. See the `custom-voice-provider` example for a Web Speech adapter.
+  - **Simpler config:** `runtype.clientToken` and `host` are now optional, defaulting from the widget's `clientToken`/`apiUrl`: the minimum voice config collapses to just `{ agentId }`. `pauseDuration`/`silenceThreshold` are deprecated no-ops on the realtime path (the server's STT owns turn-taking).
+
+- 6884ee3: Add a built-in Runtype hosted TTS provider for read-aloud. `textToSpeech: { provider: 'runtype' }` now powers the per-message "Read aloud" button (and auto-speak) with a new built-in `RuntypeSpeechEngine` that streams PCM from Runtype's `POST {host}/v1/agents/:agentId/speak` endpoint. `host`/`agentId`/`clientToken` are derived from the widget config (new `textToSpeech.agentId`/`host`/`prebufferMs` options, falling back to `apiUrl`/`voiceRecognition.provider.runtype.agentId`/`clientToken`).
+
+  Playback defaults to a main-thread `AudioPlaybackManager` (in-bundle, with prebuffer, pause/resume, graceful-underrun softening and a real "audible start" signal). For the higher-quality jitter-buffered AudioWorklet player, pass the new `textToSpeech.createPlaybackEngine` and import `createPcmStreamPlayer` from `@runtypelabs/persona/voice-worklet-player` — it then ships in your bundle, not Persona's.
+
+  Unless `browserFallback: false`, the engine is wrapped in a `FallbackSpeechEngine` so a missing endpoint or transient failure transparently falls back to the browser voice — never a broken button — and auto-upgrades to Runtype voices once the endpoint answers.
+
+  Bundle impact: `provider: 'runtype'` is opt-in, so the whole read-aloud engine (`RuntypeSpeechEngine` + `FallbackSpeechEngine` + its `AudioPlaybackManager`) is code-split out of the CDN payload (`index.global.js`) into a lazy `runtype-tts.js` chunk (~2 kB), loaded on demand and prefetched at init so first-audio latency is unchanged. npm/bundler consumers get it inlined (and tree-shaken when unused). `RuntypeSpeechEngine`, `FallbackSpeechEngine`, and their option types are exported from `@runtypelabs/persona/voice-worklet-player`.
+
+- 58a4e93: Split `@runtypelabs/persona/theme-editor` into a headless core (~30 kB gzip) and a new `@runtypelabs/persona/theme-editor/preview` subpath for `createThemePreview` (mounts the full widget). Import preview helpers from the headless path; import `createThemePreview` from `./theme-editor/preview` instead of `./theme-editor`.
+- dc7cf1d: Add a `voice:status` controller event exposing the granular `VoiceStatus` (`listening` / `processing` / `speaking` / `idle` / …) on every transition. Subscribe via `widget.on('voice:status', (e) => e.status)`. Complements the existing coarse `voice:state` (active on/off) event — non-breaking. The new `AgentWidgetVoiceStatusEvent` payload type is exported.
+
+  Also fix the message render cache: `computeMessageFingerprint` now includes `voiceProcessing`, so a voice message whose `voiceProcessing` flag flips `true→false` on transcript finalize (typically with unchanged text) re-renders instead of being served the cached in-progress bubble. This previously caused custom voice-processing UIs (via `postprocessMessage` or a `renderMessage` plugin) to stick on finalized messages.
+
+### Patch Changes
+
+- 12e5db2: Fix the header icon color not persisting after runtime config/theme updates. `controller.update()` re-rendered the header Lucide icon with a hardcoded white stroke, overriding the themed `components.header.iconForeground`. The icon now renders with `currentColor` (matching the initial render), so the configured/themed header icon color sticks across updates (including live changes from the theme editor).
+- f0d2aa9: Fix the `inline` message timestamp position rendering on its own line (identical to `below`). The inline timestamp was a block-level `<div>` that relied on a `persona-inline` class absent from the stylesheet, and even once tucked into the message text it was invalid markup (`<div>` inside `<p>`) that got re-parented onto its own line on every re-render. Inline timestamps now render as an inline `<span>` (`persona-timestamp-inline`, `display: inline-block`) tucked into the last content block, so they trail the final line of the message and survive re-renders — making `layout.messages.timestamp.position: "inline"` visually distinct from `"below"`.
+- ## 02d9183: Reduce em dash sentence constructions across package source and documentation.
+
+  "@runtypelabs/persona": patch
+  "@runtypelabs/persona-proxy": patch
+
+  ***
+
+  ## Reduce em dash sentence constructions across package source and documentation.
+
+  "@runtypelabs/persona": patch
+  "@runtypelabs/persona-proxy": patch
+
+  ***
+
+  ## Reduce em dash sentence constructions across package source and documentation.
+
+  "@runtypelabs/persona": patch
+  "@runtypelabs/persona-proxy": patch
+
+  ***
+
+  Normalize em dash punctuation to ASCII hyphen separators across package source and documentation.
+
+- d4578ee: Reduce widget bundle pressure by slimming the deferred launcher bundle and trimming theme editor metadata.
+- 10e654c: Internal refactor of widget UI assembly. Component construction now flows through a small `components/widget-view.ts` view layer (`createWidgetView` / `resolveLauncher`) that groups the shell, transcript, header, composer, and launcher element references into named regions, while `ui.ts` keeps owning behavior. Composer/header parts also expose stable `data-persona-composer-*` ref attributes so plugin and config-driven replacement no longer depends on brittle compound class selectors. No public API or visual changes.
+
 ## 3.34.1
 
 ### Patch Changes
