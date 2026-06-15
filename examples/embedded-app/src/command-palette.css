@@ -5,7 +5,8 @@
   --persona-command-soft: #9a968b;
   --persona-command-line: rgba(255, 255, 255, 0.12);
   --persona-command-line-strong: rgba(255, 255, 255, 0.3);
-  --persona-command-accent: var(--teal-dim, var(--primary, #26fedc));
+  /* Teal accent; never fall back to a page's --primary (which can be violet). */
+  --persona-command-accent: var(--teal-dim, #00dfc1);
   --persona-command-blue: #7eb1ff;
 
   position: fixed;

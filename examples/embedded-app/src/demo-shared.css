@@ -1,41 +1,43 @@
-/* Fonts (Newsreader / Inter / Asap Condensed / JetBrains Mono) load via a
+/* Fonts (Bitcount Prop Single / Geist / Syne / JetBrains Mono) load via a
    <link> in <head>, injected by the gallery-fonts Vite plugin (vite.config.ts).
    Do NOT re-add an `@import` here: the browser discovers it only after this file
    downloads, which loads the fonts late and brings back the font-swap flash. */
 
+@import "./editorial-tokens.css";
+
 /* ════════════════════════════════════════════════════════════════════════
-   Persona Examples: design system
-   Inherits the Runtype marketing identity from the homepage (index.css):
-   cool off-white paper, the Runtype violet accent, Newsreader serif headings,
-   Inter body, Asap Condensed uppercase labels, JetBrains Mono code. Refined
-   and calm: not loud.
+   Persona Examples — design system
+   Shares the editorial/terminal identity of the homepage (home.css): warm
+   paper, the teal accent, Syne editorial headings, Geist body, JetBrains Mono
+   labels + code, hairline borders, sharp corners, hard-offset shadows.
 
    This stylesheet is the single source of truth for every gallery example.
    Pages author only their per-demo *content*; all chrome + control primitives
-   live here so the 15 examples read as one coherent reference.
+   live here so the examples read as one coherent reference.
+
+   The canonical palette + type tokens live in editorial-tokens.css; the :root
+   below only remaps this file's semantic names (--primary, --background, …)
+   onto them so existing component rules update wholesale.
    ════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  color-scheme: light;
+  /* ── Paper + ink (warm editorial palette) ── */
+  --background: #fef9f1;     /* cream paper (canonical --paper) */
+  --paper: #fffdf8;          /* card / control surface, a touch above paper */
+  --card: #fffdf8;
+  --card-foreground: var(--ink);
+  --foreground: var(--ink);
+  --primary: var(--teal-ink);         /* readable teal for text / borders / focus */
+  --primary-hover: #004d42;           /* darker teal */
+  --primary-foreground: var(--ink);   /* dark ink reads on the teal fill */
+  --muted: #57544c;          /* warm gray */
+  --faint: #8a877d;          /* warmer faint */
+  --accent: var(--teal-soft);         /* light teal fill (was light violet) */
 
-  /* ── Paper + ink (Runtype marketing palette) ── */
-  --background: #f6f7fb;
-  --paper: #ffffff;
-  --card: #ffffff;
-  --card-foreground: #1a1b20;
-  --foreground: #1a1b20;
-  --ink: #1a1b20;
-  --primary: #5b2eff;
-  --primary-hover: #3d1dcc;
-  --primary-foreground: #ffffff;
-  --muted: #6b6e76;
-  --faint: #8a8f9c;
-  --accent: #eee9ff;         /* light violet fill */
-
-  /* ── Accent (was "signal"): the Runtype violet ── */
-  --signal: #5b2eff;
-  --signal-ink: #ffffff;
-  --signal-soft: rgba(91, 46, 255, 0.08);
+  /* ── Accent (was "signal") — the bright teal, for fills ── */
+  --signal: var(--teal-dim);
+  --signal-ink: var(--ink);
+  --signal-soft: var(--teal-soft);
 
   /* ── Semantic signals (logs / status) ── */
   --ok: #2f7d4f;
@@ -48,8 +50,8 @@
   --danger-soft: #fbe4de;
 
   /* ── Lines ── */
-  --border: #e6e8f0;         /* hairline */
-  --border-strong: #d4d7e4;  /* soft framing line */
+  --border: var(--hairline);          /* rgba(0,0,0,0.1) */
+  --border-strong: rgba(0, 0, 0, 0.2);
   --grid: rgba(20, 20, 20, 0.02);
 
   /* ── Code surfaces (match homepage) ── */
@@ -57,21 +59,20 @@
   --code-fg: #c9c9c9;
   --code-line: rgba(255, 255, 255, 0.06);
 
-  /* ── Type ── */
-  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
-  --font-label: 'Asap Condensed', var(--font-sans);
+  /* ── Type (remapped onto canonical families) ── */
+  --font-display: var(--font-editorial);   /* Syne */
+  --font-sans: var(--font-body);           /* Geist */
+  --font-label: var(--font-mono);          /* JetBrains Mono caps labels */
 
-  /* ── Elevation (soft) ── */
-  --shadow-sm: 0 1px 2px rgba(26, 27, 32, 0.05);
-  --shadow-md: 0 4px 16px -8px rgba(26, 27, 32, 0.16);
-  --shadow-lg: 0 24px 48px -28px rgba(26, 27, 32, 0.3);
+  /* ── Elevation — hard offset, not soft blur ── */
+  --shadow-sm: none;
+  --shadow-md: var(--shadow-hard-sm);
+  --shadow-lg: var(--shadow-hard);
 
-  /* ── Radius ── */
-  --radius-sm: 4px;
-  --radius: 6px;
-  --radius-lg: 8px;
+  /* ── Radius — sharp corners ── */
+  --radius-sm: 0;
+  --radius: 0;
+  --radius-lg: 0;
 
   /* ── Shell ── */
   --shell-header: 56px;
@@ -88,7 +89,7 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: var(--background);
-  /* Faint paper grid: matches the homepage, fixed so content floats above it. */
+  /* Faint paper grid — matches the homepage, fixed so content floats above it. */
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
@@ -144,15 +145,16 @@ a {
   outline-offset: 2px;
 }
 
-/* Page / section eyebrows: Asap Condensed, tracked, uppercase. */
+/* Page / section eyebrows: JetBrains Mono, tracked, uppercase teal (label-caps). */
 .eyebrow,
 .notes-heading,
 .gallery-tier-heading {
   font-family: var(--font-label);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.2em;
-  color: var(--muted);
+  text-transform: uppercase;
+  color: var(--teal-ink);
 }
 /* In-rail control labels: normal case for a calm, consistent form look. */
 .configure-label,
@@ -175,7 +177,7 @@ a {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Shell: persistent top bar
+   Shell — persistent top bar
    ════════════════════════════════════════════════════════════════════════ */
 
 .shell-header {
@@ -189,7 +191,7 @@ a {
   background: color-mix(in srgb, var(--background) 82%, transparent);
   backdrop-filter: saturate(140%) blur(12px);
   -webkit-backdrop-filter: saturate(140%) blur(12px);
-  border-bottom: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--black);
   z-index: 9000;
   font-size: 0.85rem;
   /* Injected by a deferred module; fade in (see `data-shell-ready`) so it
@@ -202,30 +204,32 @@ a {
 }
 
 .shell-brand {
-  font-family: var(--font-sans);
-  font-weight: 700;
-  color: var(--foreground);
+  font-family: var(--font-wordmark);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  color: var(--ink);
   text-decoration: none;
-  font-size: 0.92rem;
-  letter-spacing: -0.01em;
+  font-size: 1.2rem;
+  letter-spacing: 0.04em;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
 }
-.shell-brand:hover { color: var(--primary); }
+.shell-brand:hover { color: var(--teal-ink); }
 
 .shell-crumb {
-  font-family: var(--font-sans);
-  font-weight: 600;
-  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--ink);
   text-decoration: none;
-  font-size: 0.92rem;
-  letter-spacing: -0.01em;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   display: inline-flex;
   align-items: center;
   white-space: nowrap;
 }
-.shell-crumb:hover { color: var(--primary); }
+.shell-crumb:hover { color: var(--teal-ink); }
 
 .shell-sep {
   color: var(--faint);
@@ -242,9 +246,10 @@ a {
   border: 1px solid transparent;
   padding: 0.32rem 0.55rem;
   border-radius: var(--radius);
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   color: var(--foreground);
   cursor: pointer;
   line-height: 1;
@@ -376,7 +381,7 @@ a {
   font-family: var(--font-label);
   font-size: 0.66rem;
   padding: 0.05rem 0.45rem;
-  border-radius: 100px;
+  border-radius: 0;
   background: var(--signal);
   color: var(--signal-ink);
   font-weight: 600;
@@ -526,7 +531,7 @@ a {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Preview: simulated host-page viewport
+   Preview — simulated host-page viewport
    ════════════════════════════════════════════════════════════════════════ */
 
 .preview {
@@ -591,10 +596,10 @@ a {
   min-height: 32px;
 }
 .preview-toolbar-variants [data-variant-toolbar]:empty { display: none; }
-/* Mount-toolbar lives in the preview toolbar now: drop its left-rail margins. */
+/* Mount-toolbar lives in the preview toolbar now — drop its left-rail margins. */
 .preview-toolbar-variants .mount-toolbar { margin: 0; min-height: 0; }
 
-/* Preview body: swaps between the live widget and the code pane in place. */
+/* Preview body — swaps between the live widget and the code pane in place. */
 .preview-body {
   flex: 1;
   min-height: 0;
@@ -664,25 +669,25 @@ body.demo-code-active [data-persona-root] { display: none; }
 }
 .btn:disabled:hover { background: var(--paper); border-color: var(--border); transform: none; }
 
-/* Signature CTA: signal-filled.
+/* Signature CTA — signal-filled.
    Variants use the doubled `.btn.btn-x` form so they outrank the base
    `.btn-group button` / `.btn-row button` descendant selectors (0,1,1) that
    would otherwise win over a single-class variant inside a group. */
 .btn.btn-primary,
 .btn-primary,
 .btn.running {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border-color: var(--primary);
-  box-shadow: 0 4px 12px -4px rgba(91, 46, 255, 0.25);
+  background: var(--signal);
+  color: var(--signal-ink);
+  border-color: var(--teal-ink);
+  box-shadow: none;
 }
 .btn.btn-primary:hover,
 .btn-primary:hover {
-  background: var(--primary-hover);
-  border-color: var(--primary-hover);
-  color: var(--primary-foreground);
+  background: var(--teal);
+  border-color: var(--teal-ink);
+  color: var(--ink);
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px -4px rgba(91, 46, 255, 0.3);
+  box-shadow: var(--shadow-hard-sm);
 }
 
 /* Semantic variants (replace per-page .btn-approve/.btn-deny/.action-btn). */
@@ -733,7 +738,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .btn-row:not(:last-child) { margin-bottom: 0.5rem; }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Segmented control: replaces every per-page .mode-group / .mode-btn pill set
+   Segmented control — replaces every per-page .mode-group / .mode-btn pill set
    ════════════════════════════════════════════════════════════════════════ */
 
 .mode-group,
@@ -767,8 +772,8 @@ body.demo-code-active [data-persona-root] { display: none; }
 .seg-btn.active,
 .seg-btn[aria-selected="true"] {
   background: var(--paper);
-  color: var(--foreground);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -879,6 +884,11 @@ body.demo-code-active [data-persona-root] { display: none; }
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+}
+/* A primary action sitting directly under a config grid needs breathing room. */
+.config-grid + .btn,
+.config-grid + .btn-primary {
+  margin-top: 1rem;
 }
 @media (max-width: 480px) {
   .field-grid, .config-grid { grid-template-columns: minmax(0, 1fr); }
@@ -1060,7 +1070,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .stat-card.read-alouds .stat-value { color: #b794f4; }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Event logs: one readout style, several sizes
+   Event logs — one readout style, several sizes
    (.event-log / .log / .log-panel / .feedback-log + #log via added class)
    ════════════════════════════════════════════════════════════════════════ */
 
@@ -1116,7 +1126,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Notes: flat reference section
+   Notes — flat reference section
    ════════════════════════════════════════════════════════════════════════ */
 
 .notes {
@@ -1234,7 +1244,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .notes-rail-body[hidden] { display: none; }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Panels (legacy compat: kept for any page that still uses them)
+   Panels (legacy compat — kept for any page that still uses them)
    ════════════════════════════════════════════════════════════════════════ */
 
 .panel {
@@ -1254,7 +1264,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .panel-content { padding: 1.5rem; }
 
 /* ════════════════════════════════════════════════════════════════════════
-   Code blocks: instrument readout
+   Code blocks — instrument readout
    ════════════════════════════════════════════════════════════════════════ */
 
 .code-block {
@@ -1270,13 +1280,13 @@ body.demo-code-active [data-persona-root] { display: none; }
   margin-bottom: 1rem;
   tab-size: 2;
 }
-.code-block .comment  { color: #6b6e76; }
-.code-block .keyword  { color: #7a5cff; }
-.code-block .string   { color: #8fd400; }
+.code-block .comment  { color: #7c7a70; }
+.code-block .keyword  { color: #7eb1ff; }
+.code-block .string   { color: var(--teal-dim); }
 .code-block .prop,
 .code-block .property { color: #00b8d9; }
 .code-block .function { color: #00b8d9; }
-.code-block .tag      { color: #7a5cff; }
+.code-block .tag      { color: #7eb1ff; }
 
 /* ════════════════════════════════════════════════════════════════════════
    Badges
@@ -1285,7 +1295,7 @@ body.demo-code-active [data-persona-root] { display: none; }
 .badge {
   display: inline-block;
   padding: 0.12rem 0.5rem;
-  border-radius: 100px;
+  border-radius: 0;
   font-family: var(--font-label);
   font-size: 0.68rem;
   font-weight: 600;
@@ -1639,13 +1649,15 @@ body.is-fullscreen .fullscreen-exit { display: inline-flex !important; }
 }
 .demo-card-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .demo-card-tag {
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
   font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   padding: 0.12rem 0.5rem;
-  background: rgba(255, 255, 255, 0.6);
+  background: transparent;
   border: 1px solid var(--border);
-  border-radius: 100px;
+  border-radius: 0;
   color: var(--muted);
 }
 .advanced-card {}

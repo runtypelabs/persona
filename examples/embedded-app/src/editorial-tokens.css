@@ -1,0 +1,76 @@
+/* ===========================================================================
+   Persona editorial/terminal design tokens — single source of truth.
+
+   The home page redesign (home.css) defined this palette + type system. It is
+   lifted here so every surface (home.css, demo-shared.css, index.css) imports
+   ONE canonical set instead of each redeclaring (and drifting from) it.
+
+   Per-file stylesheets keep their own semantic token names (e.g. --primary,
+   --background) and remap them onto these canonical tokens, so existing
+   component rules update wholesale without renaming every usage.
+
+   Fonts load via a <link> injected by the gallery-fonts Vite plugin
+   (vite.config.ts) — do NOT @import font CSS here.
+   =========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* Paper & ink ------------------------------------------------------------ */
+  --paper: #fef9f1;
+  --paper-high: #ece8e0;
+  --paper-low: #f8f3eb;
+  --ink: #1d1c17;
+  --ink-soft: #444748;
+  --black: #000000;
+
+  /* Accents ---------------------------------------------------------------- */
+  --teal: #26fedc;
+  --teal-dim: #00dfc1;
+  --teal-ink: #006b5b;
+  --teal-soft: rgba(38, 254, 220, 0.12);
+  --cobalt: #00429a;
+  --cobalt-bright: #357eff;
+
+  /* Hairlines -------------------------------------------------------------- */
+  --hairline: rgba(0, 0, 0, 0.1);
+  --hairline-soft: rgba(0, 0, 0, 0.05);
+
+  /* Type ------------------------------------------------------------------- */
+  --font-display: 'JetBrains Mono', ui-monospace, monospace;
+  --font-editorial: 'Syne', sans-serif;
+  --font-body: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-wordmark: 'Bitcount Prop Single', var(--font-mono);
+
+  /* Elevation — hard offset (editorial), not soft blur --------------------- */
+  --shadow-hard-sm: 6px 6px 0 -1px rgba(29, 28, 23, 0.08);
+  --shadow-hard: 12px 12px 0 -1px rgba(29, 28, 23, 0.08);
+  --shadow-hard-lg: 16px 16px 0 rgba(29, 28, 23, 0.12);
+
+  /* Sharp corners ---------------------------------------------------------- */
+  --radius: 0;
+
+  /* Motion ----------------------------------------------------------------- */
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Shared type voices ------------------------------------------------------- */
+
+.label-caps {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--teal-ink);
+}
+
+.editorial-h {
+  font-family: var(--font-editorial);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  margin: 0;
+}
