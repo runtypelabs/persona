@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents (Claude Code, Codex, Cursor, etc
 
 ## Project Overview
 
-Persona is a pnpm monorepo containing a themeable, pluggable streaming chat widget for websites. It consists of two publishable packages and four example applications.
+Persona is a pnpm monorepo containing a themeable, pluggable streaming chat UI library for websites and app in plain JS.
 
 **Packages:**
 - `packages/widget` (`@runtypelabs/persona`) - The main chat widget library
@@ -91,7 +91,7 @@ The widget uses a layered architecture:
 3. **UI Layer** (`ui.ts` + `components/`)
    - `ui.ts` - Main UI controller, DOM rendering, event handling
    - `components/` - Modular UI components (launcher, panel, header, messages, feedback, artifacts, tool bubbles, reasoning, approval, suggestions, forms, composer)
-   - `styles/widget.css` - Tailwind CSS with `tvw-` prefix for style scoping
+   - `styles/widget.css` - Hand-authored utility classes (Tailwind-style names, not a Tailwind build) with the `persona-` prefix for style scoping
 
 4. **Utilities** (`utils/`)
    - `formatting.ts` - Stream parsers (JSON, XML, plain text)
@@ -128,7 +128,7 @@ The widget uses a layered architecture:
 
 **Shadow DOM:** Widgets can render inside a Shadow DOM for style isolation when `useShadowDom: true` is set. The default is `false` for CSS compatibility.
 
-**Theme System:** CSS custom properties (variables) + Tailwind with the `tvw-` prefix. The `tokens.ts` and `theme.ts` utilities manage runtime theme application. See `packages/widget/THEME-CONFIG.md` for the full theming reference.
+**Theme System:** CSS custom properties (variables) + hand-authored utility classes (Tailwind-style names, not a Tailwind build) with the `persona-` prefix. The `tokens.ts` and `theme.ts` utilities manage runtime theme application. See `packages/widget/THEME-CONFIG.md` for the full theming reference.
 
 **HTML Sanitization:** All rendered markdown is sanitized via DOMPurify by default (`utils/sanitize.ts`). Configurable per-widget via the `sanitize` option: `true` (default), `false`, or a custom `(html: string) => string` function. When writing sanitization hooks, always compare URI schemes case-insensitively (e.g. `val.toLowerCase().startsWith("data:")`) per RFC 3986.
 
@@ -136,7 +136,7 @@ The widget uses a layered architecture:
 
 **WebMCP page tools:** `webmcp.enabled` snapshots tools from `document.modelContext`, sends them as `clientTools[]`, executes returned `webmcp:<name>` calls in the browser with approval gating, and resumes via `${apiUrl}/resume`. `contextProviders` run on both agent and flow/proxy paths.
 
-**Deferred Launcher Loading:** For the common floating-launcher case, `install.ts` paints the real launcher from the tiny `launcher.global.js` (~13 KB brotli) at page load and defers the full `index.global.js` (~134 KB) until the user's first click. `shouldDeferPanel()` gates this: floating launcher, not auto-expanded, no restored/`onStateLoaded` open state, derivable launcher URL , and everything else eager-loads unchanged. The critical launcher is mount-then-destroyed at handoff and renders pixel-identically to the full widget's, so the swap is invisible. Installer lifecycle hooks (`onScriptLoad` / `onLauncherShown` / `onChatReady` / `onError`) and matching `persona:*` DOM events expose each stage; `onChatReady` (formerly `onReady`, now a deprecated alias) fires after first open in a deferred install. See the header comment in `launcher-global.ts` and the gate/handoff comments in `install.ts` for the invariants.
+**Deferred Launcher Loading:** For the common floating-launcher case, `install.ts` paints the real launcher from the tiny `launcher.global.js` (< 20 KB brotli) at page load and defers the full `index.global.js` until the user's first click. `shouldDeferPanel()` gates this: floating launcher, not auto-expanded, no restored/`onStateLoaded` open state, derivable launcher URL , and everything else eager-loads unchanged. The critical launcher is mount-then-destroyed at handoff and renders pixel-identically to the full widget's, so the swap is invisible. Installer lifecycle hooks (`onScriptLoad` / `onLauncherShown` / `onChatReady` / `onError`) and matching `persona:*` DOM events expose each stage; `onChatReady` (formerly `onReady`, now a deprecated alias) fires after first open in a deferred install. See the header comment in `launcher-global.ts` and the gate/handoff comments in `install.ts` for the invariants.
 
 ### Proxy Package (`packages/proxy/src/`)
 
@@ -191,7 +191,7 @@ The widget builds to multiple formats via tsup:
 - `dist/launcher.global.js` - IIFE critical launcher bundle (deferred-loading fast path; see "Deferred Launcher Loading")
 - `dist/webmcp-polyfill.js` - Self-contained ESM chunk with `@mcp-b/webmcp-polyfill`; lazy-imported by the IIFE bundle (which marks the polyfill external) only when `config.webmcp.enabled` is true and the page has no `document.modelContext`. URL is derived from the widget script's `src` by the loader registered in `index-global.ts`.
 - `dist/index.d.ts` - TypeScript declarations
-- `dist/widget.css` - Prefixed Tailwind CSS (for consumers who import styles separately)
+- `dist/widget.css` - Prefixed, hand-authored utility CSS (for consumers who import styles separately)
 
 ## CI
 
@@ -206,8 +206,9 @@ All five checks must pass before a PR can be merged.
 
 ## Code Conventions
 
-- **CSS classes:** `tvw-` prefix on all Tailwind utility classes (prevents collisions with host page styles)
+- **CSS classes:** `persona-` prefix on all utility classes. `widget.css` is hand-authored with Tailwind-style names (there is no Tailwind build), and the prefix prevents collisions with host page styles. Add the rule by hand when you use a new utility class.
 - **Filenames:** kebab-case (`component-name.ts`, `my-util.ts`)
 - **Linting:** ESLint + Prettier: run `pnpm lint` before committing; CI enforces this
 - **Type safety:** Avoid `any`; prefer explicit types from `types.ts`
 - **Exports:** Named exports preferred; only use default exports where a clear single-export module pattern applies
+- **DOM construction (`widget/src/utils/dom.ts`):** `createElement(tag, className)` for class-only nodes; `createNode(tag, { className, attrs, style, text }, ...children)` when a node also needs attributes, inline styles, or children (nullish `style`/`children` values are skipped, so conditionals inline without `if`s); `cx(...)` to join conditional class fragments instead of `classList.add`. Leave heavily conditional/imperative builders on whatever reads clearest: don't force `createNode`.
