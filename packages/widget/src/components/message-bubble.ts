@@ -498,10 +498,11 @@ const createAvatar = (
  */
 const createTimestamp = (
   message: AgentWidgetMessage,
-  timestampConfig: AgentWidgetTimestampConfig
+  timestampConfig: AgentWidgetTimestampConfig,
+  tagName: "div" | "span" = "div"
 ): HTMLElement => {
   const timestamp = createElement(
-    "div",
+    tagName,
     "persona-text-xs persona-text-persona-muted"
   );
 
@@ -868,11 +869,17 @@ export const createStandardBubble = (
     }
   }
 
-  // Add inline timestamp if configured
+  // Usung <span>, not <div> for timestamp 
+  // because a block child of a <p> gets re-parented outside of it on re-render (idiomorph).
   if (showTimestamp && timestampPosition === "inline" && message.createdAt) {
-    const timestamp = createTimestamp(message, timestampConfig!);
-    timestamp.classList.add("persona-ml-2", "persona-inline");
-    contentDiv.appendChild(timestamp);
+    const timestamp = createTimestamp(message, timestampConfig!, "span");
+    timestamp.classList.add("persona-timestamp-inline");
+    const lastBlock = contentDiv.lastElementChild;
+    if (lastBlock) {
+      lastBlock.appendChild(timestamp);
+    } else {
+      contentDiv.appendChild(timestamp);
+    }
   }
 
   if (imageParts.length > 0) {

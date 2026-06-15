@@ -2967,6 +2967,13 @@
   animation: persona-stream-blink 1s steps(1) infinite;
 }
 
+/* ---------- inline timestamp (trails the last line of message text) ---------- */
+[data-persona-root] .persona-timestamp-inline {
+  display: inline-block;
+  margin-left: 0.5rem;
+  white-space: nowrap;
+}
+
 /* ---------- skeleton placeholder (pre-first-token) ---------- */
 @keyframes persona-stream-skeleton-shimmer {
   0%   { background-position: 200% 0; }

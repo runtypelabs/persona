@@ -192,6 +192,10 @@ function serveWidgetDist(): Plugin {
             "application/octet-stream";
           res.setHeader("Content-Type", contentType);
           res.setHeader("Access-Control-Allow-Origin", "*");
+          // Dev only: never cache the locally-built widget assets, so a
+          // `pnpm build` rebuild is reflected on the next reload (the theme
+          // preview iframe pins /widget-dist/widget.css).
+          res.setHeader("Cache-Control", "no-store");
           fs.createReadStream(filePath).pipe(res);
         } else {
           next();
@@ -210,6 +214,10 @@ function serveWidgetDist(): Plugin {
             "application/octet-stream";
           res.setHeader("Content-Type", contentType);
           res.setHeader("Access-Control-Allow-Origin", "*");
+          // Dev only: never cache the locally-built widget assets, so a
+          // `pnpm build` rebuild is reflected on the next reload (the theme
+          // preview iframe pins /widget-dist/widget.css).
+          res.setHeader("Cache-Control", "no-store");
           fs.createReadStream(filePath).pipe(res);
         } else {
           next();
