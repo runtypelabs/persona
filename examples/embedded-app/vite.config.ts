@@ -412,17 +412,16 @@ function previewEmbedCheck(): Plugin {
   };
 }
 
-// Font sets used by the shared stylesheets. Kept in sync with the families each
-// CSS file expects: demo-shared.css (gallery/demo pages), home.css (the
-// redesigned home page), and index.css (theme, products, misc demo pages).
-const GALLERY_FONTS_HREF =
-  "https://fonts.googleapis.com/css2?family=Asap+Condensed:wght@400;600&family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500;600&display=swap";
-
+// Font sets used by the shared stylesheets. Every surface now shares the
+// homepage's editorial/terminal identity (Bitcount wordmark, Geist body, Syne
+// headings, JetBrains Mono labels + code), so the gallery/demo (demo-shared.css)
+// and misc (index.css) pages load the same families as home.css.
 const HOME_FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=Bitcount+Prop+Single:wght@100..900&family=Geist:wght@400;500&family=JetBrains+Mono:wght@200;400;500;700&family=Syne:wght@400;500;700;800&display=swap";
 
-const SHARED_FONTS_HREF =
-  "https://fonts.googleapis.com/css2?family=Asap+Condensed:wght@400&family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;700&display=swap";
+const GALLERY_FONTS_HREF = HOME_FONTS_HREF;
+
+const SHARED_FONTS_HREF = HOME_FONTS_HREF;
 
 // Load the gallery fonts via <link> in <head> rather than an `@import` inside the
 // CSS. The browser only discovers an `@import` *after* the stylesheet downloads:// a serialized request with no preconnect: which delayed the web fonts enough to
