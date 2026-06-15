@@ -6641,9 +6641,13 @@ export const createAgentExperience = (
           
           // Update icon content based on priority: Lucide icon > iconUrl > agentIconText
           if (headerIconName) {
-            // Use Lucide icon
+            // Use Lucide icon. Stroke `currentColor` (not a hardcoded white) so the
+            // glyph inherits iconHolder's `color: var(--persona-header-icon-fg, …)`,
+            // matching the initial render in header-builder.ts. Without this, any
+            // controller.update() (e.g. a theme-editor change) re-rendered the icon
+            // as white and the configured header icon color "wouldn't stick".
             const iconSize = parseFloat(headerIconSize) || 24;
-            const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "#ffffff", 2);
+            const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "currentColor", 1);
             if (iconSvg) {
               iconHolder.replaceChildren(iconSvg);
             } else {
