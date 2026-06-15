@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════
-   Switchback storefront — Next.js port of the embedded-app WebMCP demo.
+   Switchback storefront: Next.js port of the embedded-app WebMCP demo.
    Ports examples/embedded-app/src/webmcp-shop.css and recreates the two-column
    "shell" layout that the gallery's demo-shared.css used to provide. The whole
    app IS the shop, so the original `body.webmcp-shop` scope becomes top-level.
@@ -12,20 +12,20 @@
   --font-label: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* Brand — "Pine & Blaze": deep pine green primary, trail-blaze orange
+  /* Brand: "Pine & Blaze": deep pine green primary, trail-blaze orange
      accent, goldenrod promo tints, warm granite neutrals. Blaze on white is
      only ~4:1, so it never carries small text: `--shop-accent-strong` (≈6:1
      on cream) is the text-safe blaze and `--shop-badge-bg` (deep blaze,
      ≈5.2:1 under white) is the fill used behind white badge text. */
-  --shop-brand: #1f3d2b;          /* deep pine — primary fills, header */
+  --shop-brand: #1f3d2b;          /* deep pine: primary fills, header */
   --shop-brand-strong: #2a5240;   /* hover / lifted pine */
   --shop-brand-deep: #15291d;     /* active / inset pine */
   --shop-brand-ink: #f4f3ee;      /* text on pine fills (≈11:1 on #1f3d2b) */
-  --shop-accent: #d9531e;         /* blaze orange — fills, rings, highlights */
+  --shop-accent: #d9531e;         /* blaze orange: fills, rings, highlights */
   --shop-accent-strong: #a63a14;  /* text-safe blaze on cream (≈6:1) */
-  --shop-gold: #b8860b;           /* goldenrod — promo fills/tints */
+  --shop-gold: #b8860b;           /* goldenrod: promo fills/tints */
   --shop-gold-strong: #8a6508;    /* text-safe goldenrod on cream (≈5.3:1) */
-  --shop-badge-bg: #c2410c;       /* deep blaze — in-cart count fill */
+  --shop-badge-bg: #c2410c;       /* deep blaze: in-cart count fill */
   --shop-badge-ink: #ffffff;
 
   /* Paper + ink (warm granite neutrals) */
@@ -38,7 +38,7 @@
   --shop-line: #e2e1d6;
   --shop-line-strong: #d2d2c4;
 
-  /* Wire-inspector palette (pine-tinted instrument readout) — light scheme.
+  /* Wire-inspector palette (pine-tinted instrument readout): light scheme.
      Category colors are the deeper variants so the tags + left rules read on a
      light panel; the dark scheme below swaps in the brighter set. */
   --wire-bg: #f1f0e6;
@@ -47,11 +47,11 @@
   --wire-line: #e0ded0;
   --wire-head-bg: #e8e6d8;
   --wire-row-bg: rgba(29, 33, 28, 0.035);
-  --wire-reg: #2f7d4f;     /* registration — forest */
-  --wire-send: #31708f;    /* outgoing dispatch — lake */
-  --wire-gate: #8a6508;    /* approval gate — goldenrod */
-  --wire-exec: #6b46c1;    /* page-tool execution — heather */
-  --wire-resume: #c2410c;  /* batched resume — deep blaze */
+  --wire-reg: #2f7d4f;     /* registration: forest */
+  --wire-send: #31708f;    /* outgoing dispatch: lake */
+  --wire-gate: #8a6508;    /* approval gate: goldenrod */
+  --wire-exec: #6b46c1;    /* page-tool execution: heather */
+  --wire-resume: #c2410c;  /* batched resume: deep blaze */
 
   --shop-radius: 14px;
   --shop-radius-sm: 9px;
@@ -86,7 +86,7 @@
     --shop-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shop-shadow-md: 0 16px 36px -22px rgba(0, 0, 0, 0.7);
 
-    /* Wire-inspector palette — dark scheme (brighter category set). */
+    /* Wire-inspector palette: dark scheme (brighter category set). */
     --wire-bg: #181d18;
     --wire-fg: #dde4d9;
     --wire-faint: #8b9286;
@@ -111,7 +111,7 @@ body {
 
 body {
   background-color: var(--shop-bg);
-  /* Faint topographic contour rings — two "summits" per tile, drawn entirely
+  /* Faint topographic contour rings: two "summits" per tile, drawn entirely
      inside the tile so the repeat never seams. */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='200'%3E%3Cg fill='none' stroke='%231f3d2b' stroke-opacity='0.055' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M105 25c38 0 68 21 68 49s-30 50-68 50-66-22-66-50 28-49 66-49z'/%3E%3Cpath d='M105 43c27 0 49 14 49 31s-22 33-49 33-47-15-47-33 20-31 47-31z'/%3E%3Cpath d='M105 60c16 0 28 8 28 15s-12 17-28 17-26-8-26-17 10-15 26-15z'/%3E%3Cpath d='M225 122c25 0 44 14 44 31s-19 33-44 33-43-15-43-33 18-31 43-31z'/%3E%3Cpath d='M225 138c14 0 25 7 25 15s-11 16-25 16-24-7-24-16 10-15 24-15z'/%3E%3C/g%3E%3C/svg%3E");
   background-size: 280px 200px;
@@ -171,7 +171,7 @@ body {
 .shop-hero {
   margin: 0 0 1.25rem 0;
   padding-bottom: 1.1rem;
-  /* Hairline rule with a short blaze segment at the left — the trail-marker
+  /* Hairline rule with a short blaze segment at the left: the trail-marker
      "blaze" painted on the brand line. */
   background-image: linear-gradient(
     90deg,

@@ -31,7 +31,7 @@ describe("injectStyles / getStyleRoot", () => {
     expect(style?.textContent).toContain("color: red");
   });
 
-  it("is idempotent — repeated calls add only one <style>", () => {
+  it("is idempotent: repeated calls add only one <style>", () => {
     const el = document.createElement("div");
     document.body.appendChild(el);
 

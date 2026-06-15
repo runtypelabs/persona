@@ -1,4 +1,4 @@
-/* WebMCP slide-deck editor — page chrome + editor surfaces.
+/* WebMCP slide-deck editor: page chrome + editor surfaces.
    Slide CONTENT styles must stay in sync between the canvas, the sorter
    thumbnails, and presenter mode; they all share .wm-slide / .wm-element. */
 
@@ -166,7 +166,7 @@ body.wm-body {
 
 /* Persona's docked mount wraps #editor-dock-target in a generated
    [data-persona-host-layout="docked"] flex row and docks the panel beside
-   it — the editor shrinks to make room (same pattern as webmcp-calendar). */
+   it: the editor shrinks to make room (same pattern as webmcp-calendar). */
 .wm-editor {
   display: flex;
   width: 100%;

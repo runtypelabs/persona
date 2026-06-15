@@ -1,10 +1,10 @@
 /**
  * Field reference demo. One widget in the preview pane, three variant buttons
- * in the left rail — each selection re-mounts a fresh widget and pre-injects a
+ * in the left rail: each selection re-mounts a fresh widget and pre-injects a
  * DynamicForm directive showcasing a different aspect of the field schema:
  *
  *   1. all field types (text, email, tel, url, number, date, time, textarea)
- *      — also demonstrates `sensitive: true` masking via the phone field
+ *: also demonstrates `sensitive: true` masking via the phone field
  *   2. layout widths (full + half pairs)
  *   3. helper text + required marking
  *
@@ -65,7 +65,7 @@ const widgetConfig: AgentWidgetConfig = {
     muted: "#64748b",
   },
   // Default header (with the native clear-chat control), matching the other
-  // demos — not the minimal/headerless variant.
+  // demos: not the minimal/headerless variant.
   statusIndicator: { visible: false },
   suggestionChips: [],
   postprocessMessage: ({ text }) => markdownPostprocessor(text),
@@ -85,7 +85,7 @@ const VARIANTS: Variant[] = [
     directiveId: "field-types-form",
     props: {
       title: "Every field type",
-      description: "One of each — see the rendered control for each `type`.",
+      description: "One of each: see the rendered control for each `type`.",
       fields: [
         { label: "Full Name", name: "name", type: "text", required: true },
         { label: "Email", name: "email", type: "email", required: true },
@@ -94,7 +94,7 @@ const VARIANTS: Variant[] = [
           name: "phone",
           type: "tel",
           sensitive: true,
-          helper_text: "Sensitive — masked on success recap.",
+          helper_text: "Sensitive: masked on success recap.",
         },
         { label: "Website", name: "website", type: "url", placeholder: "https://…" },
         { label: "Headcount", name: "headcount", type: "number" },
@@ -152,7 +152,7 @@ const VARIANTS: Variant[] = [
         {
           label: "Description",
           type: "textarea",
-          helper_text: "Optional — a one-liner is fine.",
+          helper_text: "Optional: a one-liner is fine.",
         },
         { label: "Domain", type: "url", placeholder: "https://example.com" },
       ],

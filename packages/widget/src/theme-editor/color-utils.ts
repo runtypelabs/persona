@@ -1,4 +1,4 @@
-/** Color parsing, normalization, and scale generation utilities (pure functions — no DOM) */
+/** Color parsing, normalization, and scale generation utilities (pure functions: no DOM) */
 
 import type { ColorShade } from '../types/theme';
 
@@ -68,7 +68,7 @@ export function isValidHex(value: string): boolean {
  * Parse an `rgb()` / `rgba()` string into `#rrggbb`. Accepts integer (0-255) or
  * percentage channels; any alpha component is dropped. Returns `null` when the
  * string is not a parseable rgb/rgba value, so callers can fall back. This lets
- * the HSL/luminance paths — which otherwise `parseInt` hex digits — accept the
+ * the HSL/luminance paths, which otherwise `parseInt` hex digits, accept the
  * `rgb()` inputs that `coerceColor` admits without producing `#NaNNaNNaN`.
  */
 export function rgbToHex(value: string): string | null {

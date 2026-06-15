@@ -13,7 +13,7 @@
         <aside class="stage-controls">
           <header class="demo-meta">
             <h1>Ask User Question &amp; Suggested Replies</h1>
-            <p>The two built-in client tools: the <code>ask_user_question</code> answer sheet (blocking) and <code>suggest_replies</code> quick-reply chips (fire-and-forget). Pick a preset to inject a simulated tool call, or just send a message — every mocked reply ends with fresh chips.</p>
+            <p>The two built-in client tools: the <code>ask_user_question</code> answer sheet (blocking) and <code>suggest_replies</code> quick-reply chips (fire-and-forget). Pick a preset to inject a simulated tool call, or just send a message: every mocked reply ends with fresh chips.</p>
             <div class="mount-toolbar" data-mount-toolbar></div>
           </header>
 
@@ -52,7 +52,7 @@
                   <button class="mode-btn" data-resume="slow">Slow (2s)</button>
                   <button class="mode-btn" data-resume="hang">Hang</button>
                 </div>
-                <p class="hint">Intercepts the <code>/resume</code> POST that fires after you answer so the typing indicator is observable. <em>Hang</em> never resolves — use Reset transcript to recover.</p>
+                <p class="hint">Intercepts the <code>/resume</code> POST that fires after you answer so the typing indicator is observable. <em>Hang</em> never resolves: use Reset transcript to recover.</p>
               </div>
             </div>
 
@@ -67,7 +67,7 @@
                   <button data-preset="freeText">Free-text only</button>
                   <button data-preset="grouped3">Grouped (3 mixed)</button>
                   <button data-preset="grouped5">Grouped (5 short)</button>
-                  <button data-preset="grouped8">Grouped (8 — cap)</button>
+                  <button data-preset="grouped8">Grouped (8: cap)</button>
                 </div>
               </div>
 
@@ -75,10 +75,10 @@
                 <label>Suggested-reply presets</label>
                 <div class="btn-group" id="suggest-preset-group">
                   <button data-suggest-preset="three">Replies (3)</button>
-                  <button data-suggest-preset="four">Replies (4 — cap)</button>
+                  <button data-suggest-preset="four">Replies (4: cap)</button>
                   <button data-suggest-preset="longChips">Long labels</button>
                 </div>
-                <p class="hint">Injects a simulated <code>suggest_replies</code> call. The widget renders the chips and immediately auto-POSTs <code>/resume</code> (watch the event log) — tapping a chip sends it as your message.</p>
+                <p class="hint">Injects a simulated <code>suggest_replies</code> call. The widget renders the chips and immediately auto-POSTs <code>/resume</code> (watch the event log): tapping a chip sends it as your message.</p>
               </div>
 
               <div class="section">
@@ -87,7 +87,7 @@
                   <button class="mode-btn active" data-chipsloop="on">On</button>
                   <button class="mode-btn" data-chipsloop="off">Off</button>
                 </div>
-                <p class="hint">When on, the mocked chat reply ends with a real <code>step_await</code> for <code>suggest_replies</code> — the full loop: send → reply → fresh chips → tap → repeat.</p>
+                <p class="hint">When on, the mocked chat reply ends with a real <code>step_await</code> for <code>suggest_replies</code>: the full loop: send → reply → fresh chips → tap → repeat.</p>
               </div>
 
               <div class="section">
@@ -120,27 +120,27 @@
 
         <div class="notes-section">
           <h3 class="notes-section-title">Persistence</h3>
-          <p>Off (default) passes <code>persistState: false</code> — nothing is written to <code>localStorage</code>, so reloading wipes any injected tool calls. On wires up a <code>storageAdapter</code> with a demo-scoped key, so the active question survives a reload. "Reset transcript" still clears either way.</p>
+          <p>Off (default) passes <code>persistState: false</code>: nothing is written to <code>localStorage</code>, so reloading wipes any injected tool calls. On wires up a <code>storageAdapter</code> with a demo-scoped key, so the active question survives a reload. "Reset transcript" still clears either way.</p>
         </div>
 
         <div class="notes-section">
-          <h3 class="notes-section-title">Suggested replies — the fire-and-forget loop</h3>
+          <h3 class="notes-section-title">Suggested replies: the fire-and-forget loop</h3>
           <p>Where <code>ask_user_question</code> blocks the execution until you answer, <code>suggest_replies</code> resolves instantly: the chips render above the composer and the widget auto-POSTs <code>/resume</code> with a canned "shown" result so the agent's turn completes. Three ways to see it here:</p>
           <ul>
-            <li><strong>Presets</strong> — inject a simulated call; the event log shows the immediate auto-resume.</li>
-            <li><strong>Chips loop</strong> — type anything (or tap a chip). The mocked reply ends with a real <code>step_await</code>, so fresh chips appear after every turn — the full send → reply → chips cycle.</li>
-            <li><strong>Soft dismiss</strong> — ignore the chips and type your own message: they clear the moment any user message lands. Latest call wins if several arrive in one turn.</li>
+            <li><strong>Presets</strong>: inject a simulated call; the event log shows the immediate auto-resume.</li>
+            <li><strong>Chips loop</strong>: type anything (or tap a chip). The mocked reply ends with a real <code>step_await</code>, so fresh chips appear after every turn: the full send → reply → chips cycle.</li>
+            <li><strong>Soft dismiss</strong>: ignore the chips and type your own message: they clear the moment any user message lands. Latest call wins if several arrive in one turn.</li>
           </ul>
         </div>
 
         <div class="notes-section">
-          <h3 class="notes-section-title">Resume mock — verifying the typing indicator</h3>
+          <h3 class="notes-section-title">Resume mock: verifying the typing indicator</h3>
           <p>The widget shows a three-dot typing bubble during the silent gap between the user answering a question and the agent's next streamed token. Pick a preset, answer it, and watch the indicator render below the answer bubble until the simulated <code>/resume</code> response lands.</p>
           <ul>
-            <li><strong>Fast (300ms)</strong> — close to a real low-latency backend; the indicator briefly appears then completes.</li>
-            <li><strong>Slow (2s)</strong> — easy to inspect; the indicator should remain mounted for ~2 seconds, then a simulated assistant reply appears.</li>
-            <li><strong>Hang</strong> — indicator stays mounted indefinitely. Click <em>Reset transcript</em> to recover.</li>
-            <li><strong>Off</strong> — falls through to the real (no-op) host; the answer click resolves into a fetch error and the indicator clears via the error path.</li>
+            <li><strong>Fast (300ms)</strong>: close to a real low-latency backend; the indicator briefly appears then completes.</li>
+            <li><strong>Slow (2s)</strong>: easy to inspect; the indicator should remain mounted for ~2 seconds, then a simulated assistant reply appears.</li>
+            <li><strong>Hang</strong>: indicator stays mounted indefinitely. Click <em>Reset transcript</em> to recover.</li>
+            <li><strong>Off</strong>: falls through to the real (no-op) host; the answer click resolves into a fetch error and the indicator clears via the error path.</li>
           </ul>
         </div>
       </section>
@@ -194,14 +194,14 @@
       // and the typing indicator we want to show off only flashes for ~1 frame.
       // The mock intercepts `/resume` POSTs and returns a synthetic SSE stream
       // after a configurable delay, so the gap between answer-click and the
-      // next streamed token is visible. Default is "fast" — flip to "slow" or
+      // next streamed token is visible. Default is "fast": flip to "slow" or
       // "hang" to study the indicator in detail; flip to "off" to confirm the
       // un-intercepted behavior (indicator flashes then errors).
       let resumeMockMode = "fast"; // "off" | "fast" | "slow" | "hang"
       const RESUME_MOCK_DELAYS = { off: 0, fast: 300, slow: 2000, hang: Infinity };
 
       // When on, every mocked chat reply ends with a real `step_await` for
-      // `suggest_replies` — the widget renders chips and auto-resumes, so a
+      // `suggest_replies`: the widget renders chips and auto-resumes, so a
       // chip tap (or any typed message) loops: send → reply → fresh chips.
       let chipsLoop = true;
       let simTurn = 0;
@@ -231,7 +231,7 @@
 
       // Simulated chat reply: echo the user's message, then (when the chips
       // loop is on) pause the "execution" with a real suggest_replies
-      // step_await — exactly the wire shape a flow emits — so the widget's
+      // step_await, exactly the wire shape a flow emits, so the widget's
       // fire-and-forget auto-resume runs against the /resume mock above.
       function mockDispatchResponse(body) {
         let lastUserText = "";
@@ -243,7 +243,7 @@
         } catch {}
 
         const n = ++simTurn;
-        const replyText = `You said "${lastUserText}" — here's a simulated reply (turn ${n}).`;
+        const replyText = `You said "${lastUserText}". Here's a simulated reply (turn ${n}).`;
         const chips = [
           "Tell me more",
           `Show example #${n}`,
@@ -256,7 +256,7 @@
           ``,
         ];
         if (chipsLoop) {
-          // Server pauses at step_await and closes the SSE — no flow_complete.
+          // Server pauses at step_await and closes the SSE: no flow_complete.
           // The widget's auto-resume posts /resume (mocked above) to finish.
           events.push(
             `event: step_await`,
@@ -309,7 +309,7 @@
         // suggest_replies auto-resume (fire-and-forget): keyed by the wire
         // tool name for injected presets, or by the per-call `sr-call-*` id
         // for chips-loop step_awaits. The agent "ends its turn" after
-        // suggesting, so reply with flow_complete only — no extra text.
+        // suggesting, so reply with flow_complete only: no extra text.
         const isSuggestResume = Object.keys(toolOutputs).some(
           (k) => k === "suggest_replies" || k.startsWith("sr-call-"),
         );
@@ -351,7 +351,7 @@
         return new Promise((resolve) => {
           setTimeout(() => {
             const encoder = new TextEncoder();
-            const replyText = `Thanks — got "${answerText}". (simulated response)`;
+            const replyText = `Thanks, I got "${answerText}". (simulated response)`;
             const sse = [
               `data: {"type":"step_chunk","id":"sim-step","name":"sim","executionType":"prompt","index":0,"text":${JSON.stringify(replyText)}}`,
               ``,
@@ -510,7 +510,7 @@
         },
         grouped8: {
           questions: Array.from({ length: 8 }, (_, i) => ({
-            question: `Step ${i + 1} — pick an option`,
+            question: `Step ${i + 1}: pick an option`,
             header: `Step ${i + 1}`,
             options: [
               { label: `${i + 1}-A` },
@@ -562,7 +562,7 @@
         );
         controller = c;
         teardownActive = teardown;
-        log(`Widget initialized — variant: ${variant}, autoAdvance: ${autoAdvance}, persist: ${persistOn ? "on" : "off"}`, "info");
+        log(`Widget initialized. Variant: ${variant}, autoAdvance: ${autoAdvance}, persist: ${persistOn ? "on" : "off"}`, "info");
       }
 
       let askCounter = 0;
@@ -714,7 +714,7 @@
         createWidget();
       });
 
-      // Resume-mock toggle. Switching modes doesn't re-mount the widget — the
+      // Resume-mock toggle. Switching modes doesn't re-mount the widget: the
       // wrapped fetch reads `resumeMockMode` on every call, so the next
       // /resume POST picks up the new delay.
       const resumeMockSelector = document.getElementById("resume-mock-selector");
@@ -741,7 +741,7 @@
         triggerSuggestReplies(btn.dataset.suggestPreset);
       });
 
-      // Chips-loop toggle. No re-mount needed — the dispatch mock reads
+      // Chips-loop toggle. No re-mount needed: the dispatch mock reads
       // `chipsLoop` on every call.
       const chipsLoopSelector = document.getElementById("chips-loop-selector");
       chipsLoopSelector.addEventListener("click", (e) => {

@@ -131,7 +131,7 @@ const requireUser = (id) => {
   const user = USERS.find((candidate) => candidate.id === id);
   if (!user) {
     throw new Error(
-      `Unknown userId "${id}". Valid user IDs: ${USERS.map((candidate) => candidate.id).join(', ')} — call get_calendar_state.`,
+      `Unknown userId "${id}". Valid user IDs: ${USERS.map((candidate) => candidate.id).join(', ')}: call get_calendar_state.`,
     );
   }
   return user;
@@ -240,7 +240,7 @@ const filterEvents = ({ month, userId, search } = {}) => {
 
 const summarizeEvent = (event) => {
   const user = userById(event.userId);
-  return `${event.title} — ${formatDate(event.startDate, { weekday: 'short' })}, ${formatTime(event.startDate)}–${formatTime(event.endDate)} with ${user.name}`;
+  return `${event.title}: ${formatDate(event.startDate, { weekday: 'short' })}, ${formatTime(event.startDate)}–${formatTime(event.endDate)} with ${user.name}`;
 };
 
 const getCalendarState = () => {
@@ -384,7 +384,7 @@ const registerTool = (modelContext, tool, signal) => {
   try {
     // The WebMCP spec carries the display title on the descriptor itself, but
     // the current @mcp-b SDK only surfaces annotations.title to consumers
-    // (Persona approval bubbles, Chrome DevTools MCP) — mirror it there.
+    // (Persona approval bubbles, Chrome DevTools MCP): mirror it there.
     const descriptor = tool.title
       ? { ...tool, annotations: { title: tool.title, ...tool.annotations } }
       : tool;
@@ -397,7 +397,7 @@ const registerTool = (modelContext, tool, signal) => {
 const registerCalendarTools = () => {
   const modelContext = getModelContext();
   if (!modelContext?.registerTool) {
-    setToolStatus('WebMCP unavailable — no modelContext found on this page.', 'error');
+    setToolStatus('WebMCP unavailable: no modelContext found on this page.', 'error');
     return;
   }
 
@@ -501,7 +501,7 @@ const registerCalendarTools = () => {
       name: 'create_event',
       title: 'Create event',
       description:
-        'Create a calendar event and render it on the page. startDate/endDate are LOCAL wall-clock times in the calendar timezone, formatted YYYY-MM-DDTHH:mm — never append "Z" or a UTC offset (any offset is ignored and the stated clock time is used as-is). Use a userId from get_calendar_state.',
+        'Create a calendar event and render it on the page. startDate/endDate are LOCAL wall-clock times in the calendar timezone, formatted YYYY-MM-DDTHH:mm: never append "Z" or a UTC offset (any offset is ignored and the stated clock time is used as-is). Use a userId from get_calendar_state.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -1,3 +1,10 @@
+import "./command-palette.css";
+
+import {
+  createPersonaCommandItems,
+  installCommandPalette,
+} from "./command-palette";
+
 export type StandaloneExample = {
   slug: string;
   href: string;
@@ -135,6 +142,17 @@ const STYLES = `
     background: #1f2937;
     color: #ffffff;
   }
+  .standalone-nav-command {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.72);
+    color: #374151;
+    border-radius: 6px;
+    padding: 4px 9px;
+    font: inherit;
+    cursor: pointer;
+    flex: none;
+  }
+  .standalone-nav-command:hover { background: rgba(0, 0, 0, 0.05); }
 `;
 
 function injectStyles(): void {
@@ -168,8 +186,17 @@ export function renderStandaloneNav(currentSlug?: string): void {
     <a class="standalone-nav-home" href="/">← Home</a>
     <span class="standalone-nav-divider"></span>
     <span class="standalone-nav-label">Standalone</span>
+    <button type="button" class="standalone-nav-command" aria-label="Search Persona pages">⌘K</button>
     <ul class="standalone-nav-list">${items}</ul>
   `;
 
   document.body.insertBefore(nav, document.body.firstChild);
+
+  installCommandPalette({
+    trigger: nav.querySelector<HTMLElement>(".standalone-nav-command"),
+    items: createPersonaCommandItems({
+      standaloneExamples: STANDALONE_EXAMPLES,
+      currentPath: STANDALONE_EXAMPLES.find((entry) => entry.slug === currentSlug)?.href,
+    }),
+  });
 }

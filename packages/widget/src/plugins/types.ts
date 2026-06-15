@@ -64,7 +64,7 @@ export interface AgentWidgetPlugin {
     defaultRenderer: () => HTMLElement;
     onSubmit: (text: string) => void;
     /**
-     * When true, the assistant stream is active — same moment `session.isStreaming()` becomes true.
+     * When true, the assistant stream is active: same moment `session.isStreaming()` becomes true.
      * Prefer wiring controls to `data-persona-composer-disable-when-streaming` plus `setComposerDisabled`
      * in the host, or react to `footer.dataset.personaComposerStreaming === "true"`.
      */
@@ -113,14 +113,14 @@ export interface AgentWidgetPlugin {
    * Custom renderer for `ask_user_question` tool calls.
    *
    * When a plugin returns an `HTMLElement`, it is inserted into the transcript
-   * in place of the default (which is no transcript bubble — the built-in
+   * in place of the default (which is no transcript bubble: the built-in
    * renders a sheet over the composer). The built-in composer-overlay sheet
    * is suppressed so the plugin's UI fully owns the interaction.
    *
    * Return `null` to fall through to the built-in overlay sheet.
    *
    * The context gives you a pre-parsed `payload` (may be partial while the
-   * tool call is still streaming — check `complete`) and two callbacks:
+   * tool call is still streaming: check `complete`) and two callbacks:
    * `resolve(answer)` resumes the paused LOCAL tool with the user's answer,
    * and `dismiss()` cancels with the sentinel `"(dismissed)"`.
    *
@@ -170,8 +170,8 @@ export interface AgentWidgetPlugin {
    *
    * Return an `HTMLElement` to fully own the approval UI, `defaultRenderer()`
    * to render (or wrap) the built-in bubble, or `null` to fall through to the
-   * default. Unlike the built-in bubble — whose Approve/Deny buttons are wired
-   * via delegation — a fully custom element resolves the approval by calling
+   * default. Unlike the built-in bubble: whose Approve/Deny buttons are wired
+   * via delegation: a fully custom element resolves the approval by calling
    * the `approve`/`deny` callbacks. Both route through the same path the
    * built-in buttons use (optimistic update, `onDecision`, in-place anchoring).
    *

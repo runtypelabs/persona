@@ -35,7 +35,7 @@ describe("estimateOutputTokens", () => {
   });
 });
 
-describe("ThroughputTracker — live estimate", () => {
+describe("ThroughputTracker: live estimate", () => {
   it("estimates output tokens live from visible text deltas", () => {
     const h = makeTracker();
 
@@ -97,7 +97,7 @@ describe("ThroughputTracker — live estimate", () => {
   });
 });
 
-describe("ThroughputTracker — exact usage finalization", () => {
+describe("ThroughputTracker: exact usage finalization", () => {
   it("prefers exact output tokens from the terminal event over the estimate", () => {
     const h = makeTracker();
     h.at(1000).processEvent("step_delta", { type: "step_delta", text: text(40) });
@@ -160,7 +160,7 @@ describe("ThroughputTracker — exact usage finalization", () => {
   });
 });
 
-describe("ThroughputTracker — non-visible deltas ignored", () => {
+describe("ThroughputTracker: non-visible deltas ignored", () => {
   it("ignores agent thinking and tool_input deltas", () => {
     const h = makeTracker();
 
@@ -223,7 +223,7 @@ describe("ThroughputTracker — non-visible deltas ignored", () => {
   });
 });
 
-describe("ThroughputTracker — intermediate completes do not finalize", () => {
+describe("ThroughputTracker: intermediate completes do not finalize", () => {
   it("keeps the run running across step_complete / agent_turn_complete", () => {
     const h = makeTracker();
     h.at(1000).processEvent("step_delta", { type: "step_delta", text: text(40) });
@@ -245,7 +245,7 @@ describe("ThroughputTracker — intermediate completes do not finalize", () => {
   });
 });
 
-describe("ThroughputTracker — error handling", () => {
+describe("ThroughputTracker: error handling", () => {
   it.each(["step_error", "flow_error", "agent_error", "error"])(
     "marks the metric unavailable on %s",
     (errorType: string) => {
@@ -278,7 +278,7 @@ describe("ThroughputTracker — error handling", () => {
   });
 });
 
-describe("ThroughputTracker — reset & re-run", () => {
+describe("ThroughputTracker: reset & re-run", () => {
   it("reset() returns to idle", () => {
     const h = makeTracker();
     h.at(1000).processEvent("step_delta", { type: "step_delta", text: text(40) });
@@ -302,7 +302,7 @@ describe("ThroughputTracker — reset & re-run", () => {
   it("resets a stale run on the next request's start event (no bleed)", () => {
     const h = makeTracker();
     // First request streams visible output but never terminates (e.g. the
-    // user cancels mid-stream — no flow_complete / error frame is emitted).
+    // user cancels mid-stream: no flow_complete / error frame is emitted).
     h.at(1000).processEvent("step_delta", { type: "step_delta", text: text(120) });
     expect(h.metric().outputTokens).toBe(30);
     expect(h.metric().status).toBe("running");
@@ -328,7 +328,7 @@ describe("ThroughputTracker — reset & re-run", () => {
   });
 });
 
-describe("ThroughputTracker — exact usage never drops mid-run", () => {
+describe("ThroughputTracker: exact usage never drops mid-run", () => {
   it("keeps exact tokens as a floor when later steps stream more text", () => {
     const h = makeTracker();
     h.at(1000).processEvent("step_delta", { type: "step_delta", text: text(40) });
@@ -342,7 +342,7 @@ describe("ThroughputTracker — exact usage never drops mid-run", () => {
     expect(m.outputTokens).toBe(50);
     expect(m.source).toBe("usage");
 
-    // Step 2 streams more visible text — the total must grow from 50, not
+    // Step 2 streams more visible text: the total must grow from 50, not
     // collapse back to a bare 10-token estimate of the new text.
     h.at(2000).processEvent("step_delta", { type: "step_delta", text: text(40) });
     m = h.metric();
@@ -351,14 +351,14 @@ describe("ThroughputTracker — exact usage never drops mid-run", () => {
   });
 });
 
-describe("ThroughputTracker — live rate decays while paused", () => {
+describe("ThroughputTracker: live rate decays while paused", () => {
   it("recomputes duration/tok-s from the clock between events", () => {
     const h = makeTracker();
     h.at(1000).processEvent("step_delta", { type: "step_delta", text: text(400) });
     // 100 tokens over a 1s window read at t=2000 → ~100 tok/s.
     h.at(2000);
     expect(h.metric().tokensPerSecond).toBeCloseTo(100);
-    // Same tokens, but the model has paused — reading at t=5000 (4s window)
+    // Same tokens, but the model has paused: reading at t=5000 (4s window)
     // must decay the displayed rate even though no new event arrived.
     h.at(5000);
     expect(h.metric().tokensPerSecond).toBeCloseTo(25);

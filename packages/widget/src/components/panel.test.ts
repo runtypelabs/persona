@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createWrapper } from "./panel";
 import type { AgentWidgetConfig } from "../types";
 
-describe("createWrapper — composer-bar mode", () => {
+describe("createWrapper: composer-bar mode", () => {
   it("marks the wrapper with composer-bar data-attrs and leaves geometry to updateOpenState", () => {
     const config: AgentWidgetConfig = {
       apiUrl: "/api",

@@ -1,5 +1,5 @@
 /**
- * Inline editing zones — click elements in the preview iframe to edit them directly.
+ * Inline editing zones: click elements in the preview iframe to edit them directly.
  *
  * Each "zone" maps a CSS selector inside an iframe to a state path and editor type
  * (color picker, slider, or inline text).  Overlays are injected into the iframe's

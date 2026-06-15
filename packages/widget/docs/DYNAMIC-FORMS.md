@@ -19,7 +19,7 @@ component directive of the form:
 ```
 
 The form is rendered by a `DynamicForm` component that ships with the example
-app — **not** the widget core. You're expected to copy and customize it. This
+app: **not** the widget core. You're expected to copy and customize it. This
 doc is the reference for what that component supports out of the box and how
 to extend it.
 
@@ -27,8 +27,8 @@ to extend it.
 
 ## Live demos
 
-- [`/dynamic-form.html`](../../../examples/embedded-app/dynamic-form.html) — primary demo, plus three layout variants (Compact, Spacious, Branded).
-- [`/dynamic-form-fields.html`](../../../examples/embedded-app/dynamic-form-fields.html) — field-type reference: every supported `type`, `width: "half"` pairing, helper text, required marking, and sensitive masking.
+- [`/dynamic-form.html`](../../../examples/embedded-app/dynamic-form.html): primary demo, plus three layout variants (Compact, Spacious, Branded).
+- [`/dynamic-form-fields.html`](../../../examples/embedded-app/dynamic-form-fields.html): field-type reference: every supported `type`, `width: "half"` pairing, helper text, required marking, and sensitive masking.
 
 ## Wiring it up
 
@@ -45,7 +45,7 @@ initAgentWidget({
     parserType: "json",
     enableComponentStreaming: true,
     formEndpoint: "/form",         // POST target on submit
-    wrapComponentDirectiveInBubble: false  // optional — see below
+    wrapComponentDirectiveInBubble: false  // optional: see below
   }
 });
 ```
@@ -93,7 +93,7 @@ Override with `autocomplete: "off"` (or any standard token) if needed.
 | `description`     | `string?`           | Subtitle below the title.                                                                                        |
 | `fields`          | `FormField[]`       | The fields, in render order.                                                                                     |
 | `submit_text`     | `string?`           | Label on the submit button. Defaults to `"Submit"`. (Alias: `submitText`.)                                       |
-| `helper_text`     | `string?`           | Below the submit button — defaults to `"Takes less than 30 seconds."` for forms with > 2 fields. Pass `""` to hide. |
+| `helper_text`     | `string?`           | Below the submit button: defaults to `"Takes less than 30 seconds."` for forms with > 2 fields. Pass `""` to hide. |
 | `success_title`   | `string?`           | Heading on the success recap card. Defaults to `"You're all set!"`.                                              |
 | `success_message` | `string?`           | Body copy on the success recap. Falls back to a generic confirmation.                                            |
 | `allow_edit`      | `boolean?`          | When `true` (default), the success card shows an "Edit details" button that returns to the form.                 |
@@ -124,7 +124,7 @@ initAgentWidget({
 |------------------------|----------------------|------------------------------------------------------------------|
 | `margin`               | `0.5rem 0`           | Outer margin around the card.                                    |
 | `borderRadius`         | `14px`               | Card corner radius.                                              |
-| `border`               | `—`                  | Full CSS shorthand. Overrides `borderWidth` + `borderColor`.     |
+| `border`               | `: `                  | Full CSS shorthand. Overrides `borderWidth` + `borderColor`.     |
 | `borderWidth`          | `1px`                | Used when `border` is not set.                                   |
 | `borderColor`          | theme `--persona-border` | Used when `border` is not set.                                |
 | `padding`              | `0.875rem 1rem`      | Card padding.                                                    |
@@ -166,13 +166,13 @@ First Name / Last Name, City / Postal Code, Card Number / CVC.
 ```
 
 A trailing single `"half"` (no partner) still spans one column. The grid
-gap and column count come from `formStyles` — adjust `inputPadding` and
+gap and column count come from `formStyles`: adjust `inputPadding` and
 `labelFontSize` to keep paired fields readable on narrow widgets.
 
 ### Auto-growing textarea
 
 Textareas start at single-input height and grow as the user types, up to
-`maxHeight: 140px`. No extra props needed — just `type: "textarea"`. This
+`maxHeight: 140px`. No extra props needed: just `type: "textarea"`. This
 keeps long forms compact at rest without making the user feel rushed.
 
 ### Sensitive masking
@@ -186,7 +186,7 @@ similar identifiers users want kept out of plain view in confirmations.
 > **Not for cardholder data.** Collecting credit-card numbers in a
 > chat-widget input puts your application in **PCI DSS** scope. Use a
 > vendor-hosted iframe (Stripe Elements, Adyen Drop-in, Braintree
-> Hosted Fields) instead — masking on the recap is not a substitute for
+> Hosted Fields) instead: masking on the recap is not a substitute for
 > keeping PAN out of your DOM and your server payload.
 
 ## Submission
@@ -270,7 +270,7 @@ processing.
 
 ## Extending the component
 
-The shipped `DynamicForm` is an **example** — fork it. Common extensions:
+The shipped `DynamicForm` is an **example**: fork it. Common extensions:
 
 - **New field types** (`select`, `radio`, `checkbox`, `password`, `file`):
   add a branch in the `if (inputType === "textarea") { … } else { … }`

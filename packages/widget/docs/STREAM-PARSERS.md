@@ -202,5 +202,5 @@ interface AgentWidgetStreamParser {
 }
 ```
 
-The parser's `processChunk` method is called for each chunk. If the content matches your parser's format, return the extracted text and the raw payload. Built-in parsers already do this, so action handlers and middleware can read the original structured content without re-implementing a parser. Return `null` if the chunk isn't ready yet—the widget will keep waiting or fall back to plain text.
+The parser's `processChunk` method is called for each chunk. If the content matches your parser's format, return the extracted text and the raw payload. Built-in parsers already do this, so action handlers and middleware can read the original structured content without re-implementing a parser. Return `null` if the chunk isn't ready yet: the widget will keep waiting or fall back to plain text.
 

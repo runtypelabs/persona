@@ -1,4 +1,4 @@
-// Plugin Kit — small, dependency-free utilities for authoring Persona plugins.
+// Plugin Kit: small, dependency-free utilities for authoring Persona plugins.
 //
 // Plugin render hooks (`renderApproval`, `renderAskUserQuestion`, `renderMessage`,
 // …) return a detached `HTMLElement` that the widget morphs into the transcript.
@@ -6,7 +6,7 @@
 //
 //   1. Injecting the plugin's own CSS so it survives the widget's Shadow-DOM mode
 //      (a plain `document.head` <style> does NOT pierce a shadow root).
-//   2. Floating UI — dropdowns, menus, tooltips — that must overlay the rest of
+//   2. Floating UI, dropdowns, menus, tooltips, that must overlay the rest of
 //      the widget and not be clipped by the transcript's scroll container.
 //
 // Both are easy to get subtly wrong, so they live here as a supported, optional
@@ -42,7 +42,7 @@ function injectInto(root: Document | ShadowRoot, id: string, css: string): void 
     root instanceof Document ? root.head : root;
   const escaped = id.replace(/["\\]/g, "\\$&");
   if (container.querySelector(`style[data-persona-plugin-style="${escaped}"]`)) {
-    return; // Already present in this root — idempotent.
+    return; // Already present in this root: idempotent.
   }
   const doc = root instanceof Document ? root : root.ownerDocument ?? document;
   const style = doc.createElement("style");
@@ -52,15 +52,15 @@ function injectInto(root: Document | ShadowRoot, id: string, css: string): void 
 }
 
 /**
- * Inject a plugin's CSS once into the correct root — the widget's shadow root
+ * Inject a plugin's CSS once into the correct root: the widget's shadow root
  * when shadowed, the document head otherwise. Idempotent: keyed by `id`, so it
  * is safe to call on every render.
  *
  * Pass the element you're about to return from a render hook. While building, an
  * element is detached and its eventual root is unknown, so this injects into the
  * owning document immediately (covering the default light-DOM case with no
- * flash) and then, on the next microtask — after the widget has mounted the
- * element — re-resolves and also injects into its shadow root if it landed in
+ * flash) and then, on the next microtask: after the widget has mounted the
+ * element: re-resolves and also injects into its shadow root if it landed in
  * one. You may also pass an explicit `Document` or `ShadowRoot`.
  *
  * @example
@@ -124,7 +124,7 @@ export interface PopoverOptions {
   zIndex?: number | null;
   /**
    * Where to mount `content`. Defaults to the anchor's shadow root (when
-   * shadowed) or `document.body` — keeping it inside the same style + stacking
+   * shadowed) or `document.body`: keeping it inside the same style + stacking
    * scope as the anchor while escaping the transcript's scroll clipping.
    */
   container?: HTMLElement | ShadowRoot;

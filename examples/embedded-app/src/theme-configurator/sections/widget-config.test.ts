@@ -21,7 +21,7 @@ describe('widget config section parity', () => {
     expect(paths).toContain('layout.messages.layout');
     expect(paths).toContain('messageActions.enabled');
 
-    // Widget sub-group — full launcher config is now in Configure tab
+    // Widget sub-group: full launcher config is now in Configure tab
     expect(paths).toContain('launcher.title');
     expect(paths).toContain('launcher.subtitle');
     expect(paths).toContain('launcher.agentIconSize');

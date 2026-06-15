@@ -72,11 +72,11 @@ export function createDropdownMenu(options: CreateDropdownOptions): DropdownMenu
   menu.setAttribute("data-persona-theme-zone", "dropdown");
 
   if (portal) {
-    // Fixed positioning — menu is portaled outside the anchor's overflow context
+    // Fixed positioning: menu is portaled outside the anchor's overflow context
     menu.style.position = "fixed";
     menu.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
   } else {
-    // Absolute positioning — menu lives inside the anchor
+    // Absolute positioning: menu lives inside the anchor
     menu.style.position = "absolute";
     menu.style.top = "100%";
     menu.style.marginTop = "4px";

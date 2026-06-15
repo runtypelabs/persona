@@ -2,7 +2,7 @@
  * npm package entry (`@runtypelabs/persona`).
  *
  * This is a thin barrel over `index-core.ts` (the shared public API) that adds
- * back the **dev/config-tool-only** helpers — `generateCodeSnippet` and
+ * back the **dev/config-tool-only** helpers: `generateCodeSnippet` and
  * `createDemoCarousel`. Those are kept out of `index-core.ts` so the IIFE/CDN
  * build (`index-global.ts`, which re-exports from `index-core.ts`) doesn't ship
  * them: a running widget never needs them, only build-time/demo tooling does.
@@ -11,6 +11,12 @@
  * `window.AgentWidget` global no longer exposes `generateCodeSnippet` /
  * `createDemoCarousel`.
  */
+
+// Register `marked` + `dompurify` synchronously for the bundled npm build so
+// the synchronous markdown/sanitize API renders on first paint. The IIFE/CDN
+// entry (`index-global.ts`) does NOT import this; it lazy-loads the parsers
+// from the `markdown-parsers.js` chunk instead. Must run before any render.
+import "./markdown-parsers-eager";
 
 // Full public API (everything except the two dev-only helpers below).
 export * from "./index-core";

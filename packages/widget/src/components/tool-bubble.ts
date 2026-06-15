@@ -197,7 +197,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     title.style.color = toolCallConfig.headerTextColor;
   }
 
-  // Elapsed helpers — defined early so they're available to renderCollapsedSummary
+  // Elapsed helpers: defined early so they're available to renderCollapsedSummary
   const startedAt = String(tool.startedAt ?? Date.now());
 
   // Helper: build a <span data-tool-elapsed> that the global timer in ui.ts updates

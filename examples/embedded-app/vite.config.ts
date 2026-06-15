@@ -192,6 +192,10 @@ function serveWidgetDist(): Plugin {
             "application/octet-stream";
           res.setHeader("Content-Type", contentType);
           res.setHeader("Access-Control-Allow-Origin", "*");
+          // Dev only: never cache the locally-built widget assets, so a
+          // `pnpm build` rebuild is reflected on the next reload (the theme
+          // preview iframe pins /widget-dist/widget.css).
+          res.setHeader("Cache-Control", "no-store");
           fs.createReadStream(filePath).pipe(res);
         } else {
           next();
@@ -210,6 +214,10 @@ function serveWidgetDist(): Plugin {
             "application/octet-stream";
           res.setHeader("Content-Type", contentType);
           res.setHeader("Access-Control-Allow-Origin", "*");
+          // Dev only: never cache the locally-built widget assets, so a
+          // `pnpm build` rebuild is reflected on the next reload (the theme
+          // preview iframe pins /widget-dist/widget.css).
+          res.setHeader("Cache-Control", "no-store");
           fs.createReadStream(filePath).pipe(res);
         } else {
           next();
@@ -269,7 +277,7 @@ function serveJsPaint(): Plugin {
     let rel = decodeURIComponent(url.pathname);
     if (rel === "" || rel === "/") rel = "/index.html";
     const filePath = path.join(jspaintDir, rel);
-    // Containment check — never serve outside the package directory.
+    // Containment check: never serve outside the package directory.
     if (!filePath.startsWith(jspaintDir + path.sep)) {
       next();
       return;
@@ -417,8 +425,7 @@ const SHARED_FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=Asap+Condensed:wght@400&family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;700&display=swap";
 
 // Load the gallery fonts via <link> in <head> rather than an `@import` inside the
-// CSS. The browser only discovers an `@import` *after* the stylesheet downloads —
-// a serialized request with no preconnect — which delayed the web fonts enough to
+// CSS. The browser only discovers an `@import` *after* the stylesheet downloads:// a serialized request with no preconnect: which delayed the web fonts enough to
 // show a visible font-swap flash (FOUT) on first paint. Injecting preconnect +
 // the stylesheet into <head> lets the fonts download in parallel and arrive far
 // sooner. Pages that ship their own fonts (bakery, standalone) are left alone.
@@ -456,11 +463,40 @@ function galleryFonts(): Plugin {
   };
 }
 
+function commandPaletteEntry(): Plugin {
+  return {
+    name: "persona-command-palette-entry",
+    transformIndexHtml(html) {
+      if (html.includes("/src/command-palette-entry.ts")) return;
+      const isHome = html.includes('src="/src/main.ts"') || html.includes("src/home.css");
+      if (isHome) return;
+      return [
+        {
+          tag: "script",
+          attrs: { type: "module", src: "/src/command-palette-entry.ts" },
+          injectTo: "body",
+        },
+      ] satisfies HtmlTagDescriptor[];
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [serveWidgetDist(), serveJsPaint(), llmsTxt(), previewEmbedCheck(), galleryFonts()],
+  plugins: [
+    serveWidgetDist(),
+    serveJsPaint(),
+    llmsTxt(),
+    previewEmbedCheck(),
+    galleryFonts(),
+    commandPaletteEntry(),
+  ],
   resolve: {
     alias: {
+      "@runtypelabs/persona/theme-editor/preview": path.resolve(
+        __dirname,
+        "../../packages/widget/src/theme-editor-preview.ts"
+      ),
       "@runtypelabs/persona/theme-editor": path.resolve(
         __dirname,
         "../../packages/widget/src/theme-editor"
@@ -502,13 +538,13 @@ export default defineConfig({
         'persistent-composer': path.resolve(__dirname, 'persistent-composer.html'),
         // Agent demo
         'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
-        // WebMCP — page-discovered tools
+        // WebMCP: page-discovered tools
         'webmcp-demo': path.resolve(__dirname, 'webmcp-demo.html'),
-        // WebMCP — calendar copilot (client-token mode)
+        // WebMCP: calendar copilot (client-token mode)
         'webmcp-calendar': path.resolve(__dirname, 'webmcp-calendar.html'),
-        // WebMCP — slide-deck editor (dynamic tool sets, selection context)
+        // WebMCP: slide-deck editor (dynamic tool sets, selection context)
         'webmcp-slides': path.resolve(__dirname, 'webmcp-slides.html'),
-        // WebMCP — Paint Pal (drives an embedded jspaint; image snapshot loop)
+        // WebMCP: Paint Pal (drives an embedded jspaint; image snapshot loop)
         'webmcp-paint': path.resolve(__dirname, 'webmcp-paint.html'),
         // Bakery demo pages
         'bakery': path.resolve(__dirname, 'bakery.html'),
@@ -532,6 +568,8 @@ export default defineConfig({
         'stream-animations-demo': path.resolve(__dirname, 'stream-animations-demo.html'),
         'ask-user-question-demo': path.resolve(__dirname, 'ask-user-question-demo.html'),
         'voice-integration-demo': path.resolve(__dirname, 'voice-integration-demo.html'),
+        'custom-voice-provider-demo': path.resolve(__dirname, 'custom-voice-provider-demo.html'),
+        'server-tts-demo': path.resolve(__dirname, 'server-tts-demo.html'),
         'autoscroll-stress-test': path.resolve(__dirname, 'autoscroll-stress-test.html'),
         // Standalone (CDN / Copy-Paste) pages
         'standalone/shopify': path.resolve(__dirname, 'standalone/shopify.html'),

@@ -121,7 +121,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
   header.style.borderBottom =
     'var(--persona-header-border-bottom, 1px solid var(--persona-header-border, var(--persona-divider, #f1f5f9)))';
 
-  // Build the title area — either a combo button (titleMenu) or standard title row
+  // Build the title area: either a combo button (titleMenu) or standard title row
   const titleMenuConfig = layoutHeaderConfig?.titleMenu;
   let titleRow: HTMLElement;
   let headerTitle: HTMLElement;

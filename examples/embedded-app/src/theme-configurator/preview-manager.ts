@@ -1,5 +1,5 @@
 /**
- * Preview Manager — encapsulates all preview-related logic extracted from index.ts.
+ * Preview Manager: encapsulates all preview-related logic extracted from index.ts.
  *
  * Responsibilities:
  *   - Background URL preview (types, state, embed checking, overlays, message handling)
@@ -104,7 +104,7 @@ const PREVIEW_BG_MESSAGE_TYPE = 'persona-theme-preview-background-state';
 const PREVIEW_BG_EMBED_CHECK_ENDPOINT = '/api/preview/embed-check';
 const PREVIEW_IFRAME_SHELL_STYLE_ID = SHELL_STYLE_ID;
 
-// Preview transcript streaming cadence — tuned to be closer to real LLM output
+// Preview transcript streaming cadence: tuned to be closer to real LLM output
 // so Stream Animation settings (typewriter, letter-rise, word-fade, etc.) have
 // enough time on screen to be legible, instead of finishing in a blink.
 // ~75 chars/sec, plus a short pause after the empty bubble appears so any
@@ -730,7 +730,7 @@ export function createPreviewManager(
       .join('|');
 
     // Feature display flags (showReasoning, showToolCalls, toolCallDisplay,
-    // reasoningDisplay) are intentionally excluded — they are handled live by
+    // reasoningDisplay) are intentionally excluded: they are handled live by
     // controller.update() without requiring an iframe remount.
     const mode = isDockedMountMode(config) ? `docked:${(config.launcher?.dock ?? {}).side ?? 'right'}:${(config.launcher?.dock ?? {}).width ?? '420px'}` : 'floating';
     return [mode, initialMessagesSignature].join('::');
@@ -1332,16 +1332,16 @@ export function createPreviewManager(
 
       // Capture the iframe's body, not the widget mount: in floating/minimized
       // scenes the widget is position:fixed in the body (the mount box is
-      // empty), and the body shows the widget in situ — shell, placement,
+      // empty), and the body shows the widget in situ: shell, placement,
       // launcher. The CSS scale() on the iframe element lives in the parent
       // document and doesn't affect the inner DOM, so render at device
       // dimensions and downscale via the library's `scale` option. Nested
       // iframes (the cross-origin background preview) are excluded via a
-      // tagName check — NOT instanceof, which always fails across realms.
+      // tagName check: NOT instanceof, which always fails across realms.
       //
       // Backfill the (JPEG, no-alpha) canvas with the frame's own body
       // background so dark previews aren't captured against white where the
-      // canvas shows through — e.g. behind the excluded background iframe.
+      // canvas shows through: e.g. behind the excluded background iframe.
       const bodyBg = doc.defaultView?.getComputedStyle(doc.body).backgroundColor;
       const bodyBgTransparent = !bodyBg || bodyBg === 'transparent' || bodyBg === 'rgba(0, 0, 0, 0)';
       const dataUrl = await domToJpeg(doc.body, {
@@ -1545,7 +1545,7 @@ export function createPreviewManager(
 
     // Stamp interactively-added entries with a real, monotonically increasing
     // timestamp. Messages sort by createdAt, and resolving an approval bumps its
-    // createdAt to "now" — so without this, the next entry (built with the
+    // createdAt to "now", so without this, the next entry (built with the
     // preset's backdated createdAt) would sort *above* a just-approved/denied
     // bubble. Captured once so all of a streaming entry's frames share one time.
     const injectionBase = Date.now();
@@ -1563,7 +1563,7 @@ export function createPreviewManager(
 
     // Non-streaming entries (e.g. the approval bubble) land their full height in
     // a single frame, and the widget's one-shot auto-scroll can fire before that
-    // layout settles — leaving a tall bubble below the fold. Re-pin to the bottom
+    // layout settles: leaving a tall bubble below the fold. Re-pin to the bottom
     // after layout/paint so the newest entry stays in view. (Streaming entries
     // re-pin themselves via auto-follow as later frames arrive, so this is a
     // harmless no-op for them.)

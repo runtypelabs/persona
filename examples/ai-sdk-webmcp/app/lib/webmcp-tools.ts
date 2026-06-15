@@ -9,7 +9,7 @@
 //
 // Each tool's execute() mutates the shared observable store (store.ts); the
 // React storefront re-renders off that store. This is the only structural
-// change from the vanilla embedded-app demo — the tool surface and behavior are
+// change from the vanilla embedded-app demo: the tool surface and behavior are
 // identical.
 
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
@@ -58,7 +58,7 @@ export function registerStorefrontTools(): void {
   ).modelContext;
 
   if (!modelContext) {
-    logWire("reg", "register", "document.modelContext unavailable — tools NOT registered");
+    logWire("reg", "register", "document.modelContext unavailable: tools NOT registered");
     return;
   }
 
@@ -126,7 +126,7 @@ export function registerStorefrontTools(): void {
         }
         highlightHits([product.sku]);
         flashCard(product.sku);
-        logWire("exec", "view_product", `<b>${esc(product.sku)}</b> — ${esc(product.title)}`);
+        logWire("exec", "view_product", `<b>${esc(product.sku)}</b>: ${esc(product.title)}`);
         return {
           found: true,
           sku: product.sku,
@@ -199,7 +199,7 @@ export function registerStorefrontTools(): void {
         const { sku, quantity } = input as { sku: string; quantity?: number };
         // Resolve the SKU canonically (the cart is keyed by product.sku), then
         // only a positive partial quantity decrements; anything else removes the
-        // whole line — so a negative quantity can't subtract-a-negative.
+        // whole line, so a negative quantity can't subtract-a-negative.
         const product = findBySku(sku);
         if (!product) {
           logWire("exec", "remove_from_cart", `<b>${esc(sku)}</b> → not found`);

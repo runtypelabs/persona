@@ -4,7 +4,7 @@
 [![Live demo](https://img.shields.io/badge/live_demo-persona--chat.dev-0d9488?style=flat)](https://persona-chat.dev)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/runtypelabs/persona)
 
-A themeable, pluggable AI chat widget for websites — built in Typescript with zero framework dependencies. It renders using Vanilla JS.
+A themeable, pluggable AI chat widget for websites: built in Typescript with zero framework dependencies. It renders using Vanilla JS.
 
 Persona gives you a drop-in UI for your AI assistant that works on basically any site or product on the web. It ships with support for streaming responses, direct client-token installs, WebMCP/page tools, built-in local client tools, voice I/O, multi-modal content, tool call visualization, approval gates, artifact rendering, safe markdown/HTML rendering, and a plugin system so you can customize every layer of the UI.
 
@@ -60,10 +60,10 @@ SSE-based message streaming with pluggable parsers (plain text, JSON, XML, regex
 Text, images (PNG, JPEG, GIF, WebP, SVG), and documents (PDF, DOCX, TXT, CSV, JSON, Excel). Configure allowed file types, size limits, and previews through the attachments config.
 
 ### Voice Input & Output
-Optional speech-to-text via the Web Speech API or Runtype's WebSocket voice service with barge-in interruption and voice activity detection. Text-to-speech playback for assistant responses. Enable via `voiceRecognition` and `textToSpeech`.
+Optional speech-to-text via the Web Speech API or Runtype's WebSocket voice service with barge-in interruption and voice activity detection. Text-to-speech playback for assistant responses — auto-speak via `textToSpeech`, or a per-message "Read aloud" button with play/pause/resume via `messageActions.showReadAloud`. TTS is backed by a pluggable `SpeechEngine` (browser Web Speech API by default, or a hosted engine via `textToSpeech.createEngine`). Enable via `voiceRecognition` and `textToSpeech`.
 
 ### Reasoning & Extended Thinking
-Collapsible reasoning bubbles that display model chain-of-thought with duration tracking and streaming. Controlled by `features.showReasoning` — on by default, or override the renderer with a plugin hook.
+Collapsible reasoning bubbles that display model chain-of-thought with duration tracking and streaming. Controlled by `features.showReasoning`: on by default, or override the renderer with a plugin hook.
 
 ### Tool Calls, Approvals & Local Client Tools
 Expandable tool call bubbles showing name, status, arguments, and results, with compact display modes, active previews, grouping, and loading animations. Optional human-in-the-loop approval bubbles include friendly summaries, hidden/collapsed technical details, agent-stated reasons, and custom approve/deny handlers. Built-in LOCAL client tools (`ask_user_question` and `suggest_replies`) can be advertised from the widget with `features.askUserQuestion.expose` and `features.suggestReplies.expose`.
@@ -75,10 +75,10 @@ Optional side-panel for rendering markdown and component content. Desktop split 
 Optional real-time event capture with search/filter, badge coloring, timestamps, expandable payloads, and output-throughput diagnostics. Enable via `features.showEventStreamToggle`. Customize rows, toolbar, and payload rendering through plugin hooks.
 
 ### Composer, Scrolling & Keyboard Shortcuts
-`Enter` sends a message (`Shift+Enter` for a newline) and is inert while a response is streaming — it never interrupts generation. Press `Esc` within the widget to stop an in-flight response (the visible Stop button does the same). `Up`/`Down` navigate previously sent messages for quick re-entry or editing — entered only when the caret is at the start of the input, so multi-line editing is preserved, and your in-progress draft is restored when you page back to the present. History navigation is on by default; disable via `features.composerHistory: false`. Streaming scroll behavior is configurable with `features.scrollBehavior` (`follow`, `anchor-top`, or `none`), and the shared scroll-to-bottom affordance shows a new-message count while you're scrolled away.
+`Enter` sends a message (`Shift+Enter` for a newline) and is inert while a response is streaming: it never interrupts generation. Press `Esc` within the widget to stop an in-flight response (the visible Stop button does the same). `Up`/`Down` navigate previously sent messages for quick re-entry or editing : entered only when the caret is at the start of the input, so multi-line editing is preserved, and your in-progress draft is restored when you page back to the present. History navigation is on by default; disable via `features.composerHistory: false`. Streaming scroll behavior is configurable with `features.scrollBehavior` (`follow`, `anchor-top`, or `none`), and the shared scroll-to-bottom affordance shows a new-message count while you're scrolled away.
 
 ### Themes & Styling
-Light and dark themes included. Full design token system (palette, semantic, component-level) with CSS variable support. Extend with built-in plugins for accessibility, reduced motion, high contrast, and branding — or create your own.
+Light and dark themes included. Full design token system (palette, semantic, component-level) with CSS variable support. Extend with built-in plugins for accessibility, reduced motion, high contrast, and branding, or create your own.
 
 ### Layout, Docking & Fast Script Installs
 Start from a built-in preset (shop, minimal, fullscreen) or configure from scratch. Header layouts, message layouts, avatars, timestamps, and slot-based rendering are all customizable. Dock as a floating widget, wrap a page region with a side panel (`resize`, `emerge`, `overlay`, or `push` reveals with a `dock.maxHeight` viewport guard), or embed inline. Script-tag installs paint a tiny real launcher first and defer the full panel bundle until first open when the config allows it.
@@ -90,20 +90,20 @@ Start from a built-in preset (shop, minimal, fullscreen) or configure from scrat
 Optional message-level upvote/downvote/copy with automatic backend submission in client-token mode. CSAT and NPS survey components. Script-tag lifecycle callbacks/events (`onScriptLoad`, `onLauncherShown`, `onChatReady`, `onError`) and controller events make it easy to wire custom analytics.
 
 ### Agent Execution
-Renders multi-turn agent loops as they stream from the backend — displaying iteration progress, reflections, and stop reasons. Agent metadata is attached to every message. Customize how execution events appear through plugin hooks.
+Renders multi-turn agent loops as they stream from the backend: displaying iteration progress, reflections, and stop reasons. Agent metadata is attached to every message. Customize how execution events appear through plugin hooks.
 
 ### Component System
 Register custom components and render them inline via directives. Stream-aware parser and middleware support dynamic UI insertion during streaming, with live DOM element hydration so event listeners survive transcript re-renders.
 
 ### Message Injection, Context & Page Tools
-Programmatically insert messages (`injectMessage`, `injectAssistantMessage`, `injectUserMessage`, `injectSystemMessage`) with dual-content support — display one thing to the user while sending different content to the LLM. Inject page/editor context with `contextProviders` and `requestMiddleware`; use `webmcp: { enabled: true }` to expose page actions through `document.modelContext`. For richer page context, import the optional `@runtypelabs/persona/smart-dom-reader` provider.
+Programmatically insert messages (`injectMessage`, `injectAssistantMessage`, `injectUserMessage`, `injectSystemMessage`) with dual-content support: display one thing to the user while sending different content to the LLM. Inject page/editor context with `contextProviders` and `requestMiddleware`; use `webmcp: { enabled: true }` to expose page actions through `document.modelContext`. For richer page context, import the optional `@runtypelabs/persona/smart-dom-reader` provider.
 
 ## Proxy Deployment
 
 Both proxy examples handle secure API key management, CORS, and multiple flow configurations.
 
-- **vercel-edge** — best for quick deployment to Vercel or any Node.js host
-- **cloudflare-workers** — best for global edge deployment with low latency
+- **vercel-edge**: best for quick deployment to Vercel or any Node.js host
+- **cloudflare-workers**: best for global edge deployment with low latency
 
 ## Publishing
 

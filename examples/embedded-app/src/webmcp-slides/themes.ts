@@ -2,7 +2,7 @@ import type { Theme } from "./types";
 
 // Element color/font props may hold theme tokens ('theme.accent',
 // 'theme.heading') instead of literals. Tokens resolve at render time, so
-// `apply_theme` restyles every token-colored element across the deck — the
+// `apply_theme` restyles every token-colored element across the deck: the
 // system prompt tells the model to prefer tokens for exactly this reason.
 
 export const THEMES: Theme[] = [

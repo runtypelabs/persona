@@ -1,4 +1,4 @@
-/** @runtypelabs/persona/testing — Helpers for mocking SSE streams in demos, previews, and tests. */
+/** @runtypelabs/persona/testing: Helpers for mocking SSE streams in demos, previews, and tests. */
 
 export {
   createMockSSEStream,

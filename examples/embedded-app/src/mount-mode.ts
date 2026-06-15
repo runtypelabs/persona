@@ -78,7 +78,7 @@ const readStoredMode = (
   try {
     const value = window.localStorage.getItem(storageKey(slug));
     // Fullscreen is treated as an immersive/temporary view, not a sticky
-    // preference — landing on a fresh page in fullscreen hides the toolbar
+    // preference: landing on a fresh page in fullscreen hides the toolbar
     // and disorients the user. Clear stale stored values.
     if (value === "fullscreen") {
       window.localStorage.removeItem(storageKey(slug));
@@ -124,7 +124,7 @@ export function renderLauncherScene(stage: HTMLElement): {
 /**
  * Default scaffold for inline mode: empty the stage and return an `<div>` that
  * fills it. Demos with custom inline UI (e.g., the artifact demo) should not
- * use this — they own the stage directly.
+ * use this: they own the stage directly.
  */
 export function renderInlineMount(stage: HTMLElement): HTMLElement {
   stage.innerHTML = "";
@@ -149,7 +149,7 @@ export function renderInlineMount(stage: HTMLElement): HTMLElement {
  * preview pane rather than a rounded card floating inside it. Demos that
  * mount inline directly (bypassing {@link runWidgetMount}) should wrap their
  * config in this so the gallery preview stays visually consistent. Returns a
- * shallow clone — the caller's config (and what the Code tab reports) is left
+ * shallow clone: the caller's config (and what the Code tab reports) is left
  * untouched. A demo that explicitly sets `panel.borderRadius` still wins.
  */
 export function squareInlinePanel(config: AgentWidgetConfig): AgentWidgetConfig {

@@ -5,7 +5,7 @@ import { VERSION } from "./version";
 
 // The `@runtypelabs/persona/codegen` subpath is the server/Worker-safe entry for
 // snippet generation. It must expose the exact same generator as the internal
-// module (and, transitively, the main barrel) — no fork, no drift.
+// module (and, transitively, the main barrel): no fork, no drift.
 describe("codegen subpath", () => {
   const config = {
     apiUrl: "https://api.example.com/chat",

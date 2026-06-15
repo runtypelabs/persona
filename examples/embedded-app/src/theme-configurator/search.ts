@@ -53,7 +53,7 @@ export function registerSearchEntry(field: FieldDef, control: ControlResult): vo
 /**
  * Register fields from section definitions up front, so they are searchable
  * before their (lazily-rendered) drill-down has ever been opened. These entries
- * carry no live element — navigateToField re-finds the element by id once the
+ * carry no live element: navigateToField re-finds the element by id once the
  * section has been rendered by navigation. Duplicates against live entries are
  * collapsed by field id in `search()`.
  */
@@ -252,7 +252,7 @@ function navigateToField(entry: SearchEntry): void {
 
   // onNavigate may have just (re)rendered the target section (e.g. opening a
   // drill-down), so the live control is found by id rather than via a stored
-  // element — catalog entries carry none, and re-rendered elements are fresh.
+  // element: catalog entries carry none, and re-rendered elements are fresh.
   // Defer past onNavigate's own section-expand rAF before scrolling.
   requestAnimationFrame(() => {
     const input = document.getElementById(entry.fieldId);

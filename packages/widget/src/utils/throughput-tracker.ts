@@ -5,7 +5,7 @@
 // Derives an output tokens-per-second metric from the widget's existing SSE
 // event stream, for display in the Events diagnostics screen. This is a passive
 // consumer: it never mutates dispatch payloads, never forces debug mode, and
-// never changes the wire contract — it only inspects the `(type, payload)`
+// never changes the wire contract: it only inspects the `(type, payload)`
 // events that already flow through the SSE tap.
 //
 // Throughput is estimated live from visible text deltas while a run streams,
@@ -62,7 +62,7 @@ const REQUEST_START_EVENTS = new Set([
 ]);
 
 // Per-step markers that fire repeatedly WITHIN a single request (a flow emits
-// one per step). These only lazily begin a run — they must never reset, or a
+// one per step). These only lazily begin a run: they must never reset, or a
 // multi-step response would restart the metric between steps. If no request- or
 // step-start event is emitted, the first visible delta lazily starts the run.
 const STEP_START_EVENTS = new Set(["step_start", "execution_start"]);
@@ -151,8 +151,8 @@ function getTextDelta(payload: Record<string, unknown>): string {
  * other value, and a missing contentType are ignored so throughput never
  * includes deltas the chat UI doesn't render.
  *
- * For `step_delta` / `step_chunk`, skip tool and context steps — those carry
- * tool I/O, not model-visible text — mirroring the widget's own renderer.
+ * For `step_delta` / `step_chunk`, skip tool and context steps: those carry
+ * tool I/O, not model-visible text: mirroring the widget's own renderer.
  */
 function isVisibleTextDelta(
   type: string,
@@ -298,13 +298,13 @@ export class ThroughputTracker {
     const now = this.now();
 
     if (REQUEST_START_EVENTS.has(type)) {
-      // New request — start fresh, discarding any incomplete prior run.
+      // New request: start fresh, discarding any incomplete prior run.
       this.startRun(now);
       return;
     }
 
     if (STEP_START_EVENTS.has(type)) {
-      // Mid-request step marker — only begin a run if none is active.
+      // Mid-request step marker: only begin a run if none is active.
       if (!this.run) this.startRun(now);
       return;
     }
@@ -323,7 +323,7 @@ export class ThroughputTracker {
 
       // Add the live char estimate of the CURRENT (not-yet-completed) step on
       // top of any exact usage already booked from completed steps, so the
-      // count only grows — it never drops back to a bare estimate mid-run.
+      // count only grows: it never drops back to a bare estimate mid-run.
       const outputTokens =
         stats.exactOutputTokens +
         estimateTokensFromCharCount(stats.visibleCharCount);
@@ -339,7 +339,7 @@ export class ThroughputTracker {
     }
 
     if (INTERMEDIATE_COMPLETE_EVENTS.has(type)) {
-      // Accumulate exact usage but keep the run going — these fire per
+      // Accumulate exact usage but keep the run going: these fire per
       // step/turn, not at the end of the whole run.
       if (!this.run) return;
       const stats = this.run;
@@ -347,7 +347,7 @@ export class ThroughputTracker {
       if (exact !== undefined) {
         stats.exactOutputTokens += exact;
         // This step's visible text is now represented exactly by provider
-        // usage — drop it from the running char estimate so the two don't
+        // usage: drop it from the running char estimate so the two don't
         // double-count once the next step starts streaming.
         stats.visibleCharCount = 0;
       }

@@ -82,7 +82,7 @@ export type {
   AgentWidgetApproval,
   AgentWidgetApprovalConfig,
   AgentWidgetApprovalDecisionOptions,
-  // WebMCP — page-discovered tool consumption
+  // WebMCP: page-discovered tool consumption
   AgentWidgetWebMcpConfig,
   ClientToolDefinition,
   WebMcpConfirmHandler,
@@ -98,6 +98,7 @@ export type {
   EventStreamPayloadRenderContext,
   // Controller event map
   AgentWidgetControllerEventMap,
+  AgentWidgetReadAloudEvent,
   // Ask-user-question (built-in answer-pill sheet) types
   AskUserQuestionPayload,
   AskUserQuestionPrompt,
@@ -245,7 +246,7 @@ export type { AgentWidgetInitHandle };
 export type { AgentWidgetPlugin } from "./plugins/types";
 export { pluginRegistry } from "./plugins/registry";
 
-// Stream animation plugin API — lets consumers register custom animations
+// Stream animation plugin API: lets consumers register custom animations
 // that match the built-in surface (typewriter, pop-bubble) and subpath
 // modules (letter-rise, word-fade, wipe, glyph-cycle).
 export {
@@ -263,7 +264,7 @@ export type {
   AgentWidgetStreamAnimationPlaceholder,
 } from "./types";
 
-// Action system types — needed to type the `actionHandlers` / `actionParsers`
+// Action system types: needed to type the `actionHandlers` / `actionParsers`
 // config options and to author custom handlers/parsers.
 export type {
   AgentWidgetActionHandler,
@@ -435,7 +436,32 @@ export type {
   VoiceProvider,
   VoiceResult,
   VoiceStatus,
-  VoiceConfig
+  VoiceConfig,
+  VoiceMetrics,
+  VoicePlaybackEngine,
+  PcmStreamPlayer,
+  AgentWidgetVoiceStatusEvent,
+  ReadAloudState,
+  SpeechEngine,
+  SpeechRequest,
+  SpeechCallbacks
 } from "./types";
+
+export {
+  BrowserSpeechEngine,
+  pickBestVoice,
+  ReadAloudController
+} from "./voice";
+export type {
+  BrowserSpeechEngineOptions,
+  ReadAloudListener,
+  FallbackSpeechEngineOptions
+} from "./voice";
+// RuntypeSpeechEngine + FallbackSpeechEngine ship from the
+// `@runtypelabs/persona/voice-worklet-player` subpath, not here: keeping the
+// hosted read-aloud engine out of the main bundle lets the IIFE/CDN build defer
+// it to the `runtype-tts.js` chunk (loaded only for `provider: 'runtype'`). The
+// blessed way to use it is `textToSpeech: { provider: 'runtype' }` — no import
+// needed.
 
 export default initAgentWidgetFn;

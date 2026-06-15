@@ -283,7 +283,7 @@ export interface ComboButtonHandle {
 }
 
 /**
- * Creates a combo button — a clickable label with a chevron that opens a dropdown menu.
+ * Creates a combo button: a clickable label with a chevron that opens a dropdown menu.
  *
  * The entire label + chevron area acts as a single interactive unit with an optional
  * hover pill effect. Clicking anywhere on it toggles the dropdown.

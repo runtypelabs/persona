@@ -94,7 +94,7 @@ const storefrontApp = createChatProxyApp({
 // The demo page registers its tools on document.modelContext; the widget sends
 // them as clientTools[] each turn and the proxy forwards them upstream (and
 // proxies the /resume round-trip). The agent definition lives entirely in code
-// as WEBMCP_STOREFRONT_FLOW — no hosted Runtype agent / client token needed.
+// as WEBMCP_STOREFRONT_FLOW: no hosted Runtype agent / client token needed.
 const webmcpApp = createChatProxyApp({
   path: "/api/chat/dispatch-webmcp",
   allowedOrigins,
@@ -106,7 +106,7 @@ const webmcpApp = createChatProxyApp({
 // WebMCP calendar proxy - for the calendar copilot demo. Same pattern as the
 // storefront: the page registers ten calendar tools on document.modelContext,
 // the widget forwards them as clientTools[], and the in-code
-// WEBMCP_CALENDAR_FLOW drives them — no hosted Runtype agent / client token.
+// WEBMCP_CALENDAR_FLOW drives them: no hosted Runtype agent / client token.
 const webmcpCalendarApp = createChatProxyApp({
   path: "/api/chat/dispatch-calendar",
   allowedOrigins,
@@ -142,7 +142,7 @@ const webmcpPaintApp = createChatProxyApp({
 // WebMCP docked-dashboard proxy - for the docked panel demo. Same pattern as
 // the storefront/calendar: the page registers four workspace tools on
 // document.modelContext, the widget forwards them as clientTools[], and the
-// in-code WEBMCP_DOCKED_FLOW drives them — no hosted Runtype agent / client token.
+// in-code WEBMCP_DOCKED_FLOW drives them: no hosted Runtype agent / client token.
 const webmcpDockedApp = createChatProxyApp({
   path: "/api/chat/dispatch-docked",
   allowedOrigins,
@@ -162,12 +162,12 @@ const pageContextApp = createChatProxyApp({
   upstreamUrl
 });
 
-// Theme-assistant proxy — for the Theme Editor's docked Theme Copilot.
+// Theme-assistant proxy: for the Theme Editor's docked Theme Copilot.
 // The Theme Editor registers its controls (plus screenshot_preview) as WebMCP
 // tools on document.modelContext; the copilot widget ships them as clientTools[]
 // and the agent calls them (webmcp:*) to restyle the live theme preview.
 // Tool-calling flow (not an action envelope), so it relies on clientTools
-// forwarding + /resume — including image blocks in screenshot tool results.
+// forwarding + /resume: including image blocks in screenshot tool results.
 const themeAssistantApp = createChatProxyApp({
   path: "/api/chat/dispatch-theme",
   allowedOrigins,
@@ -189,6 +189,101 @@ app.route("/", webmcpPaintApp);
 app.route("/", webmcpDockedApp);
 app.route("/", pageContextApp);
 app.route("/", themeAssistantApp);
+
+// --- Streaming text-to-speech proxy (OpenAI) ---
+// Streams raw 24 kHz / 16-bit / mono PCM from OpenAI straight to the browser,
+// where examples/embedded-app's ServerTtsEngine feeds it into Persona's
+// AudioPlaybackManager for gap-free, low-latency "Read aloud" playback. The API
+// key stays server-side. CORS preflight is handled by the proxy's global
+// withCors middleware; we also reflect the allowed origin on the stream response
+// to match the other custom routes here.
+app.post("/api/tts", async (c) => {
+  const origin = c.req.header("origin");
+  const corsOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+
+  if (!process.env.OPENAI_API_KEY) {
+    return c.json(
+      { error: "OPENAI_API_KEY is not configured on the proxy." },
+      500,
+      { "Access-Control-Allow-Origin": corsOrigin },
+    );
+  }
+
+  let text = "";
+  let voice: string | undefined;
+  let rate: number | undefined;
+  let model: string | undefined;
+  try {
+    const body = (await c.req.json()) as {
+      text?: string;
+      voice?: string;
+      rate?: number;
+      model?: string;
+    };
+    text = (body.text ?? "").trim();
+    voice = typeof body.voice === "string" ? body.voice : undefined;
+    rate = typeof body.rate === "number" ? body.rate : undefined;
+    model = typeof body.model === "string" ? body.model : undefined;
+  } catch {
+    return c.json({ error: "Invalid JSON body." }, 400, {
+      "Access-Control-Allow-Origin": corsOrigin,
+    });
+  }
+  if (!text) {
+    return c.json({ error: "Missing 'text'." }, 400, {
+      "Access-Control-Allow-Origin": corsOrigin,
+    });
+  }
+
+  // response_format: "pcm" → raw 24 kHz / 16-bit signed LE / mono, exactly what
+  // AudioPlaybackManager.enqueue() expects. To use ElevenLabs instead, POST to
+  // /v1/text-to-speech/{voiceId} with output_format: "pcm_24000" and the
+  // xi-api-key header — the streamed body plugs into the same client engine.
+  const payload: Record<string, unknown> = {
+    // `tts-1` is OpenAI's low-latency model (faster first byte + steady
+    // delivery); `gpt-4o-mini-tts` is higher quality but slower and burstier to
+    // start. Default to the responsive one; override per-request or via env.
+    model: model || process.env.OPENAI_TTS_MODEL || "tts-1",
+    voice: voice || process.env.OPENAI_TTS_VOICE || "alloy",
+    input: text,
+    response_format: "pcm",
+  };
+  // `speed` isn't accepted by every model (gpt-4o-mini-tts rejects it), so only
+  // send it when a caller actually asked for a non-default rate.
+  if (typeof rate === "number" && rate !== 1) {
+    payload.speed = Math.min(4, Math.max(0.25, rate));
+  }
+
+  const upstream = await fetch("https://api.openai.com/v1/audio/speech", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!upstream.ok || !upstream.body) {
+    const detail = await upstream.text().catch(() => "");
+    return c.json(
+      { error: `OpenAI TTS failed (${upstream.status}).`, detail: detail.slice(0, 500) },
+      502,
+      { "Access-Control-Allow-Origin": corsOrigin },
+    );
+  }
+
+  // Pass the PCM stream straight through — no buffering, so playback can start
+  // as soon as the first chunk lands.
+  return new Response(upstream.body, {
+    status: 200,
+    headers: {
+      "Content-Type": "audio/pcm; rate=24000",
+      "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": corsOrigin,
+      Vary: "Origin",
+    },
+  });
+});
 
 // Stripe checkout endpoint
 // Uses the shared createCheckoutSession helper from @runtypelabs/persona-proxy

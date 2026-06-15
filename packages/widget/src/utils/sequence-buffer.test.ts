@@ -32,16 +32,16 @@ describe("SequenceReorderBuffer", () => {
 
   it("reorders leading out-of-order events (3, 1, 2 → 1, 2, 3)", () => {
     const buf = new SequenceReorderBuffer(emitter);
-    // seq=3 arrives first — should be buffered (3 > nextExpected=1)
+    // seq=3 arrives first: should be buffered (3 > nextExpected=1)
     buf.push("step_delta", { seq: 3, text: "c" });
     expect(emitted).toHaveLength(0);
 
-    // seq=1 arrives — matches nextExpected, emits, then drains seq=2 (not present), stops
+    // seq=1 arrives: matches nextExpected, emits, then drains seq=2 (not present), stops
     buf.push("step_delta", { seq: 1, text: "a" });
     expect(emitted).toHaveLength(1);
     expect(emitted[0].payload.text).toBe("a");
 
-    // seq=2 arrives — matches nextExpected=2, emits, drains seq=3 from buffer
+    // seq=2 arrives: matches nextExpected=2, emits, drains seq=3 from buffer
     buf.push("step_delta", { seq: 2, text: "b" });
     expect(emitted).toHaveLength(3);
     expect(emitted[1].payload.text).toBe("b");
@@ -69,7 +69,7 @@ describe("SequenceReorderBuffer", () => {
 
     expect(emitted).toHaveLength(1);
 
-    // Advance past gap timeout — seq=2 never arrives, flush seq=3 anyway
+    // Advance past gap timeout: seq=2 never arrives, flush seq=3 anyway
     vi.advanceTimersByTime(60);
 
     expect(emitted).toHaveLength(2);
@@ -96,7 +96,7 @@ describe("SequenceReorderBuffer", () => {
     buf.push("step_delta", { seq: 3, text: "c" });
     expect(emitted).toHaveLength(3);
 
-    // Now seq=1 arrives again — it's a duplicate (1 < nextExpected=4), still emitted
+    // Now seq=1 arrives again: it's a duplicate (1 < nextExpected=4), still emitted
     buf.push("step_delta", { seq: 1, text: "a-dup" });
     expect(emitted).toHaveLength(4);
     expect(emitted[3].payload.text).toBe("a-dup");
@@ -184,7 +184,7 @@ describe("SequenceReorderBuffer", () => {
 
   it("leading gap flushes via timeout when seq=1 never arrives", () => {
     const buf = new SequenceReorderBuffer(emitter, 50);
-    // Only seq=2 and seq=3 arrive — seq=1 is missing
+    // Only seq=2 and seq=3 arrive: seq=1 is missing
     buf.push("step_delta", { seq: 2, text: "b" });
     buf.push("step_delta", { seq: 3, text: "c" });
     expect(emitted).toHaveLength(0); // both buffered
@@ -232,7 +232,7 @@ describe("SequenceReorderBuffer", () => {
     buf.push("step_delta", { seq: 3, text: "first-at-3" });
     expect(emitted).toHaveLength(1);
 
-    // Second event with same seq=3 — prior one should be emitted out-of-order
+    // Second event with same seq=3: prior one should be emitted out-of-order
     buf.push("reason_delta", { seq: 3, text: "second-at-3" });
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
@@ -244,7 +244,7 @@ describe("SequenceReorderBuffer", () => {
     expect(emitted).toHaveLength(2);
     expect(emitted[1].payload.text).toBe("first-at-3");
 
-    // seq=2 arrives — advances nextExpected through the buffered second-at-3
+    // seq=2 arrives: advances nextExpected through the buffered second-at-3
     buf.push("step_delta", { seq: 2, text: "b" });
     expect(emitted).toHaveLength(4);
     expect(emitted[2].payload.text).toBe("b");

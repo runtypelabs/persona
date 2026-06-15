@@ -30,7 +30,7 @@ describe("createAgentExperience stop-streaming submit button", () => {
     vi.stubGlobal("cancelAnimationFrame", () => {});
     window.scrollTo = vi.fn();
 
-    // Fetch hangs until the caller aborts the signal — models an in-flight
+    // Fetch hangs until the caller aborts the signal: models an in-flight
     // SSE stream so the widget stays in the "streaming" state.
     global.fetch = vi.fn().mockImplementation((_url: string, options: any) => {
       const signal = options.signal as AbortSignal;
@@ -78,7 +78,7 @@ describe("createAgentExperience stop-streaming submit button", () => {
     expect(capturedSignals).toHaveLength(1);
     expect(capturedSignals[0].aborted).toBe(false);
 
-    // Second click — acts as "stop generating".
+    // Second click: acts as "stop generating".
     submit!.click();
 
     await flush();
@@ -89,8 +89,7 @@ describe("createAgentExperience stop-streaming submit button", () => {
     expect(capturedSignals).toHaveLength(1);
     // Typed text is preserved so the user can resend after stopping.
     expect(textarea.value).toBe("");
-    // (The textarea was cleared on the *first* submit, not by the stop click —
-    // that's fine because after cancel the user can keep typing.)
+    // (The textarea was cleared on the *first* submit, not by the stop click:    // that's fine because after cancel the user can keep typing.)
 
     controller.destroy();
   });

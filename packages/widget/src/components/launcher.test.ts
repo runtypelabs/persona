@@ -5,6 +5,17 @@ import { createLauncherButton } from "./launcher";
 import { DEFAULT_WIDGET_CONFIG } from "../defaults";
 
 describe("createLauncherButton", () => {
+  it("uses the package default subtitle when no subtitle is configured", () => {
+    const { element, update } = createLauncherButton(undefined, () => {});
+    update({});
+    const subtitleEl = element.querySelector("[data-role='launcher-subtitle']");
+    expect(subtitleEl?.textContent).toBe("Here to help you get answers fast");
+    expect(subtitleEl?.getAttribute("title")).toBe(
+      "Here to help you get answers fast"
+    );
+    element.remove();
+  });
+
   it("applies collapsedMaxWidth when set", () => {
     const { element, update } = createLauncherButton(undefined, () => {});
     update({

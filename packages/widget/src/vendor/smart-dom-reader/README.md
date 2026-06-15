@@ -34,15 +34,15 @@ and never touches a package resolver. Consumers who never import the
 
 ## Files
 
-- `index.js` — upstream `dist/index.mjs`, with two local edits (see header comment).
-- `index.d.ts` — upstream `dist/index.d.mts` verbatim (sourceMappingURL stripped).
-- `LICENSE` — upstream MIT license.
+- `index.js`: upstream `dist/index.mjs`, with two local edits (see header comment).
+- `index.d.ts`: upstream `dist/index.d.mts` verbatim (sourceMappingURL stripped).
+- `LICENSE`: upstream MIT license.
 
 ## Local modifications to `index.js`
 
 The **only** changes from upstream `dist/index.mjs` are:
 
-1. Removed the top-level `import { createRequire } from "node:module";` — a
+1. Removed the top-level `import { createRequire } from "node:module";`: a
    Node-only builtin that breaks browser bundling.
 2. Replaced `var __require = createRequire(import.meta.url);` with
    `var __require = void 0;`. `__require` is referenced only inside a guarded

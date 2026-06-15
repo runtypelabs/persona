@@ -70,6 +70,60 @@ describe("createSendButton", () => {
     expect(send.button.textContent).toBe("Send");
   });
 
+  it("applies configured icon-button styles and skips the primary-bg fallback class", () => {
+    const send = createSendButton({
+      ...baseConfig,
+      sendButton: {
+        useIcon: true,
+        iconName: "send",
+        size: "48px",
+        backgroundColor: "rgb(1, 2, 3)",
+        textColor: "rgb(4, 5, 6)",
+        borderWidth: "2px",
+        borderColor: "rgb(7, 8, 9)",
+        paddingX: "6px",
+        paddingY: "4px",
+      },
+    });
+    const s = send.button.style;
+    expect(s.width).toBe("48px");
+    expect(s.height).toBe("48px");
+    expect(s.minWidth).toBe("48px");
+    expect(s.minHeight).toBe("48px");
+    expect(s.color).toBe("rgb(4, 5, 6)");
+    expect(s.backgroundColor).toBe("rgb(1, 2, 3)");
+    expect(s.borderWidth).toBe("2px");
+    expect(s.borderStyle).toBe("solid");
+    expect(s.borderColor).toBe("rgb(7, 8, 9)");
+    expect(s.paddingLeft).toBe("6px");
+    expect(s.paddingRight).toBe("6px");
+    expect(s.paddingTop).toBe("4px");
+    expect(s.paddingBottom).toBe("4px");
+    // An explicit backgroundColor means the fallback class is not added.
+    expect(send.button.classList.contains("persona-bg-persona-primary")).toBe(false);
+  });
+
+  it("toggles the white-text fallback class based on textColor (text mode)", () => {
+    const plain = createSendButton(baseConfig);
+    expect(plain.button.classList.contains("persona-text-white")).toBe(true);
+    expect(plain.button.style.color).toBe("");
+
+    const colored = createSendButton({
+      ...baseConfig,
+      sendButton: { textColor: "rgb(4, 5, 6)" },
+    });
+    expect(colored.button.classList.contains("persona-text-white")).toBe(false);
+    expect(colored.button.style.color).toBe("rgb(4, 5, 6)");
+  });
+
+  it("adds the primary-bg fallback class in icon mode without an explicit background", () => {
+    const send = createSendButton({
+      ...baseConfig,
+      sendButton: { useIcon: true, iconName: "send" },
+    });
+    expect(send.button.classList.contains("persona-bg-persona-primary")).toBe(true);
+  });
+
   describe("icon mode", () => {
     const iconConfig: AgentWidgetConfig = {
       ...baseConfig,

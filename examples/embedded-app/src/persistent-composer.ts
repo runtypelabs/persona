@@ -30,7 +30,7 @@ const checkoutUrl = import.meta.env.VITE_PROXY_URL
 const CART_STORAGE_KEY = "everspun-cart";
 const CHAT_STORAGE_KEY = "everspun-demo-chat";
 
-// Hero product on the page itself — clicking the static "Add to bag" button
+// Hero product on the page itself: clicking the static "Add to bag" button
 // adds this to the cart. The agent sees it in {{cart}} context next turn.
 const HERO_PRODUCT = {
   id: "mongolian-cashmere-button-down",
@@ -124,7 +124,7 @@ const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] || c);
 
 // ============================================================================
-// ProductGrid component — renders inline in the chat as cards
+// ProductGrid component: renders inline in the chat as cards
 // ============================================================================
 
 interface StorefrontProduct {
@@ -142,7 +142,7 @@ const ensureProductGridStyles = () => {
   style.textContent = `
     /* Bubbles that contain a ProductGrid escape the default 85% bubble cap so
        the grid can stretch the full chat-panel width. The widget sets the
-       bubble class to "persona-max-w-[85%] persona-p-4" — override the cap
+       bubble class to "persona-max-w-[85%] persona-p-4": override the cap
        with higher specificity, and supply explicit padding because
        "persona-p-4" isn't shipped in the widget's Tailwind build. */
     .persona-message-bubble:has(.persona-product-grid) {
@@ -225,7 +225,7 @@ const ensureProductGridStyles = () => {
 // animation. The widget re-runs this renderer on every fingerprint change
 // (each streaming chunk + a final stabilization render once `streaming`
 // flips to false), and a fresh DOM tree on each pass means cards would
-// re-fire the `personaProductCardIn` animation every time — visible as a
+// re-fire the `personaProductCardIn` animation every time: visible as a
 // "flash" when the assistant's reply finishes. Animate only on first sight
 // of a given message id; subsequent renders mount cards in their final
 // state with no animation.
@@ -312,7 +312,7 @@ const ProductGrid: ComponentRenderer = (props, context) => {
 componentRegistry.register("ProductGrid", ProductGrid);
 
 // ============================================================================
-// Storefront chat header — custom body-top slot that replaces the default
+// Storefront chat header: custom body-top slot that replaces the default
 // "Hi 👋" welcome card with an ecommerce-style header (brand wordmark,
 // concierge badge, welcome hero, category chips). The chips submit real
 // queries through the widget handle below.
@@ -443,7 +443,7 @@ const renderStorefrontHeader: SlotRenderer = () => {
   const header = document.createElement("section");
   header.className = "persona-storefront-header";
   header.setAttribute("aria-label", "Everspun storefront");
-  // Intentionally NOT setting `data-persona-intro-card` — the widget's
+  // Intentionally NOT setting `data-persona-intro-card`: the widget's
   // `updateCopy()` queries that attribute and toggles `display: none` based
   // on `copy.showWelcomeCard`. Since we set `showWelcomeCard: false` to
   // suppress the default card, the slot replacement (this element) must not
@@ -456,7 +456,7 @@ const renderStorefrontHeader: SlotRenderer = () => {
     <div class="persona-storefront-header__hero">
       <h2 class="persona-storefront-header__title">Welcome.</h2>
       <p class="persona-storefront-header__lede">
-        Your private fitting room. Ask about fit, fabric, or pairings — or shop by category below.
+        Your private fitting room. Ask about fit, fabric, or pairings, or shop by category below.
       </p>
     </div>
     <div class="persona-storefront-header__shopby">
@@ -712,7 +712,7 @@ const handleCheckoutReturn = () => {
     clearCart();
     showToast("Thank you for your order!");
   } else if (status === "cancelled") {
-    showToast("Checkout cancelled — your bag is saved.");
+    showToast("Checkout cancelled: your bag is saved.");
   }
   params.delete("checkout");
   params.delete("session_id");
@@ -724,7 +724,7 @@ const handleCheckoutReturn = () => {
 handleCheckoutReturn();
 
 // ============================================================================
-// Stream parser — extracts the displayable `text` field from agent JSON
+// Stream parser: extracts the displayable `text` field from agent JSON
 // ============================================================================
 
 const createStorefrontParser = (): AgentWidgetStreamParser => {
@@ -737,7 +737,7 @@ const createStorefrontParser = (): AgentWidgetStreamParser => {
 };
 
 // ============================================================================
-// Action handler — agent-driven add-to-cart
+// Action handler: agent-driven add-to-cart
 // ============================================================================
 
 const agentAddToCartHandler: AgentWidgetActionHandler = (action) => {
@@ -753,7 +753,7 @@ const agentAddToCartHandler: AgentWidgetActionHandler = (action) => {
 };
 
 // ============================================================================
-// Page context provider — what the agent sees each turn
+// Page context provider: what the agent sees each turn
 // ============================================================================
 
 const pageContextProvider = () => {
@@ -868,7 +868,7 @@ const config: AgentWidgetConfig = {
   },
   features: {
     ...DEFAULT_WIDGET_CONFIG.features,
-    // word-fade on the main bubble — and, by inheritance, on the peek
+    // word-fade on the main bubble, and, by inheritance, on the peek
     // ticker above the collapsed pill. Devs configure animations in one
     // place and both surfaces render with matching cadence. `buffer: "line"`
     // holds back each line until its trailing newline arrives, then the
@@ -892,7 +892,7 @@ const config: AgentWidgetConfig = {
     showWelcomeCard: false,
     welcomeTitle: "Hi 👋",
     welcomeSubtitle:
-      "Ask about fit, fabric, or care — or browse the catalog (\"show me cashmere essentials\", \"what pants would go with this?\").",
+      "Ask about fit, fabric, or care, or browse the catalog (\"show me cashmere essentials\", \"what pants would go with this?\").",
     inputPlaceholder: "Ask about this product or browse the catalog...",
   },
   layout: {

@@ -1,5 +1,5 @@
 /**
- * VENDORED — @mcp-b/smart-dom-reader v2.3.1 (MIT, (c) 2025 mcp-b contributors).
+ * VENDORED: @mcp-b/smart-dom-reader v2.3.1 (MIT, (c) 2025 mcp-b contributors).
  * Source: https://github.com/WebMCP-org/npm-packages/tree/main/packages/smart-dom-reader
  *
  * Vendored rather than installed as a dependency because every published version
@@ -864,7 +864,7 @@ function renderRegionInfo(region) {
 	if (region.linkCount) stats.push(`${region.linkCount} links`);
 	if (region.inputCount) stats.push(`${region.inputCount} inputs`);
 	if (region.textPreview) stats.push(`“${truncate(region.textPreview, 80)}”`);
-	const statsLine = stats.length ? ` — ${stats.join(", ")}` : "";
+	const statsLine = stats.length ? `: ${stats.join(", ")}` : "";
 	return `${icon} ${label} → \`${region.selector}\` [${id}]${statsLine}`;
 }
 function wrapXml(body, meta, type = "section") {

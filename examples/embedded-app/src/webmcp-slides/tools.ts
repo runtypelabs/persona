@@ -6,10 +6,10 @@ import { THEMES, getTheme } from "./themes";
 // WebMCP tool surface for the slide editor. Three tool sets share two
 // AbortController owners (the calendar demo's re-registration pattern):
 //
-//   1. the static editing set (17 tools) — registered while mode === 'edit';
-//   2. the presenter set (4 tools) — replaces the editing set wholesale while
+//   1. the static editing set (17 tools): registered while mode === 'edit';
+//   2. the presenter set (4 tools): replaces the editing set wholesale while
 //      mode === 'present', so the agent only sees show controls mid-show;
-//   3. the selection-scoped set (2 tools) — registered only while 2+ elements
+//   3. the selection-scoped set (2 tools): registered only while 2+ elements
 //      are selected, debounced so shift-click sprees don't thrash the registry.
 //
 // Every tool returns structured JSON including the ids it created or touched,
@@ -27,8 +27,7 @@ declare global {
   }
 }
 
-// Only destructive or deck-wide tools raise Persona's approval bubble —
-// ordinary writes (add_element, update_element, …) auto-approve so the user
+// Only destructive or deck-wide tools raise Persona's approval bubble:// ordinary writes (add_element, update_element, …) auto-approve so the user
 // can watch the agent build slides without clicking through every step.
 export const APPROVAL_REQUIRED_TOOL_NAMES = new Set([
   "delete_slide",
@@ -93,7 +92,7 @@ const registerTool = (
   try {
     // The WebMCP spec carries the display title on the descriptor itself, but
     // the current @mcp-b SDK only surfaces annotations.title to consumers
-    // (Persona approval bubbles, Chrome DevTools MCP) — mirror it there.
+    // (Persona approval bubbles, Chrome DevTools MCP): mirror it there.
     const descriptor = tool.title
       ? { ...tool, annotations: { title: tool.title, ...tool.annotations } }
       : tool;
@@ -395,14 +394,14 @@ const buildEditingTools = (store: DeckStore): ToolDescriptor[] => [
           elementCount: slide.elements.length,
         })),
       };
-      return toolResult(data, `Deck "${store.deck.title}" — ${data.slideCount} slides.`);
+      return toolResult(data, `Deck "${store.deck.title}": ${data.slideCount} slides.`);
     },
   },
   {
     name: "get_slide",
     title: "Read a slide",
     description:
-      "Read one slide's full contents — every element with its id, geometry, and style. Call this before editing a slide's elements. Defaults to the slide open in the editor.",
+      "Read one slide's full contents: every element with its id, geometry, and style. Call this before editing a slide's elements. Defaults to the slide open in the editor.",
     inputSchema: {
       type: "object",
       properties: {
@@ -459,7 +458,7 @@ const buildEditingTools = (store: DeckStore): ToolDescriptor[] => [
   {
     name: "goto_slide",
     title: "Go to a slide",
-    description: "Open a slide in the editor (navigation only — changes nothing).",
+    description: "Open a slide in the editor (navigation only: changes nothing).",
     inputSchema: {
       type: "object",
       properties: {
@@ -694,7 +693,7 @@ const buildEditingTools = (store: DeckStore): ToolDescriptor[] => [
     name: "update_element",
     title: "Update an element",
     description:
-      "Merge a partial patch into one element — position, size, text, and style in a single call. Omitted keys are unchanged. Returns the updated element.",
+      "Merge a partial patch into one element: position, size, text, and style in a single call. Omitted keys are unchanged. Returns the updated element.",
     inputSchema: {
       type: "object",
       required: ["elementId", "patch"],
@@ -956,7 +955,7 @@ const buildPresenterTools = (store: DeckStore): ToolDescriptor[] => {
 };
 
 // ---------------------------------------------------------------------------
-// Selection-scoped dynamic tool set — exists only while 2+ elements are
+// Selection-scoped dynamic tool set: exists only while 2+ elements are
 // selected. These act on the LIVE selection, so no ids are needed.
 
 const buildSelectionTools = (store: DeckStore): ToolDescriptor[] => [
@@ -964,7 +963,7 @@ const buildSelectionTools = (store: DeckStore): ToolDescriptor[] => [
     name: "style_selection",
     title: "Style the selected elements",
     description:
-      "Apply shared style properties to every element the user has selected. Acts on the live selection — no ids needed.",
+      "Apply shared style properties to every element the user has selected. Acts on the live selection: no ids needed.",
     inputSchema: {
       type: "object",
       required: ["patch"],
@@ -1009,7 +1008,7 @@ const buildSelectionTools = (store: DeckStore): ToolDescriptor[] => [
     name: "align_selection",
     title: "Align the selected elements",
     description:
-      "Align or distribute the elements the user has selected. Acts on the live selection — no ids needed.",
+      "Align or distribute the elements the user has selected. Acts on the live selection: no ids needed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1067,7 +1066,7 @@ const buildSelectionTools = (store: DeckStore): ToolDescriptor[] => [
 export const setupSlidesTools = (store: DeckStore): boolean => {
   const modelContext = getModelContext();
   if (!modelContext?.registerTool) {
-    console.warn("[Slides] WebMCP unavailable — no modelContext found on this page.");
+    console.warn("[Slides] WebMCP unavailable: no modelContext found on this page.");
     return false;
   }
 

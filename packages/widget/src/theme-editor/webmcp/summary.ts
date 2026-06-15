@@ -49,8 +49,7 @@ const RADIUS_KEYS = ['sm', 'md', 'lg', 'xl', 'full'] as const;
 /**
  * Resolve a theme token path to a concrete color, following `palette.*`,
  * `semantic.*`, and `components.*` references. When resolving the `darkTheme`
- * variant, tokens the dark theme doesn't define fall back to the light theme —
- * mirroring the widget's runtime merge behavior.
+ * variant, tokens the dark theme doesn't define fall back to the light theme: * mirroring the widget's runtime merge behavior.
  */
 export function resolveColor(
   state: ThemeEditorLike,

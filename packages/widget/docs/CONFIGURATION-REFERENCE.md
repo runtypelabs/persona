@@ -69,7 +69,7 @@ When `clientToken` is set, the widget uses `/v1/client/*` endpoints directly fro
 config: {
   clientToken: 'ct_live_flow01k7_a8b9c0d1e2f3g4h5i6j7k8l9',
   onSessionInit: (session) => console.log('Session:', session.sessionId),
-  onSessionExpired: () => alert('Session expired — please refresh.'),
+  onSessionExpired: () => alert('Session expired: please refresh.'),
   getStoredSessionId: () => localStorage.getItem('session_id'),
   setStoredSessionId: (id) => localStorage.setItem('session_id', id)
 }
@@ -144,7 +144,7 @@ config: {
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `theme` | `DeepPartial<PersonaTheme>` | Semantic tokens (`palette`, `semantic`, `components`). See [THEME-CONFIG.md](../THEME-CONFIG.md). The flat v1 shape (`{ primary, accent, surface, ... }`) is **not** supported — there is no runtime migration; port themes to the token tree. |
+| `theme` | `DeepPartial<PersonaTheme>` | Semantic tokens (`palette`, `semantic`, `components`). See [THEME-CONFIG.md](../THEME-CONFIG.md). The flat v1 shape (`{ primary, accent, surface, ... }`) is **not** supported: there is no runtime migration; port themes to the token tree. |
 | `darkTheme` | `DeepPartial<PersonaTheme>` | Dark-mode token overrides, merged over `theme` when the active scheme is dark. |
 | `colorScheme` | `'light' \| 'dark' \| 'auto'` | Color scheme mode. `'auto'` detects from `<html class="dark">` or `prefers-color-scheme`. Default: `'light'`. |
 | `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel?, stopButtonLabel?, showWelcomeCard?, stopReasonNotice? }` | Customize user-facing text strings, hide the welcome card, or override per-stop-reason notices. |
@@ -170,7 +170,7 @@ Controls the floating launcher button and panel.
 | `iconUrl` | `string?` | URL for the launcher icon image. |
 | `position` | `'bottom-right' \| 'bottom-left' \| 'top-right' \| 'top-left'?` | Screen corner position. |
 | `mountMode` | `'floating' \| 'docked'?` | Mount as the existing floating launcher or wrap the target with a docked side panel. Default: `'floating'`. |
-| `dock` | `{ side?, width?, animate?, reveal?, maxHeight? }?` | Dock layout. Defaults: right / `420px` / `animate: true` / `reveal: 'resize'` / `maxHeight: '100dvh'`. `reveal: 'emerge'` = content column animates like resize but the panel stays fixed `dock.width` (clip-in). `reveal: 'overlay'` = transform overlay; `reveal: 'push'` = sliding track. `animate: false` snaps without transition. `maxHeight` is the viewport guard (see note below the table) — set a CSS length to override the cap or `false` to disable it. |
+| `dock` | `{ side?, width?, animate?, reveal?, maxHeight? }?` | Dock layout. Defaults: right / `420px` / `animate: true` / `reveal: 'resize'` / `maxHeight: '100dvh'`. `reveal: 'emerge'` = content column animates like resize but the panel stays fixed `dock.width` (clip-in). `reveal: 'overlay'` = transform overlay; `reveal: 'push'` = sliding track. `animate: false` snaps without transition. `maxHeight` is the viewport guard (see note below the table): set a CSS length to override the cap or `false` to disable it. |
 | `width` | `string?` | Width of the launcher button. |
 | `fullHeight` | `boolean?` | Fill the full height of the container. Default: `false`. |
 | `sidebarMode` | `boolean?` | Flush sidebar layout with no border-radius or margins. Default: `false`. |
@@ -183,7 +183,7 @@ Controls the floating launcher button and panel.
 
 In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because the widget fills the dock slot created around the target container.
 
-**Docked height contract.** The docked shell sizes itself with `height: 100%`, so the page must give it a definite height — usually `html, body { height: 100% }` (as in `docked-panel-demo.html`), or a fixed-height app-shell container around the dock target. When no ancestor provides one, the widget falls back to clamping the dock panel to `dock.maxHeight` (default `100dvh`; `resize`/`emerge` are additionally pinned with `position: sticky`, while `push`/`overlay` get the cap only — push's dock slot is an in-flow `position: relative` column and overlay is absolutely positioned, so neither pins with sticky) so the chat stays viewport-sized and scrolls internally instead of growing with the conversation, and logs a console warning explaining the fix. Advanced layouts (e.g. a dock inside a deliberately taller scroll container) can override the cap with a CSS length or disable the guard entirely with `dock.maxHeight: false`.
+**Docked height contract.** The docked shell sizes itself with `height: 100%`, so the page must give it a definite height: usually `html, body { height: 100% }` (as in `docked-panel-demo.html`), or a fixed-height app-shell container around the dock target. When no ancestor provides one, the widget falls back to clamping the dock panel to `dock.maxHeight` (default `100dvh`; `resize`/`emerge` are additionally pinned with `position: sticky`, while `push`/`overlay` get the cap only : push's dock slot is an in-flow `position: relative` column and overlay is absolutely positioned, so neither pins with sticky) so the chat stays viewport-sized and scrolls internally instead of growing with the conversation, and logs a console warning explaining the fix. Advanced layouts (e.g. a dock inside a deliberately taller scroll container) can override the cap with a CSS length or disable the guard entirely with `dock.maxHeight: false`.
 
 ### Layout
 
@@ -201,7 +201,7 @@ In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because 
 | `messages` | `AgentWidgetMessageLayoutConfig?` | Message display customization (see below). |
 | `slots` | `Record<WidgetLayoutSlot, SlotRenderer>?` | Content injection into named slots. |
 
-**`header`** — `AgentWidgetHeaderLayoutConfig`
+**`header`**: `AgentWidgetHeaderLayoutConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -213,7 +213,7 @@ In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because 
 | `showClearChat` | `boolean?` | Show/hide the clear chat button. |
 | `render` | `(ctx: HeaderRenderContext) => HTMLElement?` | Custom renderer that replaces the entire header. |
 
-**`messages`** — `AgentWidgetMessageLayoutConfig`
+**`messages`**: `AgentWidgetMessageLayoutConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -236,7 +236,7 @@ In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because 
 | `messageActions` | `AgentWidgetMessageActionsConfig` | Action buttons on assistant messages (see sub-table). |
 | `loadingIndicator` | `AgentWidgetLoadingIndicatorConfig` | Customize the loading indicator (see sub-table). |
 
-**`markdown`** — `AgentWidgetMarkdownConfig`
+**`markdown`**: `AgentWidgetMarkdownConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -244,7 +244,7 @@ In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because 
 | `renderer` | `AgentWidgetMarkdownRendererOverrides?` | Custom renderers for elements: `heading`, `code`, `blockquote`, `table`, `link`, `image`, `list`, `listitem`, `paragraph`, `codespan`, `strong`, `em`, `hr`, `br`, `del`, `checkbox`, `html`, `text`. Return `false` to use default. |
 | `disableDefaultStyles` | `boolean?` | Skip all default markdown CSS styles. Default: `false`. |
 
-**`messageActions`** — `AgentWidgetMessageActionsConfig`
+**`messageActions`**: `AgentWidgetMessageActionsConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -258,7 +258,7 @@ In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because 
 | `onFeedback` | `(feedback: AgentWidgetMessageFeedback) => void?` | Callback on upvote/downvote. Called in addition to automatic submission with `clientToken`. |
 | `onCopy` | `(message: AgentWidgetMessage) => void?` | Callback on copy. Called in addition to automatic tracking with `clientToken`. |
 
-**`loadingIndicator`** — `AgentWidgetLoadingIndicatorConfig`
+**`loadingIndicator`**: `AgentWidgetLoadingIndicatorConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -278,7 +278,7 @@ In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because 
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `components` | `Record<string, AgentWidgetComponentRenderer>` | Registry of custom components rendered from JSON directives (`{"component": "Name", "props": {...}}`). Each renderer receives `(props, context)` and returns an `HTMLElement`. Event listeners attached via `addEventListener` (and any other imperative state on the returned element) are preserved across transcript updates — the widget injects the live element directly into the morphed wrapper so listeners survive subsequent re-renders. The renderer is re-invoked when the directive's props change; for state you want to persist across prop changes, hold it in a closure outside the render. |
+| `components` | `Record<string, AgentWidgetComponentRenderer>` | Registry of custom components rendered from JSON directives (`{"component": "Name", "props": {...}}`). Each renderer receives `(props, context)` and returns an `HTMLElement`. Event listeners attached via `addEventListener` (and any other imperative state on the returned element) are preserved across transcript updates: the widget injects the live element directly into the morphed wrapper so listeners survive subsequent re-renders. The renderer is re-invoked when the directive's props change; for state you want to persist across prop changes, hold it in a closure outside the render. |
 
 ```typescript
 config: {
@@ -298,7 +298,7 @@ config: {
 | --- | --- | --- |
 | `voiceRecognition` | `AgentWidgetVoiceRecognitionConfig` | Voice input configuration (see sub-table). |
 
-**`voiceRecognition`** — `AgentWidgetVoiceRecognitionConfig`
+**`voiceRecognition`**: `AgentWidgetVoiceRecognitionConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -355,7 +355,7 @@ config: {
 | --- | --- | --- |
 | `textToSpeech` | `TextToSpeechConfig` | TTS configuration (see sub-table). |
 
-**`textToSpeech`** — `TextToSpeechConfig`
+**`textToSpeech`**: `TextToSpeechConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -386,7 +386,7 @@ config: {
 | `toolCall` | `AgentWidgetToolCallConfig` | Styling for tool call bubbles: `backgroundColor`, `borderColor`, `borderWidth`, `borderRadius`, `headerBackgroundColor`, `headerTextColor`, `contentBackgroundColor`, `contentTextColor`, `codeBlockBackgroundColor`, `codeBlockBorderColor`, `codeBlockTextColor`, `toggleTextColor`, `labelTextColor`, and padding options. |
 | `approval` | `AgentWidgetApprovalConfig \| false` | Tool approval bubble configuration. Set to `false` to disable built-in approval handling. |
 
-**`approval`** — `AgentWidgetApprovalConfig`
+**`approval`**: `AgentWidgetApprovalConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -409,8 +409,8 @@ with it. The user-facing summary resolves in priority order:
 
 1. `formatDescription(...)` from your config, when it returns a non-empty string
 2. The display title the tool declared via the WebMCP spec's `ToolDescriptor.title`
-   (e.g. `"Add to Cart"`) — WebMCP tools only
-3. The humanized tool name — `add_to_cart` / `webmcp:add_to_cart` →
+   (e.g. `"Add to Cart"`): WebMCP tools only
+3. The humanized tool name: `add_to_cart` / `webmcp:add_to_cart` →
    "Add to cart", `getProductDetails` → "Get product details"
 4. The raw `description` (only when the approval carries no tool name at all)
 
@@ -440,7 +440,7 @@ WebMCP lets the page register browser-local tools on `document.modelContext`. Wi
 | --- | --- | --- |
 | `webmcp` | `AgentWidgetWebMcpConfig` | Page-tool discovery/execution config. Default: disabled. |
 
-**`webmcp`** — `AgentWidgetWebMcpConfig`
+**`webmcp`**: `AgentWidgetWebMcpConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -481,7 +481,7 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `attachments` | `AgentWidgetAttachmentsConfig` | File attachment configuration (see sub-table). |
 | `formEndpoint` | `string` | Endpoint used by built-in directives. Default: `'/form'`. |
 
-**`attachments`** — `AgentWidgetAttachmentsConfig`
+**`attachments`**: `AgentWidgetAttachmentsConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -505,7 +505,7 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | --- | --- | --- |
 | `features` | `AgentWidgetFeatureFlags` | Feature flag toggles (see sub-table). |
 
-**`features`** — `AgentWidgetFeatureFlags`
+**`features`**: `AgentWidgetFeatureFlags`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -523,14 +523,14 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `askUserQuestion` | `AgentWidgetAskUserQuestionFeature?` | Built-in `ask_user_question` answer sheet. `enabled` defaults to `true`; set `expose: true` to advertise the LOCAL tool via `clientTools[]`. |
 | `suggestReplies` | `AgentWidgetSuggestRepliesFeature?` | Built-in `suggest_replies` chips. `enabled` defaults to `true`; set `expose: true` to advertise the LOCAL tool via `clientTools[]` and auto-resume when called. |
 
-**`features.scrollBehavior`** — `AgentWidgetScrollBehaviorFeature`
+**`features.scrollBehavior`**: `AgentWidgetScrollBehaviorFeature`
 
 | Property | Type | Description |
 | --- | --- | --- |
 | `mode` | `'follow' \| 'anchor-top' \| 'none'?` | `follow` keeps the latest content in view; `anchor-top` pins the sent user message near the top while the response streams; `none` disables streaming auto-scroll. Default: `'follow'`. |
 | `anchorTopOffset` | `number?` | Top gap in pixels for `anchor-top`. Default: `16`. |
 
-**`features.scrollToBottom`** — `AgentWidgetScrollToBottomFeature`
+**`features.scrollToBottom`**: `AgentWidgetScrollToBottomFeature`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -538,7 +538,7 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `iconName` | `string?` | Lucide icon name. Default: `'arrow-down'`. |
 | `label` | `string?` | Optional text label; empty string renders icon-only. Default: `''`. |
 
-**`features.toolCallDisplay`** — `AgentWidgetToolCallDisplayFeature`
+**`features.toolCallDisplay`**: `AgentWidgetToolCallDisplayFeature`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -550,7 +550,7 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `expandable` | `boolean?` | Allow users to expand details. Default: `true`. |
 | `loadingAnimation` | `'none' \| 'pulse' \| 'shimmer' \| 'shimmer-color' \| 'rainbow'?` | Header animation while active. Default: `'none'`. |
 
-**`features.reasoningDisplay`** — `AgentWidgetReasoningDisplayFeature`
+**`features.reasoningDisplay`**: `AgentWidgetReasoningDisplayFeature`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -560,7 +560,7 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `expandable` | `boolean?` | Allow users to expand details. Default: `true`. |
 | `loadingAnimation` | `'none' \| 'pulse' \| 'shimmer' \| 'shimmer-color' \| 'rainbow'?` | Header animation while active. Default: `'none'`. |
 
-**`features.streamAnimation`** — `AgentWidgetStreamAnimationFeature`
+**`features.streamAnimation`**: `AgentWidgetStreamAnimationFeature`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -571,7 +571,7 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `buffer` | `'none' \| 'word' \| 'line'?` | Trim incomplete streaming units before rendering. Default: `'none'`. |
 | `plugins` | `Record<string, StreamAnimationPlugin>?` | Instance-scoped animation plugins. |
 
-**`features.askUserQuestion`** — `AgentWidgetAskUserQuestionFeature`
+**`features.askUserQuestion`**: `AgentWidgetAskUserQuestionFeature`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -580,14 +580,14 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `layout` | `'rows' \| 'pills'?` | Option layout. `rows` is the default full-width layout; `pills` is the legacy compact wrap layout. |
 | `slideInMs`, `freeTextLabel`, `freeTextPlaceholder`, `submitLabel`, `nextLabel`, `backLabel`, `submitAllLabel`, `skipLabel`, `groupedAutoAdvance`, `styles` | various | Sheet animation, copy, multi-question navigation, and CSS variable overrides. See [UI Features & Components](./UI-COMPONENTS.md#ask-user-question). |
 
-**`features.suggestReplies`** — `AgentWidgetSuggestRepliesFeature`
+**`features.suggestReplies`**: `AgentWidgetSuggestRepliesFeature`
 
 | Property | Type | Description |
 | --- | --- | --- |
 | `enabled` | `boolean?` | Render chips and auto-resume `suggest_replies`. Default: `true`. When `false`, it falls through to a generic tool bubble and does not auto-resume. |
 | `expose` | `boolean?` | Advertise the built-in LOCAL tool definition on `clientTools[]`. Default: `false`; leave off when the flow already declares the tool server-side. |
 
-**`features.artifacts`** — `AgentWidgetArtifactsFeature`
+**`features.artifacts`**: `AgentWidgetArtifactsFeature`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -595,7 +595,7 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `allowedTypes` | `('markdown' \| 'component')[]?` | If set, other artifact kinds are ignored client-side. |
 | `layout` | `AgentWidgetArtifactsLayoutConfig?` | Split/drawer sizing and launcher widen behavior. |
 
-**`features.artifacts.layout`** — `AgentWidgetArtifactsLayoutConfig`
+**`features.artifacts.layout`**: `AgentWidgetArtifactsLayoutConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |
@@ -609,11 +609,11 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `resizable` | `boolean?` | When `true`, draggable handle between chat and artifact in desktop split mode. Default: `false`. |
 | `resizableMinWidth` | `string?` | Min artifact width while resizing; `px` only (e.g. `"200px"`). Default: `200px`. |
 | `resizableMaxWidth` | `string?` | Optional max artifact width cap (`px` only); layout still limits by panel width. |
-| `paneAppearance` | `'panel' \| 'seamless'?` | `panel` (default) — bordered sidebar with left border, gap, and shadow. `seamless` — flush with chat: no border or shadow, container background, zero gap (with `resizable`, the drag handle overlays the seam). |
+| `paneAppearance` | `'panel' \| 'seamless'?` | `panel` (default), bordered sidebar with left border, gap, and shadow. `seamless`, flush with chat: no border or shadow, container background, zero gap (with `resizable`, the drag handle overlays the seam). |
 | `paneBorderRadius` | `string?` | Border radius on the artifact pane. Works with any `paneAppearance`. |
 | `paneShadow` | `string?` | CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow. |
 | `paneBorder` | `string?` | Full CSS `border` shorthand on the artifact pane (e.g. `"1px solid #cccccc"`). Overrides default/`rounded` borders. If set, `paneBorderLeft` is ignored. |
-| `paneBorderLeft` | `string?` | `border-left` shorthand only — typical for the split edge next to chat (works with or without `resizable`). Example: `"1px solid #cccccc"`. |
+| `paneBorderLeft` | `string?` | `border-left` shorthand only: typical for the split edge next to chat (works with or without `resizable`). Example: `"1px solid #cccccc"`. |
 | `unifiedSplitChrome` | `boolean?` | Desktop split only: square the main chat card’s **top-right / bottom-right** radii and round the artifact pane’s **top-right / bottom-right** to match the panel (`--persona-radius-lg`) so both columns read as one shell. |
 | `unifiedSplitOuterRadius` | `string?` | Outer-right radius on the artifact side when `unifiedSplitChrome` is true. If omitted, uses `--persona-radius-lg`, or `paneBorderRadius` when `paneAppearance: 'rounded'`. |
 
@@ -627,7 +627,7 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `onStateLoaded` | `(state: AgentWidgetStoredState) => AgentWidgetStoredState \| { state: AgentWidgetStoredState; open?: boolean }` | Transform state after loading from storage but before widget initialization. Return `{ state, open: true }` to also open the panel. |
 | `clearChatHistoryStorageKey` | `string` | Additional localStorage key to clear on chat reset. The widget clears `"persona-chat-history"` by default. |
 
-**`persistState`** — `AgentWidgetPersistStateConfig`
+**`persistState`**: `AgentWidgetPersistStateConfig`
 
 | Property | Type | Description |
 | --- | --- | --- |

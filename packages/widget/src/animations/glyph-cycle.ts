@@ -2,14 +2,13 @@ import type { StreamAnimationPlugin } from "../types";
 import { registerStreamAnimationPlugin } from "../utils/stream-animation";
 
 /**
- * Glyph-cycle animation — "hacker-settling" reveal.
+ * Glyph-cycle animation: "hacker-settling" reveal.
  *
  * Each arriving char briefly cycles through a sequence of random glyphs
  * before locking in to its final character. Unlike a pure CSS effect, this
  * needs JS because it mutates `textContent` per tick. To keep idiomorph from
  * clobbering mid-cycle work, each cycling span carries
- * `data-preserve-runtime="stream-glyph-cycle"` until its cycle completes —
- * morph honors that attribute as an absolute skip marker.
+ * `data-preserve-runtime="stream-glyph-cycle"` until its cycle completes: * morph honors that attribute as an absolute skip marker.
  *
  * A short buffer (`BUFFER_THRESHOLD`) holds the bubble empty (with the
  * typing indicator) until enough text has arrived to run a visible reveal.
@@ -19,7 +18,7 @@ import { registerStreamAnimationPlugin } from "../utils/stream-animation";
  * settling wave flows through the full message.
  *
  * Ships as a subpath module so consumers who don't want it pay zero cost.
- * Importing this module auto-registers the plugin globally — just add the
+ * Importing this module auto-registers the plugin globally: just add the
  * import and set `features.streamAnimation.type = "glyph-cycle"`.
  *
  * ```ts
@@ -54,8 +53,7 @@ const STYLES = `
 const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&@";
 const TICK_COUNT = 10;
 // Base interval between glyph swaps (ms). Scaled by the widget's configured
-// `speed` so the cycle feels coherent with the rest of the stream animation —
-// faster speed → snappier cycling, slower speed → more deliberate flicker.
+// `speed` so the cycle feels coherent with the rest of the stream animation:// faster speed → snappier cycling, slower speed → more deliberate flicker.
 const BASE_TICK_MS = 120;
 const DEFAULT_STEP_MS = 120;
 // Probability that each later still-cycling sibling gets re-randomized on
@@ -63,7 +61,7 @@ const DEFAULT_STEP_MS = 120;
 const CROSS_FLICKER_PROBABILITY = 0.4;
 // Hold the stream back until at least this many chars have arrived. Once
 // released, every char is rendered as a random glyph and settles in order
-// from the start — so the visible animation carries through the full text.
+// from the start, so the visible animation carries through the full text.
 const BUFFER_THRESHOLD = 50;
 
 const getStepMs = (container: HTMLElement | null): number => {
@@ -96,7 +94,7 @@ const flickerLaterSiblings = (span: HTMLElement): void => {
   const container = span.closest(".persona-stream-glyph-cycle") as HTMLElement | null;
   if (!container) return;
   // Any scheduled char that still has its final char stashed is "pending
-  // or cycling" — both kinds are valid flicker targets. Settled chars have
+  // or cycling": both kinds are valid flicker targets. Settled chars have
   // `data-glyph-cycle-final` deleted and are excluded.
   const unsettled = container.querySelectorAll<HTMLElement>(
     ".persona-stream-char[data-glyph-cycle-final]"
@@ -115,8 +113,8 @@ const flickerLaterSiblings = (span: HTMLElement): void => {
 };
 
 // Per-container timestamp tracking: when the next char's cycle should settle.
-// Each char starts cycling immediately on schedule — no static placeholder
-// wait — and finishes when `Date.now() >= settleAt`. This slot advances by
+// Each char starts cycling immediately on schedule: no static placeholder
+// wait, and finishes when `Date.now() >= settleAt`. This slot advances by
 // one stagger step per schedule, so the burst settles left-to-right while
 // every char is visibly flickering from the moment it enters the DOM.
 const containerNextSettleAt = new WeakMap<Element, number>();
@@ -139,8 +137,7 @@ const observeStagger = (container: Element | null, now: number): number => {
   let observed = containerArrivalMs.get(container) ?? DEFAULT_ARRIVAL_MS;
   if (last !== undefined) {
     const interval = now - last;
-    // Skip near-zero intervals (burst within one MutationObserver batch) —
-    // they don't reflect the real stream cadence.
+    // Skip near-zero intervals (burst within one MutationObserver batch):    // they don't reflect the real stream cadence.
     if (interval > 1) {
       observed = observed * (1 - EMA_ALPHA) + interval * EMA_ALPHA;
       containerArrivalMs.set(container, observed);
@@ -180,7 +177,7 @@ const scheduleCycle = (span: HTMLElement): void => {
   span.dataset.glyphCycleScheduled = "true";
   // Stash the target char and immediately paint a random glyph so the span
   // reads as "cycling" even before its staggered kickoff. Also opt out of
-  // morph — without this, streamed token re-renders would overwrite our
+  // morph: without this, streamed token re-renders would overwrite our
   // placeholder glyph with the final char.
   span.dataset.glyphCycleFinal = finalChar;
   span.setAttribute("data-preserve-runtime", "stream-glyph-cycle");
@@ -275,7 +272,7 @@ export const glyphCycle: StreamAnimationPlugin = {
     // `**template literal**`) would trigger a render of the partial
     // `**template`, which markdown emits as literal asterisks, gets
     // wrapped + marked `data-preserve-runtime`, and leaks through later
-    // morphs — the final structure can't reconcile.
+    // morphs: the final structure can't reconcile.
     let boldPairs = 0;
     let lastSafe = -1;
     let i = 0;

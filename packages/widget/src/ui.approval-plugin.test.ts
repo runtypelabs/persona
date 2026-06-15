@@ -104,7 +104,7 @@ describe("renderApproval plugin hook", () => {
         head.setAttribute("data-action", "toggle");
         const params = document.createElement("pre");
         params.setAttribute("data-test-id", "appr-params");
-        // Single delegated listener at the root — the recommended pattern.
+        // Single delegated listener at the root: the recommended pattern.
         root.addEventListener("click", (e) => {
           const target = (e.target as HTMLElement).closest("[data-action]");
           if (target?.getAttribute("data-action") === "toggle") {
@@ -125,7 +125,7 @@ describe("renderApproval plugin hook", () => {
     } as unknown as Parameters<typeof createAgentExperience>[1]);
 
     injectApproval(controller);
-    // Force a re-render — the scenario where innerHTML morph drops listeners
+    // Force a re-render: the scenario where innerHTML morph drops listeners
     // on a freshly-built plugin element unless it's hydrated post-morph.
     injectNoise(controller);
 
@@ -195,7 +195,7 @@ describe("renderApproval plugin hook", () => {
       plugins: [plugin],
     } as unknown as Parameters<typeof createAgentExperience>[1]);
 
-    // Inject directly in the resolved state — plugin opts out, built-in renders.
+    // Inject directly in the resolved state: plugin opts out, built-in renders.
     injectApproval(controller, { status: "approved" });
 
     expect(mount.querySelector('[data-test-id="custom-pending"]')).toBeNull();

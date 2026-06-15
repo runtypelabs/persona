@@ -28,5 +28,19 @@ export default defineConfig({
     // `index-global.ts` registers a loader that imports the standalone
     // `webmcp-polyfill.js` chunk instead.
     options.external = [...(options.external ?? []), "@mcp-b/webmcp-polyfill"];
+    // Keep the hosted Runtype TTS read-aloud engine + browser-fallback wrapper
+    // (and the AudioPlaybackManager they bundle) out of the CDN payload. esbuild
+    // leaves the loader's default `import("./runtype-tts-entry")` in place as a
+    // dead relative import; it is never invoked here because `index-global.ts`
+    // registers a loader that imports the standalone `runtype-tts.js` chunk from
+    // a sibling URL instead.
+    // `provider: 'runtype'` is opt-in, so most pages never fetch it.
+    options.external.push("./runtype-tts-entry");
+
+    // Keep the markdown parsers (marked and dompurify) out of the CDN payload. esbuild
+    // leaves the loader's default import in place; it is never invoked here because
+    // `index-global.ts` registers a loader that imports the standalone
+    // `markdown-parsers.js` chunk from a sibling URL instead.
+    options.external.push("./markdown-parsers-entry");
   },
 });

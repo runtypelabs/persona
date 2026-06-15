@@ -13,7 +13,7 @@ import {
   type AgentWidgetConfig,
   type AgentWidgetActionHandler,
 } from "@runtypelabs/persona";
-// Optional entry — bundled with a vendored @mcp-b/smart-dom-reader. Not part of the
+// Optional entry: bundled with a vendored @mcp-b/smart-dom-reader. Not part of the
 // main bundle; importing this subpath is opt-in. Used by the "Compare readers" panel
 // below to demonstrate the library piercing the shadow root the default reader misses.
 import { collectSmartDomContext } from "@runtypelabs/persona/smart-dom-reader";
@@ -30,7 +30,7 @@ const configInspector = createDemoConfigInspector({
 });
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
-// Read-only, markdown page-context flow (PAGE_CONTEXT_FLOW) — its prompt injects
+// Read-only, markdown page-context flow (PAGE_CONTEXT_FLOW): its prompt injects
 // {{pageContext}}. Unlike the JSON-action demos, this one only answers about the page.
 const proxyUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-page-context`
@@ -38,7 +38,7 @@ const proxyUrl = import.meta.env.VITE_PROXY_URL
 
 const STORAGE_KEY = "persona-state-smart-dom-reader";
 
-// Scope every read to the shop pane only — not the demo nav/rail/chrome. This keeps the
+// Scope every read to the shop pane only: not the demo nav/rail/chrome. This keeps the
 // element counts meaningful and prevents the rail (which prints product names in the
 // compare cards) from contaminating the readers.
 const shopPane = document.querySelector<HTMLElement>(".shop-pane");
@@ -82,7 +82,7 @@ function setupFeaturedDropShadow(): void {
   if (!host || host.shadowRoot) return;
   const shadow = host.attachShadow({ mode: "open" });
   // Each card is a DIRECT child of the shadow root (no wrapping grid element). The smart
-  // reader extracts each card as its own element with its own short text — if they were
+  // reader extracts each card as its own element with its own short text: if they were
   // wrapped in one grid div, the library would surface only that wrapper and
   // formatEnrichedContext would truncate its combined text, dropping the second product.
   // Layout lives on :host so there is no extra element to collapse the cards into.
@@ -144,15 +144,15 @@ setupFeaturedDropShadow();
 
 // --- Section-grouped, action-annotated page context -----------------------------
 // A demo-specific context provider. Instead of the default reader's flat,
-// interactivity-bucketed string — which scatters a section's heading and its products
-// into separate "Content"/"Interactive" lists and loses the visual hierarchy — this
+// interactivity-bucketed string: which scatters a section's heading and its products
+// into separate "Content"/"Interactive" lists and loses the visual hierarchy: this
 // walks the shop's two <h2> sections and lists each product *under its heading*. The
 // "Featured drop" section lives inside a shadow root, so the provider crosses that
 // boundary explicitly via host.shadowRoot (the Compare-readers panel below shows
 // smart-dom-reader doing the same thing as a general-purpose library).
 //
 // Every product line carries a stable `product=<id>` handle, so the model can both
-// DESCRIBE products and emit an `add_to_cart` action — the same id then resolves to a
+// DESCRIBE products and emit an `add_to_cart` action: the same id then resolves to a
 // light-DOM or shadow-DOM button in addToCartHandler.
 
 type ShopProduct = { id: string; name: string; price: string };
@@ -170,7 +170,7 @@ function readLightProducts(): ShopProduct[] {
 }
 
 // Featured-drop products: rendered inside the #featured-drop shadow root, so a plain
-// document query can't see them — we read through host.shadowRoot directly.
+// document query can't see them: we read through host.shadowRoot directly.
 function readFeaturedProducts(): ShopProduct[] {
   const shadow = document.getElementById("featured-drop")?.shadowRoot;
   if (!shadow) return [];
@@ -190,7 +190,7 @@ function buildSectionedPageContext(): string {
     .filter((s) => s.products.length > 0)
     .map((s) => {
       const items = s.products
-        .map((p) => `- ${p.name} — ${p.price} (to add to cart: product=${p.id})`)
+        .map((p) => `- ${p.name}: ${p.price} (to add to cart: product=${p.id})`)
         .join("\n");
       return `## ${s.heading} (${s.zone})\n${items}`;
     });
@@ -218,7 +218,7 @@ const READER_METHODS: Record<
 > = {
   default: {
     label: "Default reader",
-    desc: "Flat TreeWalker list — can't see the shadow-DOM Featured drop, and gives the assistant no handles to add to cart.",
+    desc: "Flat TreeWalker list: can't see the shadow-DOM Featured drop, and gives the assistant no handles to add to cart.",
     build: () =>
       formatEnrichedContext(
         collectEnrichedPageContext({
@@ -229,7 +229,7 @@ const READER_METHODS: Record<
   },
   smart: {
     label: "smart-dom-reader (full)",
-    desc: "Pierces the shadow root, so the assistant can describe the Featured drop — but the list is flat (sections scattered) with no add-to-cart handles.",
+    desc: "Pierces the shadow root, so the assistant can describe the Featured drop, but the list is flat (sections scattered) with no add-to-cart handles.",
     build: () =>
       formatEnrichedContext(
         collectSmartDomContext({
@@ -241,7 +241,7 @@ const READER_METHODS: Record<
   },
   sectioned: {
     label: "Section-grouped",
-    desc: "Products grouped under their section heading (shadow drop included), each with a product=<id> handle — the assistant can describe AND add to cart.",
+    desc: "Products grouped under their section heading (shadow drop included), each with a product=<id> handle: the assistant can describe AND add to cart.",
     build: buildSectionedPageContext,
   },
 };
@@ -255,7 +255,7 @@ const pageContextProvider = () => ({
 
 // Resolve a product id to its Add-to-cart button and click it. Light-DOM buttons are
 // reachable via document.querySelector; the Featured-drop buttons are not (they live in
-// a shadow root) so we pierce host.shadowRoot — the move the default click loop cannot
+// a shadow root) so we pierce host.shadowRoot: the move the default click loop cannot
 // make. This is why the assistant can add the shadow-DOM products to the cart.
 const addToCartHandler: AgentWidgetActionHandler = (action) => {
   if (action.type !== "add_to_cart") return;
@@ -284,8 +284,7 @@ const config: AgentWidgetConfig = {
   storageAdapter: createLocalStorageAdapter(STORAGE_KEY),
   clearChatHistoryStorageKey: STORAGE_KEY,
   // Shadow-aware page context. Which method builds it is chosen live by the rail's
-  // "Assistant's page reader" toggle (default / smart-dom-reader / section-grouped) —
-  // see READER_METHODS and pageContextProvider above.
+  // "Assistant's page reader" toggle (default / smart-dom-reader / section-grouped):  // see READER_METHODS and pageContextProvider above.
   contextProviders: [pageContextProvider],
   // The model replies with a small JSON envelope ({"text": ...} or {"action":
   // "add_to_cart", "product": ..., "text": ...}). The flexible parser renders `text`
@@ -311,14 +310,14 @@ const config: AgentWidgetConfig = {
     width: "min(420px, 95vw)",
     title: "Shopping Assistant",
     subtitle:
-      "I can see this whole shop — including the shadow-DOM featured drop — and add things to your cart",
+      "I can see this whole shop, including the shadow-DOM featured drop, and add things to your cart",
     agentIconText: "🛍️",
   },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
     welcomeTitle: "Shadow-aware page context + actions",
     welcomeSubtitle:
-      "This assistant reads the whole shop grouped by section — including the shadow-DOM \"Featured drop\" the default reader misses — and can add any product to the cart, even the shadow-DOM ones. Ask what's here, or to add something.",
+      "This assistant reads the whole shop grouped by section, including the shadow-DOM \"Featured drop\" the default reader misses, and can add any product to the cart, even the shadow-DOM ones. Ask what's here, or to add something.",
     inputPlaceholder: "Ask about products, or say \"add the headphones\"…",
   },
   suggestionChips: [
@@ -342,7 +341,7 @@ reportDemoConfig(configInspector, { config, mode: "launcher" });
 // shadow-DOM "Featured drop" visibly flips from missed (default) to found (smart).
 // The raw LLM-formatted context is tucked into an expandable <details>.
 //
-// Detection runs against the formatted context string, by section — NOT by product
+// Detection runs against the formatted context string, by section: NOT by product
 // name. The two readers represent products differently (the default reader keys light
 // products by `data-product` + price; the smart reader keys them by css-path + the
 // "Add to cart" label), so a per-name probe is unreliable. What IS reliable: every
@@ -446,7 +445,7 @@ function selectReaderMethod(method: ReaderMethod, announce = false): void {
   if (methodDescEl) methodDescEl.textContent = READER_METHODS[method].desc;
   if (announce) {
     showToast(
-      `Page reader: ${READER_METHODS[method].label} — used on your next message`,
+      `Page reader: ${READER_METHODS[method].label}: used on your next message`,
     );
   }
 }

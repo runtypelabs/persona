@@ -612,7 +612,7 @@ export function createDemoCarousel(
         body.classList.remove("theme-dark");
       }
     } catch {
-      // Cross-origin iframe — silently ignore
+      // Cross-origin iframe: silently ignore
     }
   }
 

@@ -1,5 +1,6 @@
-import { Marked, type RendererObject } from "marked";
+import type { RendererObject } from "marked";
 import type { AgentWidgetMarkdownConfig, AgentWidgetMarkdownRendererOverrides, AgentWidgetMarkdownOptions } from "./types";
+import { getMarkdownParsersSync } from "./markdown-parsers-loader";
 
 /**
  * Options for creating a markdown processor
@@ -48,20 +49,32 @@ const convertRendererOverrides = (
  * ```
  */
 export const createMarkdownProcessor = (options?: MarkdownProcessorOptions) => {
-  const opts = options?.markedOptions;
-  const markedInstance = new Marked({
-    gfm: opts?.gfm ?? true,
-    breaks: opts?.breaks ?? true,
-    pedantic: opts?.pedantic,
-    silent: opts?.silent,
-  });
-  
-  const rendererOverrides = convertRendererOverrides(options?.renderer);
-  if (rendererOverrides) {
-    markedInstance.use({ renderer: rendererOverrides });
-  }
-  
+  let markedInstance: any = null;
+
   return (text: string): string => {
+    const parsers = getMarkdownParsersSync();
+    if (!parsers) {
+      // If the markdown parser hasn't loaded yet, fall back to plain text with HTML escaped.
+      // The widget will re-render automatically once the parser finishes loading.
+      return escapeHtml(text);
+    }
+    
+    if (!markedInstance) {
+      const { Marked } = parsers;
+      const opts = options?.markedOptions;
+      markedInstance = new Marked({
+        gfm: opts?.gfm ?? true,
+        breaks: opts?.breaks ?? true,
+        pedantic: opts?.pedantic,
+        silent: opts?.silent,
+      });
+      
+      const rendererOverrides = convertRendererOverrides(options?.renderer);
+      if (rendererOverrides) {
+        markedInstance.use({ renderer: rendererOverrides });
+      }
+    }
+    
     return markedInstance.parse(text) as string;
   };
 };

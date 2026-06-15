@@ -1,4 +1,4 @@
-/** Theme editor presets — unified collection of built-in presets */
+/** Theme editor presets: unified collection of built-in presets */
 
 import type { ThemeEditorPreset } from './types';
 

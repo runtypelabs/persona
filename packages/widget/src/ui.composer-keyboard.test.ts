@@ -25,7 +25,7 @@ const press = (el: Element, key: string) =>
     new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })
   );
 
-describe("createAgentExperience composer keyboard — Enter / Esc while streaming", () => {
+describe("createAgentExperience composer keyboard: Enter / Esc while streaming", () => {
   const originalFetch = global.fetch;
   let capturedSignals: AbortSignal[] = [];
 
@@ -38,7 +38,7 @@ describe("createAgentExperience composer keyboard — Enter / Esc while streamin
     vi.stubGlobal("cancelAnimationFrame", () => {});
     window.scrollTo = vi.fn();
 
-    // Fetch hangs until aborted — models an in-flight SSE stream so the widget
+    // Fetch hangs until aborted: models an in-flight SSE stream so the widget
     // stays "streaming".
     global.fetch = vi.fn().mockImplementation((_url: string, options: any) => {
       const signal = options.signal as AbortSignal;
@@ -80,7 +80,7 @@ describe("createAgentExperience composer keyboard — Enter / Esc while streamin
     expect(controller.getState().streaming).toBe(true);
     expect(capturedSignals).toHaveLength(1);
 
-    // Type something new, then hit Enter — it must be inert mid-stream.
+    // Type something new, then hit Enter: it must be inert mid-stream.
     textarea.value = "queued text";
     press(textarea, "Enter");
     await flush();
@@ -130,7 +130,7 @@ describe("createAgentExperience composer keyboard — Enter / Esc while streamin
   });
 });
 
-describe("createAgentExperience composer keyboard — Up/Down history", () => {
+describe("createAgentExperience composer keyboard: Up/Down history", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
     try {
@@ -207,7 +207,7 @@ describe("createAgentExperience composer keyboard — Up/Down history", () => {
     textarea.setSelectionRange(5, 5); // caret mid-text
 
     press(textarea, "ArrowUp");
-    // Value unchanged — Up moved the cursor instead of recalling history.
+    // Value unchanged: Up moved the cursor instead of recalling history.
     expect(textarea.value).toBe("line one\nline two");
 
     controller.destroy();

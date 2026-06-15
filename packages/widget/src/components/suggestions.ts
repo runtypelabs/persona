@@ -45,7 +45,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
     if (!chips || !chips.length) return;
 
     // Hide config suggestions after the first user message is sent.
-    // Agent-pushed chips skip this gate — their visibility is the caller's
+    // Agent-pushed chips skip this gate: their visibility is the caller's
     // latest-turn rule (last suggest_replies call with no user message after).
     // Use provided messages or get from session
     if (!agentPushed) {

@@ -2,9 +2,9 @@
  * Shared layout scaffold for the advanced Persona examples.
  *
  * Standardizes every demo page into two columns under the persistent top nav:
- *   1. Configure — the left rail (`.stage-controls`): a unified header plus the
+ *   1. Configure: the left rail (`.stage-controls`): a unified header plus the
  *      page's per-demo controls.
- *   2. Preview — the right pane (`.preview`). Its toolbar carries a
+ *   2. Preview: the right pane (`.preview`). Its toolbar carries a
  *      Preview | Code mode toggle on the left and the variant selectors on the
  *      right (the mount-mode pills built by `setupMountMode`, plus an optional
  *      per-demo variant control). Below the toolbar, the body swaps in place
@@ -65,15 +65,15 @@ export type DemoOutputPanel = {
 export type DemoScaffold = {
   /** The `.shell-main` root. */
   root: HTMLElement;
-  /** `[data-demo-controls]` — per-demo controls live here. */
+  /** `[data-demo-controls]`: per-demo controls live here. */
   controlsSlot: HTMLElement;
-  /** `[data-mount-toolbar]` — the mount-mode pill group renders here. */
+  /** `[data-mount-toolbar]`: the mount-mode pill group renders here. */
   toolbarSlot: HTMLElement;
-  /** `[data-variant-toolbar]` — optional per-demo variant selectors render here. */
+  /** `[data-variant-toolbar]`: optional per-demo variant selectors render here. */
   variantSlot: HTMLElement;
-  /** `.stage-widget` — the widget mount target (inside the preview pane). */
+  /** `.stage-widget`: the widget mount target (inside the preview pane). */
   stage: HTMLElement;
-  /** `[data-config-inspector]` — inside the preview code pane. */
+  /** `[data-config-inspector]`: inside the preview code pane. */
   inspectorSlot: HTMLElement;
   /** Preview | Code mode switch controller. */
   output: DemoOutputPanel;
@@ -230,7 +230,7 @@ export function renderDemoScaffold(
     stage.parentElement?.insertBefore(controls, stage);
   }
 
-  // Drop any author-provided header / toolbar — the scaffold owns these.
+  // Drop any author-provided header / toolbar: the scaffold owns these.
   // Everything else in the rail is treated as per-demo controls.
   controls
     .querySelectorAll(".demo-meta, .demo-header, .title-strip, [data-mount-toolbar]")

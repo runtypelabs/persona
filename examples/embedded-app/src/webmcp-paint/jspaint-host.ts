@@ -1,6 +1,5 @@
 // Parent-side handle on the embedded jspaint iframe. Injects the bridge
-// module (public/jspaint-bridge.mjs) into the same-origin iframe after load —
-// the iframe's CSP allows same-origin scripts but not eval, and jspaint's app
+// module (public/jspaint-bridge.mjs) into the same-origin iframe after load:// the iframe's CSP allows same-origin scripts but not eval, and jspaint's app
 // state lives in global lexical bindings only an in-realm script can reach.
 // See the bridge file's header comment for the full rationale.
 //
@@ -44,7 +43,7 @@ async function injectBridge(iframe: HTMLIFrameElement): Promise<PaintBridge> {
   const frameDocument = iframe.contentDocument;
   if (!frameWindow || !frameDocument) {
     throw new Error(
-      "jspaint iframe is not same-origin — the bridge cannot be injected. " +
+      "jspaint iframe is not same-origin: the bridge cannot be injected. " +
         "Is /jspaint/ being served? (the `jspaint` git dependency is served " +
         "by the serveJsPaint plugin in vite.config.ts; run `pnpm install`)",
     );
@@ -80,7 +79,7 @@ export async function mountJsPaint(host: HTMLElement): Promise<PaintBridge> {
       () => reject(new Error("jspaint iframe failed to load")),
       { once: true },
     );
-    // Not `once` — each document replacement fires load again and needs a
+    // Not `once`: each document replacement fires load again and needs a
     // fresh injection into the new realm.
     iframe.addEventListener("load", () => {
       injectBridge(iframe).then((injected) => {

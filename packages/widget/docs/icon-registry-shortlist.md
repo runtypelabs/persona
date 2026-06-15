@@ -6,9 +6,9 @@ The widget currently imports lucide via `import * as icons from "lucide"` in `sr
 
 We are converting `utils/icons.ts` to a **closed registry of explicitly named imports**. The bundler can then drop unused icons. The trade-off is that `renderLucideIcon(name)` becomes a closed set: any name not in the registry returns `null` and logs a warning. Custom `ComponentRenderer` authors are public consumers of `renderLucideIcon`, so the registry must be generous enough that they rarely hit a missing-icon dead end.
 
-This file defines the curated ~100-icon registry. **Verified against `lucide@0.552.0`** — every entry below resolves to a real file under `node_modules/.pnpm/lucide@0.552.0/node_modules/lucide/dist/esm/icons/`.
+This file defines the curated ~100-icon registry. **Verified against `lucide@0.552.0`**: every entry below resolves to a real file under `node_modules/.pnpm/lucide@0.552.0/node_modules/lucide/dist/esm/icons/`.
 
-**Rule for adding/removing later:** Adding an icon is cheap (~1KB per entry), so add freely if it appears in widget source, in defaults, or as a documented configuration default. Before adding by request, check whether the *visual* is already covered by an existing entry (e.g. don't add `pen` when `pencil` is registered). Use lucide's actual kebab-case identifier — `arrow-up-right`, never `arrowUpRight` or `arrow_up`. If you remove an icon, grep the widget source and the changelog of theme defaults first; mandatory icons in this list are referenced as string literals in widget code or as documented defaults.
+**Rule for adding/removing later:** Adding an icon is cheap (~1KB per entry), so add freely if it appears in widget source, in defaults, or as a documented configuration default. Before adding by request, check whether the *visual* is already covered by an existing entry (e.g. don't add `pen` when `pencil` is registered). Use lucide's actual kebab-case identifier: `arrow-up-right`, never `arrowUpRight` or `arrow_up`. If you remove an icon, grep the widget source and the changelog of theme defaults first; mandatory icons in this list are referenced as string literals in widget code or as documented defaults.
 
 ---
 
@@ -20,7 +20,7 @@ These icons are referenced in `packages/widget/src/` as string literals or as do
 
 | Icon | Where used |
 |---|---|
-| `activity` | `ui.ts:889`, `ui.ts:5016` — connection/streaming pulse indicator |
+| `activity` | `ui.ts:889`, `ui.ts:5016`: connection/streaming pulse indicator |
 | `arrow-down` | default `features.scrollToBottom.iconName` (`defaults.ts:123`) |
 | `arrow-up` | default fallback for send button icon in tests / docs |
 | `arrow-up-right` | default `launcher.callToActionIconName` (`defaults.ts:52`) |
@@ -87,9 +87,9 @@ Running total: 53
 
 | Icon | Rationale |
 |---|---|
-| `circle-check` | Lucide's current name for `check-circle` — success badge in cards/toasts |
-| `circle-x` | Lucide's current name for `x-circle` — error/dismiss pill on inline status |
-| `triangle-alert` | Lucide's current name for `alert-triangle` — warning state, the canonical "watch out" glyph |
+| `circle-check` | Lucide's current name for `check-circle`: success badge in cards/toasts |
+| `circle-x` | Lucide's current name for `x-circle`: error/dismiss pill on inline status |
+| `triangle-alert` | Lucide's current name for `alert-triangle`: warning state, the canonical "watch out" glyph |
 | `info` | Informational tooltips, hint blocks |
 | `ban` | Disabled/forbidden state, blocked user, unsupported feature |
 | `shield` | Trust/security badge (paired with the existing `shield-check`/`shield-x`/`shield-alert`) |
@@ -102,11 +102,11 @@ Running total: 60
 |---|---|
 | `arrow-left` | Back navigation, previous step |
 | `arrow-right` | Forward, "continue", next step CTA |
-| `external-link` | Outbound link affordance — high-frequency in chat output |
-| `ellipsis` | Lucide's current name for `more-horizontal` — overflow / "more options" menu |
-| `ellipsis-vertical` | Lucide's current name for `more-vertical` — kebab menu in lists/rows |
+| `external-link` | Outbound link affordance: high-frequency in chat output |
+| `ellipsis` | Lucide's current name for `more-horizontal`: overflow / "more options" menu |
+| `ellipsis-vertical` | Lucide's current name for `more-vertical`: kebab menu in lists/rows |
 | `menu` | Hamburger / sidebar toggle |
-| `house` | Lucide's current name for `home` — home/dashboard nav |
+| `house` | Lucide's current name for `home`: home/dashboard nav |
 
 ### Actions (14)
 
@@ -122,9 +122,9 @@ Running total: 74
 | `save` | Explicit save action |
 | `download` | Download file/export action |
 | `share` | Share sheet / share-link action |
-| `funnel` | Lucide's current name for `filter` — filter dropdowns and table headers |
+| `funnel` | Lucide's current name for `filter`: filter dropdowns and table headers |
 | `settings` | Settings / preferences gear |
-| `rotate-cw` | Retry / refresh action (visually distinct from `refresh-cw` — clockwise rotation) |
+| `rotate-cw` | Retry / refresh action (visually distinct from `refresh-cw`: clockwise rotation) |
 | `maximize` | Expand panel / fullscreen |
 | `minimize` | Shrink panel / exit fullscreen |
 | `plus` already counted | (kept as reminder; not double-counted) |
@@ -135,7 +135,7 @@ Running total: 85
 
 | Icon | Rationale |
 |---|---|
-| `shopping-cart` | Cart, checkout — table-stakes for retail integrations |
+| `shopping-cart` | Cart, checkout: table-stakes for retail integrations |
 | `shopping-bag` | Alt cart visual; common in mobile/fashion contexts |
 | `package` | Order / shipment object, generic "product" |
 | `truck` | Shipping / delivery status |
@@ -167,8 +167,8 @@ Running total: 100
 
 | Icon | Rationale |
 |---|---|
-| `message-circle` | Chat bubble (rounded variant) — generic conversation |
-| `message-square` | Chat bubble (squared variant) — alternate styling |
+| `message-circle` | Chat bubble (rounded variant): generic conversation |
+| `message-square` | Chat bubble (squared variant): alternate styling |
 | `bell` | Notifications |
 | `heart` | Like / favorite / save |
 | `star` | Rating, favorite, featured |
@@ -200,11 +200,11 @@ Running total: 106
 
 Running total: 111
 
-Wait — actually that's 110 unique icons. Recount confirms **110 total** (33 mandatory + 77 curated).
+Wait: actually that's 110 unique icons. Recount confirms **110 total** (33 mandatory + 77 curated).
 
 | Icon | Rationale |
 |---|---|
-| `sparkles` | AI / "magic" affordance — extremely common in agent UIs |
+| `sparkles` | AI / "magic" affordance: extremely common in agent UIs |
 | `zap` | Power / fast action / "lightning" CTA |
 | `sun` | Light theme toggle |
 | `moon` | Dark theme toggle |
@@ -228,15 +228,15 @@ Useful when someone later asks "why isn't `foo` in the registry?"
 
 | Icon | Why excluded |
 |---|---|
-| `file-json` | **Does not exist in lucide v0.552** — `attachment-manager.ts:69` references it as a fallback for `application/json` mime types, but the runtime already handles a missing icon gracefully (`renderLucideIcon` returns `null`). Switch the source to `file-code` or `file-braces` before relying on it. |
+| `file-json` | **Does not exist in lucide v0.552**: `attachment-manager.ts:69` references it as a fallback for `application/json` mime types, but the runtime already handles a missing icon gracefully (`renderLucideIcon` returns `null`). Switch the source to `file-code` or `file-braces` before relying on it. |
 | `home` | Renamed to `house` in lucide. Adding `home` would silently miss; consumers should learn the new name. |
 | `edit`, `edit-2`, `edit-3` | All removed from lucide. Use `pencil` (registered) or `square-pen`. |
-| `alert-triangle`, `alert-circle` | Renamed to `triangle-alert` and `circle-alert` — register the new names. |
-| `more-horizontal`, `more-vertical` | Renamed to `ellipsis` / `ellipsis-vertical` — register the new names. |
+| `alert-triangle`, `alert-circle` | Renamed to `triangle-alert` and `circle-alert`: register the new names. |
+| `more-horizontal`, `more-vertical` | Renamed to `ellipsis` / `ellipsis-vertical`: register the new names. |
 | `loader-2` | Renamed to `loader-circle`. |
 | `pen` | Visual overlap with `pencil`; pick one. We registered `pencil` because it's the long-standing convention and matches the original `edit` semantics. |
 | `wand-2`, `wand`, `wand-sparkles` | Niche; `sparkles` covers the AI-magic affordance more universally. |
-| `circle-alert` | Considered as a third "warning" glyph alongside `triangle-alert` + `info`. Cut to keep the status set lean — `triangle-alert` is the canonical warning shape. Add back if a consumer asks. |
+| `circle-alert` | Considered as a third "warning" glyph alongside `triangle-alert` + `info`. Cut to keep the status set lean: `triangle-alert` is the canonical warning shape. Add back if a consumer asks. |
 | `hourglass` | Niche; `timer` and `clock` cover the "time passing" semantic without it. |
 | `file-image` | Redundant with `image`; not worth the kilobyte unless attachment previews start using a dedicated file-shaped variant. |
 | `bot-message-square`, `palette` | Brand/decorative; pull in only if/when the widget adopts them as defaults. |

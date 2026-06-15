@@ -7,9 +7,9 @@
 > Full reference (config + theming): https://persona-chat.dev/llms-full.txt
 > Agent skills: https://github.com/runtypelabs/skills
 
-Persona is a drop-in streaming chat UI for AI assistants that works on any website. It's built in TypeScript with vanilla JS — no React, Vue, or framework dependency. It can render inside an opt-in Shadow DOM (`useShadowDom: true`) for style isolation and ships as ESM, CJS, IIFE script-tag bundles, and focused subpath exports for codegen, plugin helpers, animations, theme tools, testing, and smart DOM page-context reading.
+Persona is a drop-in streaming chat UI for AI assistants that works on any website. It's built in TypeScript with vanilla JS: no React, Vue, or framework dependency. It can render inside an opt-in Shadow DOM (`useShadowDom: true`) for style isolation and ships as ESM, CJS, IIFE script-tag bundles, and focused subpath exports for codegen, plugin helpers, animations, theme tools, testing, and smart DOM page-context reading.
 
-The fastest way to deploy an AI chat experience is with [Runtype](https://runtype.com) — Persona is pre-integrated, so you get streaming chat with client tokens, WebMCP/page tools, built-in local client tools, voice, theming, analytics, approvals, and artifacts out of the box. Just set a `clientToken` and go. It also works with any SSE-capable backend if you want to bring your own.
+The fastest way to deploy an AI chat experience is with [Runtype](https://runtype.com): Persona is pre-integrated, so you get streaming chat with client tokens, WebMCP/page tools, built-in local client tools, voice, theming, analytics, approvals, and artifacts out of the box. Just set a `clientToken` and go. It also works with any SSE-capable backend if you want to bring your own.
 
 ## Agent Skills
 
@@ -21,12 +21,12 @@ npx skills add runtypelabs/skills
 
 This registers skills that activate contextually in Claude Code, Cursor, Copilot, Codex, Windsurf, and 30+ other agents. Key skills:
 
-- **`runtype-persona`** — Embedding, configuring, theming, and debugging Persona widgets. Prefers MCP-generated embed code over hand-written snippets.
-- **`runtype`** — Umbrella skill for all Runtype platform questions. Routes to focused skills and includes detailed reference material.
-- **`runtype-build-product`** — Building and deploying Runtype products (agents, flows, tools, surfaces).
-- **`runtype-admin`** — Operating and debugging live Runtype accounts (traces, logs, evals).
-- **`runtype-templates`** — Packaging products as distributable FPO templates.
-- **`runtype-sdk-marathon`** — Code-first workflows with the TypeScript/Python SDK and Marathon task harness.
+- **`runtype-persona`**: Embedding, configuring, theming, and debugging Persona widgets. Prefers MCP-generated embed code over hand-written snippets.
+- **`runtype`**: Umbrella skill for all Runtype platform questions. Routes to focused skills and includes detailed reference material.
+- **`runtype-build-product`**: Building and deploying Runtype products (agents, flows, tools, surfaces).
+- **`runtype-admin`**: Operating and debugging live Runtype accounts (traces, logs, evals).
+- **`runtype-templates`**: Packaging products as distributable FPO templates.
+- **`runtype-sdk-marathon`**: Code-first workflows with the TypeScript/Python SDK and Marathon task harness.
 
 Browse and discover skills at [skills.sh](https://skills.sh).
 
@@ -36,7 +36,7 @@ Browse and discover skills at [skills.sh](https://skills.sh).
 npm install @runtypelabs/persona
 ```
 
-## Quick Start — ES Modules
+## Quick Start: ES Modules
 
 ```ts
 import '@runtypelabs/persona/widget.css';
@@ -57,7 +57,7 @@ chat.submitMessage('Hello!');
 chat.on('assistant:complete', (msg) => console.log(msg.content));
 ```
 
-## Quick Start — Script Tag (CDN)
+## Quick Start: Script Tag (CDN)
 
 ```html
 <script>
@@ -72,7 +72,7 @@ chat.on('assistant:complete', (msg) => console.log(msg.content));
 <script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
 ```
 
-## Quick Start — Client Token (No Proxy)
+## Quick Start: Client Token (No Proxy)
 
 ```ts
 initAgentWidget({
@@ -97,8 +97,8 @@ initAgentWidget({
 
 Two entry points:
 
-- `initAgentWidget({ target, config, useShadowDom?, onChatReady?, windowKey? })` — floating launcher or docked panel. Returns a controller.
-- `createAgentExperience(element, config)` — inline embed with no launcher. Returns a controller.
+- `initAgentWidget({ target, config, useShadowDom?, onChatReady?, windowKey? })`: floating launcher or docked panel. Returns a controller.
+- `createAgentExperience(element, config)`: inline embed with no launcher. Returns a controller.
 
 ### Controller API
 
@@ -136,30 +136,30 @@ Two entry points:
 
 The full config is passed as `config` to `initAgentWidget()`. Key sections:
 
-- **`apiUrl`** — Your proxy endpoint (or use `clientToken` for direct browser-to-API)
-- **`flowId`** — Runtype flow ID for server-side flow selection
-- **`agent`** — Agent loop config (model, systemPrompt, tools, loopConfig) — mutually exclusive with `flowId`
-- **`theme` / `darkTheme`** — Design tokens (palette, semantic, component-level). See `llms-full.txt` for the full token reference.
-- **`colorScheme`** — `'light'`, `'dark'`, or `'auto'`
-- **`launcher`** — Button/panel config (enabled, title, subtitle, position, mountMode, dock)
-- **`layout`** — Header, messages, and slot configuration
-- **`voiceRecognition`** — Speech-to-text (browser Web Speech API or Runtype WebSocket)
-- **`textToSpeech`** — TTS for assistant responses
-- **`features`** — Feature flags for reasoning/tool-call visibility, event stream, artifacts, scroll behavior, stream animations, composer history, `ask_user_question`, and `suggest_replies`
-- **`webmcp`** — Page tool discovery/execution via WebMCP (`document.modelContext`) and `clientTools[]`
-- **`contextProviders` / `requestMiddleware`** — Inject page/editor context into each request (for example, current slide selection)
-- **`plugins`** — Array of plugin objects with render hooks
-- **`parserType`** — `'plain'`, `'json'`, `'regex-json'`, or `'xml'` for structured streaming
-- **`attachments`** — File upload config (types, size limits)
-- **`messageActions`** — Copy/upvote/downvote buttons
-- **`suggestionChips`** — Quick-reply buttons above the composer
-- **`persistState`** — Save widget state across page navigations
-- **`postprocessMessage` / `markdown` / `sanitize`** — Transform and render message HTML; DOMPurify sanitization is on by default
+- **`apiUrl`**: Your proxy endpoint (or use `clientToken` for direct browser-to-API)
+- **`flowId`**: Runtype flow ID for server-side flow selection
+- **`agent`**, Agent loop config (model, systemPrompt, tools, loopConfig), mutually exclusive with `flowId`
+- **`theme` / `darkTheme`**: Design tokens (palette, semantic, component-level). See `llms-full.txt` for the full token reference.
+- **`colorScheme`**: `'light'`, `'dark'`, or `'auto'`
+- **`launcher`**: Button/panel config (enabled, title, subtitle, position, mountMode, dock)
+- **`layout`**: Header, messages, and slot configuration
+- **`voiceRecognition`**: Speech-to-text (browser Web Speech API or Runtype WebSocket)
+- **`textToSpeech`**: TTS for assistant responses
+- **`features`**: Feature flags for reasoning/tool-call visibility, event stream, artifacts, scroll behavior, stream animations, composer history, `ask_user_question`, and `suggest_replies`
+- **`webmcp`**: Page tool discovery/execution via WebMCP (`document.modelContext`) and `clientTools[]`
+- **`contextProviders` / `requestMiddleware`**: Inject page/editor context into each request (for example, current slide selection)
+- **`plugins`**: Array of plugin objects with render hooks
+- **`parserType`**: `'plain'`, `'json'`, `'regex-json'`, or `'xml'` for structured streaming
+- **`attachments`**: File upload config (types, size limits)
+- **`messageActions`**: Copy/upvote/downvote buttons
+- **`suggestionChips`**: Quick-reply buttons above the composer
+- **`persistState`**: Save widget state across page navigations
+- **`postprocessMessage` / `markdown` / `sanitize`**: Transform and render message HTML; DOMPurify sanitization is on by default
 
 ## Launcher Modes
 
-- **Floating** (default): `launcher.mountMode: 'floating'` — corner-anchored button + popup panel. Script-tag installs defer the heavy panel bundle until first open when possible.
-- **Docked**: `launcher.mountMode: 'docked'` — side panel that wraps a content container. `dock.reveal` controls the animation: `'resize'` (default), `'emerge'`, `'overlay'`, `'push'`. `dock.maxHeight` defaults to `100dvh` as a viewport guard when the page has no definite height chain.
+- **Floating** (default): `launcher.mountMode: 'floating'`: corner-anchored button + popup panel. Script-tag installs defer the heavy panel bundle until first open when possible.
+- **Docked**: `launcher.mountMode: 'docked'`: side panel that wraps a content container. `dock.reveal` controls the animation: `'resize'` (default), `'emerge'`, `'overlay'`, `'push'`. `dock.maxHeight` defaults to `100dvh` as a viewport guard when the page has no definite height chain.
 
 ## Message Injection
 

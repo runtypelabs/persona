@@ -1,5 +1,6 @@
 import "@runtypelabs/persona/widget.css";
 import "./home.css";
+import "./command-palette.css";
 
 import {
   createAgentExperience,
@@ -7,10 +8,29 @@ import {
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG
 } from "@runtypelabs/persona";
+import {
+  createPersonaCommandItems,
+  installCommandPalette,
+} from "./command-palette";
+import { ADVANCED_EXAMPLES } from "./examples-nav";
 import { initHomeBackground } from "./home-background";
+import { STANDALONE_EXAMPLES } from "./standalone-nav";
 
 const bgCanvas = document.getElementById("bg-tunnel") as HTMLCanvasElement | null;
 if (bgCanvas) initHomeBackground(bgCanvas);
+
+installCommandPalette({
+  trigger: document.querySelector<HTMLElement>("[data-command-palette-trigger]"),
+  items: createPersonaCommandItems({
+    advancedExamples: ADVANCED_EXAMPLES,
+    standaloneExamples: STANDALONE_EXAMPLES,
+    currentPath: window.location.pathname,
+    includeHomeSections: true,
+  }),
+  title: "Search Persona",
+  subtitle: "Jump to pages, demos, examples, and homepage sections.",
+  placeholder: "Search Persona...",
+});
 
 /** Storage key scoped to this index demo so it does not collide with other demos. */
 const sharedWidgetStorage = createLocalStorageAdapter("persona-state-index-demo");
@@ -98,21 +118,21 @@ You ONLY answer questions about Persona (@runtypelabs/persona), the Persona prox
 
 ## What is Persona?
 Persona is a themeable, pluggable streaming chat widget for websites. It ships as two npm packages:
-- **@runtypelabs/persona** — the main widget library (Shadow DOM isolation, SSE streaming, theming, plugins, voice)
-- **@runtypelabs/persona-proxy** — an optional Hono-based proxy server that sits between the widget and the Runtype API
+- **@runtypelabs/persona**: the main widget library (Shadow DOM isolation, SSE streaming, theming, plugins, voice)
+- **@runtypelabs/persona-proxy**: an optional Hono-based proxy server that sits between the widget and the Runtype API
 
 ## Key Features
-- **Shadow DOM isolation** — widget styles never leak into or from the host page
+- **Shadow DOM isolation**: widget styles never leak into or from the host page
 - **SSE streaming** with pluggable parsers (markdown, JSON, XML, plain text)
-- **Theme system** — CSS custom properties + Tailwind with a \`tvw-\` prefix; light and dark presets included
+- **Theme system**: CSS custom properties + Tailwind with a \`tvw-\` prefix; light and dark presets included
 - **Plugin architecture** for custom functionality
-- **Voice integration** — Web Audio API and ElevenLabs-powered voice input
-- **Agent loop execution** — multi-turn reasoning with tool use
-- **Tool approval** — user confirmation before executing tools
-- **Artifact sidebar** — multi-pane interface for rendering rich content alongside chat
-- **Message feedback** — copy, upvote, downvote on messages
+- **Voice integration**: Web Audio API and ElevenLabs-powered voice input
+- **Agent loop execution**: multi-turn reasoning with tool use
+- **Tool approval**: user confirmation before executing tools
+- **Artifact sidebar**: multi-pane interface for rendering rich content alongside chat
+- **Message feedback**: copy, upvote, downvote on messages
 - **Virtual scrolling** for performance with large message histories
-- **Multiple install methods** — ESM/bundler, CommonJS, or CDN script tag (IIFE)
+- **Multiple install methods**: ESM/bundler, CommonJS, or CDN script tag (IIFE)
 
 ## Installation
 
@@ -151,48 +171,49 @@ CDN URLs follow the pattern \`https://cdn.jsdelivr.net/npm/@runtypelabs/persona@
 ## Available Demos
 When a user asks about a feature or use case, recommend the most relevant demo from this list. Format links as markdown, e.g. [Demo Name](/path.html).
 
-- [Theme Editor](/theme.html) — visually customize the widget theme and styling in real time
-- [Action Middleware](/action-middleware.html) — DOM-aware page context each turn plus middleware that executes real UI actions (navigate, cart, checkout)
-- [Bakery Assistant](/bakery.html) — industry-specific persona with a rich product catalog and cart actions
-- [Docked Panel](/docked-panel-demo.html) — WebMCP-powered dashboard copilot docked to the side of the page; it reads the workspace, switches sections, logs activity, and can move its own dock via page tools
-- [Feedback Integration](/feedback-integration-demo.html) — wiring feedback events to an external API
-- [Custom Loading Indicator](/custom-loading-indicator.html) — replace the default loading UX with your own
-- [Agent Loop Execution](/agent-demo.html) — multi-turn reasoning with internal thought processes and tool use
-- [Tool Approval](/approval-demo.html) — require user confirmation before the agent executes a tool
-- [Focus Input](/focus-input-demo.html) — programmatic input focus and state handling
-- [Artifact Sidebar](/artifact-demo.html) — multi-pane interface with a resizable artifact panel
-- [Fullscreen Assistant](/fullscreen-assistant-demo.html) — dark full-viewport split layout (chat + artifacts)
-- [Voice Integration](/voice-integration-demo.html) — voice input powered by ElevenLabs
-- [Custom Components](/custom-components.html) — render your own interactive components inside assistant messages
-- [Layout Configuration](/layout-config-demo.html) — tweak panel sizing, spacing, and layout options
-- [Stream Animations](/stream-animations-demo.html) — customize how streamed text animates in
-- [Persistent Composer](/persistent-composer.html) — always-visible composer bar layout
-- [WebMCP Storefront](/webmcp-demo.html) — expose page tools to the agent via WebMCP
-- [WebMCP Calendar](/webmcp-calendar.html) — a team calendar copilot that reads availability and books events through WebMCP page tools
-- [WebMCP Slides](/webmcp-slides.html) — a Deck Copilot that edits a slide deck through WebMCP page tools, with selection-scoped tools and presenter-mode controls
+- [Theme Editor](/theme.html): visually customize the widget theme and styling in real time
+- [Action Middleware](/action-middleware.html): DOM-aware page context each turn plus middleware that executes real UI actions (navigate, cart, checkout)
+- [Bakery Assistant](/bakery.html): industry-specific persona with a rich product catalog and cart actions
+- [Docked Panel](/docked-panel-demo.html): WebMCP-powered dashboard copilot docked to the side of the page; it reads the workspace, switches sections, logs activity, and can move its own dock via page tools
+- [Feedback Integration](/feedback-integration-demo.html): wiring feedback events to an external API
+- [Custom Loading Indicator](/custom-loading-indicator.html): replace the default loading UX with your own
+- [Agent Loop Execution](/agent-demo.html): multi-turn reasoning with internal thought processes and tool use
+- [Tool Approval](/approval-demo.html): require user confirmation before the agent executes a tool
+- [Focus Input](/focus-input-demo.html): programmatic input focus and state handling
+- [Artifact Sidebar](/artifact-demo.html): multi-pane interface with a resizable artifact panel
+- [Fullscreen Assistant](/fullscreen-assistant-demo.html): dark full-viewport split layout (chat + artifacts)
+- [Voice Integration](/voice-integration-demo.html): voice input powered by ElevenLabs
+- [Custom Components](/custom-components.html): render your own interactive components inside assistant messages
+- [Layout Configuration](/layout-config-demo.html): tweak panel sizing, spacing, and layout options
+- [Stream Animations](/stream-animations-demo.html): customize how streamed text animates in
+- [Persistent Composer](/persistent-composer.html): always-visible composer bar layout
+- [WebMCP Storefront](/webmcp-demo.html): expose page tools to the agent via WebMCP
+- [WebMCP Calendar](/webmcp-calendar.html): a team calendar copilot that reads availability and books events through WebMCP page tools
+- [WebMCP Slides](/webmcp-slides.html): a Deck Copilot that edits a slide deck through WebMCP page tools, with selection-scoped tools and presenter-mode controls
 
 ## Customization
 
 When a user asks what they can customize, cover these areas (all set via the config object passed to \`initAgentWidget\` / \`createAgentExperience\`):
 
-- **Theme** — \`theme\` accepts a token tree with three layers: \`palette\` (raw color scales, spacing, typography, shadows, radii), \`semantic\` (intent tokens like \`colors.primary\`, \`colors.surface\` that reference palette values), and \`components\` (per-component tokens like \`launcher.size\`, \`panel.borderRadius\`). Simplest override:
+- **Theme**: \`theme\` accepts a token tree with three layers: \`palette\` (raw color scales, spacing, typography, shadows, radii), \`semantic\` (intent tokens like \`colors.primary\`, \`colors.surface\` that reference palette values), and \`components\` (per-component tokens like \`launcher.size\`, \`panel.borderRadius\`). Simplest override:
   \`\`\`js
   theme: { palette: { colors: { primary: { 500: '#7c3aed', 600: '#6d28d9' } } } }
   \`\`\`
-  IMPORTANT: the old flat v1 shape (\`theme: { primary, accent, surface, ... }\`) was removed and is NOT supported — always show the token tree. A \`createTheme()\` helper with plugins (e.g. \`brandPlugin\`, \`accessibilityPlugin\`) is also exported. Point users at the [Theme Editor](/theme.html) demo and the THEME-CONFIG.md reference in the repo.
-- **Dark mode** — \`darkTheme\` (token overrides merged over \`theme\` when dark) and \`colorScheme: 'light' | 'dark' | 'auto'\` (auto detects the \`dark\` class on \`<html>\`, then \`prefers-color-scheme\`).
-- **Copy** — \`copy: { welcomeTitle, welcomeSubtitle, inputPlaceholder, sendButtonLabel, stopButtonLabel, showWelcomeCard, stopReasonNotice }\`.
-- **Launcher & layout** — \`launcher\` config (floating launcher vs inline embed via \`enabled: false\`, width, fullHeight), docked panel mode, artifact sidebar.
-- **Suggestion chips** — \`suggestionChips: [...]\` for starter prompts, plus \`suggestionChipsConfig\` for behavior/appearance.
-- **Composer & buttons** — \`sendButton\`, \`statusIndicator\` (idle text/link/alignment), \`autoFocusInput\`.
-- **Message rendering** — \`postprocessMessage\` hook to transform rendered HTML (e.g. add copy buttons to code blocks), built-in \`markdownPostprocessor\`, custom components inside messages, \`sanitize\` option (\`true\` by default, \`false\`, or a custom \`(html) => string\` function).
-- **Tool & reasoning UI** — \`toolCall\`, \`reasoning\`, and \`approval\` configs for how tool calls, thinking, and approval bubbles render.
-- **Voice & speech** — \`voiceRecognition\` (browser or ElevenLabs-powered providers) and \`textToSpeech\` (Web Speech API: voice, rate, pitch).
-- **Plugins** — a plugin registry for custom functionality beyond config options.
+  IMPORTANT: the old flat v1 shape (\`theme: { primary, accent, surface, ... }\`) was removed and is NOT supported: always show the token tree. A \`createTheme()\` helper with plugins (e.g. \`brandPlugin\`, \`accessibilityPlugin\`) is also exported. Point users at the [Theme Editor](/theme.html) demo and the THEME-CONFIG.md reference in the repo.
+- **Dark mode**: \`darkTheme\` (token overrides merged over \`theme\` when dark) and \`colorScheme: 'light' | 'dark' | 'auto'\` (auto detects the \`dark\` class on \`<html>\`, then \`prefers-color-scheme\`).
+- **Copy**: \`copy: { welcomeTitle, welcomeSubtitle, inputPlaceholder, sendButtonLabel, stopButtonLabel, showWelcomeCard, stopReasonNotice }\`.
+- **Launcher & layout**: \`launcher\` config (floating launcher vs inline embed via \`enabled: false\`, width, fullHeight), docked panel mode, artifact sidebar.
+- **Suggestion chips**: \`suggestionChips: [...]\` for starter prompts, plus \`suggestionChipsConfig\` for behavior/appearance.
+- **Composer & buttons**: \`sendButton\`, \`statusIndicator\` (idle text/link/alignment), \`autoFocusInput\`.
+- **Message rendering**: \`postprocessMessage\` hook to transform rendered HTML (e.g. add copy buttons to code blocks), built-in \`markdownPostprocessor\`, custom components inside messages, \`sanitize\` option (\`true\` by default, \`false\`, or a custom \`(html) => string\` function).
+- **Tool & reasoning UI**: \`toolCall\`, \`reasoning\`, and \`approval\` configs for how tool calls, thinking, and approval bubbles render.
+- **Message actions**: \`messageActions\` toggles for per-message buttons — \`showCopy\`, \`showUpvote\`/\`showDownvote\` (feedback), and \`showReadAloud\` (a "Read aloud" text-to-speech button with play/pause/resume; emits the \`message:read-aloud\` event).
+- **Voice & speech**: \`voiceRecognition\` (browser or ElevenLabs-powered providers) and \`textToSpeech\` (auto-speak + the read-aloud button; voice, rate, pitch, or a hosted engine via \`createEngine\`).
+- **Plugins**: a plugin registry for custom functionality beyond config options.
 
 ## Setting Up Persona With an AI Coding Agent
 
-When a user asks what to tell their AI coding agent to set up Persona, give them a step-by-step prompt they can paste into their agent (Claude Code, Cursor, Copilot, Windsurf, etc.) to implement the widget from scratch. The prompt should be implementation-focused — a one-time setup task, not a reference doc. Adapt it based on the user's context (framework, SSE format, launcher vs inline).
+When a user asks what to tell their AI coding agent to set up Persona, give them a step-by-step prompt they can paste into their agent (Claude Code, Cursor, Copilot, Windsurf, etc.) to implement the widget from scratch. The prompt should be implementation-focused: a one-time setup task, not a reference doc. Adapt it based on the user's context (framework, SSE format, launcher vs inline).
 
 Here is the prompt template:
 
@@ -218,11 +239,11 @@ Add the Persona chat widget (@runtypelabs/persona) to this project.
 
    For an inline embed instead of a floating launcher, use createAgentExperience(element, config) with launcher.enabled = false.
 
-4. Connect to your SSE backend — the widget expects a server-sent event stream. Use these hooks to adapt it to your API:
-   - customFetch(url, init, payload) — replace the built-in fetch to transform the request/response for your backend's expected format. Return a Response with a ReadableStream.
-   - parseSSEEvent(eventData) — parse each incoming SSE event into { text, done, error } so the widget can render it. Return null to skip an event.
-   - getHeaders() / headers — inject auth tokens or other headers into every request.
-   - requestMiddleware(context) — transform the outgoing request payload (messages, metadata) before it's sent.
+4. Connect to your SSE backend: the widget expects a server-sent event stream. Use these hooks to adapt it to your API:
+   - customFetch(url, init, payload): replace the built-in fetch to transform the request/response for your backend's expected format. Return a Response with a ReadableStream.
+   - parseSSEEvent(eventData): parse each incoming SSE event into { text, done, error } so the widget can render it. Return null to skip an event.
+   - getHeaders() / headers: inject auth tokens or other headers into every request.
+   - requestMiddleware(context): transform the outgoing request payload (messages, metadata) before it's sent.
 
 5. Customize appearance:
    - theme: a token tree, e.g. theme: { palette: { colors: { primary: { 500: '#7c3aed', 600: '#6d28d9' } } } } to match site colors (the flat { primary, accent, ... } shape is not supported)
@@ -243,7 +264,7 @@ Tell the user to adjust the prompt to their specifics (framework, styling, use c
 
 You have access to a DeepWiki tool that can read documentation for the runtypelabs/persona repository. When you cannot confidently answer a question from the knowledge in this system prompt alone, use the DeepWiki tool to look up the answer. Always query for the repo "runtypelabs/persona". Do not use DeepWiki for questions you can already answer from the information above.
 
-Keep answers concise. Use markdown formatting. When recommending a demo, briefly explain why it is relevant to the user's question. When suggesting demos as general showcases of Persona's capabilities, prefer highlighting the [Action Middleware](/action-middleware.html) and [Docked Panel](/docked-panel-demo.html) demos — they best demonstrate the full breadth of the widget.`;
+Keep answers concise. Use markdown formatting. When recommending a demo, briefly explain why it is relevant to the user's question. When suggesting demos as general showcases of Persona's capabilities, prefer highlighting the [Action Middleware](/action-middleware.html) and [Docked Panel](/docked-panel-demo.html) demos: they best demonstrate the full breadth of the widget.`;
 
 const homeDemoWelcomeTitle = "Welcome to Persona";
 const homeDemoWelcomeSubtitle =
@@ -297,7 +318,7 @@ const inlineController = createAgentExperience(inlineMount, {
   ...homeDemoSharedAssistant,
   // Match the page's editorial/terminal design: paper surfaces, square
   // corners, ink text, teal accents, mono/Geist type. Raw values are allowed
-  // anywhere a token reference is — the resolver passes non-token strings
+  // anywhere a token reference is: the resolver passes non-token strings
   // through unchanged.
   theme: {
     palette: {
@@ -388,6 +409,23 @@ const inlineController = createAgentExperience(inlineMount, {
   features: {
     showEventStreamToggle: true
   },
+  // Read aloud uses Runtype-hosted TTS (provider: 'runtype'): the button
+  // streams audio from Runtype's per-agent `/speak` endpoint. This demo talks
+  // to a proxy with no clientToken/agentId, so `browserFallback` transparently
+  // speaks with the OS voice today and auto-upgrades to the Runtype voice once a
+  // real clientToken + agentId (and the endpoint) are wired in. `enabled: false`
+  // keeps auto-speak off — only the per-message button uses the engine.
+  textToSpeech: {
+    enabled: false,
+    provider: "runtype",
+    browserFallback: true,
+  },
+  // Per-message "Read aloud" alongside the copy action. Votes stay off (they
+  // need a backend).
+  messageActions: {
+    ...DEFAULT_WIDGET_CONFIG.messageActions,
+    showReadAloud: true,
+  },
   persistState: {
     keyPrefix: homeDemoPersistKeyPrefix
   },
@@ -454,7 +492,7 @@ function initHeroCarousel() {
     card.classList.toggle('is-front', i === 0);
   }
 
-  // Dots — one per card, in original DOM order; clicking brings that card forward.
+  // Dots: one per card, in original DOM order; clicking brings that card forward.
   const dots: HTMLButtonElement[] = [];
   if (dotsMount) {
     cards.forEach((card) => {
@@ -488,7 +526,7 @@ function initHeroCarousel() {
   }
 
   // Start (or restart) the front card's approach animation, honoring an
-  // in-progress hover pause — the stack can rotate while the pointer stays
+  // in-progress hover pause: the stack can rotate while the pointer stays
   // over the carousel, and the new front card must come up already paused.
   function startApproach() {
     stack[0].classList.add('is-approaching');
@@ -554,7 +592,7 @@ function initHeroCarousel() {
 
     peeled.forEach((card, i) => {
       card.classList.remove('is-approaching');
-      // Hand off front-card status immediately — a peeling card must not keep
+      // Hand off front-card status immediately: a peeling card must not keep
       // the is-front affordance or sit in the tab order for the 700ms flight.
       card.classList.remove('is-front');
       const link = card.querySelector('.carousel-3d-card-link') as HTMLAnchorElement | null;
@@ -660,7 +698,7 @@ function initHeroCarousel() {
     const target = e.target as HTMLElement | null;
     if (target && (target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName))) return;
     // Roving-tabindex widgets (e.g. the Quick Start tabs) own the arrow keys
-    // while focused — don't page the carousel on the same keypress.
+    // while focused: don't page the carousel on the same keypress.
     if (target?.closest('[role="tablist"], [role="tab"]')) return;
 
     const lightbox = document.getElementById('demo-lightbox') as HTMLDialogElement;
@@ -703,8 +741,7 @@ function initDemoLightbox() {
     link.addEventListener('click', (e) => {
       e.preventDefault();
 
-      // Clicking a back card brings it to the front instead of opening it —
-      // its visible edge reads as a "next card" affordance, not a link.
+      // Clicking a back card brings it to the front instead of opening it:      // its visible edge reads as a "next card" affordance, not a link.
       const card = link.closest('.carousel-3d-card') as HTMLElement | null;
       const win = window as Window & {
         __heroCarouselStack?: HTMLElement[];
@@ -741,7 +778,7 @@ function initDemoLightbox() {
 
   lightbox.addEventListener('close', () => {
     iframe.src = '';
-    // Only rewind if the lightbox entry is still the active one — the visitor
+    // Only rewind if the lightbox entry is still the active one: the visitor
     // may have navigated (e.g. a hash link) while the modal was open, and
     // history.back() would undo that navigation instead.
     const state = history.state as { demoLightbox?: boolean } | null;

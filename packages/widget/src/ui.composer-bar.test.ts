@@ -17,7 +17,7 @@ describe("createAgentExperience composer-bar mode", () => {
     }
   });
 
-  it("starts collapsed with pill geometry — bottom-centered, configured width on pillRoot", () => {
+  it("starts collapsed with pill geometry: bottom-centered, configured width on pillRoot", () => {
     const mount = document.createElement("div");
     document.body.appendChild(mount);
 
@@ -197,21 +197,20 @@ describe("createAgentExperience composer-bar mode", () => {
     expect(pillRoot).not.toBeNull();
     expect(wrapper!.dataset.state).toBe("collapsed");
     expect(pillRoot!.dataset.state).toBe("collapsed");
-    // Modal's expanded geometry on the wrapper must be cleared on close —
-    // the wrapper has no visible chrome in collapsed state since the
+    // Modal's expanded geometry on the wrapper must be cleared on close:    // the wrapper has no visible chrome in collapsed state since the
     // container is hidden via CSS and the pill lives in pillRoot.
     expect(wrapper!.style.transform).toBe("");
     expect(wrapper!.style.top).toBe("");
     expect(wrapper!.style.maxHeight).toBe("");
     expect(wrapper!.style.height).toBe("");
-    // Pill geometry on pillRoot is reapplied per state — bottom uses the
+    // Pill geometry on pillRoot is reapplied per state: bottom uses the
     // configured offset (default 16px).
     expect(pillRoot!.style.bottom).toBe("16px");
 
     controller.destroy();
   });
 
-  it("does NOT cap the pill composer form with contentMaxWidth — the pill matches the wrapper's responsive width", () => {
+  it("does NOT cap the pill composer form with contentMaxWidth: the pill matches the wrapper's responsive width", () => {
     const mount = document.createElement("div");
     document.body.appendChild(mount);
 
@@ -374,7 +373,7 @@ describe("createAgentExperience composer-bar mode", () => {
     controller.destroy();
   });
 
-  it("places the pill (footer) inside pillRoot — a viewport-fixed sibling of the wrapper, not inside the panel", () => {
+  it("places the pill (footer) inside pillRoot: a viewport-fixed sibling of the wrapper, not inside the panel", () => {
     const mount = document.createElement("div");
     document.body.appendChild(mount);
 
@@ -519,7 +518,7 @@ describe("createAgentExperience composer-bar mode", () => {
     expect(wrapper!.dataset.state).toBe("expanded");
 
     // Simulate a pointerdown anywhere outside the wrapper. Use document.body
-    // as the target — definitely outside the wrapper subtree.
+    // as the target: definitely outside the wrapper subtree.
     const outsideTarget = document.createElement("div");
     document.body.appendChild(outsideTarget);
     outsideTarget.dispatchEvent(
@@ -813,7 +812,7 @@ describe("createAgentExperience composer-bar mode", () => {
     panel!.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true }));
 
     const textNode = getPeekText(mount)!;
-    // letter-rise wins over typewriter — peek-specific config beats inherit.
+    // letter-rise wins over typewriter: peek-specific config beats inherit.
     expect(textNode.classList.contains("persona-stream-letter-rise")).toBe(true);
     expect(textNode.classList.contains("persona-stream-typewriter")).toBe(false);
     expect(textNode.style.getPropertyValue("--persona-stream-step")).toBe("40ms");
@@ -945,7 +944,7 @@ describe("createAgentExperience composer-bar mode", () => {
 
     const textNode = getPeekText(mount)!;
     expect(textNode.querySelector(".persona-pill-peek__skeleton")).not.toBeNull();
-    // No char spans yet — skeleton stands alone.
+    // No char spans yet: skeleton stands alone.
     expect(textNode.querySelectorAll(".persona-stream-char").length).toBe(0);
 
     controller.destroy();
@@ -986,7 +985,7 @@ describe("createAgentExperience composer-bar mode", () => {
     const wrapper = mount.querySelector<HTMLElement>("[data-persona-composer-bar]");
     expect(wrapper!.dataset.state).toBe("expanded");
 
-    // Click inside the pill textarea — must keep the panel expanded.
+    // Click inside the pill textarea: must keep the panel expanded.
     const textarea = mount.querySelector<HTMLTextAreaElement>(
       "[data-persona-composer-input]"
     );
@@ -996,7 +995,7 @@ describe("createAgentExperience composer-bar mode", () => {
     );
     expect(wrapper!.dataset.state).toBe("expanded");
 
-    // Click inside the chat container body — must also keep the panel open.
+    // Click inside the chat container body: must also keep the panel open.
     const body = mount.querySelector<HTMLElement>(".persona-widget-body");
     expect(body).not.toBeNull();
     body!.dispatchEvent(

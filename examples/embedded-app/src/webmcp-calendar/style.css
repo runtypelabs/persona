@@ -575,8 +575,8 @@ h2 {
 
 /* When the user shows AI intent (copilot docked open), the copilot owns the
    full viewport height: collapse the app header (the widget has its own
-   header and close button), hide the manual input surfaces — prompt bar and
-   quick-add form — and let the calendar + events fill the content column. */
+   header and close button), hide the manual input surfaces: prompt bar and
+   quick-add form, and let the calendar + events fill the content column. */
 body.copilot-open .app-header {
   height: 0;
   border-bottom-width: 0;
@@ -601,7 +601,7 @@ body.copilot-open .workspace {
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* ?mode=pill — Persona's native composer-bar pill replaces the page prompt
+/* ?mode=pill: Persona's native composer-bar pill replaces the page prompt
    bar and the header toggle; extra bottom padding keeps the pill from
    covering the footer status line. */
 body.persona-pill-mode .prompt-bar,

@@ -1,5 +1,6 @@
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
+import { loadMarkdownParsers, getMarkdownParsersSync } from "./markdown-parsers-loader";
 import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
 import {
   AgentWidgetConfig,
@@ -24,6 +25,7 @@ import {
   LoadingIndicatorRenderContext,
   IdleIndicatorRenderContext,
   VoiceStatus,
+  ReadAloudState,
   PersonaArtifactRecord,
   PersonaArtifactManualUpsert
 } from "./types";
@@ -64,8 +66,9 @@ import {
 import { syncOverlayHostStacking } from "./utils/overlay-host-stacking";
 import { acquireScrollLock } from "./utils/scroll-lock";
 import { isComposerBarMountMode, isDockedMountMode, resolveDockConfig } from "./utils/dock";
-import { createLauncherButton } from "./components/launcher";
-import { createWrapper, buildPanel, buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
+import { LauncherButton } from "./components/launcher";
+import { buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
+import { createWidgetView, resolveLauncher } from "./components/widget-view";
 import { HEADER_THEME_CSS } from "./components/header-builder";
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
@@ -313,7 +316,7 @@ type Controller = {
   injectMessageBatch: (optionsList: InjectMessageOptions[]) => AgentWidgetMessage[];
   /**
    * Convenience method for injecting an assistant message that renders as a
-   * registered component — same shape Persona produces from a streamed
+   * registered component: same shape Persona produces from a streamed
    * `{ "text": "...", "component": "...", "props": {...} }` payload.
    */
   injectComponentDirective: (
@@ -340,6 +343,13 @@ type Controller = {
   // State query methods
   isOpen: () => boolean;
   isVoiceActive: () => boolean;
+  // Read-aloud (text-to-speech) methods
+  toggleReadAloud: (messageId: string) => void;
+  stopReadAloud: () => void;
+  getReadAloudState: (messageId: string) => ReadAloudState;
+  onReadAloudChange: (
+    listener: (activeId: string | null, state: ReadAloudState) => void
+  ) => () => void;
   getState: () => AgentWidgetStateSnapshot;
   // Feedback methods (CSAT/NPS)
   showCSATFeedback: (options?: Partial<CSATFeedbackOptions>) => void;
@@ -520,7 +530,7 @@ export const createAgentExperience = (
   const eventBus = createEventBus<AgentWidgetControllerEventMap>();
 
   // When persistState is explicitly false, message-history persistence is
-  // disabled — including any user-supplied storageAdapter. This is the strict
+  // disabled: including any user-supplied storageAdapter. This is the strict
   // kill-switch semantic; pass `persistState: true` (or omit it) to opt in.
   const messagePersistenceDisabled = config.persistState === false;
   const storageAdapter: AgentWidgetStorageAdapter | null =
@@ -758,8 +768,13 @@ export const createAgentExperience = (
     }
   }
 
-  const { wrapper, panel, pillRoot } = createWrapper(config);
-  const panelElements = buildPanel(config, isPanelToggleable());
+  // The view layer (`components/widget-view.ts`) owns the one-time structural
+  // assembly (shell + panel) and groups the resulting refs into named regions.
+  // Behavior stays here in ui.ts; the locals below mirror the grouped refs so
+  // the surrounding orchestration code keeps its existing variable names.
+  const view = createWidgetView({ config, showClose: isPanelToggleable() });
+  const { wrapper, panel, pillRoot } = view.shell;
+  const panelElements = view.panelElements;
   let {
     container,
     body,
@@ -882,6 +897,9 @@ export const createAgentExperience = (
       if (existingHeader) {
         existingHeader.replaceWith(customHeader);
         header = customHeader;
+        // Keep the view's tracked header element in sync so a later
+        // header-layout rebuild (view.replaceHeader) targets the mounted node.
+        view.header.element = customHeader;
       }
     }
   }
@@ -985,12 +1003,15 @@ export const createAgentExperience = (
   const ensureComposerAttachmentSurface = (rootFooter: HTMLElement) => {
     const att = config.attachments;
     if (!att?.enabled) return;
-    let previews = rootFooter.querySelector<HTMLElement>(".persona-attachment-previews");
+    let previews =
+      rootFooter.querySelector<HTMLElement>("[data-persona-composer-attachment-previews]") ??
+      rootFooter.querySelector<HTMLElement>(".persona-attachment-previews");
     if (!previews) {
       previews = createElement(
         "div",
         "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2"
       );
+      previews.setAttribute("data-persona-composer-attachment-previews", "");
       previews.style.display = "none";
       const form = rootFooter.querySelector("[data-persona-composer-form]");
       if (form?.parentNode) {
@@ -999,9 +1020,13 @@ export const createAgentExperience = (
         rootFooter.insertBefore(previews, rootFooter.firstChild);
       }
     }
-    if (!rootFooter.querySelector<HTMLInputElement>('input[type="file"]')) {
+    const hasFileInput =
+      rootFooter.querySelector<HTMLInputElement>("[data-persona-composer-attachment-input]") ??
+      rootFooter.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!hasFileInput) {
       const fileIn = createElement("input") as HTMLInputElement;
       fileIn.type = "file";
+      fileIn.setAttribute("data-persona-composer-attachment-input", "");
       fileIn.accept = (att.allowedTypes ?? ALL_SUPPORTED_MIME_TYPES).join(",");
       fileIn.multiple = (att.maxFiles ?? 4) > 1;
       fileIn.style.display = "none";
@@ -1063,13 +1088,24 @@ export const createAgentExperience = (
           : undefined
     });
     if (customComposer) {
-      // Replace the default footer with custom composer
-      footer.replaceWith(customComposer);
-      footer = customComposer;
+      // Replace the default footer with custom composer (keeps view.composer.footer in sync).
+      view.replaceComposer(customComposer);
+      footer = view.composer.footer;
     }
   }
 
   const bindComposerRefsFromFooter = (rootFooter: HTMLElement) => {
+    // Prefer stable `data-persona-composer-*` refs (set by the default and
+    // pill builders); fall back to the legacy class selectors so custom
+    // plugin composers built before these refs existed still bind.
+    const pick = <T extends HTMLElement>(...selectors: string[]): T | null => {
+      for (const selector of selectors) {
+        const found = rootFooter.querySelector<T>(selector);
+        if (found) return found;
+      }
+      return null;
+    };
+
     const form = rootFooter.querySelector<HTMLFormElement>("[data-persona-composer-form]");
     const ta = rootFooter.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]");
     const sb = rootFooter.querySelector<HTMLButtonElement>("[data-persona-composer-submit]");
@@ -1083,18 +1119,31 @@ export const createAgentExperience = (
       micButtonWrapper = mic.parentElement as HTMLElement | null;
     }
     if (st) statusText = st;
-    const sug = rootFooter.querySelector<HTMLElement>(
+    const sug = pick<HTMLElement>(
+      "[data-persona-composer-suggestions]",
       ".persona-mb-3.persona-flex.persona-flex-wrap.persona-gap-2"
     );
     if (sug) suggestions = sug;
-    const attBtn = rootFooter.querySelector<HTMLButtonElement>(".persona-attachment-button");
+    const attBtn = pick<HTMLButtonElement>(
+      "[data-persona-composer-attachment-button]",
+      ".persona-attachment-button"
+    );
     if (attBtn) {
       attachmentButton = attBtn;
       attachmentButtonWrapper = attBtn.parentElement as HTMLElement | null;
     }
-    attachmentInput = rootFooter.querySelector<HTMLInputElement>('input[type="file"]');
-    attachmentPreviewsContainer = rootFooter.querySelector<HTMLElement>(".persona-attachment-previews");
-    const ar = rootFooter.querySelector<HTMLElement>(".persona-widget-composer .persona-flex.persona-items-center.persona-justify-between");
+    attachmentInput = pick<HTMLInputElement>(
+      "[data-persona-composer-attachment-input]",
+      'input[type="file"]'
+    );
+    attachmentPreviewsContainer = pick<HTMLElement>(
+      "[data-persona-composer-attachment-previews]",
+      ".persona-attachment-previews"
+    );
+    const ar = pick<HTMLElement>(
+      "[data-persona-composer-actions]",
+      ".persona-widget-composer .persona-flex.persona-items-center.persona-justify-between"
+    );
     if (ar) _actionsRow = ar;
   };
   ensureComposerAttachmentSurface(footer);
@@ -1310,6 +1359,47 @@ export const createAgentExperience = (
   // This handles clicks even after idiomorph morphs the DOM and strips inline listeners
   const messageVoteState = new Map<string, "upvote" | "downvote">();
 
+  // Read-aloud (text-to-speech) button state. The ReadAloudController in the
+  // session is the source of truth; these mirror its last-known state so the
+  // button visuals can be re-applied after every render/morph (which would
+  // otherwise revert the swapped icon to the default "volume-2").
+  let readAloudActiveId: string | null = null;
+  let readAloudActiveState: ReadAloudState = "idle";
+
+  const READ_ALOUD_ICONS: Record<ReadAloudState, { icon: string; label: string }> = {
+    idle: { icon: "volume-2", label: "Read aloud" },
+    loading: { icon: "loader-circle", label: "Loading…" },
+    playing: { icon: "pause", label: "Pause" },
+    paused: { icon: "play", label: "Resume" },
+  };
+
+  const applyReadAloudButton = (btn: HTMLElement, state: ReadAloudState) => {
+    const { icon, label } = READ_ALOUD_ICONS[state];
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+    btn.setAttribute("aria-pressed", state === "idle" ? "false" : "true");
+    btn.classList.toggle("persona-message-action-active", state !== "idle");
+    btn.classList.toggle("persona-message-action-loading", state === "loading");
+    const svg = renderLucideIcon(icon, 14, "currentColor", 2);
+    if (svg) {
+      btn.innerHTML = "";
+      btn.appendChild(svg);
+    }
+  };
+
+  // Re-apply the current read-aloud state to every read-aloud button in the
+  // thread. Called on state change and after each render so a button that is
+  // playing/paused keeps its icon across DOM morphs.
+  const refreshReadAloudButtons = () => {
+    const buttons = messagesWrapper.querySelectorAll<HTMLElement>('[data-action="read-aloud"]');
+    buttons.forEach((btn) => {
+      const container = btn.closest("[data-actions-for]");
+      const id = container?.getAttribute("data-actions-for") ?? null;
+      const state: ReadAloudState = id && id === readAloudActiveId ? readAloudActiveState : "idle";
+      applyReadAloudButton(btn, state);
+    });
+  };
+
   messagesWrapper.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     const actionBtn = target.closest('.persona-message-action-btn[data-action]') as HTMLElement;
@@ -1356,13 +1446,17 @@ export const createAgentExperience = (
         });
         messageActionCallbacks.onCopy(message);
       }
+    } else if (action === 'read-aloud') {
+      // Toggle play/pause/resume; ReadAloudController drives the engine and
+      // notifies onReadAloudChange, which refreshes the button icon.
+      session.toggleReadAloud(messageId);
     } else if (action === 'upvote' || action === 'downvote') {
       const currentVote = messageVoteState.get(messageId) ?? null;
       const wasActive = currentVote === action;
       const iconName = action === 'upvote' ? 'thumbs-up' : 'thumbs-down';
 
       if (wasActive) {
-        // Toggle off — revert to outline icon
+        // Toggle off: revert to outline icon
         messageVoteState.delete(messageId);
         actionBtn.classList.remove("persona-message-action-active");
         const outlineIcon = renderLucideIcon(iconName, 14, "currentColor", 2);
@@ -1486,7 +1580,7 @@ export const createAgentExperience = (
     let markdown = artifact?.markdown;
     let title = artifact?.title || 'artifact';
     if (!markdown) {
-      // After page refresh, session state is gone — read from the persisted card message
+      // After page refresh, session state is gone: read from the persisted card message
       const cardEl = dlBtn.closest('[data-open-artifact]');
       const msgEl = cardEl?.closest('[data-message-id]');
       const msgId = msgEl?.getAttribute('data-message-id');
@@ -1617,7 +1711,7 @@ export const createAgentExperience = (
 
   /**
    * If `groupedAutoAdvance` is enabled (default) and we're not on the final
-   * page, advance one step. The final page never auto-submits — users always
+   * page, advance one step. The final page never auto-submits: users always
    * confirm with an explicit Submit-all click so they can review.
    */
   const maybeAutoAdvance = (sheet: HTMLElement): void => {
@@ -1657,7 +1751,7 @@ export const createAgentExperience = (
 
       // Best-effort: if this sheet corresponds to a LOCAL-awaiting tool,
       // unblock the paused execution with a sentinel answer so the server
-      // doesn't sit in waiting_for_local forever. Fire-and-forget — errors
+      // doesn't sit in waiting_for_local forever. Fire-and-forget: errors
       // are surfaced to the onError callback. Flip the answered flag first
       // so a racing render pass doesn't re-mount the sheet mid-dismissal.
       const sourceMessage = sessionRef.current
@@ -1693,7 +1787,7 @@ export const createAgentExperience = (
         return;
       }
 
-      // 1-question modes — preserve original UX.
+      // 1-question modes: preserve original UX.
       if (multiSelect) {
         const pressed = trigger.getAttribute("aria-pressed") === "true";
         trigger.setAttribute("aria-pressed", pressed ? "false" : "true");
@@ -2137,7 +2231,7 @@ export const createAgentExperience = (
     // Composer-bar mode: the pill (footer) and peek banner live in a
     // viewport-fixed sibling of the wrapper (`pillRoot`) so they're
     // independent of the wrapper's geometry transitions. Critical for
-    // modal mode — the wrapper there has `transform: translate(-50%, -50%)`
+    // modal mode: the wrapper there has `transform: translate(-50%, -50%)`
     // which would establish a containing block trapping any `position: fixed`
     // descendant. Order inside pillRoot: peekBanner (slim row above pill)
     // → footer (pill). pillRoot's `gap` spaces them; the peek is hidden by
@@ -2165,7 +2259,7 @@ export const createAgentExperience = (
     // `applyComposerBarGeometry()` (per-state inline on the wrapper), the
     // pill carries its own chrome via `.persona-pill-composer`, and the
     // expanded chat panel chrome (border + radius + shadow + bg) is painted
-    // inline on the `container` (NOT the panel — the panel is a transparent
+    // inline on the `container` (NOT the panel: the panel is a transparent
     // flex column with a gap so the pill renders as a sibling below the
     // chrome). Same theme contract as floating mode
     // (`theme.components.panel.{shadow,border,borderRadius}`); collapsed
@@ -2252,7 +2346,7 @@ export const createAgentExperience = (
     // `min-height: 0` / `overflow-y: auto` that make the messages area a
     // scroll container. Between the reset and the mode-specific reapply,
     // the body's clientHeight == scrollHeight momentarily, so the browser
-    // clamps scrollTop to 0 — and a synchronous restore at the end of this
+    // clamps scrollTop to 0, and a synchronous restore at the end of this
     // function runs before layout has reflowed, so the write is also
     // clamped. Defer the restore to the next frame, once the reapplied
     // styles have produced a scrollable container again.
@@ -2287,7 +2381,7 @@ export const createAgentExperience = (
         'persona-bottom-4', 'persona-right-4', 'persona-left-4', 'persona-top-4'
       );
 
-      // Wrapper — fill entire viewport
+      // Wrapper: fill entire viewport
       wrapper.style.cssText = `
         position: fixed !important;
         inset: 0 !important;
@@ -2302,7 +2396,7 @@ export const createAgentExperience = (
         background-color: var(--persona-surface, #ffffff) !important;
       `;
 
-      // Panel — fill wrapper, no radius/shadow
+      // Panel: fill wrapper, no radius/shadow
       panel.style.cssText = `
         position: relative !important;
         display: flex !important;
@@ -2318,7 +2412,7 @@ export const createAgentExperience = (
         border-radius: 0 !important;
       `;
 
-      // Container — fill panel, no radius/border
+      // Container: fill panel, no radius/border
       container.style.cssText = `
         display: flex !important;
         flex-direction: column !important;
@@ -2332,12 +2426,12 @@ export const createAgentExperience = (
         border: none !important;
       `;
 
-      // Body — scrollable messages
+      // Body: scrollable messages
       body.style.flex = '1 1 0%';
       body.style.minHeight = '0';
       body.style.overflowY = 'auto';
 
-      // Footer — pinned at bottom
+      // Footer: pinned at bottom
       footer.style.flexShrink = '0';
 
       wasMobileFullscreen = true;
@@ -2635,7 +2729,7 @@ export const createAgentExperience = (
   // chips win when the latest-turn rule yields any (last suggest_replies tool
   // message with no user message after it); otherwise static config chips
   // keep their before-first-user-message behavior. Config updates MUST route
-  // through here too — re-rendering with only `config.suggestionChips` would
+  // through here too: re-rendering with only `config.suggestionChips` would
   // drop a live agent chip row until the next message change.
   const renderSuggestions = (messages?: AgentWidgetMessage[]) => {
     if (!session) return;
@@ -2686,6 +2780,11 @@ export const createAgentExperience = (
   // pending.
   const lastApprovalBubbleFingerprint = new Map<string, string>();
   let configVersion = 0;
+  // Whether the markdown parsers (marked + dompurify) were already loaded when
+  // this widget mounted. False only on the IIFE/CDN lazy path before the
+  // `markdown-parsers.js` chunk resolves; in that window messages render as
+  // escaped plain text and are re-rendered once the chunk lands (see below).
+  const markdownReadyAtInit = getMarkdownParsersSync() !== null;
   const autoFollow = createFollowStateController();
   let lastScrollTop = 0;
   let scrollRAF: number | null = null;
@@ -2856,7 +2955,7 @@ export const createAgentExperience = (
     updateScrollToBottomCountBadge();
   };
 
-  // Whether the user is currently away from the latest content — drives both
+  // Whether the user is currently away from the latest content: drives both
   // the scroll-to-bottom affordance and the new-messages badge. In follow
   // mode that's "auto-follow paused"; in anchor-top/none modes (where there
   // is no follow state) it's simply "not near the bottom".
@@ -2906,7 +3005,7 @@ export const createAgentExperience = (
 
     if (!force && !isStreaming) return;
 
-    // Only cancel the pending schedule rAF — keep the ongoing smooth scroll
+    // Only cancel the pending schedule rAF: keep the ongoing smooth scroll
     // animation alive so isAutoScrolling stays true.  This prevents scroll
     // events fired by DOM morphing (between cancel and the next rAF) from
     // being misinterpreted as user-initiated upward scrolls that would
@@ -3044,7 +3143,7 @@ export const createAgentExperience = (
       cancelAnimationFrame(anchorRAF);
       anchorRAF = null;
     }
-    // Also stop an in-flight anchor scroll animation — otherwise its
+    // Also stop an in-flight anchor scroll animation: otherwise its
     // remaining frames keep easing scrollTop toward the stale anchor target
     // after a jump-to-latest, chat clear, or scroll-mode change.
     cancelSmoothScroll();
@@ -3103,7 +3202,7 @@ export const createAgentExperience = (
 
   // Content growth handler (ResizeObserver-driven). In follow mode this is
   // what keeps the transcript pinned when content grows *without* a render
-  // event — images/embeds finishing loading mid-stream, fonts swapping,
+  // event: images/embeds finishing loading mid-stream, fonts swapping,
   // the panel or composer resizing. In anchor-top mode it gives spacer room
   // back as the streamed response grows (shrink-only, so total scroll height
   // stays constant and nothing jumps).
@@ -3130,7 +3229,7 @@ export const createAgentExperience = (
 
   // Reacts to a user message the user just sent (seeded so restored history
   // never triggers it). Follow mode re-sticks to the bottom even if the user
-  // had scrolled up — sending is an unambiguous "take me to the latest"
+  // had scrolled up: sending is an unambiguous "take me to the latest"
   // signal. Anchor-top mode pins the sent message near the viewport top.
   const handleUserMessageSent = (messageId: string) => {
     const mode = getScrollMode();
@@ -3240,12 +3339,12 @@ export const createAgentExperience = (
     // Track active message IDs for cache pruning
     const activeMessageIds = new Set<string>();
     // Track ask_user_question tool-call ids whose bubbles were rendered this
-    // pass — used to prune stale sheets from the composer overlay afterward.
+    // pass: used to prune stale sheets from the composer overlay afterward.
     const liveAskToolIds = new Set<string>();
 
     // Plugins that render `ask_user_question` typically attach DOM listeners
     // directly to their buttons. The wrapper cache uses `cloneNode(true)` and
-    // idiomorph inserts new nodes via `document.importNode` — both strip
+    // idiomorph inserts new nodes via `document.importNode`: both strip
     // listeners. For plugin-handled ask messages we therefore append an empty
     // stub during the morph pass and hydrate the live plugin bubble into the
     // morphed wrapper afterward (see post-morph loop below). The stub carries
@@ -3365,7 +3464,7 @@ export const createAgentExperience = (
         }
         // Approval plugins are handled via the stub-and-hydrate path below
         // (see `approvalWithPlugin`), not this inline morph path, so their
-        // listeners survive — so they are intentionally excluded here.
+        // listeners survive, so they are intentionally excluded here.
         if (!message.variant && p.renderMessage) {
           return true;
         }
@@ -3376,9 +3475,9 @@ export const createAgentExperience = (
       const messageLayoutConfig = config.layout?.messages;
 
       // ask_user_question has two rendering modes while waiting for an answer:
-      //   1. Plugin `renderAskUserQuestion` — returns an inline transcript
+      //   1. Plugin `renderAskUserQuestion`: returns an inline transcript
       //      element with its own UI; the composer-overlay sheet is suppressed.
-      //   2. Built-in composer-overlay answer-pill sheet — no transcript stub.
+      //   2. Built-in composer-overlay answer-pill sheet: no transcript stub.
       // Plugins win when they return a non-null element; otherwise fall
       // through to the built-in overlay.
       //
@@ -3400,7 +3499,7 @@ export const createAgentExperience = (
         return;
       }
 
-      // suggest_replies renders no transcript bubble — the chips above the
+      // suggest_replies renders no transcript bubble: the chips above the
       // composer are the only UI, and the session auto-resumes the call.
       // When the feature is disabled the message falls through to the generic
       // tool bubble (and is never auto-resumed), keeping the parked execution
@@ -3507,7 +3606,7 @@ export const createAgentExperience = (
         if (needsRebuild && approvalPlugin?.renderApproval) {
           // Re-find the live message at decision time so we resolve against
           // current state, and route WebMCP gate approvals to the local
-          // resolver — mirroring the built-in delegated handler.
+          // resolver: mirroring the built-in delegated handler.
           const approvalMessageId = message.id;
           const resolveDecision = (
             decision: "approved" | "denied",
@@ -3535,8 +3634,8 @@ export const createAgentExperience = (
         if (needsRebuild && liveBubble === null) {
           // Plugin opted out for this state (e.g. a resolved approval, where the
           // demo plugin defers to the built-in approved/denied bubble). Render
-          // the built-in bubble — it resolves via the delegated `messagesWrapper`
-          // handler and morphs normally — and drop any preserved live wrapper so
+          // the built-in bubble: it resolves via the delegated `messagesWrapper`
+          // handler and morphs normally, and drop any preserved live wrapper so
           // morph can replace the now-stale pending bubble.
           const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
           existing?.removeAttribute("data-preserve-runtime");
@@ -3866,7 +3965,7 @@ export const createAgentExperience = (
     
     // Also check if there's a recently completed assistant message (streaming just ended)
     // This prevents flicker when the message completes but isStreaming hasn't updated yet
-    // Approval-variant messages are UI controls, not content — exclude them so the typing
+    // Approval-variant messages are UI controls, not content: exclude them so the typing
     // indicator still shows while the agent resumes after approval
     const lastMessage = messages[messages.length - 1];
     const hasRecentAssistantResponse = lastMessage?.role === "assistant" && !lastMessage.streaming && lastMessage.variant !== "approval";
@@ -4006,14 +4105,14 @@ export const createAgentExperience = (
 
     // Hydrate plugin-rendered ask-question bubbles into their stub wrappers.
     // Idiomorph imports new nodes via `document.importNode`, which strips
-    // listeners — so we built only an empty stub during morph and now inject
+    // listeners, so we built only an empty stub during morph and now inject
     // the real, listener-bearing bubble directly into the live DOM.
     if (askPluginHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of askPluginHydrate) {
         const wrapper = container.querySelector(`#wrapper-${messageId}`);
         if (!wrapper) continue;
         if (bubble === null) {
-          // No fresh bubble built this pass — either the plugin opted out
+          // No fresh bubble built this pass: either the plugin opted out
           // and a previously-mounted bubble already lives here (preserved by
           // `data-preserve-runtime`), or we skipped the rebuild because the
           // fingerprint matched. Either way, leave the live wrapper alone.
@@ -4040,7 +4139,7 @@ export const createAgentExperience = (
         const wrapper = container.querySelector(`#wrapper-${messageId}`);
         if (!wrapper) continue;
         if (bubble === null) {
-          // Fingerprint matched the previous pass — the live wrapper (kept
+          // Fingerprint matched the previous pass: the live wrapper (kept
           // alive by `data-preserve-runtime`) still holds the listener-bearing
           // bubble from a prior render. Leave it untouched.
           continue;
@@ -4065,7 +4164,7 @@ export const createAgentExperience = (
         if (!wrapper) continue;
         if (bubble === null) {
           // Fingerprint matched the previous pass (or the plugin opted out
-          // after a prior render) — the live wrapper, kept alive by
+          // after a prior render): the live wrapper, kept alive by
           // `data-preserve-runtime`, still holds the listener-bearing bubble.
           continue;
         }
@@ -4082,8 +4181,17 @@ export const createAgentExperience = (
     }
   };
 
-  // Alias for clarity - the implementation handles flicker prevention via typing indicator logic
-  const renderMessagesWithPlugins = renderMessagesWithPluginsImpl;
+  // Alias for clarity - the implementation handles flicker prevention via typing indicator logic.
+  // Re-apply read-aloud button state after each render so a playing/paused
+  // message keeps its icon across idiomorph DOM morphs.
+  const renderMessagesWithPlugins = (
+    container: HTMLElement,
+    messages: AgentWidgetMessage[],
+    transform: MessageTransform
+  ) => {
+    renderMessagesWithPluginsImpl(container, messages, transform);
+    refreshReadAloudButtons();
+  };
 
   /**
    * Composer-bar outside-click dismiss. While the chat is expanded, clicking
@@ -4127,7 +4235,7 @@ export const createAgentExperience = (
 
   /**
    * Composer-bar ESC dismiss. While the chat is expanded, pressing Escape
-   * collapses back to just the pill — same end state as outside-click.
+   * collapses back to just the pill: same end state as outside-click.
    * Matches the WAI-ARIA dialog pattern (modal mode is literally a dialog)
    * and the dominant chat-widget convention (Intercom, Drift, Crisp).
    * Guards on `event.isComposing` so dismissing an IME suggestion doesn't
@@ -4161,7 +4269,7 @@ export const createAgentExperience = (
   destroyCallbacks.push(() => detachComposerBarEscapeDismiss());
 
   /**
-   * Composer-bar "peek" affordance — a chrome-less row above the pill that
+   * Composer-bar "peek" affordance: a chrome-less row above the pill that
    * shows a chat-bubble icon, the trailing 100 chars of the most recent
    * assistant message, and a chevron-up. It is the user's path back into the
    * expanded chat from the collapsed pill.
@@ -4272,7 +4380,7 @@ export const createAgentExperience = (
     }
 
     // Apply buffering (word/line/plugin custom). If the buffer trims content
-    // to empty AND the placeholder is "skeleton", show the skeleton — that's
+    // to empty AND the placeholder is "skeleton", show the skeleton: that's
     // the "line buffer between completions" affordance. Otherwise no
     // pre-content placeholder on the peek (a typing-dots indicator inside a
     // 1-line ticker would feel cramped).
@@ -4297,7 +4405,7 @@ export const createAgentExperience = (
     } else {
       // Trailing 100 chars; for animated modes we keep the slice but use
       // ABSOLUTE indices so per-char/per-word span IDs stay stable as the
-      // window shifts each chunk — idiomorph then preserves animations on
+      // window shifts each chunk: idiomorph then preserves animations on
       // already-revealed units instead of restarting them. Plain "none" mode
       // keeps the legacy `…` ellipsis prefix for visual continuity with the
       // pre-animation behavior.
@@ -4344,7 +4452,7 @@ export const createAgentExperience = (
         // Fire the plugin's per-render hook so glyph-cycle / wipe / custom
         // plugins get a chance to mutate the peek's spans the same way they
         // mutate the main bubble's. The carve-out: `bubble` here is the peek
-        // banner root, not a message bubble — plugins that target
+        // banner root, not a message bubble: plugins that target
         // `bubbleClass` should no-op on that surface.
         plugin.onAfterRender?.({
           container: peekTextNode,
@@ -4421,7 +4529,7 @@ export const createAgentExperience = (
    *
    * Width is expressed as `width: <configured>; max-width: calc(100vw -
    * 32px)`. The two combine such that `width` wins on wide viewports and
-   * `max-width` clamps on narrow ones — same effect as `min(...)` but
+   * `max-width` clamps on narrow ones: same effect as `min(...)` but
    * jsdom-compatible. `100vw` is always the viewport, so the containing-
    * block edge case (host with `transform`/`filter` causing `100%` to
    * resolve against the host instead of the viewport) is neutralized.
@@ -4430,7 +4538,7 @@ export const createAgentExperience = (
     const cb = config.launcher?.composerBar ?? {};
     const expandedSize = cb.expandedSize ?? "anchored";
     const bottomOffset = cb.bottomOffset ?? "16px";
-    // No hardcoded default — when undefined, CSS media queries provide the
+    // No hardcoded default: when undefined, CSS media queries provide the
     // responsive width (90vw / 70vw / 50vw at <640 / <1024 / >=1024) on
     // pillRoot.
     const collapsedMaxWidth = cb.collapsedMaxWidth;
@@ -4470,7 +4578,7 @@ export const createAgentExperience = (
     }
 
     if (!isOpen) {
-      // Collapsed: wrapper has nothing visible to render — the container
+      // Collapsed: wrapper has nothing visible to render: the container
       // inside is `display: none` (via CSS keyed on `[data-state="collapsed"]`)
       // and the pill lives in pillRoot. Leave wrapper geometry empty so it
       // collapses to a zero-size positioning frame at the default fixed
@@ -4497,7 +4605,7 @@ export const createAgentExperience = (
       return;
     }
 
-    // Default: anchored — pill stays at the viewport bottom (in pillRoot);
+    // Default: anchored: pill stays at the viewport bottom (in pillRoot);
     // wrapper's bottom edge clears the pill area so the chrome doesn't
     // overlap it.
     s.left = "50%";
@@ -4541,7 +4649,7 @@ export const createAgentExperience = (
 
       // Toggle the entire container (chat chrome + body + close button) so
       // the collapsed pill only shows the footer (which lives as a SIBLING
-      // of the container in the panel — see panel.appendChild(footer) above).
+      // of the container in the panel: see panel.appendChild(footer) above).
       // The footer is always visible / interactive.
       container.style.display = open ? "flex" : "none";
 
@@ -4609,7 +4717,7 @@ export const createAgentExperience = (
         panel.classList.remove("persona-scale-100", "persona-opacity-100");
         panel.classList.add("persona-scale-95", "persona-opacity-0");
       }
-      // Show launcher when closed, except docked mode (0px column — use controller.open()).
+      // Show launcher when closed, except docked mode (0px column: use controller.open()).
       if (launcherButtonInstance) {
         launcherButtonInstance.element.style.display = dockedMode ? "none" : "";
       } else if (customLauncherElement) {
@@ -4634,7 +4742,7 @@ export const createAgentExperience = (
       const mb = config.launcher?.mobileBreakpoint ?? 640;
       const isMobile = ow.innerWidth <= mb;
       const dockedMF = isDockedMountMode(config) && mf && isMobile;
-      // Composer-bar in expanded fullscreen mode covers the viewport — lock
+      // Composer-bar in expanded fullscreen mode covers the viewport: lock
       // background scroll and elevate host stacking to match other
       // viewport-covering modes (mobile fullscreen, sidebar).
       const composerBarFS =
@@ -4700,7 +4808,7 @@ export const createAgentExperience = (
   };
 
   const setComposerDisabled = (disabled: boolean) => {
-    // The send button stays enabled while streaming — it doubles as a stop
+    // The send button stays enabled while streaming: it doubles as a stop
     // button. Ancillary controls (mic, suggestions, opt-in targets) still
     // disable so the user can't race a send against an in-flight stream.
     setSendButtonMode(disabled ? "stop" : "send");
@@ -4811,7 +4919,7 @@ export const createAgentExperience = (
       renderMessagesWithPlugins(messagesWrapper, messages, postprocess);
       // Start elapsed timer if any active tool has a live duration span
       ensureToolElapsedTimer();
-      // Re-render suggestions — agent chips vs config chips, one shared rule.
+      // Re-render suggestions: agent chips vs config chips, one shared rule.
       // Pass messages directly to avoid calling session.getMessages() during construction
       renderSuggestions(messages);
       scheduleAutoScroll(!isStreaming);
@@ -4875,11 +4983,21 @@ export const createAgentExperience = (
       syncComposerBarPeek();
     },
     onVoiceStatusChanged(status: VoiceStatus) {
+      // Surface the granular status publicly so consumers can render their own
+      // per-state UI (e.g. a listening/speaking status dock). Fires for every
+      // provider; the mic-button styling below is runtype-specific.
+      eventBus.emit("voice:status", { status, timestamp: Date.now() });
       if (config.voiceRecognition?.provider?.type !== 'runtype') return;
 
       switch (status) {
         case 'listening':
-          // Recording styles are applied by toggleVoice() / startVoiceRecognition() flows
+          // A continuous realtime call re-enters `listening` after every spoken
+          // reply, so reassert the recording styles here (they were replaced by
+          // the `processing`/`speaking` states during the turn). The initial
+          // listen is also styled by the toggleVoice()/startVoiceRecognition()
+          // flows; reapplying is idempotent.
+          removeRuntypeMicStateStyles();
+          applyRuntypeMicRecordingStyles();
           break;
         case 'processing':
           removeRuntypeMicStateStyles();
@@ -4892,7 +5010,7 @@ export const createAgentExperience = (
         default:
           // idle, connected, disconnected, error
           if (status === 'idle' && session.isBargeInActive()) {
-            // Barge-in mic is still hot between turns — show it as active
+            // Barge-in mic is still hot between turns: show it as active
             removeRuntypeMicStateStyles();
             applyRuntypeMicRecordingStyles();
             micButton?.setAttribute("aria-label", "End voice session");
@@ -4914,9 +5032,32 @@ export const createAgentExperience = (
 
   sessionRef.current = session;
 
+  // Mirror read-aloud playback state into the action buttons, and surface it as
+  // a controller event (parallel to message:copy / message:feedback).
+  let lastReadAloudId: string | null = null;
+  session.onReadAloudChange((activeId, state) => {
+    readAloudActiveId = activeId;
+    readAloudActiveState = state;
+    refreshReadAloudButtons();
+
+    // On the terminal `idle` transition activeId is null, so fall back to the
+    // last active id to identify the message that just finished/stopped.
+    const messageId = activeId ?? lastReadAloudId;
+    if (activeId) lastReadAloudId = activeId;
+    const message = messageId
+      ? session.getMessages().find((m) => m.id === messageId) ?? null
+      : null;
+    eventBus.emit("message:read-aloud", {
+      messageId,
+      message,
+      state,
+      timestamp: Date.now(),
+    });
+    if (state === "idle") lastReadAloudId = null;
+  });
+
   // The constructor only emits onMessagesChanged when it has initial
-  // messages, so seed send-detection explicitly for the empty-session case —
-  // otherwise the user's very first send would be mistaken for the seed.
+  // messages, so seed send-detection explicitly for the empty-session case:  // otherwise the user's very first send would be mistaken for the seed.
   scrollSendSeeded = true;
 
   // Setup Runtype voice provider when configured (connects WebSocket for server-side STT)
@@ -5052,7 +5193,7 @@ export const createAgentExperience = (
   // --- Composer message-history navigation (Up/Down arrows) ---
   // Lets users recall and edit previously sent messages, shell/Slack style.
   // The pure state machine lives in utils/composer-history.ts; here we feed it
-  // caret info and apply the value it returns. Text-only recall — attachments
+  // caret info and apply the value it returns. Text-only recall: attachments
   // on past messages are not restored.
   const historyNavigationEnabled = () =>
     config.features?.composerHistory !== false;
@@ -5121,11 +5262,11 @@ export const createAgentExperience = (
         }
         return;
       }
-      // Not handled — fall through to default cursor movement.
+      // Not handled: fall through to default cursor movement.
     }
 
     // Enter: send, unless a response is streaming. While streaming, Enter is
-    // inert (never a stop trigger) — the visible Stop button / Esc stop it.
+    // inert (never a stop trigger): the visible Stop button / Esc stop it.
     if (event.key === "Enter" && !event.shiftKey) {
       if (session.isStreaming()) {
         event.preventDefault();
@@ -5147,7 +5288,7 @@ export const createAgentExperience = (
     if (!session.isStreaming()) return;
     if (!event.composedPath().includes(container)) return;
     session.cancel();
-    // Cancelling emits no terminal/error SSE frame — reset throughput so the
+    // Cancelling emits no terminal/error SSE frame: reset throughput so the
     // Events row doesn't keep showing a live rate from the stopped stream.
     throughputTracker?.reset();
     eventStreamView?.update();
@@ -5364,7 +5505,10 @@ export const createAgentExperience = (
       (typeof (window as any).webkitSpeechRecognition !== 'undefined' ||
        typeof (window as any).SpeechRecognition !== 'undefined');
     const hasRuntypeProvider = voiceConfig?.provider?.type === 'runtype';
-    const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider;
+    // Bring-your-own (`custom`) providers own their own input pipeline (cloud
+    // STT, etc.), so the mic should render regardless of Web Speech support.
+    const hasCustomProvider = voiceConfig?.provider?.type === 'custom';
+    const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider || hasCustomProvider;
 
     if (!hasVoiceInput) return null;
 
@@ -5709,31 +5853,17 @@ export const createAgentExperience = (
   };
 
   // Plugin hook: renderLauncher - allow plugins to provide custom launcher
-  let launcherButtonInstance: ReturnType<typeof createLauncherButton> | null = null;
+  let launcherButtonInstance: LauncherButton | null = null;
   let customLauncherElement: HTMLElement | null = null;
   
   // Composer-bar mode is launcher-less by design: the persistent pill IS the
   // entry point, so skip creating any launcher button (default or plugin).
   if (launcherEnabled && !isComposerBar()) {
-    const launcherPlugin = plugins.find(p => p.renderLauncher);
-    if (launcherPlugin?.renderLauncher) {
-      const customLauncher = launcherPlugin.renderLauncher({
-        config,
-        defaultRenderer: () => {
-          const btn = createLauncherButton(config, toggleOpen);
-          return btn.element;
-        },
-        onToggle: toggleOpen
-      });
-      if (customLauncher) {
-        customLauncherElement = customLauncher;
-      }
-    }
-
-    // Use custom launcher if provided, otherwise use default
-    if (!customLauncherElement) {
-      launcherButtonInstance = createLauncherButton(config, toggleOpen);
-    }
+    const { instance, element } = resolveLauncher({ config, plugins, onToggle: toggleOpen });
+    launcherButtonInstance = instance;
+    // A plugin-provided launcher returns no controller instance; track its
+    // element separately so the update path can manage it.
+    if (!instance) customLauncherElement = element;
   }
 
   if (launcherButtonInstance) {
@@ -5754,7 +5884,7 @@ export const createAgentExperience = (
 
   if (autoFocusInput) {
     // Composer-bar's pill exposes the textarea immediately, so focus it on
-    // init like the inline embed does — even though the panel is collapsed.
+    // init like the inline embed does: even though the panel is collapsed.
     if (!launcherEnabled || isComposerBar()) {
       setTimeout(() => maybeFocusInput(), 0);
     } else if (open) {
@@ -5763,7 +5893,7 @@ export const createAgentExperience = (
   }
 
   const recalcPanelHeight = () => {
-    // Composer-bar mode lets CSS own all sizing — collapsed pill is auto-sized
+    // Composer-bar mode lets CSS own all sizing: collapsed pill is auto-sized
     // by the footer; expanded fullscreen/modal are driven by CSS attribute
     // selectors plus inline maxWidth/maxHeight set in updateOpenState. JS
     // sizing here would fight the morph transitions.
@@ -5791,7 +5921,7 @@ export const createAgentExperience = (
         return;
       }
 
-      // Exiting mobile fullscreen (e.g., orientation change to landscape) — reset all styles
+      // Exiting mobile fullscreen (e.g., orientation change to landscape): reset all styles
       if (wasMobileFullscreen) {
         wasMobileFullscreen = false;
         applyFullHeightStyles();
@@ -5905,7 +6035,7 @@ export const createAgentExperience = (
     lastBottomOffset = currentBottomOffset;
 
     if (getScrollMode() !== "follow") {
-      // No follow state to manage — just keep the scroll-to-bottom
+      // No follow state to manage: just keep the scroll-to-bottom
       // affordance in sync with the user's position.
       lastScrollTop = scrollTop;
       syncScrollToBottomButton();
@@ -6039,7 +6169,7 @@ export const createAgentExperience = (
       messageCache.clear();
       resumeAutoScroll();
 
-      // Drop any open ask_user_question sheets — their source messages are gone.
+      // Drop any open ask_user_question sheets: their source messages are gone.
       removeAskUserQuestionSheet(panelElements.composerOverlay);
 
       // Always clear the default localStorage key
@@ -6168,7 +6298,7 @@ export const createAgentExperience = (
   // may expose `dataTransfer.types` as a DOMStringList or restrict access
   // during certain drag phases.  The cost is minimal: we suppress the native
   // "open file" default for ALL drag-overs while the widget is alive and
-  // attachments are on — text drags into the textarea still work because
+  // attachments are on: text drags into the textarea still work because
   // element-level handlers are unaffected (we don't stopPropagation here).
   const ownerDoc = mount.ownerDocument;
   const handleDocDragOver = (e: DragEvent) => {
@@ -6338,26 +6468,11 @@ export const createAgentExperience = (
       }
 
       if (config.launcher?.enabled !== false && !launcherButtonInstance && !customLauncherElement) {
-        // Check for launcher plugin when re-enabling
-        const launcherPlugin = plugins.find(p => p.renderLauncher);
-        if (launcherPlugin?.renderLauncher) {
-          const customLauncher = launcherPlugin.renderLauncher({
-            config,
-            defaultRenderer: () => {
-              const btn = createLauncherButton(config, toggleOpen);
-              return btn.element;
-            },
-            onToggle: toggleOpen
-          });
-          if (customLauncher) {
-            customLauncherElement = customLauncher;
-            mount.appendChild(customLauncherElement);
-          }
-        }
-        if (!customLauncherElement) {
-          launcherButtonInstance = createLauncherButton(config, toggleOpen);
-          mount.appendChild(launcherButtonInstance.element);
-        }
+        // Resolve the launcher again when re-enabling (honors renderLauncher plugin).
+        const { instance, element } = resolveLauncher({ config, plugins, onToggle: toggleOpen });
+        launcherButtonInstance = instance;
+        if (!instance) customLauncherElement = element;
+        mount.appendChild(element);
       }
 
       if (launcherButtonInstance) {
@@ -6390,15 +6505,15 @@ export const createAgentExperience = (
               onClose: () => setOpenState(false, "user")
             });
 
-        // Replace the old header with the new one
-        header.replaceWith(newHeaderElements.header);
+        // Replace the old header with the new one (keeps view.header in sync).
+        view.replaceHeader(newHeaderElements);
 
-        // Update references
-        header = newHeaderElements.header;
-        iconHolder = newHeaderElements.iconHolder;
-        headerTitle = newHeaderElements.headerTitle;
-        headerSubtitle = newHeaderElements.headerSubtitle;
-        closeButton = newHeaderElements.closeButton;
+        // Mirror the view's refreshed header refs into the local bindings.
+        header = view.header.element;
+        iconHolder = view.header.iconHolder;
+        headerTitle = view.header.headerTitle;
+        headerSubtitle = view.header.headerSubtitle;
+        closeButton = view.header.closeButton;
 
         prevHeaderLayout = headerLayoutConfig?.layout;
       } else if (headerLayoutConfig) {
@@ -6532,9 +6647,13 @@ export const createAgentExperience = (
           
           // Update icon content based on priority: Lucide icon > iconUrl > agentIconText
           if (headerIconName) {
-            // Use Lucide icon
+            // Use Lucide icon. Stroke `currentColor` (not a hardcoded white) so the
+            // glyph inherits iconHolder's `color: var(--persona-header-icon-fg, …)`,
+            // matching the initial render in header-builder.ts. Without this, any
+            // controller.update() (e.g. a theme-editor change) re-rendered the icon
+            // as white and the configured header icon color "wouldn't stick".
             const iconSize = parseFloat(headerIconSize) || 24;
-            const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "#ffffff", 2);
+            const iconSvg = renderLucideIcon(headerIconName, iconSize * 0.6, "currentColor", 1);
             if (iconSvg) {
               iconHolder.replaceChildren(iconSvg);
             } else {
@@ -6851,7 +6970,7 @@ export const createAgentExperience = (
         }
 
         if (shouldShowClearChat) {
-          // Update size — composer-bar mode owns its sizing (16px to match
+          // Update size: composer-bar mode owns its sizing (16px to match
           // the close icon), so leave size alone there. Floating-launcher
           // and other modes still honor `launcher.clearChat.size`.
           if (!isComposerBar()) {
@@ -7830,6 +7949,28 @@ export const createAgentExperience = (
     isVoiceActive(): boolean {
       return voiceState.active;
     },
+    /**
+     * Toggle "Read aloud" for an assistant message: play → pause → resume (or
+     * play → stop when the engine can't pause). Speaks via the configured
+     * speech engine (browser Web Speech API by default).
+     */
+    toggleReadAloud(messageId: string): void {
+      session.toggleReadAloud(messageId);
+    },
+    /** Stop any in-progress read-aloud / text-to-speech playback. */
+    stopReadAloud(): void {
+      session.stopSpeaking();
+    },
+    /** Current read-aloud playback state for a message (`idle` unless active). */
+    getReadAloudState(messageId: string): ReadAloudState {
+      return session.getReadAloudState(messageId);
+    },
+    /** Subscribe to read-aloud state changes. Returns an unsubscribe function. */
+    onReadAloudChange(
+      listener: (activeId: string | null, state: ReadAloudState) => void
+    ): () => void {
+      return session.onReadAloudChange(listener);
+    },
     getState(): AgentWidgetStateSnapshot {
       return {
         open: isPanelToggleable() && open,
@@ -8117,6 +8258,26 @@ export const createAgentExperience = (
   // `onStreamingChanged`, `updateOpenState`, and pointerenter/leave on
   // the panel.
   syncComposerBarPeek();
+
+  // IIFE/CDN lazy path only: the parsers were not ready at mount, so any
+  // messages rendered so far (restored history, eager intro/injected messages)
+  // were escaped to plain text. Once the `markdown-parsers.js` chunk resolves,
+  // bust the message cache and re-render so they pick up real markdown. Bumping
+  // `configVersion` + clearing the cache is required because the message
+  // content is unchanged, so the fingerprint cache would otherwise reuse the
+  // stale escaped wrappers. No-op for the ESM build (parsers ready at init).
+  if (!markdownReadyAtInit) {
+    loadMarkdownParsers()
+      .then(() => {
+        if (!session) return;
+        configVersion++;
+        messageCache.clear();
+        renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+      })
+      .catch(() => {
+        /* chunk failed to load (e.g. ad blocker): keep the escaped fallback */
+      });
+  }
 
   return controller;
 };

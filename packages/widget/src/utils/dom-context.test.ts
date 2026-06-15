@@ -181,7 +181,7 @@ describe("collectEnrichedPageContext", () => {
   it("handles empty body", () => {
     document.body.innerHTML = "";
     const result = collectEnrichedPageContext();
-    // May return body itself or empty — either is valid
+    // May return body itself or empty: either is valid
     expect(Array.isArray(result)).toBe(true);
   });
 
@@ -386,7 +386,7 @@ describe("formatEnrichedContext", () => {
         interactivity: "static",
         attributes: {},
         formattedSummary:
-          "[Shirt](/p/1) — $10\nselector: div.card\nactions: Add",
+          "[Shirt](/p/1): $10\nselector: div.card\nactions: Add",
       },
     ];
     const out = formatEnrichedContext(elements, { mode: "structured" });

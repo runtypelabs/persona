@@ -1,6 +1,6 @@
 import type { PaintBridge } from "./jspaint-host";
 
-// WebMCP tool surface for the jspaint demo — spike scope. Operator-level
+// WebMCP tool surface for the jspaint demo: spike scope. Operator-level
 // tools that drive jspaint's real UI (tool palette, undo stack, brush
 // dynamics) through the injected bridge, plus the snapshot tool that closes
 // the visual loop by returning the canvas as an MCP image content block
@@ -14,7 +14,7 @@ declare global {
   }
 }
 
-// Only canvas-wiping tools raise Persona's approval bubble — strokes, fills,
+// Only canvas-wiping tools raise Persona's approval bubble: strokes, fills,
 // and color changes auto-approve so the user can watch the agent paint live
 // (and everything lands on jspaint's undo stack anyway).
 export const APPROVAL_REQUIRED_TOOL_NAMES = new Set(["clear_canvas"]);
@@ -89,7 +89,7 @@ export function setupPaintTools(bridge: PaintBridge): void {
       name: "get_canvas_info",
       title: "Read canvas state",
       description:
-        "Read the canvas dimensions, the currently selected tool, and the current foreground/background colors. Call this first to learn the coordinate space — the origin is the top-left, x grows right, y grows down.",
+        "Read the canvas dimensions, the currently selected tool, and the current foreground/background colors. Call this first to learn the coordinate space: the origin is the top-left, x grows right, y grows down.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true },
       execute: () => toolResult(bridge.getState()),
@@ -136,7 +136,7 @@ export function setupPaintTools(bridge: PaintBridge): void {
       name: "draw_stroke",
       title: "Draw a stroke",
       description:
-        "Draw one continuous stroke through the given canvas-pixel points using the selected tool — a freehand path for pencil/brush/airbrush/eraser, or first-to-last for shape tools (line, rectangle, ellipse: pass exactly 2 points, the corners/endpoints). Optionally switch tool and foreground color in the same call. The stroke animates live on screen.",
+        "Draw one continuous stroke through the given canvas-pixel points using the selected tool: a freehand path for pencil/brush/airbrush/eraser, or first-to-last for shape tools (line, rectangle, ellipse: pass exactly 2 points, the corners/endpoints). Optionally switch tool and foreground color in the same call. The stroke animates live on screen.",
       inputSchema: {
         type: "object",
         properties: {
@@ -181,7 +181,7 @@ export function setupPaintTools(bridge: PaintBridge): void {
       name: "get_canvas_snapshot",
       title: "Look at the canvas",
       description:
-        "Capture the current canvas as an image — exactly what the user sees. Call this after drawing to check your work and fix mistakes, or to see what the user has drawn.",
+        "Capture the current canvas as an image: exactly what the user sees. Call this after drawing to check your work and fix mistakes, or to see what the user has drawn.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true },
       execute: () => {
@@ -208,13 +208,13 @@ export function setupPaintTools(bridge: PaintBridge): void {
       name: "render_replay_gif",
       title: "Replay the drawing as a GIF",
       description:
-        "Open the paint app's 'Render History as GIF' window: an animated replay of every stroke since the canvas was last cleared, with a Save button the user can click to keep it. Call this once at the end of a finished drawing (especially a speedrun) — the replay is the shareable artifact.",
+        "Open the paint app's 'Render History as GIF' window: an animated replay of every stroke since the canvas was last cleared, with a Save button the user can click to keep it. Call this once at the end of a finished drawing (especially a speedrun): the replay is the shareable artifact.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true },
       execute: () =>
         toolResult(
           bridge.renderHistoryGif(),
-          "Replay GIF window opened — the user can hit Save to keep it.",
+          "Replay GIF window opened: the user can hit Save to keep it.",
         ),
     },
     {

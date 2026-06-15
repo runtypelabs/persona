@@ -154,7 +154,7 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
   });
 
   it("returns empty when initializeWebMCPPolyfill() throws", async () => {
-    // No pre-existing modelContext — otherwise install() short-circuits
+    // No pre-existing modelContext: otherwise install() short-circuits
     // before importing the polyfill and the throwing init never runs.
     vi.stubGlobal("document", {});
     polyfillMock.initThrows = true;
@@ -249,7 +249,7 @@ describe("setWebMcpPolyfillLoader", () => {
   });
 
   it("never invokes the loader when a compatible modelContext is already present", async () => {
-    // beforeEach stubs a compatible document.modelContext — the install
+    // beforeEach stubs a compatible document.modelContext: the install
     // short-circuit must win, so a failing loader is irrelevant.
     registry.tools = [fakeTool({ name: "search" })];
     const loader = vi.fn(() => Promise.reject(new Error("should not load")));
@@ -439,7 +439,7 @@ describe("WebMcpBridge.executeToolCall", () => {
     ];
     const bridge = new WebMcpBridge({ enabled: true, onConfirm: confirmSpy });
     const r = await bridge.executeToolCall("webmcp:sensitive", {});
-    // Only the single outer gate fires — the polyfill owns the in-tool callback.
+    // Only the single outer gate fires: the polyfill owns the in-tool callback.
     expect(confirmSpy).toHaveBeenCalledTimes(1);
     expect(r.isError).toBeUndefined();
     expect(r.content[0]).toEqual({
@@ -532,13 +532,13 @@ describe("WebMcpBridge.executeToolCall", () => {
     const r = await pending;
     expect(r.isError).toBe(true);
     expect((r.content[0] as { text: string }).text).toMatch(/abort/i);
-    // Late resolve from the page side — must not poison anything.
+    // Late resolve from the page side: must not poison anything.
     resolveStuck?.("late");
   });
 
   it("rejects a webmcp call for a tool excluded by the client allowlist", async () => {
     // snapshotForDispatch filters by allowlist for the wire surface, but
-    // executeToolCall must also re-check it — defense-in-depth alongside the
+    // executeToolCall must also re-check it: defense-in-depth alongside the
     // server-side check.
     const executeSpy = vi.fn(() => "should not run");
     registry.tools = [
@@ -556,7 +556,7 @@ describe("WebMcpBridge.executeToolCall", () => {
   });
 });
 
-describe("computeClientToolsFingerprint — diff-only / send-once", () => {
+describe("computeClientToolsFingerprint: diff-only / send-once", () => {
   const tool = (over: Partial<ClientToolDefinition> = {}): ClientToolDefinition => ({
     name: "search",
     description: "Search the catalog",

@@ -4,7 +4,7 @@
 
 ### Minor Changes
 
-- 571f4c5: Add WEBMCP_PAINT_FLOW — the Paint Pal flow for the jspaint WebMCP demo, with a snapshot-and-look visual loop (image tool results through /resume).
+- 571f4c5: Add WEBMCP_PAINT_FLOW: the Paint Pal flow for the jspaint WebMCP demo, with a snapshot-and-look visual loop (image tool results through /resume).
 
 ### Patch Changes
 
@@ -14,12 +14,12 @@
 
 ### Minor Changes
 
-- 1aeba66: Add `THEME_ASSISTANT_FLOW` — the tool-calling flow behind the Theme Editor's docked **Theme Copilot**. It drives the page's WebMCP theme tools (`webmcp:*`) to restyle the editor's live preview from chat, and supports an image-matching loop: paste a screenshot of another chat widget and the copilot extracts a style spec, applies it, then verifies the result via the page's `screenshot_preview` capture tool.
+- 1aeba66: Add `THEME_ASSISTANT_FLOW`: the tool-calling flow behind the Theme Editor's docked **Theme Copilot**. It drives the page's WebMCP theme tools (`webmcp:*`) to restyle the editor's live preview from chat, and supports an image-matching loop: paste a screenshot of another chat widget and the copilot extracts a style spec, applies it, then verifies the result via the page's `screenshot_preview` capture tool.
 
 ### Patch Changes
 
-- 6d57356: Add "Asking instead of guessing" guidance to the WebMCP calendar and slides flow prompts: when an `ask_user_question` tool is available (e.g. via the widget's `features.askUserQuestion.expose` flag), the copilots now know to offer structured options for genuinely ambiguous requests — conflicting slots and multi-match events in the calendar, theme/content/style-direction forks in the deck editor — and to act directly otherwise.
-- dd03a60: Update the WebMCP calendar and slides flow prompts for the slimmed demo tool surfaces: the calendar demo dropped its lookup-only tools (`get_users`, `get_event_colors`, `get_page_title` — users now ride along on `get_calendar_state` and colors are schema enums), and the slides demo folded `distribute_elements` into `align_elements`.
+- 6d57356: Add "Asking instead of guessing" guidance to the WebMCP calendar and slides flow prompts: when an `ask_user_question` tool is available (e.g. via the widget's `features.askUserQuestion.expose` flag), the copilots now know to offer structured options for genuinely ambiguous requests: conflicting slots and multi-match events in the calendar, theme/content/style-direction forks in the deck editor , and to act directly otherwise.
+- dd03a60: Update the WebMCP calendar and slides flow prompts for the slimmed demo tool surfaces: the calendar demo dropped its lookup-only tools (`get_users`, `get_event_colors`, `get_page_title`: users now ride along on `get_calendar_state` and colors are schema enums), and the slides demo folded `distribute_elements` into `align_elements`.
 - ee8febd: Add "Acting vs. claiming" grounding rules to all WebMCP demo flow system prompts (calendar, storefront, slides, docked) so the model never confirms a calendar/cart/deck/workspace change without a same-turn tool call, and handles bare follow-ups like "do it" by executing or verifying instead of re-announcing a past action.
 - f3868fe: Ground the WebMCP slides flow for vague restyle requests ("make the title slide pop"): treat them as a small focused style pass (4-5 mutations, prefer update_element, at most one new decorative element, theme tokens only) ending in a summary, instead of an open-ended add_element spree that hits the runtime's per-turn tool-call cap and strands the user with "Stopped after calling a tool."
 
@@ -28,13 +28,13 @@
 ### Minor Changes
 
 - 1247779: Add `WEBMCP_DOCKED_FLOW`, a tool-less dashboard-copilot flow for the docked panel demo. Like the other WebMCP flows, the page registers its workspace tools on `document.modelContext` and the proxy forwards them as `clientTools[]`.
-- 3333850: Add WEBMCP_SLIDES_FLOW — a Deck Copilot flow for the new slide-deck editor WebMCP demo (`examples/embedded-app/webmcp-slides.html`). Like the other WebMCP flows it owns no tools of its own; the system prompt teaches the model to work with the page's dynamic tool set (selection-scoped tools, presenter-mode swap) and the live `{{slides_context}}` editor state.
+- 3333850: Add WEBMCP_SLIDES_FLOW: a Deck Copilot flow for the new slide-deck editor WebMCP demo (`examples/embedded-app/webmcp-slides.html`). Like the other WebMCP flows it owns no tools of its own; the system prompt teaches the model to work with the page's dynamic tool set (selection-scoped tools, presenter-mode swap) and the live `{{slides_context}}` editor state.
 
 ## 3.31.0
 
 ### Minor Changes
 
-- 4d1e79c: Add `WEBMCP_CALENDAR_FLOW`, an in-code flow template for the webmcp-calendar example. Like `WEBMCP_STOREFRONT_FLOW`, the agent owns no tools of its own — the page registers ten calendar tools on `document.modelContext` and the widget forwards them as `clientTools[]`. The system prompt reinforces the page's timezone-safe tool contract (local wall-clock `YYYY-MM-DDTHH:mm` date-times, no UTC offsets).
+- 4d1e79c: Add `WEBMCP_CALENDAR_FLOW`, an in-code flow template for the webmcp-calendar example. Like `WEBMCP_STOREFRONT_FLOW`, the agent owns no tools of its own: the page registers ten calendar tools on `document.modelContext` and the widget forwards them as `clientTools[]`. The system prompt reinforces the page's timezone-safe tool contract (local wall-clock `YYYY-MM-DDTHH:mm` date-times, no UTC offsets).
 
 ### Patch Changes
 
@@ -46,8 +46,8 @@
 
 - 236afc2: Two proxy additions:
 
-  - **`WEBMCP_STOREFRONT_FLOW`** — an in-code agent definition for the WebMCP "Switchback" storefront demo. The demo now runs through the local proxy like the other examples (via a new `/api/chat/dispatch-webmcp` route) instead of requiring a client token pointed at a hosted Runtype agent — the page's `clientTools[]` are forwarded upstream and the `/resume` round-trip is proxied, with the full agent prompt and model living in the repo.
-  - **Preview-aware CORS** — `createChatProxyApp` now reflects dynamic preview origins so per-branch preview deployments work without enumerating their URLs. It reflects the caller's origin when the proxy itself is a preview runtime (`VERCEL_ENV === "preview"`) and when the origin matches the new `previewOriginPattern` option (default `https://*.vercel.app`; settable via the `PREVIEW_ORIGIN_PATTERN` env var to allow other preview domains, or `false` to disable). The exact `allowedOrigins` allowlist and production behavior are unchanged.
+  - **`WEBMCP_STOREFRONT_FLOW`**: an in-code agent definition for the WebMCP "Switchback" storefront demo. The demo now runs through the local proxy like the other examples (via a new `/api/chat/dispatch-webmcp` route) instead of requiring a client token pointed at a hosted Runtype agent : the page's `clientTools[]` are forwarded upstream and the `/resume` round-trip is proxied, with the full agent prompt and model living in the repo.
+  - **Preview-aware CORS**: `createChatProxyApp` now reflects dynamic preview origins so per-branch preview deployments work without enumerating their URLs. It reflects the caller's origin when the proxy itself is a preview runtime (`VERCEL_ENV === "preview"`) and when the origin matches the new `previewOriginPattern` option (default `https://*.vercel.app`; settable via the `PREVIEW_ORIGIN_PATTERN` env var to allow other preview domains, or `false` to disable). The exact `allowedOrigins` allowlist and production behavior are unchanged.
 
 ### Patch Changes
 
@@ -61,11 +61,11 @@
   `{{pageContext}}`. It returns a small JSON envelope: a markdown `text` field for chat
   replies, plus an optional `add_to_cart` action carrying a product handle so the assistant
   can drive the host. Used by the smart-dom-reader example to demonstrate shadow-DOM-aware
-  page context reaching the model — and the assistant adding shadow-DOM products to the cart.
+  page context reaching the model, and the assistant adding shadow-DOM products to the cart.
 
 ### Patch Changes
 
-- 6569c56: Forward WebMCP `clientTools[]` to the upstream API in flow-dispatch mode. The proxy rebuilds the flow-dispatch payload from scratch, which previously dropped the page-discovered tools the widget snapshots from `document.modelContext` — so a WebMCP-enabled flow behind the proxy never received them and the agent could not call page tools. The flow path now copies `clientTools` through (agent mode already forwarded the payload as-is), pairing with the existing `/resume` endpoint to complete the local-tool round-trip.
+- 6569c56: Forward WebMCP `clientTools[]` to the upstream API in flow-dispatch mode. The proxy rebuilds the flow-dispatch payload from scratch, which previously dropped the page-discovered tools the widget snapshots from `document.modelContext`, so a WebMCP-enabled flow behind the proxy never received them and the agent could not call page tools. The flow path now copies `clientTools` through (agent mode already forwarded the payload as-is), pairing with the existing `/resume` endpoint to complete the local-tool round-trip.
 
 ## 3.19.0
 
@@ -73,33 +73,33 @@
 
 - 2eba114: ## `@runtypelabs/persona`
 
-  ### `launcher.mountMode: "composer-bar"` — persistent pill composer
+  ### `launcher.mountMode: "composer-bar"`: persistent pill composer
 
-  Add `launcher.mountMode: "composer-bar"` — a sleek rounded-pill composer fixed at the bottom of the viewport that morphs into an expanded chat panel on submit and minimizes back. Single composer DOM instance, so messages, drafts, and attachments persist across collapse/expand. The collapsed pill is single-row (paperclip · textarea · mic · send) with no surrounding card chrome; suggestions and status indicator stay hidden until expanded.
+  Add `launcher.mountMode: "composer-bar"`: a sleek rounded-pill composer fixed at the bottom of the viewport that morphs into an expanded chat panel on submit and minimizes back. Single composer DOM instance, so messages, drafts, and attachments persist across collapse/expand. The collapsed pill is single-row (paperclip · textarea · mic · send) with no surrounding card chrome; suggestions and status indicator stay hidden until expanded.
 
   Configurable via `launcher.composerBar`:
 
-  - `expandedSize`: `"anchored"` (default — pill stays put, panel grows upward into a centered column above it) | `"fullscreen"` (edge-to-edge viewport) | `"modal"` (centered sheet)
-  - `expandedMaxWidth` (default `"880px"`) and `expandedTopOffset` (default `"5vh"`) — anchored panel sizing
-  - `contentMaxWidth` (default `"720px"`) — auto-centers messages, composer, suggestions, and previews horizontally inside the expanded panel; falls back to `layout.contentMaxWidth` when set
-  - `collapsedMaxWidth` (no default — when omitted, the pill uses the responsive defaults `90vw` / `70vw` / `50vw` at `<640` / `<1024` / `>=1024` viewports; setting it overrides with a fixed pill width) and `bottomOffset` (default `"16px"`) — pill sizing/position
+  - `expandedSize`: `"anchored"` (default: pill stays put, panel grows upward into a centered column above it) | `"fullscreen"` (edge-to-edge viewport) | `"modal"` (centered sheet)
+  - `expandedMaxWidth` (default `"880px"`) and `expandedTopOffset` (default `"5vh"`): anchored panel sizing
+  - `contentMaxWidth` (default `"720px"`): auto-centers messages, composer, suggestions, and previews horizontally inside the expanded panel; falls back to `layout.contentMaxWidth` when set
+  - `collapsedMaxWidth` (no default: when omitted, the pill uses the responsive defaults `90vw` / `70vw` / `50vw` at `<640` / `<1024` / `>=1024` viewports; setting it overrides with a fixed pill width) and `bottomOffset` (default `"16px"`) : pill sizing/position
   - `expandOnSubmit` (default `true`), `modalMaxWidth`, `modalMaxHeight`
 
-  Internally, composer-bar mode uses a purpose-built pill composer (`pill-composer-builder.ts`) that shares low-level button factories with the regular composer (`composer-parts.ts`) — the only meaningful difference is the layout shell + className. Plugin-rendered headers and composers continue to work unchanged; stable data-attribute selectors (`data-persona-composer-form`, `-input`, `-submit`, `-mic`, `-status`) are preserved across both composer variants.
+  Internally, composer-bar mode uses a purpose-built pill composer (`pill-composer-builder.ts`) that shares low-level button factories with the regular composer (`composer-parts.ts`): the only meaningful difference is the layout shell + className. Plugin-rendered headers and composers continue to work unchanged; stable data-attribute selectors (`data-persona-composer-form`, `-input`, `-submit`, `-mic`, `-status`) are preserved across both composer variants.
 
-  The expanded chat panel is purpose-built for this UX: a minimal corner-only header (no title bar, subtitle, or refresh button strip) with two small action icons stacked in the top-right — a clear/start-over button and the × close button — and the pill stays mounted as a viewport-fixed sibling of the chat panel chrome (always visible and interactive, never absorbed into the panel above). Clicks anywhere outside the wrapper or pill collapse back to just the pill. Both action buttons flow through the existing `launcher.closeButton*` and `launcher.clearChat.*` config (tooltip, icon, color, size) via shared `createCloseButton` and `createClearChatButton` factories in `header-parts.ts`. Set `launcher.clearChat: { enabled: false }` to render only the × close icon. Composer-bar mode sizes both icons at 16px (versus the floating launcher's 32px default) to read as a paired action group rather than a header strip.
+  The expanded chat panel is purpose-built for this UX: a minimal corner-only header (no title bar, subtitle, or refresh button strip) with two small action icons stacked in the top-right, a clear/start-over button and the × close button, and the pill stays mounted as a viewport-fixed sibling of the chat panel chrome (always visible and interactive, never absorbed into the panel above). Clicks anywhere outside the wrapper or pill collapse back to just the pill. Both action buttons flow through the existing `launcher.closeButton*` and `launcher.clearChat.*` config (tooltip, icon, color, size) via shared `createCloseButton` and `createClearChatButton` factories in `header-parts.ts`. Set `launcher.clearChat: { enabled: false }` to render only the × close icon. Composer-bar mode sizes both icons at 16px (versus the floating launcher's 32px default) to read as a paired action group rather than a header strip.
 
-  The pill (and peek banner) live in a viewport-fixed `pillRoot` element that is a sibling of the wrapper inside the host mount node — not a descendant. This decouples the pill from the wrapper's geometry transitions: in `expandedSize: "modal"` the wrapper's `transform: translate(-50%, -50%)` no longer drags the pill toward the centered modal, and in `expandedSize: "fullscreen"` the pill stays anchored at the viewport bottom while the chat panel covers the rest of the screen. The pillRoot mirrors the wrapper's `data-state` and `data-expanded-size` attributes so peek visibility rules cascade unchanged. Pill width is set on the pillRoot itself via the same responsive `90vw / 70vw / 50vw` media-query defaults (overridable with `composerBar.collapsedMaxWidth`); pill bottom offset honors `composerBar.bottomOffset` (default `16px`). In `expandedSize: "anchored"`, the wrapper's bottom edge clears the pill area via `calc(${bottomOffset} + var(--persona-pill-area-height, 80px))` — override the CSS variable on the host if the static 80px clearance leaves a visible overlap with custom pill content.
+  The pill (and peek banner) live in a viewport-fixed `pillRoot` element that is a sibling of the wrapper inside the host mount node: not a descendant. This decouples the pill from the wrapper's geometry transitions: in `expandedSize: "modal"` the wrapper's `transform: translate(-50%, -50%)` no longer drags the pill toward the centered modal, and in `expandedSize: "fullscreen"` the pill stays anchored at the viewport bottom while the chat panel covers the rest of the screen. The pillRoot mirrors the wrapper's `data-state` and `data-expanded-size` attributes so peek visibility rules cascade unchanged. Pill width is set on the pillRoot itself via the same responsive `90vw / 70vw / 50vw` media-query defaults (overridable with `composerBar.collapsedMaxWidth`); pill bottom offset honors `composerBar.bottomOffset` (default `16px`). In `expandedSize: "anchored"`, the wrapper's bottom edge clears the pill area via `calc(${bottomOffset} + var(--persona-pill-area-height, 80px))` : override the CSS variable on the host if the static 80px clearance leaves a visible overlap with custom pill content.
 
   In `expandedSize: "fullscreen"`, the chat panel covers the entire viewport and messages scroll behind the pill rather than stopping above it. The body's bottom padding is removed in this mode (so the body background extends to the viewport edge) and the messages list gains `padding-bottom: calc(${bottomOffset} + var(--persona-pill-area-height) + 16px)` so the last bubble is reachable above the pill rather than permanently obscured. Override `--persona-pill-area-height` on the host to tune the reachability gap if you've themed the pill to a non-default height.
 
-  Pressing Escape while the chat is expanded collapses back to just the pill — same end state as outside-click. Matches the WAI-ARIA dialog pattern (modal mode is literally a dialog) and the dominant chat-widget convention (Intercom, Drift, Crisp). The handler attaches on expand and detaches on collapse, so it doesn't intercept Escape outside the chat session. Guarded on `event.isComposing` so dismissing an IME suggestion (Pinyin, Kotoeri, etc.) doesn't also collapse the panel.
+  Pressing Escape while the chat is expanded collapses back to just the pill: same end state as outside-click. Matches the WAI-ARIA dialog pattern (modal mode is literally a dialog) and the dominant chat-widget convention (Intercom, Drift, Crisp). The handler attaches on expand and detaches on collapse, so it doesn't intercept Escape outside the chat session. Guarded on `event.isComposing` so dismissing an IME suggestion (Pinyin, Kotoeri, etc.) doesn't also collapse the panel.
 
-  In `expandedSize: "modal"` and `expandedSize: "anchored"`, the wrapper's geometry transition is disabled so the panel snaps to its expanded position rather than sliding in directionally. (The wrapper goes from collapsed — no inline `top/left/transform` — to its expanded position, and the default `transform 220ms ease` would interpolate `none → translate(...)`, reading as a slide-in from the wrapper's static-default origin: diagonally from the bottom-right for modal, horizontally from the right for anchored. With pillRoot owning the visible chrome in the collapsed state, the wrapper has nothing to morph from, so the slide is pure motion noise. The container's existing opacity fade-in keyframe is enough of a reveal. Fullscreen keeps its geometry transition because that's the one mode where the wrapper genuinely morphs from empty to full viewport, and the staggered fade-in cascade is built specifically to mask the outer-edge/inner-content desync during that morph.)
+  In `expandedSize: "modal"` and `expandedSize: "anchored"`, the wrapper's geometry transition is disabled so the panel snaps to its expanded position rather than sliding in directionally. (The wrapper goes from collapsed, no inline `top/left/transform`, to its expanded position, and the default `transform 220ms ease` would interpolate `none → translate(...)`, reading as a slide-in from the wrapper's static-default origin: diagonally from the bottom-right for modal, horizontally from the right for anchored. With pillRoot owning the visible chrome in the collapsed state, the wrapper has nothing to morph from, so the slide is pure motion noise. The container's existing opacity fade-in keyframe is enough of a reveal. Fullscreen keeps its geometry transition because that's the one mode where the wrapper genuinely morphs from empty to full viewport, and the staggered fade-in cascade is built specifically to mask the outer-edge/inner-content desync during that morph.)
 
   The collapsed pill includes a "peek" affordance for re-entering chat history: a chrome-less row above the pill that shows a chat-bubble icon, a trailing-100-character preview of the most recent assistant message, and a chevron-up. The peek fades in while a response is streaming OR when the user hovers the composer area, and fades out otherwise. Clicking the peek expands the panel. This replaces the earlier pill-internal chat-bubble button + focus-to-open behavior, which read as composer chrome rather than as navigation.
 
-  The peek banner shares the same animation surface as the main message stream. Configure once via `features.streamAnimation` and both surfaces inherit (matching `type`, `speed`, `duration`, `buffer`, `placeholder`, and custom plugins). To animate the peek differently — e.g. faster cadence in the ticker than in the bubble — set `launcher.composerBar.peek.streamAnimation` with the same `AgentWidgetStreamAnimationFeature` shape. Carve-out: `bubbleClass` is ignored on the peek (no bubble analog); `containerClass`, `wrap` (`"char"`/`"word"`), `useCaret`, the `"skeleton"` placeholder (used when `buffer: "line"` trims to empty between line completions), and `onAfterRender` plugin hooks all port over. Per-char/per-word span IDs are namespaced with a `peek-` prefix so they don't collide with the main bubble's spans for the same message id, and use absolute char indices so animations on already-revealed chars survive each chunk's slice shift.
+  The peek banner shares the same animation surface as the main message stream. Configure once via `features.streamAnimation` and both surfaces inherit (matching `type`, `speed`, `duration`, `buffer`, `placeholder`, and custom plugins). To animate the peek differently, e.g. faster cadence in the ticker than in the bubble, set `launcher.composerBar.peek.streamAnimation` with the same `AgentWidgetStreamAnimationFeature` shape. Carve-out: `bubbleClass` is ignored on the peek (no bubble analog); `containerClass`, `wrap` (`"char"`/`"word"`), `useCaret`, the `"skeleton"` placeholder (used when `buffer: "line"` trims to empty between line completions), and `onAfterRender` plugin hooks all port over. Per-char/per-word span IDs are namespaced with a `peek-` prefix so they don't collide with the main bubble's spans for the same message id, and use absolute char indices so animations on already-revealed chars survive each chunk's slice shift.
 
   ### Icon registry: explicit named imports + public `renderLucideIcon` export
 
@@ -114,11 +114,11 @@
      if (clock) container.appendChild(clock);
      ```
 
-  2. **Closed icon registry — drops ~400KB from the IIFE bundle.** The previous implementation was `import * as icons from "lucide"` plus a runtime string lookup, which defeated tree-shaking; the script-tag/CDN distribution (`dist/index.global.js`) shipped all 1640 lucide icons. The registry is now a curated set of ~110 named imports covering the widget's internal usage and common UI patterns (forms, status, navigation, commerce, media, files, social, decorative). Names outside the registry return `null` and log a warning. See `packages/widget/docs/icon-registry-shortlist.md` for the full list and the rule for adding more.
+  2. **Closed icon registry: drops ~400KB from the IIFE bundle.** The previous implementation was `import * as icons from "lucide"` plus a runtime string lookup, which defeated tree-shaking; the script-tag/CDN distribution (`dist/index.global.js`) shipped all 1640 lucide icons. The registry is now a curated set of ~110 named imports covering the widget's internal usage and common UI patterns (forms, status, navigation, commerce, media, files, social, decorative). Names outside the registry return `null` and log a warning. See `packages/widget/docs/icon-registry-shortlist.md` for the full list and the rule for adding more.
 
   **Behavior note for config consumers:** any place where you previously passed an arbitrary lucide icon name string (e.g. `launcher.callToActionIconName`, `sendButton.iconName`, `voiceRecognition.iconName`) now resolves against the closed registry. The default values are unchanged. If you were passing a custom name that isn't on the shortlist, the icon will silently render as null and you'll see a console warning telling you to add it to the registry. The new `IconName` type gives TypeScript users autocomplete and compile-time errors for unknown names.
 
-  **Side fix:** `attachment-manager.ts` previously returned `"file-json"` as the icon name for `application/json` attachments — that name doesn't exist in lucide v0.552 and silently failed. Switched to `"file-code"`.
+  **Side fix:** `attachment-manager.ts` previously returned `"file-json"` as the icon name for `application/json` attachments: that name doesn't exist in lucide v0.552 and silently failed. Switched to `"file-code"`.
 
   ### Component directives: preserve event listeners across morph passes
 
@@ -126,7 +126,7 @@
 
   ### `persistState: false` is now an explicit storage kill-switch
 
-  Make `persistState: false` an explicit kill-switch for chat-history persistence. Previously, setting `persistState: false` only suppressed UI state (open/closed, voice mode, focus) — message history was still written to the default `localStorage["persona-state"]` adapter. Now `persistState: false` also short-circuits the storage adapter: the default localStorage adapter is never created, and any user-supplied `storageAdapter` is ignored. This is the strict semantic — passing `persistState: false` means "no chat history is read or written, period." Pass `persistState: true` (or omit it) to keep the prior behavior of persisting messages via the configured `storageAdapter` (or the built-in localStorage adapter).
+  Make `persistState: false` an explicit kill-switch for chat-history persistence. Previously, setting `persistState: false` only suppressed UI state (open/closed, voice mode, focus): message history was still written to the default `localStorage["persona-state"]` adapter. Now `persistState: false` also short-circuits the storage adapter: the default localStorage adapter is never created, and any user-supplied `storageAdapter` is ignored. This is the strict semantic : passing `persistState: false` means "no chat history is read or written, period." Pass `persistState: true` (or omit it) to keep the prior behavior of persisting messages via the configured `storageAdapter` (or the built-in localStorage adapter).
 
   Why this matters: multiple widgets on the same origin (e.g. several demos served from `localhost:5173`) used to share a single `localStorage` key by default, so injecting a tool call or message in one demo would leak into the next. Setting `persistState: false` now prevents that leakage; for cases that _want_ persistence, pass an explicit `storageAdapter: createLocalStorageAdapter("my-unique-key")`.
 
@@ -136,9 +136,9 @@
 
   Add `STOREFRONT_ASSISTANT_FLOW` for product-discovery demos. The flow emits three JSON actions:
 
-  - `{"action": "show_products", "text": "...", "products": [{"id", "title", "price", "image", "description"}]}` — the host page renders these as a product card grid alongside the chat.
-  - `{"action": "add_to_cart", "text": "...", "item": {"id", "title", "price"}}` — the host adds the item to its cart.
-  - `{"action": "message", "text": "..."}` — plain conversational reply that stays in the chat panel.
+  - `{"action": "show_products", "text": "...", "products": [{"id", "title", "price", "image", "description"}]}`: the host page renders these as a product card grid alongside the chat.
+  - `{"action": "add_to_cart", "text": "...", "item": {"id", "title", "price"}}`: the host adds the item to its cart.
+  - `{"action": "message", "text": "..."}`: plain conversational reply that stays in the chat panel.
 
   Wired into `examples/persistent-composer.html` as the "Everspun" storefront demo, where asking the agent for products dynamically populates a host-page product grid below the existing hero.
 
@@ -187,7 +187,7 @@
 ### Patch Changes
 
 - a723d8e: Harden the proxy for edge runtimes, reduce sensitive development logging, update Hono dependencies for security fixes, and clean up widget build tooling.
-- a723d8e: Read `NODE_ENV` and `RUNTYPE_API_KEY` through a runtime-safe env helper (works when `process` is absent), and keep verbose dispatch logs—API key prefix and full JSON payload—strictly in development.
+- a723d8e: Read `NODE_ENV` and `RUNTYPE_API_KEY` through a runtime-safe env helper (works when `process` is absent), and keep verbose dispatch logs, API key prefix and full JSON payload, strictly in development.
 
 ## 2.3.0
 

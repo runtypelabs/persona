@@ -3,7 +3,7 @@
  *
  * Maps high-level editor choices (family + intensity) to concrete palette
  * token references across multiple component/semantic paths. This is the
- * core of the "Interface Roles" editor section — one picker writes to
+ * core of the "Interface Roles" editor section: one picker writes to
  * many tokens atomically.
  *
  * All functions are pure and headless (no DOM).
@@ -202,7 +202,7 @@ function resolveTarget(
     return resolveHeaderTarget(family, solid, target);
   }
 
-  // Input has special handling — foreground target is the placeholder
+  // Input has special handling: foreground target is the placeholder
   if (roleId === 'role-input') {
     return resolveInputTarget(family, solid, target);
   }
@@ -329,7 +329,7 @@ export function detectRoleAssignment(
     : null;
   if (!family) return null;
 
-  // Try both intensities — shade-based guessing doesn't work for all target kinds
+  // Try both intensities: shade-based guessing doesn't work for all target kinds
   for (const intensity of ['solid', 'soft'] as const) {
     const expected = resolveRoleAssignment(family, intensity, role);
     const allMatch = role.targets.every((t) => {

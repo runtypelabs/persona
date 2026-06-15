@@ -103,7 +103,7 @@ document.getElementById("focus-win-wrong")?.addEventListener("click", () => {
   window.dispatchEvent(
     new CustomEvent("persona:focusInput", { detail: { instanceId: "wrong-id" } }),
   );
-  log("Dispatched persona:focusInput (instanceId: wrong-id) — no effect expected");
+  log("Dispatched persona:focusInput (instanceId: wrong-id): no effect expected");
 });
 
 log("Focus Input Demo ready. Toggle mount above to compare inline vs launcher.");

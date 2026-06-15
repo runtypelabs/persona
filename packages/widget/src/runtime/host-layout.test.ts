@@ -227,7 +227,7 @@ describe("createWidgetHostLayout docked", () => {
   });
 
   it("clamps push and overlay dock slots without sticky (in-flow/absolute contexts)", () => {
-    // push: the slot is an in-flow `position: relative` column — max-height cap
+    // push: the slot is an in-flow `position: relative` column: max-height cap
     // only, no sticky. overlay: keeps absolute positioning.
     const cases = [
       { reveal: "push" as const, position: "relative" },

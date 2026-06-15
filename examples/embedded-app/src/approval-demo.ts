@@ -11,7 +11,7 @@ import {
 import { createMockSSEResponse, createMockSSEStream } from "@runtypelabs/persona/testing";
 import { setupMountMode, runWidgetMountWithInspector } from "./mount-mode";
 import { createDemoConfigInspector } from "./demo-config-inspector";
-// `renderApproval` plugin example — shows an alternative permission prompt
+// `renderApproval` plugin example: shows an alternative permission prompt
 // ("Always allow / Allow once / Deny"). Untyped JS import (mirrors the
 // ask-user-question pills plugin); the widget plugin contract is duck-typed.
 // The `icons` map gives the "Runtype" source an explicit square icon (served
@@ -157,7 +157,7 @@ const createWidget = (): void => {
     activeController = null;
   };
   wireApprovalLogging(controller);
-  updateLog(`Widget initialized — renderer: ${variant}`);
+  updateLog(`Widget initialized: renderer: ${variant}`);
 };
 
 setupMountMode({

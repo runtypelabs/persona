@@ -1,4 +1,4 @@
-import type { AgentWidgetConfig } from "./types";
+import type { AgentWidgetConfig, AgentWidgetLauncherConfig } from "./types";
 import type { DeepPartial, PersonaTheme } from "./types/theme";
 import { deepMerge } from "./utils/deep-merge";
 
@@ -12,6 +12,58 @@ export const DEFAULT_FLOATING_LAUNCHER_WIDTH = "min(440px, calc(100vw - 24px))";
 /** Max width cap paired with {@link DEFAULT_FLOATING_LAUNCHER_WIDTH} for theme defaults. */
 export const DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH = "440px";
 
+export const DEFAULT_LAUNCHER_CONFIG: AgentWidgetLauncherConfig = {
+  enabled: true,
+  mountMode: "floating",
+  dock: {
+    side: "right",
+    width: "420px",
+  },
+  title: "Chat Assistant",
+  subtitle: "Here to help you get answers fast",
+  agentIconText: "💬",
+  agentIconName: "bot",
+  headerIconName: "bot",
+  position: "bottom-right",
+  width: DEFAULT_FLOATING_LAUNCHER_WIDTH,
+  heightOffset: 0,
+  autoExpand: false,
+  callToActionIconHidden: false,
+  agentIconSize: "40px",
+  headerIconSize: "40px",
+  closeButtonSize: "32px",
+  // Zero out browser-default <button> padding so the icon gets the full
+  // 32x32 content box, matching clearChat.paddingX/Y below. Without this,
+  // UA stylesheets add ~1-2px vertical and ~6px horizontal padding that
+  // eats into the border-box width and shrinks the rendered icon.
+  closeButtonPaddingX: "0px",
+  closeButtonPaddingY: "0px",
+  callToActionIconName: "arrow-up-right",
+  callToActionIconText: "",
+  callToActionIconSize: "32px",
+  callToActionIconPadding: "5px",
+  callToActionIconColor: undefined,
+  callToActionIconBackgroundColor: undefined,
+  // closeButtonColor / clearChat.iconColor omitted so theme.components.header.actionIconForeground applies.
+  closeButtonBackgroundColor: "transparent",
+  clearChat: {
+    backgroundColor: "transparent",
+    borderColor: "transparent",
+    enabled: true,
+    placement: "inline",
+    iconName: "refresh-cw",
+    size: "32px",
+    showTooltip: true,
+    tooltipText: "Clear chat",
+    paddingX: "0px",
+    paddingY: "0px",
+  },
+  headerIconHidden: false,
+  border: undefined,
+  shadow:
+    "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)",
+};
+
 /**
  * Default widget configuration
  * Single source of truth for all default values
@@ -23,56 +75,7 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   theme: undefined,
   darkTheme: undefined,
   colorScheme: "light",
-  launcher: {
-    enabled: true,
-    mountMode: "floating",
-    dock: {
-      side: "right",
-      width: "420px",
-    },
-    title: "Chat Assistant",
-    subtitle: "Here to help you get answers fast",
-    agentIconText: "💬",
-    agentIconName: "bot",
-    headerIconName: "bot",
-    position: "bottom-right",
-    width: DEFAULT_FLOATING_LAUNCHER_WIDTH,
-    heightOffset: 0,
-    autoExpand: false,
-    callToActionIconHidden: false,
-    agentIconSize: "40px",
-    headerIconSize: "40px",
-    closeButtonSize: "32px",
-    // Zero out browser-default <button> padding so the icon gets the full
-    // 32x32 content box, matching clearChat.paddingX/Y below. Without this,
-    // UA stylesheets add ~1-2px vertical and ~6px horizontal padding that
-    // eats into the border-box width and shrinks the rendered icon.
-    closeButtonPaddingX: "0px",
-    closeButtonPaddingY: "0px",
-    callToActionIconName: "arrow-up-right",
-    callToActionIconText: "",
-    callToActionIconSize: "32px",
-    callToActionIconPadding: "5px",
-    callToActionIconColor: undefined,
-    callToActionIconBackgroundColor: undefined,
-    // closeButtonColor / clearChat.iconColor omitted so theme.components.header.actionIconForeground applies.
-    closeButtonBackgroundColor: "transparent",
-    clearChat: {
-      backgroundColor: "transparent",
-      borderColor: "transparent",
-      enabled: true,
-      placement: "inline",
-      iconName: "refresh-cw",
-      size: "32px",
-      showTooltip: true,
-      tooltipText: "Clear chat",
-      paddingX: "0px",
-      paddingY: "0px",
-    },
-    headerIconHidden: false,
-    border: undefined,
-    shadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)",
-  },
+  launcher: DEFAULT_LAUNCHER_CONFIG,
   copy: {
     welcomeTitle: "Hello 👋",
     welcomeSubtitle: "Ask anything about your account or products.",

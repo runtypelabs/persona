@@ -98,7 +98,7 @@ function Cart({ state }: { state: ShopState }) {
     return (
       <div className={className}>
         <p className="shop-cart-empty">
-          Your cart is empty — ask the assistant to add something.
+          Your cart is empty: ask the assistant to add something.
         </p>
       </div>
     );
@@ -241,7 +241,7 @@ export default function Home() {
             <div className="shop-wire-body">
               {state.wire.length === 0 ? (
                 <div className="shop-wire-empty">
-                  No events yet — ask the assistant something.
+                  No events yet: ask the assistant something.
                 </div>
               ) : (
                 state.wire.map((ev) => (

@@ -1,4 +1,4 @@
-import { createElement } from "../utils/dom";
+import { createElement, createNode } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
 import { createCloseButton, createClearChatButton } from "./header-parts";
@@ -38,15 +38,18 @@ export interface HeaderBuildContext {
 export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   const { config, showClose = true } = context;
 
-  const header = createElement(
-    "div",
-    "persona-widget-header persona-flex persona-items-center persona-gap-3 persona-px-6 persona-py-5"
-  );
-  header.setAttribute("data-persona-theme-zone", "header");
-  header.style.backgroundColor = 'var(--persona-header-bg, var(--persona-surface, #ffffff))';
-  header.style.borderBottomColor = 'var(--persona-header-border, var(--persona-divider, #f1f5f9))';
-  header.style.boxShadow = 'var(--persona-header-shadow, none)';
-  header.style.borderBottom = 'var(--persona-header-border-bottom, 1px solid var(--persona-header-border, var(--persona-divider, #f1f5f9)))';
+  const header = createNode("div", {
+    className:
+      "persona-widget-header persona-flex persona-items-center persona-gap-3 persona-px-6 persona-py-5",
+    attrs: { "data-persona-theme-zone": "header" },
+    style: {
+      backgroundColor: "var(--persona-header-bg, var(--persona-surface, #ffffff))",
+      borderBottomColor: "var(--persona-header-border, var(--persona-divider, #f1f5f9))",
+      boxShadow: "var(--persona-header-shadow, none)",
+      borderBottom:
+        "var(--persona-header-border-bottom, 1px solid var(--persona-header-border, var(--persona-divider, #f1f5f9)))",
+    },
+  });
 
   const launcher = config?.launcher ?? {};
   const headerIconSize = launcher.headerIconSize ?? "48px";
@@ -54,16 +57,16 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   const headerIconHidden = launcher.headerIconHidden ?? false;
   const headerIconName = launcher.headerIconName;
 
-  const iconHolder = createElement(
-    "div",
-    "persona-flex persona-items-center persona-justify-center persona-rounded-xl persona-text-xl"
-  );
-  iconHolder.style.height = headerIconSize;
-  iconHolder.style.width = headerIconSize;
-  iconHolder.style.backgroundColor =
-    "var(--persona-header-icon-bg, var(--persona-primary, #0f0f0f))";
-  iconHolder.style.color =
-    "var(--persona-header-icon-fg, var(--persona-text-inverse, #ffffff))";
+  const iconHolder = createNode("div", {
+    className:
+      "persona-flex persona-items-center persona-justify-center persona-rounded-xl persona-text-xl",
+    style: {
+      height: headerIconSize,
+      width: headerIconSize,
+      backgroundColor: "var(--persona-header-icon-bg, var(--persona-primary, #0f0f0f))",
+      color: "var(--persona-header-icon-fg, var(--persona-text-inverse, #ffffff))",
+    },
+  });
 
   // Render icon based on priority: Lucide icon > iconUrl > agentIconText
   if (!headerIconHidden) {
@@ -93,13 +96,16 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   }
 
   const headerCopy = createElement("div", "persona-flex persona-flex-col persona-flex-1 persona-min-w-0");
-  const title = createElement("span", "persona-text-base persona-font-semibold");
-  title.style.color = HEADER_THEME_CSS.titleColor;
-  title.textContent = config?.launcher?.title ?? "Chat Assistant";
-  const subtitle = createElement("span", "persona-text-xs");
-  subtitle.style.color = HEADER_THEME_CSS.subtitleColor;
-  subtitle.textContent =
-    config?.launcher?.subtitle ?? "Here to help you get answers fast";
+  const title = createNode("span", {
+    className: "persona-text-base persona-font-semibold",
+    text: config?.launcher?.title ?? "Chat Assistant",
+    style: { color: HEADER_THEME_CSS.titleColor },
+  });
+  const subtitle = createNode("span", {
+    className: "persona-text-xs",
+    text: config?.launcher?.subtitle ?? "Here to help you get answers fast",
+    style: { color: HEADER_THEME_CSS.subtitleColor },
+  });
 
   headerCopy.append(title, subtitle);
 

@@ -21,7 +21,7 @@ Use the \`/research\` tool against **acme.com** to pull positioning signals.
 
 ### What this pane is showing
 
-> **TL;DR** — You’re looking at **rendered Markdown** beside the thread, in a **near-fullscreen split**—the same “chat + canvas” rhythm as today’s flagship AI assistants, embedded on *your* domain.
+> **TL;DR**, You’re looking at **rendered Markdown** beside the thread, in a **near-fullscreen split**, the same “chat + canvas” rhythm as today’s flagship AI assistants, embedded on *your* domain.
 
 **Rendered document, not source**
 
@@ -30,8 +30,8 @@ Use the \`/research\` tool against **acme.com** to pull positioning signals.
 
 **Layout**
 
-1. **Thread** — the conversation column on the left.
-2. **Canvas** — the artifact column on the right (this document).
+1. **Thread**: the conversation column on the left.
+2. **Canvas**: the artifact column on the right (this document).
 `;
 
 /** Default artifact id for the scripted stream and file card (keep in sync). */
@@ -53,7 +53,7 @@ function pushArtifactOnlyFrames(
   options?: { artifactId?: string; title?: string; chunkSize?: number }
 ): void {
   const id = options?.artifactId ?? FULLSCREEN_ASSISTANT_DEMO_ARTIFACT_ID;
-  /** Omit "· MD" here — document preset appends \` · ${kind}\` in the toolbar. */
+  /** Omit "· MD" here: document preset appends \` · ${kind}\` in the toolbar. */
   const title = options?.title ?? "Runtype assistant spotlight";
   const chunkSize = options?.chunkSize ?? 44;
 

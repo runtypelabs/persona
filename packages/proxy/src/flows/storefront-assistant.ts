@@ -15,7 +15,7 @@ import type { RuntypeFlowConfig } from "../index.js";
 export const STOREFRONT_ASSISTANT_FLOW: RuntypeFlowConfig = {
   name: "Storefront Assistant Flow",
   description:
-    "Everspun storefront assistant — surfaces product cards via component directives",
+    "Everspun storefront assistant: surfaces product cards via component directives",
   steps: [
     {
       id: "storefront_action_prompt",
@@ -60,20 +60,20 @@ Use for fit / fabric / care / styling Q&A about the current product, for clarify
   }
 }
 
-Use when the shopper asks to see options, asks "what would go with this", asks for a category, asks for a price range, or asks for a gift suggestion. Pick **2–6** items from the catalog below — never more than 6, never fewer than 2. Each product object must use the exact id, title, price (integer cents), image URL, and description from the catalog. The text field is a one-sentence intro shown in the chat bubble above the inline grid of product cards.
+Use when the shopper asks to see options, asks "what would go with this", asks for a category, asks for a price range, or asks for a gift suggestion. Pick **2–6** items from the catalog below: never more than 6, never fewer than 2. Each product object must use the exact id, title, price (integer cents), image URL, and description from the catalog. The text field is a one-sentence intro shown in the chat bubble above the inline grid of product cards.
 
 ### 3. Add to cart (action)
 {"action": "add_to_cart", "text": "Confirmation line.", "item": {"id": "...", "title": "...", "price": 24800}}
 
-Use only when the shopper explicitly asks you to add a specific product to their bag ("add the linen pant", "I'll take the beanie"). Use the exact id/title/price from the catalog. The host updates the bag count on its own — your text confirms the action and renders as a regular chat bubble.
+Use only when the shopper explicitly asks you to add a specific product to their bag ("add the linen pant", "I'll take the beanie"). Use the exact id/title/price from the catalog. The host updates the bag count on its own: your text confirms the action and renders as a regular chat bubble.
 
 ## Rules
 
 - Prices in JSON are always **integer cents** (24800 = $248.00).
-- When the shopper asks "what would go with this?", ground your suggestions in **{{current_product}}** — pick items that complement the color, fabric, or category.
+- When the shopper asks "what would go with this?", ground your suggestions in **{{current_product}}**: pick items that complement the color, fabric, or category.
 - For "under $X" queries, only return products from the catalog priced under that amount.
 - For gift queries, prefer the gift card SKUs or compact accessories.
-- After a ProductGrid response, do **not** also describe each product in the text — the cards speak for themselves. Keep text short ("A few cashmere options:", "Pieces under $200:").
+- After a ProductGrid response, do **not** also describe each product in the text: the cards speak for themselves. Keep text short ("A few cashmere options:", "Pieces under $200:").
 - Never invent products. The catalog below is the entire universe.
 
 ## Product catalog
@@ -130,7 +130,7 @@ User asks "how does this fit?" (current_product is the cashmere button-down):
 {"text": "It runs true to size with a relaxed shoulder. If you're between sizes and want it slightly more fitted, take the smaller. The body length sits just below the hip."}
 
 User asks "what's the best way to care for cashmere?":
-{"text": "Hand-wash cool with a wool-safe detergent, lay flat to dry, and store folded — never on a hanger. A cedar block in the drawer keeps moths off."}`,
+{"text": "Hand-wash cool with a wool-safe detergent, lay flat to dry, and store folded: never on a hanger. A cedar block in the drawer keeps moths off."}`,
         previousMessages: "{{messages}}"
       }
     }

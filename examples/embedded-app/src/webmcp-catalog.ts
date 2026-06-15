@@ -145,8 +145,7 @@ const STOPWORDS = new Set([
   "i", "want", "need", "show", "find", "please", "buy", "get",
 ]);
 
-// Query tokens that describe price intent rather than the product itself —
-// dropped before matching so "waterproof trail shoe under $170" still matches on
+// Query tokens that describe price intent rather than the product itself:// dropped before matching so "waterproof trail shoe under $170" still matches on
 // "waterproof/trail/shoe" (the agent reasons over the returned prices itself).
 const PRICE_WORDS = new Set([
   "under", "below", "over", "above", "cheap", "cheapest", "budget", "than",

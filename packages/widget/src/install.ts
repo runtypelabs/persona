@@ -30,11 +30,11 @@ interface SiteAgentInstallConfig {
    */
   onScriptLoad?: (info: { version: string }) => void;
   /**
-   * Fired when the floating launcher is painted on the page — at page-load time.
+   * Fired when the floating launcher is painted on the page: at page-load time.
    * Deferred installs: the critical launcher mounts. Eager floating installs:
    * the full widget's launcher mounts. Use this for "widget appeared" analytics.
    * Does NOT fire for inline / docked / composer-bar installs (no floating
-   * launcher) — use `onChatReady` there.
+   * launcher): use `onChatReady` there.
    */
   onLauncherShown?: (info: { deferred: boolean; element?: HTMLElement }) => void;
   /**
@@ -88,7 +88,7 @@ declare global {
     if (configJson) {
       try {
         // HTML attributes preserve literal newlines/tabs which are invalid
-        // control characters inside JSON string literals — strip them.
+        // control characters inside JSON string literals: strip them.
         const normalizedJson = configJson.replace(/[\r\n]+\s*/g, '');
         const parsedConfig = JSON.parse(normalizedJson);
         // If it has nested 'config' property, use it; otherwise treat as widget config
@@ -152,7 +152,7 @@ declare global {
     try {
       window.dispatchEvent(new CustomEvent(name, { detail }));
     } catch {
-      /* CustomEvent unsupported — ignore */
+      /* CustomEvent unsupported: ignore */
     }
   };
   const fail = (phase: "css" | "bundle" | "init", error: unknown): void => {
@@ -168,14 +168,14 @@ declare global {
       if (!warnedOnReadyDeprecated) {
         warnedOnReadyDeprecated = true;
         console.warn(
-          "[Persona] `onReady` is deprecated — use `onChatReady`. `onReady` still works but is removed in the next major."
+          "[Persona] `onReady` is deprecated: use `onChatReady`. `onReady` still works but is removed in the next major."
         );
       }
       return config.onReady;
     }
     return undefined;
   };
-  // True when the config renders a standard floating launcher button — the only
+  // True when the config renders a standard floating launcher button: the only
   // case that paints a clickable launcher at load. Shared by the deferral gate
   // and the eager-path `onLauncherShown` so the event name stays honest.
   const hasFloatingLauncher = (widgetConfig: any): boolean => {
@@ -343,12 +343,23 @@ declare global {
   // first open is quick. Runs at idle so it never competes with the launcher.
   const prefetchFullBundle = (): void => {
     const addPrefetch = () => {
-      if (isJsLoaded()) return;
-      const link = document.createElement("link");
-      link.rel = "prefetch";
-      link.as = "script";
-      link.href = jsUrl;
-      document.head.appendChild(link);
+      if (!isJsLoaded()) {
+        const link = document.createElement("link");
+        link.rel = "prefetch";
+        link.as = "script";
+        link.href = jsUrl;
+        document.head.appendChild(link);
+      }
+
+      // Also prefetch the markdown parsers chunk
+      const markdownUrl = jsUrl.replace(/index\.global\.js($|\?)/, "markdown-parsers.js$1");
+      if (markdownUrl !== jsUrl) {
+        const link2 = document.createElement("link");
+        link2.rel = "prefetch";
+        link2.as = "script";
+        link2.href = markdownUrl;
+        document.head.appendChild(link2);
+      }
     };
     if (typeof requestIdleCallback !== "undefined") {
       requestIdleCallback(addPrefetch, { timeout: 4000 });
@@ -408,7 +419,7 @@ declare global {
         handle.open();
       }
 
-      // Eager floating installs paint their launcher at load time too — emit the
+      // Eager floating installs paint their launcher at load time too: emit the
       // same page-load "appeared" signal as the deferred path. The deferred
       // handoff (openAfter) already fired it at launcher mount, and non-floating
       // modes have no launcher, so guard on both.
@@ -420,7 +431,7 @@ declare global {
       // The full widget is initialized and its controller API is callable.
       safeCall(resolveChatReady(), handle);
       dispatchLifecycle("persona:chat-ready", handle);
-      dispatchLifecycle("persona:ready", handle); // deprecated alias — removed next major
+      dispatchLifecycle("persona:ready", handle); // deprecated alias: removed next major
       return handle;
     } catch (error) {
       fail("init", error);
@@ -449,11 +460,10 @@ declare global {
 
   // The deferred-launcher optimization only applies to the common floating case
   // that paints a collapsed launcher and waits for a click. Anything that starts
-  // open or renders differently eager-loads the full bundle exactly as before —
-  // including the two open triggers config alone can't express: a host
+  // open or renders differently eager-loads the full bundle exactly as before:  // including the two open triggers config alone can't express: a host
   // onStateLoaded hook that may request open, and a restored "was open" state.
   const shouldDeferPanel = (widgetConfig: any): boolean => {
-    if (!launcherUrl) return false;                                      // custom bundle URL override — can't derive launcher URL
+    if (!launcherUrl) return false;                                      // custom bundle URL override: can't derive launcher URL
     if (!hasFloatingLauncher(widgetConfig)) return false;                // inline / docked / composer-bar
     const launcher = widgetConfig.launcher ?? {};
     if (launcher.autoExpand === true) return false;                      // starts open
@@ -488,7 +498,7 @@ declare global {
     const mounted = window.AgentWidgetLauncher.mount({ target, config: widgetConfig, onOpen });
     launcherHandle = mounted;
 
-    // The real launcher is now painted at page-load time — emit the page-load
+    // The real launcher is now painted at page-load time: emit the page-load
     // "appeared" signal (distinct from `onChatReady`, which waits for first open).
     safeCall(config.onLauncherShown, { deferred: true, element: mounted.element });
     dispatchLifecycle("persona:launcher-shown", { deferred: true, element: mounted.element });

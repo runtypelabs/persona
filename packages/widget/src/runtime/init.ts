@@ -161,7 +161,7 @@ export const initAgentWidget = (
 
   mountController();
   // Fired when the controller is mounted and its API is callable. `onReady` is
-  // the deprecated alias of `onChatReady` (removed next major) — warn once.
+  // the deprecated alias of `onChatReady` (removed next major): warn once.
   if (options.onChatReady) {
     options.onChatReady();
   } else if (options.onReady) {
@@ -169,7 +169,7 @@ export const initAgentWidget = (
       warnedOnReadyDeprecated = true;
       // eslint-disable-next-line no-console
       console.warn(
-        "[Persona] `onReady` is deprecated — use `onChatReady`. `onReady` still works but is removed in the next major."
+        "[Persona] `onReady` is deprecated: use `onChatReady`. `onReady` still works but is removed in the next major."
       );
     }
     options.onReady();

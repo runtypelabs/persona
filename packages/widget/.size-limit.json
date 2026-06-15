@@ -36,9 +36,15 @@
     "gzip": true
   },
   {
-    "name": "Opt-in · theme-editor subpath (theme-editor.js)",
+    "name": "Opt-in · theme-editor headless subpath (theme-editor.js)",
     "path": "dist/theme-editor.js",
-    "limit": "152 kB",
+    "limit": "35 kB",
+    "gzip": true
+  },
+  {
+    "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
+    "path": "dist/theme-editor-preview.js",
+    "limit": "135 kB",
     "gzip": true
   },
   {
@@ -63,6 +69,12 @@
     "name": "Lazy · WebMCP polyfill chunk (webmcp-polyfill.js)",
     "path": "dist/webmcp-polyfill.js",
     "limit": "11 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · Runtype TTS engine chunk (runtype-tts.js)",
+    "path": "dist/runtype-tts.js",
+    "limit": "4 kB",
     "gzip": true
   }
 ]

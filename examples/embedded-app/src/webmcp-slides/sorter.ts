@@ -6,7 +6,7 @@ import { renderSlide } from "./render";
 // Slide sorter rail: scaled-down thumbnails rendered with the same pure
 // renderSlide() the canvas uses, so thumbnails are always pixel-faithful.
 // Reordering is via per-slide up/down buttons (drag-reorder is intentionally
-// out of scope — the agent's reorder_slides tool covers the rich case).
+// out of scope: the agent's reorder_slides tool covers the rich case).
 
 const THUMB_SCALE = 0.16;
 

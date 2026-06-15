@@ -1,4 +1,4 @@
-import { createElement } from "../utils/dom";
+import { createElement, createNode } from "../utils/dom";
 import { AgentWidgetConfig, ContentPart } from "../types";
 import {
   createAttachmentControls,
@@ -57,20 +57,20 @@ export interface ComposerBuildContext {
 export const buildComposer = (context: ComposerBuildContext): ComposerElements => {
   const { config } = context;
 
-  const footer = createElement(
-    "div",
-    "persona-widget-footer persona-border-t-persona-divider persona-bg-persona-surface persona-px-6 persona-py-4"
-  );
-  footer.setAttribute("data-persona-theme-zone", "composer");
+  const footer = createNode("div", {
+    className:
+      "persona-widget-footer persona-border-t-persona-divider persona-bg-persona-surface persona-px-6 persona-py-4",
+    attrs: { "data-persona-theme-zone": "composer" },
+  });
 
   const suggestions = createSuggestionsRow();
 
-  const composerForm = createElement(
-    "form",
-    "persona-widget-composer persona-flex persona-flex-col persona-gap-2 persona-rounded-2xl persona-border persona-border-gray-200 persona-bg-persona-input-background persona-px-4 persona-py-3"
-  ) as HTMLFormElement;
-  composerForm.setAttribute("data-persona-composer-form", "");
-  composerForm.style.outline = "none";
+  const composerForm = createNode("form", {
+    className:
+      "persona-widget-composer persona-flex persona-flex-col persona-gap-2 persona-rounded-2xl persona-border persona-border-gray-200 persona-bg-persona-input-background persona-px-4 persona-py-3",
+    attrs: { "data-persona-composer-form": "" },
+    style: { outline: "none" },
+  });
 
   const { textarea, attachAutoResize } = createComposerTextarea(config);
   attachAutoResize();
@@ -93,10 +93,11 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   // The bare class names (persona-widget-composer__actions / __left-actions /
   // __right-actions) are stable CSS hooks. The pill composer reuses
   // __left-actions / __right-actions as semantic markers in its grid.
-  const actionsRow = createElement(
-    "div",
-    "persona-widget-composer__actions persona-flex persona-items-center persona-justify-between persona-w-full"
-  );
+  const actionsRow = createNode("div", {
+    className:
+      "persona-widget-composer__actions persona-flex persona-items-center persona-justify-between persona-w-full",
+    attrs: { "data-persona-composer-actions": "" },
+  });
   const leftActions = createElement(
     "div",
     "persona-widget-composer__left-actions persona-flex persona-items-center persona-gap-2"

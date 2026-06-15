@@ -1,4 +1,4 @@
-import { createElement } from "../utils/dom";
+import { createElement, createNode } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { ComposerBuildContext, ComposerElements } from "./composer-builder";
 import {
@@ -12,7 +12,7 @@ import {
 
 export interface PillPeekBanner {
   /**
-   * The peek button itself — a chrome-less row that floats above the pill,
+   * The peek button itself: a chrome-less row that floats above the pill,
    * showing a chat-bubble icon, a trailing-100-char preview of the most
    * recent assistant message, and a chevron-up. Rendered hidden by default
    * (opacity 0, pointer-events none); ui.ts toggles
@@ -25,8 +25,7 @@ export interface PillPeekBanner {
 
 /**
  * Build the peek banner for `launcher.mountMode: "composer-bar"`. The peek
- * is the user's path back into the expanded chat from the collapsed pill —
- * it fades in during streaming OR on composer hover, and clicking it opens
+ * is the user's path back into the expanded chat from the collapsed pill: * it fades in during streaming OR on composer hover, and clicking it opens
  * the panel. ui.ts owns visibility + content updates via
  * `syncComposerBarPeek`; this factory just produces the inert DOM shell.
  *
@@ -34,11 +33,15 @@ export interface PillPeekBanner {
  * just above the pill in the collapsed-state UI.
  */
 export const buildPillPeekBanner = (): PillPeekBanner => {
-  const root = createElement("button", "persona-pill-peek") as HTMLButtonElement;
-  root.type = "button";
-  root.setAttribute("data-persona-pill-peek", "");
-  root.setAttribute("aria-label", "Show conversation");
-  root.setAttribute("tabindex", "-1");
+  const root = createNode("button", {
+    className: "persona-pill-peek",
+    attrs: {
+      type: "button",
+      "data-persona-pill-peek": "",
+      "aria-label": "Show conversation",
+      tabindex: "-1",
+    },
+  });
 
   const iconHolder = createElement("span", "persona-pill-peek__icon");
   const messageIcon = renderLucideIcon("message-square", 16, "currentColor", 1.5);
@@ -61,7 +64,7 @@ export const buildPillPeekBanner = (): PillPeekBanner => {
 /**
  * Single-row pill composer for `launcher.mountMode: "composer-bar"`.
  *
- * Same control factories as `buildComposer` — the only difference is the
+ * Same control factories as `buildComposer`: the only difference is the
  * layout shell + className. The form ships with `persona-pill-composer`
  * (no `persona-flex-col` / `persona-rounded-2xl` baggage), so the CSS
  * layout rules apply at normal specificity without `!important` fights.
@@ -71,7 +74,7 @@ export const buildPillPeekBanner = (): PillPeekBanner => {
  *
  * Suggestions row + status text are built (so plugin code that mutates
  * them keeps working and `bindComposerRefsFromFooter` finds them) but are
- * `display: none` by default — pill UX is just textarea + 3 buttons.
+ * `display: none` by default: pill UX is just textarea + 3 buttons.
  *
  * Attachment previews float ABOVE the pill in their own row when
  * AttachmentManager toggles the previews container's `display` property
@@ -80,8 +83,10 @@ export const buildPillPeekBanner = (): PillPeekBanner => {
 export const buildPillComposer = (context: ComposerBuildContext): ComposerElements => {
   const { config } = context;
 
-  const footer = createElement("div", "persona-widget-footer persona-widget-footer--pill");
-  footer.setAttribute("data-persona-theme-zone", "composer");
+  const footer = createNode("div", {
+    className: "persona-widget-footer persona-widget-footer--pill",
+    attrs: { "data-persona-theme-zone": "composer" },
+  });
 
   const suggestions = createSuggestionsRow();
   suggestions.style.display = "none";
@@ -105,12 +110,11 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
 
   // Pill form: NO `persona-flex-col`. Only the marker classes that the rest
   // of the codebase queries by name.
-  const composerForm = createElement(
-    "form",
-    "persona-widget-composer persona-pill-composer"
-  ) as HTMLFormElement;
-  composerForm.setAttribute("data-persona-composer-form", "");
-  composerForm.style.outline = "none";
+  const composerForm = createNode("form", {
+    className: "persona-widget-composer persona-pill-composer",
+    attrs: { "data-persona-composer-form": "" },
+    style: { outline: "none" },
+  });
 
   // Three columns of the grid: [paperclip?] · textarea · mic + send.
   // The empty leftActions wrapper still ships when attachments are off so
@@ -154,11 +158,11 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
 
   // The pill flattens left/right into the form's grid; there's no separate
   // wrapper. Surface the form itself as `actionsRow` to satisfy the
-  // ComposerElements contract — downstream code only treats it as an
-  // opaque ref. `bindComposerRefsFromFooter` queries for the legacy
-  // `.persona-flex.persona-items-center.persona-justify-between` class
-  // selector and won't find one in pill mode; that lookup writes to
-  // `_actionsRow` (the underscore prefix marks it as soft-optional).
+  // ComposerElements contract: downstream code only treats it as an
+  // opaque ref. The pill form intentionally carries no
+  // `data-persona-composer-actions` marker, so `bindComposerRefsFromFooter`
+  // finds no actions row in pill mode; that lookup writes to `_actionsRow`
+  // (the underscore prefix marks it as soft-optional).
   const actionsRow = composerForm;
 
   return {

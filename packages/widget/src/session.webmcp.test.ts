@@ -33,7 +33,7 @@ const makeSession = (overrides?: {
           content: [{ type: "text", text: "ok" }],
         }),
   );
-  // Mimic AgentWidgetClient.executeWebMcpToolCall — returns null when bridge
+  // Mimic AgentWidgetClient.executeWebMcpToolCall: returns null when bridge
   // not configured. We toggle via isOperational below.
   client.executeWebMcpToolCall = vi.fn(
     () =>
@@ -75,7 +75,7 @@ const awaitingMessage = (
   },
 });
 
-describe("AgentWidgetSession — WebMCP resolve", () => {
+describe("AgentWidgetSession: WebMCP resolve", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -130,7 +130,7 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
 
   it("still resumes (with isError) when the bridge is not operational", async () => {
     // BugBot finding #1: previously, handleEvent skipped resolveWebMcpToolCall
-    // entirely when `isWebMcpOperational()` was false — leaving the dispatch
+    // entirely when `isWebMcpOperational()` was false: leaving the dispatch
     // hung. The session must surface an actionable error to /resume instead.
     const { session, resumeSpy } = makeSession({
       isOperational: false,
@@ -190,8 +190,8 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     expect(afterFailedResume?.toolCall?.result).toBeUndefined();
     expect(afterFailedResume?.toolCall?.durationMs).toBeUndefined();
 
-    await session.resolveWebMcpToolCall(msg); // retry — must be allowed
-    await session.resolveWebMcpToolCall(msg); // post-success — must be blocked
+    await session.resolveWebMcpToolCall(msg); // retry: must be allowed
+    await session.resolveWebMcpToolCall(msg); // post-success: must be blocked
 
     expect(executeSpy).toHaveBeenCalledTimes(2);
     expect(resumeSpy).toHaveBeenCalledTimes(2);
@@ -233,7 +233,7 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
   });
 
   it("aborts an in-flight resolve when cancel() is called", async () => {
-    // BugBot finding #6 (cont.) — the bridge execute race should reject on
+    // BugBot finding #6 (cont.): the bridge execute race should reject on
     // cancel so the dispatch doesn't fire a stale /resume after the user
     // stops.
     let release: () => void = () => undefined;
@@ -263,8 +263,8 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
   it("does NOT abort the shared session abortController", async () => {
     // The chained-turn fix: a webmcp resolve must leave `this.abortController`
     // untouched. In a chain (tool A → /resume → tool B) that shared controller
-    // is still piping A's resume SSE — the very stream that just delivered B's
-    // step_await — so aborting it strands B (it never executes; its /resume is
+    // is still piping A's resume SSE: the very stream that just delivered B's
+    // step_await, so aborting it strands B (it never executes; its /resume is
     // never POSTed; the dispatch hangs forever). Resolves use a dedicated
     // per-call controller tracked in `webMcpResolveControllers` instead.
     const { session } = makeSession();
@@ -547,7 +547,7 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
   });
 
   it("an error event does not clear streaming while a webmcp resolve is in flight", () => {
-    // BugBot: the error handler mirrors the idle handler — it must not tear
+    // BugBot: the error handler mirrors the idle handler: it must not tear
     // down streaming while a sibling/successor resolve is still executing.
     const stuck = new Promise<WebMcpToolResult>(() => undefined);
     const session = makeSession({ executeImpl: () => stuck }).session;
@@ -559,7 +559,7 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
   });
 
   it("connectStream error does not clear streaming while a webmcp resolve is in flight", async () => {
-    // BugBot: connectStream's catch mirrors the error/idle handlers — a failed
+    // BugBot: connectStream's catch mirrors the error/idle handlers: a failed
     // resume stream must not tear down streaming while another resolve runs.
     const session = new AgentWidgetSession(
       { apiUrl: "http://test", webmcp: { enabled: true } },
@@ -603,7 +603,7 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     // BugBot finding #14: previously the bridge was constructed whenever a
     // `webmcp` block existed, regardless of `enabled`. That left
     // `executeWebMcpToolCall` returning a non-null promise even when WebMCP
-    // was explicitly disabled — making the session's "WebMCP not enabled"
+    // was explicitly disabled: making the session's "WebMCP not enabled"
     // resume branch dead code. Constructor now gates on `enabled === true`.
     const session = new AgentWidgetSession(
       { apiUrl: "http://test", webmcp: { enabled: false } },
@@ -652,7 +652,7 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
 
   it("marks resolved on HTTP /resume success, not on stream completion", async () => {
     // BugBot finding #8: if the resume HTTP response is OK but the downstream
-    // SSE stream errors, we still want dedupe to block re-emits — the server
+    // SSE stream errors, we still want dedupe to block re-emits: the server
     // has already accepted the answer.
     const { session, resumeSpy, executeSpy } = makeSession();
     // Make connectStream throw to simulate a broken downstream SSE.
@@ -663,7 +663,7 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
 
     const msg = awaitingMessage("tool-1", "webmcp:search");
     await session.resolveWebMcpToolCall(msg);
-    await session.resolveWebMcpToolCall(msg); // re-emit — must be blocked
+    await session.resolveWebMcpToolCall(msg); // re-emit: must be blocked
 
     expect(executeSpy).toHaveBeenCalledTimes(1);
     expect(resumeSpy).toHaveBeenCalledTimes(1);
@@ -678,7 +678,7 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     await session.resolveWebMcpToolCall(
       awaitingMessage("tool-1", "webmcp:search", "exec-1"),
     );
-    // Different execution, same toolCall.id — must be allowed.
+    // Different execution, same toolCall.id: must be allowed.
     await session.resolveWebMcpToolCall(
       awaitingMessage("tool-1", "webmcp:search", "exec-2"),
     );
@@ -690,12 +690,12 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
     // BugBot finding #11: clearing the resolved set on sendMessage would
     // let a stale step_await from the prior /resume's still-active SSE
     // re-trigger execute(). With executionId-scoped keys, the prior
-    // execution's resolved entries persist — so stale re-emits stay blocked.
+    // execution's resolved entries persist, so stale re-emits stay blocked.
     const { session, executeSpy, resumeSpy } = makeSession();
     await session.resolveWebMcpToolCall(
       awaitingMessage("tool-1", "webmcp:search", "exec-1"),
     );
-    // Stale re-emit from exec-1 after a new turn started — still blocked.
+    // Stale re-emit from exec-1 after a new turn started: still blocked.
     await session.resolveWebMcpToolCall(
       awaitingMessage("tool-1", "webmcp:search", "exec-1"),
     );
@@ -781,7 +781,7 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
 
   it("keys a single call's /resume by webMcpToolCallId when present", async () => {
     // core#3878: when the server emits a per-call id, the single-call path keys
-    // /resume by it (server prefers id over name) — not by the wire tool name.
+    // /resume by it (server prefers id over name): not by the wire tool name.
     const { session, resumeSpy } = makeSession({
       executeReturn: { content: [{ type: "text", text: "added" }] },
     });
@@ -812,7 +812,7 @@ describe("AgentWidgetSession — WebMCP resolve", () => {
   });
 });
 
-describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", () => {
+describe("AgentWidgetSession: WebMCP parallel batched resume (core#3878)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -853,8 +853,7 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
       message: msg,
     });
 
-  // The batch flushes only when the stream that delivered the awaits ENDS —
-  // the client emits `status: idle` at stream end. Simulate that.
+  // The batch flushes only when the stream that delivered the awaits ENDS:  // the client emits `status: idle` at stream end. Simulate that.
   const endStream = (session: AgentWidgetSession) =>
     (session as unknown as { handleEvent: (e: unknown) => void }).handleEvent({
       type: "status",
@@ -893,7 +892,7 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     // Both page tools ran.
     expect(executeSpy).toHaveBeenCalledTimes(2);
 
-    // Exactly ONE /resume for the shared execution — not one per tool.
+    // Exactly ONE /resume for the shared execution: not one per tool.
     expect(resumeSpy).toHaveBeenCalledTimes(1);
     const [execId, toolOutputs] = resumeSpy.mock.calls[0]! as unknown as [
       string,
@@ -906,7 +905,7 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     expect(toolOutputs["toolu_B"].content[0].text).toBe("added SHOE-007");
   });
 
-  it("executes siblings concurrently — one call's gate Promise does not block the other", async () => {
+  it("executes siblings concurrently: one call's gate Promise does not block the other", async () => {
     // The native approval bubble parks each call's execute on a Promise. A
     // gated sibling must not head-of-line-block the others: both executes
     // should be in flight before either completes.
@@ -1078,7 +1077,7 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
   it("a UI-only updateConfig preserves the client, bridge, and in-flight WebMCP state", async () => {
     // Self-styling widget: a `webmcp:*` theme tool mutates config and re-renders
     // mid-turn. updateConfig must NOT swap the client when only display fields
-    // (theme/copy/…) change — doing so would abort the very turn that's
+    // (theme/copy/…) change: doing so would abort the very turn that's
     // restyling the widget and strand the paused execution. (Inverse of the
     // teardown test above.)
     const { session } = makeSession();
@@ -1128,7 +1127,7 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     feed(session, parallelAwait("toolu_A", "SHOE-001"));
     feed(session, parallelAwait("toolu_B", "SHOE-007"));
     // Teardown clears the buffered batch (and bumps the epoch) BEFORE the
-    // stream-end flush — even if a late idle arrives, nothing should resolve.
+    // stream-end flush: even if a late idle arrives, nothing should resolve.
     session.clearMessages();
     endStream(session);
     await flushMicrotasks();
@@ -1160,7 +1159,7 @@ describe("AgentWidgetSession — WebMCP parallel batched resume (core#3878)", ()
     // The parked confirm Promise resolves false (declined) and the map clears.
     await expect(pending).resolves.toBe(false);
     expect(s.webMcpApprovalResolvers.size).toBe(0);
-    // The bubble must not be left visually "pending" — it flips to denied so no
+    // The bubble must not be left visually "pending": it flips to denied so no
     // stale Approve/Deny remains clickable.
     const bubble = s.messages.find((m) => m.variant === "approval");
     expect(bubble?.approval?.status).toBe("denied");

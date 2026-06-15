@@ -18,17 +18,17 @@ import { READ_ONLY_TOOLS } from "./webmcp-tools";
 // --- Switchback brand theme (mirrors globals.css; both follow the OS
 //     light/dark preference via colorScheme:'auto').
 //
-//     "Pine & Blaze" — deep pine green primary + trail-blaze orange accent on
+//     "Pine & Blaze": deep pine green primary + trail-blaze orange accent on
 //     warm granite paper; dark mode is a night forest where lichen green takes
 //     over as the interactive primary and the blaze glows brighter.
 //
 //     This block is intentionally a tour of Persona's three theming layers:
-//       1. palette   — raw brand scales + the fonts the page already loads
-//       2. semantic  — role colors (surface/text/interactive/feedback) derived
+//       1. palette: raw brand scales + the fonts the page already loads
+//       2. semantic: role colors (surface/text/interactive/feedback) derived
 //                      from the palette
-//       3. components — per-surface overrides where the brand needs a specific
+//       3. components: per-surface overrides where the brand needs a specific
 //                       read (header bar, bubbles, the approval gate, markdown)
-//     Everything below is plain config — no custom CSS, no plugins.
+//     Everything below is plain config: no custom CSS, no plugins.
 //
 //     Contrast anchors: paper on pine #1f3d2b ≈ 11:1; blaze #d9531e fails AA
 //     for small text on white, so text-safe #a63a14 (~6:1) carries links and
@@ -137,7 +137,7 @@ const shopTheme: NonNullable<AgentWidgetConfig["theme"]> = {
       placeholder: "#8b9286",
       focus: { border: "#1f3d2b", ring: "rgba(31, 61, 43, 0.25)" },
     },
-    // The approval gate is this demo's headline surface — every mutating
+    // The approval gate is this demo's headline surface: every mutating
     // page-tool call (add_to_cart, apply_promo, …) lands here. Parchment
     // bubble with a blaze-tinted frame; approve is a solid pine button, deny
     // stays a neutral ghost.
@@ -236,7 +236,7 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
   },
   components: {
     panel: { borderRadius: "0" },
-    // Header stays a pine bar at night too — deepest pine instead of flipping
+    // Header stays a pine bar at night too: deepest pine instead of flipping
     // to lichen, with the blaze chip glowing against it.
     header: {
       borderRadius: "0",
@@ -248,7 +248,7 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
       actionIconForeground: "#b9c8bc",
     },
     // The widget's component defaults back these surfaces with `gray.50`, which
-    // this dark palette keeps light (#e8eee7) — so without explicit overrides
+    // this dark palette keeps light (#e8eee7), so without explicit overrides
     // the assistant bubbles, composer input, tool-call chrome, and inline code
     // would render as bright chalk cards on the night-forest panel. Pin them to
     // the dark surface set (and flip their default dark `gray.900` text to light).
@@ -280,7 +280,7 @@ const shopDarkTheme: NonNullable<AgentWidgetConfig["darkTheme"]> = {
     },
     collapsibleWidget: {
       container: "#1d2420", // tool/reasoning bubble chrome
-      surface: "#0e120f", // inset args/code box — reads as a dark terminal panel
+      surface: "#0e120f", // inset args/code box: reads as a dark terminal panel
       border: "#2c352d",
     },
     toolBubble: { shadow: "none" },
@@ -307,7 +307,7 @@ export function buildWidgetConfig(): AgentWidgetConfig {
       ...DEFAULT_WIDGET_CONFIG.copy,
       welcomeTitle: "Switchback Assistant",
       welcomeSubtitle:
-        "I can search the catalog, pull up a product, and manage your cart — using this page's own tools. Try one of the prompts below.",
+        "I can search the catalog, pull up a product, and manage your cart: using this page's own tools. Try one of the prompts below.",
       inputPlaceholder: "Find me a trail shoe…",
     },
     suggestionChips: [
@@ -326,7 +326,7 @@ export function buildWidgetConfig(): AgentWidgetConfig {
         logWire(
           "gate",
           "gate",
-          `${esc(info.toolName)} — ${readOnly ? "read-only → <b>auto-approve</b>" : "mutating → <b>approval bubble</b>"}`,
+          `${esc(info.toolName)}: ${readOnly ? "read-only → <b>auto-approve</b>" : "mutating → <b>approval bubble</b>"}`,
         );
         return readOnly;
       },

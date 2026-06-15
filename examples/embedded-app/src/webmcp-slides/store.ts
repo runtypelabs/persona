@@ -12,7 +12,7 @@ export type FindElementResult = { slide: Slide; element: SlideElement };
 /**
  * Single source of truth for the deck, shared by human gestures and agent
  * tools. Undo is a snapshot stack: `commit()` clones the deck, applies the
- * mutator, and pushes the previous deck — decks are a few KB of JSON so
+ * mutator, and pushes the previous deck: decks are a few KB of JSON so
  * snapshots are effectively free and trivially correct, and because tools and
  * UI handlers go through the same `commit()`, Cmd+Z reverses agent edits too.
  *
@@ -43,7 +43,7 @@ export class DeckStore {
     return () => this.listeners.delete(listener);
   }
 
-  /** All mutations — human or agent — enter here. One call = one undo step. */
+  /** All mutations, human or agent, enter here. One call = one undo step. */
   commit(mutate: (deck: Deck) => void): void {
     const previous = structuredClone(this.deck);
     const next = structuredClone(this.deck);
@@ -162,7 +162,7 @@ export class DeckStore {
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.deck));
       } catch {
-        // Storage may be unavailable (private mode, quota) — demo keeps working.
+        // Storage may be unavailable (private mode, quota): demo keeps working.
       }
     }, PERSIST_DEBOUNCE_MS);
   }
@@ -181,7 +181,7 @@ const loadDeck = (): Deck | null => {
 };
 
 // ---------------------------------------------------------------------------
-// Seed deck — a fictional startup pitch so demo prompts have material.
+// Seed deck: a fictional startup pitch so demo prompts have material.
 
 const text = (
   props: Partial<SlideElement> & Pick<SlideElement, "x" | "y" | "w" | "h">,
@@ -212,7 +212,7 @@ const shape = (
 
 export const createSeedDeck = (): Deck => ({
   id: makeId("deck"),
-  title: "Lumen Labs — Seed Pitch",
+  title: "Lumen Labs: Seed Pitch",
   themeId: "paper",
   slides: [
     {
@@ -243,7 +243,7 @@ export const createSeedDeck = (): Deck => ({
         }),
         text({
           x: 60, y: 150, w: 500, h: 280, fontSize: 20,
-          text: "Commercial buildings spend 17% of their energy budget on lighting — most of it during daylight hours.\n\nFacility teams have no per-room visibility into natural light, so fixtures run at full power all day.",
+          text: "Commercial buildings spend 17% of their energy budget on lighting: most of it during daylight hours.\n\nFacility teams have no per-room visibility into natural light, so fixtures run at full power all day.",
         }),
         shape("ellipse", { x: 640, y: 170, w: 240, h: 240, fill: "theme.accent" }),
         text({

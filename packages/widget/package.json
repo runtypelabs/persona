@@ -27,6 +27,11 @@
       "import": "./dist/theme-editor.js",
       "require": "./dist/theme-editor.cjs"
     },
+    "./theme-editor/preview": {
+      "types": "./dist/theme-editor-preview.d.ts",
+      "import": "./dist/theme-editor-preview.js",
+      "require": "./dist/theme-editor-preview.cjs"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js",
@@ -36,6 +41,11 @@
       "types": "./dist/smart-dom-reader.d.ts",
       "import": "./dist/smart-dom-reader.js",
       "require": "./dist/smart-dom-reader.cjs"
+    },
+    "./voice-worklet-player": {
+      "types": "./dist/voice-worklet-player.d.ts",
+      "import": "./dist/voice-worklet-player.js",
+      "require": "./dist/voice-worklet-player.cjs"
     },
     "./plugin-kit": {
       "types": "./dist/plugin-kit.d.ts",
@@ -59,17 +69,21 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:plugin-kit && pnpm run build:animations",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations",
+    "build:markdown-parsers": "tsup --config tsup.markdown-parsers.config.ts",
     "build:plugin-kit": "tsup src/plugin-kit.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:theme-editor": "tsup src/theme-editor.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
+    "build:theme-editor-preview": "tsup src/theme-editor-preview.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:testing": "tsup src/testing.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:smart-dom-reader": "tsup src/smart-dom-reader.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
+    "build:voice-worklet-player": "tsup src/voice-worklet-player.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:animations": "tsup src/animations/glyph-cycle.ts src/animations/wipe.ts --format esm,cjs --minify --dts --out-dir dist/animations --no-splitting",
     "build:theme-ref": "tsup src/theme-reference.ts --format esm,cjs --minify --dts",
     "build:codegen": "tsup src/codegen.ts --format esm,cjs --minify --dts",
     "build:styles": "node -e \"const fs=require('fs');fs.mkdirSync('dist',{recursive:true});fs.copyFileSync('src/styles/widget.css','dist/widget.css');\"",
     "build:client": "tsup src/index.ts --format esm,cjs --minify --sourcemap --splitting false --dts --loader \".css=text\" && tsup --config tsup.global.config.ts && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/index-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/index'+ext);}\"",
     "build:webmcp-polyfill": "tsup --config tsup.webmcp-polyfill.config.ts",
+    "build:runtype-tts": "tsup --config tsup.runtype-tts.config.ts",
     "build:installer": "tsup src/install.ts --format iife --global-name SiteAgentInstaller --out-dir dist --minify --sourcemap --no-splitting",
     "build:launcher": "tsup src/launcher-global.ts --format iife --global-name AgentWidgetLauncher --minify --sourcemap --splitting false --out-dir dist && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/launcher-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/launcher'+ext);}\"",
     "lint": "eslint . --ext .ts",

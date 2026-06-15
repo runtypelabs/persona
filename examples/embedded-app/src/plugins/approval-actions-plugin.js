@@ -1,4 +1,4 @@
-// Example plugin: shows an alternative tool-approval bubble — a permission
+// Example plugin: shows an alternative tool-approval bubble: a permission
 // prompt with an expandable "BotName wants to use <tool>" header plus a split
 // "Always allow ⏎ / Allow once ⌘⏎" primary control and a "Deny Esc" button,
 // with keyboard shortcuts.
@@ -15,7 +15,7 @@
 //
 // An approval is a single binary gate (approved / denied), so there are exactly
 // two outcomes. "Always allow" vs "Allow once" is the same `approve` outcome
-// with a `{ remember: true }` flag — the widget resolves THIS approval
+// with a `{ remember: true }` flag: the widget resolves THIS approval
 // identically either way, and forwards `remember` to `config.approval.onDecision`
 // so you can persist a don't-ask-again policy for FUTURE approvals yourself.
 //
@@ -27,13 +27,13 @@
 //
 // This version uses the widget's Plugin Kit (`@runtypelabs/persona/plugin-kit`)
 // for the cross-cutting bits every non-trivial plugin needs:
-//   * `injectStyles` — Shadow-DOM-safe <style> injection (a `document.head`
+//   * `injectStyles`: Shadow-DOM-safe <style> injection (a `document.head`
 //     <style> would not reach elements rendered inside the widget's shadow root).
-//   * `createPopover` — the floating "Allow once" menu: portaled out of the
+//   * `createPopover`: the floating "Allow once" menu: portaled out of the
 //     transcript's scroll container, positioned from the anchor, dismissed on
 //     outside click, repositioned on scroll/resize, auto-closed if the anchor
 //     leaves the DOM.
-//   * `isEditableEventTarget` — so the Enter/Esc shortcuts don't fire while the
+//   * `isEditableEventTarget`, so the Enter/Esc shortcuts don't fire while the
 //     user is typing in the composer.
 //
 // Copy this file into your own app; its only dependency is the widget's
@@ -287,7 +287,7 @@ const formatParams = (value) => {
 
 // Optional favicon-service fallback (opt in via `faviconService: true`). Guesses
 // a `<source>.com` domain from the source label and asks Google's favicon
-// service — demo-grade, and it leaks the source to a third party, which is why
+// service: demo-grade, and it leaks the source to a third party, which is why
 // it's off by default in favor of the explicit `icons` map. `size` requests a
 // higher-resolution favicon (the box renders ~20px, so 64 stays sharp on 2x/3x
 // displays); the service returns the nearest available size.
@@ -307,7 +307,7 @@ const makeResolveIcon = ({ icons, faviconService, faviconSize }) => (source) => 
 
 // Inlined Lucide icons (lucide.dev, ISC) so the plugin keeps its single
 // dependency. SVG chevrons (not the "⌄" text glyph) center predictably in their
-// box — the glyph's ink sits high in its line box, so flex-centering it looks
+// box: the glyph's ink sits high in its line box, so flex-centering it looks
 // off. The viewBox-centered path fixes the caret/header alignment.
 const svgIcon = (markup) => {
   const tpl = document.createElement("template");
@@ -318,16 +318,16 @@ const svgIcon = (markup) => {
 const SVG_OPEN =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
 
-// Lucide "wrench" — the default icon when no source icon is configured/resolved.
+// Lucide "wrench": the default icon when no source icon is configured/resolved.
 const toolIcon = () =>
   svgIcon(
     `${SVG_OPEN}<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`
   );
 
-// Lucide "chevron-down" — the header collapse affordance and the split caret.
+// Lucide "chevron-down": the header collapse affordance and the split caret.
 const chevronIcon = () => svgIcon(`${SVG_OPEN}<path d="m6 9 6 6 6-6"/></svg>`);
 
-// Lucide "ban" — the denied/timeout trace.
+// Lucide "ban": the denied/timeout trace.
 const deniedIcon = () =>
   svgIcon(`${SVG_OPEN}<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>`);
 
@@ -339,7 +339,7 @@ const kbd = (label) => {
 };
 
 // Resolved (non-approved) trace: a subtle one-line "[icon] {tool} denied" row.
-// Approved approvals render nothing — the tool call takes over the transcript.
+// Approved approvals render nothing: the tool call takes over the transcript.
 const buildResolved = (approval) => {
   const row = document.createElement("div");
   row.className = "appr-resolved";
@@ -375,8 +375,8 @@ const buildPending = (approval, approve, deny, messageId, resolveIcon) => {
   }
 
   // 24px icon box. `resolveIcon` returns an explicit URL (config `icons` map,
-  // or the optional favicon service); with no URL — or if the image fails to
-  // load — we fall back to the default tool icon.
+  // or the optional favicon service); with no URL, or if the image fails to
+  // load: we fall back to the default tool icon.
   const logo = document.createElement("span");
   logo.className = "appr-logo";
   const iconUrl = resolveIcon(source);
@@ -420,7 +420,7 @@ const buildPending = (approval, approve, deny, messageId, resolveIcon) => {
   const body = document.createElement("div");
   body.className = "appr-body";
 
-  // Parameters block — expanded by default to mirror the reference UX.
+  // Parameters block: expanded by default to mirror the reference UX.
   if (hasParams) {
     const pre = document.createElement("pre");
     pre.className = "appr-params";
@@ -488,7 +488,7 @@ const buildPending = (approval, approve, deny, messageId, resolveIcon) => {
     approve(); // Allow once
   });
 
-  // Single delegated click listener for the in-card actions — survives morph
+  // Single delegated click listener for the in-card actions: survives morph
   // passes via the stub-and-hydrate path.
   card.addEventListener("click", (e) => {
     const liveRoot = e.currentTarget;
@@ -534,7 +534,7 @@ const buildPending = (approval, approve, deny, messageId, resolveIcon) => {
  *   `{ Runtype: "/runtype-logo.svg" }`. Checked first; an entry here always wins.
  * @param {boolean} [options.faviconService=false]
  *   When no `icons` entry matches, fall back to Google's favicon service
- *   (guesses `<source>.com`). Off by default — it's demo-grade and leaks the
+ *   (guesses `<source>.com`). Off by default: it's demo-grade and leaks the
  *   source label to a third party. With no map entry and this off, the icon box
  *   shows the default tool icon.
  * @param {number} [options.faviconSize=64]
@@ -561,7 +561,7 @@ export const createApprovalActionsPlugin = (options = {}) => {
       if (approval.status !== "pending") {
         teardownMessage(message.id);
         // Approved → render nothing; the tool call takes over the transcript.
-        // (Returning an empty element — not null — suppresses the built-in.)
+        // (Returning an empty element, not null, suppresses the built-in.)
         if (approval.status === "approved") {
           const hidden = document.createElement("div");
           hidden.style.display = "none";

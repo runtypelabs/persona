@@ -25,7 +25,7 @@ body {
   overflow: hidden;
 }
 
-/* Theme Copilot dock target — the docked widget shell wraps this element and
+/* Theme Copilot dock target: the docked widget shell wraps this element and
    flexes the editor when the copilot sidebar opens. min-width: 0 lets the
    grid's 1fr preview column absorb the squeeze instead of overflowing. */
 .theme-copilot-dock-target {
@@ -98,7 +98,7 @@ body {
   line-height: 1.5;
 }
 
-/* Mobile shell (shown ≤767px — see media query) */
+/* Mobile shell (shown ≤767px: see media query) */
 .mobile-editor-toolbar {
   display: none;
 }
@@ -3194,7 +3194,7 @@ body {
 
 .export-dropdown {
   position: absolute;
-  /* .toolbar-menu sets left:0 — without left:auto, CSS ignores right:0 and the panel
+  /* .toolbar-menu sets left:0: without left:auto, CSS ignores right:0 and the panel
      grows rightward from the narrow button box, so it is clipped by .config-panel overflow. */
   left: auto;
   top: 100%;

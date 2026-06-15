@@ -2,7 +2,7 @@ import type { StreamAnimationPlugin } from "../types";
 import { registerStreamAnimationPlugin } from "../utils/stream-animation";
 
 /**
- * Wipe animation — per-word left-to-right mask reveal.
+ * Wipe animation: per-word left-to-right mask reveal.
  *
  * Each arriving word is revealed via a soft feathered mask that sweeps from
  * right to left. Uses `mask-image` (not `background-clip: text`) so the

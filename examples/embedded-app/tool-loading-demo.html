@@ -92,7 +92,7 @@
               </label>
               <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
                 Toggle <code>features.showToolCalls</code> (visibility) and
-                <code>toolCallDisplay.grouped</code> (grouping) — these apply instantly
+                <code>toolCallDisplay.grouped</code> (grouping): these apply instantly
                 via <code>controller.update()</code> without clearing the transcript.
                 Run <strong>Multiple Concurrent Tools</strong>, then toggle grouping to
                 see it regroup live.
@@ -337,7 +337,7 @@
 
       // Apply config to the live widget without re-mounting, so the existing
       // transcript re-renders in place (no messages lost). Used by the Tool
-      // Display toggles — controller.update() reads showToolCalls and
+      // Display toggles: controller.update() reads showToolCalls and
       // toolCallDisplay.grouped on each render pass.
       function applyLive() {
         const cfg = getConfig();
@@ -792,13 +792,13 @@
       // These scenarios build a real SSE ReadableStream and pipe it
       // through controller.connectStream(), which routes through the
       // same client.processStream() pipeline a live dispatch uses.
-      // That means events go through SequenceReorderBuffer — the
-      // subject of PR #168 — so scrambled `seq` / `sequenceIndex`
+      // That means events go through SequenceReorderBuffer: the
+      // subject of PR #168, so scrambled `seq` / `sequenceIndex`
       // ordering here actually exercises the reorder/repair code.
 
       /**
        * Build a ReadableStream<Uint8Array> of SSE events. Each entry is
-       * { data: <object>, delayMs?: number } — delay is applied BEFORE
+       * { data: <object>, delayMs?: number }: delay is applied BEFORE
        * the event is enqueued, so you can simulate gap-timeout flushes
        * by delaying a mid-sequence chunk past the buffer's 50ms gap.
        */
@@ -843,7 +843,7 @@
         // Text chunks → "Short wavelengths dominate, so the sky looks blue."
         // One chunk (seq=10) arrives AFTER a late gap so that the gap timer
         // flushes seq 11 first, then the late seq=10 repairs via
-        // insertOrderedChunk — the exact path the PR adds regression tests
+        // insertOrderedChunk: the exact path the PR adds regression tests
         // for.
         const t1 = "Short wavelengths ";
         const t2 = "dominate, ";
@@ -861,7 +861,7 @@
           { data: { type: "reason_delta", reasoningId, reasoningText: r2, hidden: false, done: false, sequenceIndex: 3 }, delayMs: 30 },
           { data: { type: "reason_complete", reasoningId, hidden: false, done: true, sequenceIndex: 5 }, delayMs: 120 },
 
-          // Text — first two chunks arrive in order, then a GAP (seq=10 is
+          // Text: first two chunks arrive in order, then a GAP (seq=10 is
           // missing) while seq=11 arrives; buffer waits 50ms then flushes
           // seq=11. Then seq=10 shows up late and insertOrderedChunk
           // repairs the rendered content back into correct order.
@@ -894,8 +894,7 @@
       // ── Long sequenced reasoning (regression guard) ────────────
       // Streams many reason_delta events IN ORDER, each carrying a
       // `sequenceIndex`, so the client takes the ordered path in client.ts
-      // and collapses `reasoning.chunks` to a single accumulated string —
-      // `chunks.length` stays 1 for the whole stream. This is the path that
+      // and collapses `reasoning.chunks` to a single accumulated string:      // `chunks.length` stays 1 for the whole stream. This is the path that
       // regressed once: when the reasoning fingerprint (message-fingerprint.ts)
       // only hashed `chunks.length`, the message cache never invalidated and
       // the bubble froze if you opened the "Thinking…" accordion mid-stream.
@@ -930,7 +929,7 @@
           "Propagating to the general case, ",
           "the invariant is preserved each step. ",
           "Double-checking the boundary conditions. ",
-          "Everything lines up — ready to answer.",
+          "Everything lines up: ready to answer.",
         ];
 
         const entries = [
@@ -1178,10 +1177,10 @@
           { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "that up.", partId: partA, messageId: messageIdA, seq: 6 }, ctx), delayMs: 80 },
           { data: withToolContext({ type: "text_end", partId: partA, messageId: messageIdA, seq: 7 }, ctx), delayMs: 40 },
 
-          // Inner tool call — own tool bubble (independent toolId).
+          // Inner tool call: own tool bubble (independent toolId).
           // Using `advisor` because that is the real producer of `tool_delta`
           // events in production. External / custom / builtin / mcp / flow
-          // tools do NOT emit tool_delta — they go tool_start → tool_complete
+          // tools do NOT emit tool_delta: they go tool_start → tool_complete
           // with a result blob only. Swapping to advisor makes the "Activity"
           // block in this demo reflect production behavior faithfully.
           { data: { type: "tool_start", toolId: innerToolId, name: "advisor", args: { question: "What should I consider about bird migration?" }, seq: 8 } },
@@ -1254,7 +1253,7 @@
           { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "moment...", partId: outerPartA, messageId: outerMsgA, seq: 3 }, delayMs: 80 },
           { data: { type: "text_end", partId: outerPartA, messageId: outerMsgA, seq: 4 }, delayMs: 40 },
 
-          // Outer tool call starts — nested flow runs in between.
+          // Outer tool call starts: nested flow runs in between.
           { data: { type: "tool_start", toolId: outerToolId, name: "sample_flow", args: { input: "hi" }, seq: 5 } },
           { data: withToolContext({ type: "flow_start", flowId: nestedFlowId, flowName: "sample_flow", totalSteps: 1, seq: 6 }, ctx) },
           { data: withToolContext({ type: "step_start", id: nestedStreamId, name: "Stream", stepType: "send-stream", index: 1, totalSteps: 1, seq: 7 }, ctx) },
@@ -1264,10 +1263,10 @@
           { data: withToolContext({ type: "flow_complete", flowId: nestedFlowId, success: true, duration: 300, seq: 11 }, ctx) },
           { data: { type: "tool_complete", toolId: outerToolId, result: { ok: true }, duration: 300, seq: 12 } },
 
-          // Outer text resumes in a new partId segment — must NOT be corrupted
+          // Outer text resumes in a new partId segment: must NOT be corrupted
           // by nested text_start/text_end that fired in between.
           { data: { type: "text_start", partId: outerPartB, messageId: outerMsgB, seq: 13 }, delayMs: 40 },
-          { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "All done — ", partId: outerPartB, messageId: outerMsgB, seq: 14 }, delayMs: 80 },
+          { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "All done: ", partId: outerPartB, messageId: outerMsgB, seq: 14 }, delayMs: 80 },
           { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "anything else?", partId: outerPartB, messageId: outerMsgB, seq: 15 }, delayMs: 80 },
           { data: { type: "text_end", partId: outerPartB, messageId: outerMsgB, seq: 16 }, delayMs: 40 },
           { data: { type: "step_complete", id: outerFlowStepId, stepType: "prompt", success: true, duration: 600, seq: 17 } },
@@ -1276,7 +1275,7 @@
         try {
           await controller.connectStream(buildSSEStream(entries));
           log("Expected: outer bubble 'Sure, one moment...' → sample_flow tool");
-          log("  bubble → nested 'Working on it.' → outer bubble 'All done —");
+          log("  bubble → nested 'Working on it.' → outer bubble 'All done: ");
           log("  anything else?' (NOT merged into a single outer message).");
         } catch (err) {
           log(`Error: ${err?.message ?? err}`);

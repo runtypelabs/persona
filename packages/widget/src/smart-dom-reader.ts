@@ -4,11 +4,10 @@
  * Adapts `@mcp-b/smart-dom-reader` into Persona's enriched page-context pipeline and
  * exposes a ready-made {@link AgentWidgetContextProvider} you can drop into
  * `config.contextProviders`. This is the ONLY module that imports the smart-dom-reader
- * runtime value, so the library never reaches the main bundle or the IIFE/CDN build —
- * importing this subpath is opt-in.
+ * runtime value, so the library never reaches the main bundle or the IIFE/CDN build: * importing this subpath is opt-in.
  *
  * The library is **vendored** under `src/vendor/smart-dom-reader/` (it is mis-published
- * on npm and cannot be imported by name — see that directory's README). Vendoring it
+ * on npm and cannot be imported by name: see that directory's README). Vendoring it
  * here means consumers need no extra install: the code is bundled into this entry, and
  * consumers who never import this subpath pay nothing.
  *
@@ -65,7 +64,7 @@ export interface SmartDomContextOptions extends SmartDomAdapterOptions {
   /** Document to extract from. Default: the global `document`. Ignored when `root` is set. */
   document?: Document;
   /**
-   * Scope extraction to this element's subtree instead of the whole document — parity
+   * Scope extraction to this element's subtree instead of the whole document: parity
    * with `collectEnrichedPageContext`'s `root`. Useful to read only a main-content region
    * and skip site chrome (nav, sidebars). Shadow DOM inside the subtree is still pierced.
    * When set, `document` is ignored.

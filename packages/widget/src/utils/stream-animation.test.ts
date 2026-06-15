@@ -22,7 +22,7 @@ import type { AgentWidgetMessage, StreamAnimationPlugin } from "../types";
 import "../animations/wipe";
 import "../animations/glyph-cycle";
 
-describe("wrapStreamAnimation — char mode", () => {
+describe("wrapStreamAnimation: char mode", () => {
   it("wraps every character in a plain paragraph into a stream-char span", () => {
     const out = wrapStreamAnimation("<p>Hi!</p>", "char", "m1");
     const parser = document.createElement("div");
@@ -145,7 +145,7 @@ describe("wrapStreamAnimation — char mode", () => {
     };
     const firstSpans = parse(first);
     const secondSpans = parse(second);
-    // First two ids are stable — idiomorph match contract. The space between
+    // First two ids are stable: idiomorph match contract. The space between
     // "Hi" and "there" is a plain text node, not a span, so the next wrapped
     // char after "Hi" jumps to index 2 for "t" in "there".
     expect(firstSpans[0].id).toBe(secondSpans[0].id);
@@ -161,7 +161,7 @@ describe("wrapStreamAnimation — char mode", () => {
   });
 });
 
-describe("wrapStreamAnimation — word mode", () => {
+describe("wrapStreamAnimation: word mode", () => {
   it("splits on whitespace and wraps each non-whitespace token", () => {
     const out = wrapStreamAnimation("<p>Hello brave world</p>", "word", "m1");
     const parser = document.createElement("div");

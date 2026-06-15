@@ -4,7 +4,7 @@
 // Here the tools live outside React (registered on `document.modelContext`), so
 // they instead mutate this tiny observable store and the React storefront
 // subscribes via `useSyncExternalStore`. This is the only structural change
-// from the original demo — the cart math, promo logic, and search highlighting
+// from the original demo: the cart math, promo logic, and search highlighting
 // behave identically.
 
 import {
@@ -37,7 +37,7 @@ export interface ShopState {
   promo: { code: string; rate: number; label: string } | null;
   /** SKUs highlighted by the last search_products / view_product call. */
   hits: string[];
-  /** Last single card to change — `nonce` restarts the flash animation. */
+  /** Last single card to change: `nonce` restarts the flash animation. */
   flash: { sku: string; nonce: number } | null;
   /** Bumped whenever the cart card should flash. */
   cartFlashNonce: number;
@@ -105,7 +105,7 @@ export const shopStore = {
 };
 
 // ---------------------------------------------------------------------------
-// Mutations — called by the WebMCP tool execute()s in webmcp-tools.ts
+// Mutations: called by the WebMCP tool execute()s in webmcp-tools.ts
 // ---------------------------------------------------------------------------
 
 export function cartSummary(): CartSummary {
@@ -199,7 +199,7 @@ export function logWire(kind: WireKind, tag: string, detailHtml: string): void {
   emit();
 }
 
-/** Minimal HTML escaper — wire-log details mix static + agent-supplied text. */
+/** Minimal HTML escaper: wire-log details mix static + agent-supplied text. */
 export const esc = (value: unknown): string =>
   String(value ?? "").replace(/[&<>"']/g, (ch) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] as string,

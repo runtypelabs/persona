@@ -1,4 +1,4 @@
-// WebMCP Calendar Copilot — adapted from WebMCP-org/chrome-devtools-quickstart
+// WebMCP Calendar Copilot: adapted from WebMCP-org/chrome-devtools-quickstart
 // (https://github.com/WebMCP-org/chrome-devtools-quickstart, MIT). The embedded
 // Persona widget and Chrome DevTools MCP call the same WebMCP tools registered
 // in ./calendar.js.
@@ -19,7 +19,7 @@ import { READ_ONLY_TOOL_NAMES, setupCalendar } from './calendar.js';
 const app = document.querySelector('#app');
 setupCalendar(app);
 
-// Proxy mode, like the other example demos — the agent is defined in code as
+// Proxy mode, like the other example demos: the agent is defined in code as
 // WEBMCP_CALENDAR_FLOW (packages/proxy/src/flows/webmcp-calendar.ts) and the
 // local proxy mounts it at /api/chat/dispatch-calendar (see
 // examples/vercel-edge/src/server.ts). No hosted agent or client token needed.
@@ -29,7 +29,7 @@ const proxyApiUrl = import.meta.env.VITE_PROXY_URL
   : `http://localhost:${proxyPort}/api/chat/dispatch-calendar`;
 
 // `?mode=pill` mounts Persona as its native bottom composer-bar pill instead
-// of the docked side panel — same WebMCP tools, different embedding style.
+// of the docked side panel: same WebMCP tools, different embedding style.
 const isPillMode = new URLSearchParams(window.location.search).get('mode') === 'pill';
 document.body.classList.toggle('persona-pill-mode', isPillMode);
 const assistantToggle = document.querySelector('#assistant-toggle');
@@ -388,7 +388,7 @@ if (!workspaceTarget) {
         setPersonaStatus(`Calendar Copilot connected to ${session.flow?.name || 'WebMCP Calendar Flow'}.`, 'ready');
       },
       onSessionExpired: () => {
-        setPersonaStatus('Calendar Copilot session expired — refresh the page to reconnect.', 'error');
+        setPersonaStatus('Calendar Copilot session expired: refresh the page to reconnect.', 'error');
       },
       onError: (error) => {
         console.error('[Calendar] Persona error', error);

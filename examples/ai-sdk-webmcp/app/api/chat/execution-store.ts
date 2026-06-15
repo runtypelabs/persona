@@ -4,7 +4,7 @@
 // The widget pauses on a tool call (dispatch) and POSTs the result later
 // (/resume) as a SEPARATE request. On serverless those two requests can land on
 // different function instances, so the in-flight conversation must live in a
-// store both can reach — NOT a module-level Map (which is per-instance).
+// store both can reach: NOT a module-level Map (which is per-instance).
 //
 // ⚠️  PRODUCTION: SWAP THIS OUT FOR A REAL DATA STORE.  ⚠️
 // This uses the **Vercel Runtime Cache** (`@vercel/functions` getCache), which
@@ -12,7 +12,7 @@
 // are not guaranteed to persist or to be strongly consistent across regions.
 // That is acceptable for a demo / preview deployment (the pause→resume window is
 // only seconds), but for production you MUST replace it with a durable,
-// strongly-consistent store keyed by executionId — e.g. Redis/Upstash, Vercel
+// strongly-consistent store keyed by executionId: e.g. Redis/Upstash, Vercel
 // KV, a database row, or a Durable Object. The interface below
 // (save/load/delete) is deliberately tiny so swapping the backend is a one-file
 // change.

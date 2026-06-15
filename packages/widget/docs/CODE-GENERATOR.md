@@ -55,7 +55,7 @@ How it works per format:
 
 - **`script-installer`**: The `data-config` JSON includes `windowKey` alongside a nested `config` object, matching the install script's expected structure.
 - **`script-manual`** and **`script-advanced`**: `windowKey` is added to the `initAgentWidget()` call options.
-- **`esm`**, **`react-component`**, **`react-advanced`**: No effect — these formats return the handle directly as a variable.
+- **`esm`**, **`react-component`**, **`react-advanced`**: No effect: these formats return the handle directly as a variable.
 
 ## Custom Hooks
 

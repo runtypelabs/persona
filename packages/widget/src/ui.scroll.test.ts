@@ -808,7 +808,7 @@ describe("createAgentExperience streaming scroll", () => {
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
 
     // Content grows with no render event (e.g. an image finishing loading
-    // mid-stream) — only the ResizeObserver sees it.
+    // mid-stream): only the ResizeObserver sees it.
     metrics.setScrollHeight(1200);
     resize.trigger();
     raf.flush();
@@ -869,8 +869,7 @@ describe("createAgentExperience streaming scroll", () => {
 
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
 
-    // A selection forms inside the transcript (mouse drag or keyboard —
-    // both surface as selectionchange).
+    // A selection forms inside the transcript (mouse drag or keyboard:    // both surface as selectionchange).
     let currentSelection: Partial<Selection> | null = {
       isCollapsed: false,
       anchorNode: scrollContainer,
@@ -888,7 +887,7 @@ describe("createAgentExperience streaming scroll", () => {
     // Auto-follow paused: the selection isn't dragged out from under the user.
     expect(metrics.getScrollTop()).toBe(600);
 
-    // Drag-selecting toward the bottom edge auto-scrolls down — that must
+    // Drag-selecting toward the bottom edge auto-scrolls down: that must
     // not read as a resume gesture while the selection is still active.
     metrics.setScrollTop(metrics.getBottomScrollTop());
     scrollContainer!.dispatchEvent(new Event("scroll"));
@@ -1023,7 +1022,7 @@ describe("createAgentExperience streaming scroll", () => {
     );
     expect(spacer?.style.height).toBe("84px");
 
-    // The spacer's height is invisible to the mocked scroll metrics — apply
+    // The spacer's height is invisible to the mocked scroll metrics: apply
     // it manually so the anchor target is reachable, as in a real browser.
     metrics.setScrollHeight(1084);
     raf.flush();
@@ -1078,7 +1077,7 @@ describe("createAgentExperience streaming scroll", () => {
     Object.defineProperty(bubble!, "offsetTop", { value: 500 });
 
     raf.step(1); // anchor frame: starts the scroll animation
-    raf.step(1); // first animation frame — animation now in flight
+    raf.step(1); // first animation frame: animation now in flight
 
     // Jump to the latest mid-animation: the stale anchor animation must not
     // keep easing scrollTop back toward the old target.

@@ -1,4 +1,4 @@
-/** Theme Configurator v2 — Entry point */
+/** Theme Configurator v2: Entry point */
 
 import '@runtypelabs/persona/widget.css';
 import '../index.css';
@@ -229,8 +229,8 @@ function init(): void {
   });
   window.addEventListener('beforeunload', mcp.unmount);
 
-  // Mount the docked Theme Copilot — the live agent that drives the tools
-  // above — only after registration completes, so its first dispatch always
+  // Mount the docked Theme Copilot: the live agent that drives the tools
+  // above: only after registration completes, so its first dispatch always
   // carries the full clientTools list. The copilot is opt-in (?copilot=on);
   // when disabled, init runs synchronously so the toolbar toggle is removed
   // before first paint instead of flashing until mcp.ready resolves.
@@ -793,9 +793,9 @@ const SECTION_TO_DRILLDOWN: Record<string, DrilldownView> = {
 const ADVANCED_TOKENS_STATIC_SECTION_IDS = ['chat-colors', 'typography', 'launcher-style', 'shape', 'shadows', 'widget-style'];
 
 function buildSearchCatalog(): void {
-  // "Component shapes" drill-down — includes the Component Shadows section.
+  // "Component shapes" drill-down: includes the Component Shadows section.
   registerCatalogSections('style', COMPONENT_SHAPE_SECTIONS);
-  // "Advanced Tokens" drill-down — palette shadow scale, widget surface, etc.
+  // "Advanced Tokens" drill-down: palette shadow scale, widget surface, etc.
   registerCatalogSections(
     'style',
     STYLE_SECTIONS.filter((section) => ADVANCED_TOKENS_STATIC_SECTION_IDS.includes(section.id))

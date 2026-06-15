@@ -2,7 +2,7 @@
 // Runtype proxy-mode wire protocol, implemented on top of the Vercel AI SDK.
 //
 // The Persona widget (proxy mode) POSTs a dispatch request, reads an SSE stream,
-// and — for WebMCP page tools — pauses on a `step_await` event, runs the tool on
+// and, for WebMCP page tools, pauses on a `step_await` event, runs the tool on
 // the page, and POSTs the result to `${apiUrl}/resume`. Runtype normally serves
 // that protocol; here we serve it ourselves, backed by `streamText`. The widget
 // is unchanged and never learns it isn't talking to Runtype.
@@ -84,7 +84,7 @@ interface WebMcpToolResult {
 // Paused conversations live in `execution-store.ts` (Vercel Runtime Cache, so
 // the dispatch pause and the later /resume can land on different serverless
 // instances). The widget's /resume request omits clientTools[], so we persist
-// the full tool surface there too — multi-step prompts call other tools after
+// the full tool surface there too: multi-step prompts call other tools after
 // the first result returns. ⚠️ That store is an ephemeral cache: swap it for a
 // durable data store in production (see execution-store.ts).
 
@@ -254,7 +254,7 @@ async function runTurn(
       })),
       clientTools,
     });
-    return; // no flow_complete — the widget will /resume with tool outputs
+    return; // no flow_complete: the widget will /resume with tool outputs
   }
 
   // No tool calls: the turn is done. Clean up the stored execution now that it
@@ -287,11 +287,11 @@ export function handleResume(body: ResumeBody): Response {
     const paused = await loadPausedExecution(executionId);
     if (!paused) {
       send.send("error", {
-        message: `Unknown executionId "${executionId}" (expired or evicted from the cache — see execution-store.ts).`,
+        message: `Unknown executionId "${executionId}" (expired or evicted from the cache: see execution-store.ts).`,
       });
       return;
     }
-    // NB: we do NOT delete the paused state here — runTurn cleans it up only
+    // NB: we do NOT delete the paused state here: runTurn cleans it up only
     // once the continued turn completes, so a mid-stream failure stays retryable.
 
     const outputs = body.toolOutputs ?? {};

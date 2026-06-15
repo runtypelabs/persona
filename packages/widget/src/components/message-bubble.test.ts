@@ -155,7 +155,7 @@ describe("resolveStopReasonNoticeText", () => {
   });
 });
 
-describe("createStandardBubble — stopReason notice", () => {
+describe("createStandardBubble: stopReason notice", () => {
   const renderWithStopReason = (
     overrides: Partial<AgentWidgetMessage>,
     widgetConfig?: Partial<AgentWidgetConfig>
@@ -333,7 +333,7 @@ describe("isSafeMediaSrc", () => {
   });
 });
 
-describe("createStandardBubble — audio/video/file content parts", () => {
+describe("createStandardBubble: audio/video/file content parts", () => {
   it("renders an <audio> element with controls for an audio content part", () => {
     const bubble = createStandardBubble(
       makeMessage({
@@ -464,5 +464,77 @@ describe("createStandardBubble — audio/video/file content parts", () => {
       '[data-message-attachments="files"] a'
     ) as HTMLAnchorElement | null;
     expect(link?.getAttribute("href")).toBe("https://example.com/report.pdf");
+  });
+});
+
+describe("createStandardBubble: timestamp position", () => {
+  it("tucks an inline timestamp inside the last content block so it trails the text", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ content: "Hello there" }),
+      ({ text }) => `<p>${text}</p>`,
+      { timestamp: { show: true, position: "inline" } }
+    );
+
+    // Markdown content is block-wrapped; the inline timestamp must live inside
+    // that block (trailing the text), not as a block sibling under the bubble.
+    const inline = bubble.querySelector("p .persona-timestamp-inline");
+    expect(inline).not.toBeNull();
+    expect(inline?.textContent).toMatch(/\d/);
+    expect(Array.from(bubble.children)).not.toContain(inline);
+    // Must be an inline-level <span>; a <div> here is invalid inside a <p>.
+    expect(inline?.tagName).toBe("SPAN");
+  });
+
+  it("uses an inline element that survives an innerHTML re-parse (idiomorph round-trip)", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ content: "Hello there" }),
+      ({ text }) => `<p>${text}</p>`,
+      { timestamp: { show: true, position: "inline" } }
+    );
+    const content = bubble.querySelector(".persona-message-content") as HTMLElement;
+
+    // Re-serializing + re-parsing is what the re-render path does. A <div>
+    // inside a <p> would be auto-closed out to a sibling (leaving an empty
+    // <p>), dropping the timestamp onto its own line; a <span> stays put.
+    const serialized = content.innerHTML;
+    content.innerHTML = serialized;
+
+    expect(content.querySelector("p .persona-timestamp-inline")).not.toBeNull();
+    const emptyParagraphs = Array.from(content.querySelectorAll("p")).filter(
+      (p) => p.textContent === ""
+    );
+    expect(emptyParagraphs.length).toBe(0);
+  });
+
+  it("falls back to the content container for plain-text (non-block) content", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ content: "Hello there" }),
+      ({ text }) => text,
+      { timestamp: { show: true, position: "inline" } }
+    );
+
+    const content = bubble.querySelector(".persona-message-content")!;
+    const inline = content.querySelector(".persona-timestamp-inline");
+    expect(inline).not.toBeNull();
+    expect(content.contains(inline)).toBe(true);
+  });
+
+  it("renders a below timestamp as a block under the content (direct bubble child)", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ content: "Hello there" }),
+      ({ text }) => `<p>${text}</p>`,
+      { timestamp: { show: true, position: "below" } }
+    );
+
+    // "below" must not produce an inline timestamp, and the timestamp block is
+    // appended to the bubble (under the content), not nested in the content.
+    expect(bubble.querySelector(".persona-timestamp-inline")).toBeNull();
+    const below = Array.from(bubble.children).find(
+      (el) =>
+        el.classList.contains("persona-mt-1") &&
+        el.classList.contains("persona-text-xs")
+    );
+    expect(below).toBeDefined();
+    expect(below?.textContent).toMatch(/\d/);
   });
 });

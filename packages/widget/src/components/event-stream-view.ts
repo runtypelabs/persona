@@ -568,7 +568,7 @@ export function createEventStreamView(
         );
         throughputValueEl.textContent = "-- tok/s";
 
-        // Custom hover tooltip — appears instantly (no native title delay).
+        // Custom hover tooltip: appears instantly (no native title delay).
         // Appended to the (non-clipping) toolbar wrapper rather than the header
         // bar, which has overflow-hidden and would clip a dropdown. Position is
         // measured on hover so it sits just under the throughput group.
@@ -899,7 +899,7 @@ export function createEventStreamView(
         expandedSet.add(eventId);
       }
       dirtyExpandId = eventId;
-      // Save scroll position — user-initiated expand/collapse should not auto-scroll
+      // Save scroll position: user-initiated expand/collapse should not auto-scroll
       const savedScrollTop = eventsList.scrollTop;
       const wasAutoFollowing = autoFollow.isFollowing();
       suppressScrollHandler = true;
@@ -993,7 +993,7 @@ export function createEventStreamView(
       const isFirstRender = rowElements.size === 0 && filteredEvents.length > 0;
 
       if (filterChanged || isFirstRender || filteredEvents.length === 0) {
-        // Path A — Full rebuild (filter/search changed, first render, or empty list)
+        // Path A: Full rebuild (filter/search changed, first render, or empty list)
         eventsList.innerHTML = "";
         rowElements.clear();
         const fragment = document.createDocumentFragment();
@@ -1016,7 +1016,7 @@ export function createEventStreamView(
         lastRenderedSearch = searchTerm;
         dirtyExpandId = null;
       } else {
-        // Path B — Single row replace (expand/collapse)
+        // Path B: Single row replace (expand/collapse)
         if (dirtyExpandId !== null) {
           const oldRow = rowElements.get(dirtyExpandId);
           if (oldRow && oldRow.parentNode === eventsList) {
@@ -1043,7 +1043,7 @@ export function createEventStreamView(
           dirtyExpandId = null;
         }
 
-        // Path C — Incremental append (default streaming path)
+        // Path C: Incremental append (default streaming path)
         // Remove evicted rows
         const activeIds = new Set(filteredEvents.map((e) => e.id));
         for (const [id, el] of rowElements) {

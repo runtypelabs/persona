@@ -5,7 +5,7 @@ import { renderSlide } from "./render";
 
 // Presenter mode: a full-viewport overlay reusing the pure renderSlide().
 // Entering/leaving flips store.mode, which also swaps the WebMCP tool set
-// (see tools.ts) — the agent can drive the show with next/prev/jump tools.
+// (see tools.ts): the agent can drive the show with next/prev/jump tools.
 
 export const createPresenter = (store: DeckStore): void => {
   let overlay: HTMLElement | null = null;

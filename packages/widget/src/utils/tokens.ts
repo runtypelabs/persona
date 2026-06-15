@@ -194,23 +194,23 @@ export const DEFAULT_SEMANTIC: SemanticTokens = {
   colors: {
     primary: 'palette.colors.primary.500',
     secondary: 'palette.colors.secondary.500',
-    // Links/Focus role — solid primary
+    // Links/Focus role: solid primary
     accent: 'palette.colors.primary.600',
-    // Surfaces role — soft gray
+    // Surfaces role: soft gray
     surface: 'palette.colors.gray.50',
     background: 'palette.colors.gray.50',
     container: 'palette.colors.gray.50',
     text: 'palette.colors.gray.900',
     textMuted: 'palette.colors.gray.500',
     textInverse: 'palette.colors.gray.50',
-    // Borders role — soft gray
+    // Borders role: soft gray
     border: 'palette.colors.gray.200',
     divider: 'palette.colors.gray.200',
     interactive: {
-      // Primary Actions role — solid primary
+      // Primary Actions role: solid primary
       default: 'palette.colors.primary.600',
       hover: 'palette.colors.primary.700',
-      // Links/Focus role — solid primary
+      // Links/Focus role: solid primary
       focus: 'palette.colors.primary.600',
       active: 'palette.colors.primary.600',
       disabled: 'palette.colors.gray.300',
@@ -241,7 +241,7 @@ export const DEFAULT_SEMANTIC: SemanticTokens = {
 export const DEFAULT_COMPONENTS: ComponentTokens = {
   button: {
     primary: {
-      // Primary Actions role — solid primary
+      // Primary Actions role: solid primary
       background: 'palette.colors.primary.500',
       foreground: 'palette.colors.primary.50',
       borderRadius: 'palette.radius.lg',
@@ -261,7 +261,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     },
   },
   input: {
-    // Input role — soft gray
+    // Input role: soft gray
     background: 'palette.colors.gray.50',
     placeholder: 'palette.colors.gray.400',
     borderRadius: 'palette.radius.lg',
@@ -289,7 +289,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     shadow: 'palette.shadows.xl',
   },
   header: {
-    // Header role — solid primary
+    // Header role: solid primary
     background: 'palette.colors.primary.500',
     border: 'palette.colors.primary.600',
     borderRadius: 'palette.radius.xl palette.radius.xl 0 0',
@@ -302,14 +302,14 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
   },
   message: {
     user: {
-      // User Messages role — solid primary
+      // User Messages role: solid primary
       background: 'palette.colors.primary.500',
       text: 'palette.colors.primary.50',
       borderRadius: 'palette.radius.lg',
       shadow: 'palette.shadows.sm',
     },
     assistant: {
-      // Assistant Messages role — soft gray
+      // Assistant Messages role: soft gray
       background: 'palette.colors.gray.50',
       text: 'palette.colors.gray.900',
       borderRadius: 'palette.radius.lg',
@@ -341,7 +341,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       foreground: 'palette.colors.gray.900',
     },
     link: {
-      // Links/Focus role — solid primary
+      // Links/Focus role: solid primary
       foreground: 'palette.colors.primary.600',
     },
     prose: {
@@ -755,7 +755,7 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-radius-lg'] ??
     '0.5rem';
 
-  // Component-level color overrides — these map component tokens to
+  // Component-level color overrides: these map component tokens to
   // dedicated CSS variables that the widget CSS reads for individual elements.
   cssVars['--persona-header-bg'] =
     cssVars['--persona-components-header-background'] ?? cssVars['--persona-surface'];
@@ -776,7 +776,7 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;
   if (headerTokens?.borderBottom) cssVars['--persona-header-border-bottom'] = headerTokens.borderBottom;
 
-  // Intro card aliases — short names the panel inline-styles read directly.
+  // Intro card aliases: short names the panel inline-styles read directly.
   // The full-path `--persona-components-introCard-*` variables auto-emit above;
   // these mirror them with sensible fallbacks so existing pages keep their look.
   const introCardTokens = theme.components?.introCard;
