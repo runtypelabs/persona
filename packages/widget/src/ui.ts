@@ -1,5 +1,6 @@
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
+import { loadMarkdownParsers, getMarkdownParsersSync } from "./markdown-parsers-loader";
 import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
 import {
   AgentWidgetConfig,
@@ -2779,6 +2780,11 @@ export const createAgentExperience = (
   // pending.
   const lastApprovalBubbleFingerprint = new Map<string, string>();
   let configVersion = 0;
+  // Whether the markdown parsers (marked + dompurify) were already loaded when
+  // this widget mounted. False only on the IIFE/CDN lazy path before the
+  // `markdown-parsers.js` chunk resolves; in that window messages render as
+  // escaped plain text and are re-rendered once the chunk lands (see below).
+  const markdownReadyAtInit = getMarkdownParsersSync() !== null;
   const autoFollow = createFollowStateController();
   let lastScrollTop = 0;
   let scrollRAF: number | null = null;
@@ -8252,6 +8258,26 @@ export const createAgentExperience = (
   // `onStreamingChanged`, `updateOpenState`, and pointerenter/leave on
   // the panel.
   syncComposerBarPeek();
+
+  // IIFE/CDN lazy path only: the parsers were not ready at mount, so any
+  // messages rendered so far (restored history, eager intro/injected messages)
+  // were escaped to plain text. Once the `markdown-parsers.js` chunk resolves,
+  // bust the message cache and re-render so they pick up real markdown. Bumping
+  // `configVersion` + clearing the cache is required because the message
+  // content is unchanged, so the fingerprint cache would otherwise reuse the
+  // stale escaped wrappers. No-op for the ESM build (parsers ready at init).
+  if (!markdownReadyAtInit) {
+    loadMarkdownParsers()
+      .then(() => {
+        if (!session) return;
+        configVersion++;
+        messageCache.clear();
+        renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+      })
+      .catch(() => {
+        /* chunk failed to load (e.g. ad blocker): keep the escaped fallback */
+      });
+  }
 
   return controller;
 };

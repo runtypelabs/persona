@@ -343,12 +343,23 @@ declare global {
   // first open is quick. Runs at idle so it never competes with the launcher.
   const prefetchFullBundle = (): void => {
     const addPrefetch = () => {
-      if (isJsLoaded()) return;
-      const link = document.createElement("link");
-      link.rel = "prefetch";
-      link.as = "script";
-      link.href = jsUrl;
-      document.head.appendChild(link);
+      if (!isJsLoaded()) {
+        const link = document.createElement("link");
+        link.rel = "prefetch";
+        link.as = "script";
+        link.href = jsUrl;
+        document.head.appendChild(link);
+      }
+
+      // Also prefetch the markdown parsers chunk
+      const markdownUrl = jsUrl.replace(/index\.global\.js($|\?)/, "markdown-parsers.js$1");
+      if (markdownUrl !== jsUrl) {
+        const link2 = document.createElement("link");
+        link2.rel = "prefetch";
+        link2.as = "script";
+        link2.href = markdownUrl;
+        document.head.appendChild(link2);
+      }
     };
     if (typeof requestIdleCallback !== "undefined") {
       requestIdleCallback(addPrefetch, { timeout: 4000 });

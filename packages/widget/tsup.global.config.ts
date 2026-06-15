@@ -36,5 +36,11 @@ export default defineConfig({
     // a sibling URL instead.
     // `provider: 'runtype'` is opt-in, so most pages never fetch it.
     options.external.push("./runtype-tts-entry");
+
+    // Keep the markdown parsers (marked and dompurify) out of the CDN payload. esbuild
+    // leaves the loader's default import in place; it is never invoked here because
+    // `index-global.ts` registers a loader that imports the standalone
+    // `markdown-parsers.js` chunk from a sibling URL instead.
+    options.external.push("./markdown-parsers-entry");
   },
 });

@@ -1,11 +1,13 @@
-import DOMPurify from "dompurify";
+import type * as DOMPurifyType from "dompurify";
+import { escapeHtml } from "../postprocessors";
+import { getMarkdownParsersSync } from "../markdown-parsers-loader";
 
 /**
  * A function that sanitizes an HTML string, returning safe HTML.
  */
 export type SanitizeFunction = (html: string) => string;
 
-const DEFAULT_PURIFY_CONFIG: DOMPurify.Config = {
+const DEFAULT_PURIFY_CONFIG: DOMPurifyType.Config = {
   // Tags safe for markdown-rendered content
   ALLOWED_TAGS: [
     // Headings & structure
@@ -49,22 +51,36 @@ const SAFE_DATA_URI = /^data:image\/(?:png|jpe?g|gif|webp|bmp|x-icon|avif)/i;
  * Uses the global window when available (browser).
  */
 export const createDefaultSanitizer = (): SanitizeFunction => {
-  // DOMPurify needs a DOM context. In the browser, pass `window`.
-  // The widget only runs in browsers, so `window` is always available at runtime.
-  const purify = DOMPurify(typeof window !== "undefined" ? window : (undefined as never));
+  let purifyInstance: ReturnType<typeof DOMPurifyType.default> | null = null;
 
-  // Hook: strip data:image/svg+xml and other unsafe data: URIs from src/href
-  purify.addHook("uponSanitizeAttribute", (_node, data) => {
-    if (data.attrName === "src" || data.attrName === "href") {
-      const val = data.attrValue;
-      if (val.toLowerCase().startsWith("data:") && !SAFE_DATA_URI.test(val)) {
-        data.attrValue = "";
-        data.keepAttr = false;
-      }
+  return (html: string): string => {
+    const parsers = getMarkdownParsersSync();
+    if (!parsers) {
+      // If DOMPurify hasn't loaded yet, fall back to escaping HTML completely
+      // to remain safe until the module is available.
+      return escapeHtml(html);
     }
-  });
+    
+    if (!purifyInstance) {
+      const { DOMPurify } = parsers;
+      // DOMPurify needs a DOM context. In the browser, pass `window`.
+      // The widget only runs in browsers, so `window` is always available at runtime.
+      purifyInstance = DOMPurify(typeof window !== "undefined" ? window : (undefined as never));
 
-  return (html: string): string => purify.sanitize(html, DEFAULT_PURIFY_CONFIG) as string;
+      // Hook: strip data:image/svg+xml and other unsafe data: URIs from src/href
+      purifyInstance.addHook("uponSanitizeAttribute", (_node, data) => {
+        if (data.attrName === "src" || data.attrName === "href") {
+          const val = data.attrValue;
+          if (val.toLowerCase().startsWith("data:") && !SAFE_DATA_URI.test(val)) {
+            data.attrValue = "";
+            data.keepAttr = false;
+          }
+        }
+      });
+    }
+
+    return purifyInstance.sanitize(html, DEFAULT_PURIFY_CONFIG) as string;
+  };
 };
 
 /**

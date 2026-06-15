@@ -72,6 +72,41 @@ setWebMcpPolyfillLoader(() => {
 });
 
 // ---------------------------------------------------------------------------
+// Deferred Markdown Parsers (marked + dompurify) loading.
+//
+// This bundle is built with `./markdown-parsers-entry` external: the Markdown
+// and HTML sanitization libraries are kept out of the CDN payload. Register a
+// loader that imports the self-contained `markdown-parsers.js` chunk from a sibling
+// URL. The session prefetches it at init so it's warm before the first message.
+// ---------------------------------------------------------------------------
+
+import { setMarkdownParsersLoader, loadMarkdownParsers } from "./markdown-parsers-loader";
+
+setMarkdownParsersLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "markdown-parsers.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the markdown-parsers.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host markdown-parsers.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// Kick off the load immediately since it will likely be needed.
+loadMarkdownParsers().catch(err => {
+  // It's okay if this fails (e.g. ad blocker), it'll just fall back to plain text.
+  if (typeof console !== "undefined") {
+    console.warn("[Persona] Failed to pre-load markdown parsers", err);
+  }
+});
+// ---------------------------------------------------------------------------
 // Deferred Runtype TTS engine loading.
 //
 // This bundle is built with `./runtype-speech-engine` external (see
