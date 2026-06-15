@@ -27,6 +27,11 @@
       "import": "./dist/theme-editor.js",
       "require": "./dist/theme-editor.cjs"
     },
+    "./theme-editor/preview": {
+      "types": "./dist/theme-editor-preview.d.ts",
+      "import": "./dist/theme-editor-preview.js",
+      "require": "./dist/theme-editor-preview.cjs"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js",
@@ -64,10 +69,11 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations",
     "build:markdown-parsers": "tsup --config tsup.markdown-parsers.config.ts",
     "build:plugin-kit": "tsup src/plugin-kit.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:theme-editor": "tsup src/theme-editor.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
+    "build:theme-editor-preview": "tsup src/theme-editor-preview.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:testing": "tsup src/testing.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:smart-dom-reader": "tsup src/smart-dom-reader.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:voice-worklet-player": "tsup src/voice-worklet-player.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",

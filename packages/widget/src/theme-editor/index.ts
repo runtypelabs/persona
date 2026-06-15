@@ -55,18 +55,9 @@ export {
   getThemeEditorPreset,
 } from './presets';
 
-// Preview renderer
-export { createThemePreview } from './preview';
-export type {
-  ThemePreviewOptions,
-  ThemePreviewHandle,
-  PreviewLifecycleContext,
-  PreviewDevice,
-  PreviewShellMode,
-  CompareMode,
-} from './preview';
-
-// Preview building blocks (for advanced/custom preview renderers)
+// Preview building blocks (for advanced/custom preview renderers).
+// For the full iframe preview helper (`createThemePreview`), use
+// `@runtypelabs/persona/theme-editor/preview`.
 export {
   DEVICE_DIMENSIONS,
   ZOOM_MIN,

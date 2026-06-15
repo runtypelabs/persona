@@ -1,5 +1,8 @@
 /**
  * Imperative preview renderer for the theme editor.
+ * Import from `@runtypelabs/persona/theme-editor/preview` (not the headless
+ * `@runtypelabs/persona/theme-editor` subpath, which omits the widget runtime).
+ *
  * Manages iframe-based widget previews with device frames, zoom, scenes, and compare mode.
  * No external DOM dependencies: only needs a container element to mount into.
  *

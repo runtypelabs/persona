@@ -493,6 +493,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      "@runtypelabs/persona/theme-editor/preview": path.resolve(
+        __dirname,
+        "../../packages/widget/src/theme-editor-preview.ts"
+      ),
       "@runtypelabs/persona/theme-editor": path.resolve(
         __dirname,
         "../../packages/widget/src/theme-editor"
