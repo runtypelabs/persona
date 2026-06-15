@@ -285,6 +285,7 @@ export type RuntypeFlowSSEEvent = {
   totalSteps?: number;
   type: "flow_start";
 } | {
+  claudeManagedAgentId?: string;
   completedAt?: string;
   completedSteps?: number;
   duration?: number;
@@ -399,6 +400,7 @@ export type RuntypeFlowSSEEvent = {
   toolId: string;
 };
   type: "step_complete";
+  unresolvedVariables?: Array<string>;
 }) | {
   error: string;
   executionId?: string;
@@ -836,6 +838,7 @@ export type RuntypeDispatchSSEEvent = {
   totalSteps?: number;
   type: "flow_start";
 } | {
+  claudeManagedAgentId?: string;
   completedAt?: string;
   completedSteps?: number;
   duration?: number;
@@ -950,6 +953,7 @@ export type RuntypeDispatchSSEEvent = {
   toolId: string;
 };
   type: "step_complete";
+  unresolvedVariables?: Array<string>;
 }) | {
   error: string;
   executionId?: string;
@@ -1253,6 +1257,7 @@ export type RuntypeClientFeedbackRequest = {
   metadata?: Record<string, unknown>;
   rating?: number;
   sessionId: string;
+  token: string;
   type: "upvote" | "downvote" | "copy" | "csat" | "nps";
 };
 
