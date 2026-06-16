@@ -2042,11 +2042,22 @@ export class AgentWidgetClient {
           if (callKey) {
             toolContext.byCall.delete(callKey);
           }
-        } else if (payloadType === "step_await" && payload.awaitReason === "local_tool_required" && payload.toolName) {
-          // LOCAL tool pause. Runtype's prompt step throws LocalToolRequiredError
-          // when the model calls a tool with `toolType: "local"`. The server
-          // emits step_await with the tool name, params, and execution id; the
-          // execution pauses until the client POSTs /resume with toolOutputs.
+        } else if (
+          (payloadType === "step_await" &&
+            payload.awaitReason === "local_tool_required" &&
+            payload.toolName) ||
+          (payloadType === "agent_await" && payload.toolName)
+        ) {
+          // LOCAL tool pause. Two wire shapes resolve here, by dispatch target:
+          //  - FLOW dispatch → `step_await` + `awaitReason: "local_tool_required"`
+          //    (Runtype's prompt step throws LocalToolRequiredError when the model
+          //    calls a `toolType: "local"` tool).
+          //  - AGENT dispatch → `agent_await` (the agent runtime's native pause).
+          // Either way the server emits the tool name, params, and execution id;
+          // the execution pauses until the client POSTs /resume with toolOutputs.
+          // `agent_await` carries a BARE tool name plus an `origin`; page tools
+          // (origin "webmcp") are normalized to the `webmcp:`-prefixed form below
+          // so the bridge + session.ts `/resume` keying are identical for both.
           //
           // Upsert a fully-populated tool-variant message so the existing
           // ask_user_question bubble + sheet paths fire. Mark the message with
@@ -2069,7 +2080,16 @@ export class AgentWidgetClient {
           const toolId =
             toolCallId ?? (payload.toolId as string) ?? `local-${nextSequence()}`;
           const toolMessage = ensureToolMessage(toolId);
-          const toolName = payload.toolName as string;
+          const rawToolName = payload.toolName as string;
+          // `agent_await` page tools arrive with a bare name; synthesize the
+          // `webmcp:` prefix so isWebMcpToolName (and the bridge's prefix-strip on
+          // resume) treat them identically to a flow `step_await`.
+          const toolName =
+            payloadType === "agent_await" &&
+            payload.origin === "webmcp" &&
+            !isWebMcpToolName(rawToolName)
+              ? `webmcp:${rawToolName}`
+              : rawToolName;
           const webMcpTool = isWebMcpToolName(toolName);
           const tool = toolMessage.toolCall ?? { id: toolId, status: "pending" as const };
           tool.name = toolName;
@@ -2083,7 +2103,8 @@ export class AgentWidgetClient {
           tool.status = webMcpTool ? "running" : "complete";
           tool.chunks = tool.chunks ?? [];
           tool.startedAt =
-            tool.startedAt ?? resolveTimestamp(payload.startedAt ?? payload.timestamp);
+            tool.startedAt ??
+            resolveTimestamp(payload.startedAt ?? payload.timestamp ?? payload.awaitedAt);
           if (webMcpTool) {
             tool.completedAt = undefined;
             tool.duration = undefined;

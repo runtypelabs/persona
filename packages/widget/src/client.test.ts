@@ -3123,6 +3123,99 @@ describe('AgentWidgetClient: step_await parsing', () => {
   });
 });
 
+// ============================================================================
+// agent_await (AGENT-dispatch LOCAL tool pause) — resolves through the same
+// path as step_await; carries a bare tool name + origin instead of a webmcp:
+// prefix + awaitReason.
+// ============================================================================
+
+describe('AgentWidgetClient: agent_await parsing', () => {
+  const buildAgentAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
+    const encoder = new TextEncoder();
+    const body = `event: agent_await\ndata: ${JSON.stringify({ type: 'agent_await', ...payload })}\n\n`;
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(body));
+        controller.close();
+      },
+    });
+  };
+
+  it('normalizes a WebMCP agent_await (origin "webmcp") to a running webmcp: tool message', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: buildAgentAwaitStream({
+        executionId: 'exec_abc',
+        toolId: 'runtime_get_product_by_url_1',
+        toolCallId: 'tc_webmcp_1',
+        toolName: 'get_product_by_url',
+        origin: 'webmcp',
+        awaitedAt: 1234,
+        parameters: { path: '/jade/' },
+      }),
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const toolMsg = events
+      .filter((e) => e.type === 'message')
+      .map((e) => (e as { message: AgentWidgetMessage }).message)
+      .find((m) => m.variant === 'tool' && m.toolCall?.name === 'webmcp:get_product_by_url');
+
+    expect(toolMsg).toBeDefined();
+    // bare wire name is normalized to the webmcp: prefix
+    expect(toolMsg!.toolCall!.name).toBe('webmcp:get_product_by_url');
+    expect(toolMsg!.toolCall!.id).toBe('tc_webmcp_1');
+    expect(toolMsg!.toolCall!.status).toBe('running');
+    expect(toolMsg!.toolCall!.startedAt).toBe(1234);
+    expect(toolMsg!.toolCall!.completedAt).toBeUndefined();
+    expect(toolMsg!.toolCall!.args).toEqual({ path: '/jade/' });
+    expect(toolMsg!.agentMetadata?.executionId).toBe('exec_abc');
+    expect(toolMsg!.agentMetadata?.awaitingLocalTool).toBe(true);
+    expect(toolMsg!.agentMetadata?.webMcpToolCallId).toBe('tc_webmcp_1');
+  });
+
+  it('emits a complete tool message for a non-WebMCP agent_await (origin "sdk")', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: buildAgentAwaitStream({
+        executionId: 'exec_abc',
+        toolId: 'runtime_ask_user_question_123',
+        toolName: 'ask_user_question',
+        origin: 'sdk',
+        awaitedAt: 1234,
+        parameters: {
+          questions: [{ question: 'Who?', options: [{ label: 'A' }, { label: 'B' }] }],
+        },
+      }),
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const toolMsg = events
+      .filter((e) => e.type === 'message')
+      .map((e) => (e as { message: AgentWidgetMessage }).message)
+      .find((m) => m.variant === 'tool' && m.toolCall?.name === 'ask_user_question');
+
+    expect(toolMsg).toBeDefined();
+    // sdk-origin local tool keeps its bare name (no webmcp: prefix)
+    expect(toolMsg!.toolCall!.name).toBe('ask_user_question');
+    expect(toolMsg!.toolCall!.status).toBe('complete');
+    expect(toolMsg!.agentMetadata?.executionId).toBe('exec_abc');
+    expect(toolMsg!.agentMetadata?.awaitingLocalTool).toBe(true);
+  });
+});
+
 describe('AgentWidgetClient.resumeFlow', () => {
   it('POSTs to ${apiUrl}/resume with the expected body shape', async () => {
     let capturedUrl: string | undefined;
