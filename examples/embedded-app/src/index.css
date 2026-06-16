@@ -1,32 +1,41 @@
 /* Fonts load via a <link> in <head>, injected by the gallery-fonts Vite plugin
-   (vite.config.ts). Do NOT re-add an `@import` here: it loads the fonts late
+   (vite.config.ts). Do NOT re-add an `@import` here — it loads the fonts late
    and causes a font-swap flash on first paint. */
 
-:root {
-  color-scheme: light;
+@import "./editorial-tokens.css";
 
-  /* Runtype marketing palette */
-  --background: #F6F7FB;
-  --foreground: #1A1B20;
-  --primary: #5B2EFF;
-  --primary-hover: #3D1DCC;
-  --primary-foreground: #ffffff;
-  --secondary: #7A5CFF;
-  --border: #E6E8F0;
-  --muted: #6B6E76;
-  --muted-light: #8A8F9C;
-  --secondary-text: #3D3F46;
-  --accent: #EEE9FF;
-  --accent-lime: #8FD400;
+/* ════════════════════════════════════════════════════════════════════════
+   index.css — editorial/terminal identity (shared with the homepage).
+   Warm cream paper, the teal accent, Syne editorial headings, Geist body,
+   JetBrains Mono labels + code, hairline borders, sharp corners (radius 0),
+   and hard-offset (not soft-blur) shadows.
+
+   The canonical palette + type tokens live in editorial-tokens.css; the :root
+   below only remaps this file's semantic names (--primary, --background, …)
+   onto them so existing component rules update wholesale.
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Warm editorial palette */
+  --background: #fef9f1;              /* cream paper (canonical --paper) */
+  --foreground: var(--ink);
+  --primary: var(--teal-ink);         /* readable teal for text / borders / links / focus */
+  --primary-hover: #004d42;           /* darker teal */
+  --primary-foreground: var(--ink);   /* dark ink reads on the teal fill */
+  --secondary: var(--teal-dim);       /* bright teal for fills / accents */
+  --border: var(--hairline);          /* rgba(0,0,0,0.1) */
+  --muted: #57544c;                   /* warm gray */
+  --muted-light: #8a877d;             /* warmer faint */
+  --secondary-text: var(--ink-soft);
+  --accent: var(--teal-soft);         /* light teal fill (was light violet) */
+  --accent-lime: #8FD400;             /* semantic accents — kept */
   --accent-cyan: #00B8D9;
 
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-serif: 'Newsreader', Georgia, serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  --font-label: 'Asap Condensed', sans-serif;
+  --font-sans: var(--font-body);      /* Geist */
+  --font-serif: var(--font-editorial);/* Syne */
+  --font-label: var(--font-mono);     /* JetBrains Mono caps labels */
 
-  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
-  --radius: 6px;
+  --radius: 0;                        /* sharp corners */
 }
 
 *, *::before, *::after {
@@ -111,7 +120,7 @@ code {
   font-size: 13px;
   background: var(--accent);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 /* Utilities */
@@ -277,7 +286,7 @@ section[id] {
   height: 34px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -299,7 +308,7 @@ section[id] {
 }
 
 /* ======================================================================
-   Hero Split: 3D Carousel Layout
+   Hero Split — 3D Carousel Layout
    ====================================================================== */
 
 .hero-split {
@@ -316,7 +325,7 @@ section[id] {
   gap: 3vw;
 }
 
-/* Floating glass panel: left side */
+/* Floating glass panel — left side */
 .hero-panel {
   flex: 0 0 clamp(280px, 24vw, 420px);
   display: flex;
@@ -327,10 +336,8 @@ section[id] {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 16px;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.06),
-    0 0 0 1px rgba(0, 0, 0, 0.03);
+  border-radius: 0;
+  box-shadow: var(--shadow-hard-sm);
   z-index: 2;
   position: relative;
   animation: hero-fade-in 0.8s var(--ease-smooth) 0.1s both;
@@ -354,7 +361,7 @@ section[id] {
   justify-content: flex-start;
 }
 
-/* Card Stack: right side */
+/* Card Stack — right side */
 .carousel-3d {
   flex: 1;
   perspective: 1200px;
@@ -376,7 +383,7 @@ section[id] {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(ellipse, rgba(91, 46, 255, 0.06) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(38, 254, 220, 0.06) 0%, transparent 70%);
   pointer-events: none;
   z-index: -1;
 }
@@ -404,19 +411,19 @@ section[id] {
   display: block;
   text-decoration: none;
   color: inherit;
-  border-radius: 14px;
+  border-radius: 0;
   overflow: hidden;
   box-shadow:
-    0 12px 40px -8px rgba(0, 0, 0, 0.18),
-    0 0 0 1px rgba(0, 0, 0, 0.06);
+    var(--shadow-hard),
+    inset 0 0 0 1px var(--border-strong, rgba(0, 0, 0, 0.2));
   transition: box-shadow 0.3s ease;
   background: #fff;
 }
 
 .carousel-3d-card-link:hover {
   box-shadow:
-    0 16px 48px -8px rgba(91, 46, 255, 0.25),
-    0 0 0 1px rgba(91, 46, 255, 0.15);
+    var(--shadow-hard-lg),
+    inset 0 0 0 1px var(--teal-ink);
 }
 
 .carousel-3d-iframe-wrap {
@@ -452,7 +459,7 @@ section[id] {
   letter-spacing: 0.01em;
 }
 
-/* Carousel controls: arrows + dots */
+/* Carousel controls — arrows + dots */
 .carousel-3d-controls {
   display: flex;
   align-items: center;
@@ -497,7 +504,7 @@ section[id] {
   height: 8px;
   padding: 0;
   border: none;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--border);
   cursor: pointer;
   transition: background 0.25s ease, width 0.25s var(--ease-smooth);
@@ -535,7 +542,7 @@ section[id] {
   left: 50%;
   transform: translate(-50%, -50%) scale(0.96);
   padding: 9px 16px;
-  border-radius: 999px;
+  border-radius: 0;
   background: rgba(20, 20, 28, 0.82);
   color: #fff;
   font-family: var(--font-sans);
@@ -582,14 +589,14 @@ section[id] {
   }
 }
 
-/* Hero responsive: tablet (vw handles card scaling, just tweak panel) */
+/* Hero responsive — tablet (vw handles card scaling, just tweak panel) */
 @media (max-width: 1080px) {
   .hero-panel h1 {
     font-size: clamp(24px, 2.5vw, 32px);
   }
 }
 
-/* Hero responsive: small tablet / large phone */
+/* Hero responsive — small tablet / large phone */
 @media (max-width: 960px) {
   .hero-split {
     padding: 76px 16px 0;
@@ -624,7 +631,7 @@ section[id] {
   }
 }
 
-/* Hero responsive: phone */
+/* Hero responsive — phone */
 @media (max-width: 640px) {
   .hero-split {
     padding: 64px 10px 0;
@@ -637,7 +644,7 @@ section[id] {
   .hero-panel {
     padding: 20px 16px 16px;
     gap: 8px;
-    border-radius: 12px;
+    border-radius: 0;
   }
 
   .hero-panel .label {
@@ -797,7 +804,7 @@ section[id] {
 }
 
 .install-command:hover {
-  box-shadow: 0 0 0 1px rgba(91, 46, 255, 0.3);
+  box-shadow: inset 0 0 0 1px var(--teal-ink);
 }
 
 .install-prefix {
@@ -809,7 +816,7 @@ section[id] {
   margin-left: auto;
   flex-shrink: 0;
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--primary);
   color: var(--primary-foreground);
   font-family: var(--font-sans);
@@ -837,7 +844,7 @@ section[id] {
 }
 
 /*
- * Demo chrome only: scoped to `.page` (index.html) so other pages that import this file
+ * Demo chrome only — scoped to `.page` (index.html) so other pages that import this file
  * (theme.html, bakery, json, etc.) are not affected. The widget mounts in the light DOM by
  * default (`useShadowDom` is opt-in), so a bare `button { padding: 10px 18px }` applies to
  * the header close control. With `width`/`height` 32px and `box-sizing: border-box`,
@@ -864,18 +871,18 @@ section[id] {
 .primaryButton {
   background: var(--primary);
   color: var(--primary-foreground);
-  box-shadow: 0 4px 12px -4px rgba(91, 46, 255, 0.25);
+  box-shadow: var(--shadow-hard-sm);
 }
 
 .primaryButton:hover {
   background: var(--primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px -4px rgba(91, 46, 255, 0.3);
+  box-shadow: var(--shadow-hard-sm);
 }
 
 .primaryButton:active {
   transform: translateY(1px);
-  box-shadow: 0 1px 4px rgba(91, 46, 255, 0.15);
+  box-shadow: none;
 }
 
 .secondaryButton,
@@ -883,12 +890,12 @@ section[id] {
   background: #ffffff;
   color: var(--foreground);
   border: 1px solid var(--border);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow: none;
 }
 
 .secondaryButton:hover {
   background: var(--accent);
-  border-color: rgba(91, 46, 255, 0.2);
+  border-color: var(--teal-ink);
   transform: translateY(-1px);
 }
 
@@ -974,7 +981,7 @@ section[id] {
 
 /* Rotating color accents for each pill */
 .examples-list li:nth-child(9n+1) .example-item::after,
-.featured-grid .example-item:nth-child(9n+1)::after { background: radial-gradient(circle at 70% 50%, #8b5cf6, transparent 70%); }
+.featured-grid .example-item:nth-child(9n+1)::after { background: radial-gradient(circle at 70% 50%, #26fedc, transparent 70%); }
 .examples-list li:nth-child(9n+2) .example-item::after,
 .featured-grid .example-item:nth-child(9n+2)::after { background: radial-gradient(circle at 70% 50%, #06b6d4, transparent 70%); }
 .examples-list li:nth-child(9n+3) .example-item::after,
@@ -994,8 +1001,8 @@ section[id] {
 
 .example-item:hover {
   transform: translateY(-1px);
-  border-color: rgba(91, 46, 255, 0.2);
-  box-shadow: 0 4px 12px -8px rgba(91, 46, 255, 0.15);
+  border-color: var(--teal-ink);
+  box-shadow: var(--shadow-hard-sm);
 }
 
 .example-item small {
@@ -1048,10 +1055,10 @@ section[id] {
   line-height: 1.7;
 }
 
-.code-showcase .code-comment { color: #6B6E76; }
-.code-showcase .code-keyword { color: #7A5CFF; }
-.code-showcase .code-string { color: #8FD400; }
-.code-showcase .code-function { color: #00B8D9; }
+.code-showcase .code-comment { color: #7c7a70; }
+.code-showcase .code-keyword { color: #7eb1ff; }
+.code-showcase .code-string { color: #00dfc1; }
+.code-showcase .code-function { color: #00b8d9; }
 
 .quick-start-section {
   gap: 18px;
@@ -1062,7 +1069,7 @@ section[id] {
   align-items: center;
   gap: 2px;
   padding: 3px;
-  border-radius: 10px;
+  border-radius: 0;
   border: 1px solid var(--border);
   background: rgba(246, 247, 251, 0.9);
 }
@@ -1071,7 +1078,7 @@ section[id] {
   position: relative;
   min-height: 34px;
   padding: 6px 16px;
-  border-radius: 8px;
+  border-radius: 0;
   border: none;
   background: transparent;
   color: var(--muted);
@@ -1091,15 +1098,13 @@ section[id] {
 .quick-start-tab[aria-selected='true'] {
   background: #ffffff;
   color: var(--foreground);
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.08),
-    0 0 0 1px rgba(0, 0, 0, 0.04);
+  box-shadow: inset 0 0 0 1px var(--border-strong, rgba(0, 0, 0, 0.2));
 }
 
 .quick-start-tab:focus-visible {
   box-shadow:
-    0 0 0 2px rgba(91, 46, 255, 0.4),
-    0 0 0 4px rgba(91, 46, 255, 0.12);
+    0 0 0 2px var(--teal-ink),
+    0 0 0 4px var(--teal-soft);
 }
 
 .quick-start-panel {
@@ -1115,8 +1120,8 @@ section[id] {
 .quick-start-intro {
   padding: 14px 16px;
   border-radius: var(--radius);
-  border: 1px solid rgba(91, 46, 255, 0.12);
-  background: rgba(91, 46, 255, 0.05);
+  border: 1px solid var(--border);
+  background: var(--teal-soft);
   color: var(--secondary-text);
   font-size: 14px;
   line-height: 1.6;
@@ -1151,9 +1156,9 @@ section[id] {
   width: 32px;
   height: 32px;
   flex: 0 0 32px;
-  border-radius: 999px;
-  border: 1px solid rgba(91, 46, 255, 0.18);
-  background: rgba(91, 46, 255, 0.08);
+  border-radius: 0;
+  border: 1px solid var(--teal-ink);
+  background: var(--teal-soft);
   color: var(--primary);
   font-family: var(--font-mono);
   font-size: 12px;
@@ -1211,10 +1216,10 @@ section[id] {
 }
 
 .quick-start-note-link:focus-visible {
-  border-radius: 8px;
+  border-radius: 0;
   box-shadow:
-    0 0 0 1px rgba(91, 46, 255, 0.35),
-    0 0 0 4px rgba(91, 46, 255, 0.12) !important;
+    0 0 0 1px var(--teal-ink),
+    0 0 0 4px var(--teal-soft) !important;
 }
 
 .quick-start-install {
@@ -1249,8 +1254,8 @@ section[id] {
 .quick-start-install:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 1px rgba(91, 46, 255, 0.35),
-    0 0 0 4px rgba(91, 46, 255, 0.12);
+    0 0 0 1px var(--teal-ink),
+    0 0 0 4px var(--teal-soft);
 }
 
 .quick-start-step .code-showcase {
@@ -1261,7 +1266,7 @@ section[id] {
   width: min(680px, calc(100vw - 32px));
   padding: 0;
   border: none;
-  border-radius: 12px;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   overflow: hidden;
@@ -1277,7 +1282,7 @@ section[id] {
   flex-direction: column;
   background: #0a0b0e;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: 0;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
@@ -1319,7 +1324,7 @@ section[id] {
   font-family: var(--font-mono) !important;
   background: rgba(255, 255, 255, 0.06) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 6px !important;
+  border-radius: 0 !important;
   color: #6b6e76 !important;
   box-shadow: none !important;
   line-height: 1.4;
@@ -1422,7 +1427,7 @@ section[id] {
 /* Try-it Smoke Background */
 .tryit-backdrop {
   position: relative;
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
   padding: 32px;
 }
@@ -1432,7 +1437,7 @@ section[id] {
   inset: -50%;
   background:
     radial-gradient(ellipse 80% 60% at 15% 80%, rgba(30, 58, 95, 0.9) 0%, transparent 60%),
-    radial-gradient(ellipse 70% 50% at 75% 15%, rgba(139, 92, 246, 0.7) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 75% 15%, rgba(38, 254, 220, 0.7) 0%, transparent 55%),
     radial-gradient(ellipse 60% 70% at 85% 75%, rgba(6, 182, 212, 0.65) 0%, transparent 50%),
     radial-gradient(ellipse 90% 50% at 25% 20%, rgba(249, 115, 22, 0.6) 0%, transparent 55%),
     radial-gradient(ellipse 50% 80% at 50% 50%, rgba(16, 185, 129, 0.5) 0%, transparent 50%),
@@ -1490,10 +1495,10 @@ section[id] {
 .tryit-widget-frame {
   position: relative;
   z-index: 3;
-  border-radius: 8px;
+  border-radius: 0;
   height: 600px;
   overflow: hidden;
-  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-hard), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 /* Theme Editor Section */
@@ -1504,19 +1509,19 @@ section[id] {
 .theme-editor-link {
   display: block;
   text-decoration: none;
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .theme-editor-link:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 40px -12px rgba(139, 92, 246, 0.35);
+  box-shadow: var(--shadow-hard);
 }
 
 .theme-backdrop {
   position: relative;
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
   padding: 56px 32px;
 }
@@ -1525,7 +1530,7 @@ section[id] {
   position: absolute;
   inset: -50%;
   background:
-    radial-gradient(ellipse 70% 60% at 20% 30%, rgba(139, 92, 246, 0.85) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 60% at 20% 30%, rgba(38, 254, 220, 0.85) 0%, transparent 55%),
     radial-gradient(ellipse 60% 70% at 80% 70%, rgba(236, 72, 153, 0.7) 0%, transparent 50%),
     radial-gradient(ellipse 80% 50% at 50% 80%, rgba(6, 182, 212, 0.6) 0%, transparent 55%),
     radial-gradient(ellipse 50% 80% at 70% 20%, rgba(249, 115, 22, 0.55) 0%, transparent 50%),
@@ -1615,10 +1620,10 @@ section[id] {
   height: 85vh;
   padding: 0;
   border: none;
-  border-radius: 14px;
+  border-radius: 0;
   overflow: hidden;
   background: #fff;
-  box-shadow: 0 24px 80px -12px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-hard-lg);
 }
 
 .demo-lightbox::backdrop {
@@ -1641,7 +1646,7 @@ section[id] {
   gap: 5px;
   padding: 6px 12px !important;
   border: none !important;
-  border-radius: 8px !important;
+  border-radius: 0 !important;
   background: rgba(0, 0, 0, 0.55) !important;
   color: #fff !important;
   font-size: 16px !important;
@@ -1808,7 +1813,7 @@ section[id] {
 
   .quick-start-tabs {
     width: 100%;
-    border-radius: 10px;
+    border-radius: 0;
   }
 
   .quick-start-tab {

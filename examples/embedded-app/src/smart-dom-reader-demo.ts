@@ -309,7 +309,7 @@ const config: AgentWidgetConfig = {
     width: "min(420px, 95vw)",
     title: "Shopping Assistant",
     subtitle:
-      "I can see this whole shop, including the shadow-DOM featured drop, and add things to your cart",
+      "Use me to test out different config",
     agentIconText: "🛍️",
   },
   copy: {

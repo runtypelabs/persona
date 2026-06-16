@@ -1,46 +1,19 @@
 /* ===========================================================================
-   Persona home page: editorial/terminal redesign.
+   Persona home page — editorial/terminal redesign.
    Used ONLY by index.html (other pages keep src/index.css).
    Fonts load via a <link> injected by the gallery-fonts Vite plugin
-   (vite.config.ts): do not @import them here.
+   (vite.config.ts) — do not @import them here.
    =========================================================================== */
 
+@import "./editorial-tokens.css";
+
+/* The palette, type, hairlines, elevation, radius, motion + the .label-caps /
+   .editorial-h type voices now live in editorial-tokens.css (shared with the
+   gallery + demo pages). This :root keeps only the home page's layout vars. */
 :root {
-  color-scheme: light;
-
-  /* Paper & ink */
-  --paper: #fef9f1;
-  --paper-high: #ece8e0;
-  --paper-low: #f8f3eb;
-  --ink: #1d1c17;
-  --ink-soft: #444748;
-  --black: #000000;
-
-  /* Accents */
-  --teal: #26fedc;
-  --teal-dim: #00dfc1;
-  --teal-ink: #006b5b;
-  --cobalt: #00429a;
-  --cobalt-bright: #357eff;
-
-  /* Hairlines */
-  --hairline: rgba(0, 0, 0, 0.1);
-  --hairline-soft: rgba(0, 0, 0, 0.05);
-
-  /* Type */
-  --font-display: 'JetBrains Mono', ui-monospace, monospace;
-  --font-editorial: 'Syne', sans-serif;
-  --font-body: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --font-wordmark: 'Bitcount Prop Single', var(--font-mono);
-
-  /* Layout */
   --margin: clamp(16px, 4vw, 64px);
   --header-h: 72px;
   --rail-w: 420px;
-
-  /* Used by carousel JS for injected transitions */
-  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 *, *::before, *::after {
@@ -94,24 +67,7 @@ section[id], aside[id] {
 }
 
 /* Shared type voices ------------------------------------------------------ */
-
-.label-caps {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.2em;
-  line-height: 1;
-  text-transform: uppercase;
-  color: var(--teal-ink);
-}
-
-.editorial-h {
-  font-family: var(--font-editorial);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--ink);
-  margin: 0;
-}
+/* .label-caps and .editorial-h are defined in editorial-tokens.css. */
 
 .body-copy {
   font-family: var(--font-body);
@@ -326,7 +282,7 @@ section[id], aside[id] {
 }
 
 /* Keep the live-preview deck partially above the fold on typical desktop
-   viewports: the visible card edge is the scroll cue. */
+   viewports — the visible card edge is the scroll cue. */
 #showcase {
   padding-top: 36px;
 }
@@ -615,7 +571,7 @@ section[id], aside[id] {
   animation: card-approach 4s ease-in forwards;
 }
 
-/* Controls: round bordered arrows + bar indicators */
+/* Controls — round bordered arrows + bar indicators */
 .carousel-3d-controls {
   display: flex;
   align-items: center;
@@ -969,7 +925,7 @@ section[id], aside[id] {
   color: var(--ink);
 }
 
-/* Quick start flags dialog: terminal window */
+/* Quick start flags dialog — terminal window */
 .quick-start-dialog {
   width: min(720px, calc(100vw - 32px));
   padding: 0;

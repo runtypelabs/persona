@@ -291,7 +291,8 @@ const withCors =
 
       const headers: Record<string, string> = {
         "Access-Control-Allow-Origin": corsOrigin,
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Headers":
+          "Content-Type, Authorization, X-Persona-Version",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
         Vary: "Origin"
       };
@@ -513,11 +514,15 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       console.log("Request Payload:", JSON.stringify(runtypePayload, null, 2));
     }
 
+    // Forward the widget's self-reported version to the API, when present.
+    const personaVersion = c.req.header("x-persona-version");
+
     const response = await fetch(upstream, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...(personaVersion && { "X-Persona-Version": personaVersion })
       },
       body: JSON.stringify(runtypePayload)
     });
@@ -591,11 +596,15 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       console.log("=== End Runtype Proxy Resume ===\n");
     }
 
+    // Forward the widget's self-reported version to the API, when present.
+    const personaVersion = c.req.header("x-persona-version");
+
     const response = await fetch(upstreamResumeUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...(personaVersion && { "X-Persona-Version": personaVersion })
       },
       body: JSON.stringify(body)
     });

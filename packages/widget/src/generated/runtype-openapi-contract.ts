@@ -1190,6 +1190,7 @@ export type RuntypeClientChatRequest = {
   type: "object";
   [key: string]: unknown;
 };
+  untrustedContentHint?: boolean;
 }>;
   clientToolsFingerprint?: string;
   inputs?: Record<string, unknown>;
