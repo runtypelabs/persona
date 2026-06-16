@@ -33,6 +33,7 @@ import {
   createXmlParser
 } from "./utils/formatting";
 import { SequenceReorderBuffer } from "./utils/sequence-buffer";
+import { VERSION } from "./version";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
 
@@ -188,6 +189,7 @@ export class AgentWidgetClient {
     this.apiUrl = config.apiUrl ?? DEFAULT_ENDPOINT;
     this.headers = {
       "Content-Type": "application/json",
+      "X-Persona-Version": VERSION,
       ...config.headers
     };
     this.debug = Boolean(config.debug);
@@ -355,6 +357,7 @@ export class AgentWidgetClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Persona-Version': VERSION,
       },
       body: JSON.stringify(requestBody),
     });
@@ -495,6 +498,7 @@ export class AgentWidgetClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Persona-Version': VERSION,
       },
       body: JSON.stringify(requestBody),
     });
@@ -682,6 +686,7 @@ export class AgentWidgetClient {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-Persona-Version': VERSION,
           },
           body: JSON.stringify(chatRequest),
           signal: controller.signal,

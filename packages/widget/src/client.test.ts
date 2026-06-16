@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AgentWidgetClient, preferFinalStructuredContent } from './client';
 import { AgentWidgetEvent, AgentWidgetMessage } from './types';
 import { createJsonStreamParser } from './utils/formatting';
+import { VERSION } from './version';
 
 describe('AgentWidgetClient - Empty Message Filtering', () => {
   let client: AgentWidgetClient;
@@ -4174,5 +4175,48 @@ describe('AgentWidgetClient - Feedback request builder', () => {
 
     expect(feedbackBodies[0].token).toBe('ct_live_xyz789');
     expect(feedbackBodies[0].rating).toBe(5);
+  });
+});
+
+describe('AgentWidgetClient - version header', () => {
+  function captureHeaders() {
+    const headers: Array<Record<string, string>> = [];
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: { headers: Record<string, string> }) => {
+      headers.push(options.headers);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(c) {
+          c.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          c.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+    return headers;
+  }
+
+  const msg = () => ({
+    messages: [{ id: 'u1', role: 'user' as const, content: 'hi', createdAt: '2025-01-01T00:00:00.000Z' }],
+  });
+
+  it('broadcasts X-Persona-Version on the dispatch request', async () => {
+    const headers = captureHeaders();
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+
+    await client.dispatch(msg(), () => undefined);
+
+    expect(headers[0]['X-Persona-Version']).toBe(VERSION);
+  });
+
+  it('lets an explicit config header override the version', async () => {
+    const headers = captureHeaders();
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      headers: { 'X-Persona-Version': 'override' },
+    });
+
+    await client.dispatch(msg(), () => undefined);
+
+    expect(headers[0]['X-Persona-Version']).toBe('override');
   });
 });
