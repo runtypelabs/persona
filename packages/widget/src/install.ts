@@ -44,11 +44,6 @@ interface SiteAgentInstallConfig {
    */
   onChatReady?: (handle: any) => void;
   /**
-   * @deprecated Use `onChatReady`. Retained as a working alias; it will be
-   * removed in the next major version.
-   */
-  onReady?: (handle: any) => void;
-  /**
    * Fired when a load step fails (stylesheet, full bundle, or init), so you can
    * detect ad-blocked / timed-out installs instead of failing silently.
    */
@@ -159,21 +154,6 @@ declare global {
     console.error("Failed to install AgentWidget:", error);
     safeCall(config.onError, { phase, error });
     dispatchLifecycle("persona:error", { phase, error });
-  };
-  // `onReady` is the deprecated alias of `onChatReady`; warn once if it's used.
-  let warnedOnReadyDeprecated = false;
-  const resolveChatReady = (): ((handle: any) => void) | undefined => {
-    if (config.onChatReady) return config.onChatReady;
-    if (config.onReady) {
-      if (!warnedOnReadyDeprecated) {
-        warnedOnReadyDeprecated = true;
-        console.warn(
-          "[Persona] `onReady` is deprecated: use `onChatReady`. `onReady` still works but is removed in the next major."
-        );
-      }
-      return config.onReady;
-    }
-    return undefined;
   };
   // True when the config renders a standard floating launcher button: the only
   // case that paints a clickable launcher at load. Shared by the deferral gate
@@ -429,9 +409,8 @@ declare global {
       }
 
       // The full widget is initialized and its controller API is callable.
-      safeCall(resolveChatReady(), handle);
+      safeCall(config.onChatReady, handle);
       dispatchLifecycle("persona:chat-ready", handle);
-      dispatchLifecycle("persona:ready", handle); // deprecated alias: removed next major
       return handle;
     } catch (error) {
       fail("init", error);

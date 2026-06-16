@@ -15,12 +15,13 @@ behind the widget: instead of Runtype, an AI SDK route handler running Claude.
 
 ## What this shows / what it costs
 
-The Persona widget's WebMCP loop is **transport-bound to Runtype's proxy wire
-protocol** (a `step_await` SSE pause → `/resume` round-trip). To keep the widget
-UI while talking directly to the AI SDK, this example ships a **protocol shim**:
-two route handlers that emit Runtype's proxy protocol on top of `streamText`
+The Persona widget's WebMCP loop runs over **Persona's agent wire protocol** (an
+`agent_await` SSE pause → `/resume` round-trip) — the neutral vocabulary any
+backend can speak, not Runtype's flow-automation dialect. To keep the widget UI
+while talking directly to the AI SDK, this example ships a **protocol shim**: two
+route handlers that emit that agent protocol on top of `streamText`
 (`app/api/chat/shim.ts`). The widget is unchanged and never learns it isn't
-talking to Runtype.
+talking to a hosted agent runtime.
 
 - **You keep:** the full Persona widget UI, WebMCP page-tool discovery,
   per-call approval gating, and parallel/multi-step tool calls.
@@ -80,10 +81,15 @@ pnpm --filter ai-sdk-webmcp dev
 
 | Widget expects (SSE `event`) | Shim emits from `streamText` |
 | --- | --- |
-| `step_chunk` `{text}` | `text-delta` parts |
-| `step_await` `{toolName:"webmcp:<bare>", toolCallId, parameters, executionId}` | `tool-call` parts (paused: no `flow_complete`) |
-| `step_complete` + `flow_complete` | end of a turn with no tool calls |
-| POST `/resume` `{executionId, toolOutputs}` | tool-result message appended → `streamText` continues |
+| `agent_start` `{executionId, agentId}` | run start (dispatch only) |
+| `agent_turn_delta` `{contentType:"text", delta}` | `text-delta` parts |
+| `agent_await` `{toolName:"<bare>", origin:"webmcp", toolCallId, parameters, executionId}` | `tool-call` parts (paused: no `agent_complete`) |
+| `agent_complete` `{executionId, success}` | end of a turn with no tool calls |
+| POST `/resume` `{executionId, toolOutputs}` | tool-result message appended → `streamText` continues at `iteration + 1` |
+
+One `exec_…` `executionId` is carried across the whole run — dispatch, every
+`agent_await`, every `/resume`, and `agent_complete` — and `iteration` advances
+on each resume.
 
 ## Deploy on Vercel
 

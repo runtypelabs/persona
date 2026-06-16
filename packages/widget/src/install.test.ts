@@ -15,7 +15,6 @@ const PERSONA_EVENTS = [
   "persona:script-load",
   "persona:launcher-shown",
   "persona:chat-ready",
-  "persona:ready",
   "persona:error",
 ] as const;
 
@@ -28,7 +27,6 @@ let launcherDestroy: ReturnType<typeof vi.fn>;
 let launcherElement: HTMLButtonElement;
 let initAgentWidget: ReturnType<typeof vi.fn>;
 let fakeHandle: FakeHandle;
-let warnSpy: ReturnType<typeof vi.spyOn>;
 let errorSpy: ReturnType<typeof vi.spyOn>;
 
 /** Subscribe to every persona:* event and record dispatch order + detail. */
@@ -128,7 +126,7 @@ beforeEach(() => {
   fakeHandle = { open: vi.fn(), close: vi.fn(), on: vi.fn() };
   initAgentWidget = vi.fn(() => fakeHandle);
 
-  warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "warn").mockImplementation(() => {});
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -342,37 +340,6 @@ describe("install.ts: deferral gate", () => {
     await flush();
     expect(launcherMount).not.toHaveBeenCalled();
     expect(initAgentWidget).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("install.ts: onReady deprecation alias", () => {
-  it("still calls the deprecated onReady and warns once", async () => {
-    markCssLoaded();
-    provideFullBundle();
-    const onReady = vi.fn();
-
-    await install({ config: { apiUrl: "/api", launcher: { enabled: false } }, onReady });
-    await flush();
-
-    expect(onReady).toHaveBeenCalledTimes(1);
-    expect(onReady).toHaveBeenCalledWith(fakeHandle);
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(String(warnSpy.mock.calls[0]?.[0])).toContain("`onReady` is deprecated");
-  });
-
-  it("prefers onChatReady over onReady and does not warn", async () => {
-    markCssLoaded();
-    provideFullBundle();
-    const onReady = vi.fn();
-    const onChatReady = vi.fn();
-
-    await install({ config: { apiUrl: "/api", launcher: { enabled: false } }, onReady, onChatReady });
-    await flush();
-
-    expect(onChatReady).toHaveBeenCalledTimes(1);
-    expect(onChatReady).toHaveBeenCalledWith(fakeHandle);
-    expect(onReady).not.toHaveBeenCalled();
-    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 

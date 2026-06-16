@@ -54,7 +54,6 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 - `onLauncherShown` - Fired when the floating launcher is painted on the page (page-load time: for "widget appeared" analytics); signature: `({ deferred, element? }) => void`
 - `onChatReady` - Fired when the widget is initialized and its controller API is callable (after first open in a deferred install); signature: `(handle) => void`
 - `onError` - Fired when a load step fails (`css` / `bundle` / `init`), so ad-blocked / timed-out installs don't fail silently; signature: `({ phase, error }) => void`
-- `onReady` - **Deprecated** alias of `onChatReady`; still works, removed in the next major; signature: `(handle) => void`
 
 **Example with version pinning:**
 

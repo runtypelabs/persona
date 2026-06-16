@@ -1,21 +1,32 @@
 // ───────────────────────────────────────────────────────────────────────────
-// Runtype proxy-mode wire protocol, implemented on top of the Vercel AI SDK.
+// Persona's **agent** wire protocol, implemented on top of the Vercel AI SDK.
 //
-// The Persona widget (proxy mode) POSTs a dispatch request, reads an SSE stream,
-// and, for WebMCP page tools, pauses on a `step_await` event, runs the tool on
-// the page, and POSTs the result to `${apiUrl}/resume`. Runtype normally serves
-// that protocol; here we serve it ourselves, backed by `streamText`. The widget
-// is unchanged and never learns it isn't talking to Runtype.
+// The Persona widget POSTs a dispatch request, reads an SSE stream, and, for
+// WebMCP page tools, pauses on an `agent_await` event, runs the tool on the
+// page, and POSTs the result to `${apiUrl}/resume`. This serves the neutral
+// agent vocabulary any backend can speak (`agent_*`) — not Runtype's
+// flow-automation dialect (`step_*` / `flow_complete`). The widget is unchanged
+// and never learns it isn't talking to a hosted agent runtime.
 //
 // Wire contract (verified against packages/widget/src/{client,session}.ts):
-//   • text delta  → event: step_chunk    {type, id, executionId, text}
-//   • text done   → event: step_complete {type, id, result:{response}}
-//   • WebMCP call → event: step_await     {type, awaitReason:"local_tool_required",
-//                                          toolName:"webmcp:<bare>", toolId,
-//                                          toolCallId, executionId, parameters}
-//   • turn done   → event: flow_complete  {type, success:true, executionId}
-//   • failure     → event: error          {type, message}
+//   • run start   → event: agent_start       {type, executionId, agentId, startedAt}
+//   • text delta  → event: agent_turn_delta   {type, executionId, iteration, turnId,
+//                                              contentType:"text", delta}
+//   • WebMCP call → event: agent_await        {type, executionId, toolName:"<bare>",
+//                                              origin:"webmcp", toolId, toolCallId,
+//                                              parameters, awaitedAt}
+//   • turn done   → event: agent_complete     {type, executionId, success:true,
+//                                              completedAt}
+//   • failure     → event: agent_error        {type, executionId, recoverable:false,
+//                                              error:{message}}
 // Resume body: {executionId, toolOutputs: Record<toolCallId, WebMcpToolResult>}.
+//
+// Two correctness properties this reference models on purpose (an external
+// adapter owns its own ids, so it gets both right by construction):
+//   1. ONE `exec_…` executionId is carried across the whole run — every delta,
+//      every `agent_await`, every resume, and `agent_complete`.
+//   2. `iteration` ADVANCES on each /resume: re-invoking the model over the tool
+//      results is a new reasoning turn, so the resumed turn reports iteration+1.
 // ───────────────────────────────────────────────────────────────────────────
 
 import {
@@ -191,17 +202,21 @@ function resultToOutput(raw: unknown): ToolResultPart["output"] {
 // ── Core turn: stream text, surface tool calls, pause or complete ───────────
 
 /**
- * Run one model turn over `messages`, streaming text as `step_chunk`. If the
- * model calls page tools, emit a `step_await` per call and PAUSE (store state,
- * no `flow_complete`). Otherwise finalize with `step_complete` + `flow_complete`.
+ * Run one model turn over `messages`, streaming text as `agent_turn_delta`. If
+ * the model calls page tools, emit an `agent_await` per call and PAUSE (store
+ * state, no `agent_complete`). Otherwise finalize with `agent_complete`.
+ *
+ * `iteration` is the 1-based turn index within this run; it advances on each
+ * /resume (see handleResume) so the wire reflects a genuinely new reasoning turn.
  */
 async function runTurn(
   send: SSESender,
   executionId: string,
   messages: ModelMessage[],
   clientTools: ClientToolDefinition[],
+  iteration: number,
 ): Promise<void> {
-  const stepId = `step_${generateId()}`;
+  const turnId = `turn_${generateId()}`;
   let text = "";
   const toolCalls: ToolCallPart[] = [];
 
@@ -215,7 +230,13 @@ async function runTurn(
   for await (const part of result.fullStream) {
     if (part.type === "text-delta") {
       text += part.text;
-      send.send("step_chunk", { id: stepId, executionId, text: part.text });
+      send.send("agent_turn_delta", {
+        executionId,
+        iteration,
+        turnId,
+        contentType: "text",
+        delta: part.text,
+      });
     } else if (part.type === "tool-call") {
       toolCalls.push({
         type: "tool-call",
@@ -223,25 +244,28 @@ async function runTurn(
         toolName: part.toolName,
         input: part.input,
       });
-      send.send("step_await", {
-        awaitReason: "local_tool_required",
-        id: stepId,
-        toolId: `runtime_${part.toolName}_${part.toolCallId}`,
-        toolName: `${WEBMCP_PREFIX}${part.toolName}`,
-        toolCallId: part.toolCallId,
+      // agent_await carries a BARE tool name + origin; the widget synthesizes the
+      // `webmcp:` prefix and keys the pause by toolCallId (parallel same-tool calls).
+      send.send("agent_await", {
         executionId,
+        toolId: `runtime_${WEBMCP_PREFIX}${part.toolName}_${part.toolCallId}`,
+        toolName: part.toolName,
+        origin: "webmcp",
+        toolCallId: part.toolCallId,
         parameters: part.input,
+        awaitedAt: new Date().toISOString(),
       });
     } else if (part.type === "error") {
       const message =
         part.error instanceof Error ? part.error.message : String(part.error);
-      send.send("error", { message });
+      send.send("agent_error", { executionId, recoverable: false, error: { message } });
       return;
     }
   }
 
   if (toolCalls.length > 0) {
-    // Pause: persist the assistant turn (incl. tool calls) and the pending set.
+    // Pause: persist the assistant turn (incl. tool calls), the pending set, and
+    // the current iteration so the resumed turn can report iteration + 1.
     const assistantContent: Array<{ type: "text"; text: string } | ToolCallPart> = [
       ...(text ? [{ type: "text" as const, text }] : []),
       ...toolCalls,
@@ -253,8 +277,9 @@ async function runTurn(
         toolName: tc.toolName,
       })),
       clientTools,
+      iteration,
     });
-    return; // no flow_complete: the widget will /resume with tool outputs
+    return; // no agent_complete: the widget will /resume with tool outputs
   }
 
   // No tool calls: the turn is done. Clean up the stored execution now that it
@@ -262,13 +287,16 @@ async function runTurn(
   // NOT delete earlier in handleResume: if the turn errors mid-stream, the
   // paused state must stay put so the widget can retry /resume with the same
   // executionId instead of getting an "unknown executionId" error.
-  send.send("step_complete", { id: stepId, result: { response: text } });
   try {
     await deletePausedExecution(executionId);
   } catch {
     /* best-effort cleanup; the cache TTL expires it regardless */
   }
-  send.send("flow_complete", { success: true, executionId });
+  send.send("agent_complete", {
+    executionId,
+    success: true,
+    completedAt: new Date().toISOString(),
+  });
 }
 
 // ── Route entry points ───────────────────────────────────────────────────────
@@ -277,7 +305,14 @@ export function handleDispatch(body: DispatchBody): Response {
   const messages = toModelMessages(body.messages);
   const clientTools = body.clientTools ?? [];
   const executionId = `exec_${generateId()}`;
-  return sseResponse((send) => runTurn(send, executionId, messages, clientTools));
+  return sseResponse((send) => {
+    send.send("agent_start", {
+      executionId,
+      agentId: "virtual",
+      startedAt: new Date().toISOString(),
+    });
+    return runTurn(send, executionId, messages, clientTools, 1);
+  });
 }
 
 export function handleResume(body: ResumeBody): Response {
@@ -321,7 +356,9 @@ export function handleResume(body: ResumeBody): Response {
       { role: "tool", content: toolResults },
     ];
 
-    // Reuse the same executionId so a follow-up tool call can /resume again.
-    await runTurn(send, executionId, messages, paused.clientTools);
+    // Reuse the same executionId so a follow-up tool call can /resume again, and
+    // advance the iteration: re-invoking the model over the tool results is a new
+    // reasoning turn. No fresh agent_start — this continues the run, not a new one.
+    await runTurn(send, executionId, messages, paused.clientTools, paused.iteration + 1);
   });
 }

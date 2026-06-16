@@ -96,7 +96,6 @@ const docked = initAgentWidget({
 | `config` | `AgentWidgetConfig` | Widget configuration object (see the [Configuration Reference](./docs/CONFIGURATION-REFERENCE.md)). |
 | `useShadowDom` | `boolean` | Use Shadow DOM for style isolation (default: `false`). |
 | `onChatReady` | `() => void` | Callback fired when the widget is initialized and its API is callable. |
-| `onReady` | `() => void` | **Deprecated** alias of `onChatReady`; still works, removed in the next major. |
 | `windowKey` | `string` | If provided, stores the controller on `window[windowKey]` for global access. Automatically cleaned up on `destroy()`. |
 
 When `config.launcher.mountMode` is `'docked'`, `target` is treated as the page container that Persona should wrap. Use a concrete element such as `#workspace-main`; `body` and `html` are rejected.

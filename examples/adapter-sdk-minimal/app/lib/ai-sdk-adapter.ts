@@ -18,12 +18,10 @@ export function createAISDKPersonaHandler({
 
     return createPersonaSSEStream(async ({ emit }) => {
       const result = streamText({ model, system, messages });
-      let fullText = "";
 
       for await (const part of result.fullStream) {
         if (part.type === "text-delta") {
-          fullText += part.text;
-          emit.stepChunk(part.text);
+          emit.textDelta(part.text);
         } else if (part.type === "error") {
           const message = part.error instanceof Error ? part.error.message : String(part.error);
           emit.error(message);
@@ -31,8 +29,7 @@ export function createAISDKPersonaHandler({
         }
       }
 
-      emit.stepComplete(fullText);
-      emit.flowComplete();
+      emit.complete();
     });
   };
 }

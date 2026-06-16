@@ -39,19 +39,13 @@ export function createOpenAIResponsesPersonaHandler({
         stream: true,
       });
 
-      let fullText = "";
-
       for await (const rawEvent of stream) {
         const event = rawEvent as OpenAIStreamEvent;
 
         if (event.type === "response.output_text.delta") {
-          const delta = event.delta ?? "";
-          fullText += delta;
-          emit.stepChunk(delta);
+          emit.textDelta(event.delta ?? "");
         } else if (event.type === "response.completed") {
-          const completedText = event.response?.output_text;
-          emit.stepComplete(completedText ?? fullText);
-          emit.flowComplete();
+          emit.complete();
           return;
         } else if (event.type === "response.failed") {
           emit.error(event.response?.error?.message ?? "OpenAI response failed");
@@ -62,8 +56,7 @@ export function createOpenAIResponsesPersonaHandler({
         }
       }
 
-      emit.stepComplete(fullText);
-      emit.flowComplete();
+      emit.complete();
     });
   };
 }

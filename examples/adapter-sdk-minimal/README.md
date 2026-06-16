@@ -6,6 +6,11 @@ into Persona's SSE protocol without writing Persona frames in every route:
 - **Vercel AI SDK**: wraps `streamText().fullStream`
 - **OpenAI Responses SDK**: wraps `openai.responses.create({ stream: true })`
 
+The adapters emit Persona's neutral **agent** vocabulary
+(`agent_start` / `agent_turn_delta` / `agent_complete`) — the protocol any
+backend can speak. (The `step_*` / `flow_complete` events you may see elsewhere
+are Runtype's flow-automation dialect; you don't need them here.)
+
 The local adapter helpers live in `app/lib/` so they are easy to lift into a
 future package export such as `@runtypelabs/persona-proxy/adapters`.
 
@@ -37,23 +42,25 @@ Both routes accept the normal Persona proxy-mode dispatch body:
 }
 ```
 
-Both routes return Persona-compatible SSE:
+Both routes return Persona-compatible SSE. The streamed `agent_turn_delta`s are
+authoritative — there's no need to re-send the full text at the end, and one
+`executionId` (`exec_…`) is carried across every event of the run:
 
 ```txt
-event: step_chunk
-data: {"type":"step_chunk","id":"...","executionId":"...","text":"..."}
+event: agent_start
+data: {"type":"agent_start","executionId":"exec_...","agentId":"virtual","startedAt":"..."}
 
-event: step_complete
-data: {"type":"step_complete","id":"...","executionId":"...","result":{"response":"..."}}
+event: agent_turn_delta
+data: {"type":"agent_turn_delta","executionId":"exec_...","iteration":1,"turnId":"turn_...","contentType":"text","delta":"..."}
 
-event: flow_complete
-data: {"type":"flow_complete","executionId":"...","success":true}
+event: agent_complete
+data: {"type":"agent_complete","executionId":"exec_...","success":true,"completedAt":"..."}
 ```
 
 ## What this intentionally does not show
 
 This example is plain streaming chat. It does not include WebMCP, local tools,
-`step_await`, or `/resume`. Those belong in the advanced example at
+`agent_await`, or `/resume`. Those belong in the advanced example at
 `examples/ai-sdk-webmcp`.
 
 The split is deliberate:
