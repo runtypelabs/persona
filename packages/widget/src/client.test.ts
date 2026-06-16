@@ -4220,3 +4220,101 @@ describe('AgentWidgetClient - version header', () => {
     expect(headers[0]['X-Persona-Version']).toBe('override');
   });
 });
+
+describe('AgentWidgetClient - Unified event vocabulary (events: "unified")', () => {
+  const unifiedTextStream = (execId: string) => [
+    sseEvent('execution_start', { kind: 'agent', executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+    sseEvent('turn_start', { executionId: execId, id: 'turn_1', iteration: 1, role: 'assistant', seq: 2 }),
+    sseEvent('text_start', { executionId: execId, id: 'text_1', role: 'assistant', seq: 3 }),
+    sseEvent('text_delta', { executionId: execId, id: 'text_1', delta: 'Hello', seq: 4 }),
+    sseEvent('text_delta', { executionId: execId, id: 'text_1', delta: ' World', seq: 5 }),
+    sseEvent('text_complete', { executionId: execId, id: 'text_1', seq: 6 }),
+    sseEvent('turn_complete', { executionId: execId, id: 'turn_1', iteration: 1, role: 'assistant', completedAt: new Date().toISOString(), seq: 7 }),
+    sseEvent('execution_complete', { kind: 'agent', executionId: execId, success: true, completedAt: new Date().toISOString(), seq: 8 }),
+  ];
+
+  it('appends ?events=unified to the dispatch URL when opted in', async () => {
+    let capturedUrl = '';
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      capturedUrl = url;
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(c) {
+          for (const e of unifiedTextStream('exec_u')) c.enqueue(encoder.encode(e));
+          c.close();
+        },
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      events: 'unified',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      () => {}
+    );
+    expect(capturedUrl).toContain('events=unified');
+  });
+
+  it('renders a unified stream by bridging it back to the legacy handlers', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_u1';
+    global.fetch = createAgentStreamFetch(unifiedTextStream(execId));
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      events: 'unified',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const messageEvents = events.filter((e) => e.type === 'message');
+    expect(messageEvents.length).toBeGreaterThan(0);
+    const last = messageEvents[messageEvents.length - 1];
+    expect(last.type).toBe('message');
+    if (last.type === 'message') {
+      expect(last.message.content).toBe('Hello World');
+      expect(last.message.streaming).toBe(false);
+      expect(last.message.role).toBe('assistant');
+      expect(last.message.agentMetadata?.executionId).toBe(execId);
+    }
+  });
+
+  it('auto-falls-back to legacy when "unified" was requested but the API streamed legacy frames', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_legacy_fallback';
+    // Same content, LEGACY vocabulary — the API ignored ?events=unified.
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+      sseEvent('agent_turn_start', { executionId: execId, iteration: 1, turnId: 'turn_1', role: 'assistant', seq: 2 }),
+      sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: 'Hello', contentType: 'text', turnId: 'turn_1', seq: 3 }),
+      sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: ' World', contentType: 'text', turnId: 'turn_1', seq: 4 }),
+      sseEvent('agent_turn_complete', { executionId: execId, iteration: 1, turnId: 'turn_1', completedAt: new Date().toISOString(), seq: 5 }),
+      sseEvent('agent_complete', { executionId: execId, success: true, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 6 }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      events: 'unified',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const messageEvents = events.filter((e) => e.type === 'message');
+    const last = messageEvents[messageEvents.length - 1];
+    expect(last.type).toBe('message');
+    if (last.type === 'message') {
+      expect(last.message.content).toBe('Hello World');
+      expect(last.message.streaming).toBe(false);
+    }
+  });
+});

@@ -33,6 +33,7 @@ import {
   createXmlParser
 } from "./utils/formatting";
 import { SequenceReorderBuffer } from "./utils/sequence-buffer";
+import { UnifiedToLegacyBridge, isUnifiedLifecycleStart } from "./utils/unified-event-bridge";
 import { VERSION } from "./version";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
@@ -290,6 +291,17 @@ export class AgentWidgetClient {
    */
   public isAgentMode(): boolean {
     return !!this.config.agent;
+  }
+
+  /**
+   * Append `?events=unified` when the widget opted into the unified vocabulary,
+   * preserving any existing query string. No-op for the default legacy mode.
+   * The server only switches vocabularies when it sees the param; the widget
+   * still auto-detects the actual wire mode from the first stream frame.
+   */
+  private withEventsParam(url: string): string {
+    if (this.config.events !== "unified") return url;
+    return url + (url.includes("?") ? "&" : "?") + "events=unified";
   }
 
   /**
@@ -682,7 +694,7 @@ export class AgentWidgetClient {
           console.debug("[AgentWidgetClient] client token dispatch", chatRequest);
         }
 
-        response = await fetch(this.getClientApiUrl('chat'), {
+        response = await fetch(this.withEventsParam(this.getClientApiUrl('chat')), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -802,7 +814,7 @@ export class AgentWidgetClient {
     if (this.customFetch) {
       try {
         response = await this.customFetch(
-          this.apiUrl,
+          this.withEventsParam(this.apiUrl),
           {
             method: "POST",
             headers,
@@ -817,7 +829,7 @@ export class AgentWidgetClient {
         throw err;
       }
     } else {
-      response = await fetch(this.apiUrl, {
+      response = await fetch(this.withEventsParam(this.apiUrl), {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -878,7 +890,7 @@ export class AgentWidgetClient {
     if (this.customFetch) {
       try {
         response = await this.customFetch(
-          this.apiUrl,
+          this.withEventsParam(this.apiUrl),
           {
             method: "POST",
             headers,
@@ -893,7 +905,7 @@ export class AgentWidgetClient {
         throw err;
       }
     } else {
-      response = await fetch(this.apiUrl, {
+      response = await fetch(this.withEventsParam(this.apiUrl), {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -996,9 +1008,11 @@ export class AgentWidgetClient {
     options?: { streamResponse?: boolean; signal?: AbortSignal }
   ): Promise<Response> {
     const isClientToken = this.isClientTokenMode();
-    const url = isClientToken
-      ? this.getClientApiUrl('resume')
-      : `${this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE}/resume`;
+    const url = this.withEventsParam(
+      isClientToken
+        ? this.getClientApiUrl('resume')
+        : `${this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE}/resume`
+    );
 
     // The client-token resume route authenticates the session, not a Bearer
     // key. A WebMCP approval can sit awaiting user input for a long time, so by
@@ -1833,6 +1847,17 @@ export class AgentWidgetClient {
       seqReadyQueue.push({ payloadType, payload });
       scheduleReadyQueueDrain();
     });
+    // Unified-event consumer (opt-in; see utils/unified-event-bridge.ts). When the
+    // API streams the neutral unified vocabulary, each frame is transduced back to
+    // the legacy events the dispatch chain below already renders. Seed the mode from
+    // the requested vocabulary so /resume (whose stream continues mid-run with no
+    // `execution_start`) bridges correctly; a leading lifecycle frame is then
+    // authoritative and can flip it (e.g. an upstream that ignored `?events=unified`
+    // streams `agent_start`). The unified stream is single-connection and in order,
+    // so bridged events bypass the reorder buffer.
+    const unifiedBridge = new UnifiedToLegacyBridge();
+    let unifiedMode = this.config.events === "unified";
+    let wireModeResolved = false;
     // Agent execution state tracking
     let agentExecution: AgentExecutionState | null = null;
     // Track assistant messages per agent iteration for 'separate' mode
@@ -3371,6 +3396,31 @@ export class AgentWidgetClient {
             assistantMessage = assistantMessageRef.current;
           }
           if (handled) continue; // Skip default handling if custom handler processed it
+        }
+
+        // Unified vocabulary (opt-in): resolve the wire mode from the first
+        // lifecycle frame (the flag only requests the param; the frame is
+        // authoritative), then transduce unified → legacy, bypassing the reorder
+        // buffer (the unified stream is single-connection and already in order).
+        if (!wireModeResolved) {
+          if (isUnifiedLifecycleStart(payloadType)) {
+            unifiedMode = true;
+            wireModeResolved = true;
+          } else if (
+            payloadType === "agent_start" ||
+            payloadType === "flow_start" ||
+            payloadType === "step_start"
+          ) {
+            unifiedMode = false;
+            wireModeResolved = true;
+          }
+        }
+        if (unifiedMode) {
+          for (const legacyEvent of unifiedBridge.push(payloadType, payload)) {
+            seqReadyQueue.push(legacyEvent);
+          }
+          drainReadyQueue();
+          continue;
         }
 
         // Push through the sequence reorder buffer
