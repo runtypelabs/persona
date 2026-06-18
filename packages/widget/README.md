@@ -124,9 +124,9 @@ The full reference lives in [`docs/`](./docs/) and the theming guide:
 - [Code Generator](./docs/CODE-GENERATOR.md): `@runtypelabs/persona/codegen` options for CLI/server-side snippet generation
 - [THEME-CONFIG.md](./THEME-CONFIG.md): the complete theme and design-token reference
 
-### Optional proxy server
+### Optional Runtype proxy server
 
-The proxy server handles flow configuration and forwards requests to Runtype. You can configure it in three ways:
+The `@runtypelabs/persona-proxy` package handles flow configuration and forwards requests to Runtype. You can configure it in three ways:
 
 **Option 1: Use default flow (recommended for getting started)**
 
@@ -200,9 +200,9 @@ Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payl
 
 ### Development notes
 
-- The widget streams results using SSE and mirrors Runtype flow/agent events, including `step_await` local-tool pauses and `/resume` continuations.
+- The widget streams results using SSE and mirrors Persona's unified flow/agent events (which Runtype implements natively), including `await` local-tool pauses and `/resume` continuations.
 - Tailwind classes are prefixed with `tvw-` and scoped to `[data-persona-root]`, so they won't collide with the host page.
-- Run `pnpm dev` from the repository root to boot the example proxy (`examples/vercel-edge`) and the vanilla demo (`examples/embedded-app`).
+- Run `pnpm dev` from the repository root to boot the example Runtype proxy (`examples/vercel-edge`) and the vanilla demo (`examples/embedded-app`).
 - The proxy prefers port `43111` but automatically selects the next free port if needed.
 - `features.askUserQuestion.expose` and `features.suggestReplies.expose` advertise built-in LOCAL client tools through `clientTools[]`; leave `expose` off if the flow already declares those tools server-side.
 - `webmcp: { enabled: true }` snapshots page-registered tools on `document.modelContext`, sends them as `clientTools[]`, executes returned `webmcp:*` calls in the browser, and resumes the paused execution.
