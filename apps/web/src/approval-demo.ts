@@ -14,13 +14,13 @@ import {
 } from "@runtypelabs/persona/testing";
 import { setupMountMode, runWidgetMountWithInspector } from "./mount-mode";
 import { createDemoConfigInspector } from "./demo-config-inspector";
-// `renderApproval` plugin example: shows an alternative permission prompt
-// ("Always allow / Allow once / Deny"). Untyped JS import (mirrors the
-// ask-user-question pills plugin); the widget plugin contract is duck-typed.
-// The `icons` map gives the "Runtype" source an explicit square icon (served
-// from /public); pass `faviconService: true` instead to use Google's favicon
-// service, or omit both to fall back to the default tool icon.
-import { createApprovalActionsPlugin } from "./plugins/approval-actions-plugin.js";
+// `renderApproval` plugin example: the Pixel Guardian — a tiny pixel-art
+// "Gatekeeper" who fully owns the approval UX (speech bubble, custom buttons,
+// idle animation, and per-state resolved flourishes). Showcases how far a custom
+// renderApproval plugin can go now that the polished card is the built-in
+// default. Untyped JS import (mirrors the ask-user-question pills plugin); the
+// widget plugin contract is duck-typed.
+import { createPixelGuardianPlugin } from "./plugins/pixel-guardian-plugin.js";
 import type { Mode } from "./examples-nav";
 
 renderDemoScaffold({ slug: "approval-demo" });
@@ -33,18 +33,6 @@ let variant: ApprovalVariant = "builtin";
 // shortcuts. Off by default — it forwards `remember` to onDecision for a
 // backend to persist, which the mock here just logs.
 let alwaysAllow = false;
-
-// Icon source for the plugin renderer's source-icon box. Mirrors the three
-// resolution paths in approval-actions-plugin: explicit `icons` map, the
-// optional Google favicon service, or the built-in default tool icon.
-type IconMode = "map" | "google" | "default";
-let iconMode: IconMode = "map";
-
-const buildApprovalPlugin = () => {
-  if (iconMode === "google") return createApprovalActionsPlugin({ faviconService: true, faviconSize: 128 });
-  if (iconMode === "default") return createApprovalActionsPlugin();
-  return createApprovalActionsPlugin({ icons: { Runtype: "/sample-icon.svg" } });
-};
 
 let activeController: AgentWidgetController | null = null;
 let lastApprovalDecision: "approved" | "denied" | null = null;
@@ -90,7 +78,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     // a fresh load always shows the working chips — like the other mock-driven
     // demo (fullscreen-assistant-demo-sse).
     persistState: false,
-    plugins: variant === "plugin" ? [buildApprovalPlugin()] : [],
+    plugins: variant === "plugin" ? [createPixelGuardianPlugin()] : [],
     customFetch: async () => {
       const executionId = "exec-demo-1";
       const events: MockSSEFrame[] = [
@@ -233,15 +221,13 @@ setupMountMode({
   },
 });
 
-// The icon-source toggle only applies to the plugin renderer; the always-allow
-// toggle only applies to the built-in renderer.
-const iconModeRow = document.getElementById("icon-mode-row");
+// The "always allow" toggle only applies to the built-in renderer (the Pixel
+// Guardian plugin draws its own controls), so hide it on the plugin variant.
 const alwaysAllowRow = document.getElementById("always-allow-row");
-const syncIconRow = (): void => {
-  if (iconModeRow) iconModeRow.style.display = variant === "plugin" ? "" : "none";
+const syncRendererRows = (): void => {
   if (alwaysAllowRow) alwaysAllowRow.style.display = variant === "builtin" ? "" : "none";
 };
-syncIconRow();
+syncRendererRows();
 
 // "Always allow" toggle (built-in renderer): single Allow/Deny vs. the split
 // "Always allow / Allow once" control with keyboard shortcuts.
@@ -271,22 +257,7 @@ variantSelector?.addEventListener("click", (event) => {
     .forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
   variant = next;
-  syncIconRow();
-  createWidget();
-});
-
-// Icon-source selector (square map icon vs. Google favicon vs. default tool icon).
-const iconSelector = document.getElementById("icon-selector");
-iconSelector?.addEventListener("click", (event) => {
-  const btn = (event.target as HTMLElement).closest<HTMLElement>(".mode-btn");
-  if (!btn) return;
-  const next = btn.dataset.icon as IconMode | undefined;
-  if (!next || next === iconMode) return;
-  iconSelector
-    .querySelectorAll(".mode-btn")
-    .forEach((b) => b.classList.remove("active"));
-  btn.classList.add("active");
-  iconMode = next;
+  syncRendererRows();
   createWidget();
 });
 
