@@ -1462,32 +1462,25 @@ section[id], aside[id] {
   top: 0;
   right: 0;
   z-index: 2;
-  padding: 12px;
+  padding: 0;
 }
 
 .demo-lightbox-close {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  justify-content: center;
+  padding: 8px 10px;
   border: none;
   background: var(--black);
   color: #fff;
-  font-size: 15px;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
   transition: color 0.2s ease;
 }
 
 .demo-lightbox-close:hover {
   color: var(--teal);
-}
-
-.demo-lightbox-hint {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  opacity: 0.7;
 }
 
 .demo-lightbox-iframe {
