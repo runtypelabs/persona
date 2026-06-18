@@ -12,7 +12,7 @@ Persona works with any SSE-capable backend. It includes first-party support for 
 
 ## Live demo
 
-**[persona-chat.dev](https://persona-chat.dev)** hosts the interactive gallery (35+ pages): streaming chat, voice, docked and fullscreen layouts, themes, tool calls, artifacts, and more. It mirrors [`examples/embedded-app`](./examples/embedded-app). To run the same pages on your machine with hot reload while you edit code, run `pnpm dev` from the repository root: the Vite dev server reloads the demo, and the app resolves `@runtypelabs/persona` from the workspace (`packages/widget`), so widget changes apply without publishing to npm.
+**[persona-chat.dev](https://persona-chat.dev)** hosts the interactive gallery (35+ pages): streaming chat, voice, docked and fullscreen layouts, themes, tool calls, artifacts, and more. It mirrors [`apps/web`](./apps/web). To run the same pages on your machine with hot reload while you edit code, run `pnpm dev` from the repository root: the Vite dev server reloads the demo, and the app resolves `@runtypelabs/persona` from the workspace (`packages/widget`), so widget changes apply without publishing to npm.
 
 ## Packages
 
@@ -21,11 +21,16 @@ Persona works with any SSE-capable backend. It includes first-party support for 
 | [`packages/widget`](./packages/widget) | `@runtypelabs/persona` | The installable chat widget |
 | [`packages/proxy`](./packages/proxy) | `@runtypelabs/persona-proxy` | Optional Hono-based proxy server for flow configuration |
 
+## Apps
+
+| App | Platform | Description |
+|-----|----------|-------------|
+| [`apps/web`](./apps/web) | Vite | The Persona showcase — 35+ interactive demo pages ([live](https://persona-chat.dev)) |
+
 ## Examples
 
 | Example | Platform | Description |
 |---------|----------|-------------|
-| [`examples/embedded-app`](./examples/embedded-app) | Vite | Vanilla JS demo with runtime configuration ([live](https://persona-chat.dev)) |
 | [`examples/ai-sdk-webmcp`](./examples/ai-sdk-webmcp) | Next.js | WebMCP page tools on a direct Vercel AI SDK backend, no Runtype ([live](https://ai-sdk-webmcp.persona-chat.dev)) |
 | [`examples/vercel-edge`](./examples/vercel-edge) | Vercel / Railway / Fly.io | Node.js proxy server for Runtype |
 | [`examples/cloudflare-workers`](./examples/cloudflare-workers) | Cloudflare Workers | Edge proxy server for Runtype |

@@ -2,7 +2,7 @@ import type { RuntypeFlowConfig } from "../index.js";
 
 /**
  * WebMCP paint flow for the Paint Pal demo
- * (`examples/embedded-app/webmcp-paint.html`).
+ * (`apps/web/webmcp-paint.html`).
  *
  * Like the other WebMCP flows, this agent owns **no** tools of its own: the
  * demo page registers them on `document.modelContext` (driving a real,

@@ -1,6 +1,6 @@
 /* ════════════════════════════════════════════════════════════════════════
-   Switchback storefront: Next.js port of the embedded-app WebMCP demo.
-   Ports examples/embedded-app/src/webmcp-shop.css and recreates the two-column
+   Switchback storefront: Next.js port of the web app WebMCP demo.
+   Ports apps/web/src/webmcp-shop.css and recreates the two-column
    "shell" layout that the gallery's demo-shared.css used to provide. The whole
    app IS the shop, so the original `body.webmcp-shop` scope becomes top-level.
    Mirrors the embedded demo's Pine & Blaze outdoor palette so the direct

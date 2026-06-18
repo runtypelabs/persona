@@ -23,12 +23,12 @@ app: **not** the widget core. You're expected to copy and customize it. This
 doc is the reference for what that component supports out of the box and how
 to extend it.
 
-> **Where to find it:** [`examples/embedded-app/src/components.ts`](../../../examples/embedded-app/src/components.ts) (look for `export const DynamicForm`).
+> **Where to find it:** [`apps/web/src/components.ts`](../../../apps/web/src/components.ts) (look for `export const DynamicForm`).
 
 ## Live demos
 
-- [`/dynamic-components.html`](../../../examples/embedded-app/dynamic-components.html): primary demo, plus three layout variants (Compact, Spacious, Branded) and additional component directive examples.
-- [`/dynamic-form-fields.html`](../../../examples/embedded-app/dynamic-form-fields.html): field-type reference: every supported `type`, `width: "half"` pairing, helper text, required marking, and sensitive masking.
+- [`/dynamic-components.html`](../../../apps/web/dynamic-components.html): primary demo, plus three layout variants (Compact, Spacious, Branded) and additional component directive examples.
+- [`/dynamic-form-fields.html`](../../../apps/web/dynamic-form-fields.html): field-type reference: every supported `type`, `width: "half"` pairing, helper text, required marking, and sensitive masking.
 
 ## Wiring it up
 
@@ -56,7 +56,7 @@ bubble wrap and avoid a card-on-card look.
 
 ## Field reference
 
-Each entry in `props.fields` is a [`FormField`](../../../examples/embedded-app/src/components.ts):
+Each entry in `props.fields` is a [`FormField`](../../../apps/web/src/components.ts):
 
 | Property      | Type                                                                           | Notes                                                                                  |
 |---------------|--------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
@@ -198,7 +198,7 @@ email/phone format checks block submission and surface errors inline.
 Successful submission:
 
 1. Saves the payload to `localStorage` keyed by the assistant message
-   ID, via [`user-action-store.ts`](../../../examples/embedded-app/src/user-action-store.ts).
+   ID, via [`user-action-store.ts`](../../../apps/web/src/user-action-store.ts).
    On reload, the form re-renders into the success state instead of
    re-prompting.
 2. Animates to the success recap card showing the submitted values.

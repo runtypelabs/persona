@@ -10,8 +10,10 @@ Persona is a pnpm monorepo containing a themeable, pluggable streaming chat UI l
 - `packages/widget` (`@runtypelabs/persona`) - The main chat widget library
 - `packages/proxy` (`@runtypelabs/persona-proxy`) - Optional Hono-based proxy server
 
+**Apps:**
+- `apps/web` - The Vite showcase site with vanilla JS (35+ demo pages); deployed to persona-chat.dev
+
 **Examples:**
-- `examples/embedded-app` - Vite demo with vanilla JS (35+ demo pages)
 - `examples/ai-sdk-webmcp` - Next.js / Vercel AI SDK WebMCP demo without Runtype
 - `examples/vercel-edge` - Node.js proxy for Vercel/Railway/Fly.io
 - `examples/cloudflare-workers` - Edge proxy for Cloudflare Workers
@@ -166,7 +168,7 @@ Checklist for a new demo flow or server-pinned agent:
 1. Define the flow in `packages/proxy/src/flows/<name>.ts` or the agent in `packages/proxy/src/agents/<name>.ts`, then export it from that directory's `index.ts` (this is a `packages/proxy` change: **changeset required**).
 2. Mount it in **BOTH** `src/server.ts` and `api/index.ts`: import the flow/agent, add a `createChatProxyApp({ path: "/api/chat/dispatch-<name>", … })` block (follow the existing `FLOW_ID_*` / `AGENT_ID_*` env-override pattern), and add the `app.route("/", …)` line. If you only touched `src/server.ts`, the demo will 404 in production.
 3. Run `pnpm build:proxy` before testing locally: both entries import the **built** `@runtypelabs/persona-proxy`, so a new flow isn't visible to the dev server until the package is rebuilt.
-4. Point the demo page's `apiUrl` at the new route (see any `src/webmcp-*/main.*` in `examples/embedded-app` for the proxy-port pattern).
+4. Point the demo page's `apiUrl` at the new route (see any `src/webmcp-*/main.*` in `apps/web` for the proxy-port pattern).
 5. After merging, verify the route on the deployed proxy: `curl -X OPTIONS https://proxy.persona-chat.dev/api/chat/dispatch-<name>` should not 404.
 
 ## Testing

@@ -301,7 +301,7 @@ To use the shopping assistant, your frontend needs to:
 2. **Parse JSON responses** - Extract the action and execute it
 3. **Handle navigation** - Store state when navigating between pages
 
-See `examples/embedded-app/src/action-middleware-demo.ts` and `examples/embedded-app/src/middleware.ts` for a complete implementation.
+See `apps/web/src/action-middleware-demo.ts` and `apps/web/src/middleware.ts` for a complete implementation.
 
 ### Example Conversation Flow
 

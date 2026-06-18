@@ -744,11 +744,11 @@ The AI responds with JSON like:
 
 **Demos and reference:**
 
-- [`examples/embedded-app/dynamic-components.html`](../../../examples/embedded-app/dynamic-components.html): primary demo with three DynamicForm layout variants (Compact / Spacious / Branded) plus smaller ProductCard, SimpleChart, StatusBadge, and InfoCard directives.
-- [`examples/embedded-app/dynamic-form-fields.html`](../../../examples/embedded-app/dynamic-form-fields.html): every field type, layout width, helper-text, required marking, and sensitive-masking pattern in one page.
+- [`apps/web/dynamic-components.html`](../../../apps/web/dynamic-components.html): primary demo with three DynamicForm layout variants (Compact / Spacious / Branded) plus smaller ProductCard, SimpleChart, StatusBadge, and InfoCard directives.
+- [`apps/web/dynamic-form-fields.html`](../../../apps/web/dynamic-form-fields.html): every field type, layout width, helper-text, required marking, and sensitive-masking pattern in one page.
 - [`docs/DYNAMIC-FORMS.md`](./DYNAMIC-FORMS.md): full reference: field schema, `formStyles` tokens, layout patterns, recipes, and how to extend the example component (new field types, sections, conditional fields).
 
-The shipped `DynamicForm` is an **example** in [`examples/embedded-app/src/components.ts`](../../../examples/embedded-app/src/components.ts): copy it into your app and customize. It supports text/email/tel/url/number/date/time/textarea, half-width pairs, auto-grow textareas, required-asterisk marking, inline validation, a success recap card with sensitive-field masking, and edit-after-submit. See [DYNAMIC-FORMS.md](./DYNAMIC-FORMS.md) for the full surface area.
+The shipped `DynamicForm` is an **example** in [`apps/web/src/components.ts`](../../../apps/web/src/components.ts): copy it into your app and customize. It supports text/email/tel/url/number/date/time/textarea, half-width pairs, auto-grow textareas, required-asterisk marking, inline validation, a success recap card with sensitive-field masking, and edit-after-submit. See [DYNAMIC-FORMS.md](./DYNAMIC-FORMS.md) for the full surface area.
 
 ## Directive postprocessor (Deprecated)
 

@@ -2,7 +2,7 @@ import type { RuntypeFlowConfig } from "../index.js";
 
 /**
  * WebMCP slide-editor flow for the Deck Copilot demo
- * (`examples/embedded-app/webmcp-slides.html`).
+ * (`apps/web/webmcp-slides.html`).
  *
  * Like the other WebMCP flows, this agent owns **no** tools of its own: the
  * demo page registers them on `document.modelContext` and the widget snapshots

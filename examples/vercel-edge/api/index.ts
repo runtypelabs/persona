@@ -207,7 +207,7 @@ app.route("/", chatAssistantApp);
 
 // --- Streaming text-to-speech proxy (OpenAI) ---
 // Streams raw 24 kHz / 16-bit / mono PCM from OpenAI straight to the browser,
-// where examples/embedded-app's ServerTtsEngine feeds it into Persona's
+// where apps/web's ServerTtsEngine feeds it into Persona's
 // createPcmStreamPlayer for jitter-buffered "Read aloud" playback. The API
 // key stays server-side. CORS preflight is handled by the proxy's global
 // withCors middleware; we also reflect the allowed origin on the stream response

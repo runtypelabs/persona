@@ -1,5 +1,5 @@
 // Static product catalog for the WebMCP demo (ported verbatim from the
-// embedded-app Switchback demo). The page's `search_products` tool filters this
+// web app Switchback demo). The page's `search_products` tool filters this
 // list; `add_to_cart` looks products up by SKU. Small and fictional (no real
 // trademarks) but varied enough that "blue running shoes", "trail", "jacket", or
 // "cheapest" return distinct results.

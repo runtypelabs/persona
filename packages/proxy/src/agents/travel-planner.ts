@@ -1,7 +1,7 @@
 import type { AgentConfig } from "../index.js";
 
 /**
- * Travel Planner agent for the Agent Loop demo (examples/embedded-app/agent-demo.html).
+ * Travel Planner agent for the Agent Loop demo (apps/web/agent-demo.html).
  * Server-pinned replacement for the demo's former browser-supplied `config.agent`.
  */
 export const TRAVEL_PLANNER_AGENT: AgentConfig = {

@@ -2,7 +2,7 @@ import type { RuntypeFlowConfig } from "../index.js";
 
 /**
  * WebMCP calendar flow for the calendar copilot demo
- * (`examples/embedded-app/webmcp-calendar.html`).
+ * (`apps/web/webmcp-calendar.html`).
  *
  * Like WEBMCP_STOREFRONT_FLOW, this agent owns **no** tools of its own. The
  * demo page registers seven calendar tools on `document.modelContext` via

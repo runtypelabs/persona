@@ -12,14 +12,8 @@ import {
   type AgentWidgetController,
 } from "@runtypelabs/persona";
 
-import {
-  DynamicForm,
-  ProductCard,
-  SimpleChart,
-  StatusBadge,
-  InfoCard,
-  type DynamicFormStyles,
-} from "./components";
+import { DynamicForm, type DynamicFormStyles } from "./components";
+import { galleryComponents, registerGalleryComponents } from "./gallery-components";
 import { setupMountMode, runWidgetMountWithInspector, squareInlinePanel } from "./mount-mode";
 import {
   createDemoConfigInspector,
@@ -33,10 +27,10 @@ renderDemoScaffold({ slug: "dynamic-components" });
 const configInspector = createDemoConfigInspector({ title: "Dynamic Components" });
 
 componentRegistry.register("DynamicForm", DynamicForm);
-componentRegistry.register("ProductCard", ProductCard);
-componentRegistry.register("SimpleChart", SimpleChart);
-componentRegistry.register("StatusBadge", StatusBadge);
-componentRegistry.register("InfoCard", InfoCard);
+// Every component in `gallery-components/` is auto-discovered and registered;
+// adding a file there is all it takes to make it available here and in the
+// "Try other UI" buttons below.
+registerGalleryComponents();
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
@@ -218,75 +212,32 @@ document.getElementById("dynamic-form-preview")?.addEventListener("click", () =>
   applyVariantToActivePreview(selectedVariant);
 });
 
-type PreviewDirective = {
-  label: string;
-  component: string;
-  text: string;
-  props: Record<string, unknown>;
-};
-
-const componentPreviews: Record<string, PreviewDirective> = {
-  product: {
-    label: "Product card",
-    component: "ProductCard",
-    text: "Preview: a streamed ProductCard component.",
-    props: {
-      id: "cashmere-crewneck",
-      title: "Mongolian Cashmere Crewneck",
-      price: 248,
-      description: "A soft product card rendered from a JSON component directive.",
-      image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=600&h=750&fit=crop",
-    },
-  },
-  chart: {
-    label: "Chart",
-    component: "SimpleChart",
-    text: "Preview: a streamed SimpleChart component.",
-    props: {
-      title: "Quarterly pipeline",
-      data: [42, 68, 91, 76],
-      labels: ["Q1", "Q2", "Q3", "Q4"],
-    },
-  },
-  status: {
-    label: "Status badge",
-    component: "StatusBadge",
-    text: "Preview: a streamed StatusBadge component.",
-    props: {
-      status: "success",
-      message: "Account verified",
-    },
-  },
-  info: {
-    label: "Info card",
-    component: "InfoCard",
-    text: "Preview: a streamed InfoCard component.",
-    props: {
-      title: "Next step",
-      content: "The same directive path can render any host-provided UI component.",
-      icon: "i",
-    },
-  },
-};
-
-document.querySelectorAll<HTMLButtonElement>("[data-component-preview]").forEach((button) => {
+// Build the "Try other UI" buttons from the auto-discovered gallery. Clicking
+// one injects that component's sample directive — the same payload an agent
+// would stream — into the live preview on the right. Contributing a component
+// (a file in `gallery-components/`) adds its button here automatically.
+const previewButtonsContainer = document.getElementById("component-preview-buttons");
+galleryComponents.forEach((component) => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn";
+  button.textContent = component.label;
   button.addEventListener("click", () => {
     if (!activeController) return;
-    const preview = componentPreviews[button.dataset.componentPreview ?? ""];
-    if (!preview) return;
     previewIndex += 1;
     activeController.injectComponentDirective({
-      id: `preview-${preview.component}-${previewIndex}`,
-      component: preview.component,
-      text: preview.text,
-      props: preview.props,
-      llmContent: `[Demo: previewed ${preview.component} via injectComponentDirective.]`,
+      id: `preview-${component.name}-${previewIndex}`,
+      component: component.name,
+      text: component.sample.text,
+      props: component.sample.props,
+      llmContent: `[Demo: previewed ${component.name} via injectComponentDirective.]`,
     });
     configInspector.setScenario(
-      { component: preview.component, props: preview.props },
-      `injectComponentDirective payload · ${preview.label}`,
+      { component: component.name, props: component.sample.props },
+      `injectComponentDirective payload · ${component.label}`,
     );
   });
+  previewButtonsContainer?.appendChild(button);
 });
 
 // ---------------------------------------------------------------------------
