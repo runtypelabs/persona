@@ -207,6 +207,38 @@ const escapeHtml = (s: string): string =>
             : "&#39;",
   );
 
+function normalizeCodeBlockHtml(html: string): string {
+  const lines = html.replace(/\r\n?/g, "\n").split("\n");
+
+  while (lines[0]?.trim() === "") lines.shift();
+  while (lines[lines.length - 1]?.trim() === "") lines.pop();
+
+  const commonIndent = Math.min(
+    ...lines
+      .filter((line) => line.trim().length > 0)
+      .map((line) => line.match(/^[ \t]*/)?.[0].length ?? 0),
+  );
+
+  if (!Number.isFinite(commonIndent) || commonIndent <= 0) {
+    return lines.join("\n");
+  }
+
+  return lines
+    .map((line) => {
+      const lineIndent = line.match(/^[ \t]*/)?.[0].length ?? 0;
+      return line.slice(Math.min(commonIndent, lineIndent));
+    })
+    .join("\n");
+}
+
+function normalizeDemoCodeBlocks(root: ParentNode = document): void {
+  root.querySelectorAll<HTMLElement>(".code-block").forEach((block) => {
+    if (block.dataset.codeBlockNormalized === "true") return;
+    block.innerHTML = normalizeCodeBlockHtml(block.innerHTML);
+    block.dataset.codeBlockNormalized = "true";
+  });
+}
+
 /**
  * Find the registry entry for a given slug. Useful when a demo wants to read
  * its own title/blurb/badge for the title strip.
@@ -242,6 +274,8 @@ export function renderExamplesShell(
   currentSlug?: string,
   options: ExamplesShellOptions = {},
 ): void {
+  normalizeDemoCodeBlocks();
+
   const items = ADVANCED_EXAMPLES;
   const currentIndex = currentSlug
     ? items.findIndex((e) => e.slug === currentSlug)

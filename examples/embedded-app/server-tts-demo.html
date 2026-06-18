@@ -13,7 +13,7 @@
       <aside class="stage-controls">
         <header class="demo-meta">
           <h1>Server TTS (streaming)</h1>
-          <p>Read assistant replies aloud with a <em>hosted</em> voice instead of the browser's built-in speech. A custom <code>SpeechEngine</code> streams PCM from the proxy's <code>/api/tts</code> route (OpenAI) into Persona's own <code>AudioPlaybackManager</code>, so audio starts on the first chunk and pause/resume are real.</p>
+          <p>Read assistant replies aloud with a <em>hosted</em> voice instead of the browser's built-in speech. A custom <code>SpeechEngine</code> streams PCM from the proxy's <code>/api/tts</code> route (OpenAI) into Persona's <code>createPcmStreamPlayer()</code>, so audio starts once the jitter buffer fills and pause/resume are real.</p>
           <div class="mount-toolbar" data-mount-toolbar></div>
         </header>
 
@@ -40,7 +40,10 @@
             <span class="prop">textToSpeech</span>: {
               <span class="comment">// no auto-speak; the button still uses this engine</span>
               <span class="prop">enabled</span>: <span class="keyword">false</span>,
-              <span class="prop">createEngine</span>: () =&gt; <span class="keyword">new</span> <span class="prop">ServerTtsEngine</span>({ <span class="prop">endpoint</span>: ttsUrl }),
+              <span class="prop">createEngine</span>: () =&gt;
+                <span class="keyword">new</span> <span class="prop">ServerTtsEngine</span>({
+                  <span class="prop">endpoint</span>: ttsUrl,
+                }),
             },
             <span class="prop">messageActions</span>: { <span class="prop">showReadAloud</span>: <span class="keyword">true</span> },
           </div>
@@ -73,7 +76,7 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">Swapping vendors</h3>
-        <p>The browser contract is just “stream 24&nbsp;kHz PCM”. To use ElevenLabs, change the proxy's upstream <code>fetch</code> to <code>/v1/text-to-speech/{voiceId}</code> with <code>output_format: "pcm_24000"</code> and the <code>xi-api-key</code> header — <code>server-tts-engine.ts</code> doesn't change. Runtype has no standalone TTS endpoint today, so this demo proxies a third party with the key held server-side.</p>
+        <p>The browser contract is just “stream 24&nbsp;kHz PCM”. Runtype agents with voice configured can use <code>POST /v1/client/agents/{agentId}/speak</code> with the same client token as the widget; it streams PCM by default from the agent's configured voice provider, including ElevenLabs in production. For a custom proxy like this demo, you can also swap the upstream fetch directly to ElevenLabs (<code>/v1/text-to-speech/{voiceId}/stream?output_format=pcm_24000</code> with the <code>xi-api-key</code> header), Azure, Polly, or another provider — <code>server-tts-engine.ts</code> doesn't change.</p>
       </div>
 
       <div class="notes-section">

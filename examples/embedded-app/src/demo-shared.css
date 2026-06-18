@@ -1248,7 +1248,10 @@ body.demo-code-active [data-persona-root] { display: none; }
   line-height: 1.6;
   color: var(--code-fg);
   margin-bottom: 1rem;
+  white-space: pre;
   tab-size: 2;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 .code-block .comment  { color: #7c7a70; }
 .code-block .keyword  { color: #7eb1ff; }
