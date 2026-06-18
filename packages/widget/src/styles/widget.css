@@ -2392,6 +2392,219 @@
 }
 
 /* ============================================
+   Approval card (default renderer, components/approval-actions.ts)
+   Neutral surface card. Every color is a --persona-* token; the legacy
+   --persona-approval-* shorthands are honored fallback-first so a consumer who
+   themed them still wins, then the new semantic default applies.
+   ============================================ */
+.persona-approval-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: var(--persona-approval-bg, var(--persona-surface, #ffffff));
+  border: 0.5px solid var(--persona-approval-border, var(--persona-border, rgba(11, 11, 11, 0.1)));
+  border-radius: 0.75rem;
+  padding: 0.5rem;
+}
+.persona-approval-card.persona-shadow-sm {
+  box-shadow: var(--persona-approval-shadow, 0 1px 2px 0 rgba(11, 11, 11, 0.06), 0 2px 8px 0 rgba(11, 11, 11, 0.04));
+}
+
+.persona-approval-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--persona-text, #0b0b0b);
+  border-radius: 0.5rem;
+  transition: background 0.12s ease;
+}
+.persona-approval-head:hover { background: var(--persona-container, rgba(11, 11, 11, 0.04)); }
+.persona-approval-head[data-static="true"] { cursor: default; }
+.persona-approval-head[data-static="true"]:hover { background: transparent; }
+
+.persona-approval-logo {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  border: 0.5px solid var(--persona-border, rgba(11, 11, 11, 0.12));
+  border-radius: 6.5px;
+  background: var(--persona-surface, #ffffff);
+  box-shadow: 0 1px 2px 0 rgba(11, 11, 11, 0.08);
+  color: var(--persona-muted, #6b7280);
+  overflow: hidden;
+}
+.persona-approval-logo svg { width: 15px; height: 15px; display: block; }
+
+.persona-approval-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--persona-text, #0b0b0b);
+}
+.persona-approval-title strong { font-weight: 600; }
+
+.persona-approval-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+  color: var(--persona-muted, #6b7280);
+  vertical-align: middle;
+  transition: transform 0.15s ease;
+}
+.persona-approval-toggle svg { width: 0.85rem; height: 0.85rem; display: block; }
+.persona-approval-head[aria-expanded="false"] .persona-approval-toggle { transform: rotate(-90deg); }
+
+.persona-approval-body {
+  padding: 0.5rem 0.6rem 0.35rem calc(24px + 0.75rem + 0.6rem);
+}
+
+.persona-approval-params {
+  margin: 0 0 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.625rem;
+  background: var(--persona-container, rgba(11, 11, 11, 0.04));
+  color: var(--persona-text, #1f2937);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  overflow-x: auto;
+  max-height: 9rem;
+}
+.persona-approval-params[hidden] { display: none; }
+
+.persona-approval-reason {
+  margin: 0 0 0.6rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--persona-muted, #6b7280);
+}
+.persona-approval-reason-label { font-weight: 500; }
+
+.persona-approval-resolved {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.5rem 0;
+  padding: 0.3rem 0.15rem;
+  font-size: 0.8rem;
+  color: var(--persona-muted, #6b7280);
+}
+.persona-approval-resolved svg { width: 0.95rem; height: 0.95rem; display: block; flex-shrink: 0; }
+.persona-approval-resolved-name { font-weight: 600; }
+
+.persona-approval-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.persona-approval-split { position: relative; display: inline-flex; }
+
+.persona-approval-primary,
+.persona-approval-caret,
+.persona-approval-deny {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+/* Primary anchors to the brand token via the established button-primary pair. */
+.persona-approval-primary {
+  background: var(--persona-approval-approve-bg, var(--persona-button-primary-bg, var(--persona-primary, #111827)));
+  color: var(--persona-button-primary-fg, var(--persona-text-inverse, #ffffff));
+  padding: 0 0.75rem;
+  border-radius: 0.5rem 0 0 0.5rem;
+}
+.persona-approval-primary--solo { border-radius: 0.5rem; }
+.persona-approval-caret {
+  position: relative;
+  background: var(--persona-approval-approve-bg, var(--persona-button-primary-bg, var(--persona-primary, #111827)));
+  color: var(--persona-button-primary-fg, var(--persona-text-inverse, #ffffff));
+  width: 2rem;
+  justify-content: center;
+  padding: 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+.persona-approval-caret svg { width: 0.95rem; height: 0.95rem; display: block; }
+.persona-approval-caret::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--persona-button-primary-fg, #ffffff);
+  opacity: 0.25;
+  transition: opacity 0.12s ease;
+}
+.persona-approval-caret:hover::before,
+.persona-approval-primary:hover + .persona-approval-caret::before { opacity: 0; }
+.persona-approval-primary:hover,
+.persona-approval-caret:hover { box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.16); }
+
+.persona-approval-deny {
+  background: var(--persona-approval-deny-bg, var(--persona-container, rgba(11, 11, 11, 0.04)));
+  color: var(--persona-text, #1f2937);
+  padding: 0 0.75rem;
+  border-radius: 0.5rem;
+  box-shadow: inset 0 0 0 0.5px var(--persona-border, rgba(0, 0, 0, 0.1));
+}
+.persona-approval-deny:hover { box-shadow: inset 0 0 0 0.5px var(--persona-border, rgba(0, 0, 0, 0.1)), inset 0 0 0 999px rgba(11, 11, 11, 0.04); }
+
+.persona-approval-menu {
+  width: max-content;
+  max-width: 18rem;
+  box-sizing: border-box;
+  background: var(--persona-surface, #ffffff);
+  border: 0.5px solid var(--persona-border, rgba(11, 11, 11, 0.1));
+  border-radius: 0.625rem;
+  box-shadow: 0 8px 24px rgba(11, 11, 11, 0.12), 0 2px 6px rgba(11, 11, 11, 0.08);
+  padding: 0.25rem;
+  white-space: nowrap;
+}
+.persona-approval-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--persona-text, #1f2937);
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.4rem;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+.persona-approval-menu-item:hover { background: var(--persona-container, rgba(11, 11, 11, 0.06)); }
+.persona-approval-kbd {
+  font-family: inherit;
+  font-size: 0.75rem;
+  line-height: 1;
+  opacity: 0.7;
+  margin-left: 0.25rem;
+}
+.persona-approval-menu-item .persona-approval-kbd { margin-left: auto; }
+
+/* ============================================
    Visibility (Tailwind parity: prefix persona-)
    Shipped widget.css is hand-maintained; these utilities are used in TS but not generated by Tailwind at build time.
    ============================================ */

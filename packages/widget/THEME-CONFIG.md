@@ -345,27 +345,36 @@ Semantic tokens provide intent-based naming that references palette values.
 
 ### Approval (`components.approval.*`)
 
+The default approval renderer is a neutral surface card whose primary action
+anchors to the brand primary. Defaults map to semantic tokens (so the card
+tracks your theme), not the old warning/success/error palette:
+
 | Token | Default Reference |
 |-------|-------------------|
-| `requested.background` | `palette.colors.warning.50` |
-| `requested.border` | `palette.colors.warning.200` |
+| `requested.background` | `semantic.colors.surface` |
+| `requested.border` | `semantic.colors.border` |
 | `requested.text` | `palette.colors.gray.900` |
-| `requested.shadow` | `"0 5px 15px rgba(15, 23, 42, 0.08)"` |
-| `approve.background` | `palette.colors.success.500` |
-| `approve.foreground` | `palette.colors.gray.50` |
-| `deny.background` | `palette.colors.error.500` |
-| `deny.foreground` | `palette.colors.gray.50` |
+| `requested.shadow` | `"0 1px 2px 0 rgba(11,11,11,0.06), 0 2px 8px 0 rgba(11,11,11,0.04)"` |
+| `approve.background` | `semantic.colors.primary` (→ `--persona-button-primary-bg`) |
+| `approve.foreground` | `semantic.colors.textInverse` (→ `--persona-button-primary-fg`) |
+| `deny.background` | `semantic.colors.container` |
+| `deny.foreground` | `semantic.colors.text` |
 
 **Per-widget overrides (`config.approval.*`)** take precedence over the tokens above:
 
 | Property | Description |
 |----------|-------------|
-| `backgroundColor` / `borderColor` | Bubble container styling |
-| `shadow` | Box-shadow for the bubble; pass `"none"` to remove it. Overrides the `requested.shadow` token / `--persona-approval-shadow` |
-| `title` / `titleColor` / `descriptionColor` | Title and description text |
+| `enableAlwaysAllow` | `false` by default. `true` adds the split "Always allow / Allow once" control + keyboard shortcuts; forwards `{ remember: true }` to `onDecision` (needs a backend to persist the policy) |
+| `detailsDisplay` | `"collapsed"` (default) / `"expanded"` / `"hidden"` — initial state of the tool-arguments disclosure |
+| `showDetailsLabel` / `hideDetailsLabel` | Disclosure toggle labels |
+| `backgroundColor` / `borderColor` | Card container styling |
+| `shadow` | Box-shadow for the card; pass `"none"` to remove it. Overrides the `requested.shadow` token / `--persona-approval-shadow` |
+| `titleColor` / `descriptionColor` | Title and summary text (`title` no longer renders in the default card — use `formatDescription` to customize the summary line) |
 | `parameterBackgroundColor` / `parameterTextColor` | Parameters code block |
-| `approveLabel` / `approveButtonColor` / `approveButtonTextColor` | Approve button |
-| `denyLabel` / `denyButtonColor` / `denyButtonTextColor` | Deny button (text color also drives the outline) |
+| `approveLabel` / `approveButtonColor` / `approveButtonTextColor` | Primary (Allow / Always allow) button + caret |
+| `denyLabel` / `denyButtonColor` / `denyButtonTextColor` | Deny button |
+
+> The legacy yellow look: set `config.approval.backgroundColor`/`borderColor` (or the `components.approval.requested.*` tokens) back to the warning palette to restore it. The `--persona-approval-*` aliases are still honored fallback-first.
 
 ### Attachment (`components.attachment.*`)
 

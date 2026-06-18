@@ -384,22 +384,25 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       icon: 'palette.colors.success.500',
     },
   },
+  // Neutral surface card (components/approval-actions.ts). The primary action
+  // anchors to the brand primary; deny is a neutral tinted button. Consumers who
+  // themed these (or set config.approval.* color overrides) still win.
   approval: {
     requested: {
-      background: 'palette.colors.warning.50',
-      border: 'palette.colors.warning.200',
+      background: 'semantic.colors.surface',
+      border: 'semantic.colors.border',
       text: 'palette.colors.gray.900',
-      shadow: '0 5px 15px rgba(15, 23, 42, 0.08)',
+      shadow: '0 1px 2px 0 rgba(11, 11, 11, 0.06), 0 2px 8px 0 rgba(11, 11, 11, 0.04)',
     },
     approve: {
-      background: 'palette.colors.success.500',
-      foreground: 'palette.colors.gray.50',
+      background: 'semantic.colors.primary',
+      foreground: 'semantic.colors.textInverse',
       borderRadius: 'palette.radius.md',
       padding: 'semantic.spacing.sm',
     },
     deny: {
-      background: 'palette.colors.error.500',
-      foreground: 'palette.colors.gray.50',
+      background: 'semantic.colors.container',
+      foreground: 'semantic.colors.text',
       borderRadius: 'palette.radius.md',
       padding: 'semantic.spacing.sm',
     },
@@ -681,12 +684,12 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-voice-processing-icon'] = cssVars['--persona-components-voice-processing-icon'] ?? cssVars['--persona-palette-colors-primary-500'];
   cssVars['--persona-voice-speaking-icon'] = cssVars['--persona-components-voice-speaking-icon'] ?? cssVars['--persona-palette-colors-success-500'];
 
-  cssVars['--persona-approval-bg'] = cssVars['--persona-components-approval-requested-background'] ?? cssVars['--persona-palette-colors-warning-50'];
-  cssVars['--persona-approval-border'] = cssVars['--persona-components-approval-requested-border'] ?? cssVars['--persona-palette-colors-warning-200'];
+  cssVars['--persona-approval-bg'] = cssVars['--persona-components-approval-requested-background'] ?? cssVars['--persona-surface'];
+  cssVars['--persona-approval-border'] = cssVars['--persona-components-approval-requested-border'] ?? cssVars['--persona-border'];
   cssVars['--persona-approval-text'] = cssVars['--persona-components-approval-requested-text'] ?? cssVars['--persona-palette-colors-gray-900'];
-  cssVars['--persona-approval-shadow'] = cssVars['--persona-components-approval-requested-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
-  cssVars['--persona-approval-approve-bg'] = cssVars['--persona-components-approval-approve-background'] ?? cssVars['--persona-palette-colors-success-500'];
-  cssVars['--persona-approval-deny-bg'] = cssVars['--persona-components-approval-deny-background'] ?? cssVars['--persona-palette-colors-error-500'];
+  cssVars['--persona-approval-shadow'] = cssVars['--persona-components-approval-requested-shadow'] ?? '0 1px 2px 0 rgba(11, 11, 11, 0.06), 0 2px 8px 0 rgba(11, 11, 11, 0.04)';
+  cssVars['--persona-approval-approve-bg'] = cssVars['--persona-components-approval-approve-background'] ?? cssVars['--persona-button-primary-bg'];
+  cssVars['--persona-approval-deny-bg'] = cssVars['--persona-components-approval-deny-background'] ?? cssVars['--persona-container'];
 
   cssVars['--persona-attachment-image-bg'] = cssVars['--persona-components-attachment-image-background'] ?? cssVars['--persona-palette-colors-gray-100'];
   cssVars['--persona-attachment-image-border'] = cssVars['--persona-components-attachment-image-border'] ?? cssVars['--persona-palette-colors-gray-200'];
