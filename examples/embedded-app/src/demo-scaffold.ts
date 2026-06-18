@@ -264,32 +264,14 @@ export function renderDemoScaffold(
 
   controls.replaceChildren(header, configureSection);
 
-  // ── 1b. Notes → collapsible at the bottom of the left rail ───────────
+  // ── 1b. Notes → visible reference section in the left rail ───────────
   // Authored as a full-width `.notes` section below the stage; relocate it
-  // into the configure rail as a show/hide so the preview owns the full
-  // right column (and a docked launcher reads as bottom-of-screen).
+  // into the scrolling configure rail so the preview owns the full right
+  // column while keeping reference copy immediately available.
   const notes = root.querySelector<HTMLElement>(".notes");
   if (notes) {
-    notes.querySelector(".notes-heading")?.remove();
-    const notesRail = document.createElement("section");
-    notesRail.className = "notes-rail";
-    const notesToggle = document.createElement("button");
-    notesToggle.type = "button";
-    notesToggle.className = "notes-rail-toggle";
-    notesToggle.setAttribute("aria-expanded", "false");
-    notesToggle.textContent = "Notes";
-    const notesBody = document.createElement("div");
-    notesBody.className = "notes notes-rail-body";
-    notesBody.hidden = true;
-    while (notes.firstChild) notesBody.appendChild(notes.firstChild);
-    notes.remove();
-    notesToggle.addEventListener("click", () => {
-      const open = notesToggle.getAttribute("aria-expanded") === "true";
-      notesToggle.setAttribute("aria-expanded", open ? "false" : "true");
-      notesBody.hidden = open;
-    });
-    notesRail.append(notesToggle, notesBody);
-    controls.appendChild(notesRail);
+    notes.classList.add("notes-rail");
+    controls.appendChild(notes);
   }
 
   // ── 2. Preview pane ──────────────────────────────────────────────────

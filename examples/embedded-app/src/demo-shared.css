@@ -147,7 +147,6 @@ a {
 
 /* Page / section eyebrows: JetBrains Mono, tracked, uppercase teal (label-caps). */
 .eyebrow,
-.notes-heading,
 .gallery-tier-heading {
   font-family: var(--font-label);
   font-size: 0.75rem;
@@ -158,6 +157,7 @@ a {
 }
 /* In-rail control labels: normal case for a calm, consistent form look. */
 .configure-label,
+.notes-heading,
 .control-label,
 .artifact-controls-label {
   font-family: var(--font-label);
@@ -1137,8 +1137,8 @@ body.demo-code-active [data-persona-root] { display: none; }
 }
 .notes-heading {
   margin: 0;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--border-strong);
+  font-size: inherit;
+  line-height: inherit;
 }
 .notes-section-title {
   font-size: 0.95rem;
@@ -1205,43 +1205,13 @@ body.demo-code-active [data-persona-root] { display: none; }
 .notes-body p { font-size: 0.875rem; line-height: 1.65; color: var(--muted); }
 .notes-body code { font-size: 0.78em; }
 
-/* Notes relocated into the left rail as a collapsible show/hide. */
-.notes-rail {
-  margin-top: 0.5rem;
-  padding-top: 1rem;
+/* Notes relocated into the left rail as a visible reference section. */
+.notes.notes-rail {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
   border-top: 1px solid var(--border);
+  gap: 1.25rem;
 }
-.notes-rail-toggle {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-family: var(--font-label);
-  font-size: 1rem;
-  font-weight: 300;
-  text-transform: none;
-  letter-spacing: 0.01em;
-  color: var(--muted);
-}
-.notes-rail-toggle::before {
-  content: "";
-  width: 0;
-  height: 0;
-  border: 4px solid transparent;
-  border-left-color: var(--muted);
-  transition: transform 0.15s ease;
-  flex: none;
-}
-.notes-rail-toggle[aria-expanded="true"]::before { transform: rotate(90deg); }
-.notes-rail-toggle:hover { color: var(--foreground); }
-.notes-rail-body.notes { margin-top: 1rem; gap: 1.25rem; }
-/* `.notes` sets display:flex, which would override the [hidden] attribute. */
-.notes-rail-body[hidden] { display: none; }
 
 /* ════════════════════════════════════════════════════════════════════════
    Panels (legacy compat — kept for any page that still uses them)
