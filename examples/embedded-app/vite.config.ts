@@ -465,17 +465,25 @@ function galleryFonts(): Plugin {
 function commandPaletteEntry(): Plugin {
   return {
     name: "persona-command-palette-entry",
-    transformIndexHtml(html) {
-      if (html.includes("/src/command-palette-entry.ts")) return;
-      const isHome = html.includes('src="/src/main.ts"') || html.includes("src/home.css");
-      if (isHome) return;
-      return [
-        {
-          tag: "script",
-          attrs: { type: "module", src: "/src/command-palette-entry.ts" },
-          injectTo: "body",
-        },
-      ] satisfies HtmlTagDescriptor[];
+    // Must run `pre` so the injected tag is present when Vite scans the HTML
+    // for module inputs. With the default (post) ordering the build emits the
+    // `/src/command-palette-entry.ts` src verbatim, and it 404s in production
+    // because the raw TS source isn't served — it only works under the dev
+    // server. Running `pre` lets Vite bundle/hash it like a hand-written tag.
+    transformIndexHtml: {
+      order: "pre",
+      handler(html) {
+        if (html.includes("command-palette-entry")) return;
+        const isHome = html.includes('src="/src/main.ts"') || html.includes("src/home.css");
+        if (isHome) return;
+        return [
+          {
+            tag: "script",
+            attrs: { type: "module", src: "/src/command-palette-entry.ts" },
+            injectTo: "body",
+          },
+        ] satisfies HtmlTagDescriptor[];
+      },
     },
   };
 }
