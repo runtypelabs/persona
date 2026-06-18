@@ -36,6 +36,7 @@ import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
 import { createElement, createElementInDocument } from "./utils/dom";
 import { morphMessages } from "./utils/morph";
+import { normalizeCopiedSelectionText } from "./utils/copy-selection";
 import {
   navigateComposerHistory,
   INITIAL_HISTORY_STATE,
@@ -1353,6 +1354,26 @@ export const createAgentExperience = (
       event.preventDefault();
       handleBubbleExpansion(event);
     }
+  });
+
+  // Normalize manual (triple-click + Ctrl/Cmd-C) copies of message text. The
+  // browser serializes the DOM selection, and block-level markdown elements
+  // (<p>, <li>, <pre>, …) emit surrounding newlines — so a single-message copy
+  // arrives with stray trailing/leading blank lines. Rewrite the clipboard's
+  // plain text to the trimmed selection so the buffer matches what was visibly
+  // highlighted. (The Copy action button is unaffected; it uses message.content.)
+  messagesWrapper.addEventListener('copy', (event) => {
+    const { clipboardData } = event;
+    if (!clipboardData) return;
+    const root = messagesWrapper.getRootNode() as { getSelection?: () => Selection | null };
+    const selection =
+      typeof root.getSelection === 'function' ? root.getSelection() : window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+    const raw = selection.toString();
+    const normalized = normalizeCopiedSelectionText(raw);
+    if (!normalized || normalized === raw) return;
+    clipboardData.setData('text/plain', normalized);
+    event.preventDefault();
   });
 
   // Add event delegation for message action buttons (upvote, downvote, copy)
