@@ -247,7 +247,7 @@ app.route("/", chatAssistantApp);
 // --- Streaming text-to-speech proxy (OpenAI) ---
 // Streams raw 24 kHz / 16-bit / mono PCM from OpenAI straight to the browser,
 // where examples/embedded-app's ServerTtsEngine feeds it into Persona's
-// AudioPlaybackManager for gap-free, low-latency "Read aloud" playback. The API
+// createPcmStreamPlayer for jitter-buffered "Read aloud" playback. The API
 // key stays server-side. CORS preflight is handled by the proxy's global
 // withCors middleware; we also reflect the allowed origin on the stream response
 // to match the other custom routes here.
@@ -290,9 +290,10 @@ app.post("/api/tts", async (c) => {
   }
 
   // response_format: "pcm" → raw 24 kHz / 16-bit signed LE / mono, exactly what
-  // AudioPlaybackManager.enqueue() expects. To use ElevenLabs instead, POST to
-  // /v1/text-to-speech/{voiceId} with output_format: "pcm_24000" and the
-  // xi-api-key header — the streamed body plugs into the same client engine.
+  // the Persona PCM stream player expects. For Runtype-hosted agent voices, call
+  // POST /v1/client/agents/{agentId}/speak instead; for a direct ElevenLabs proxy,
+  // POST to /v1/text-to-speech/{voiceId}/stream?output_format=pcm_24000 with the
+  // xi-api-key header. Either streamed body plugs into the same client engine.
   const payload: Record<string, unknown> = {
     // `tts-1` is OpenAI's low-latency model (faster first byte + steady
     // delivery); `gpt-4o-mini-tts` is higher quality but slower and burstier to

@@ -65,24 +65,29 @@
       <h2 class="notes-heading">Notes</h2>
 
       <div class="notes-section">
+        <h3 class="notes-section-title">Requirements</h3>
+        <p>This demo needs the proxy running (<code>pnpm dev</code>) with <code>OPENAI_API_KEY</code> set in <code>examples/vercel-edge/.env</code> (see <code>.env.example</code>). Without it, the reply still streams normally but “Read aloud” reports an error in the log.</p>
+      </div>
+
+      <div class="notes-section">
         <h3 class="notes-section-title">Why a server engine?</h3>
         <p>The default <code>BrowserSpeechEngine</code> uses the Web Speech API: zero backend, but the voices are whatever the OS/browser ships and vary per device. A hosted engine gives one consistent, higher-quality voice everywhere — at the cost of a server call. <code>textToSpeech.createEngine</code> is the seam: return any object implementing <code>SpeechEngine</code> and the read-aloud button, the four-state icon, and the <code>message:read-aloud</code> event all work unchanged.</p>
       </div>
 
       <div class="notes-section">
         <h3 class="notes-section-title">Why a jitter buffer</h3>
-        <p>The proxy requests OpenAI's <code>response_format: "pcm"</code> (raw 24&nbsp;kHz / 16-bit / mono) and pipes the body straight to the browser. Hosted TTS arrives <em>bursty</em> — a brief blip, then a ~500–800ms generation stall, then a flood — so playing the first chunk immediately would starve and stutter. <code>createPcmStreamPlayer({ prebufferMs })</code> buffers a short waterline before the first sample and, on any underrun, goes silent and re-buffers instead of clicking; pause/resume suspend the underlying <code>AudioContext</code>. Tune the latency↔smoothness trade-off with <code>prebufferMs</code>.</p>
+        <p>The proxy requests OpenAI's <code>response_format: "pcm"</code> (raw 24&nbsp;kHz / 16-bit / mono) and pipes the body straight to the browser.</p>
+        <p>Hosted TTS arrives <em>bursty</em>: a brief blip, then a ~500–800ms generation stall, then a flood. Playing the first chunk immediately would starve and stutter.</p>
+        <p><code>createPcmStreamPlayer({ prebufferMs })</code> buffers a short waterline before the first sample and, on any underrun, goes silent and re-buffers instead of clicking. Pause/resume suspend the underlying <code>AudioContext</code>. Tune the latency↔smoothness trade-off with <code>prebufferMs</code>.</p>
       </div>
 
       <div class="notes-section">
         <h3 class="notes-section-title">Swapping vendors</h3>
-        <p>The browser contract is just “stream 24&nbsp;kHz PCM”. Runtype agents with voice configured can use <code>POST /v1/client/agents/{agentId}/speak</code> with the same client token as the widget; it streams PCM by default from the agent's configured voice provider, including ElevenLabs in production. For a custom proxy like this demo, you can also swap the upstream fetch directly to ElevenLabs (<code>/v1/text-to-speech/{voiceId}/stream?output_format=pcm_24000</code> with the <code>xi-api-key</code> header), Azure, Polly, or another provider — <code>server-tts-engine.ts</code> doesn't change.</p>
+        <p>The browser contract is just “stream 24&nbsp;kHz PCM”. <code>server-tts-engine.ts</code> does not care which service produced the bytes.</p>
+        <p>Runtype agents with voice configured can use <code>POST /v1/client/agents/{agentId}/speak</code> with the same client token as the widget. It streams PCM by default from the agent's configured voice provider, including ElevenLabs in production.</p>
+        <p>For a custom proxy like this demo, you can also swap the upstream fetch directly to ElevenLabs (<code>/v1/text-to-speech/{voiceId}/stream?output_format=pcm_24000</code> with the <code>xi-api-key</code> header), Azure, Polly, or another provider.</p>
       </div>
-
-      <div class="notes-section">
-        <h3 class="notes-section-title">Requirements</h3>
-        <p>Needs the demo proxy running (<code>pnpm dev</code>) with <code>OPENAI_API_KEY</code> set in <code>examples/vercel-edge/.env</code> (see <code>.env.example</code>). Without it, the reply still streams normally but “Read aloud” reports an error in the log.</p>
-      </div>
+      
     </section>
   </main>
 
