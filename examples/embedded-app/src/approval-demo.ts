@@ -138,6 +138,22 @@ const wireApprovalLogging = (controller: AgentWidgetController): void => {
 let activeStage: HTMLElement | null = null;
 let teardownActive: (() => void) | null = null;
 
+// Declared before `setupMountMode` runs: setupMountMode invokes `mount`
+// synchronously during module evaluation, which calls `createWidget()` →
+// `updateLog()`. If `logContainer` (a const) were declared below that call it
+// would still be in its temporal dead zone, throwing "Cannot access
+// 'logContainer' before initialization" and crashing the demo before the widget
+// ever mounts (so no dispatch request fires).
+const logContainer = document.getElementById("event-log");
+function updateLog(message: string): void {
+  if (!logContainer) return;
+  const entry = document.createElement("div");
+  entry.style.cssText = "padding: 0.25rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem;";
+  const time = new Date().toLocaleTimeString();
+  entry.innerHTML = `<span style="color: #64748b;">[${time}]</span> ${message}`;
+  logContainer.prepend(entry);
+}
+
 const createWidget = (): void => {
   if (teardownActive) {
     teardownActive();
@@ -213,16 +229,6 @@ iconSelector?.addEventListener("click", (event) => {
   iconMode = next;
   createWidget();
 });
-
-const logContainer = document.getElementById("event-log");
-function updateLog(message: string): void {
-  if (!logContainer) return;
-  const entry = document.createElement("div");
-  entry.style.cssText = "padding: 0.25rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem;";
-  const time = new Date().toLocaleTimeString();
-  entry.innerHTML = `<span style="color: #64748b;">[${time}]</span> ${message}`;
-  logContainer.prepend(entry);
-}
 
 document.getElementById("btn-approve")?.addEventListener("click", () => {
   if (!activeController) return;
