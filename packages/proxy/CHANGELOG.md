@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.0.1
+
+### Patch Changes
+
+- db3ea6f: Unify the component demo flow so it can emit dynamic forms and smaller component directives.
+
 ## 4.0.0
 
 ### Major Changes
