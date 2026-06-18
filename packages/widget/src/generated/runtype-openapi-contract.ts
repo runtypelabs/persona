@@ -293,6 +293,10 @@ export type RuntypeExecutionStreamEvent = ({
   reason?: string;
   seq: number;
   startedAt?: string;
+  subagent?: {
+  agentName?: string;
+  toolName: string;
+};
   timeout?: number;
   toolCallId?: string;
   toolName: string;
