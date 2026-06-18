@@ -227,9 +227,9 @@ export const THEME_TOKEN_DOCS = {
     },
     approval: {
       description:
-        'Tool approval bubble styling and behavior. Set to false to disable.',
+        'Tool approval card styling and behavior. Neutral surface card; the primary action anchors to the brand --persona-primary token. Set to false to disable. Set enableAlwaysAllow: true to add the split "Always allow / Allow once" control (needs a backend to persist the policy via onDecision\'s remember).',
       properties:
-        'backgroundColor, borderColor, titleColor, descriptionColor, reasonColor, reasonLabel, approveButtonColor, approveButtonTextColor, denyButtonColor, denyButtonTextColor, parameterBackgroundColor, parameterTextColor, title, approveLabel, denyLabel.',
+        'enableAlwaysAllow, detailsDisplay ("collapsed" | "expanded" | "hidden"), showDetailsLabel, hideDetailsLabel, backgroundColor, borderColor, titleColor, descriptionColor, reasonColor, reasonLabel, approveButtonColor, approveButtonTextColor, denyButtonColor, denyButtonTextColor, parameterBackgroundColor, parameterTextColor, approveLabel, denyLabel, formatDescription. (title no longer renders in the default card; use formatDescription to customize the summary.)',
     },
     copy: {
       description: 'Widget text content.',

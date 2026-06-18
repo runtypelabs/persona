@@ -2297,6 +2297,21 @@ export type AgentWidgetApprovalConfig = {
   /** Label for the toggle that hides the technical details */
   hideDetailsLabel?: string;
   /**
+   * Offer an "Always allow" affordance in the default approval bubble.
+   *
+   * Default `false`. When `false`, the bubble shows a single "Allow" (allow
+   * once) plus "Deny". When `true`, the primary action becomes a split control:
+   * "Always allow" (resolves with `{ remember: true }`) with a dropdown for
+   * "Allow once", plus "Deny", and keyboard shortcuts (Enter = Always allow,
+   * Cmd/Ctrl+Enter = Allow once, Esc = Deny).
+   *
+   * Keep this off unless your backend actually persists the don't-ask-again
+   * policy: "Always allow" only resolves the *current* approval — honoring it
+   * for *future* calls is up to your `onDecision` handler (which receives
+   * `options.remember`). Showing it without that wiring would mislead users.
+   */
+  enableAlwaysAllow?: boolean;
+  /**
    * Build the user-facing summary line for an approval request. Overrides the
    * default "The assistant wants to use “Tool name”." copy. Return a falsy
    * value to fall back to the default for that approval. `displayTitle` is

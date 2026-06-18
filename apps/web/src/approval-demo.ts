@@ -29,6 +29,10 @@ const configInspector = createDemoConfigInspector({ title: "Tool Approval" });
 let approvalMountMode: Mode = "inline";
 type ApprovalVariant = "builtin" | "plugin";
 let variant: ApprovalVariant = "builtin";
+// Built-in renderer only: offer the "Always allow" split control + keyboard
+// shortcuts. Off by default — it forwards `remember` to onDecision for a
+// backend to persist, which the mock here just logs.
+let alwaysAllow = false;
 
 // Icon source for the plugin renderer's source-icon box. Mirrors the three
 // resolution paths in approval-actions-plugin: explicit `icons` map, the
@@ -107,6 +111,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       return createMockSSEResponse(events, { delayMs: 200 });
     },
     approval: {
+      enableAlwaysAllow: alwaysAllow,
       onDecision: async (data, decision, options) => {
         lastApprovalDecision = decision;
         const remember = options?.remember ? " (remember)" : "";
@@ -228,12 +233,31 @@ setupMountMode({
   },
 });
 
-// The icon-source toggle only applies to the plugin renderer.
+// The icon-source toggle only applies to the plugin renderer; the always-allow
+// toggle only applies to the built-in renderer.
 const iconModeRow = document.getElementById("icon-mode-row");
+const alwaysAllowRow = document.getElementById("always-allow-row");
 const syncIconRow = (): void => {
   if (iconModeRow) iconModeRow.style.display = variant === "plugin" ? "" : "none";
+  if (alwaysAllowRow) alwaysAllowRow.style.display = variant === "builtin" ? "" : "none";
 };
 syncIconRow();
+
+// "Always allow" toggle (built-in renderer): single Allow/Deny vs. the split
+// "Always allow / Allow once" control with keyboard shortcuts.
+const alwaysAllowSelector = document.getElementById("always-allow-selector");
+alwaysAllowSelector?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLElement>(".mode-btn");
+  if (!btn) return;
+  const next = btn.dataset.always === "on";
+  if (next === alwaysAllow) return;
+  alwaysAllowSelector
+    .querySelectorAll(".mode-btn")
+    .forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  alwaysAllow = next;
+  createWidget();
+});
 
 // Renderer variant selector (built-in bubble vs. renderApproval plugin).
 const variantSelector = document.getElementById("variant-selector");

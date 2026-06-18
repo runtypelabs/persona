@@ -99,6 +99,7 @@ import {
 } from "./suggest-replies-tool";
 import { formatElapsedMs } from "./utils/formatting";
 import { approvalDetailsExpansionState, createApprovalBubble, updateApprovalDetailsUI } from "./components/approval-bubble";
+import { createBuiltInApprovalPlugin } from "./components/approval-actions";
 import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
@@ -542,7 +543,13 @@ export const createAgentExperience = (
 
   // Get plugins for this instance
   const plugins = pluginRegistry.getForInstance(config.plugins);
-  
+
+  // The built-in approval renderer, shaped as a plugin. Resolved as a FALLBACK
+  // (not pushed into `plugins`) so a user `renderApproval` plugin always wins
+  // and a later config-update plugin push can't reorder ahead of it.
+  const { plugin: builtInApprovalPlugin, teardown: teardownBuiltInApprovals } =
+    createBuiltInApprovalPlugin();
+
   // Register components from config
   if (config.components) {
     componentRegistry.registerAll(config.components);
@@ -2743,6 +2750,11 @@ export const createAgentExperience = (
     }
   });
 
+  // Release this widget's pending built-in approval listeners + "Allow once"
+  // popovers if it's destroyed while an approval is still open. Scoped to this
+  // instance's state, so other widgets on the page are unaffected.
+  destroyCallbacks.push(teardownBuiltInApprovals);
+
   // Activate the stream-animation plugin for this widget instance. Plugins
   // with `styles` inject their CSS into the widget root once; plugins with
   // `onAttach` (e.g., glyph-cycle's MutationObserver for real glyph tick
@@ -3418,7 +3430,10 @@ export const createAgentExperience = (
     // interactivity), and idiomorph imports nodes via `document.importNode`,
     // which strips them. So we build the live element, append a stub during
     // morph, and inject the live element afterward.
-    const hasApprovalPlugin = plugins.some((p) => p.renderApproval) && config.approval !== false;
+    // The built-in approval renderer is always available (as a fallback plugin),
+    // so every approval flows through the stub-and-hydrate path whenever
+    // approvals are enabled — a user `renderApproval` plugin just overrides it.
+    const hasApprovalPlugin = config.approval !== false;
     type ApprovalPluginHydrate = {
       messageId: string;
       fingerprint: string;
@@ -3638,7 +3653,8 @@ export const createAgentExperience = (
         // any accordion listeners survive idiomorph's `importNode`. Gate the
         // rebuild on fingerprint so interactive state (e.g. a collapsed
         // accordion) is preserved while the approval stays pending.
-        const approvalPlugin = plugins.find((p) => typeof p.renderApproval === "function");
+        const approvalPlugin =
+          plugins.find((p) => typeof p.renderApproval === "function") ?? builtInApprovalPlugin;
         const lastFp = lastApprovalBubbleFingerprint.get(message.id);
         const needsRebuild = lastFp !== fingerprint;
         let liveBubble: HTMLElement | null = null;

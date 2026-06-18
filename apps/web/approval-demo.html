@@ -19,10 +19,17 @@
 
         <div class="info-section">
           <h3>Renderer</h3>
-          <p>Built-in bubble vs. a <code>renderApproval</code> plugin that shows an alternative "Always allow / Allow once / Deny" prompt.</p>
+          <p>The built-in approval card, or a <code>renderApproval</code> plugin that fully customizes it (e.g. a source icon and different copy).</p>
           <div class="mode-group" id="variant-selector" style="margin-top: 0.5rem;">
             <button class="mode-btn active" data-variant="builtin">Built-in</button>
             <button class="mode-btn" data-variant="plugin">Plugin (alternative)</button>
+          </div>
+          <div id="always-allow-row" style="margin-top: 0.85rem;">
+            <p style="margin: 0 0 0.4rem; font-size: 0.85rem;">"Always allow" affordance (<code>approval.enableAlwaysAllow</code>). Off by default — it needs a backend to persist the don't-ask-again policy.</p>
+            <div class="mode-group" id="always-allow-selector">
+              <button class="mode-btn active" data-always="off">Allow / Deny</button>
+              <button class="mode-btn" data-always="on">Always allow + dropdown</button>
+            </div>
           </div>
           <div id="icon-mode-row" style="margin-top: 0.85rem; display: none;">
             <p style="margin: 0 0 0.4rem; font-size: 0.85rem;">Source icon: explicit <code>icons</code> map vs. Google favicon service vs. the built-in default tool icon.</p>
