@@ -29,17 +29,18 @@ Tweak `src/main.ts` to experiment with different configuration presets, launcher
   - Shows inline widget and launcher widget examples
   - Basic chat functionality
 
-### Dynamic Forms Demo
-- **Dynamic Forms page**: `http://localhost:5173/dynamic-form.html`
-  - Demonstrates AI-generated dynamic forms using the component middleware
+### Dynamic Components Demo
+- **Dynamic Components page**: `http://localhost:5173/dynamic-components.html`
+  - Demonstrates AI-generated forms and custom UI using component middleware
   - The AI generates form definitions with custom fields, and the `DynamicForm` component renders them
+  - The same directive path can render ProductCard, SimpleChart, StatusBadge, and InfoCard examples
   - Forms are fully themeable via `config.formStyles`
   - Submitted data is POSTed to the configured `formEndpoint` (default: `/form`)
 
-The dynamic forms example demonstrates:
-- Component registry with `DynamicForm` for rendering AI-generated forms
+The dynamic components example demonstrates:
+- Component registry with `DynamicForm` and other host-provided renderers
 - JSON streaming with `parserType: "json"` and `enableComponentStreaming: true`
-- Dynamic field generation based on conversation context
+- Dynamic field generation and structured visual components based on conversation context
 - Theme integration via `config.theme` and `config.formStyles`
 
 #### Setting Up Dynamic Forms
@@ -54,7 +55,7 @@ componentRegistry.register("DynamicForm", DynamicForm);
 initAgentWidget({
   target: "#app",
   config: {
-    apiUrl: "/api/chat/dispatch-directive",
+    apiUrl: "/api/chat/dispatch-component",
     parserType: "json",
     enableComponentStreaming: true,
     formEndpoint: "/form",
@@ -178,18 +179,9 @@ To run against your own Runtype flow instead of the in-code definitions, set the
   - **Three game modes** ride on the same tools (see the suggestion chips): **Pictionary** (you draw, big, with the brush, and the agent snapshots and guesses), a **paint-along tutorial** (the agent demos each step on the left half, pauses with the built-in `ask_user_question` answer sheet, then snapshots to check your copy on the right), and **speedruns** (a stroke budget, then `render_replay_gif` opens jspaint's own Render-History-as-GIF window: the animated replay is the shareable trophy)
   - Try: *"Draw a house with a sun in the sky"* → *"Look at the canvas and tell me what you see"* (watch it critique and fix its own drawing) → *"Speedrun the Mona Lisa in 20 strokes"* → *"Clear the canvas"* (approval)
 
-### Custom Components Demo
-- **Components page**: `http://localhost:5173/custom-components.html`
-  - Demonstrates custom component rendering from JSON directives
-  - Components are registered and can be invoked via JSON responses with the format: `{"component": "ComponentName", "props": {...}}`
-  - Props update incrementally as they stream in from the AI
-  - Includes example components: ProductCard, SimpleChart, StatusBadge, InfoCard
+### Component Directive Reference
 
-The custom components example demonstrates:
-- Component registry for registering custom renderers
-- JSON streaming parser that extracts component directives
-- Incremental prop updates during streaming
-- Type-safe component renderer interface
+The Dynamic Components demo also covers smaller custom renderers such as ProductCard, SimpleChart, StatusBadge, and InfoCard. Components are registered and can be invoked via JSON responses with the format `{"component": "ComponentName", "props": {...}}`.
 
 #### Registering Components
 
@@ -261,6 +253,7 @@ For combined text + component responses:
 #### Try It Out
 
 Ask the AI to:
+- "Can you schedule a demo for me?"
 - "Show me a product card for a laptop priced at $999"
 - "Display a chart with sales data: [100, 150, 200, 180, 250]"
 - "Create a success status badge"

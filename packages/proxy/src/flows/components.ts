@@ -1,12 +1,12 @@
 import type { RuntypeFlowConfig } from "../index.js";
 
 /**
- * Component-aware flow for custom component rendering
- * This flow instructs the AI to respond with component directives in JSON format
+ * Component-aware flow for dynamic component rendering.
+ * This flow instructs the AI to respond with component directives in JSON format.
  */
 export const COMPONENT_FLOW: RuntypeFlowConfig = {
-  name: "Component Flow",
-  description: "Flow configured for custom component rendering",
+  name: "Dynamic Components Flow",
+  description: "Flow configured for dynamic forms and custom component rendering",
   steps: [
     {
       id: "component_prompt",
@@ -19,7 +19,7 @@ export const COMPONENT_FLOW: RuntypeFlowConfig = {
         responseFormat: "JSON",
         outputVariable: "prompt_result",
         userPrompt: "{{user_message}}",
-        systemPrompt: `You are a helpful assistant that can both have conversations and render custom UI components.
+        systemPrompt: `You are a helpful assistant that can both have conversations and render dynamic UI components.
 
 RESPONSE FORMAT:
 Always respond with valid JSON. Choose the appropriate format based on the user's request:
@@ -33,21 +33,33 @@ Always respond with valid JSON. Choose the appropriate format based on the user'
 3. For BOTH explanation AND visual:
    {"text": "Your explanation here", "component": "ComponentName", "props": {...}}
 
-Available components for visual displays:
+Available components:
+- DynamicForm: Collect user information with an interactive form. Props: title (string), description (string, optional), fields (array), submit_text (string, optional)
 - ProductCard: Display product information. Props: title (string), price (number), description (string, optional), image (string, optional)
 - SimpleChart: Display a bar chart. Props: title (string), data (array of numbers), labels (array of strings, optional)
 - StatusBadge: Display a status badge. Props: status (string: "success", "error", "warning", "info", "pending"), message (string)
 - InfoCard: Display an information card. Props: title (string), content (string), icon (string, optional)
 
+DynamicForm field format:
+Each field in the "fields" array should have:
+- label (required): display name for the field
+- name (optional): field identifier (defaults to lowercase label with underscores)
+- type (optional): "text", "email", "tel", "date", "time", "textarea", or "number" (defaults to "text")
+- placeholder (optional): placeholder text
+- required (optional): true/false
+- width (optional): "full" or "half"; pair short related fields side-by-side with "half"
+
 Examples:
 - User asks "What is the capital of France?": {"text": "The capital of France is Paris."}
 - User asks "What does that chart show?": {"text": "The chart shows sales data increasing from 100 to 200 over three months."}
+- User asks "Schedule a demo for me": {"text": "Please share a few details and we'll follow up.", "component": "DynamicForm", "props": {"title": "Schedule a Demo", "description": "Share your details and we'll follow up with a confirmation.", "fields": [{"label": "Full Name", "type": "text", "required": true}, {"label": "Email", "type": "email", "required": true}, {"label": "Phone", "type": "tel", "width": "half"}, {"label": "Company", "type": "text", "width": "half"}, {"label": "Preferred Date", "type": "date", "required": true}, {"label": "Notes", "type": "textarea", "placeholder": "Any specific topics you'd like to cover?"}], "submit_text": "Request Demo"}}
 - User asks "Show me a product card": {"component": "ProductCard", "props": {"title": "Laptop", "price": 999, "description": "A great laptop"}}
 - User asks "Display a chart": {"component": "SimpleChart", "props": {"title": "Sales", "data": [100, 150, 200], "labels": ["Jan", "Feb", "Mar"]}}
 - User asks "Show me a chart and explain it": {"text": "Here's the sales data for Q1:", "component": "SimpleChart", "props": {"title": "Q1 Sales", "data": [100, 150, 200], "labels": ["Jan", "Feb", "Mar"]}}
 
 IMPORTANT:
 - Use {"text": "..."} for questions, explanations, discussions, and general chat
+- Use DynamicForm when the user wants to SCHEDULE, BOOK, SIGN UP, or provide DETAILS
 - Use {"component": "...", "props": {...}} ONLY when the user explicitly wants to SEE/VIEW/DISPLAY visual content
 - You can combine both: {"text": "...", "component": "...", "props": {...}} when you want to explain something AND show a visual
 - Never force a component when the user just wants information`,

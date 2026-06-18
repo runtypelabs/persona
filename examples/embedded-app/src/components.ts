@@ -20,8 +20,12 @@ export const ProductCard: ComponentRenderer = (props, context) => {
 
   const title = String(props.title || "Product Name");
   const price = typeof props.price === "number" ? props.price : 0;
+  const id = String(props.id || title.toLowerCase().replace(/[^a-z0-9]+/g, "-"));
   const image = String(props.image || "");
   const description = String(props.description || "");
+  const messageId = context.message?.id || `product-card-${id}`;
+  const previousAction = getUserAction<{ id: string; title: string; price: number }>(messageId);
+  const isAdded = previousAction?.type === "add_to_cart";
 
   card.innerHTML = `
     ${image ? `<img src="${image}" alt="${title}" style="width: 100%; height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 1rem;" />` : ""}
@@ -30,16 +34,33 @@ export const ProductCard: ComponentRenderer = (props, context) => {
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <span style="font-size: 1.5rem; font-weight: bold; color: #2196f3;">$${price.toFixed(2)}</span>
       <button style="
-        background: #2196f3;
+        background: ${isAdded ? "#4caf50" : "#2196f3"};
         color: white;
         border: none;
         padding: 0.5rem 1rem;
         border-radius: 4px;
         cursor: pointer;
         font-size: 0.9rem;
-      ">Add to Cart</button>
+      " aria-pressed="${isAdded ? "true" : "false"}">${isAdded ? "Added" : "Add to Cart"}</button>
     </div>
   `;
+
+  const button = card.querySelector<HTMLButtonElement>("button");
+  button?.addEventListener("click", () => {
+    const item = { id, title, price };
+    setUserAction(messageId, {
+      type: "add_to_cart",
+      data: item,
+    });
+    button.textContent = "Added";
+    button.setAttribute("aria-pressed", "true");
+    button.style.background = "#4caf50";
+    window.dispatchEvent(
+      new CustomEvent("persona:demo-cart:add", {
+        detail: item,
+      }),
+    );
+  });
 
   return card;
 };

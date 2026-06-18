@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css">
+    <link rel="icon" href="/favicon.ico" />
+    <title>Persona – Dynamic Components Demo</title>
+    <style>
+      .form-tabs-preview .embedded-target {
+        height: 760px;
+        min-height: 760px;
+      }
+      .dynamic-form-variants-wrap {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 1.25rem 2rem;
+      }
+      #dynamic-form-inline {
+        height: 100%;
+        min-height: 100%;
+      }
+      .component-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+      }
+      .component-preview-grid .btn {
+        width: 100%;
+        justify-content: center;
+      }
+      .dynamic-form-variants-rail {
+        margin-top: 1rem;
+      }
+      .dynamic-form-variants-rail .form-tabs {
+        gap: 0.75rem;
+      }
+      .dynamic-form-variants-rail .form-tabs-def {
+        max-height: 220px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell-main">
+      <div class="stage">
+        <aside class="stage-controls">
+          <header class="demo-meta">
+            <h1>Dynamic Components</h1>
+            <p>The assistant can send a component name plus props. Persona turns that into real UI inside the chat.</p>
+            <div class="mount-toolbar" data-mount-toolbar></div>
+          </header>
+
+          <div class="info-section">
+            <h3>Try a form</h3>
+            <p style="margin-bottom: 0.75rem;">Click once to add an interactive form message. This is what the agent can create from JSON.</p>
+            <button type="button" id="dynamic-form-preview" class="btn btn-primary">
+              Preview form
+            </button>
+          </div>
+
+          <div class="info-section dynamic-form-variants-rail">
+            <h3>Form layout variants</h3>
+            <p style="margin-bottom: 0.75rem;">Same DynamicForm renderer, three visual treatments. Only the component styling changes.</p>
+            <div class="form-tabs" id="variants-tabs">
+              <div class="form-tabs-tablist" role="tablist" aria-label="Layout variants">
+                <button
+                  type="button"
+                  class="form-tabs-tab"
+                  role="tab"
+                  id="variants-tab-compact"
+                  aria-controls="variants-panel-compact"
+                  aria-selected="true"
+                  data-tab-id="compact"
+                >
+                  Compact
+                  <small>Default density</small>
+                </button>
+                <button
+                  type="button"
+                  class="form-tabs-tab"
+                  role="tab"
+                  id="variants-tab-spacious"
+                  aria-controls="variants-panel-spacious"
+                  aria-selected="false"
+                  tabindex="-1"
+                  data-tab-id="spacious"
+                >
+                  Spacious
+                  <small>Stripe / Material 3</small>
+                </button>
+                <button
+                  type="button"
+                  class="form-tabs-tab"
+                  role="tab"
+                  id="variants-tab-branded"
+                  aria-controls="variants-panel-branded"
+                  aria-selected="false"
+                  tabindex="-1"
+                  data-tab-id="branded"
+                >
+                  Branded
+                  <small>Custom accent + chrome</small>
+                </button>
+              </div>
+
+              <div class="form-tabs-def">
+                <div class="form-tabs-def-caption">Selected variant config</div>
+                <pre id="variants-def"></pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Try other UI</h3>
+            <p style="margin-bottom: 0.75rem;">These use the same pattern. Try Product card, then click Add to Cart.</p>
+            <div class="component-preview-grid">
+              <button type="button" class="btn" data-component-preview="product">Product card</button>
+              <button type="button" class="btn" data-component-preview="chart">Chart</button>
+              <button type="button" class="btn" data-component-preview="status">Status badge</button>
+              <button type="button" class="btn" data-component-preview="info">Info card</button>
+            </div>
+          </div>
+
+          <div data-config-inspector></div>
+        </aside>
+
+        <div class="stage-widget"></div>
+      </div>
+
+      <section class="notes">
+        <h2 class="notes-heading">Notes</h2>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">How forms work</h3>
+          <p>A form is the same idea: register a <code>DynamicForm</code> component, then have the agent return a field list in <code>props</code>.</p>
+          <div class="code-block"><span class="prop">componentRegistry</span>.<span class="function">register</span>(<span class="string">"DynamicForm"</span>, <span class="prop">DynamicForm</span>);</div>
+
+          <div class="code-block"><span class="comment">System prompt:</span>
+When you need to collect details, respond with this JSON:
+
+{
+  <span class="prop">"component"</span>: <span class="string">"DynamicForm"</span>,
+  <span class="prop">"props"</span>: {
+    <span class="prop">"title"</span>: <span class="string">"Schedule a demo"</span>,
+    <span class="prop">"fields"</span>: [
+      { <span class="prop">"label"</span>: <span class="string">"Email"</span>, <span class="prop">"type"</span>: <span class="string">"email"</span>, <span class="prop">"required"</span>: <span class="keyword">true</span> },
+      { <span class="prop">"label"</span>: <span class="string">"Notes"</span>, <span class="prop">"type"</span>: <span class="string">"textarea"</span> }
+    ],
+    <span class="prop">"submit_text"</span>: <span class="string">"Request meeting"</span>
+  }
+}</div>
+
+          <p>The form renderer turns each field object into inputs, handles validation/submission, and can use <code>formStyles</code> or <code>props.styles</code> for the visual variants above.</p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">How components work</h3>
+          <p>1. Create a normal component.</p>
+          <div class="code-block"><span class="keyword">function</span> <span class="function">ProductCard</span>({ <span class="prop">title</span> }) {
+  <span class="keyword">const</span> <span class="prop">button</span> = <span class="prop">document</span>.<span class="function">createElement</span>(<span class="string">"button"</span>);
+  <span class="prop">button</span>.<span class="prop">textContent</span> = <span class="string">"Add to Cart"</span>;
+  <span class="prop">button</span>.<span class="function">addEventListener</span>(<span class="string">"click"</span>, () =&gt; {
+    <span class="prop">button</span>.<span class="prop">textContent</span> = <span class="string">"Added"</span>;
+  });
+  <span class="keyword">return</span> <span class="prop">button</span>;
+}</div>
+
+          <p>2. Register it, then initialize Persona. The widget reads from the shared registry automatically.</p>
+          <div class="code-block"><span class="keyword">import</span> { <span class="prop">componentRegistry</span>, <span class="prop">initAgentWidget</span> } <span class="keyword">from</span> <span class="string">"@runtypelabs/persona"</span>;
+
+<span class="prop">componentRegistry</span>.<span class="function">register</span>(<span class="string">"ProductCard"</span>, <span class="prop">ProductCard</span>);
+
+<span class="function">initAgentWidget</span>({
+  <span class="prop">target</span>: <span class="string">"#app"</span>,
+  <span class="prop">config</span>: {
+    <span class="prop">apiUrl</span>: <span class="string">"/api/chat/dispatch-component"</span>,
+    <span class="prop">parserType</span>: <span class="string">"json"</span> <span class="comment">// needed for streamed JSON directives</span>
+  }
+});</div>
+
+          <p>3. Tell the agent to return this JSON when it should show the component. This usually goes in your system prompt or flow instructions.</p>
+          <div class="code-block"><span class="comment">System prompt:</span>
+When showing a product, respond with this JSON:
+
+{
+  <span class="prop">"component"</span>: <span class="string">"ProductCard"</span>,
+  <span class="prop">"props"</span>: {
+    <span class="prop">"title"</span>: <span class="string">"{{name of the product}}"</span>,
+    <span class="prop">"price"</span>: <span class="keyword">{{price of the product}}</span>
+  }
+}</div>
+
+          <p>4. Persona renders it in the chat.</p>
+          <div class="code-block">
+            <span class="comment">// The asks for a product.</span>
+            <span class="comment">// LLM returns the JSON, Persona renders registered component.</span>
+            <span class="comment">// The user clicks "Add to Cart".</span>
+            <span class="comment">// Action performed, button changes to "Added".</span></div>
+
+          <p>The component is normal DOM, so buttons, forms, saved state, and page events all work.</p>
+        </div>
+
+      </section>
+    </main>
+
+    <script type="module" src="/src/dynamic-form-demo.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("dynamic-components");
+    </script>
+  </body>
+</html>

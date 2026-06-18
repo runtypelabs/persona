@@ -71,7 +71,7 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 - [Artifact Sidebar](/artifact-demo.html): multi-pane interface with a resizable artifact panel
 - [Fullscreen Assistant](/fullscreen-assistant-demo.html): dark full-viewport split layout (chat + artifacts)
 - [Voice Integration](/voice-integration-demo.html): voice input powered by ElevenLabs
-- [Custom Components](/custom-components.html): render your own interactive components inside assistant messages
+- [Dynamic Components](/dynamic-components.html): stream forms, cards, charts, and other host-rendered UI inside assistant messages
 - [Layout Configuration](/layout-config-demo.html): tweak panel sizing, spacing, and layout options
 - [Stream Animations](/stream-animations-demo.html): customize how streamed text animates in
 - [Persistent Composer](/persistent-composer.html): always-visible composer bar layout

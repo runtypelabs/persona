@@ -8,7 +8,7 @@ A themeable, pluggable AI chat widget for websites: built in Typescript with zer
 
 Persona gives you a drop-in UI for your AI assistant that works on basically any site or product on the web. It ships with support for streaming responses, direct client-token installs, WebMCP/page tools, built-in local client tools, voice I/O, multi-modal content, tool call visualization, approval gates, artifact rendering, safe markdown/HTML rendering, and a plugin system so you can customize every layer of the UI.
 
-Persona works with any SSE-capable backend. It's pre-integrated with [Runtype](https://runtype.com) out of the box, so you can go from install to a live assistant with a `clientToken`, or route through `@runtypelabs/persona-proxy` when you need server-side API-key control.
+Persona works with any SSE-capable backend. It includes first-party support for [Runtype](https://runtype.com) out of the box (via `clientToken` or `@runtypelabs/persona-proxy`), and can be easily wired into any other streaming backend using the Persona unified SSE protocol.
 
 ## Live demo
 
@@ -27,8 +27,25 @@ Persona works with any SSE-capable backend. It's pre-integrated with [Runtype](h
 |---------|----------|-------------|
 | [`examples/embedded-app`](./examples/embedded-app) | Vite | Vanilla JS demo with runtime configuration ([live](https://persona-chat.dev)) |
 | [`examples/ai-sdk-webmcp`](./examples/ai-sdk-webmcp) | Next.js | WebMCP page tools on a direct Vercel AI SDK backend, no Runtype ([live](https://ai-sdk-webmcp.persona-chat.dev)) |
-| [`examples/vercel-edge`](./examples/vercel-edge) | Vercel / Railway / Fly.io | Node.js proxy server |
-| [`examples/cloudflare-workers`](./examples/cloudflare-workers) | Cloudflare Workers | Edge proxy server |
+| [`examples/vercel-edge`](./examples/vercel-edge) | Vercel / Railway / Fly.io | Node.js proxy server for Runtype |
+| [`examples/cloudflare-workers`](./examples/cloudflare-workers) | Cloudflare Workers | Edge proxy server for Runtype |
+
+## Bring Your Own Backend
+
+Persona is designed to be backend-agnostic. You can plug it into any streaming agent or model SDK using the Persona unified SSE protocol.
+
+### Featured Adapters
+
+See the [**`runtypelabs/persona-examples`**](https://github.com/runtypelabs/persona-examples) repository for official adapters:
+
+- [**Vercel Eve**](https://github.com/runtypelabs/persona-examples/tree/main/examples/eve-minimal): Vercel's newest filesystem-first agent framework.
+- [**OpenAI Agents**](https://github.com/runtypelabs/persona-examples/tree/main/examples/openai-agents-minimal): Official OpenAI Agents SDK integration.
+- [**LangGraph.js**](https://github.com/runtypelabs/persona-examples/tree/main/examples/langgraph-minimal): LangChain's orchestration framework.
+
+### Protocol Documentation
+
+- [**WebMCP without Runtype**](./docs/webmcp-without-runtype.md): Deep dive into shimming the Persona protocol over the Vercel AI SDK.
+- [**Adapter SDK Minimal**](./examples/adapter-sdk-minimal): Minimal reference implementations for AI SDK and OpenAI Responses.
 
 ## Quick Start
 

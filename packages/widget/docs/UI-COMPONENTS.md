@@ -708,7 +708,7 @@ componentRegistry.register("DynamicForm", DynamicForm);
 initAgentWidget({
   target: "#app",
   config: {
-    apiUrl: "/api/chat/dispatch-directive",
+    apiUrl: "/api/chat/dispatch-component",
     parserType: "json",
     enableComponentStreaming: true,
     formEndpoint: "/form",
@@ -744,7 +744,7 @@ The AI responds with JSON like:
 
 **Demos and reference:**
 
-- [`examples/embedded-app/dynamic-form.html`](../../../examples/embedded-app/dynamic-form.html): primary demo with three layout variants (Compact / Spacious / Branded) showing how `formStyles` scales between visual languages.
+- [`examples/embedded-app/dynamic-components.html`](../../../examples/embedded-app/dynamic-components.html): primary demo with three DynamicForm layout variants (Compact / Spacious / Branded) plus smaller ProductCard, SimpleChart, StatusBadge, and InfoCard directives.
 - [`examples/embedded-app/dynamic-form-fields.html`](../../../examples/embedded-app/dynamic-form-fields.html): every field type, layout width, helper-text, required marking, and sensitive-masking pattern in one page.
 - [`docs/DYNAMIC-FORMS.md`](./DYNAMIC-FORMS.md): full reference: field schema, `formStyles` tokens, layout patterns, recipes, and how to extend the example component (new field types, sections, conditional fields).
 

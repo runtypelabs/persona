@@ -27,7 +27,7 @@ to extend it.
 
 ## Live demos
 
-- [`/dynamic-form.html`](../../../examples/embedded-app/dynamic-form.html): primary demo, plus three layout variants (Compact, Spacious, Branded).
+- [`/dynamic-components.html`](../../../examples/embedded-app/dynamic-components.html): primary demo, plus three layout variants (Compact, Spacious, Branded) and additional component directive examples.
 - [`/dynamic-form-fields.html`](../../../examples/embedded-app/dynamic-form-fields.html): field-type reference: every supported `type`, `width: "half"` pairing, helper text, required marking, and sensitive masking.
 
 ## Wiring it up

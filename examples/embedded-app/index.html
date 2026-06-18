@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="/src/home.css">
   <link rel="icon" href="/favicon.ico" />
   <link rel="canonical" href="https://www.persona-chat.dev/" />
-  <title>Persona: The VanillaJS AI UI Library by Runtype</title>
+  <title>Persona: The VanillaJS AI UI Library</title>
   <meta name="description" content="Persona is an open-source, themeable AI chat widget you can add to any website in minutes. SSE streaming, agent loops, tool use, and style isolation: zero framework dependencies.">
   <meta property="og:title" content="Persona: Open-source AI UI Library in VanillaJS">
   <meta property="og:description" content="Add a streaming AI chat to any website, in minutes. Themeable, pluggable, zero framework dependencies.">
@@ -197,26 +197,83 @@
             <button
               type="button"
               class="quick-start-tab"
-              id="quick-start-tab-runtype"
+              id="quick-start-tab-sse"
               role="tab"
               aria-selected="true"
-              aria-controls="quick-start-panel-runtype"
-              data-quick-start-tab="runtype"
+              aria-controls="quick-start-panel-sse"
+              data-quick-start-tab="sse"
             >
-              Using Runtype
+              Any SSE Backend
             </button>
             <button
               type="button"
               class="quick-start-tab"
-              id="quick-start-tab-sse"
+              id="quick-start-tab-runtype"
               role="tab"
               aria-selected="false"
-              aria-controls="quick-start-panel-sse"
-              data-quick-start-tab="sse"
+              aria-controls="quick-start-panel-runtype"
+              data-quick-start-tab="runtype"
               tabindex="-1"
             >
-              Any SSE Backend
+              Using Runtype
             </button>
+          </div>
+
+          <div
+            class="quick-start-panel"
+            id="quick-start-panel-sse"
+            role="tabpanel"
+            aria-labelledby="quick-start-tab-sse"
+            data-quick-start-panel="sse"
+          >
+            <div class="quick-start-intro">
+              <strong>Bring your own backend:</strong> point Persona at any SSE endpoint and adapt the request or event format if needed.
+            </div>
+            <div class="quick-start-steps">
+              <div class="quick-start-step">
+                <div class="quick-start-step-meta">
+                  <span class="quick-start-step-index">01</span>
+                  <div class="quick-start-step-copy">
+                    <h3 class="quick-start-step-title">Install Persona</h3>
+                    <p>Add the widget package to your app.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="install-command quick-start-install"
+                  data-copy-text="npm install @runtypelabs/persona"
+                  data-copy-default="Copy"
+                  data-copy-success="Copied"
+                  aria-label="Copy npm install command"
+                >
+                  <span class="install-prefix">$</span>
+                  <span>npm install @runtypelabs/persona</span>
+                  <span class="install-copy" data-copy-label>Copy</span>
+                </button>
+              </div>
+
+              <div class="quick-start-step">
+                <div class="quick-start-step-meta">
+                  <span class="quick-start-step-index">02</span>
+                  <div class="quick-start-step-copy">
+                    <h3 class="quick-start-step-title">Mount the widget</h3>
+                    <p>Import the stylesheet, initialize Persona, and point it at your SSE endpoint.</p>
+                  </div>
+                </div>
+                <div class="code-showcase">
+                  <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
+<span class="code-keyword">import</span> { <span class="code-function">initAgentWidget</span> } <span class="code-keyword">from</span> <span class="code-string">"@runtypelabs/persona"</span>;
+
+<span class="code-function">initAgentWidget</span>({
+  <span class="code-keyword">target</span>: <span class="code-string">"#chat"</span>,
+  <span class="code-keyword">config</span>: { apiUrl: <span class="code-string">"https://your-api.com/chat"</span> },
+});</code></pre>
+                </div>
+              </div>
+            </div>
+            <p class="quick-start-footnote">
+              See the <a href="https://github.com/runtypelabs/persona-examples" target="_blank" rel="noopener">Official Adapters</a> for <strong>Vercel Eve</strong>, <strong>OpenAI Agents</strong>, and <strong>LangGraph</strong>.
+            </p>
           </div>
 
           <div
@@ -225,6 +282,7 @@
             role="tabpanel"
             aria-labelledby="quick-start-tab-runtype"
             data-quick-start-panel="runtype"
+            hidden
           >
             <div class="quick-start-steps">
               <div class="quick-start-step">
@@ -279,110 +337,6 @@
               </div>
             </div>
             <p class="quick-start-footnote">Need server-side flow control? Use <code>@runtypelabs/persona-proxy</code>.</p>
-            <dialog class="quick-start-dialog" id="quick-start-flags-dialog" data-quick-start-flags-dialog aria-labelledby="quick-start-flags-title">
-              <div class="quick-start-dialog-card">
-                <div class="quick-start-dialog-titlebar">
-                  <div class="quick-start-dialog-dots">
-                    <span class="quick-start-dialog-dot"></span>
-                    <span class="quick-start-dialog-dot"></span>
-                    <span class="quick-start-dialog-dot"></span>
-                  </div>
-                  <span class="quick-start-dialog-titlebar-label" id="quick-start-flags-title">persona init --help</span>
-                  <button type="button" class="quick-start-dialog-close" data-quick-start-flags-close aria-label="Close">esc</button>
-                </div>
-                <div class="quick-start-dialog-body">
-                  <pre>
-<span class="term-heading">Usage</span>
-  $ npx @runtypelabs/cli@latest persona init <span class="term-muted">[options]</span>
-
-<span class="term-heading">Description</span>
-  Create agent + client token and output a Persona embed snippet.
-
-<span class="term-heading">Options</span>
-  <span class="term-flag">--agent-name</span> <span class="term-meta">&lt;name&gt;</span>         Name for the new agent
-  <span class="term-flag">--agent-description</span> <span class="term-meta">&lt;text&gt;</span>  Optional agent description
-  <span class="term-flag">--token-name</span> <span class="term-meta">&lt;name&gt;</span>         Custom name for the client token
-  <span class="term-flag">--environment</span> <span class="term-meta">&lt;env&gt;</span>         test or live <span class="term-muted">(default: test)</span>
-  <span class="term-flag">--origins</span> <span class="term-meta">&lt;origins...&gt;</span>     Allowed origins <span class="term-muted">(default: *)</span>
-  <span class="term-flag">--format</span> <span class="term-meta">&lt;fmt&gt;</span>             script-installer | script-manual | esm | react
-                              <span class="term-muted">(default: script-installer)</span>
-  <span class="term-flag">--print-snippet</span>             Print the snippet to stdout
-  <span class="term-flag">--target-selector</span> <span class="term-meta">&lt;sel&gt;</span>    Widget mount target <span class="term-muted">(default: body)</span>
-  <span class="term-flag">--api-url</span> <span class="term-meta">&lt;url&gt;</span>            Override API base URL
-  <span class="term-flag">--json</span>                      Structured JSON output (includes snippet)
-  <span class="term-flag">--yes</span>                       Accept defaults without prompting
-  <span class="term-flag">--tty</span> / <span class="term-flag">--no-tty</span>            Force interactive or non-interactive mode
-
-<span class="term-heading">Examples</span>
-  <span class="term-muted"># Interactive: just run it</span>
-  $ npx @runtypelabs/cli@latest persona init
-
-  <span class="term-muted"># Non-interactive for CI</span>
-  $ RUNTYPE_API_KEY=sk_... npx @runtypelabs/cli@latest persona init \
-      --agent-name "Support" --no-tty --json
-
-  <span class="term-muted"># ESM snippet for a bundled app</span>
-  $ npx @runtypelabs/cli@latest persona init --format esm
-</pre>
-                </div>
-              </div>
-            </dialog>
-          </div>
-
-          <div
-            class="quick-start-panel"
-            id="quick-start-panel-sse"
-            role="tabpanel"
-            aria-labelledby="quick-start-tab-sse"
-            data-quick-start-panel="sse"
-            hidden
-          >
-            <div class="quick-start-intro">
-              <strong>Bring your own backend:</strong> point Persona at any SSE endpoint and adapt the request or event format if needed.
-            </div>
-            <div class="quick-start-steps">
-              <div class="quick-start-step">
-                <div class="quick-start-step-meta">
-                  <span class="quick-start-step-index">01</span>
-                  <div class="quick-start-step-copy">
-                    <h3 class="quick-start-step-title">Install Persona</h3>
-                    <p>Add the widget package to your app.</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  class="install-command quick-start-install"
-                  data-copy-text="npm install @runtypelabs/persona"
-                  data-copy-default="Copy"
-                  data-copy-success="Copied"
-                  aria-label="Copy npm install command"
-                >
-                  <span class="install-prefix">$</span>
-                  <span>npm install @runtypelabs/persona</span>
-                  <span class="install-copy" data-copy-label>Copy</span>
-                </button>
-              </div>
-
-              <div class="quick-start-step">
-                <div class="quick-start-step-meta">
-                  <span class="quick-start-step-index">02</span>
-                  <div class="quick-start-step-copy">
-                    <h3 class="quick-start-step-title">Mount the widget</h3>
-                    <p>Import the stylesheet, initialize Persona, and point it at your SSE endpoint.</p>
-                  </div>
-                </div>
-                <div class="code-showcase">
-                  <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
-<span class="code-keyword">import</span> { <span class="code-function">initAgentWidget</span> } <span class="code-keyword">from</span> <span class="code-string">"@runtypelabs/persona"</span>;
-
-<span class="code-function">initAgentWidget</span>({
-  <span class="code-keyword">target</span>: <span class="code-string">"#chat"</span>,
-  <span class="code-keyword">config</span>: { apiUrl: <span class="code-string">"https://your-api.com/chat"</span> },
-});</code></pre>
-                </div>
-              </div>
-            </div>
-            <p class="quick-start-footnote">If your backend uses a different request or event shape, customize <code>customFetch</code> or <code>parseSSEEvent</code> in the widget config.</p>
           </div>
         </section>
 
@@ -440,7 +394,7 @@ document.modelContext.registerTool({
             <a class="pattern-link" href="/approval-demo.html"><span>Tool Approval</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
             <a class="pattern-link" href="/voice-integration-demo.html"><span>Voice Integration</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
             <a class="pattern-link" href="/artifact-demo.html"><span>Artifact Sidebar</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
-            <a class="pattern-link" href="/custom-components.html"><span>Custom Components</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
+            <a class="pattern-link" href="/dynamic-components.html"><span>Dynamic Components</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
             <a class="pattern-link" href="/stream-animations-demo.html"><span>Stream Animations</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
             <a class="pattern-link" href="/theme.html"><span>Theme Editor</span><span class="pattern-arrow" aria-hidden="true">&#8599;</span></a>
           </div>

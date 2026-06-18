@@ -66,7 +66,7 @@ const actionApp = createChatProxyApp({
   upstreamUrl
 });
 
-// Component proxy - returns component directives for custom component rendering
+// Component proxy - returns directives for dynamic forms and custom components
 const componentApp = createChatProxyApp({
   path: "/api/chat/dispatch-component",
   allowedOrigins,

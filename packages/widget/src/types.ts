@@ -1791,7 +1791,7 @@ export type AgentWidgetStatusIndicatorConfig = {
 export type AgentWidgetVoiceRecognitionConfig = {
   enabled?: boolean;
   pauseDuration?: number;
-  /** Text shown in the user message placeholder while voice is being processed. Default: "🎤 Processing voice..." */
+  /** Text shown in the user message placeholder while voice is being processed. Default: "Processing voice..." */
   processingText?: string;
   /** Text shown in the assistant message if voice processing fails. Default: "Voice processing failed. Please try again." */
   processingErrorText?: string;
