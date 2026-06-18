@@ -564,6 +564,7 @@ export default defineConfig({
         'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
         'tool-loading-demo': path.resolve(__dirname, 'tool-loading-demo.html'),
         'stream-animations-demo': path.resolve(__dirname, 'stream-animations-demo.html'),
+        'streaming-table-demo': path.resolve(__dirname, 'streaming-table-demo.html'),
         'ask-user-question-demo': path.resolve(__dirname, 'ask-user-question-demo.html'),
         'voice-integration-demo': path.resolve(__dirname, 'voice-integration-demo.html'),
         'custom-voice-provider-demo': path.resolve(__dirname, 'custom-voice-provider-demo.html'),

@@ -1,5 +1,6 @@
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
+import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { loadMarkdownParsers, getMarkdownParsersSync } from "./markdown-parsers-loader";
 import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
 import {
@@ -473,8 +474,12 @@ export const buildPostprocessor = (
       // sanitizer's degraded fallback. Honors `sanitize: false` (pass-through) as before.
       html = sanitize ? sanitize(out) : out;
     } else if (markdownProcessor) {
+      // While streaming, normalize tables-in-progress so they render as a real
+      // <table> from the first row with a stable column count (Telegram-style
+      // space reservation). The final, non-streaming render is left untouched.
+      const source = context.streaming ? stabilizeStreamingTables(nextText) : nextText;
       // Already escapeHtml(text) (single, safe) while parsers are not loaded.
-      const out = markdownProcessor(nextText);
+      const out = markdownProcessor(source);
       html = sanitize && parsersReady ? sanitize(out) : out;
     } else {
       // Plain text: escapeHtml output is inert — never re-sanitize (the second escape).

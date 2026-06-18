@@ -1621,6 +1621,20 @@
   background-color: rgba(0, 0, 0, 0.02);
 }
 
+/* While a message is still streaming, lock table column widths so incoming rows
+   append without the per-chunk horizontal reflow (Telegram-style space
+   reservation). The class is removed on the final render, relaxing the finished
+   table to natural content-fit widths. overflow-wrap keeps long cell content
+   from spilling past the fixed columns mid-stream. */
+.persona-content-streaming table {
+  table-layout: fixed;
+}
+
+.persona-content-streaming th,
+.persona-content-streaming td {
+  overflow-wrap: break-word;
+}
+
 /* ============================================
    Markdown Horizontal Rule Styles
    ============================================ */

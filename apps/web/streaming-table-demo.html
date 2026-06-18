@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>Streaming Markdown Tables: Persona</title>
+    <style>
+      .table-demo-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 1.5rem;
+        margin: 1.5rem 0 2rem;
+      }
+      .table-demo-controls .section { margin: 0; }
+      .table-demo-controls label {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-bottom: 0.4rem;
+        color: var(--muted);
+      }
+      .range-row { display: flex; align-items: center; gap: 0.6rem; }
+
+      .stream-panel {
+        max-width: 720px;
+        border: 1px solid var(--border, #e5e7eb);
+        border-radius: 0.75rem;
+        overflow: hidden;
+        background: var(--surface, #fff);
+      }
+      .stream-panel-head {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border, #e5e7eb);
+      }
+      .stream-panel-head h3 { margin: 0; font-size: 0.95rem; }
+      .stream-panel-body { padding: 1rem; min-height: 18rem; }
+      /* Reset the persona-root wrapper (all:initial makes it inline) to a block
+         so the bubble fills the panel; widget.css supplies the table styling. */
+      .persona-render-host { display: block; }
+    </style>
+  </head>
+  <body>
+    <main class="shell-main">
+      <header class="title-strip">
+        <h1>Streaming Markdown Tables</h1>
+        <p>
+          Markdown streams into the message bubble token-by-token. The widget
+          completes the table structure as soon as the first row arrives and
+          reserves the column widths, so a real table appears immediately and
+          rows fill in without the header flipping from a paragraph or the
+          columns jiggling. Widths relax to their natural sizes once the stream
+          finishes. Pick a sample, slow the chunk delay down, and replay.
+        </p>
+      </header>
+
+      <div class="table-demo-controls">
+        <div class="section">
+          <label>Sample</label>
+          <div class="mode-group" id="sample-selector"></div>
+        </div>
+        <div class="section">
+          <label>Chunk delay</label>
+          <div class="range-row">
+            <input type="range" id="speed" min="8" max="120" step="4" value="40" />
+            <span id="speed-label">40ms</span>
+          </div>
+        </div>
+        <div class="section">
+          <button class="btn btn-primary" id="btn-play">Replay stream</button>
+        </div>
+      </div>
+
+      <div class="stream-panel">
+        <div class="stream-panel-head">
+          <h3>Assistant reply</h3>
+        </div>
+        <div class="stream-panel-body">
+          <div class="persona-render-host" data-persona-root>
+            <div class="persona-message-bubble">
+              <div class="persona-message-content" id="stream-content"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script type="module" src="/src/streaming-table-demo.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("streaming-table-demo");
+    </script>
+  </body>
+</html>
