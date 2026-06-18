@@ -21,7 +21,16 @@ renderDemoScaffold({ slug: "feedback-integration-demo" });
 
 const configInspector = createDemoConfigInspector({ title: "Feedback Events" });
 
-const clientToken = import.meta.env.VITE_CLIENT_TOKEN || "";
+// Plain-chat demo: prefer a dedicated client token bound to a *conversational*
+// agent. The shared VITE_CLIENT_TOKEN points at the action-middleware "Persona
+// Example Agent", whose system prompt mandates a JSON action envelope
+// ({"action":"message",…}). This demo has no action parser, so that agent would
+// render the raw envelope as text. Fall back to the shared token only when the
+// dedicated chat token isn't set, so existing setups keep working.
+const clientToken =
+  import.meta.env.VITE_CLIENT_TOKEN_SIMPLE_CHAT ||
+  import.meta.env.VITE_CLIENT_TOKEN ||
+  "";
 const apiUrl = import.meta.env.VITE_API_URL || "https://api.runtype.com";
 
 const cfgCopy = document.getElementById("cfg-copy") as HTMLInputElement;

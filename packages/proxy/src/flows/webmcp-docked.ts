@@ -2,7 +2,7 @@ import type { RuntypeFlowConfig } from "../index.js";
 
 /**
  * WebMCP docked-dashboard flow for the docked panel demo
- * (`examples/embedded-app/docked-panel-demo.html`).
+ * (`apps/web/docked-panel-demo.html`).
  *
  * Like the other WebMCP flows, this agent owns **no** tools of its own. The
  * demo page registers four workspace tools on `document.modelContext` via

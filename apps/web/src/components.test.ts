@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { ProductCard } from "./components";
+import { ProductCard } from "./gallery-components/product-card";
 import { getUserAction } from "./user-action-store";
 
 const renderProductCard = () =>

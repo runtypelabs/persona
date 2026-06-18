@@ -414,7 +414,7 @@ import { ChatWidget } from './ChatWidget.tsx';
 
 ### Using the Theme Configurator
 
-For easy configuration generation, use the [Theme Editor demo](https://github.com/runtypelabs/persona/tree/main/examples/embedded-app) (`theme.html` in the embedded-app example) which includes a "React (Client Component)" export option. It generates a complete React component with your custom theme, launcher settings, and all configuration options.
+For easy configuration generation, use the [Theme Editor demo](https://github.com/runtypelabs/persona/tree/main/apps/web) (`theme.html` in the web app) which includes a "React (Client Component)" export option. It generates a complete React component with your custom theme, launcher settings, and all configuration options.
 
 ### Installation
 

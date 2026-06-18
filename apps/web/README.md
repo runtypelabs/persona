@@ -1,4 +1,4 @@
-## Embedded App Demo
+## Web App (Persona Showcase)
 
 This Vite (vanilla JS) app showcases the streaming chat widget running both inline and as a floating launcher. It consumes the library via the workspace link so live edits in `packages/widget` hot-reload here.
 
@@ -7,7 +7,7 @@ This Vite (vanilla JS) app showcases the streaming chat widget running both inli
 ```bash
 pnpm install
 pnpm dev --filter proxy           # start backend proxy (prefers port 43111)
-pnpm dev --filter embedded-app
+pnpm dev --filter web
 ```
 
 Or from the repo root:

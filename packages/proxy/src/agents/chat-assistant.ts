@@ -2,7 +2,7 @@ import type { AgentConfig } from "../index.js";
 
 /**
  * Plain chat assistant for the Fullscreen Assistant demo
- * (examples/embedded-app/fullscreen-assistant-demo.html). Server-pinned
+ * (apps/web/fullscreen-assistant-demo.html). Server-pinned
  * replacement for the demo's former browser-supplied `config.agent`.
  */
 export const CHAT_ASSISTANT_AGENT: AgentConfig = {

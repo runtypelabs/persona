@@ -2,7 +2,7 @@ import type { RuntypeFlowConfig } from "../index.js";
 
 /**
  * WebMCP storefront flow for the "Switchback" trail/road running demo
- * (`examples/embedded-app/webmcp-demo.html`).
+ * (`apps/web/webmcp-demo.html`).
  *
  * Unlike the other example flows, this agent owns **no** tools of its own. The
  * demo page registers its tools on `document.modelContext` via WebMCP

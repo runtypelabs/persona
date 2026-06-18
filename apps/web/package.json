@@ -1,5 +1,5 @@
 {
-  "name": "embedded-app",
+  "name": "web",
   "private": true,
   "type": "module",
   "scripts": {

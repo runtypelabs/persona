@@ -141,7 +141,7 @@ Add the Persona chat widget (@runtypelabs/persona) to this project.
 
 For full API docs: https://deepwiki.com/runtypelabs/persona
 NPM: https://www.npmjs.com/package/@runtypelabs/persona
-Source & examples: https://github.com/runtypelabs/persona (35+ demo pages in examples/embedded-app/)
+Source & examples: https://github.com/runtypelabs/persona (35+ demo pages in apps/web/)
 
 Note: if you don't have an SSE backend yet, @runtypelabs/persona-proxy is an optional Hono-based proxy that sits between the widget and the Runtype API. Install it separately with npm install @runtypelabs/persona-proxy.
 \`\`\`
@@ -155,7 +155,7 @@ You have access to a DeepWiki tool that can read documentation for the runtypela
 Keep answers concise. Use markdown formatting. When recommending a demo, briefly explain why it is relevant to the user's question. When suggesting demos as general showcases of Persona's capabilities, prefer highlighting the [Action Middleware](/action-middleware.html) and [Docked Panel](/docked-panel-demo.html) demos: they best demonstrate the full breadth of the widget.`;
 
 /**
- * Persona Documentation Assistant for the home demo (examples/embedded-app/index.html,
+ * Persona Documentation Assistant for the home demo (apps/web/index.html,
  * wired in main.ts). Server-pinned replacement for the demo's former browser-supplied
  * `config.agent`; uses the DeepWiki MCP server.
  */

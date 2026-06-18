@@ -7,7 +7,7 @@
     "build:proxy": "pnpm --filter @runtypelabs/persona-proxy build",
     "lint": "pnpm --filter @runtypelabs/persona lint && pnpm --filter @runtypelabs/persona-proxy lint",
     "typecheck": "pnpm --filter @runtypelabs/persona typecheck && pnpm --filter @runtypelabs/persona-proxy typecheck",
-    "dev:widget": "pnpm --filter embedded-app dev",
+    "dev:widget": "pnpm --filter web dev",
     "dev:vercel": "pnpm --filter vercel-edge dev",
     "dev:cloudflare": "pnpm --filter cloudflare-workers dev",
     "dev": "pnpm --filter @runtypelabs/persona build:styles && NODE_ENV=development concurrently \"pnpm dev:vercel\" \"pnpm dev:widget\"",

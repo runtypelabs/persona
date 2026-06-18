@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["cloudflare-workers", "embedded-app", "vercel-edge"]
+  "ignore": ["cloudflare-workers", "web", "vercel-edge"]
 }

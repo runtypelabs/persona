@@ -25,7 +25,7 @@ import {
 /** Must match `initAgentWidget` mount element `id` (used for persona:* window events). */
 const FULLSCREEN_ASSISTANT_DEMO_INSTANCE_ID = "fullscreen-assistant-demo-root";
 
-/** Isolated from the main embedded-app `persona-state` bucket (home + shared demos). */
+/** Isolated from the main web app `persona-state` bucket (home + shared demos). */
 const FULLSCREEN_ASSISTANT_DEMO_STORAGE_KEY = "persona-fullscreen-assistant-demo";
 const fullscreenAssistantWidgetStorage = createLocalStorageAdapter(
   FULLSCREEN_ASSISTANT_DEMO_STORAGE_KEY

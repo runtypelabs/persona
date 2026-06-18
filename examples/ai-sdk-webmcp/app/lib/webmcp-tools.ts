@@ -9,7 +9,7 @@
 //
 // Each tool's execute() mutates the shared observable store (store.ts); the
 // React storefront re-renders off that store. This is the only structural
-// change from the vanilla embedded-app demo: the tool surface and behavior are
+// change from the vanilla web app demo: the tool surface and behavior are
 // identical.
 
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";

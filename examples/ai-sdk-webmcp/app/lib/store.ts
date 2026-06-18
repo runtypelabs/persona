@@ -1,6 +1,6 @@
 // Shared storefront state for the Switchback demo.
 //
-// In the vanilla embedded-app demo the WebMCP tools mutated the DOM directly.
+// In the vanilla web app demo the WebMCP tools mutated the DOM directly.
 // Here the tools live outside React (registered on `document.modelContext`), so
 // they instead mutate this tiny observable store and the React storefront
 // subscribes via `useSyncExternalStore`. This is the only structural change
