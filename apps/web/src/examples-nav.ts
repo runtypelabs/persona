@@ -157,6 +157,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline"],
   },
   {
+    slug: "streaming-table-demo",
+    href: "/streaming-table-demo.html",
+    title: "Streaming Markdown Tables",
+    blurb: "Telegram-style table rendering: structure and column widths reserved as rows stream in.",
+    tier: "patterns",
+    tags: ["streaming", "markdown", "tables"],
+    modes: ["inline"],
+  },
+  {
     slug: "custom-loading-indicator",
     href: "/custom-loading-indicator.html",
     title: "Replace the Loader",

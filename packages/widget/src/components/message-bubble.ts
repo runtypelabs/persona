@@ -795,6 +795,13 @@ export const createStandardBubble = (
   const contentDiv = document.createElement("div");
   contentDiv.classList.add("persona-message-content");
 
+  // While streaming, lock table column widths (see widget.css) so rows append
+  // without per-chunk horizontal reflow. The class is dropped on the final,
+  // non-streaming render, relaxing tables to natural content-fit widths.
+  if (message.streaming) {
+    contentDiv.classList.add("persona-content-streaming");
+  }
+
   if (streamAnimationActive && streamPlugin) {
     if (streamPlugin.containerClass) {
       contentDiv.classList.add(streamPlugin.containerClass);
