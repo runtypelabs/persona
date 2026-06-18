@@ -7,7 +7,7 @@ import type { AgentConfig } from "../index.js";
  */
 export const CHAT_ASSISTANT_AGENT: AgentConfig = {
   name: "Chat Assistant",
-  model: "nemotron-3-ultra-550b-a55b",
+  model: "zai/glm-5.2",
   systemPrompt:
     "You are a helpful assistant. Be friendly, concise, and helpful. If you don't know something, say so.",
   artifacts: { enabled: true, types: ["markdown", "component"] },
