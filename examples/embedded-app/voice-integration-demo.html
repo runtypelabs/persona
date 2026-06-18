@@ -413,6 +413,17 @@
                  }
                }
              },
+            <span class="comment">// Auto-speak assistant replies when enabled.</span>
+            <span class="comment">// Keep false to use the selected voice only from the read-aloud button.</span>
+            <span class="prop">textToSpeech</span>: {
+              <span class="prop">enabled</span>: <span class="keyword">false</span>,
+              <span class="prop">provider</span>: <span class="string">'browser'</span>, <span class="comment">// or 'runtype'</span>
+              <span class="comment">// For OpenAI / hosted voices, provide a SpeechEngine instead:</span>
+              <span class="prop">createEngine</span>: () =&gt; <span class="keyword">new</span> <span class="prop">ServerTtsEngine</span>({ <span class="prop">endpoint</span>: <span class="string">'/api/tts'</span> })
+            },
+            <span class="prop">messageActions</span>: {
+              <span class="prop">showReadAloud</span>: <span class="keyword">true</span>
+            },
              <span class="comment">// Processing state (while agent is thinking)</span>
              <span class="prop">processingIconName</span>: <span class="string">'loader'</span>,     <span class="comment">// spins automatically</span>
              <span class="prop">processingBackgroundColor</span>: <span class="string">'#6366f1'</span>, <span class="comment">// optional: indigo</span>

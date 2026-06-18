@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/src/demo-shared.css">
     <link rel="icon" href="/favicon.ico" />
-    <title>Streaming Chat Widget – Dynamic Form Demo</title>
+    <title>Persona – Dynamic Components Demo</title>
     <style>
       .form-tabs-preview .embedded-target {
         height: 760px;
@@ -20,6 +20,16 @@
         height: 100%;
         min-height: 100%;
       }
+      .component-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+      }
+      .component-preview-grid .btn {
+        width: 100%;
+        justify-content: center;
+      }
     </style>
   </head>
   <body>
@@ -27,17 +37,28 @@
       <div class="stage">
         <aside class="stage-controls">
           <header class="demo-meta">
-            <h1>Dynamic Forms</h1>
-            <p>AI-generated forms via component middleware. When your backend streams a JSON component directive (e.g., <code>{"component": "DynamicForm", "props": {...}}</code>), the widget renders an interactive form.</p>
+            <h1>Dynamic Components</h1>
+            <p>The assistant can send a component name plus props. Persona turns that into real UI inside the chat.</p>
             <div class="mount-toolbar" data-mount-toolbar></div>
           </header>
 
           <div class="info-section">
-            <h3>Preview</h3>
-            <p style="margin-bottom: 0.75rem;">Render the same DynamicForm bubble the AI would emit: no LLM round-trip.</p>
+            <h3>Try a form</h3>
+            <p style="margin-bottom: 0.75rem;">Click once to add an interactive form message. This is what the agent can create from JSON.</p>
             <button type="button" id="dynamic-form-preview" class="btn btn-primary">
               Preview form
             </button>
+          </div>
+
+          <div class="info-section">
+            <h3>Try other UI</h3>
+            <p style="margin-bottom: 0.75rem;">These use the same pattern. Try Product card, then click Add to Cart.</p>
+            <div class="component-preview-grid">
+              <button type="button" class="btn" data-component-preview="product">Product card</button>
+              <button type="button" class="btn" data-component-preview="chart">Chart</button>
+              <button type="button" class="btn" data-component-preview="status">Status badge</button>
+              <button type="button" class="btn" data-component-preview="info">Info card</button>
+            </div>
           </div>
 
           <div data-config-inspector></div>
@@ -51,20 +72,58 @@
 
         <div class="notes-section">
           <h3 class="notes-section-title">How it works</h3>
-          <p>The <strong>Preview form</strong> button uses <code>controller.injectComponentDirective(...)</code> to render the form directly from host code: the same path the LLM uses, but instant. Useful for QA, design previews, debug toggles, and local tools.</p>
+          <p>1. Create a normal component.</p>
+          <div class="code-block"><span class="keyword">function</span> <span class="function">ProductCard</span>({ <span class="prop">title</span> }) {
+  <span class="keyword">const</span> <span class="prop">button</span> = <span class="prop">document</span>.<span class="function">createElement</span>(<span class="string">"button"</span>);
+  <span class="prop">button</span>.<span class="prop">textContent</span> = <span class="string">"Add to Cart"</span>;
+  <span class="prop">button</span>.<span class="function">addEventListener</span>(<span class="string">"click"</span>, () =&gt; {
+    <span class="prop">button</span>.<span class="prop">textContent</span> = <span class="string">"Added"</span>;
+  });
+  <span class="keyword">return</span> <span class="prop">button</span>;
+}</div>
+
+          <p>2. Register it, then initialize Persona. The widget reads from the shared registry automatically.</p>
+          <div class="code-block"><span class="keyword">import</span> { <span class="prop">componentRegistry</span>, <span class="prop">initAgentWidget</span> } <span class="keyword">from</span> <span class="string">"@runtypelabs/persona"</span>;
+
+<span class="prop">componentRegistry</span>.<span class="function">register</span>(<span class="string">"ProductCard"</span>, <span class="prop">ProductCard</span>);
+
+<span class="function">initAgentWidget</span>({
+  <span class="prop">target</span>: <span class="string">"#app"</span>,
+  <span class="prop">config</span>: {
+    <span class="prop">apiUrl</span>: <span class="string">"/api/chat/dispatch-component"</span>,
+    <span class="prop">parserType</span>: <span class="string">"json"</span> <span class="comment">// needed for streamed JSON directives</span>
+  }
+});</div>
+
+          <p>3. Tell the agent to return this JSON when it should show the component. This usually goes in your system prompt or flow instructions.</p>
+          <div class="code-block"><span class="comment">System prompt:</span>
+When showing a product, respond with this JSON:
+
+{
+  <span class="prop">"component"</span>: <span class="string">"ProductCard"</span>,
+  <span class="prop">"props"</span>: {
+    <span class="prop">"title"</span>: <span class="string">"{{name of the product}}"</span>,
+    <span class="prop">"price"</span>: <span class="keyword">{{price of the product}}</span>
+  }
+}</div>
+
+          <p>4. Persona renders it in the chat.</p>
+          <div class="code-block">
+            <span class="comment">// The asks for a product.</span>
+            <span class="comment">// LLM returns the JSON, Persona renders registered component.</span>
+            <span class="comment">// The user clicks "Add to Cart".</span>
+            <span class="comment">// Action performed, button changes to "Added".</span></div>
+
+          <p>The component is normal DOM, so buttons, forms, saved state, and page events all work.</p>
         </div>
 
-        <div class="notes-section">
-          <h3 class="notes-section-title">Layout variants</h3>
-          <p>Same fields, three <code>formStyles</code> presets. The form component is unchanged: only its visual tokens vary. Each tab shows the <code>formStyles</code> config that produced the form on the right.</p>
-        </div>
       </section>
     </main>
 
     <section class="dynamic-form-variants-wrap">
       <header class="title-strip">
-        <h1>Layout variants</h1>
-        <p>Same fields, three <code>formStyles</code> presets. The form component is unchanged: only its visual tokens vary.</p>
+        <h1>Form layout variants</h1>
+        <p>Same DynamicForm renderer, three visual treatments. Use this as a reference for component-level theming.</p>
       </header>
       <section>
         <div class="form-tabs" id="variants-tabs">
@@ -165,7 +224,7 @@
     <script type="module" src="/src/dynamic-form-demo.ts"></script>
     <script type="module">
       import { renderExamplesShell } from "/src/examples-nav.ts";
-      renderExamplesShell("dynamic-form");
+      renderExamplesShell("dynamic-components");
     </script>
   </body>
 </html>

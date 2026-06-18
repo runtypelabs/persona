@@ -13,7 +13,14 @@ import {
   type AgentWidgetController,
 } from "@runtypelabs/persona";
 
-import { DynamicForm, type DynamicFormStyles } from "./components";
+import {
+  DynamicForm,
+  ProductCard,
+  SimpleChart,
+  StatusBadge,
+  InfoCard,
+  type DynamicFormStyles,
+} from "./components";
 import { setupMountMode, runWidgetMountWithInspector, squareInlinePanel } from "./mount-mode";
 import {
   createDemoConfigInspector,
@@ -21,17 +28,21 @@ import {
 } from "./demo-config-inspector";
 import type { Mode } from "./examples-nav";
 
-renderDemoScaffold({ slug: "dynamic-form" });
+renderDemoScaffold({ slug: "dynamic-components" });
 
-const configInspector = createDemoConfigInspector({ title: "Dynamic Forms" });
+const configInspector = createDemoConfigInspector({ title: "Dynamic Components" });
 
 componentRegistry.register("DynamicForm", DynamicForm);
+componentRegistry.register("ProductCard", ProductCard);
+componentRegistry.register("SimpleChart", SimpleChart);
+componentRegistry.register("StatusBadge", StatusBadge);
+componentRegistry.register("InfoCard", InfoCard);
 
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
   import.meta.env.VITE_PROXY_URL
-    ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-directive`
-    : `http://localhost:${proxyPort}/api/chat/dispatch-directive`;
+    ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-component`
+    : `http://localhost:${proxyPort}/api/chat/dispatch-component`;
 
 let activeController: AgentWidgetController | null = null;
 let previewIndex = 0;
@@ -42,7 +53,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
     storageAdapter: createLocalStorageAdapter(
-      `persona-state-dynamic-form-${mode}`,
+      `persona-state-dynamic-components-${mode}`,
     ),
     parserType: "json",
     enableComponentStreaming: true,
@@ -52,8 +63,8 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       ...DEFAULT_WIDGET_CONFIG.launcher,
       enabled: isLauncher,
       width: isLauncher ? "min(420px, 95vw)" : "100%",
-      title: isLauncher ? "Form Demo" : undefined,
-      subtitle: isLauncher ? "Opens the dynamic form example" : undefined,
+      title: isLauncher ? "Dynamic Components" : undefined,
+      subtitle: isLauncher ? "Streams forms, cards, charts, and badges" : undefined,
       agentIconText: isLauncher ? "📋" : undefined,
       autoExpand: isLauncher ? false : undefined,
     },
@@ -71,14 +82,15 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Dynamic Form Demo",
+      welcomeTitle: "Dynamic Components Demo",
       welcomeSubtitle:
-        "Ask about scheduling or try the suggested prompts to see dynamic forms in action.",
+        "Ask for a form, product card, chart, status badge, or info card.",
     },
     suggestionChips: [
       "Can you schedule a demo for me?",
-      "What does the dynamic form do?",
-      "Show me a form for extra context",
+      "Show me a product card",
+      "Display a chart with data",
+      "Create a status badge",
     ],
     formStyles: isLauncher
       ? {
@@ -91,11 +103,11 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
         }
       : undefined,
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
-  };
+  } as AgentWidgetConfig;
 };
 
 setupMountMode({
-  slug: "dynamic-form",
+  slug: "dynamic-components",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
     const { controller, teardown } = runWidgetMountWithInspector(
@@ -144,6 +156,77 @@ document.getElementById("dynamic-form-preview")?.addEventListener("click", () =>
     { component: "DynamicForm", props },
     "injectComponentDirective payload",
   );
+});
+
+type PreviewDirective = {
+  label: string;
+  component: string;
+  text: string;
+  props: Record<string, unknown>;
+};
+
+const componentPreviews: Record<string, PreviewDirective> = {
+  product: {
+    label: "Product card",
+    component: "ProductCard",
+    text: "Preview: a streamed ProductCard component.",
+    props: {
+      id: "cashmere-crewneck",
+      title: "Mongolian Cashmere Crewneck",
+      price: 248,
+      description: "A soft product card rendered from a JSON component directive.",
+      image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=600&h=750&fit=crop",
+    },
+  },
+  chart: {
+    label: "Chart",
+    component: "SimpleChart",
+    text: "Preview: a streamed SimpleChart component.",
+    props: {
+      title: "Quarterly pipeline",
+      data: [42, 68, 91, 76],
+      labels: ["Q1", "Q2", "Q3", "Q4"],
+    },
+  },
+  status: {
+    label: "Status badge",
+    component: "StatusBadge",
+    text: "Preview: a streamed StatusBadge component.",
+    props: {
+      status: "success",
+      message: "Account verified",
+    },
+  },
+  info: {
+    label: "Info card",
+    component: "InfoCard",
+    text: "Preview: a streamed InfoCard component.",
+    props: {
+      title: "Next step",
+      content: "The same directive path can render any host-provided UI component.",
+      icon: "i",
+    },
+  },
+};
+
+document.querySelectorAll<HTMLButtonElement>("[data-component-preview]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!activeController) return;
+    const preview = componentPreviews[button.dataset.componentPreview ?? ""];
+    if (!preview) return;
+    previewIndex += 1;
+    activeController.injectComponentDirective({
+      id: `preview-${preview.component}-${previewIndex}`,
+      component: preview.component,
+      text: preview.text,
+      props: preview.props,
+      llmContent: `[Demo: previewed ${preview.component} via injectComponentDirective.]`,
+    });
+    configInspector.setScenario(
+      { component: preview.component, props: preview.props },
+      `injectComponentDirective payload · ${preview.label}`,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -220,11 +303,11 @@ function mountVariant(variant: (typeof VARIANTS)[number]): void {
   const mount = document.getElementById(`dynamic-form-variant-${variant.id}`);
   if (!mount) return;
 
-  const config: AgentWidgetConfig = {
+  const config = {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
     storageAdapter: createLocalStorageAdapter(
-      `persona-state-dynamic-form-variant-${variant.id}`,
+      `persona-state-dynamic-components-variant-${variant.id}`,
     ),
     parserType: "json",
     enableComponentStreaming: true,
@@ -247,7 +330,7 @@ function mountVariant(variant: (typeof VARIANTS)[number]): void {
     suggestionChips: [],
     statusIndicator: { visible: false },
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
-  };
+  } as AgentWidgetConfig;
 
   const variantController = createAgentExperience(mount, squareInlinePanel(config));
   variantController.injectComponentDirective({

@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { renderExamplesShell } from "./examples-nav";
+import { ADVANCED_EXAMPLES, renderExamplesShell } from "./examples-nav";
 
 describe("examples command palette", () => {
   beforeEach(() => {
@@ -46,5 +46,19 @@ describe("examples command palette", () => {
 
     expect(selected).toEqual(["/approval-demo.html"]);
     expect(dialog?.hidden).toBe(true);
+  });
+
+  test("promotes dynamic components as the canonical streamed UI demo", () => {
+    const hrefs = ADVANCED_EXAMPLES.map((entry) => entry.href);
+
+    expect(ADVANCED_EXAMPLES).toContainEqual(
+      expect.objectContaining({
+        slug: "dynamic-components",
+        href: "/dynamic-components.html",
+        title: "Dynamic Components",
+        tags: expect.arrayContaining(["components", "forms", "interaction"]),
+      }),
+    );
+    expect(hrefs).not.toContain("/custom-components.html");
   });
 });

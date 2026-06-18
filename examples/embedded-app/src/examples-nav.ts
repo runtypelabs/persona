@@ -31,12 +31,12 @@ export const TIER_ORDER: readonly Tier[] = ["start", "patterns", "reference"];
 
 export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
   {
-    slug: "dynamic-form",
-    href: "/dynamic-form.html",
-    title: "Dynamic Forms",
-    blurb: "AI-generated forms via component middleware.",
+    slug: "dynamic-components",
+    href: "/dynamic-components.html",
+    title: "Dynamic Components",
+    blurb: "Stream interactive forms, cards, charts, and badges from JSON directives.",
     tier: "start",
-    tags: ["forms", "interaction"],
+    tags: ["components", "forms", "interaction"],
     modes: ["inline", "launcher"],
   },
   {

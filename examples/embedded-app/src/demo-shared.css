@@ -1260,6 +1260,11 @@ body.demo-code-active [data-persona-root] { display: none; }
 .code-block .property { color: #00b8d9; }
 .code-block .function { color: #00b8d9; }
 .code-block .tag      { color: #7eb1ff; }
+.code-block::selection,
+.code-block *::selection {
+  background: rgba(0, 184, 217, 0.28);
+  color: #f7fff9;
+}
 
 /* ════════════════════════════════════════════════════════════════════════
    Badges
