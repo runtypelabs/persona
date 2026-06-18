@@ -108,11 +108,10 @@ export type {
 } from "./types";
 
 export type {
-  RuntypeAgentSSEEvent,
+  RuntypeExecutionStreamEvent,
   RuntypeFlowSSEEvent,
-  RuntypeDispatchSSEEvent,
   RuntypeStreamEventOf,
-  RuntypeAgentTurnCompleteEvent,
+  RuntypeTurnCompleteEvent,
   RuntypeStepCompleteEvent,
   RuntypeStopReasonKind,
   RuntypeClientInitRequest,

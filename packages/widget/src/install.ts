@@ -18,9 +18,6 @@ interface SiteAgentInstallConfig {
   clientToken?: string;
   flowId?: string;
   apiUrl?: string;
-  /** Wire vocabulary requested from the dispatch endpoint; 'unified' opts into the
-   *  API's neutral event schema (transparently bridged back to the same rendering). */
-  events?: "legacy" | "unified";
   // Optional query param key that gates widget installation in preview mode
   previewQueryParam?: string;
   // Shadow DOM option (defaults to false for better CSS compatibility)
@@ -46,11 +43,6 @@ interface SiteAgentInstallConfig {
    * installs: on page load.
    */
   onChatReady?: (handle: any) => void;
-  /**
-   * @deprecated Use `onChatReady`. Retained as a working alias; it will be
-   * removed in the next major version.
-   */
-  onReady?: (handle: any) => void;
   /**
    * Fired when a load step fails (stylesheet, full bundle, or init), so you can
    * detect ad-blocked / timed-out installs instead of failing silently.
@@ -162,21 +154,6 @@ declare global {
     console.error("Failed to install AgentWidget:", error);
     safeCall(config.onError, { phase, error });
     dispatchLifecycle("persona:error", { phase, error });
-  };
-  // `onReady` is the deprecated alias of `onChatReady`; warn once if it's used.
-  let warnedOnReadyDeprecated = false;
-  const resolveChatReady = (): ((handle: any) => void) | undefined => {
-    if (config.onChatReady) return config.onChatReady;
-    if (config.onReady) {
-      if (!warnedOnReadyDeprecated) {
-        warnedOnReadyDeprecated = true;
-        console.warn(
-          "[Persona] `onReady` is deprecated: use `onChatReady`. `onReady` still works but is removed in the next major."
-        );
-      }
-      return config.onReady;
-    }
-    return undefined;
   };
   // True when the config renders a standard floating launcher button: the only
   // case that paints a clickable launcher at load. Shared by the deferral gate
@@ -380,7 +357,6 @@ declare global {
     if (config.apiUrl && !widgetConfig.apiUrl) widgetConfig.apiUrl = config.apiUrl;
     if (config.clientToken && !widgetConfig.clientToken) widgetConfig.clientToken = config.clientToken;
     if (config.flowId && !widgetConfig.flowId) widgetConfig.flowId = config.flowId;
-    if (config.events && !widgetConfig.events) widgetConfig.events = config.events;
 
     const hasApiConfig = !!(widgetConfig.apiUrl || widgetConfig.clientToken);
     return { target, widgetConfig, hasApiConfig };
@@ -433,9 +409,8 @@ declare global {
       }
 
       // The full widget is initialized and its controller API is callable.
-      safeCall(resolveChatReady(), handle);
+      safeCall(config.onChatReady, handle);
       dispatchLifecycle("persona:chat-ready", handle);
-      dispatchLifecycle("persona:ready", handle); // deprecated alias: removed next major
       return handle;
     } catch (error) {
       fail("init", error);

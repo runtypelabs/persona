@@ -36,7 +36,9 @@ class UnifiedEventTranslator {
   private kind: ExecutionKind = "flow";
   private blockCounter = 0;
   private openText: string | null = null;
+  private openTextBuffer = "";
   private openReasoning: string | null = null;
+  private openReasoningBuffer = "";
 
   constructor(
     private readonly sink: (chunk: string) => void,
@@ -56,40 +58,78 @@ class UnifiedEventTranslator {
     this.sink(`event: ${type}\ndata: ${JSON.stringify(frame)}\n\n`);
   }
 
-  private emitTextDelta(delta: unknown): void {
+  /**
+   * Parent model tool-call id stamped by the `tool_nested` FilteredStream as
+   * `toolContext.toolId` (a flow running as a tool enriches its frames this way).
+   * Surfaced on the text/reasoning channel as `parentToolCallId` so consumers can
+   * route nested streamed output into the parent tool's row (PR #4602). Undefined
+   * for top-level output.
+   */
+  private parentToolCallId(data: Json): string | undefined {
+    const toolContext = data.toolContext;
+    if (toolContext && typeof toolContext === "object") {
+      const toolId = (toolContext as Json).toolId;
+      if (typeof toolId === "string" && toolId) return toolId;
+    }
+    return undefined;
+  }
+
+  private emitTextDelta(delta: unknown, parentToolCallId?: string): void {
     if (delta == null || delta === "") return;
     if (!this.openText) {
       this.openText = this.mint("text");
+      this.openTextBuffer = "";
       this.out("text_start", {
         id: this.openText,
         ...(this.kind === "agent" ? { role: "assistant" } : {}),
+        ...(parentToolCallId ? { parentToolCallId } : {}),
       });
     }
-    this.out("text_delta", { id: this.openText, delta: String(delta) });
+    const text = String(delta);
+    this.openTextBuffer += text;
+    this.out("text_delta", { id: this.openText, delta: text });
   }
 
   private closeText(): void {
     if (!this.openText) return;
-    this.out("text_complete", { id: this.openText });
+    // U2: carry the assembled text so a non-streaming consumer can read the
+    // finished message off `text_complete` instead of re-concatenating deltas.
+    this.out("text_complete", {
+      id: this.openText,
+      ...(this.openTextBuffer ? { text: this.openTextBuffer } : {}),
+    });
     this.openText = null;
+    this.openTextBuffer = "";
   }
 
-  private ensureReasoningOpen(scope?: "turn" | "loop"): void {
+  private ensureReasoningOpen(scope?: "turn" | "loop", parentToolCallId?: string): void {
     if (this.openReasoning) return;
     this.openReasoning = this.mint("reason");
-    this.out("reasoning_start", { id: this.openReasoning, ...(scope ? { scope } : {}) });
+    this.openReasoningBuffer = "";
+    this.out("reasoning_start", {
+      id: this.openReasoning,
+      ...(scope ? { scope } : {}),
+      ...(parentToolCallId ? { parentToolCallId } : {}),
+    });
   }
 
-  private emitReasoningDelta(delta: unknown): void {
+  private emitReasoningDelta(delta: unknown, parentToolCallId?: string): void {
     if (delta == null || delta === "") return;
-    this.ensureReasoningOpen();
-    this.out("reasoning_delta", { id: this.openReasoning, delta: String(delta) });
+    this.ensureReasoningOpen(undefined, parentToolCallId);
+    const text = String(delta);
+    this.openReasoningBuffer += text;
+    this.out("reasoning_delta", { id: this.openReasoning, delta: text });
   }
 
   private closeReasoning(): void {
     if (!this.openReasoning) return;
-    this.out("reasoning_complete", { id: this.openReasoning });
+    // U2: carry the assembled reasoning text (parity with text_complete).
+    this.out("reasoning_complete", {
+      id: this.openReasoning,
+      ...(this.openReasoningBuffer ? { text: this.openReasoningBuffer } : {}),
+    });
     this.openReasoning = null;
+    this.openReasoningBuffer = "";
   }
 
   private closeChannels(): void {
@@ -391,7 +431,7 @@ class UnifiedEventTranslator {
         });
         break;
       case "step_delta":
-        this.emitTextDelta(data.text ?? data.delta);
+        this.emitTextDelta(data.text ?? data.delta, this.parentToolCallId(data));
         break;
       case "step_complete":
         this.closeChannels();
@@ -492,23 +532,31 @@ class UnifiedEventTranslator {
         });
         break;
       case "chunk":
-        this.emitTextDelta(data.text);
+        this.emitTextDelta(data.text, this.parentToolCallId(data));
         break;
 
       case "text_start":
         if (!this.openText) {
           this.openText = (data.id as string) ?? this.mint("text");
-          this.out("text_start", { id: this.openText });
+          this.openTextBuffer = "";
+          const parentToolCallId = this.parentToolCallId(data);
+          this.out("text_start", {
+            id: this.openText,
+            ...(parentToolCallId ? { parentToolCallId } : {}),
+          });
         }
         break;
       case "text_end":
         this.closeText();
         break;
       case "reason_start":
-        this.ensureReasoningOpen();
+        this.ensureReasoningOpen(undefined, this.parentToolCallId(data));
         break;
       case "reason_delta":
-        this.emitReasoningDelta(data.reasoningText ?? data.delta ?? data.text);
+        this.emitReasoningDelta(
+          data.reasoningText ?? data.delta ?? data.text,
+          this.parentToolCallId(data)
+        );
         break;
       case "reason_complete":
         this.closeReasoning();

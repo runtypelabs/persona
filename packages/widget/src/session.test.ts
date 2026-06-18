@@ -893,7 +893,7 @@ describe('AgentWidgetSession.resolveApproval', () => {
   });
 });
 
-describe('AgentWidgetSession - approval context across agent_approval_complete', () => {
+describe('AgentWidgetSession - approval context across approval_complete', () => {
   const sseStream = (events: Array<Record<string, unknown>>): ReadableStream<Uint8Array> => {
     const encoder = new TextEncoder();
     const body = events
@@ -919,14 +919,14 @@ describe('AgentWidgetSession - approval context across agent_approval_complete',
       }
     );
 
-    // `agent_approval_complete` carries only the resolution: none of the
-    // context fields from `agent_approval_start`. The session merge must keep
-    // them so a full re-render of the resolved bubble (morph, virtual-scroll
-    // re-mount, storage restore) still shows the tool, description, and the
-    // agent's stated reason.
+    // Unified `approval_complete` carries only the resolution: none of the
+    // context fields from `approval_start`. The session merge must keep them so
+    // a full re-render of the resolved bubble (morph, virtual-scroll re-mount,
+    // storage restore) still shows the tool, description, and the agent's stated
+    // reason.
     await session.connectStream(sseStream([
       {
-        type: 'agent_approval_start',
+        type: 'approval_start',
         executionId: 'exec_abc',
         approvalId: 'appr_1',
         toolName: 'send_email',
@@ -936,7 +936,7 @@ describe('AgentWidgetSession - approval context across agent_approval_complete',
         parameters: { to: 'customer@example.com' },
       },
       {
-        type: 'agent_approval_complete',
+        type: 'approval_complete',
         executionId: 'exec_abc',
         approvalId: 'appr_1',
         decision: 'approved',

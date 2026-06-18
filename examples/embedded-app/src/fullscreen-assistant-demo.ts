@@ -34,8 +34,8 @@ const fullscreenAssistantWidgetStorage = createLocalStorageAdapter(
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const apiUrl =
   import.meta.env.VITE_PROXY_URL != null
-    ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch`
-    : `http://localhost:${proxyPort}/api/chat/dispatch`;
+    ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-assistant`
+    : `http://localhost:${proxyPort}/api/chat/dispatch-assistant`;
 
 const COLORS = {
   page: "#000000",
@@ -457,12 +457,6 @@ const config = mergeWithDefaults({
   storageAdapter: fullscreenAssistantWidgetStorage,
   persistState: {
     keyPrefix: `${FULLSCREEN_ASSISTANT_DEMO_STORAGE_KEY}-`
-  },
-  agent: {
-    name: "Chat Assistant",
-    model: "nemotron-3-ultra-550b-a55b",
-    systemPrompt: "You are a helpful assistant. Be friendly, concise, and helpful. If you don't know something, say so.",
-    artifacts: { enabled: true, types: ["markdown", "component"] },
   },
   colorScheme: "dark",
   darkTheme: {

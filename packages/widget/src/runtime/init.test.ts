@@ -122,21 +122,6 @@ describe("initAgentWidget windowKey and ready notifications", () => {
     handle.destroy();
   });
 
-  it("calls onReady after initialization", async () => {
-    const { initAgentWidget } = await import("./init");
-    document.body.innerHTML = `<div id="target"></div>`;
-
-    const onReady = vi.fn();
-    const handle = initAgentWidget({
-      target: "#target",
-      onReady,
-      config: { launcher: { enabled: false } },
-    });
-
-    expect(onReady).toHaveBeenCalledOnce();
-    handle.destroy();
-  });
-
   it("the window key handle proxies controller methods", async () => {
     const { initAgentWidget } = await import("./init");
     document.body.innerHTML = `<div id="target"></div>`;
@@ -159,7 +144,7 @@ describe("initAgentWidget windowKey and ready notifications", () => {
   });
 });
 
-describe("initAgentWidget onChatReady / onReady deprecation", () => {
+describe("initAgentWidget onChatReady", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     createAgentExperienceMock.mockReset();
@@ -184,65 +169,21 @@ describe("initAgentWidget onChatReady / onReady deprecation", () => {
     handle.destroy();
     warn.mockRestore();
   });
-
-  it("prefers onChatReady over the deprecated onReady (onReady never fires, no warning)", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const { initAgentWidget } = await import("./init");
-    document.body.innerHTML = `<div id="target"></div>`;
-
-    const onChatReady = vi.fn();
-    const onReady = vi.fn();
-    const handle = initAgentWidget({
-      target: "#target",
-      onChatReady,
-      onReady,
-      config: { launcher: { enabled: false } },
-    });
-
-    expect(onChatReady).toHaveBeenCalledOnce();
-    expect(onReady).not.toHaveBeenCalled();
-    expect(warn).not.toHaveBeenCalled();
-
-    handle.destroy();
-    warn.mockRestore();
-  });
-
-  it("still calls the deprecated onReady but warns at most once across multiple widgets", async () => {
-    // Fresh module so the once-per-page warn flag starts unset.
-    vi.resetModules();
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const { initAgentWidget } = await import("./init");
-    document.body.innerHTML = `<div id="a"></div><div id="b"></div>`;
-
-    const onReadyA = vi.fn();
-    const onReadyB = vi.fn();
-    const a = initAgentWidget({ target: "#a", onReady: onReadyA, config: { launcher: { enabled: false } } });
-    const b = initAgentWidget({ target: "#b", onReady: onReadyB, config: { launcher: { enabled: false } } });
-
-    expect(onReadyA).toHaveBeenCalledOnce();
-    expect(onReadyB).toHaveBeenCalledOnce();
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0]?.[0])).toContain("`onReady` is deprecated");
-
-    a.destroy();
-    b.destroy();
-    warn.mockRestore();
-  });
 });
 
-describe("install script onReady and persona:ready event", () => {
+describe("install script persona:chat-ready event", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     createAgentExperienceMock.mockReset();
     createAgentExperienceMock.mockImplementation((_mount, config) => createMockController(config));
   });
 
-  it("persona:ready event fires with the handle as detail", async () => {
+  it("persona:chat-ready event fires with the handle as detail", async () => {
     const { initAgentWidget } = await import("./init");
     document.body.innerHTML = `<div id="target"></div>`;
 
     const eventPromise = new Promise<any>((resolve) => {
-      window.addEventListener("persona:ready", (e) => {
+      window.addEventListener("persona:chat-ready", (e) => {
         resolve((e as CustomEvent).detail);
       }, { once: true });
     });
@@ -254,7 +195,7 @@ describe("install script onReady and persona:ready event", () => {
     });
 
     // Simulate what install.ts does after initAgentWidget returns
-    window.dispatchEvent(new CustomEvent("persona:ready", { detail: handle }));
+    window.dispatchEvent(new CustomEvent("persona:chat-ready", { detail: handle }));
 
     const detail = await eventPromise;
     expect(detail).toBe(handle);
@@ -264,12 +205,12 @@ describe("install script onReady and persona:ready event", () => {
     handle.destroy();
   });
 
-  it("persona:ready event listener set up before init receives the handle", async () => {
+  it("persona:chat-ready event listener set up before init receives the handle", async () => {
     const { initAgentWidget } = await import("./init");
     document.body.innerHTML = `<div id="target"></div>`;
 
     const received: any[] = [];
-    window.addEventListener("persona:ready", (e) => {
+    window.addEventListener("persona:chat-ready", (e) => {
       received.push((e as CustomEvent).detail);
     }, { once: true });
 
@@ -279,7 +220,7 @@ describe("install script onReady and persona:ready event", () => {
     });
 
     // Simulate install.ts dispatching the event
-    window.dispatchEvent(new CustomEvent("persona:ready", { detail: handle }));
+    window.dispatchEvent(new CustomEvent("persona:chat-ready", { detail: handle }));
 
     expect(received).toHaveLength(1);
     expect(received[0]).toBe(handle);

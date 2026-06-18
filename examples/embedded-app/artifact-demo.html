@@ -45,7 +45,14 @@
         <div class="notes-section">
           <h3 class="notes-section-title">How it works</h3>
           <p>Enable artifacts on the widget config:</p>
-          <div class="code-block">features: { artifacts: { enabled: true, allowedTypes: ["markdown", "component"] } }</div>
+          <div class="code-block">
+            <span class="prop">features</span>: {
+              <span class="prop">artifacts</span>: {
+                <span class="prop">enabled</span>: <span class="keyword">true</span>,
+                <span class="prop">allowedTypes</span>: [<span class="string">"markdown"</span>, <span class="string">"component"</span>],
+              },
+            },
+          </div>
           <p>Call <code>controller.upsertArtifact({ artifactType, ... })</code> to render an artifact in the side panel. Components must be registered via <code>componentRegistry.register(name, renderer)</code>.</p>
         </div>
       </section>

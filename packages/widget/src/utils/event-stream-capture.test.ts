@@ -304,28 +304,9 @@ describe("Event Capture Pipeline - no interference with message processing", () 
 
   it("should still create assistant message correctly when event capture is active", async () => {
     global.fetch = createMockFetch([
-      sseData({
-        type: "step_chunk",
-        id: "step_1",
-        name: "Prompt 1",
-        executionType: "prompt",
-        index: 1,
-        text: "Hello"
-      }),
-      sseData({
-        type: "step_chunk",
-        id: "step_1",
-        name: "Prompt 1",
-        executionType: "prompt",
-        index: 2,
-        text: " there"
-      }),
-      sseData({
-        type: "flow_complete",
-        flowId: "flow_1",
-        success: true,
-        duration: 100
-      })
+      sseData({ type: "text_delta", id: "text_1", delta: "Hello" }),
+      sseData({ type: "text_delta", id: "text_1", delta: " there" }),
+      sseData({ type: "execution_complete", kind: "flow", success: true })
     ]);
 
     await client.dispatch(
@@ -374,20 +355,8 @@ describe("Event Capture Pipeline - no interference with message processing", () 
         duration: 250,
         completedAt: "2025-01-01T00:00:01.000Z"
       }),
-      sseData({
-        type: "step_chunk",
-        id: "step_1",
-        name: "Prompt 1",
-        executionType: "prompt",
-        index: 1,
-        text: "Found results"
-      }),
-      sseData({
-        type: "flow_complete",
-        flowId: "flow_1",
-        success: true,
-        duration: 500
-      })
+      sseData({ type: "text_delta", id: "text_1", delta: "Found results" }),
+      sseData({ type: "execution_complete", kind: "flow", success: true })
     ]);
 
     await client.dispatch(
@@ -442,20 +411,8 @@ describe("Event Capture Pipeline - no interference with message processing", () 
     });
 
     global.fetch = createMockFetch([
-      sseData({
-        type: "step_chunk",
-        id: "step_1",
-        name: "Prompt 1",
-        executionType: "prompt",
-        index: 1,
-        text: "Works fine"
-      }),
-      sseData({
-        type: "flow_complete",
-        flowId: "flow_1",
-        success: true,
-        duration: 50
-      })
+      sseData({ type: "text_delta", id: "text_1", delta: "Works fine" }),
+      sseData({ type: "execution_complete", kind: "flow", success: true })
     ]);
 
     const events: AgentWidgetEvent[] = [];
@@ -496,20 +453,8 @@ describe("Event Capture Pipeline - no interference with message processing", () 
     });
 
     global.fetch = createMockFetch([
-      sseData({
-        type: "step_chunk",
-        id: "step_1",
-        name: "Prompt 1",
-        executionType: "prompt",
-        index: 1,
-        text: "Still works"
-      }),
-      sseData({
-        type: "flow_complete",
-        flowId: "flow_1",
-        success: true,
-        duration: 50
-      })
+      sseData({ type: "text_delta", id: "text_1", delta: "Still works" }),
+      sseData({ type: "execution_complete", kind: "flow", success: true })
     ]);
 
     const events: AgentWidgetEvent[] = [];

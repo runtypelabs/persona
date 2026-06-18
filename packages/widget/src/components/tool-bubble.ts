@@ -45,6 +45,22 @@ const getToolPreviewText = (message: AgentWidgetMessage, maxLines: number): stri
     .join("\n");
 };
 
+/**
+ * Apply the colors for a tool-bubble code block (Arguments / Activity / Result).
+ *
+ * Defaults are theme-aware tokens so the blocks stay readable in dark themes.
+ */
+const applyToolCodeBlockColors = (
+  pre: HTMLElement,
+  toolCallConfig: NonNullable<AgentWidgetConfig["toolCall"]>
+): void => {
+  pre.style.backgroundColor =
+    toolCallConfig.codeBlockBackgroundColor ?? "var(--persona-container, #f3f4f6)";
+  pre.style.borderColor =
+    toolCallConfig.codeBlockBorderColor ?? "var(--persona-border, #e5e7eb)";
+  pre.style.color = toolCallConfig.codeBlockTextColor ?? "var(--persona-text, #171717)";
+};
+
 const getToolSummaryText = (
   message: AgentWidgetMessage,
   config?: AgentWidgetConfig
@@ -95,7 +111,14 @@ export const updateToolBubbleUI = (messageId: string, bubble: HTMLElement, confi
   const toggleIcon = headerMeta?.querySelector(':scope > .persona-flex.persona-items-center') as HTMLElement;
   if (toggleIcon) {
     toggleIcon.innerHTML = "";
-    const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
+    // Default the toggle chevron to the tool-call title color so it stays
+    // readable on whatever surface the title does. The title falls back to
+    // `.persona-text-persona-primary` (var(--persona-primary)) when no
+    // `headerTextColor` is set, so mirror that here instead of `currentColor`.
+    const iconColor =
+      toolCallConfig.toggleTextColor ||
+      toolCallConfig.headerTextColor ||
+      "var(--persona-primary, #171717)";
     const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
     if (chevronIcon) {
       toggleIcon.appendChild(chevronIcon);
@@ -328,7 +351,14 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   let toggleIcon: HTMLElement | null = null;
   if (expandable) {
     toggleIcon = createElement("div", "persona-flex persona-items-center");
-    const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
+    // Default the toggle chevron to the tool-call title color so it stays
+    // readable on whatever surface the title does. The title falls back to
+    // `.persona-text-persona-primary` (var(--persona-primary)) when no
+    // `headerTextColor` is set, so mirror that here instead of `currentColor`.
+    const iconColor =
+      toolCallConfig.toggleTextColor ||
+      toolCallConfig.headerTextColor ||
+      "var(--persona-primary, #171717)";
     const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
     if (chevronIcon) {
       toggleIcon.appendChild(chevronIcon);
@@ -425,20 +455,12 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     argsLabel.textContent = "Arguments";
     const argsPre = createElement(
       "pre",
-      "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-border-gray-100 persona-bg-white persona-px-3 persona-py-2 persona-text-xs persona-text-persona-primary"
+      "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-px-3 persona-py-2 persona-text-xs"
     );
     // Ensure font size matches header text (0.75rem / 12px)
     argsPre.style.fontSize = "0.75rem";
     argsPre.style.lineHeight = "1rem";
-    if (toolCallConfig.codeBlockBackgroundColor) {
-      argsPre.style.backgroundColor = toolCallConfig.codeBlockBackgroundColor;
-    }
-    if (toolCallConfig.codeBlockBorderColor) {
-      argsPre.style.borderColor = toolCallConfig.codeBlockBorderColor;
-    }
-    if (toolCallConfig.codeBlockTextColor) {
-      argsPre.style.color = toolCallConfig.codeBlockTextColor;
-    }
+    applyToolCodeBlockColors(argsPre, toolCallConfig);
     argsPre.textContent = formatUnknownValue(tool.args);
     argsBlock.append(argsLabel, argsPre);
     content.appendChild(argsBlock);
@@ -456,20 +478,12 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     logsLabel.textContent = "Activity";
     const logsPre = createElement(
       "pre",
-      "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-border-gray-100 persona-bg-white persona-px-3 persona-py-2 persona-text-xs persona-text-persona-primary"
+      "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-px-3 persona-py-2 persona-text-xs"
     );
     // Ensure font size matches header text (0.75rem / 12px)
     logsPre.style.fontSize = "0.75rem";
     logsPre.style.lineHeight = "1rem";
-    if (toolCallConfig.codeBlockBackgroundColor) {
-      logsPre.style.backgroundColor = toolCallConfig.codeBlockBackgroundColor;
-    }
-    if (toolCallConfig.codeBlockBorderColor) {
-      logsPre.style.borderColor = toolCallConfig.codeBlockBorderColor;
-    }
-    if (toolCallConfig.codeBlockTextColor) {
-      logsPre.style.color = toolCallConfig.codeBlockTextColor;
-    }
+    applyToolCodeBlockColors(logsPre, toolCallConfig);
     logsPre.textContent = tool.chunks.join("");
     logsBlock.append(logsLabel, logsPre);
     content.appendChild(logsBlock);
@@ -487,20 +501,12 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     resultLabel.textContent = "Result";
     const resultPre = createElement(
       "pre",
-      "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-border-gray-100 persona-bg-white persona-px-3 persona-py-2 persona-text-xs persona-text-persona-primary"
+      "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-px-3 persona-py-2 persona-text-xs"
     );
     // Ensure font size matches header text (0.75rem / 12px)
     resultPre.style.fontSize = "0.75rem";
     resultPre.style.lineHeight = "1rem";
-    if (toolCallConfig.codeBlockBackgroundColor) {
-      resultPre.style.backgroundColor = toolCallConfig.codeBlockBackgroundColor;
-    }
-    if (toolCallConfig.codeBlockBorderColor) {
-      resultPre.style.borderColor = toolCallConfig.codeBlockBorderColor;
-    }
-    if (toolCallConfig.codeBlockTextColor) {
-      resultPre.style.color = toolCallConfig.codeBlockTextColor;
-    }
+    applyToolCodeBlockColors(resultPre, toolCallConfig);
     resultPre.textContent = formatUnknownValue(tool.result);
     resultBlock.append(resultLabel, resultPre);
     content.appendChild(resultBlock);
@@ -522,7 +528,14 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     header.setAttribute("aria-expanded", expanded ? "true" : "false");
     if (toggleIcon) {
       toggleIcon.innerHTML = "";
-      const iconColor = toolCallConfig.toggleTextColor || toolCallConfig.headerTextColor || "currentColor";
+      // Default the toggle chevron to the tool-call title color so it stays
+      // readable on whatever surface the title does. The title falls back to
+      // `.persona-text-persona-primary` (var(--persona-primary)) when no
+      // `headerTextColor` is set, so mirror that here instead of `currentColor`.
+      const iconColor =
+        toolCallConfig.toggleTextColor ||
+        toolCallConfig.headerTextColor ||
+        "var(--persona-primary, #171717)";
       const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
       if (chevronIcon) {
         toggleIcon.appendChild(chevronIcon);

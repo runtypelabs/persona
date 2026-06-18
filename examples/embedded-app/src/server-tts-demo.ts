@@ -58,9 +58,9 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     // The whole demo: a hosted streaming engine instead of browser speechSynthesis.
     // `enabled: false` means no auto-speak — the per-message "Read aloud" button
     // still uses this engine. Flip it to `true` to also auto-speak every reply.
-    // The engine streams PCM from the proxy /api/tts route through Persona's own
-    // AudioPlaybackManager, so playback starts on the first chunk and pause/resume
-    // are real (supportsPause: true).
+    // The engine streams PCM from the proxy /api/tts route through Persona's
+    // createPcmStreamPlayer(), so playback starts once the jitter buffer fills and
+    // pause/resume are real (supportsPause: true).
     textToSpeech: {
       enabled: false,
       createEngine: () =>

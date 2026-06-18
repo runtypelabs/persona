@@ -1,21 +1,44 @@
 // ───────────────────────────────────────────────────────────────────────────
-// Runtype proxy-mode wire protocol, implemented on top of the Vercel AI SDK.
+// Persona's neutral **unified** wire protocol, implemented on top of the Vercel
+// AI SDK.
 //
-// The Persona widget (proxy mode) POSTs a dispatch request, reads an SSE stream,
-// and, for WebMCP page tools, pauses on a `step_await` event, runs the tool on
-// the page, and POSTs the result to `${apiUrl}/resume`. Runtype normally serves
-// that protocol; here we serve it ourselves, backed by `streamText`. The widget
-// is unchanged and never learns it isn't talking to Runtype.
+// The Persona widget POSTs a dispatch request, reads an SSE stream, and, for
+// WebMCP page tools, pauses on an `await` event, runs the tool on the page, and
+// POSTs the result to `${apiUrl}/resume`. This is the one protocol any backend
+// can speak — the same wire the Runtype API emits. The widget consumes the
+// unified wire natively; it is otherwise unchanged and never learns it isn't
+// talking to a hosted agent runtime.
 //
-// Wire contract (verified against packages/widget/src/{client,session}.ts):
-//   • text delta  → event: step_chunk    {type, id, executionId, text}
-//   • text done   → event: step_complete {type, id, result:{response}}
-//   • WebMCP call → event: step_await     {type, awaitReason:"local_tool_required",
-//                                          toolName:"webmcp:<bare>", toolId,
-//                                          toolCallId, executionId, parameters}
-//   • turn done   → event: flow_complete  {type, success:true, executionId}
-//   • failure     → event: error          {type, message}
+// Wire contract (verified against packages/widget/src/client.ts, the native handler):
+//   • run start   → event: execution_start  {type, executionId, kind:"agent",
+//                                            agentId, startedAt}
+//   • turn open   → event: turn_start        {type, executionId, id:"turn_…",
+//                                            iteration}
+//   • text delta  → event: text_start/_delta/_complete
+//                                            {type, executionId, id:"text_…",
+//                                            delta, iteration}
+//   • WebMCP call → event: await             {type, executionId, toolName:"<bare>",
+//                                            origin:"webmcp", toolId, toolCallId,
+//                                            parameters, awaitedAt}
+//   • turn done   → event: turn_complete + execution_complete
+//                                            {type, executionId, kind:"agent",
+//                                            success:true, completedAt}
+//   • failure     → event: execution_error   {type, executionId, kind:"agent",
+//                                            error:{message}}
 // Resume body: {executionId, toolOutputs: Record<toolCallId, WebMcpToolResult>}.
+//
+// Three correctness properties this reference models on purpose (an external
+// adapter owns its own ids, so it gets them right by construction):
+//   1. ONE `exec_…` executionId is carried across the whole run — every delta,
+//      every `await`, every resume, and `execution_complete`.
+//   2. `iteration` ADVANCES on each /resume: re-invoking the model over the tool
+//      results is a new reasoning turn, so the resumed turn reports iteration+1.
+//   3. `kind:"agent"` is announced on `execution_start` and is HONEST: this
+//      backend is a real agent. A /resume continuation has no `execution_start`
+//      to re-announce kind, but the widget bridge defaults a fresh stream to
+//      kind:"agent" — which matches. A backend that wrapped an agent in a
+//      virtual flow (kind:"flow") would mis-route resume tool events unless it
+//      re-announced kind; this one sidesteps that by not lying about what it is.
 // ───────────────────────────────────────────────────────────────────────────
 
 import {
@@ -115,7 +138,10 @@ export function sseResponse(
         await handler(send);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        send.send("error", { message });
+        // Terminal failure of the handler → unified `execution_error` (the bridge
+        // maps it to a non-recoverable agent_error). Unified `error` is the
+        // NON-terminal one, so it's the wrong frame for an uncaught throw.
+        send.send("execution_error", { kind: "agent", error: { message } });
       } finally {
         controller.close();
       }
@@ -191,19 +217,28 @@ function resultToOutput(raw: unknown): ToolResultPart["output"] {
 // ── Core turn: stream text, surface tool calls, pause or complete ───────────
 
 /**
- * Run one model turn over `messages`, streaming text as `step_chunk`. If the
- * model calls page tools, emit a `step_await` per call and PAUSE (store state,
- * no `flow_complete`). Otherwise finalize with `step_complete` + `flow_complete`.
+ * Run one model turn over `messages`, streaming text as unified `text_delta`. If
+ * the model calls page tools, emit an `await` per call and PAUSE (store state,
+ * no `turn_complete`/`execution_complete`). Otherwise finalize the turn and run.
+ *
+ * `iteration` is the 1-based turn index within this run; it advances on each
+ * /resume (see handleResume) so the wire reflects a genuinely new reasoning turn.
  */
 async function runTurn(
   send: SSESender,
   executionId: string,
   messages: ModelMessage[],
   clientTools: ClientToolDefinition[],
+  iteration: number,
 ): Promise<void> {
-  const stepId = `step_${generateId()}`;
+  const turnId = `turn_${generateId()}`;
   let text = "";
+  let textBlockId: string | null = null;
   const toolCalls: ToolCallPart[] = [];
+
+  // turn_start opens this iteration's reasoning turn; the text block opens
+  // lazily on the first delta so a tool-only turn never emits a stray text_start.
+  send.send("turn_start", { executionId, id: turnId, iteration });
 
   const result = streamText({
     model: MODEL, // string id → Vercel AI Gateway (see MODEL above)
@@ -215,7 +250,11 @@ async function runTurn(
   for await (const part of result.fullStream) {
     if (part.type === "text-delta") {
       text += part.text;
-      send.send("step_chunk", { id: stepId, executionId, text: part.text });
+      if (textBlockId === null) {
+        textBlockId = `text_${generateId()}`;
+        send.send("text_start", { executionId, id: textBlockId });
+      }
+      send.send("text_delta", { executionId, id: textBlockId, delta: part.text, iteration });
     } else if (part.type === "tool-call") {
       toolCalls.push({
         type: "tool-call",
@@ -223,25 +262,34 @@ async function runTurn(
         toolName: part.toolName,
         input: part.input,
       });
-      send.send("step_await", {
-        awaitReason: "local_tool_required",
-        id: stepId,
-        toolId: `runtime_${part.toolName}_${part.toolCallId}`,
-        toolName: `${WEBMCP_PREFIX}${part.toolName}`,
-        toolCallId: part.toolCallId,
+      // `await` carries a BARE tool name + origin; the widget bridge applies the
+      // `webmcp:` prefix, maps it onto the local-tool `step_await` path, and keys
+      // the pause by toolCallId (parallel same-tool calls stay distinct).
+      send.send("await", {
         executionId,
+        toolId: `runtime_${WEBMCP_PREFIX}${part.toolName}_${part.toolCallId}`,
+        toolName: part.toolName,
+        origin: "webmcp",
+        toolCallId: part.toolCallId,
         parameters: part.input,
+        awaitedAt: new Date().toISOString(),
       });
     } else if (part.type === "error") {
       const message =
         part.error instanceof Error ? part.error.message : String(part.error);
-      send.send("error", { message });
+      send.send("execution_error", { executionId, kind: "agent", error: { message } });
       return;
     }
   }
 
+  // Close the text block once, if one opened, before pausing or completing.
+  if (textBlockId !== null) {
+    send.send("text_complete", { executionId, id: textBlockId });
+  }
+
   if (toolCalls.length > 0) {
-    // Pause: persist the assistant turn (incl. tool calls) and the pending set.
+    // Pause: persist the assistant turn (incl. tool calls), the pending set, and
+    // the current iteration so the resumed turn can report iteration + 1.
     const assistantContent: Array<{ type: "text"; text: string } | ToolCallPart> = [
       ...(text ? [{ type: "text" as const, text }] : []),
       ...toolCalls,
@@ -253,8 +301,9 @@ async function runTurn(
         toolName: tc.toolName,
       })),
       clientTools,
+      iteration,
     });
-    return; // no flow_complete: the widget will /resume with tool outputs
+    return; // no turn_complete/execution_complete: the widget /resumes with outputs
   }
 
   // No tool calls: the turn is done. Clean up the stored execution now that it
@@ -262,13 +311,25 @@ async function runTurn(
   // NOT delete earlier in handleResume: if the turn errors mid-stream, the
   // paused state must stay put so the widget can retry /resume with the same
   // executionId instead of getting an "unknown executionId" error.
-  send.send("step_complete", { id: stepId, result: { response: text } });
   try {
     await deletePausedExecution(executionId);
   } catch {
     /* best-effort cleanup; the cache TTL expires it regardless */
   }
-  send.send("flow_complete", { success: true, executionId });
+  const completedAt = new Date().toISOString();
+  send.send("turn_complete", {
+    executionId,
+    id: turnId,
+    iteration,
+    stopReason: "end_turn",
+    completedAt,
+  });
+  send.send("execution_complete", {
+    executionId,
+    kind: "agent",
+    success: true,
+    completedAt,
+  });
 }
 
 // ── Route entry points ───────────────────────────────────────────────────────
@@ -277,7 +338,16 @@ export function handleDispatch(body: DispatchBody): Response {
   const messages = toModelMessages(body.messages);
   const clientTools = body.clientTools ?? [];
   const executionId = `exec_${generateId()}`;
-  return sseResponse((send) => runTurn(send, executionId, messages, clientTools));
+  return sseResponse((send) => {
+    send.send("execution_start", {
+      executionId,
+      kind: "agent",
+      agentId: "virtual",
+      agentName: "Switchback Assistant",
+      startedAt: new Date().toISOString(),
+    });
+    return runTurn(send, executionId, messages, clientTools, 1);
+  });
 }
 
 export function handleResume(body: ResumeBody): Response {
@@ -321,7 +391,11 @@ export function handleResume(body: ResumeBody): Response {
       { role: "tool", content: toolResults },
     ];
 
-    // Reuse the same executionId so a follow-up tool call can /resume again.
-    await runTurn(send, executionId, messages, paused.clientTools);
+    // Reuse the same executionId so a follow-up tool call can /resume again, and
+    // advance the iteration: re-invoking the model over the tool results is a new
+    // reasoning turn. No fresh execution_start — this continues the run, not a
+    // new one (a bare turn_start, which the widget renders under the kind:"agent"
+    // it already resolved on dispatch).
+    await runTurn(send, executionId, messages, paused.clientTools, paused.iteration + 1);
   });
 }

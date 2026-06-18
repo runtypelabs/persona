@@ -24,8 +24,8 @@ const configInspector = createDemoConfigInspector({ title: "Agent Loop" });
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const apiUrl =
   import.meta.env.VITE_PROXY_URL
-    ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch`
-    : `http://localhost:${proxyPort}/api/chat/dispatch`;
+    ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-agent-loop`
+    : `http://localhost:${proxyPort}/api/chat/dispatch-agent-loop`;
 
 let iterationDisplay: "separate" | "merged" = "separate";
 let activeController: AgentWidgetController | null = null;
@@ -39,28 +39,6 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     storageAdapter: createLocalStorageAdapter(
       `persona-state-agent-demo-${mode}`,
     ),
-    agent: {
-      name: "Travel Planner Assistant",
-      model: "nemotron-3-ultra-550b-a55b",
-      systemPrompt:
-        "You are a travel planning assistant with access to the Exa web search tool. " +
-        "For itinerary requests, complete work in exactly 3 iterations: " +
-        "Iteration 1 (Discovery), Iteration 2 (Structuring), Iteration 3 (Final). " +
-        "Provide a short heading for each iteration and do not skip directly to the final output. " +
-        "Use web search for current details when helpful and format the response in clear markdown.",
-      temperature: 0.7,
-      tools: {
-        toolIds: ["builtin:exa"],
-      },
-      loopConfig: {
-        maxTurns: 3,
-      },
-    },
-    agentOptions: {
-      streamResponse: true,
-      recordMode: "virtual",
-      storeResults: false,
-    },
     iterationDisplay,
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
@@ -96,7 +74,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
 
 setupMountMode({
   slug: "agent-demo",
-  modes: ["inline", "launcher", "fullscreen"],
+  modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
     activeMountMode = mode;
     const config = buildConfig(mode);
@@ -114,7 +92,7 @@ setupMountMode({
       };
     }
 
-    // inline + fullscreen share the same in-page mount; CSS handles the chrome
+    // inline mounts flush in the page; CSS handles the chrome
     const mount = renderInlineMount(stage);
     mount.style.height = "100%";
     const controller = createAgentExperience(mount, squareInlinePanel(config));

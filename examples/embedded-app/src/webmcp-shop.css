@@ -538,7 +538,6 @@ body.webmcp-shop .shop-wire-legend i {
 
 /* ── Notes (Try-it) tints to brand on this page ────────────────────────── */
 
-body.webmcp-shop .notes-heading { color: var(--shop-faint); }
 body.webmcp-shop .notes-section-title { color: var(--shop-ink); }
 body.webmcp-shop .notes-section > p,
 body.webmcp-shop .notes-section ul,

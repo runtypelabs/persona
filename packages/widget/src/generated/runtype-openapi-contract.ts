@@ -7,57 +7,80 @@
 // Then regenerate this file with:
 //   pnpm --filter @runtypelabs/persona generate:runtype-types
 
-export type RuntypeAgentSSEEvent = {
-  agentId: string;
-  agentName: string;
-  config?: {
-  enableReflection?: boolean;
-  model?: string;
+export type RuntypeExecutionStreamEvent = ({
+  agentId?: string;
+  agentName?: string;
+  config?: Record<string, unknown>;
+  executionId: string;
+  flowId?: string;
+  flowName?: string;
+  kind: "agent" | "flow";
+  maxTurns?: number;
+  seq: number;
+  source?: string;
+  startedAt: string;
+  totalSteps?: number;
+  type: "execution_start";
+}) | ({
+  completedAt?: string;
+  durationMs?: number;
+  executionId: string;
+  failedSteps?: number;
+  finalOutput?: string;
+  iterations?: number;
+  kind: "agent" | "flow";
+  seq: number;
+  stopReason?: string;
+  success: boolean;
+  successfulSteps?: number;
+  totalCost?: number;
+  totalSteps?: number;
+  totalTokens?: {
+  input: number;
+  output: number;
+};
+  type: "execution_complete";
+}) | ({
+  code?: string;
+  completedAt?: string;
+  error: string | {
+  code: string;
+  details?: Record<string, unknown>;
+  message: string;
 };
   executionId: string;
-  maxTurns: number;
+  kind: "agent" | "flow";
   seq: number;
-  startedAt: string;
-  type: "agent_start";
-} | {
+  type: "execution_error";
+  upgradeUrl?: string;
+}) | ({
   executionId: string;
-  iteration: number;
-  maxTurns: number;
-  seq: number;
-  startedAt: string;
-  totalCost?: number;
-  type: "agent_iteration_start";
-} | ({
-  executionId: string;
-  iteration: number;
+  id: string;
+  iteration?: number;
   role: "user" | "assistant" | "system";
   seq: number;
-  turnId: string;
-  turnIndex: number;
-  type: "agent_turn_start";
+  turnIndex?: number;
+  type: "turn_start";
 }) | ({
-  contentType: "text" | "thinking" | "tool_input";
-  delta: string;
-  executionId: string;
-  iteration: number;
-  seq: number;
-  turnId: string;
-  type: "agent_turn_delta";
-}) | ({
-  completedAt: string;
+  completedAt?: string;
   content?: string;
   cost?: number;
-  estimatedContextBreakdown?: {
-  categories: Record<string, {
-  chars: number;
-  estimatedTokens: number;
-}>;
-  contextWindowSize?: number;
-  estimatedTotalTokens: number;
-  estimatedUtilizationPercent?: number;
-};
   executionId: string;
-  iteration: number;
+  fallback?: {
+  attempts: Array<{
+  attempt: number;
+  error?: string;
+  model?: string;
+  success: boolean;
+  type: "retry" | "model" | "message" | "flow";
+}>;
+  exhausted: boolean;
+  model?: string;
+  reason?: string | null;
+  used: boolean;
+};
+  id: string;
+  iteration?: number;
   role: "user" | "assistant" | "system";
   seq: number;
   stopReason?: "end_turn" | "max_tool_calls" | "length" | "content_filter" | "error" | "unknown";
@@ -65,207 +88,260 @@ export type RuntypeAgentSSEEvent = {
   input: number;
   output: number;
 };
-  turnId: string;
-  type: "agent_turn_complete";
+  type: "turn_complete";
+}) | {
+  executionId: string;
+  id: string;
+  index?: number;
+  name?: string;
+  outputVariable?: string;
+  seq: number;
+  startedAt?: string;
+  stepType?: string;
+  totalSteps?: number;
+  type: "step_start";
+} | ({
+  completedAt?: string;
+  durationMs?: number;
+  error?: string;
+  executionId: string;
+  fallback?: {
+  attempts: Array<{
+  attempt: number;
+  error?: string;
+  model?: string;
+  success: boolean;
+  type: "retry" | "model" | "message" | "flow";
+}>;
+  exhausted: boolean;
+  model?: string;
+  reason?: string | null;
+  used: boolean;
+};
+  id: string;
+  name?: string;
+  result?: unknown;
+  seq: number;
+  stepType?: string;
+  stopReason?: "end_turn" | "max_tool_calls" | "length" | "content_filter" | "error" | "unknown";
+  success?: boolean;
+  tokensUsed?: number;
+  type: "step_complete";
+  unresolvedVariables?: Array<string>;
+}) | {
+  executionId: string;
+  id: string;
+  index?: number;
+  name?: string;
+  seq: number;
+  skippedAt?: string;
+  stepType?: string;
+  totalSteps?: number;
+  type: "step_skip";
+  when?: string;
+} | ({
+  executionId: string;
+  id: string;
+  parentToolCallId?: string;
+  role?: "user" | "assistant" | "system";
+  seq: number;
+  stepId?: string;
+  turnId?: string;
+  type: "text_start";
+}) | {
+  delta: string;
+  executionId: string;
+  id: string;
+  seq: number;
+  type: "text_delta";
+} | {
+  executionId: string;
+  id: string;
+  seq: number;
+  text?: string;
+  type: "text_complete";
+} | ({
+  executionId: string;
+  id: string;
+  parentToolCallId?: string;
+  scope?: "turn" | "loop";
+  seq: number;
+  type: "reasoning_start";
+}) | {
+  delta: string;
+  executionId: string;
+  id: string;
+  seq: number;
+  type: "reasoning_delta";
+} | ({
+  executionId: string;
+  id: string;
+  scope?: "turn" | "loop";
+  seq: number;
+  text?: string;
+  type: "reasoning_complete";
 }) | ({
   executionId: string;
-  iteration: number;
+  id: string;
+  mediaType: string;
+  role?: "user" | "assistant" | "system";
+  seq: number;
+  toolCallId?: string;
+  type: "media_start";
+}) | {
+  delta: string;
+  executionId: string;
+  id: string;
+  seq: number;
+  type: "media_delta";
+} | {
+  data?: string;
+  executionId: string;
+  id: string;
+  mediaType?: string;
+  seq: number;
+  toolCallId?: string;
+  type: "media_complete";
+  url?: string;
+} | ({
+  artifactType: "markdown" | "component";
+  component?: string;
+  executionId?: string;
+  id: string;
+  seq?: number;
+  title?: string;
+  type: "artifact_start";
+}) | {
+  delta: string;
+  executionId?: string;
+  id: string;
+  seq?: number;
+  type: "artifact_delta";
+} | {
+  component: string;
+  executionId?: string;
+  id: string;
+  props: Record<string, unknown>;
+  seq?: number;
+  type: "artifact_update";
+} | {
+  executionId?: string;
+  id: string;
+  seq?: number;
+  type: "artifact_complete";
+} | {
+  executionId: string;
+  id?: string;
+  seq: number;
+  sourceType?: string;
+  title?: string;
+  type: "source";
+  url?: string;
+  [key: string]: unknown;
+} | ({
+  executionId: string;
+  hiddenParameterNames?: Array<string>;
+  iteration?: number;
   origin?: "webmcp" | "sdk";
   pageOrigin?: string;
   parameters?: Record<string, unknown>;
   seq: number;
+  startedAt?: string;
+  stepId?: string;
   toolCallId: string;
   toolName: string;
-  toolType: "flow" | "mcp" | "builtin" | "custom" | "external" | "advisor" | "subagent" | "local";
-  type: "agent_tool_start";
+  toolType: string;
+  type: "tool_start";
 }) | {
   delta: string;
   executionId: string;
-  iteration: number;
   seq: number;
   toolCallId: string;
-  type: "agent_tool_delta";
-} | {
-  delta: string;
-  executionId: string;
-  iteration: number;
-  seq: number;
-  toolCallId: string;
-  type: "agent_tool_input_delta";
+  type: "tool_input_delta";
 } | {
   executionId: string;
   hiddenParameterNames?: Array<string>;
-  iteration: number;
   parameters: Record<string, unknown>;
   seq: number;
   toolCallId: string;
-  toolName: string;
-  type: "agent_tool_input_complete";
+  toolName?: string;
+  type: "tool_input_complete";
 } | {
+  delta: string;
+  executionId: string;
+  seq: number;
+  toolCallId: string;
+  type: "tool_output_delta";
+} | {
+  error?: string;
   executionId: string;
   executionTime?: number;
-  iteration: number;
+  iteration?: number;
   result?: unknown;
   seq: number;
+  stepId?: string;
   success: boolean;
   toolCallId: string;
-  toolName: string;
-  type: "agent_tool_complete";
-} | ({
-  executionId?: string;
-  iteration: number;
-  media: Array<({
-  annotations?: {
-  audience?: Array<"user" | "assistant">;
-};
-  data: string;
-  mediaType: string;
-  type: "media";
-}) | ({
-  annotations?: {
-  audience?: Array<"user" | "assistant">;
-};
-  mediaType?: string;
-  type: "image-url";
-  url: string;
-}) | ({
-  annotations?: {
-  audience?: Array<"user" | "assistant">;
-};
-  mediaType: string;
-  type: "file-url";
-  url: string;
-})>;
-  seq?: number;
-  toolCallId: string;
-  toolName: string;
-  type: "agent_media";
-}) | {
+  toolName?: string;
+  type: "tool_complete";
+} | {
   approvalId: string;
-  description: string;
+  description?: string;
   executionId: string;
-  externalAgent?: {
-  contextId?: string;
-  taskId?: string;
-};
   iteration?: number;
   parameters?: Record<string, unknown>;
   reason?: string;
   seq: number;
-  startedAt: string;
-  timeout: number;
-  toolCallId: string;
+  startedAt?: string;
+  subagent?: {
+  agentName?: string;
   toolName: string;
-  toolType: string;
-  type: "agent_approval_start";
+};
+  timeout?: number;
+  toolCallId?: string;
+  toolName: string;
+  toolType?: string;
+  type: "approval_start";
 } | ({
   approvalId: string;
-  completedAt: string;
+  completedAt?: string;
   decision: "approved" | "denied" | "timeout";
   executionId: string;
-  resolvedBy: "user" | "system";
+  resolvedBy?: "user" | "system";
   seq: number;
-  type: "agent_approval_complete";
+  type: "approval_complete";
 }) | ({
-  awaitedAt: string;
+  awaitedAt?: string;
   executionId: string;
   origin?: "webmcp" | "sdk";
   pageOrigin?: string;
   parameters?: Record<string, unknown>;
   seq: number;
   toolCallId?: string;
-  toolId: string;
-  toolName: string;
-  type: "agent_await";
-}) | {
-  completedAt: string;
-  cost?: number;
-  duration?: number;
-  estimatedContextBreakdown?: {
-  categories: Record<string, {
-  chars: number;
-  estimatedTokens: number;
-}>;
-  contextWindowSize?: number;
-  estimatedTotalTokens: number;
-  estimatedUtilizationPercent?: number;
-};
-  executionId: string;
-  iteration: number;
-  output?: string;
-  runningTotalCost?: number;
-  seq: number;
-  stopConditionMet: boolean;
-  tokens?: {
-  input: number;
-  output: number;
-};
-  toolCallsMade: number;
-  type: "agent_iteration_complete";
-} | {
-  executionId: string;
-  iteration: number;
-  reflection?: string;
-  seq: number;
-  timestamp?: string;
-  type: "agent_reflection";
-} | {
-  activatedCapabilities: Array<string>;
-  executionId: string;
-  iteration: number;
-  seq: number;
-  skill: string;
-  timestamp?: string;
-  toolCallId: string;
-  type: "agent_skill_loaded";
-} | ({
-  executionId: string;
-  iteration: number;
-  outcome: "pending_approval" | "auto_published";
-  proposalId?: string;
-  seq: number;
-  skill: string;
-  timestamp?: string;
-  toolCallId: string;
-  type: "agent_skill_proposed";
+  toolId?: string;
+  toolName?: string;
+  type: "await";
 }) | ({
-  agentId: string;
-  completedAt: string;
-  duration?: number;
-  error?: string;
-  executionId: string;
-  externalAgent?: {
-  contextId?: string;
-  taskId?: string;
-};
-  finalOutput?: string;
-  iterations: number;
-  seq: number;
-  stopReason: "complete" | "end_turn" | "max_turns" | "max_cost" | "timeout" | "error";
-  success: boolean;
-  totalCost?: number;
-  totalTokens?: {
-  input: number;
-  output: number;
-};
-  type: "agent_complete";
-}) | {
-  error: {
+  error: string | {
   code: string;
   details?: Record<string, unknown>;
   message: string;
 };
   executionId: string;
-  iteration?: number;
-  recoverable: boolean;
+  recoverable?: boolean;
   seq: number;
-  timestamp?: string;
-  type: "agent_error";
-} | {
+  type: "error";
+}) | {
   executionId: string;
   seq: number;
   timestamp: string;
-  type: "agent_ping";
+  type: "ping";
+} | {
+  executionId?: string;
+  name: string;
+  seq?: number;
+  type: "custom";
+  value?: unknown;
 };
 
 export type RuntypeFlowSSEEvent = {
@@ -562,591 +638,11 @@ export type RuntypeFlowSSEEvent = {
   [key: string]: unknown;
 };
 
-export type RuntypeDispatchSSEEvent = {
-  agentId: string;
-  agentName: string;
-  config?: {
-  enableReflection?: boolean;
-  model?: string;
-};
-  executionId: string;
-  maxTurns: number;
-  seq: number;
-  startedAt: string;
-  type: "agent_start";
-} | {
-  executionId: string;
-  iteration: number;
-  maxTurns: number;
-  seq: number;
-  startedAt: string;
-  totalCost?: number;
-  type: "agent_iteration_start";
-} | ({
-  executionId: string;
-  iteration: number;
-  role: "user" | "assistant" | "system";
-  seq: number;
-  turnId: string;
-  turnIndex: number;
-  type: "agent_turn_start";
-}) | ({
-  contentType: "text" | "thinking" | "tool_input";
-  delta: string;
-  executionId: string;
-  iteration: number;
-  seq: number;
-  turnId: string;
-  type: "agent_turn_delta";
-}) | ({
-  completedAt: string;
-  content?: string;
-  cost?: number;
-  estimatedContextBreakdown?: {
-  categories: Record<string, {
-  chars: number;
-  estimatedTokens: number;
-}>;
-  contextWindowSize?: number;
-  estimatedTotalTokens: number;
-  estimatedUtilizationPercent?: number;
-};
-  executionId: string;
-  iteration: number;
-  role: "user" | "assistant" | "system";
-  seq: number;
-  stopReason?: "end_turn" | "max_tool_calls" | "length" | "content_filter" | "error" | "unknown";
-  tokens?: {
-  input: number;
-  output: number;
-};
-  turnId: string;
-  type: "agent_turn_complete";
-}) | ({
-  executionId: string;
-  iteration: number;
-  origin?: "webmcp" | "sdk";
-  pageOrigin?: string;
-  parameters?: Record<string, unknown>;
-  seq: number;
-  toolCallId: string;
-  toolName: string;
-  toolType: "flow" | "mcp" | "builtin" | "custom" | "external" | "advisor" | "subagent" | "local";
-  type: "agent_tool_start";
-}) | {
-  delta: string;
-  executionId: string;
-  iteration: number;
-  seq: number;
-  toolCallId: string;
-  type: "agent_tool_delta";
-} | {
-  delta: string;
-  executionId: string;
-  iteration: number;
-  seq: number;
-  toolCallId: string;
-  type: "agent_tool_input_delta";
-} | {
-  executionId: string;
-  hiddenParameterNames?: Array<string>;
-  iteration: number;
-  parameters: Record<string, unknown>;
-  seq: number;
-  toolCallId: string;
-  toolName: string;
-  type: "agent_tool_input_complete";
-} | {
-  executionId: string;
-  executionTime?: number;
-  iteration: number;
-  result?: unknown;
-  seq: number;
-  success: boolean;
-  toolCallId: string;
-  toolName: string;
-  type: "agent_tool_complete";
-} | ({
-  executionId?: string;
-  iteration: number;
-  media: Array<({
-  annotations?: {
-  audience?: Array<"user" | "assistant">;
-};
-  data: string;
-  mediaType: string;
-  type: "media";
-}) | ({
-  annotations?: {
-  audience?: Array<"user" | "assistant">;
-};
-  mediaType?: string;
-  type: "image-url";
-  url: string;
-}) | ({
-  annotations?: {
-  audience?: Array<"user" | "assistant">;
-};
-  mediaType: string;
-  type: "file-url";
-  url: string;
-})>;
-  seq?: number;
-  toolCallId: string;
-  toolName: string;
-  type: "agent_media";
-}) | {
-  approvalId: string;
-  description: string;
-  executionId: string;
-  externalAgent?: {
-  contextId?: string;
-  taskId?: string;
-};
-  iteration?: number;
-  parameters?: Record<string, unknown>;
-  reason?: string;
-  seq: number;
-  startedAt: string;
-  timeout: number;
-  toolCallId: string;
-  toolName: string;
-  toolType: string;
-  type: "agent_approval_start";
-} | ({
-  approvalId: string;
-  completedAt: string;
-  decision: "approved" | "denied" | "timeout";
-  executionId: string;
-  resolvedBy: "user" | "system";
-  seq: number;
-  type: "agent_approval_complete";
-}) | ({
-  awaitedAt: string;
-  executionId: string;
-  origin?: "webmcp" | "sdk";
-  pageOrigin?: string;
-  parameters?: Record<string, unknown>;
-  seq: number;
-  toolCallId?: string;
-  toolId: string;
-  toolName: string;
-  type: "agent_await";
-}) | {
-  completedAt: string;
-  cost?: number;
-  duration?: number;
-  estimatedContextBreakdown?: {
-  categories: Record<string, {
-  chars: number;
-  estimatedTokens: number;
-}>;
-  contextWindowSize?: number;
-  estimatedTotalTokens: number;
-  estimatedUtilizationPercent?: number;
-};
-  executionId: string;
-  iteration: number;
-  output?: string;
-  runningTotalCost?: number;
-  seq: number;
-  stopConditionMet: boolean;
-  tokens?: {
-  input: number;
-  output: number;
-};
-  toolCallsMade: number;
-  type: "agent_iteration_complete";
-} | {
-  executionId: string;
-  iteration: number;
-  reflection?: string;
-  seq: number;
-  timestamp?: string;
-  type: "agent_reflection";
-} | {
-  activatedCapabilities: Array<string>;
-  executionId: string;
-  iteration: number;
-  seq: number;
-  skill: string;
-  timestamp?: string;
-  toolCallId: string;
-  type: "agent_skill_loaded";
-} | ({
-  executionId: string;
-  iteration: number;
-  outcome: "pending_approval" | "auto_published";
-  proposalId?: string;
-  seq: number;
-  skill: string;
-  timestamp?: string;
-  toolCallId: string;
-  type: "agent_skill_proposed";
-}) | ({
-  agentId: string;
-  completedAt: string;
-  duration?: number;
-  error?: string;
-  executionId: string;
-  externalAgent?: {
-  contextId?: string;
-  taskId?: string;
-};
-  finalOutput?: string;
-  iterations: number;
-  seq: number;
-  stopReason: "complete" | "end_turn" | "max_turns" | "max_cost" | "timeout" | "error";
-  success: boolean;
-  totalCost?: number;
-  totalTokens?: {
-  input: number;
-  output: number;
-};
-  type: "agent_complete";
-}) | {
-  error: {
-  code: string;
-  details?: Record<string, unknown>;
-  message: string;
-};
-  executionId: string;
-  iteration?: number;
-  recoverable: boolean;
-  seq: number;
-  timestamp?: string;
-  type: "agent_error";
-} | {
-  executionId: string;
-  seq: number;
-  timestamp: string;
-  type: "agent_ping";
-} | {
-  executionContext?: Record<string, unknown>;
-  executionId?: string;
-  flowId: string;
-  flowName?: string;
-  input?: unknown;
-  seq?: number;
-  source?: string;
-  startedAt: string;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  totalSteps?: number;
-  type: "flow_start";
-} | {
-  claudeManagedAgentId?: string;
-  completedAt?: string;
-  completedSteps?: number;
-  duration?: number;
-  executionContext?: Record<string, unknown>;
-  executionId?: string;
-  executionTime?: number;
-  failedSteps?: number;
-  finalOutput?: string;
-  flowId?: string;
-  flowName?: string;
-  output?: unknown;
-  seq?: number;
-  source?: string;
-  success?: boolean;
-  successfulSteps?: number;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  totalSteps?: number;
-  totalTokensUsed?: number;
-  type: "flow_complete";
-} | ({
-  code?: string;
-  error: string | {
-  code: string;
-  message: string;
-  stepId?: string;
-  stepType?: string;
-};
-  executionId?: string;
-  executionTime?: number;
-  flowId?: string;
-  seq?: number;
-  timestamp?: string;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  type: "flow_error";
-  upgradeUrl?: string;
-}) | ({
-  awaitedAt: string;
-  executionId?: string;
-  flowId: string;
-  origin?: "webmcp" | "sdk";
-  pageOrigin?: string;
-  parameters?: Record<string, unknown>;
-  seq?: number;
-  toolCallId?: string;
-  toolId?: string;
-  toolName?: string;
-  type: "flow_await";
-}) | {
-  estimatedTokens?: number;
-  executionId?: string;
-  id?: string;
-  index?: number;
-  name?: string;
-  outputVariable?: string;
-  seq?: number;
-  startedAt: string;
-  stepId?: string;
-  stepName?: string;
-  stepType?: string;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  totalSteps?: number;
-  type: "step_start";
-} | {
-  delta?: string;
-  executionId?: string;
-  id?: string;
-  messageId?: string;
-  partId?: string;
-  seq?: number;
-  text?: string;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  toolId?: string;
-  type: "step_delta";
-} | ({
-  completedAt?: string;
-  duration?: number;
-  durationMs?: number;
-  error?: string;
-  executionId?: string;
-  executionTime?: number;
-  id?: string;
-  index?: number;
-  name?: string;
-  output?: unknown;
-  result?: unknown;
-  seq?: number;
-  stepId?: string;
-  stepName?: string;
-  stepType?: string;
-  stopReason?: "end_turn" | "max_tool_calls" | "length" | "content_filter" | "error" | "unknown";
-  success?: boolean;
-  tokensUsed?: number;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  type: "step_complete";
-  unresolvedVariables?: Array<string>;
-}) | {
-  error: string;
-  executionId?: string;
-  executionTime?: number;
-  id?: string;
-  index?: number;
-  name?: string;
-  seq?: number;
-  stepType?: string;
-  type: "step_error";
-} | {
-  error?: string;
-  executionId?: string;
-  id: string;
-  index?: number;
-  name?: string;
-  seq?: number;
-  skippedAt: string;
-  stepType: string;
-  totalSteps: number;
-  type: "step_skip";
-  when: string;
-} | {
-  executionId?: string;
-  reason?: string;
-  seq?: number;
-  type: "step_await";
-  [key: string]: unknown;
-} | ({
-  agentContext?: {
-  executionId: string;
-  iteration: number;
-  seq: number;
-};
-  executionId?: string;
-  hiddenParameterNames?: Array<string>;
-  name?: string;
-  parameters?: Record<string, unknown>;
-  providerOptions?: Record<string, unknown>;
-  seq?: number;
-  startedAt?: string;
-  stepId?: string;
-  toolCallId?: string;
-  toolId?: string;
-  toolName?: string;
-  toolType: "flow" | "mcp" | "builtin" | "custom" | "external" | "advisor" | "subagent" | "local";
-  type: "tool_start";
-  [key: string]: unknown;
-}) | {
-  delta?: string;
-  executionId?: string;
-  seq?: number;
-  toolId?: string;
-  type: "tool_delta";
-  [key: string]: unknown;
-} | {
-  delta: string;
-  executionId?: string;
-  seq?: number;
-  stepId?: string;
-  toolCallId?: string;
-  toolId?: string;
-  type: "tool_input_delta";
-} | {
-  executionId?: string;
-  hiddenParameterNames?: Array<string>;
-  parameters: Record<string, unknown>;
-  providerOptions?: Record<string, unknown>;
-  seq?: number;
-  stepId?: string;
-  toolCallId?: string;
-  toolId?: string;
-  toolName?: string;
-  type: "tool_input_complete";
-} | {
-  agentContext?: {
-  executionId: string;
-  iteration: number;
-  seq: number;
-};
-  completedAt?: string;
-  error?: string;
-  executionId?: string;
-  executionTime?: number;
-  name?: string;
-  result?: unknown;
-  seq?: number;
-  stepId?: string;
-  success: boolean;
-  toolCallId?: string;
-  toolCost?: number;
-  toolId?: string;
-  toolName?: string;
-  type: "tool_complete";
-} | {
-  agentContext?: {
-  executionId: string;
-  iteration: number;
-  seq: number;
-};
-  error: string;
-  executionId?: string;
-  executionTime?: number;
-  failedAt?: string;
-  name: string;
-  seq?: number;
-  toolId: string;
-  type: "tool_error";
-} | {
-  executionId?: string;
-  id: string;
-  seq?: number;
-  text: string;
-  type: "chunk";
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "text_start";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "text_end";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "reason_start";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "reason_delta";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "reason_complete";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "source";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "fallback_start";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "fallback_complete";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "fallback_exhausted";
-  [key: string]: unknown;
-} | ({
-  artifactType: "markdown" | "component";
-  component?: string;
-  id: string;
-  title?: string;
-  type: "artifact_start";
-}) | {
-  delta: string;
-  id: string;
-  type: "artifact_delta";
-} | {
-  component: string;
-  id: string;
-  props: Record<string, unknown>;
-  type: "artifact_update";
-} | {
-  id: string;
-  type: "artifact_complete";
-} | ({
-  artifactType?: "markdown" | "component";
-  component?: string;
-  content?: string;
-  id?: string;
-  props?: Record<string, unknown>;
-  title?: string;
-  type: "artifact";
-  [key: string]: unknown;
-});
-
 export type RuntypeStreamEventOf<U, T extends string> = Extract<U, { type: T }>;
 
-export type RuntypeAgentTurnCompleteEvent = RuntypeStreamEventOf<
-  RuntypeAgentSSEEvent,
-  "agent_turn_complete"
+export type RuntypeTurnCompleteEvent = RuntypeStreamEventOf<
+  RuntypeExecutionStreamEvent,
+  "turn_complete"
 >;
 
 export type RuntypeStepCompleteEvent = RuntypeStreamEventOf<
@@ -1155,7 +651,7 @@ export type RuntypeStepCompleteEvent = RuntypeStreamEventOf<
 >;
 
 export type RuntypeStopReasonKind = NonNullable<
-  RuntypeAgentTurnCompleteEvent["stopReason"] | RuntypeStepCompleteEvent["stopReason"]
+  RuntypeTurnCompleteEvent["stopReason"] | RuntypeStepCompleteEvent["stopReason"]
 >;
 
 export type RuntypeClientInitRequest = {
@@ -1221,7 +717,7 @@ export type RuntypeClientChatRequest = {
   turnId?: string;
 };
 
-export type RuntypeClientChatStreamEvent = RuntypeFlowSSEEvent;
+export type RuntypeClientChatStreamEvent = RuntypeExecutionStreamEvent;
 
 export type RuntypeClientResumeRequest = {
   executionId: string;
@@ -1250,7 +746,7 @@ export type RuntypeClientResumeRequest = {
   toolOutputs?: Record<string, unknown>;
 };
 
-export type RuntypeClientResumeStreamEvent = RuntypeDispatchSSEEvent;
+export type RuntypeClientResumeStreamEvent = RuntypeExecutionStreamEvent;
 
 export type RuntypeClientFeedbackRequest = {
   comment?: string;

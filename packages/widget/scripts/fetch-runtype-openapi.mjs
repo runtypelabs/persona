@@ -34,7 +34,7 @@ function parseArgs(argv) {
 }
 
 function assertContractShape(doc, source) {
-  const requiredComponents = ["AgentSSEEvent", "FlowSSEEvent", "DispatchSSEEvent"];
+  const requiredComponents = ["ExecutionStreamEvent", "FlowSSEEvent"];
   const requiredPaths = [
     "/v1/client/chat",
     "/v1/client/init",

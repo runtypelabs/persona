@@ -295,6 +295,11 @@ export function buildWidgetConfig(): AgentWidgetConfig {
     ...DEFAULT_WIDGET_CONFIG,
     // Proxy mode → our own Next.js route. resume hits `${apiUrl}/resume`.
     apiUrl: "/api/chat/dispatch",
+    // The shim speaks Persona's neutral UNIFIED vocabulary (execution_start /
+    // turn_* / text_* / await / execution_complete). As of Persona 4.0 the widget
+    // consumes the unified wire natively, so no `events` opt-in is needed — the
+    // /resume continuation (which streams mid-run with no `execution_start`) is
+    // handled directly.
     features: {
       ...DEFAULT_WIDGET_CONFIG.features,
       showEventStreamToggle: true,

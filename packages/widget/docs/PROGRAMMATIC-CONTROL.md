@@ -558,8 +558,6 @@ The installer also dispatches sibling lifecycle events for diagnostics and analy
 | `persona:error` | `{ phase, error }` | a load step (`css` / `bundle` / `init`) failed |
 
 > **Note:** These events are only dispatched by the automatic installer script. Direct calls to `initAgentWidget()` return the handle synchronously and do not fire them.
->
-> `persona:ready` is still dispatched as a **deprecated** alias of `persona:chat-ready` and will be removed in the next major.
 
 ## Controller Events
 

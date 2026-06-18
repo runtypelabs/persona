@@ -29,6 +29,9 @@ export interface PausedExecution {
   messages: ModelMessage[];
   pending: Array<{ toolCallId: string; toolName: string }>;
   clientTools: ClientToolDefinition[];
+  // 1-based turn index at the time of the pause; the resumed turn reports
+  // `iteration + 1` so the wire reflects a genuinely new reasoning turn.
+  iteration: number;
 }
 
 // How long a paused execution may sit before the shopper resumes it.

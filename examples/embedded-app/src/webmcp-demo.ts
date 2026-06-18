@@ -673,11 +673,12 @@ if (!modelContext) {
 // ===========================================================================
 
 // Wiring: proxy mode only: like the other example demos. The agent that
-// drives this storefront is defined entirely in code as WEBMCP_STOREFRONT_FLOW
-// (packages/proxy/src/flows/webmcp-storefront.ts); the local proxy forwards the
-// page's clientTools[] upstream and proxies the /resume round-trip. No hosted
-// Runtype agent or client token is involved. The proxy's `/api/chat/dispatch-
-// webmcp` route mounts that flow (see examples/vercel-edge/src/server.ts).
+// drives this storefront is defined entirely in code as WEBMCP_STOREFRONT_AGENT
+// (packages/proxy/src/agents/webmcp-storefront.ts); the local proxy forwards
+// the page's clientTools[] upstream and proxies the /resume round-trip. No
+// hosted Runtype agent or client token is involved. The proxy's
+// `/api/chat/dispatch-webmcp` route mounts that agent (see
+// examples/vercel-edge/src/server.ts).
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyApiUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-webmcp`

@@ -32,8 +32,6 @@ import {
   createRegexJsonParser,
   createXmlParser
 } from "./utils/formatting";
-import { SequenceReorderBuffer } from "./utils/sequence-buffer";
-import { UnifiedToLegacyBridge, isUnifiedLifecycleStart } from "./utils/unified-event-bridge";
 import { VERSION } from "./version";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
@@ -291,17 +289,6 @@ export class AgentWidgetClient {
    */
   public isAgentMode(): boolean {
     return !!this.config.agent;
-  }
-
-  /**
-   * Append `?events=unified` when the widget opted into the unified vocabulary,
-   * preserving any existing query string. No-op for the default legacy mode.
-   * The server only switches vocabularies when it sees the param; the widget
-   * still auto-detects the actual wire mode from the first stream frame.
-   */
-  private withEventsParam(url: string): string {
-    if (this.config.events !== "unified") return url;
-    return url + (url.includes("?") ? "&" : "?") + "events=unified";
   }
 
   /**
@@ -694,7 +681,7 @@ export class AgentWidgetClient {
           console.debug("[AgentWidgetClient] client token dispatch", chatRequest);
         }
 
-        response = await fetch(this.withEventsParam(this.getClientApiUrl('chat')), {
+        response = await fetch(this.getClientApiUrl('chat'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -814,7 +801,7 @@ export class AgentWidgetClient {
     if (this.customFetch) {
       try {
         response = await this.customFetch(
-          this.withEventsParam(this.apiUrl),
+          this.apiUrl,
           {
             method: "POST",
             headers,
@@ -829,7 +816,7 @@ export class AgentWidgetClient {
         throw err;
       }
     } else {
-      response = await fetch(this.withEventsParam(this.apiUrl), {
+      response = await fetch(this.apiUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -890,7 +877,7 @@ export class AgentWidgetClient {
     if (this.customFetch) {
       try {
         response = await this.customFetch(
-          this.withEventsParam(this.apiUrl),
+          this.apiUrl,
           {
             method: "POST",
             headers,
@@ -905,7 +892,7 @@ export class AgentWidgetClient {
         throw err;
       }
     } else {
-      response = await fetch(this.withEventsParam(this.apiUrl), {
+      response = await fetch(this.apiUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -1008,11 +995,9 @@ export class AgentWidgetClient {
     options?: { streamResponse?: boolean; signal?: AbortSignal }
   ): Promise<Response> {
     const isClientToken = this.isClientTokenMode();
-    const url = this.withEventsParam(
-      isClientToken
-        ? this.getClientApiUrl('resume')
-        : `${this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE}/resume`
-    );
+    const url = isClientToken
+      ? this.getClientApiUrl('resume')
+      : `${this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE}/resume`;
 
     // The client-token resume route authenticates the session, not a Bearer
     // key. A WebMCP approval can sit awaiting user input for a long time, so by
@@ -1392,21 +1377,26 @@ export class AgentWidgetClient {
     let lastAssistantInTurn: AgentWidgetMessage | null = null;
     // Reference to track assistant message for custom event handler
     const assistantMessageRef = { current: null as AgentWidgetMessage | null };
-    // Track current partId for message segmentation at tool boundaries
-    const partIdState = { current: null as string | null };
-    let didSplitByPartId = false;
+    // Segmentation state for the `parseSSEEvent` extensibility callback (the
+    // consumer's own `partId` field) — independent of the unified wire.
+    const customParsePartId = { current: null as string | null };
+    // Unified text-channel block id (from `text_start`/`text_delta` `id`). Drives
+    // bubble-id segmentation on the unified wire in place of the legacy `partId`:
+    // a new block id means a new bubble, sealed at `text_complete`/tool boundaries.
+    let currentTextBlockId: string | null = null;
+    // Raw text accumulated for the open flow block before its bubble is
+    // materialized — lets a whitespace-only block resolve without a stray bubble.
+    let pendingFlowRaw = "";
+    // Nested flow-as-tool attribution (PR #4602): a text/reasoning block whose
+    // `parentToolCallId` matches a `tool_start.toolCallId` belongs to a flow
+    // running as that tool. Keyed by the unified block id, these route the block's
+    // deltas into a message tagged `agentMetadata.parentToolId` (the parent tool's
+    // row) instead of the top-level assistant/reasoning channel.
+    const nestedBlockParent = new Map<string, string>();
+    const nestedBlockMessages = new Map<string, AgentWidgetMessage>();
+    const nestedBlockRaw = new Map<string, string>();
     const reasoningMessages = new Map<string, AgentWidgetMessage>();
     const toolMessages = new Map<string, AgentWidgetMessage>();
-    // Messages produced by steps inside a nested flow executed as a tool.
-    // Keyed by `${parentToolId}::${nestedStepId}::${partId}` so each nested
-    // step (send-stream, prompt) gets its own assistant message, and prompts
-    // with inner tool calls split into one message per text segment: still
-    // attributable to the parent tool call.
-    const nestedStepMessages = new Map<string, AgentWidgetMessage>();
-    // Most-recent partId seen for a given `${toolId}::${stepId}` scope, used
-    // to seal the previous segment when a new partId arrives within the
-    // same nested prompt step.
-    const nestedPartIdByStep = new Map<string, string>();
     const reasoningContext = {
       lastId: null as string | null,
       byStep: new Map<string, string>()
@@ -1414,49 +1404,6 @@ export class AgentWidgetClient {
     const toolContext = {
       lastId: null as string | null,
       byCall: new Map<string, string>()
-    };
-
-    // Nested message key. partId defaults to "" so steps without segmentation
-    // (e.g. send-stream) still have a deterministic single key.
-    const getNestedStepKey = (
-      toolId: string,
-      stepId: string,
-      partId: string = ""
-    ) => `${toolId}::${stepId}::${partId}`;
-
-    // Prefix used to sweep every nested message belonging to a single
-    // (toolId, stepId) scope: needed on step_complete to seal any segments
-    // that are still streaming.
-    const getNestedStepPrefix = (toolId: string, stepId: string) =>
-      `${toolId}::${stepId}::`;
-
-    const ensureNestedStepMessage = (
-      toolId: string,
-      stepId: string,
-      partId: string,
-      executionId?: string
-    ): AgentWidgetMessage => {
-      const key = getNestedStepKey(toolId, stepId, partId);
-      const existing = nestedStepMessages.get(key);
-      if (existing) return existing;
-      const idSuffix = partId ? `-${partId}` : "";
-      const message: AgentWidgetMessage = {
-        id: `nested-${toolId}-${stepId}${idSuffix}`,
-        role: "assistant",
-        content: "",
-        createdAt: new Date().toISOString(),
-        streaming: true,
-        sequence: nextSequence(),
-        ...(partId ? { partId } : {}),
-        agentMetadata: {
-          executionId,
-          parentToolId: toolId,
-          parentStepId: stepId,
-        },
-      };
-      nestedStepMessages.set(key, message);
-      emitMessage(message);
-      return message;
     };
 
     const normalizeKey = (value: unknown): string | null => {
@@ -1496,11 +1443,12 @@ export class AgentWidgetClient {
     const ensureAssistantMessage = () => {
       if (assistantMessage) return assistantMessage;
       let id: string;
+      const segment = currentTextBlockId;
       if (!assistantIdConsumed && baseAssistantId) {
         id = baseAssistantId;
         assistantIdConsumed = true;
-      } else if (baseAssistantId && partIdState.current) {
-        id = `${baseAssistantId}_${partIdState.current}`;
+      } else if (baseAssistantId && segment) {
+        id = `${baseAssistantId}_${segment}`;
       } else {
         id = `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       }
@@ -1692,11 +1640,6 @@ export class AgentWidgetClient {
     // Rebuild incremental text by sequence so late arrivals can repair already-emitted
     // content after the reorder buffer's gap-timeout flush.
     const orderedChunkBuffers = new Map<string, Array<{ seq: number; text: string }>>();
-    const assistantMessagesByPartId = new Map<string, AgentWidgetMessage>();
-    // Only the most-recently sealed segment is reconciled with step_complete's
-    // final response. Earlier segments rely on their own async parser microtasks
-    // resolving via the closure-captured `assistant` variable.
-    let lastSealedTextSegment: AgentWidgetMessage | null = null;
 
     const insertOrderedChunk = (key: string, seq: number, text: string): string => {
       let chunks = orderedChunkBuffers.get(key);
@@ -1821,58 +1764,241 @@ export class AgentWidgetClient {
       finalizeCleanup();
     };
 
-    // Sequence reorder buffer: SSE events carrying a `seq` (or `sequenceIndex`)
-    // field are held and re-emitted in sequence order so that transport-level
-    // reordering doesn't produce garbled output.
-    const seqReadyQueue: Array<{ payloadType: string; payload: any }> = [];
-    let isDrainScheduled = false;
-    // Declared here so scheduleReadyQueueDrain can reference it; assigned
-    // after all handler-scoped variables are initialised (before the SSE loop).
-    let drainReadyQueue: () => void;
-    // Two drain paths: both are intentional, do not remove either:
-    //   1. Microtask drain (scheduleReadyQueueDrain): required when the
-    //      buffer's emitter fires from the gap-timeout setTimeout callback,
-    //      because there is no surrounding synchronous drain site there.
-    //   2. Synchronous drain (drainReadyQueue() after each seqBuffer.push):
-    //      skips an extra microtask hop on the hot in-order push path.
-    const scheduleReadyQueueDrain = () => {
-      if (isDrainScheduled) return;
-      isDrainScheduled = true;
-      queueMicrotask(() => {
-        isDrainScheduled = false;
-        drainReadyQueue();
-      });
+    // === Unified flow text channel ===
+    // Flow prompt-step text streams as `text_delta` blocks (segmented by
+    // `text_start`/`text_complete`) and can be structured JSON, so each block
+    // runs through the per-bubble structured-content parser — agent text stays
+    // plain. This is the legacy step_delta parser core, re-keyed from `partId`
+    // to the unified block-id bubble. The caller materializes the bubble lazily
+    // (whitespace-only blocks around tool boundaries never leave a stray bubble)
+    // and `step_complete.result.response` reconciles the authoritative final.
+    let lastSealedFlowBubble: AgentWidgetMessage | null = null;
+
+    // Stream one accumulated chunk of flow block text through the parser, setting
+    // display `content` (extracted) + `rawContent` (raw) and emitting. Mirrors the
+    // legacy step_delta chunk path; plain text bypasses the structured parser.
+    const applyFlowTextChunk = (
+      assistant: AgentWidgetMessage,
+      accumulatedRaw: string,
+      chunk: string,
+      chunkSeq: number | undefined
+    ) => {
+      assistant.rawContent = accumulatedRaw;
+      if (!streamParsers.has(assistant.id)) {
+        streamParsers.set(assistant.id, this.createStreamParser());
+      }
+      const parser = streamParsers.get(assistant.id)!;
+      const looksLikeJson =
+        accumulatedRaw.trim().startsWith("{") || accumulatedRaw.trim().startsWith("[");
+      if (looksLikeJson) {
+        rawContentBuffers.set(assistant.id, accumulatedRaw);
+      }
+      const isPlainTextParser = (parser as any).__isPlainTextParser === true;
+      if (isPlainTextParser) {
+        assistant.content =
+          chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
+        rawContentBuffers.delete(assistant.id);
+        streamParsers.delete(assistant.id);
+        assistant.rawContent = undefined;
+        emitMessage(assistant);
+        return;
+      }
+      const parsedResult = parser.processChunk(accumulatedRaw);
+      if (parsedResult instanceof Promise) {
+        parsedResult
+          .then((result) => {
+            const text = typeof result === "string" ? result : result?.text ?? null;
+            if (text !== null && text.trim() !== "") {
+              assistant.content = text;
+              emitMessage(assistant);
+            } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith("<")) {
+              assistant.content =
+                chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
+              rawContentBuffers.delete(assistant.id);
+              streamParsers.delete(assistant.id);
+              assistant.rawContent = undefined;
+              emitMessage(assistant);
+            }
+          })
+          .catch(() => {
+            assistant.content =
+              chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
+            rawContentBuffers.delete(assistant.id);
+            streamParsers.delete(assistant.id);
+            assistant.rawContent = undefined;
+            emitMessage(assistant);
+          });
+      } else {
+        const text =
+          typeof parsedResult === "string" ? parsedResult : parsedResult?.text ?? null;
+        if (text !== null && text.trim() !== "") {
+          assistant.content = text;
+          emitMessage(assistant);
+        } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith("<")) {
+          assistant.content =
+            chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
+          rawContentBuffers.delete(assistant.id);
+          streamParsers.delete(assistant.id);
+          assistant.rawContent = undefined;
+          emitMessage(assistant);
+        }
+      }
     };
-    const seqBuffer = new SequenceReorderBuffer((payloadType: string, payload: any) => {
-      seqReadyQueue.push({ payloadType, payload });
-      scheduleReadyQueueDrain();
-    });
-    // Unified-event consumer (opt-in; see utils/unified-event-bridge.ts). When the
-    // API streams the neutral unified vocabulary, each frame is transduced back to
-    // the legacy events the dispatch chain below already renders. Seed the mode from
-    // the requested vocabulary so /resume (whose stream continues mid-run with no
-    // `execution_start`) bridges correctly; a leading lifecycle frame is then
-    // authoritative and can flip it (e.g. an upstream that ignored `?events=unified`
-    // streams `agent_start`). The unified stream is single-connection and in order,
-    // so bridged events bypass the reorder buffer.
-    const unifiedBridge = new UnifiedToLegacyBridge();
-    let unifiedMode = this.config.events === "unified";
-    let wireModeResolved = false;
+
+    // Seal a flow text block at `text_complete`: run final structured extraction
+    // off the accumulated raw buffer (U2: `text_complete.text` mirrors that raw
+    // buffer, so we never double-count), then finalize the bubble. The structured
+    // `step_complete.result.response` reconciles afterward.
+    const finalizeFlowTextBlock = (
+      assistant: AgentWidgetMessage,
+      finalContent?: unknown
+    ) => {
+      const effectiveFinal =
+        finalContent !== undefined && finalContent !== null
+          ? finalContent
+          : assistant.content;
+      if (
+        effectiveFinal === undefined ||
+        effectiveFinal === null ||
+        effectiveFinal === ""
+      ) {
+        assistant.streaming = false;
+        emitMessage(assistant);
+        return;
+      }
+      const rawBuffer = rawContentBuffers.get(assistant.id);
+      const contentToProcess = rawBuffer ?? ensureStringContent(effectiveFinal);
+      assistant.rawContent = contentToProcess;
+      const parser = streamParsers.get(assistant.id);
+      let extractedText: string | null = null;
+      let asyncPending = false;
+      if (parser) {
+        extractedText = parser.getExtractedText();
+        if (extractedText === null) {
+          extractedText = extractTextFromJson(contentToProcess);
+        }
+        if (extractedText === null) {
+          const parsedResult = parser.processChunk(contentToProcess);
+          if (parsedResult instanceof Promise) {
+            asyncPending = true;
+            parsedResult
+              .then((result) => {
+                const text =
+                  typeof result === "string" ? result : result?.text ?? null;
+                if (text !== null) {
+                  assistant.content = text;
+                  assistant.streaming = false;
+                  streamParsers.delete(assistant.id);
+                  rawContentBuffers.delete(assistant.id);
+                  emitMessage(assistant);
+                }
+              })
+              .catch(() => {});
+          } else {
+            extractedText =
+              typeof parsedResult === "string"
+                ? parsedResult
+                : parsedResult?.text ?? null;
+          }
+        }
+      }
+      if (!asyncPending) {
+        if (extractedText !== null && extractedText.trim() !== "") {
+          assistant.content = extractedText;
+        } else if (!rawContentBuffers.has(assistant.id)) {
+          assistant.content = ensureStringContent(effectiveFinal);
+        }
+        const parserToClose = streamParsers.get(assistant.id);
+        if (parserToClose) {
+          const closeResult = parserToClose.close?.();
+          if (closeResult instanceof Promise) closeResult.catch(() => {});
+          streamParsers.delete(assistant.id);
+        }
+        rawContentBuffers.delete(assistant.id);
+        assistant.streaming = false;
+        emitMessage(assistant);
+      }
+    };
+
+    // Materialize (lazily) the message for a nested flow-as-tool block, tagged
+    // with the parent tool-call id so the UI renders it in the parent tool's row.
+    const ensureNestedBlockMessage = (
+      blockId: string,
+      parentToolCallId: string,
+      variant?: "reasoning"
+    ): AgentWidgetMessage => {
+      const existing = nestedBlockMessages.get(blockId);
+      if (existing) return existing;
+      const message: AgentWidgetMessage = {
+        id: `nested-${parentToolCallId}-${blockId}`,
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+        streaming: true,
+        sequence: nextSequence(),
+        ...(variant ? { variant } : {}),
+        ...(variant === "reasoning"
+          ? { reasoning: { id: blockId, status: "streaming", chunks: [] } }
+          : {}),
+        agentMetadata: { parentToolId: parentToolCallId },
+      };
+      nestedBlockMessages.set(blockId, message);
+      emitMessage(message);
+      return message;
+    };
+
+    // Ready queue of parsed unified frames awaiting a drain. The API streams the
+    // neutral 33-event unified vocabulary; each frame is parsed in the SSE loop
+    // below and rendered directly by the handler (no translation bridge), then
+    // pushed here. The unified stream is a single, in-order SSE connection, so
+    // frames drain straight through with no reordering.
+    const seqReadyQueue: Array<{ payloadType: string; payload: any }> = [];
+    // Declared here so later closures can reference it; assigned after all
+    // handler-scoped variables are initialised (before the SSE loop).
+    let drainReadyQueue: () => void;
+    // Per-stream media-block buffer: the unified media triad
+    // (media_start/media_delta/media_complete) is reassembled here into a single
+    // synthetic message at media_complete, keyed by the block id.
+    const mediaBuffers = new Map<
+      string,
+      { mediaType?: string; role?: string; toolCallId?: unknown; parts: string[] }
+    >();
+    // Tracks the last iteration surfaced as a per-iteration message boundary, so
+    // `turn_start` advancing the iteration rotates the bubble in 'separate' mode.
+    let lastIterationSeen = 0;
+    // Execution kind, resolved from the leading `execution_start` frame. Drives
+    // the agent-vs-flow branches that the single unified vocabulary collapses.
+    let executionKind: "agent" | "flow" = "agent";
+    // Open turn id (from `turn_start`). Unified text/reasoning deltas carry their
+    // own block id, not the turn id, so the turn id is threaded onto agentMetadata
+    // from here.
+    let openTurnId: string | null = null;
     // Agent execution state tracking
     let agentExecution: AgentExecutionState | null = null;
     // Track assistant messages per agent iteration for 'separate' mode
     const agentIterationMessages = new Map<number, AgentWidgetMessage>();
     const iterationDisplay = this.config.iterationDisplay ?? 'separate';
 
-    // Drains reorder-buffered events through the main event handler.
-    // Also invoked after the SSE loop exits so any events buffered at
+    // Drains the queued transduced events through the main event handler.
+    // Also invoked after the SSE loop exits so any events queued at
     // end-of-stream are processed.
     drainReadyQueue = () => {
       for (let i = 0; i < seqReadyQueue.length; i++) {
         const payloadType = seqReadyQueue[i].payloadType;
         const payload = seqReadyQueue[i].payload;
 
-        if (payloadType === "reason_start") {
+        if (payloadType === "reasoning_start") {
+          // Nested flow-as-tool thinking (PR #4602): route to the parent tool's row.
+          const rStartBlockId = typeof payload.id === "string" ? payload.id : null;
+          const rStartParent =
+            typeof payload.parentToolCallId === "string" && payload.parentToolCallId
+              ? payload.parentToolCallId
+              : null;
+          if (rStartBlockId && rStartParent) {
+            nestedBlockParent.set(rStartBlockId, rStartParent);
+            ensureNestedBlockMessage(rStartBlockId, rStartParent, "reasoning");
+            continue;
+          }
           const reasoningId =
             resolveReasoningId(payload, true) ?? `reason-${nextSequence()}`;
           const reasoningMessage = ensureReasoningMessage(reasoningId);
@@ -1886,10 +2012,29 @@ export class AgentWidgetClient {
             resolveTimestamp(payload.startedAt ?? payload.timestamp);
           reasoningMessage.reasoning.completedAt = undefined;
           reasoningMessage.reasoning.durationMs = undefined;
+          if (payload.scope === "loop" || payload.scope === "turn") {
+            reasoningMessage.reasoning.scope = payload.scope;
+          }
           reasoningMessage.streaming = true;
           reasoningMessage.reasoning.status = "streaming";
           emitMessage(reasoningMessage);
-        } else if (payloadType === "reason_delta" || payloadType === "reason_chunk") {
+        } else if (payloadType === "reasoning_delta") {
+          // Nested flow-as-tool thinking: append to the parent-tool-row message.
+          const rDeltaBlockId = typeof payload.id === "string" ? payload.id : null;
+          if (
+            rDeltaBlockId &&
+            nestedBlockParent.has(rDeltaBlockId) &&
+            nestedBlockMessages.has(rDeltaBlockId)
+          ) {
+            const nested = nestedBlockMessages.get(rDeltaBlockId)!;
+            const nestedChunk =
+              payload.reasoningText ?? payload.text ?? payload.delta ?? "";
+            if (nestedChunk && payload.hidden !== true && nested.reasoning) {
+              nested.reasoning.chunks.push(String(nestedChunk));
+              emitMessage(nested);
+            }
+            continue;
+          }
           const reasoningId =
             resolveReasoningId(payload, false) ??
             resolveReasoningId(payload, true) ??
@@ -1933,13 +2078,51 @@ export class AgentWidgetClient {
           }
           reasoningMessage.streaming = reasoningMessage.reasoning.status !== "complete";
           emitMessage(reasoningMessage);
-        } else if (payloadType === "reason_complete") {
+        } else if (payloadType === "reasoning_complete") {
+          // Nested flow-as-tool thinking close: seal the parent-tool-row message.
+          const rCompleteBlockId = typeof payload.id === "string" ? payload.id : null;
+          if (
+            rCompleteBlockId &&
+            nestedBlockParent.has(rCompleteBlockId) &&
+            nestedBlockMessages.has(rCompleteBlockId)
+          ) {
+            const nested = nestedBlockMessages.get(rCompleteBlockId)!;
+            if (nested.reasoning) {
+              const nestedReflection =
+                typeof payload.text === "string" ? payload.text : "";
+              if (nestedReflection && nested.reasoning.chunks.length === 0) {
+                nested.reasoning.chunks.push(nestedReflection);
+              }
+              nested.reasoning.status = "complete";
+              nested.streaming = false;
+              emitMessage(nested);
+            }
+            nestedBlockParent.delete(rCompleteBlockId);
+            nestedBlockMessages.delete(rCompleteBlockId);
+            continue;
+          }
           const reasoningId =
             resolveReasoningId(payload, false) ??
             resolveReasoningId(payload, true) ??
             `reason-${nextSequence()}`;
+          // A close carrying text (or scope:"loop") is a cross-iteration
+          // reflection fold (merged spec §4 E3): the API streams nothing for the
+          // block, then delivers the whole reflection as `text` on the close.
+          // Materialize a reasoning bubble even if no reasoning_start/delta opened
+          // one, and adopt the close text when the block streamed no chunks (the
+          // common reflection case, where reasoning_start opened an empty bubble).
+          const reflectionText = typeof payload.text === "string" ? payload.text : "";
+          if (!reasoningMessages.get(reasoningId) && (reflectionText || payload.scope === "loop")) {
+            ensureReasoningMessage(reasoningId);
+          }
           const reasoningMessage = reasoningMessages.get(reasoningId);
           if (reasoningMessage?.reasoning) {
+            if (payload.scope === "loop" || payload.scope === "turn") {
+              reasoningMessage.reasoning.scope = payload.scope;
+            }
+            if (reflectionText && reasoningMessage.reasoning.chunks.length === 0) {
+              reasoningMessage.reasoning.chunks.push(reflectionText);
+            }
             reasoningMessage.reasoning.status = "complete";
             reasoningMessage.reasoning.completedAt = resolveTimestamp(
               payload.completedAt ?? payload.timestamp
@@ -1958,14 +2141,30 @@ export class AgentWidgetClient {
             reasoningContext.byStep.delete(stepKey);
           }
         } else if (payloadType === "tool_start") {
-          const toolId =
-            resolveToolId(payload, true) ?? `tool-${nextSequence()}`;
+          // Unified tool family (agent + flow). Seal any open assistant bubble so
+          // text→tool→text interleaves chronologically (the API also emits a
+          // text_complete here, so this is usually a no-op — kept for safety).
+          if (assistantMessage) {
+            (assistantMessage as AgentWidgetMessage).streaming = false;
+            emitMessage(assistantMessage as AgentWidgetMessage);
+            assistantMessage = null;
+          }
+          // Unified denormalizes `iteration` onto tool frames too (merged spec §2).
+          // Track it so media/reflection blocks — which carry no iteration of their
+          // own — can be stamped with the enclosing iteration even on tool-only
+          // turns that never emit a `turn_start`.
+          if (typeof payload.iteration === "number") lastIterationSeen = payload.iteration;
+          const toolId: string =
+            (typeof payload.toolCallId === "string" ? payload.toolCallId : undefined) ??
+            resolveToolId(payload, true) ??
+            `tool-${nextSequence()}`;
           const toolName = payload.toolName ?? payload.name;
           // Suppress tool UI for artifact emit tools: artifacts are handled via artifact_* events
           if (isArtifactEmitToolName(toolName)) {
             artifactToolCallIds.add(toolId);
             continue;
           }
+          trackToolId(getToolCallKey(payload), toolId);
           const toolMessage = ensureToolMessage(toolId);
           const tool = toolMessage.toolCall ?? {
             id: toolId,
@@ -1973,10 +2172,10 @@ export class AgentWidgetClient {
           };
           tool.name = toolName ?? tool.name;
           tool.status = "running";
-          if (payload.args !== undefined) {
-            tool.args = payload.args;
-          } else if (payload.parameters !== undefined) {
+          if (payload.parameters !== undefined) {
             tool.args = payload.parameters;
+          } else if (payload.args !== undefined) {
+            tool.args = payload.args;
           }
           tool.startedAt =
             tool.startedAt ??
@@ -1985,15 +2184,14 @@ export class AgentWidgetClient {
           tool.durationMs = undefined;
           toolMessage.toolCall = tool;
           toolMessage.streaming = true;
-          const agentCtx = payload.agentContext;
-          if (agentCtx || payload.executionId) {
+          if (payload.executionId) {
             toolMessage.agentMetadata = {
-              executionId: agentCtx?.executionId ?? payload.executionId,
-              iteration: agentCtx?.iteration ?? payload.iteration,
+              executionId: payload.executionId,
+              iteration: payload.iteration,
             };
           }
           emitMessage(toolMessage);
-        } else if (payloadType === "tool_chunk" || payloadType === "tool_delta") {
+        } else if (payloadType === "tool_output_delta") {
           const toolId =
             resolveToolId(payload, false) ??
             resolveToolId(payload, true) ??
@@ -2072,11 +2270,17 @@ export class AgentWidgetClient {
           if (callKey) {
             toolContext.byCall.delete(callKey);
           }
-        } else if (payloadType === "step_await" && payload.awaitReason === "local_tool_required" && payload.toolName) {
-          // LOCAL tool pause. Runtype's prompt step throws LocalToolRequiredError
-          // when the model calls a tool with `toolType: "local"`. The server
-          // emits step_await with the tool name, params, and execution id; the
-          // execution pauses until the client POSTs /resume with toolOutputs.
+        } else if (payloadType === "await" && payload.toolName) {
+          // LOCAL tool pause. Two wire shapes resolve here, by dispatch target:
+          //  - FLOW dispatch → `step_await` + `awaitReason: "local_tool_required"`
+          //    (Runtype's prompt step throws LocalToolRequiredError when the model
+          //    calls a `toolType: "local"` tool).
+          //  - AGENT dispatch → `agent_await` (the agent runtime's native pause).
+          // Either way the server emits the tool name, params, and execution id;
+          // the execution pauses until the client POSTs /resume with toolOutputs.
+          // `agent_await` carries a BARE tool name plus an `origin`; page tools
+          // (origin "webmcp") are normalized to the `webmcp:`-prefixed form below
+          // so the bridge + session.ts `/resume` keying are identical for both.
           //
           // Upsert a fully-populated tool-variant message so the existing
           // ask_user_question bubble + sheet paths fire. Mark the message with
@@ -2099,7 +2303,15 @@ export class AgentWidgetClient {
           const toolId =
             toolCallId ?? (payload.toolId as string) ?? `local-${nextSequence()}`;
           const toolMessage = ensureToolMessage(toolId);
-          const toolName = payload.toolName as string;
+          const rawToolName = payload.toolName as string;
+          // `agent_await` page tools arrive with a bare name; synthesize the
+          // `webmcp:` prefix so isWebMcpToolName (and the bridge's prefix-strip on
+          // resume) treat them identically to a flow `step_await`.
+          const toolName =
+            payload.origin === "webmcp" &&
+            !isWebMcpToolName(rawToolName)
+              ? `webmcp:${rawToolName}`
+              : rawToolName;
           const webMcpTool = isWebMcpToolName(toolName);
           const tool = toolMessage.toolCall ?? { id: toolId, status: "pending" as const };
           tool.name = toolName;
@@ -2113,7 +2325,8 @@ export class AgentWidgetClient {
           tool.status = webMcpTool ? "running" : "complete";
           tool.chunks = tool.chunks ?? [];
           tool.startedAt =
-            tool.startedAt ?? resolveTimestamp(payload.startedAt ?? payload.timestamp);
+            tool.startedAt ??
+            resolveTimestamp(payload.startedAt ?? payload.timestamp ?? payload.awaitedAt);
           if (webMcpTool) {
             tool.completedAt = undefined;
             tool.duration = undefined;
@@ -2134,339 +2347,123 @@ export class AgentWidgetClient {
           };
           emitMessage(toolMessage);
         } else if (payloadType === "text_start") {
-          // Lifecycle event: a new text segment is beginning (emitted at tool boundaries).
-          // When toolContext is present this fired inside a nested flow: it must not
-          // seal or rotate the outer assistant message. Nested prompt segmentation is
-          // handled via nestedStepMessages keyed by (toolId, stepId).
-          if ((payload as any).toolContext?.toolId) {
+          // Nested flow-as-tool text (PR #4602): a `parentToolCallId` means this
+          // block belongs to a flow running as that tool — record the mapping and
+          // leave the top-level assistant bubble untouched (the nested deltas route
+          // into the parent tool's row).
+          const startBlockId = typeof payload.id === "string" ? payload.id : null;
+          const startParent =
+            typeof payload.parentToolCallId === "string" && payload.parentToolCallId
+              ? payload.parentToolCallId
+              : null;
+          if (startBlockId && startParent) {
+            nestedBlockParent.set(startBlockId, startParent);
             continue;
           }
-          const incomingPartId = payload.partId;
-          if (incomingPartId !== undefined && partIdState.current !== null && incomingPartId !== partIdState.current) {
-            const prev = assistantMessage as AgentWidgetMessage | null;
-            if (prev) {
-              prev.streaming = false;
-              emitMessage(prev);
-              lastSealedTextSegment = prev;
-              assistantMessage = null;
-              didSplitByPartId = true;
-            }
-          }
-          if (incomingPartId !== undefined) {
-            partIdState.current = incomingPartId;
-          }
-        } else if (payloadType === "text_end") {
-          // Lifecycle event: current text segment ended (tool call about to start).
-          // When toolContext is present the boundary belongs to a nested flow: leave
-          // outer assistant state alone so the outer stream is never interrupted by
-          // nested activity.
-          if ((payload as any).toolContext?.toolId) {
-            continue;
-          }
-          // Seal the current assistant message so the next segment gets a new one
+          // Unified text-channel block open. A new block id means a new bubble, so
+          // seal any open assistant bubble; the next text_delta creates a fresh one
+          // (lazily). The API emits a fresh block at every tool/media/approval/await
+          // boundary, so block-id keying drives segmentation — no partId.
           const prev = assistantMessage as AgentWidgetMessage | null;
           if (prev) {
-            prev.streaming = false;
-            emitMessage(prev);
-            lastSealedTextSegment = prev;
-            assistantMessage = null;
-            didSplitByPartId = true;
-          }
-        } else if (payloadType === "step_chunk" || payloadType === "step_delta") {
-          // Only process chunks for prompt steps, not tool/context steps
-          const stepType = (payload as any).stepType;
-          const executionType = (payload as any).executionType;
-          if (stepType === "tool" || executionType === "context") {
-            // Skip tool-related chunks - they're handled by tool_start/tool_complete
-            continue;
-          }
-
-          // Nested flow routing: when toolContext is present, this step_delta
-          // originated inside a nested flow executed as a tool. Surface it as
-          // its own assistant message keyed by the nested step id, so authors
-          // who add send-stream / prompt steps inside their flow see them as
-          // real messages in the timeline, in order: rather than merging
-          // into the outer assistant bubble or getting buried in the tool
-          // card. Each nested step id gets its own message; the parent tool
-          // bubble continues to represent the invocation via tool_* events.
-          const nestedToolCtx = (payload as any).toolContext as
-            | { toolId?: string; stepId?: string; executionId?: string }
-            | undefined;
-          if (nestedToolCtx?.toolId) {
-            const nestedStepId = String(
-              payload.id ?? nestedToolCtx.stepId ?? `step-${nextSequence()}`
-            );
-            const incomingPartId =
-              payload.partId !== undefined && payload.partId !== null
-                ? String(payload.partId)
-                : "";
-            const stepScopeKey = `${nestedToolCtx.toolId}::${nestedStepId}`;
-            const prevPartId = nestedPartIdByStep.get(stepScopeKey);
-
-            // If partId changed within this nested step (prompt with inner
-            // tool call emitting a new text segment), seal the previous
-            // segment's message so each segment renders as its own bubble.
-            if (
-              incomingPartId !== "" &&
-              prevPartId !== undefined &&
-              prevPartId !== "" &&
-              prevPartId !== incomingPartId
-            ) {
-              const prev = nestedStepMessages.get(
-                getNestedStepKey(
-                  nestedToolCtx.toolId,
-                  nestedStepId,
-                  prevPartId
-                )
-              );
-              if (prev && prev.streaming !== false) {
-                prev.streaming = false;
-                emitMessage(prev);
-              }
-            }
-            if (incomingPartId !== "") {
-              nestedPartIdByStep.set(stepScopeKey, incomingPartId);
-            }
-
-            const nestedMsg = ensureNestedStepMessage(
-              nestedToolCtx.toolId,
-              nestedStepId,
-              incomingPartId,
-              nestedToolCtx.executionId
-            );
-            const nestedChunk =
-              payload.text ??
-              payload.delta ??
-              payload.content ??
-              payload.chunk ??
-              "";
-            if (nestedChunk) {
-              nestedMsg.content += String(nestedChunk);
-              nestedMsg.streaming = true;
-              emitMessage(nestedMsg);
-            }
-            if (payload.isComplete) {
-              nestedMsg.streaming = false;
-              emitMessage(nestedMsg);
-            }
-            continue;
-          }
-
-          // partId-based segmentation: when partId changes, seal current message
-          // and start a new one so text and tools render in chronological order
-          const incomingPartId = payload.partId;
-          if (incomingPartId !== undefined && partIdState.current !== null && incomingPartId !== partIdState.current) {
-            const prev = assistantMessage as AgentWidgetMessage | null;
-            if (prev) {
+            // Normally text_complete already sealed the prior block; this is the
+            // defensive path if a producer opens a new block without closing.
+            if (executionKind === "flow") {
+              finalizeFlowTextBlock(prev);
+              lastSealedFlowBubble = prev;
+            } else {
               prev.streaming = false;
               emitMessage(prev);
-              lastSealedTextSegment = prev;
-              assistantMessage = null;
-              didSplitByPartId = true;
             }
+            assistantMessage = null;
           }
-          if (incomingPartId !== undefined) {
-            partIdState.current = incomingPartId;
+          currentTextBlockId =
+            typeof payload.id === "string" ? payload.id : currentTextBlockId;
+          pendingFlowRaw = "";
+        } else if (payloadType === "text_delta") {
+          // Nested flow-as-tool text: route to the parent tool's row, through the
+          // same structured-content parser, never the top-level assistant channel.
+          const deltaBlockId = typeof payload.id === "string" ? payload.id : null;
+          const nestedParent = deltaBlockId
+            ? nestedBlockParent.get(deltaBlockId)
+            : undefined;
+          if (deltaBlockId && nestedParent) {
+            const nestedDelta =
+              typeof payload.delta === "string" ? payload.delta : "";
+            const nestedRaw = (nestedBlockRaw.get(deltaBlockId) ?? "") + nestedDelta;
+            nestedBlockRaw.set(deltaBlockId, nestedRaw);
+            if (nestedRaw.trim() === "") continue;
+            const nested = ensureNestedBlockMessage(deltaBlockId, nestedParent);
+            nested.agentMetadata = {
+              ...nested.agentMetadata,
+              executionId: payload.executionId,
+              parentToolId: nestedParent,
+            };
+            applyFlowTextChunk(nested, nestedRaw, nestedDelta, undefined);
+            continue;
           }
-
-          const assistant =
-            incomingPartId !== undefined
-              ? (assistantMessagesByPartId.get(incomingPartId) ?? ensureAssistantMessage())
-              : ensureAssistantMessage();
-          if (incomingPartId !== undefined) {
-            if (!assistant.partId) {
-              assistant.partId = incomingPartId;
-            }
-            assistantMessagesByPartId.set(incomingPartId, assistant);
+          currentTextBlockId =
+            typeof payload.id === "string" ? payload.id : currentTextBlockId;
+          if (executionKind === "flow") {
+            // Flow prompt-step text can be structured JSON: accumulate the raw
+            // block and run it through the structured-content parser, keyed by the
+            // block-id bubble. Materialize lazily so a whitespace-only block
+            // (newlines around a tool boundary) never leaves a stray bubble.
+            const delta = typeof payload.delta === "string" ? payload.delta : "";
+            pendingFlowRaw += delta;
+            if (pendingFlowRaw.trim() === "") continue;
+            const assistant = ensureAssistantMessage();
+            assistant.agentMetadata = {
+              executionId: payload.executionId,
+              iteration: payload.iteration,
+            };
+            applyFlowTextChunk(assistant, pendingFlowRaw, delta, undefined);
+            lastAssistantInTurn = assistant;
+            continue;
           }
-          // Support various field names: text, delta, content, chunk (Runtype uses 'chunk')
-          const chunk = payload.text ?? payload.delta ?? payload.content ?? payload.chunk ?? "";
-          if (chunk) {
-            // Accumulate raw content for structured format parsing.
-            // Most out-of-order events are fixed at the dispatch layer, but once the
-            // gap timeout flushes later seqs we can still see genuine late arrivals.
-            // Rebuild chunked content by seq so those events repair prior output
-            // instead of appending in the wrong position.
-            const chunkSeq = typeof payload.seq === "number" ? payload.seq : undefined;
-            const chunkBufferKey = incomingPartId ?? assistant.id;
-            const accumulatedRaw =
-              chunkSeq !== undefined
-                ? insertOrderedChunk(chunkBufferKey, chunkSeq, String(chunk))
-                : (rawContentBuffers.get(assistant.id) ?? "") + chunk;
-            // Store raw content for action parsing, but NEVER set assistant.content to raw JSON
-            assistant.rawContent = accumulatedRaw;
-            
-            // Use stream parser to parse
-            if (!streamParsers.has(assistant.id)) {
-              streamParsers.set(assistant.id, this.createStreamParser());
-            }
-            const parser = streamParsers.get(assistant.id)!;
-            
-            // Check if content looks like JSON
-            const looksLikeJson = accumulatedRaw.trim().startsWith('{') || accumulatedRaw.trim().startsWith('[');
-            
-            // Store raw buffer before processing (needed for step_complete handler)
-            if (looksLikeJson) {
-              rawContentBuffers.set(assistant.id, accumulatedRaw);
-            }
-            
-            // Check if this is a plain text parser (marked with __isPlainTextParser)
-            const isPlainTextParser = (parser as any).__isPlainTextParser === true;
-            
-            // If plain text parser, just append the chunk directly
-            if (isPlainTextParser) {
-              assistant.content = chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
-              // Clear any raw buffer/parser since we're in plain text mode
-              rawContentBuffers.delete(assistant.id);
-              streamParsers.delete(assistant.id);
-              assistant.rawContent = undefined;
-              emitMessage(assistant);
-              continue;
-            }
-            
-            // Try to parse with the parser (for structured parsers)
-            const parsedResult = parser.processChunk(accumulatedRaw);
-            
-            // Handle async parser result
-            if (parsedResult instanceof Promise) {
-              parsedResult.then((result) => {
-                // Extract text from result (could be string or object)
-                const text = typeof result === 'string' ? result : result?.text ?? null;
-                
-                if (text !== null && text.trim() !== "") {
-                  // Parser successfully extracted text: update the chunk's assistant
-                  // (not assistantMessage; text_end may have cleared that ref before microtasks run)
-                  assistant.content = text;
-                  emitMessage(assistant);
-                } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith('<')) {
-                  // Not a structured format - show as plain text
-                  const currentAssistant = assistantMessage;
-                  const targetAssistant =
-                    currentAssistant && currentAssistant.id === assistant.id
-                      ? currentAssistant
-                      : assistant;
-                  if (targetAssistant.id === assistant.id) {
-                    targetAssistant.content =
-                      chunkSeq !== undefined ? accumulatedRaw : targetAssistant.content + chunk;
-                    rawContentBuffers.delete(targetAssistant.id);
-                    streamParsers.delete(targetAssistant.id);
-                    targetAssistant.rawContent = undefined;
-                    emitMessage(targetAssistant);
-                  }
-                }
-                // Otherwise wait for more chunks (incomplete structured format)
-                // Don't emit message if parser hasn't extracted text yet
-              }).catch(() => {
-                // On error, treat as plain text
-                assistant.content =
-                  chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
-                rawContentBuffers.delete(assistant.id);
-                streamParsers.delete(assistant.id);
-                assistant.rawContent = undefined;
-                emitMessage(assistant);
-              });
+          const assistant = ensureAssistantMessage();
+          assistant.content += payload.delta ?? '';
+          assistant.agentMetadata = {
+            executionId: payload.executionId,
+            iteration: payload.iteration,
+            turnId: openTurnId ?? undefined,
+            agentName: agentExecution?.agentName
+          };
+          lastAssistantInTurn = assistant;
+          emitMessage(assistant);
+        } else if (payloadType === "text_complete") {
+          // Nested flow-as-tool text block close: seal its parent-tool-row message.
+          const completeBlockId = typeof payload.id === "string" ? payload.id : null;
+          if (completeBlockId && nestedBlockParent.has(completeBlockId)) {
+            const nested = nestedBlockMessages.get(completeBlockId);
+            if (nested) finalizeFlowTextBlock(nested);
+            nestedBlockParent.delete(completeBlockId);
+            nestedBlockRaw.delete(completeBlockId);
+            nestedBlockMessages.delete(completeBlockId);
+            continue;
+          }
+          // Seal the current text block's bubble.
+          const prev = assistantMessage as AgentWidgetMessage | null;
+          if (prev) {
+            if (executionKind === "flow") {
+              // Final structured extraction off the accumulated raw buffer; the
+              // authoritative step_complete.result.response reconciles next.
+              finalizeFlowTextBlock(prev);
+              lastSealedFlowBubble = prev;
             } else {
-              // Synchronous parser result
-              // Extract text from result (could be string, null, or object)
-              const text = typeof parsedResult === 'string' ? parsedResult : parsedResult?.text ?? null;
-              
-              if (text !== null && text.trim() !== "") {
-                // Parser successfully extracted text
-                // Buffer is already set above
-                assistant.content = text;
-                emitMessage(assistant);
-              } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith('<')) {
-                // Not a structured format - show as plain text
-                assistant.content =
-                  chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
-                // Clear any raw buffer/parser if we were in structured format mode
-                rawContentBuffers.delete(assistant.id);
-                streamParsers.delete(assistant.id);
-                assistant.rawContent = undefined;
-                emitMessage(assistant);
+              // U2: text_complete carries the assembled text, but the bubble already
+              // holds it from the deltas — only fall back to payload.text when no
+              // delta content was seen, never double-count.
+              if ((prev.content ?? "") === "" && typeof payload.text === "string") {
+                prev.content = payload.text;
               }
-              // Otherwise wait for more chunks (incomplete structured format)
-              // Don't emit message if parser hasn't extracted text yet
+              prev.streaming = false;
+              emitMessage(prev);
             }
-            
-            // IMPORTANT: Don't call getExtractedText() and emit messages here
-            // This was causing raw JSON to be displayed because getExtractedText() 
-            // wasn't extracting the "text" field correctly during streaming
+            assistantMessage = null;
           }
-          if (payload.isComplete) {
-            const finalContent = payload.result?.response ?? assistant.content;
-            if (finalContent) {
-              // Check if we have raw content buffer that needs final processing
-              const rawBuffer = rawContentBuffers.get(assistant.id);
-              const contentToProcess = rawBuffer ?? ensureStringContent(finalContent);
-              assistant.rawContent = contentToProcess;
-              
-              // Try to extract text from final structured content
-              const parser = streamParsers.get(assistant.id);
-              let extractedText: string | null = null;
-              let asyncPending = false;
-              
-              if (parser) {
-                // First check if parser already has extracted text
-                extractedText = parser.getExtractedText();
-                
-                if (extractedText === null) {
-                  // Try extracting with regex
-                  extractedText = extractTextFromJson(contentToProcess);
-                }
-                
-                if (extractedText === null) {
-                  // Try parser.processChunk as last resort
-                  const parsedResult = parser.processChunk(contentToProcess);
-                  if (parsedResult instanceof Promise) {
-                    asyncPending = true;
-                    parsedResult.then((result) => {
-                      // Extract text from result (could be string or object)
-                      const text = typeof result === 'string' ? result : result?.text ?? null;
-                      if (text !== null) {
-                        const currentAssistant = assistantMessage;
-                        if (currentAssistant && currentAssistant.id === assistant.id) {
-                          currentAssistant.content = text;
-                          currentAssistant.streaming = false;
-                          // Clean up
-                          streamParsers.delete(currentAssistant.id);
-                          rawContentBuffers.delete(currentAssistant.id);
-                          emitMessage(currentAssistant);
-                        }
-                      }
-                    });
-                  } else {
-                    // Extract text from synchronous result
-                    extractedText = typeof parsedResult === 'string' ? parsedResult : parsedResult?.text ?? null;
-                  }
-                }
-              }
-              
-              // Skip sync emit if we're waiting on async parser
-              if (!asyncPending) {
-                // Set content: use extracted text if available, otherwise use raw content
-                if (extractedText !== null && extractedText.trim() !== "") {
-                  assistant.content = extractedText;
-                } else if (!rawContentBuffers.has(assistant.id)) {
-                  // Only use raw final content if we didn't accumulate chunks
-                  assistant.content = ensureStringContent(finalContent);
-                }
-                
-                // Clean up parser and buffer
-                const parserToClose = streamParsers.get(assistant.id);
-                if (parserToClose) {
-                  const closeResult = parserToClose.close?.();
-                  if (closeResult instanceof Promise) {
-                    closeResult.catch(() => {});
-                  }
-                  streamParsers.delete(assistant.id);
-                }
-                rawContentBuffers.delete(assistant.id);
-                assistant.streaming = false;
-                emitMessage(assistant);
-              }
-            }
-          }
+          currentTextBlockId = null;
+          pendingFlowRaw = "";
         } else if (payloadType === "step_complete") {
           // Only process completions for prompt steps, not tool/context steps
           const stepType = (payload as any).stepType;
@@ -2476,378 +2473,139 @@ export class AgentWidgetClient {
             continue;
           }
 
-          // Nested flow: seal every segment message produced by this nested
-          // step (a single nested prompt step may have produced multiple
-          // messages, one per partId, when inner tool calls split it). The
-          // outer assistantMessage state is untouched so reconciliation for
-          // the outer flow still works.
-          const nestedCompleteCtx = (payload as any).toolContext as
-            | { toolId?: string; stepId?: string; executionId?: string }
-            | undefined;
-          if (nestedCompleteCtx?.toolId) {
-            const nestedStepId = String(
-              payload.id ?? nestedCompleteCtx.stepId ?? ""
-            );
-            if (nestedStepId) {
-              const prefix = getNestedStepPrefix(
-                nestedCompleteCtx.toolId,
-                nestedStepId
-              );
-              for (const [key, msg] of nestedStepMessages) {
-                if (key.startsWith(prefix) && msg.streaming !== false) {
-                  msg.streaming = false;
-                  emitMessage(msg);
-                }
-              }
-              nestedPartIdByStep.delete(
-                `${nestedCompleteCtx.toolId}::${nestedStepId}`
-              );
+          // A failed step (`success:false`) — including the legacy `step_error`
+          // event, which the unified encoder folds into a failed `step_complete`
+          // — surfaces as a terminal error and finalizes the stream.
+          if (payload.success === false) {
+            const e = payload.error;
+            const message =
+              typeof e === "string" && e !== ""
+                ? e
+                : e != null && typeof e === "object" && "message" in e
+                  ? String((e as { message?: unknown }).message ?? "Step failed")
+                  : "Step failed";
+            onEvent({ type: "error", error: new Error(message) });
+            const finalMsg = assistantMessage as AgentWidgetMessage | null;
+            if (finalMsg && finalMsg.streaming) {
+              finalMsg.streaming = false;
+              emitMessage(finalMsg);
             }
+            onEvent({ type: "status", status: "idle" });
             continue;
           }
 
-          // Capture optional per-step stopReason emitted by the runtime
-          // (e.g. `'max_tool_calls'`, `'length'`). This is the dispatch-mode
-          // fallback: `agent_turn_complete` will overwrite it later in
-          // agent-loop streams.
-          const stepStopReason = (payload as any).stopReason as
-            | StopReasonKind
-            | undefined;
-
-          if (didSplitByPartId) {
-            // Sealed segment(s): do not create a second bubble from step_complete.
-            // Merge authoritative final response into the last sealed segment (fixes async lag).
-            if (assistantMessage !== null) {
-              const msg: AgentWidgetMessage = assistantMessage;
-              if (stepStopReason) msg.stopReason = stepStopReason;
-              streamParsers.delete(msg.id);
-              rawContentBuffers.delete(msg.id);
-              if (msg.streaming !== false) {
-                msg.streaming = false;
-                emitMessage(msg);
+          // Unified flow: reconcile the just-sealed text block with the
+          // authoritative structured final (`result.response`). Displayed content
+          // stays as streamed — a multi-segment step keeps each bubble's own text;
+          // reconcile only fills/repairs the last sealed block and sets rawContent.
+          // A pure-tool / text-less step (no sealed flow bubble) completes silently.
+          {
+            const sealed = lastSealedFlowBubble;
+            lastSealedFlowBubble = null;
+            const flowStopReason = (payload as any).stopReason as
+              | StopReasonKind
+              | undefined;
+            const finalResponse = payload.result?.response;
+            if (sealed) {
+              if (flowStopReason) sealed.stopReason = flowStopReason;
+              if (finalResponse !== undefined && finalResponse !== null) {
+                reconcileSealedAssistantWithFinalResponse(sealed, finalResponse);
+              } else if (sealed.streaming !== false) {
+                streamParsers.delete(sealed.id);
+                rawContentBuffers.delete(sealed.id);
+                sealed.streaming = false;
+                emitMessage(sealed);
               }
-            }
-            const splitFinalContent = payload.result?.response;
-            const sealedForReconcile = lastSealedTextSegment;
-            if (sealedForReconcile) {
-              if (stepStopReason) sealedForReconcile.stopReason = stepStopReason;
-              if (splitFinalContent !== undefined && splitFinalContent !== null) {
-                reconcileSealedAssistantWithFinalResponse(sealedForReconcile, splitFinalContent);
-              } else {
-                streamParsers.delete(sealedForReconcile.id);
-                rawContentBuffers.delete(sealedForReconcile.id);
-              }
-            }
-            lastSealedTextSegment = null;
-            continue;
-          }
-          const finalContent = payload.result?.response;
-          const assistant = ensureAssistantMessage();
-          if (stepStopReason) assistant.stopReason = stepStopReason;
-          if (finalContent !== undefined && finalContent !== null) {
-            // Check if we already have extracted text from streaming
-            const parser = streamParsers.get(assistant.id);
-            let hasExtractedText = false;
-            let asyncPending = false;
-            
-            if (parser) {
-              // First check if parser already extracted text during streaming
-              const currentExtractedText = parser.getExtractedText();
-              const rawBuffer = rawContentBuffers.get(assistant.id);
-              const contentToProcess = rawBuffer ?? ensureStringContent(finalContent);
-              
-              // Always set rawContent so action parsers can access the raw JSON
-              assistant.rawContent = contentToProcess;
-              
-              if (currentExtractedText !== null && currentExtractedText.trim() !== "") {
-                // We already have extracted text from streaming - use it
-                assistant.content = currentExtractedText;
-                hasExtractedText = true;
-              } else {
-                // No extracted text yet - try to extract from final content
-                
-                // Try fast path first
-                const extractedText = extractTextFromJson(contentToProcess);
-                if (extractedText !== null) {
-                  assistant.content = extractedText;
-                  hasExtractedText = true;
+            } else {
+              // Buffered / dispatch-mode step: no streamed text block, but the step
+              // carries the final response (and/or a stopReason) — render it as the
+              // assistant message. An empty response + stopReason still surfaces a
+              // sealed bubble so the UI can show an affordance.
+              const hasResponse =
+                finalResponse !== undefined &&
+                finalResponse !== null &&
+                finalResponse !== "";
+              if (hasResponse || flowStopReason) {
+                const assistant = ensureAssistantMessage();
+                if (flowStopReason) assistant.stopReason = flowStopReason;
+                if (hasResponse) {
+                  finalizeFlowTextBlock(assistant, finalResponse);
                 } else {
-                  // Try parser
-                  const parsedResult = parser.processChunk(contentToProcess);
-                  if (parsedResult instanceof Promise) {
-                    asyncPending = true;
-                    parsedResult.then((result) => {
-                      // Extract text from result (could be string or object)
-                      const text = typeof result === 'string' ? result : result?.text ?? null;
-                      
-                      if (text !== null && text.trim() !== "") {
-                        const currentAssistant = assistantMessage;
-                        if (currentAssistant && currentAssistant.id === assistant.id) {
-                          currentAssistant.content = text;
-                          currentAssistant.streaming = false;
-                          // Clean up
-                          streamParsers.delete(currentAssistant.id);
-                          rawContentBuffers.delete(currentAssistant.id);
-                          emitMessage(currentAssistant);
-                        }
-                      } else {
-                        // No extracted text - check if we should show raw content
-                        const finalExtractedText = parser.getExtractedText();
-                        const currentAssistant = assistantMessage;
-                        if (currentAssistant && currentAssistant.id === assistant.id) {
-                          if (finalExtractedText !== null && finalExtractedText.trim() !== "") {
-                            currentAssistant.content = finalExtractedText;
-                          } else if (!rawContentBuffers.has(currentAssistant.id)) {
-                            // Only show raw content if we never had any extracted text
-                            currentAssistant.content = ensureStringContent(finalContent);
-                          }
-                          currentAssistant.streaming = false;
-                          // Clean up
-                          streamParsers.delete(currentAssistant.id);
-                          rawContentBuffers.delete(currentAssistant.id);
-                          emitMessage(currentAssistant);
-                        }
-                      }
-                    });
-                  } else {
-                    // Extract text from synchronous result
-                    const text = typeof parsedResult === 'string' ? parsedResult : parsedResult?.text ?? null;
-                    
-                    if (text !== null && text.trim() !== "") {
-                      assistant.content = text;
-                      hasExtractedText = true;
-                    } else {
-                      // Check stub one more time
-                      const finalExtractedText = parser.getExtractedText();
-                      if (finalExtractedText !== null && finalExtractedText.trim() !== "") {
-                        assistant.content = finalExtractedText;
-                        hasExtractedText = true;
-                      }
-                    }
-                  }
+                  assistant.streaming = false;
+                  emitMessage(assistant);
                 }
               }
             }
-            
-            // Skip sync emit if we're waiting on async parser
-            if (!asyncPending) {
-              // Ensure rawContent is set even if there's no parser (for action parsing)
-              if (!assistant.rawContent) {
-                const rawBuffer = rawContentBuffers.get(assistant.id);
-                assistant.rawContent = rawBuffer ?? ensureStringContent(finalContent);
-              }
-              
-              // Only show raw content if we never extracted any text and no buffer was used
-              if (!hasExtractedText && !rawContentBuffers.has(assistant.id)) {
-                // No extracted text and no streaming happened - show raw content
-                assistant.content = ensureStringContent(finalContent);
-              }
-              
-              // Clean up parser and buffer
-              if (parser) {
-                const closeResult = parser.close?.();
-                if (closeResult instanceof Promise) {
-                  closeResult.catch(() => {});
-                }
-              }
-              streamParsers.delete(assistant.id);
-              rawContentBuffers.delete(assistant.id);
-              assistant.streaming = false;
-              emitMessage(assistant);
-            }
-          } else {
-            // No final content, just mark as complete and clean up
-            streamParsers.delete(assistant.id);
-            rawContentBuffers.delete(assistant.id);
-            assistant.streaming = false;
-            emitMessage(assistant);
+            continue;
           }
-        } else if (payloadType === "flow_complete") {
-          const finalContent = payload.result?.response;
-          if (didSplitByPartId) {
-            // Content was split into multiple assistant messages: the full response
-            // in flow_complete would overwrite the last segment. Just finalize streaming.
-            if (assistantMessage !== null) {
-              const msg: AgentWidgetMessage = assistantMessage;
-              streamParsers.delete(msg.id);
-              rawContentBuffers.delete(msg.id);
-              if (msg.streaming !== false) {
-                msg.streaming = false;
-                emitMessage(msg);
-              }
-            }
-          } else if (finalContent !== undefined && finalContent !== null) {
-            const assistant = ensureAssistantMessage();
-            // Check if we have raw content buffer that needs final processing
-            const rawBuffer = rawContentBuffers.get(assistant.id);
-            const stringContent = rawBuffer ?? ensureStringContent(finalContent);
-            assistant.rawContent = stringContent;
-            // Try to extract text from structured content
-            let displayContent = ensureStringContent(finalContent);
-            const parser = streamParsers.get(assistant.id);
-            if (parser) {
-              const extractedText = extractTextFromJson(stringContent);
-              if (extractedText !== null) {
-                displayContent = extractedText;
-              } else {
-                // Try parser if it exists
-                const parsedResult = parser.processChunk(stringContent);
-                if (parsedResult instanceof Promise) {
-                  parsedResult.then((result) => {
-                    // Extract text from result (could be string or object)
-                    const text = typeof result === 'string' ? result : result?.text ?? null;
-                    if (text !== null) {
-                      assistant.content = text;
-                      assistant.streaming = false;
-                      emitMessage(assistant);
-                    }
-                  });
-                }
-                const currentText = parser.getExtractedText();
-                if (currentText !== null) {
-                  displayContent = currentText;
-                }
-              }
-            }
-            // Clean up parser and buffer
-            streamParsers.delete(assistant.id);
-            rawContentBuffers.delete(assistant.id);
-
-            // Only emit if something actually changed to avoid flicker
-            const contentChanged = displayContent !== assistant.content;
-            const streamingChanged = assistant.streaming !== false;
-            
-            if (contentChanged) {
-              assistant.content = displayContent;
-            }
-            assistant.streaming = false;
-            
-            // Only emit if content or streaming state changed
-            if (contentChanged || streamingChanged) {
-              emitMessage(assistant);
-            }
-          } else {
-            // No final content, just mark as complete and clean up
-            if (assistantMessage !== null) {
-              // Clean up any remaining parsers/buffers
-              // TypeScript narrowing issue - assistantMessage is checked for null above
-              const msg: AgentWidgetMessage = assistantMessage;
-              streamParsers.delete(msg.id);
-              rawContentBuffers.delete(msg.id);
-              // Only emit if streaming state changed
-              if (msg.streaming !== false) {
-                msg.streaming = false;
-                emitMessage(msg);
-              }
-            }
-          }
-          onEvent({ type: "status", status: "idle" });
         // ================================================================
         // Agent Loop Execution Events
         // ================================================================
-        } else if (payloadType === "agent_start") {
-          agentExecution = {
-            executionId: payload.executionId,
-            agentId: payload.agentId ?? 'virtual',
-            agentName: payload.agentName ?? '',
-            status: 'running',
-            currentIteration: 0,
-            maxTurns: payload.maxTurns ?? 1,
-            startedAt: resolveTimestamp(payload.startedAt)
-          };
-        } else if (payloadType === "agent_iteration_start") {
-          if (agentExecution) {
-            agentExecution.currentIteration = payload.iteration;
-          }
-
-          // In 'separate' mode, finalize previous iteration's message and create a new one
-          if (iterationDisplay === 'separate' && payload.iteration > 1) {
-            const prevMsg = assistantMessage as AgentWidgetMessage | null;
-            if (prevMsg) {
-              prevMsg.streaming = false;
-              emitMessage(prevMsg);
-              // Store the completed message for this iteration
-              agentIterationMessages.set(payload.iteration - 1, prevMsg);
-              // Reset assistant message so ensureAssistantMessage creates a new one
-              assistantMessage = null;
-            }
-          }
-        } else if (payloadType === "agent_turn_start") {
-          // Reset the per-turn assistant tracker. lastAssistantInTurn is
-          // used by agent_turn_complete to attach stopReason to the final
-          // text segment of the turn even if that segment was sealed by an
-          // intervening tool-call boundary.
-          lastAssistantInTurn = null;
-        } else if (payloadType === "agent_turn_delta") {
-          if (payload.contentType === 'text') {
-            // Stream text to assistant message
-            const assistant = ensureAssistantMessage();
-            assistant.content += payload.delta ?? '';
-            assistant.agentMetadata = {
+        } else if (payloadType === "execution_start") {
+          executionKind = payload.kind === "flow" ? "flow" : "agent";
+          if (executionKind === "agent") {
+            agentExecution = {
               executionId: payload.executionId,
-              iteration: payload.iteration,
-              turnId: payload.turnId,
-              agentName: agentExecution?.agentName
+              agentId: payload.agentId ?? 'virtual',
+              agentName: payload.agentName ?? '',
+              status: 'running',
+              currentIteration: 0,
+              maxTurns: payload.maxTurns ?? 1,
+              startedAt: resolveTimestamp(payload.startedAt)
             };
-            lastAssistantInTurn = assistant;
-            emitMessage(assistant);
-          } else if (payload.contentType === 'thinking') {
-            // Stream thinking content to a reasoning message
-            const reasoningId = payload.turnId ?? `agent-think-${payload.iteration}`;
-            const reasoningMessage = ensureReasoningMessage(reasoningId);
-            reasoningMessage.reasoning = reasoningMessage.reasoning ?? {
-              id: reasoningId,
-              status: "streaming",
-              chunks: []
-            };
-            reasoningMessage.reasoning.chunks.push(payload.delta ?? '');
-            reasoningMessage.agentMetadata = {
-              executionId: payload.executionId,
-              iteration: payload.iteration,
-              turnId: payload.turnId
-            };
-            emitMessage(reasoningMessage);
-          } else if (payload.contentType === 'tool_input') {
-            // Stream tool input to current tool message
-            const toolId = payload.toolCallId ?? toolContext.lastId;
-            if (toolId) {
-              const toolMessage = toolMessages.get(toolId);
-              if (toolMessage?.toolCall) {
-                toolMessage.toolCall.chunks = toolMessage.toolCall.chunks ?? [];
-                toolMessage.toolCall.chunks.push(payload.delta ?? '');
-                emitMessage(toolMessage);
+          }
+        } else if (payloadType === "turn_start") {
+          // Unified collapsed `agent_iteration_*` into a denormalized `iteration`
+          // field on the turn (merged spec §2). Reconstruct the per-iteration
+          // message boundary the 'separate' renderer keys off: when the iteration
+          // advances, seal the previous iteration's bubble and rotate to a new one.
+          const iteration =
+            typeof payload.iteration === "number" ? payload.iteration : lastIterationSeen;
+          if (iteration !== lastIterationSeen) {
+            if (agentExecution) agentExecution.currentIteration = iteration;
+            if (iterationDisplay === 'separate' && iteration > 1) {
+              const prevMsg = assistantMessage as AgentWidgetMessage | null;
+              if (prevMsg) {
+                prevMsg.streaming = false;
+                emitMessage(prevMsg);
+                agentIterationMessages.set(iteration - 1, prevMsg);
+                assistantMessage = null;
               }
             }
+            lastIterationSeen = iteration;
           }
-        } else if (payloadType === "agent_turn_complete") {
-          // Mark any active reasoning for this turn as complete
-          const reasoningId = payload.turnId;
-          if (reasoningId) {
-            const reasoningMessage = reasoningMessages.get(reasoningId);
-            if (reasoningMessage?.reasoning) {
-              reasoningMessage.reasoning.status = "complete";
-              reasoningMessage.reasoning.completedAt = resolveTimestamp(payload.completedAt);
-              const start = reasoningMessage.reasoning.startedAt ?? Date.now();
-              reasoningMessage.reasoning.durationMs = Math.max(
-                0,
-                (reasoningMessage.reasoning.completedAt ?? Date.now()) - start
-              );
-              reasoningMessage.streaming = false;
-              emitMessage(reasoningMessage);
+          openTurnId = typeof payload.id === "string" ? payload.id : null;
+          // Reset the per-turn assistant tracker. lastAssistantInTurn is used by
+          // turn_complete to attach stopReason to the final text segment of the
+          // turn even if that segment was sealed by an intervening tool boundary.
+          lastAssistantInTurn = null;
+        } else if (payloadType === "tool_input_delta") {
+          // Streamed tool arguments (display-only; authoritative args ride
+          // tool_input_complete / tool_start).
+          const toolId = payload.toolCallId ?? toolContext.lastId;
+          if (toolId) {
+            const toolMessage = toolMessages.get(toolId);
+            if (toolMessage?.toolCall) {
+              toolMessage.toolCall.chunks = toolMessage.toolCall.chunks ?? [];
+              toolMessage.toolCall.chunks.push(payload.delta ?? '');
+              emitMessage(toolMessage);
             }
           }
-
-          // Attach the turn-level stopReason to the assistant message
-          // produced by this turn. Only overwrite the current message:          // prior turns already sealed their own stopReason via step_complete.
-          // Falls back to lastAssistantInTurn when the current bubble was
-          // sealed at a tool-call boundary mid-turn, so the notice still
-          // attaches to the final visible text segment.
+        } else if (payloadType === "tool_input_complete") {
+          // Authoritative args are set at tool_start; nothing to render here.
+          continue;
+        } else if (payloadType === "turn_complete") {
+          // Reasoning is sealed by its own reasoning_complete in the unified
+          // vocabulary; this only attaches the turn-level stopReason to the
+          // assistant message produced by this turn. Falls back to
+          // lastAssistantInTurn when the bubble was sealed at a tool boundary
+          // mid-turn, so the notice still attaches to the final visible segment.
           const turnStopReason = (payload as any).stopReason as
             | StopReasonKind
             | undefined;
           const stopReasonTarget = assistantMessage ?? lastAssistantInTurn;
           if (turnStopReason && stopReasonTarget !== null) {
-            const turnId = payload.turnId;
+            const turnId = payload.id;
             const matchesTurn =
               !turnId || stopReasonTarget.agentMetadata?.turnId === turnId;
             if (matchesTurn) {
@@ -2855,83 +2613,58 @@ export class AgentWidgetClient {
               emitMessage(stopReasonTarget);
             }
           }
-        } else if (payloadType === "agent_tool_start") {
-          // Finalize any in-flight assistant text bubble so subsequent text
-          // deltas in this turn create a NEW bubble. Without this, text
-          // emitted before AND after a tool call accumulates into one
-          // message that renders below all the tool bubbles, losing the
-          // chronological text→tool→text→tool interleaving.
-          if (assistantMessage) {
-            assistantMessage.streaming = false;
-            emitMessage(assistantMessage);
-            assistantMessage = null;
-          }
-          const toolId = payload.toolCallId ?? `agent-tool-${nextSequence()}`;
-          trackToolId(getToolCallKey(payload), toolId);
-          const toolMessage = ensureToolMessage(toolId);
-          const tool = toolMessage.toolCall ?? {
-            id: toolId, status: "pending" as const,
-            name: undefined, args: undefined, chunks: undefined,
-            result: undefined, duration: undefined, startedAt: undefined,
-            completedAt: undefined, durationMs: undefined
-          };
-          tool.name = payload.toolName ?? payload.name ?? tool.name;
-          tool.status = "running";
-          if (payload.parameters !== undefined) {
-            tool.args = payload.parameters;
-          }
-          tool.startedAt = resolveTimestamp(payload.startedAt ?? payload.timestamp);
-          toolMessage.toolCall = tool;
-          toolMessage.streaming = true;
-          toolMessage.agentMetadata = {
-            executionId: payload.executionId,
-            iteration: payload.iteration
-          };
-          emitMessage(toolMessage);
-        } else if (payloadType === "agent_tool_delta") {
-          const toolId = payload.toolCallId ?? toolContext.lastId;
-          if (toolId) {
-            const toolMessage = toolMessages.get(toolId) ?? ensureToolMessage(toolId);
-            if (toolMessage.toolCall) {
-              toolMessage.toolCall.chunks = toolMessage.toolCall.chunks ?? [];
-              toolMessage.toolCall.chunks.push(payload.delta ?? '');
-              toolMessage.toolCall.status = "running";
-              toolMessage.streaming = true;
-              emitMessage(toolMessage);
-            }
-          }
-        } else if (payloadType === "agent_tool_complete") {
-          const toolId = payload.toolCallId ?? toolContext.lastId;
-          if (toolId) {
-            const toolMessage = toolMessages.get(toolId) ?? ensureToolMessage(toolId);
-            if (toolMessage.toolCall) {
-              toolMessage.toolCall.status = "complete";
-              if (payload.result !== undefined) {
-                toolMessage.toolCall.result = payload.result;
-              }
-              if (typeof payload.executionTime === "number") {
-                toolMessage.toolCall.durationMs = payload.executionTime;
-              }
-              toolMessage.toolCall.completedAt = resolveTimestamp(payload.completedAt ?? payload.timestamp);
-              toolMessage.streaming = false;
-              emitMessage(toolMessage);
-              const callKey = getToolCallKey(payload);
-              if (callKey) {
-                toolContext.byCall.delete(callKey);
-              }
-            }
-          }
-        } else if (payloadType === "agent_media") {
-          // A tool produced media (image / audio / video / file). Render it
-          // as a synthetic assistant message inserted at the point the tool
-          // completed: between the tool bubble and the next text turn.
-          //
-          // Wire format is the AI SDK–aligned `MediaContentPart` from
-          // @runtypelabs/shared:
+          if (openTurnId === payload.id) openTurnId = null;
+        } else if (payloadType === "media_start") {
+          // Open a unified media block; buffer fragments until media_complete.
+          const id = String(payload.id);
+          mediaBuffers.set(id, {
+            mediaType: typeof payload.mediaType === "string" ? payload.mediaType : undefined,
+            role: typeof payload.role === "string" ? payload.role : undefined,
+            toolCallId: payload.toolCallId,
+            parts: [],
+          });
+        } else if (payloadType === "media_delta") {
+          const buf = mediaBuffers.get(String(payload.id));
+          if (buf && typeof payload.delta === "string") buf.parts.push(payload.delta);
+        } else if (payloadType === "media_complete") {
+          // Reassemble the buffered media triad into a single AI SDK–aligned
+          // `MediaContentPart`, then render it as a synthetic assistant message
+          // inserted between the tool bubble and the next text turn:
           //   { type: 'media', data, mediaType }                // AI SDK v6: base64
           //   { type: 'image-url', url, mediaType? }            // AI SDK v3/v4
           //   { type: 'file-url', url, mediaType }              // AI SDK v3/v4
-          const rawMedia = Array.isArray(payload.media) ? payload.media : [];
+          const mediaBlockId = String(payload.id);
+          const buf = mediaBuffers.get(mediaBlockId);
+          mediaBuffers.delete(mediaBlockId);
+          const completeMediaType =
+            (typeof payload.mediaType === "string" ? payload.mediaType : undefined) ??
+            buf?.mediaType ??
+            "application/octet-stream";
+          const completeData = typeof payload.data === "string" ? payload.data : undefined;
+          const completeUrl =
+            typeof payload.url === "string"
+              ? payload.url
+              : buf && buf.parts.length > 0
+                ? buf.parts.join("")
+                : undefined;
+          let reconstructed: Record<string, unknown> | null = null;
+          if (completeData) {
+            reconstructed = { type: "media", data: completeData, mediaType: completeMediaType };
+          } else if (completeUrl) {
+            // The unified wire is mediaType-only; a URL part with no declared MIME
+            // arrives as the bare bucket hint "image" (per the API encoder). Treat
+            // that — and any real `image/*` — as a hosted image so we don't misroute
+            // generated images into the file bucket.
+            const lower = completeMediaType.toLowerCase();
+            const isImage = lower === "image" || lower.startsWith("image/");
+            reconstructed = {
+              type: isImage ? "image-url" : "file-url",
+              url: completeUrl,
+              mediaType: completeMediaType,
+            };
+          }
+          const mediaToolCallId = payload.toolCallId ?? buf?.toolCallId;
+          const rawMedia = reconstructed ? [reconstructed] : [];
           const mediaContentParts: ContentPart[] = [];
           for (const part of rawMedia) {
             if (!part || typeof part !== "object") continue;
@@ -2975,7 +2708,9 @@ export class AgentWidgetClient {
               mediaContentParts.push({
                 type: "image",
                 image: src,
-                ...(mediaType ? { mimeType: mediaType } : {}),
+                // Only a real MIME (`image/png`) is a usable mimeType; the bare
+                // bucket hint "image" (a hosted URL with no declared type) is not.
+                ...(mediaType.includes("/") ? { mimeType: mediaType } : {}),
               });
             } else if (mediaType.startsWith("audio/")) {
               mediaContentParts.push({
@@ -3006,7 +2741,7 @@ export class AgentWidgetClient {
             // sharing an id would let `emitMessage` merge them by id and
             // overwrite the prior `contentParts`.
             const seq = nextSequence();
-            const toolCallIdRaw = payload.toolCallId;
+            const toolCallIdRaw = mediaToolCallId;
             const mediaIdSuffix =
               typeof toolCallIdRaw === "string" && toolCallIdRaw.length > 0
                 ? `${toolCallIdRaw}-${seq}`
@@ -3021,7 +2756,12 @@ export class AgentWidgetClient {
               sequence: seq,
               agentMetadata: {
                 executionId: payload.executionId,
-                iteration: payload.iteration,
+                // Media blocks carry no iteration of their own; stamp the
+                // enclosing iteration tracked from turn/tool frames.
+                iteration:
+                  typeof payload.iteration === "number"
+                    ? payload.iteration
+                    : lastIterationSeen,
               },
             };
             emitMessage(mediaMessage);
@@ -3039,67 +2779,49 @@ export class AgentWidgetClient {
             assistantMessage = null;
             assistantMessageRef.current = null;
           }
-        } else if (payloadType === "agent_iteration_complete") {
-          // Iteration complete - no special handling needed
-          // In 'separate' mode, message finalization happens at next iteration_start
-        } else if (payloadType === "agent_reflection" || payloadType === "agent_reflect") {
-          // Create a reasoning message for reflection content
-          const reflectionId = `agent-reflection-${payload.executionId}-${payload.iteration}`;
-          const reflectionMessage: AgentWidgetMessage = {
-            id: reflectionId,
-            role: "assistant",
-            content: payload.reflection ?? '',
-            createdAt: new Date().toISOString(),
-            streaming: false,
-            variant: "reasoning",
-            sequence: nextSequence(),
-            reasoning: {
-              id: reflectionId,
-              status: "complete",
-              chunks: [payload.reflection ?? '']
-            },
-            agentMetadata: {
-              executionId: payload.executionId,
-              iteration: payload.iteration
-            }
-          };
-          emitMessage(reflectionMessage);
-        } else if (payloadType === "agent_complete") {
-          if (agentExecution) {
+        } else if (payloadType === "execution_complete") {
+          const kind = payload.kind ?? executionKind;
+          if (kind === "agent" && agentExecution) {
             agentExecution.status = payload.success ? 'complete' : 'error';
             agentExecution.completedAt = resolveTimestamp(payload.completedAt);
             agentExecution.stopReason = payload.stopReason;
           }
 
-          // Finalize the current assistant message
+          // Finalize any still-open assistant message. Per-step reconciliation
+          // (step_complete.result.response) normally sealed the flow blocks
+          // already; this is the defensive close for an unterminated block, and
+          // for flow it runs the final structured extraction off the raw buffer.
           const finalMsg = assistantMessage as AgentWidgetMessage | null;
           if (finalMsg) {
-            finalMsg.streaming = false;
-            emitMessage(finalMsg);
+            if (kind === "flow" && finalMsg.streaming !== false) {
+              finalizeFlowTextBlock(finalMsg);
+            } else {
+              finalMsg.streaming = false;
+              emitMessage(finalMsg);
+            }
+            assistantMessage = null;
           }
+          currentTextBlockId = null;
+          pendingFlowRaw = "";
+          lastSealedFlowBubble = null;
 
           onEvent({ type: "status", status: "idle" });
-        } else if (payloadType === "agent_error") {
+        } else if (payloadType === "execution_error") {
+          // Terminal failure. The unified non-terminal `error` is handled
+          // separately (recoverable → warn).
           const errorMessage = typeof payload.error === 'string'
             ? payload.error
-            : payload.error?.message ?? 'Agent execution error';
-          if (payload.recoverable) {
-            if (typeof console !== "undefined") {
-              // eslint-disable-next-line no-console
-              console.warn("[AgentWidget] Recoverable agent error:", errorMessage);
-            }
-          } else {
-            onEvent({
-              type: "error",
-              error: new Error(errorMessage)
-            });
-          }
-        } else if (payloadType === "agent_ping") {
+            : payload.error?.message ?? 'Execution error';
+          onEvent({
+            type: "error",
+            error: new Error(errorMessage)
+          });
+        } else if (payloadType === "ping") {
           // Keep-alive heartbeat - no action needed
         // ================================================================
         // Tool Approval Events
         // ================================================================
-        } else if (payloadType === "agent_approval_start") {
+        } else if (payloadType === "approval_start") {
           const approvalId = payload.approvalId ?? `approval-${nextSequence()}`;
           const approvalMessage: AgentWidgetMessage = {
             id: `approval-${approvalId}`,
@@ -3149,7 +2871,7 @@ export class AgentWidgetClient {
             },
           };
           emitMessage(approvalMessage);
-        } else if (payloadType === "agent_approval_complete") {
+        } else if (payloadType === "approval_complete") {
           const approvalId = payload.approvalId;
           if (approvalId) {
             // Find and update the existing approval message
@@ -3294,8 +3016,33 @@ export class AgentWidgetClient {
           assistantMessageRef.current = null;
           streamParsers.delete(id);
           rawContentBuffers.delete(id);
+        } else if (payloadType === "error") {
+          // Unified non-terminal error (merged spec). A bare `error` is
+          // recoverable by default — a transient notice such as "rate limited,
+          // retrying" — and the execution continues, so it must NOT surface as a
+          // fatal error or finalize the stream. The API routes terminal failures
+          // through `execution_error`. Only an explicit `recoverable: false`
+          // promotes a unified `error` to terminal.
+          if (
+            payload.recoverable === false &&
+            payload.error != null &&
+            payload.error !== ""
+          ) {
+            const errorMessage =
+              typeof payload.error === "string"
+                ? payload.error
+                : (payload.error as { message?: unknown })?.message != null
+                  ? String((payload.error as { message?: unknown }).message)
+                  : "Execution error";
+            onEvent({ type: "error", error: new Error(errorMessage) });
+            const finalMsg = assistantMessage as AgentWidgetMessage | null;
+            if (finalMsg && finalMsg.streaming) {
+              finalMsg.streaming = false;
+              emitMessage(finalMsg);
+            }
+            onEvent({ type: "status", status: "idle" });
+          }
         } else if (
-          payloadType === "error" ||
           payloadType === "step_error" ||
           payloadType === "dispatch_error" ||
           payloadType === "flow_error"
@@ -3308,18 +3055,13 @@ export class AgentWidgetClient {
             if (msg != null && msg !== "") {
               resolvedError = new Error(String(msg));
             }
-          } else if (
-            payloadType === "step_error" ||
-            payloadType === "flow_error"
-          ) {
+          } else {
             const e = payload.error;
             if (typeof e === "string" && e !== "") {
               resolvedError = new Error(e);
             } else if (e != null && typeof e === "object" && "message" in e) {
               resolvedError = new Error(String((e as { message?: unknown }).message ?? e));
             }
-          } else if (payloadType === "error" && payload.error != null && payload.error !== "") {
-            resolvedError = new Error(String(payload.error));
           }
 
           if (resolvedError) {
@@ -3389,7 +3131,7 @@ export class AgentWidgetClient {
             assistantMessageRef,
             emitMessage,
             nextSequence,
-            partIdState
+            customParsePartId
           );
           // Update assistantMessage from ref (in case it was created or replaced by partId segmentation)
           if (assistantMessageRef.current && assistantMessageRef.current !== assistantMessage) {
@@ -3398,39 +3140,14 @@ export class AgentWidgetClient {
           if (handled) continue; // Skip default handling if custom handler processed it
         }
 
-        // Unified vocabulary (opt-in): resolve the wire mode from the first
-        // lifecycle frame (the flag only requests the param; the frame is
-        // authoritative), then transduce unified → legacy, bypassing the reorder
-        // buffer (the unified stream is single-connection and already in order).
-        if (!wireModeResolved) {
-          if (isUnifiedLifecycleStart(payloadType)) {
-            unifiedMode = true;
-            wireModeResolved = true;
-          } else if (
-            payloadType === "agent_start" ||
-            payloadType === "flow_start" ||
-            payloadType === "step_start"
-          ) {
-            unifiedMode = false;
-            wireModeResolved = true;
-          }
-        }
-        if (unifiedMode) {
-          for (const legacyEvent of unifiedBridge.push(payloadType, payload)) {
-            seqReadyQueue.push(legacyEvent);
-          }
-          drainReadyQueue();
-          continue;
-        }
-
-        // Push through the sequence reorder buffer
-        seqBuffer.push(payloadType, payload);
+        // The wire is the neutral unified vocabulary; the handler consumes it
+        // natively. The stream is single-connection and in order, so each frame
+        // drains straight through.
+        seqReadyQueue.push({ payloadType, payload });
         drainReadyQueue();
       }
     }
 
-    seqBuffer.flushPending();
     drainReadyQueue();
-    seqBuffer.destroy();
   }
 }

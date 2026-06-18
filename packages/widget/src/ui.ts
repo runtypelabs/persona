@@ -404,7 +404,7 @@ type Controller = {
   ) => Promise<void>;
 };
 
-const buildPostprocessor = (
+export const buildPostprocessor = (
   cfg: AgentWidgetConfig | undefined,
   actionManager?: ReturnType<typeof createActionManager>,
   onResubmitRequested?: () => void
@@ -453,21 +453,35 @@ const buildPostprocessor = (
       }
     }
 
-    // Priority: postprocessMessage > markdown config > escapeHtml
+    // Priority: postprocessMessage > markdown config > escapeHtml.
+    //
+    // Degraded path (IIFE/CDN build before `markdown-parsers.js` resolves, or if
+    // it never loads): the markdown processor and the sanitizer BOTH fall back to
+    // escapeHtml, so the old `sanitize(markdownProcessor(text))` escaped twice and
+    // displayed entities literally (I'll -> &amp;#39;). Only run the sanitizer when
+    // it can actually parse HTML; escapeHtml output is already inert. Checked per
+    // render (not once at setup): the chunk lands later and the self-heal re-renders.
+    const parsersReady = getMarkdownParsersSync() !== null;
     let html: string;
     if (cfg?.postprocessMessage) {
-      html = cfg.postprocessMessage({
+      const out = cfg.postprocessMessage({
         ...context,
         text: nextText,
         raw: rawPayload ?? context.text ?? ""
       });
+      // Custom HTML is NOT pre-escaped, so this stays a single pass even via the
+      // sanitizer's degraded fallback. Honors `sanitize: false` (pass-through) as before.
+      html = sanitize ? sanitize(out) : out;
     } else if (markdownProcessor) {
-      html = markdownProcessor(nextText);
+      // Already escapeHtml(text) (single, safe) while parsers are not loaded.
+      const out = markdownProcessor(nextText);
+      html = sanitize && parsersReady ? sanitize(out) : out;
     } else {
+      // Plain text: escapeHtml output is inert — never re-sanitize (the second escape).
       html = escapeHtml(nextText);
     }
 
-    return sanitize ? sanitize(html) : html;
+    return html;
   };
 };
 
