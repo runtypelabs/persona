@@ -1,5 +1,34 @@
 # @runtypelabs/persona
 
+## 4.0.0
+
+### Major Changes
+
+- 480d980: Handle `agent_await` as a distinct local-tool pause event for agent dispatch, alongside the existing `step_await` for flow dispatch. Both resolve through the same `/resume` path; agent page tools (`origin: "webmcp"`) carry a bare tool name on the wire and are normalized to the `webmcp:`-prefixed form internally, and `awaitedAt` is accepted as the pause timestamp.
+
+  This is part of the 4.0 wire-protocol change that gives flow vs. agent awaits distinct event types (`step_await` vs `agent_await`) for observability and debugging. The Runtype API emits `agent_await` for agent dispatch; widgets must be on 4.0+ to render agent-dispatch local-tool pauses.
+
+- 958e1fd: Persona 4.0: the widget now consumes the neutral 33-event unified SSE vocabulary natively off the wire.
+
+  - The dispatch handler renders unified events (`execution_*`, `turn_*`, `step_*`, `text_*`, `reasoning_*`, `media_*`, `artifact_*`, `tool_*`, `approval_*`, `await`, `source`, `error`, `ping`, `custom`) directly — no legacy-wire translation bridge, no `events` config, no `?events=` query param, no `partId` segmentation.
+  - **Agent path** and **flow path** both supported on the unified wire. Assistant bubbles segment on the **text block id** (`text_start`/`text_complete`), sealed at every tool/media/approval/await boundary. Flow prompt-step text continues to run through the streaming structured-content parser (structured-output flows keep their UX); `step_complete.result.response` reconciles the authoritative final, `execution_complete.finalOutput` finalizes.
+  - **Nested flow-as-tool attribution.** Text/reasoning blocks carrying `parentToolCallId` (a flow running as a tool) are routed into the parent tool's row (`agentMetadata.parentToolId`) instead of the top-level assistant channel.
+  - Reflection folds to `reasoning_complete{ scope:"loop" }`; skills fold to `tool_complete{ result.kind }`; iteration is a denormalized field. Recoverable `error` is non-terminal; `execution_error` is terminal. `text_complete`/`reasoning_complete` now carry the assembled `text` (consumed without double-counting deltas).
+  - Adds `scope?: "turn" | "loop"` to `AgentWidgetReasoning` so loop-level reflections stay distinguishable from per-turn thinking.
+
+  The version bump is what arms the API's unified-by-version default via the `X-Persona-Version` header. Requires the Runtype API resume/unified support to be live in production before release.
+
+- 6c53c9b: Remove the deprecated `onReady` callback and the `persona:ready` DOM event. Both were aliases of `onChatReady` / `persona:chat-ready` and have logged a deprecation warning since they were renamed. Migrate any `onReady` install/init option to `onChatReady`, and any `persona:ready` event listener to `persona:chat-ready`.
+
+### Patch Changes
+
+- 91beb60: Fix manual text copy (triple-click + Ctrl/Cmd-C) from message bubbles attaching stray leading/trailing blank lines. The widget now normalizes the clipboard's plain text to match the visible selection, while preserving interior newlines and first-line indentation.
+- ef326bb: Fix double HTML-escaping of message text (e.g. apostrophes rendering as `&#39;`) while the markdown/DOMPurify chunk is still loading — or fails to load — in the IIFE/CDN build. The render layer no longer re-runs the sanitizer over already-escaped output, so degraded mode escapes exactly once.
+- 90e892f: Improve tool-bubble readability in dark themes.
+
+  - The code blocks (Arguments / Activity / Result) were rendered with a hardcoded white background (`persona-bg-white`) paired with `persona-text-persona-primary` text, so the brand-tinted primary color — which is typically light in a dark theme — landed on a fixed white box (~2:1 contrast). The blocks now default to a matched, theme-aware token set (`--persona-container` background, `--persona-text` foreground, `--persona-border` border) that flips together with the active color scheme, restoring readable contrast in both light and dark modes. An explicit `toolCall.codeBlockBackgroundColor` / `codeBlockTextColor` / `codeBlockBorderColor` still takes precedence.
+  - The collapse/expand chevron defaulted to `currentColor`, which often rendered darker than the tool-call title. It now defaults to the title color (`var(--persona-primary)`, the same fallback the title uses), so the toggle stays as readable as the title unless `toolCall.toggleTextColor` / `headerTextColor` overrides it.
+
 ## 3.37.0
 
 ### Minor Changes
