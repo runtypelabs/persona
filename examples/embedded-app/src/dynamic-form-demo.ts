@@ -4,7 +4,6 @@ import "./index.css";
 import "./App.css";
 
 import {
-  createAgentExperience,
   componentRegistry,
   createLocalStorageAdapter,
   markdownPostprocessor,
@@ -26,6 +25,7 @@ import {
   createDemoConfigInspector,
   reportDemoConfig,
 } from "./demo-config-inspector";
+import { highlightVariantConfig } from "./dynamic-form-code-highlight";
 import type { Mode } from "./examples-nav";
 
 renderDemoScaffold({ slug: "dynamic-components" });
@@ -45,7 +45,91 @@ const proxyUrl =
     : `http://localhost:${proxyPort}/api/chat/dispatch-component`;
 
 let activeController: AgentWidgetController | null = null;
+let activeMountMode: Mode = "inline";
 let previewIndex = 0;
+
+const VARIANT_FIELDS = [
+  { label: "First Name", type: "text", required: true, width: "half" },
+  { label: "Last Name", type: "text", required: true, width: "half" },
+  { label: "Email", type: "email", required: true },
+  { label: "Phone", type: "tel", width: "half" },
+  { label: "Company", type: "text", width: "half" },
+  {
+    label: "Notes",
+    type: "textarea",
+    placeholder: "Anything we should know?",
+  },
+] satisfies Array<{
+  label: string;
+  type?: "text" | "email" | "tel" | "date" | "time" | "textarea" | "number" | "url";
+  required?: boolean;
+  width?: "full" | "half";
+  placeholder?: string;
+}>;
+
+type VariantTheme = {
+  primary?: string;
+  accent?: string;
+  surface?: string;
+  muted?: string;
+};
+
+const VARIANTS: Array<{
+  id: string;
+  formStyles: DynamicFormStyles;
+  themeOverrides: VariantTheme;
+}> = [
+  { id: "compact", formStyles: {}, themeOverrides: {} },
+  {
+    id: "spacious",
+    formStyles: {
+      padding: "1.5rem",
+      borderRadius: "16px",
+      titleFontSize: "1.25rem",
+      descriptionFontSize: "0.9375rem",
+      labelFontSize: "0.875rem",
+      labelFontWeight: "500",
+      inputFontSize: "0.9375rem",
+      inputPadding: "0.75rem 0.875rem",
+      inputBorderRadius: "0.625rem",
+      buttonPadding: "0.75rem 1.25rem",
+      buttonBorderRadius: "0.625rem",
+      buttonFontSize: "0.9375rem",
+    },
+    themeOverrides: {},
+  },
+  {
+    id: "branded",
+    formStyles: {
+      padding: "1.25rem",
+      borderRadius: "20px",
+      borderColor: "#fde68a",
+      titleFontSize: "1.125rem",
+      inputBorderRadius: "9999px",
+      inputPadding: "0.5rem 0.875rem",
+      buttonBorderRadius: "9999px",
+      buttonPadding: "0.625rem 1.25rem",
+    },
+    themeOverrides: {
+      primary: "#7c2d12",
+      accent: "#ea580c",
+      muted: "#a16207",
+    },
+  },
+];
+
+let selectedVariant = VARIANTS[0];
+
+function buildFormProps(variant = selectedVariant) {
+  return {
+    title: "Schedule a demo",
+    description: "Share your details: we'll follow up to confirm.",
+    fields: VARIANT_FIELDS,
+    submit_text: "Request meeting",
+    styles: variant.formStyles,
+    demo_variant: variant.id,
+  };
+}
 
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const isLauncher = mode === "launcher";
@@ -74,6 +158,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       accent: "#6366f1",
       surface: "#ffffff",
       muted: "#64748b",
+      ...selectedVariant.themeOverrides,
     },
     features: {
       ...DEFAULT_WIDGET_CONFIG.features,
@@ -92,8 +177,10 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       "Display a chart with data",
       "Create a status badge",
     ],
-    formStyles: isLauncher
-      ? {
+    formStyles: {
+      ...selectedVariant.formStyles,
+      ...(isLauncher
+        ? {
           borderRadius: "6px",
           borderWidth: "1px",
           borderColor: "#e5e7eb",
@@ -101,7 +188,8 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
           titleFontSize: "1.25rem",
           buttonBorderRadius: "6px",
         }
-      : undefined,
+        : {}),
+    },
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   } as AgentWidgetConfig;
 };
@@ -110,6 +198,7 @@ setupMountMode({
   slug: "dynamic-components",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
+    activeMountMode = mode;
     const { controller, teardown } = runWidgetMountWithInspector(
       configInspector,
       mode,
@@ -117,6 +206,7 @@ setupMountMode({
       buildConfig,
     );
     activeController = controller;
+    applyVariantToActivePreview(selectedVariant, { injectForm: false });
     return () => {
       teardown();
       activeController = null;
@@ -125,37 +215,7 @@ setupMountMode({
 });
 
 document.getElementById("dynamic-form-preview")?.addEventListener("click", () => {
-  if (!activeController) return;
-  previewIndex += 1;
-  const props = {
-      title: "Schedule a demo",
-      description: "Share your details: we'll follow up to confirm.",
-      fields: [
-        { label: "First Name", type: "text", required: true, width: "half" },
-        { label: "Last Name", type: "text", required: true, width: "half" },
-        { label: "Email", type: "email", required: true },
-        { label: "Phone", type: "tel", width: "half" },
-        { label: "Company", type: "text", width: "half" },
-        {
-          label: "Notes",
-          type: "textarea",
-          placeholder: "Anything we should know?",
-        },
-      ],
-      submit_text: "Request meeting",
-    };
-  activeController.injectComponentDirective({
-    id: `preview-form-${previewIndex}`,
-    component: "DynamicForm",
-    text: "Preview: this is the same DynamicForm the AI would emit.",
-    props,
-    llmContent:
-      "[Demo: previewed booking form via injectComponentDirective. Not a user request.]",
-  });
-  configInspector.setScenario(
-    { component: "DynamicForm", props },
-    "injectComponentDirective payload",
-  );
+  applyVariantToActivePreview(selectedVariant);
 });
 
 type PreviewDirective = {
@@ -230,121 +290,10 @@ document.querySelectorAll<HTMLButtonElement>("[data-component-preview]").forEach
 });
 
 // ---------------------------------------------------------------------------
-// Layout variants: same form, three formStyles presets. Each variant is a
-// fresh widget with `injectComponentDirective` to render the form on mount,
-// no LLM round-trip required.
+// Layout variants: same DynamicForm directive, different config on the live
+// preview widget. The tabs update the right-side preview instead of mounting
+// duplicate mini widgets in the configure rail.
 // ---------------------------------------------------------------------------
-
-const VARIANT_FIELDS = [
-  { label: "First Name", type: "text", required: true, width: "half" },
-  { label: "Last Name", type: "text", required: true, width: "half" },
-  { label: "Email", type: "email", required: true },
-  { label: "Phone", type: "tel", width: "half" },
-  { label: "Company", type: "text", width: "half" },
-  {
-    label: "Notes",
-    type: "textarea",
-    placeholder: "Anything we should know?",
-  },
-];
-
-type VariantTheme = {
-  primary?: string;
-  accent?: string;
-  surface?: string;
-  muted?: string;
-};
-
-const VARIANTS: Array<{
-  id: string;
-  formStyles: DynamicFormStyles;
-  themeOverrides: VariantTheme;
-}> = [
-  { id: "compact", formStyles: {}, themeOverrides: {} },
-  {
-    id: "spacious",
-    formStyles: {
-      padding: "1.5rem",
-      borderRadius: "16px",
-      titleFontSize: "1.25rem",
-      descriptionFontSize: "0.9375rem",
-      labelFontSize: "0.875rem",
-      labelFontWeight: "500",
-      inputFontSize: "0.9375rem",
-      inputPadding: "0.75rem 0.875rem",
-      inputBorderRadius: "0.625rem",
-      buttonPadding: "0.75rem 1.25rem",
-      buttonBorderRadius: "0.625rem",
-      buttonFontSize: "0.9375rem",
-    },
-    themeOverrides: {},
-  },
-  {
-    id: "branded",
-    formStyles: {
-      padding: "1.25rem",
-      borderRadius: "20px",
-      borderColor: "#fde68a",
-      titleFontSize: "1.125rem",
-      inputBorderRadius: "9999px",
-      inputPadding: "0.5rem 0.875rem",
-      buttonBorderRadius: "9999px",
-      buttonPadding: "0.625rem 1.25rem",
-    },
-    themeOverrides: {
-      primary: "#7c2d12",
-      accent: "#ea580c",
-      muted: "#a16207",
-    },
-  },
-];
-
-function mountVariant(variant: (typeof VARIANTS)[number]): void {
-  const mount = document.getElementById(`dynamic-form-variant-${variant.id}`);
-  if (!mount) return;
-
-  const config = {
-    ...DEFAULT_WIDGET_CONFIG,
-    apiUrl: proxyUrl,
-    storageAdapter: createLocalStorageAdapter(
-      `persona-state-dynamic-components-variant-${variant.id}`,
-    ),
-    parserType: "json",
-    enableComponentStreaming: true,
-    wrapComponentDirectiveInBubble: false,
-    launcher: { enabled: false, width: "100%" },
-    formEndpoint: "/form",
-    theme: {
-      ...DEFAULT_WIDGET_CONFIG.theme,
-      primary: "#111827",
-      accent: "#6366f1",
-      surface: "#ffffff",
-      muted: "#64748b",
-      ...variant.themeOverrides,
-    },
-    formStyles: variant.formStyles,
-    layout: {
-      ...DEFAULT_WIDGET_CONFIG.layout,
-      header: { layout: "minimal", showCloseButton: false },
-    },
-    suggestionChips: [],
-    statusIndicator: { visible: false },
-    postprocessMessage: ({ text }) => markdownPostprocessor(text),
-  } as AgentWidgetConfig;
-
-  const variantController = createAgentExperience(mount, squareInlinePanel(config));
-  variantController.injectComponentDirective({
-    id: `variant-${variant.id}`,
-    component: "DynamicForm",
-    text: "",
-    props: {
-      title: "Book a demo",
-      description: "Share your details and we'll follow up to confirm.",
-      fields: VARIANT_FIELDS,
-      submit_text: "Request meeting",
-    },
-  });
-}
 
 function renderVariantDef(variant: (typeof VARIANTS)[number]): string {
   const blocks: string[] = [];
@@ -355,23 +304,57 @@ function renderVariantDef(variant: (typeof VARIANTS)[number]): string {
   return blocks.join(",\n\n");
 }
 
-VARIANTS.forEach((variant) => {
-  mountVariant(variant);
-  const defEl = document.getElementById(`variants-def-${variant.id}`);
-  if (defEl) defEl.textContent = renderVariantDef(variant);
-});
+const variantDefEl = document.getElementById("variants-def");
+function updateVariantDef(variant: (typeof VARIANTS)[number]): void {
+  if (variantDefEl) variantDefEl.innerHTML = highlightVariantConfig(renderVariantDef(variant));
+}
+
+updateVariantDef(selectedVariant);
+
+function getVariantScenario(variant: (typeof VARIANTS)[number]) {
+  return {
+    component: "DynamicForm",
+    props: buildFormProps(variant),
+    formStyles: variant.formStyles,
+    themeOverrides: variant.themeOverrides,
+  };
+}
+
+function runtimeConfigForActiveMode(): AgentWidgetConfig {
+  const config = buildConfig(activeMountMode);
+  return activeMountMode === "inline" ? squareInlinePanel(config) : config;
+}
+
+function applyVariantToActivePreview(
+  variant: (typeof VARIANTS)[number],
+  options: { injectForm?: boolean } = {},
+): void {
+  selectedVariant = variant;
+  updateVariantDef(variant);
+
+  const scenario = getVariantScenario(variant);
+  configInspector.setScenario(scenario, `Layout variant · ${variant.id}`);
+  reportDemoConfig(configInspector, {
+    config: buildConfig(activeMountMode),
+    mode: activeMountMode,
+  });
+
+  if (!activeController) return;
+  activeController.update(runtimeConfigForActiveMode());
+  if (options.injectForm === false) return;
+
+  activeController.injectComponentDirective({
+    id: "dynamic-components-form-preview",
+    component: "DynamicForm",
+    text: "Preview: this is the same DynamicForm the AI would emit.",
+    props: buildFormProps(variant),
+    llmContent:
+      "[Demo: previewed booking form via injectComponentDirective. Not a user request.]",
+  });
+}
 
 configInspector.setScenario(
-  {
-    component: "DynamicForm",
-    props: {
-      title: "Book a demo",
-      fields: VARIANT_FIELDS,
-      submit_text: "Request meeting",
-    },
-    formStyles: VARIANTS[0].formStyles,
-    themeOverrides: VARIANTS[0].themeOverrides,
-  },
+  getVariantScenario(selectedVariant),
   "Layout variant · compact",
 );
 
@@ -381,32 +364,14 @@ function setupTabs(rootId: string): void {
   const root = document.getElementById(rootId);
   if (!root) return;
   const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-  const panels = Array.from(root.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
   function activate(tabId: string): void {
     tabs.forEach((tab) => {
       const isActive = tab.dataset.tabId === tabId;
       tab.setAttribute("aria-selected", String(isActive));
       tab.tabIndex = isActive ? 0 : -1;
     });
-    panels.forEach((panel) => {
-      panel.hidden = panel.dataset.tabPanel !== tabId;
-    });
     const variant = VARIANTS.find((v) => v.id === tabId);
-    if (variant) {
-      configInspector.setScenario(
-        {
-          component: "DynamicForm",
-          props: {
-            title: "Book a demo",
-            fields: VARIANT_FIELDS,
-            submit_text: "Request meeting",
-          },
-          formStyles: variant.formStyles,
-          themeOverrides: variant.themeOverrides,
-        },
-        `Layout variant · ${tabId}`,
-      );
-    }
+    if (variant) applyVariantToActivePreview(variant);
   }
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {

@@ -1702,6 +1702,18 @@ body.is-fullscreen .fullscreen-exit { display: inline-flex !important; }
   white-space: pre;
   word-break: normal;
 }
+.form-tabs-def .comment  { color: #7c7a70; }
+.form-tabs-def .keyword  { color: #7eb1ff; }
+.form-tabs-def .string   { color: var(--teal-dim); }
+.form-tabs-def .prop,
+.form-tabs-def .property { color: #00b8d9; }
+.form-tabs-def .function { color: #00b8d9; }
+.form-tabs-def .tag      { color: #7eb1ff; }
+.form-tabs-def pre::selection,
+.form-tabs-def pre *::selection {
+  background: rgba(0, 184, 217, 0.28);
+  color: #f7fff9;
+}
 .form-tabs-def-caption {
   font-family: var(--font-label);
   font-size: 0.72rem;

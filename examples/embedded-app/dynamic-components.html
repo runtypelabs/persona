@@ -30,6 +30,15 @@
         width: 100%;
         justify-content: center;
       }
+      .dynamic-form-variants-rail {
+        margin-top: 1rem;
+      }
+      .dynamic-form-variants-rail .form-tabs {
+        gap: 0.75rem;
+      }
+      .dynamic-form-variants-rail .form-tabs-def {
+        max-height: 220px;
+      }
     </style>
   </head>
   <body>
@@ -48,6 +57,58 @@
             <button type="button" id="dynamic-form-preview" class="btn btn-primary">
               Preview form
             </button>
+          </div>
+
+          <div class="info-section dynamic-form-variants-rail">
+            <h3>Form layout variants</h3>
+            <p style="margin-bottom: 0.75rem;">Same DynamicForm renderer, three visual treatments. Only the component styling changes.</p>
+            <div class="form-tabs" id="variants-tabs">
+              <div class="form-tabs-tablist" role="tablist" aria-label="Layout variants">
+                <button
+                  type="button"
+                  class="form-tabs-tab"
+                  role="tab"
+                  id="variants-tab-compact"
+                  aria-controls="variants-panel-compact"
+                  aria-selected="true"
+                  data-tab-id="compact"
+                >
+                  Compact
+                  <small>Default density</small>
+                </button>
+                <button
+                  type="button"
+                  class="form-tabs-tab"
+                  role="tab"
+                  id="variants-tab-spacious"
+                  aria-controls="variants-panel-spacious"
+                  aria-selected="false"
+                  tabindex="-1"
+                  data-tab-id="spacious"
+                >
+                  Spacious
+                  <small>Stripe / Material 3</small>
+                </button>
+                <button
+                  type="button"
+                  class="form-tabs-tab"
+                  role="tab"
+                  id="variants-tab-branded"
+                  aria-controls="variants-panel-branded"
+                  aria-selected="false"
+                  tabindex="-1"
+                  data-tab-id="branded"
+                >
+                  Branded
+                  <small>Custom accent + chrome</small>
+                </button>
+              </div>
+
+              <div class="form-tabs-def">
+                <div class="form-tabs-def-caption">Selected variant config</div>
+                <pre id="variants-def"></pre>
+              </div>
+            </div>
           </div>
 
           <div class="info-section">
@@ -71,7 +132,30 @@
         <h2 class="notes-heading">Notes</h2>
 
         <div class="notes-section">
-          <h3 class="notes-section-title">How it works</h3>
+          <h3 class="notes-section-title">How forms work</h3>
+          <p>A form is the same idea: register a <code>DynamicForm</code> component, then have the agent return a field list in <code>props</code>.</p>
+          <div class="code-block"><span class="prop">componentRegistry</span>.<span class="function">register</span>(<span class="string">"DynamicForm"</span>, <span class="prop">DynamicForm</span>);</div>
+
+          <div class="code-block"><span class="comment">System prompt:</span>
+When you need to collect details, respond with this JSON:
+
+{
+  <span class="prop">"component"</span>: <span class="string">"DynamicForm"</span>,
+  <span class="prop">"props"</span>: {
+    <span class="prop">"title"</span>: <span class="string">"Schedule a demo"</span>,
+    <span class="prop">"fields"</span>: [
+      { <span class="prop">"label"</span>: <span class="string">"Email"</span>, <span class="prop">"type"</span>: <span class="string">"email"</span>, <span class="prop">"required"</span>: <span class="keyword">true</span> },
+      { <span class="prop">"label"</span>: <span class="string">"Notes"</span>, <span class="prop">"type"</span>: <span class="string">"textarea"</span> }
+    ],
+    <span class="prop">"submit_text"</span>: <span class="string">"Request meeting"</span>
+  }
+}</div>
+
+          <p>The form renderer turns each field object into inputs, handles validation/submission, and can use <code>formStyles</code> or <code>props.styles</code> for the visual variants above.</p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">How components work</h3>
           <p>1. Create a normal component.</p>
           <div class="code-block"><span class="keyword">function</span> <span class="function">ProductCard</span>({ <span class="prop">title</span> }) {
   <span class="keyword">const</span> <span class="prop">button</span> = <span class="prop">document</span>.<span class="function">createElement</span>(<span class="string">"button"</span>);
@@ -119,107 +203,6 @@ When showing a product, respond with this JSON:
 
       </section>
     </main>
-
-    <section class="dynamic-form-variants-wrap">
-      <header class="title-strip">
-        <h1>Form layout variants</h1>
-        <p>Same DynamicForm renderer, three visual treatments. Use this as a reference for component-level theming.</p>
-      </header>
-      <section>
-        <div class="form-tabs" id="variants-tabs">
-          <div class="form-tabs-tablist" role="tablist" aria-label="Layout variants">
-            <button
-              type="button"
-              class="form-tabs-tab"
-              role="tab"
-              id="variants-tab-compact"
-              aria-controls="variants-panel-compact"
-              aria-selected="true"
-              data-tab-id="compact"
-            >
-              Compact
-              <small>Default density</small>
-            </button>
-            <button
-              type="button"
-              class="form-tabs-tab"
-              role="tab"
-              id="variants-tab-spacious"
-              aria-controls="variants-panel-spacious"
-              aria-selected="false"
-              tabindex="-1"
-              data-tab-id="spacious"
-            >
-              Spacious
-              <small>Stripe / Material 3</small>
-            </button>
-            <button
-              type="button"
-              class="form-tabs-tab"
-              role="tab"
-              id="variants-tab-branded"
-              aria-controls="variants-panel-branded"
-              aria-selected="false"
-              tabindex="-1"
-              data-tab-id="branded"
-            >
-              Branded
-              <small>Custom accent + chrome</small>
-            </button>
-          </div>
-
-          <div
-            class="form-tabs-panel"
-            role="tabpanel"
-            id="variants-panel-compact"
-            aria-labelledby="variants-tab-compact"
-            data-tab-panel="compact"
-          >
-            <div class="form-tabs-def">
-              <div class="form-tabs-def-caption">formStyles</div>
-              <pre id="variants-def-compact"></pre>
-            </div>
-            <div class="form-tabs-preview">
-              <div class="embedded-target" id="dynamic-form-variant-compact"></div>
-            </div>
-          </div>
-
-          <div
-            class="form-tabs-panel"
-            role="tabpanel"
-            id="variants-panel-spacious"
-            aria-labelledby="variants-tab-spacious"
-            data-tab-panel="spacious"
-            hidden
-          >
-            <div class="form-tabs-def">
-              <div class="form-tabs-def-caption">formStyles</div>
-              <pre id="variants-def-spacious"></pre>
-            </div>
-            <div class="form-tabs-preview">
-              <div class="embedded-target" id="dynamic-form-variant-spacious"></div>
-            </div>
-          </div>
-
-          <div
-            class="form-tabs-panel"
-            role="tabpanel"
-            id="variants-panel-branded"
-            aria-labelledby="variants-tab-branded"
-            data-tab-panel="branded"
-            hidden
-          >
-            <div class="form-tabs-def">
-              <div class="form-tabs-def-caption">formStyles + theme</div>
-              <pre id="variants-def-branded"></pre>
-            </div>
-            <div class="form-tabs-preview">
-              <div class="embedded-target" id="dynamic-form-variant-branded"></div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </section>
 
     <script type="module" src="/src/dynamic-form-demo.ts"></script>
     <script type="module">
