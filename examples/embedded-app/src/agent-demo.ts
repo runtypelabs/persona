@@ -74,7 +74,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
 
 setupMountMode({
   slug: "agent-demo",
-  modes: ["inline", "launcher", "fullscreen"],
+  modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
     activeMountMode = mode;
     const config = buildConfig(mode);
@@ -92,7 +92,7 @@ setupMountMode({
       };
     }
 
-    // inline + fullscreen share the same in-page mount; CSS handles the chrome
+    // inline mounts flush in the page; CSS handles the chrome
     const mount = renderInlineMount(stage);
     mount.style.height = "100%";
     const controller = createAgentExperience(mount, squareInlinePanel(config));

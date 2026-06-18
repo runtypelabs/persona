@@ -38,13 +38,11 @@ export type MountModeConfig = {
 const MODE_LABEL: Readonly<Record<Mode, string>> = {
   inline: "Inline",
   launcher: "Launcher",
-  fullscreen: "Fullscreen",
 };
 
 const MODE_DESCRIPTION: Readonly<Record<Mode, string>> = {
   inline: "Mounted inside this page (default).",
   launcher: "Floating launcher in the demo canvas.",
-  fullscreen: "Widget fills the viewport.",
 };
 
 const isValidMode = (
@@ -77,13 +75,9 @@ const readStoredMode = (
 ): Mode | null => {
   try {
     const value = window.localStorage.getItem(storageKey(slug));
-    // Fullscreen is treated as an immersive/temporary view, not a sticky
-    // preference: landing on a fresh page in fullscreen hides the toolbar
-    // and disorients the user. Clear stale stored values.
-    if (value === "fullscreen") {
-      window.localStorage.removeItem(storageKey(slug));
-      return null;
-    }
+    // `isValidMode` rejects any value not in `allowed` (e.g. a stale
+    // "fullscreen" left over from before that mode was removed), so it falls
+    // back to the default.
     return isValidMode(value, allowed) ? value : null;
   } catch {
     return null;
@@ -91,7 +85,6 @@ const readStoredMode = (
 };
 
 const writeStoredMode = (slug: string, mode: Mode): void => {
-  if (mode === "fullscreen") return;
   try {
     window.localStorage.setItem(storageKey(slug), mode);
   } catch {
@@ -135,9 +128,9 @@ export function renderInlineMount(stage: HTMLElement): HTMLElement {
 }
 
 /**
- * One-liner widget mount that handles inline + launcher + fullscreen variants.
+ * One-liner widget mount that handles inline + launcher variants.
  *
- * - `inline` / `fullscreen` → `createAgentExperience` into a fill-the-stage div
+ * - `inline` → `createAgentExperience` into a fill-the-stage div
  * - `launcher` → `initAgentWidget` into the bottom-right of a faux host scene
  *
  * The returned `controller` is suitable for `controller.update(...)`,
@@ -290,7 +283,6 @@ export function setupMountMode(config: MountModeConfig): void {
       }
       activeTeardown = null;
     }
-    document.body.classList.remove("is-fullscreen");
   };
 
   const applyMode = async (mode: Mode): Promise<void> => {
@@ -299,9 +291,6 @@ export function setupMountMode(config: MountModeConfig): void {
     try {
       cleanup();
       currentMode = mode;
-      if (mode === "fullscreen") {
-        document.body.classList.add("is-fullscreen");
-      }
       updatePressedState(toolbar, mode);
       const result = mount(mode, { stage, toolbar });
       activeTeardown = result instanceof Promise ? await result : result;
@@ -324,10 +313,9 @@ export function setupMountMode(config: MountModeConfig): void {
 
   void applyMode(initial);
 
-  // Anchor links like <a href="#mount=inline"> (used by the fullscreen-exit
-  // button) fire `hashchange` rather than reloading. Toolbar clicks use
-  // history.replaceState which does NOT fire hashchange, so this listener
-  // only picks up real user-driven hash changes.
+  // Anchor links like <a href="#mount=inline"> fire `hashchange` rather than
+  // reloading. Toolbar clicks use history.replaceState which does NOT fire
+  // hashchange, so this listener only picks up real user-driven hash changes.
   const onHashChange = (): void => {
     const hashMode = readHashMode(modes);
     if (hashMode && hashMode !== currentMode) {

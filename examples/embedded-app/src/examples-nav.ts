@@ -8,7 +8,7 @@ import {
 import { STANDALONE_EXAMPLES } from "./standalone-nav";
 
 export type Tier = "start" | "patterns" | "reference";
-export type Mode = "inline" | "launcher" | "fullscreen";
+export type Mode = "inline" | "launcher";
 
 export type AdvancedExample = {
   slug: string;
@@ -82,7 +82,7 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     blurb: "Multi-turn reasoning with tool calls.",
     tier: "start",
     tags: ["agent", "tool-use", "streaming"],
-    modes: ["inline", "launcher", "fullscreen"],
+    modes: ["inline", "launcher"],
   },
   {
     slug: "approval-demo",
