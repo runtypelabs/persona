@@ -3,6 +3,7 @@ import { AgentWidgetClient, preferFinalStructuredContent } from './client';
 import { AgentWidgetEvent, AgentWidgetMessage } from './types';
 import { createJsonStreamParser } from './utils/formatting';
 import { VERSION } from './version';
+import { createUnifiedEventWrite } from './utils/__fixtures__/unified-translator.oracle';
 
 describe('AgentWidgetClient - Empty Message Filtering', () => {
   let client: AgentWidgetClient;
@@ -468,22 +469,17 @@ describe('AgentWidgetClient - JSON Streaming', () => {
       'data: {"type":"flow_complete","flowId":"flow_01k9pfnztzfag9tfz4t65c9c5q","success":true,"duration":2968,"completedAt":"2025-11-12T23:47:42.234Z","totalTokensUsed":0}'
     ];
 
-    // Create a ReadableStream from the SSE events
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      start(controller) {
-        for (const event of sseEvents) {
-          controller.enqueue(encoder.encode(event + '\n'));
-        }
-        controller.close();
-      }
-    });
-
-    // Mock fetch to return our stream
-    global.fetch = async () => ({
-      ok: true,
-      body: stream
-    }) as any;
+    // Route the legacy step_chunk fixtures through the oracle as the 4.0 unified
+    // wire (step_chunk → step_delta → text_delta), exercising the structured
+    // JSON parser on the unified flow path: incremental text extraction, never
+    // showing raw JSON, with the assembled response reconciled at step_complete.
+    global.fetch = createRawStreamFetch(
+      toUnifiedFrames(
+        sseEvents
+          .filter((f) => f.startsWith('data:'))
+          .map((f) => f.replace('"type":"step_chunk"', '"type":"step_delta"') + '\n\n')
+      )
+    );
 
     // Dispatch and collect events
     await client.dispatch(
@@ -584,21 +580,40 @@ function sseEvent(eventType: string, data: Record<string, unknown>): string {
 }
 
 /**
- * Helper to create a mock fetch that returns an SSE stream
+ * Re-encode legacy `agent_*` / `flow_*` / `step_*` / `tool_*` SSE frames into the
+ * neutral UNIFIED wire the 4.0 API now emits, using the same encoder the API uses
+ * (the vendored `createUnifiedEventWrite` oracle). The 4.0 widget only consumes the
+ * unified vocabulary, so these handler tests author the rendering intent in the
+ * (more readable) legacy frames and inject exactly what the client sees off the
+ * wire — the bridge translates it straight back before the dispatch chain renders.
  */
-function createAgentStreamFetch(events: string[]) {
-  return vi.fn().mockImplementation(async (_url: string, _options: any) => {
+function toUnifiedFrames(legacyFrames: string[]): string[] {
+  const out: string[] = [];
+  const write = createUnifiedEventWrite((chunk) => out.push(chunk));
+  for (const frame of legacyFrames) write(frame);
+  return out;
+}
+
+/** Stream pre-built SSE frames verbatim (no re-encode) — for fixtures already in
+ *  the unified vocabulary. */
+function createRawStreamFetch(frames: string[]) {
+  return vi.fn().mockImplementation(async (_url?: string, _options?: any) => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
-        for (const event of events) {
-          controller.enqueue(encoder.encode(event));
-        }
+        for (const frame of frames) controller.enqueue(encoder.encode(frame));
         controller.close();
       }
     });
     return { ok: true, body: stream };
   });
+}
+
+/**
+ * Mock fetch that streams the given legacy events as the 4.0 unified wire.
+ */
+function createAgentStreamFetch(events: string[]) {
+  return createRawStreamFetch(toUnifiedFrames(events));
 }
 
 describe('AgentWidgetClient - Agent Mode Detection', () => {
@@ -1224,12 +1239,12 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
       }
     }
 
-    // Should have a reflection message
+    // Reflection now folds into a loop-scoped reasoning bubble (unified spec):
+    // `agent_reflection` → reasoning_start{scope:"loop"} + reasoning_complete{text}.
     const reflectionMessages = Array.from(messagesById.values())
-      .filter(m => m.variant === 'reasoning' && m.id.includes('reflection'));
+      .filter(m => m.variant === 'reasoning' && m.reasoning?.scope === 'loop');
     expect(reflectionMessages.length).toBe(1);
-    expect(reflectionMessages[0].content).toBe('I should try a different approach.');
-    expect(reflectionMessages[0].reasoning?.chunks).toContain('I should try a different approach.');
+    expect(reflectionMessages[0].reasoning?.chunks.join('')).toBe('I should try a different approach.');
   });
 
   it('should handle agent_ping events gracefully', async () => {
@@ -1284,259 +1299,29 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
 // Unified Event Name Support (chunk → delta, agent_tool_* → tool_* with agentContext)
 // ============================================================================
 
-describe('AgentWidgetClient - Unified Event Names', () => {
-  it('should handle step_delta as alias for step_chunk', async () => {
-    const events: AgentWidgetEvent[] = [];
-
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_start","flowId":"f1","flowName":"Test","totalSteps":1}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"step_start","id":"s1","name":"Prompt","stepType":"prompt","index":1,"totalSteps":1}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"step_delta","id":"s1","name":"Prompt","executionType":"prompt","text":"Hello "}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"step_delta","id":"s1","name":"Prompt","executionType":"prompt","text":"world"}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"step_complete","id":"s1","name":"Prompt"}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-    await client.dispatch(
-      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
-      (event) => events.push(event)
-    );
-
-    const messageEvents = events.filter(e => e.type === 'message');
-    const assistantMessages = messageEvents
-      .map(e => e.type === 'message' ? e.message : null)
-      .filter((m): m is AgentWidgetMessage => m !== null && m.role === 'assistant' && !m.variant);
-    expect(assistantMessages.length).toBeGreaterThan(0);
-    const final = assistantMessages[assistantMessages.length - 1];
-    expect(final.content).toContain('Hello ');
-    expect(final.content).toContain('world');
-  });
-
-  it('should handle tool_delta as alias for tool_chunk', async () => {
-    const events: AgentWidgetEvent[] = [];
-
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_start","flowId":"f1","flowName":"Test","totalSteps":1}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"tool_start","toolCallId":"tc_1","toolName":"search"}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"tool_delta","toolCallId":"tc_1","delta":"Searching..."}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"tool_complete","toolCallId":"tc_1","toolName":"search","result":{"found":true},"duration":100}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-    await client.dispatch(
-      { messages: [{ id: 'usr_1', role: 'user', content: 'Search', createdAt: new Date().toISOString() }] },
-      (event) => events.push(event)
-    );
-
-    const messageEvents = events.filter(e => e.type === 'message');
-    const messagesById = new Map<string, AgentWidgetMessage>();
-    for (const event of messageEvents) {
-      if (event.type === 'message') messagesById.set(event.message.id, event.message);
-    }
-
-    const toolMessages = Array.from(messagesById.values()).filter(m => m.variant === 'tool');
-    expect(toolMessages.length).toBe(1);
-    expect(toolMessages[0].toolCall?.name).toBe('search');
-    expect(toolMessages[0].toolCall?.chunks).toContain('Searching...');
-    expect(toolMessages[0].toolCall?.status).toBe('complete');
-  });
-
-  it('should handle tool_start with agentContext (unified agent tool events)', async () => {
-    const events: AgentWidgetEvent[] = [];
-    const execId = 'exec_unified_1';
-
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 1,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('tool_start', {
-        toolCallId: 'tc_1', toolName: 'search', parameters: { query: 'weather' },
-        agentContext: { executionId: execId, iteration: 1, seq: 3 },
-      }),
-      sseEvent('tool_delta', {
-        toolCallId: 'tc_1', delta: 'Searching...',
-        agentContext: { executionId: execId, iteration: 1, seq: 4 },
-      }),
-      sseEvent('tool_complete', {
-        toolCallId: 'tc_1', toolName: 'search', result: { temperature: 72 },
-        executionTime: 150,
-        agentContext: { executionId: execId, iteration: 1, seq: 5 },
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'The weather is 72F.',
-        contentType: 'text', turnId: 'turn_1', seq: 6,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 7,
-      }),
-    ]);
-
-    const client = new AgentWidgetClient({
-      apiUrl: 'http://localhost:8000',
-      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
-    });
-
-    await client.dispatch(
-      { messages: [{ id: 'usr_1', role: 'user', content: 'Weather?', createdAt: new Date().toISOString() }] },
-      (event) => events.push(event)
-    );
-
-    const messageEvents = events.filter(e => e.type === 'message');
-    const messagesById = new Map<string, AgentWidgetMessage>();
-    for (const event of messageEvents) {
-      if (event.type === 'message') messagesById.set(event.message.id, event.message);
-    }
-
-    const toolMessages = Array.from(messagesById.values()).filter(m => m.variant === 'tool');
-    expect(toolMessages.length).toBe(1);
-    expect(toolMessages[0].toolCall?.name).toBe('search');
-    expect(toolMessages[0].toolCall?.status).toBe('complete');
-    expect(toolMessages[0].toolCall?.result).toEqual({ temperature: 72 });
-    expect(toolMessages[0].toolCall?.durationMs).toBe(150);
-    expect(toolMessages[0].agentMetadata?.executionId).toBe(execId);
-    expect(toolMessages[0].agentMetadata?.iteration).toBe(1);
-
-    const assistantMessages = Array.from(messagesById.values())
-      .filter(m => m.role === 'assistant' && !m.variant);
-    expect(assistantMessages.length).toBe(1);
-    expect(assistantMessages[0].content).toBe('The weather is 72F.');
-  });
-
-  it('should handle agent_reflect as alias for agent_reflection', async () => {
-    const events: AgentWidgetEvent[] = [];
-    const execId = 'exec_reflect_1';
-
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 2, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_reflect', {
-        executionId: execId, iteration: 1,
-        reflection: 'Let me reconsider.', seq: 2,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 2, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 3,
-      }),
-    ]);
-
-    const client = new AgentWidgetClient({
-      apiUrl: 'http://localhost:8000',
-      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
-    });
-
-    await client.dispatch(
-      { messages: [{ id: 'usr_1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
-      (event) => events.push(event)
-    );
-
-    const messageEvents = events.filter(e => e.type === 'message');
-    const messagesById = new Map<string, AgentWidgetMessage>();
-    for (const event of messageEvents) {
-      if (event.type === 'message') messagesById.set(event.message.id, event.message);
-    }
-
-    const reflectionMessages = Array.from(messagesById.values())
-      .filter(m => m.variant === 'reasoning' && m.id.includes('reflection'));
-    expect(reflectionMessages.length).toBe(1);
-    expect(reflectionMessages[0].content).toBe('Let me reconsider.');
-    expect(reflectionMessages[0].reasoning?.chunks).toContain('Let me reconsider.');
-  });
-
-  it('should handle reason_delta as canonical event (with reason_chunk as legacy alias)', async () => {
-    const events: AgentWidgetEvent[] = [];
-
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_start","flowId":"f1","flowName":"Test","totalSteps":1}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"reason_start","reasoningId":"r1"}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"reason_delta","reasoningId":"r1","reasoningText":"Thinking..."}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"reason_complete","reasoningId":"r1"}\n\n'));
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-    await client.dispatch(
-      { messages: [{ id: 'usr_1', role: 'user', content: 'Think', createdAt: new Date().toISOString() }] },
-      (event) => events.push(event)
-    );
-
-    const messageEvents = events.filter(e => e.type === 'message');
-    const messagesById = new Map<string, AgentWidgetMessage>();
-    for (const event of messageEvents) {
-      if (event.type === 'message') messagesById.set(event.message.id, event.message);
-    }
-
-    const reasoningMessages = Array.from(messagesById.values())
-      .filter(m => m.variant === 'reasoning');
-    expect(reasoningMessages.length).toBe(1);
-    expect(reasoningMessages[0].reasoning?.chunks).toContain('Thinking...');
-  });
-});
-
 // ============================================================================
 // Text/Tool Interleaving via partId Segmentation
 // ============================================================================
 
 describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
-  it('should split assistant messages at tool boundaries using partId on step_delta', async () => {
+  it('should split flow text segments at a tool boundary', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: Record<string, unknown>) =>
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 0, totalSteps: 1 });
-          // First text segment
-          e({ type: 'step_delta', id: 's1', text: 'Let me search', partId: 'text_0', messageId: 'msg_s1' });
-          e({ type: 'step_delta', id: 's1', text: ' for that!', partId: 'text_0', messageId: 'msg_s1' });
-          // Tool call
-          e({ type: 'tool_start', toolId: 'tc_1', name: 'search', toolType: 'mcp', startedAt: new Date().toISOString() });
-          e({ type: 'tool_complete', toolId: 'tc_1', name: 'search', result: { found: true }, success: true, completedAt: new Date().toISOString(), executionTime: 200 });
-          // Second text segment (different partId)
-          e({ type: 'step_delta', id: 's1', text: 'Found it! Here', partId: 'text_1', messageId: 'msg_s1' });
-          e({ type: 'step_delta', id: 's1', text: ' are the results.', partId: 'text_1', messageId: 'msg_s1' });
-          e({ type: 'flow_complete', success: true });
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      sseEvent('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 0, totalSteps: 1 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Let me search' }),
+      sseEvent('step_delta', { id: 's1', text: ' for that!' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('tool_start', { toolId: 'tc_1', name: 'search', toolType: 'mcp', startedAt: new Date().toISOString() }),
+      sseEvent('tool_complete', { toolId: 'tc_1', name: 'search', result: { found: true }, success: true, completedAt: new Date().toISOString(), executionTime: 200 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Found it! Here' }),
+      sseEvent('step_delta', { id: 's1', text: ' are the results.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
     await client.dispatch(
@@ -1579,28 +1364,18 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should split assistant messages using text_start/text_end lifecycle events', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (eventType: string, data: Record<string, unknown>) =>
-            controller.enqueue(encoder.encode(`event: ${eventType}\ndata: ${JSON.stringify({ type: eventType, ...data })}\n\n`));
-
-          e('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e('text_start', { partId: 'text_0', messageId: 'msg_s1', seq: 1 });
-          e('step_delta', { id: 's1', text: 'Preamble text.', partId: 'text_0', messageId: 'msg_s1', seq: 2 });
-          e('text_end', { partId: 'text_0', messageId: 'msg_s1', seq: 3 });
-          e('tool_start', { toolId: 'tc_1', name: 'get_weather', toolType: 'builtin', startedAt: new Date().toISOString() });
-          e('tool_complete', { toolId: 'tc_1', name: 'get_weather', result: { temp: 72 }, success: true, completedAt: new Date().toISOString(), executionTime: 100 });
-          e('text_start', { partId: 'text_1', messageId: 'msg_s1', seq: 6 });
-          e('step_delta', { id: 's1', text: 'The weather is 72F.', partId: 'text_1', messageId: 'msg_s1', seq: 7 });
-          e('text_end', { partId: 'text_1', messageId: 'msg_s1', seq: 8 });
-          e('flow_complete', { success: true });
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Preamble text.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('tool_start', { toolId: 'tc_1', name: 'get_weather', toolType: 'builtin', startedAt: new Date().toISOString() }),
+      sseEvent('tool_complete', { toolId: 'tc_1', name: 'get_weather', result: { temp: 72 }, success: true, completedAt: new Date().toISOString(), executionTime: 100 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'The weather is 72F.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
     await client.dispatch(
@@ -1637,29 +1412,19 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should not emit a whitespace-only assistant bubble before a leading tool call', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (eventType: string, data: Record<string, unknown>) =>
-            controller.enqueue(encoder.encode(`event: ${eventType}\ndata: ${JSON.stringify({ type: eventType, ...data })}\n\n`));
-
-          e('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // Tool UI is the first meaningful output. Some providers still emit
-          // newline-only text lifecycle events around the tool boundary; those
-          // must not become an empty assistant message bubble.
-          e('tool_start', { toolId: 'tc_1', name: 'add_to_cart', toolType: 'local', sequenceIndex: 4 });
-          e('text_start', { partId: 'text_0', messageId: 'msg_s1', seq: 1 });
-          e('step_delta', { id: 's1', text: '\n', partId: 'text_0', messageId: 'msg_s1', seq: 2 });
-          e('text_end', { partId: 'text_0', messageId: 'msg_s1', seq: 3 });
-          e('tool_complete', { toolId: 'tc_1', name: 'add_to_cart', success: true, completedAt: new Date().toISOString(), executionTime: 20, sequenceIndex: 5 });
-          e('flow_complete', { success: true });
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
+    // Tool UI is the first meaningful output. Some providers still emit
+    // newline-only text lifecycle events around the tool boundary; those must
+    // not become an empty assistant message bubble.
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      sseEvent('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 }),
+      sseEvent('tool_start', { toolId: 'tc_1', name: 'add_to_cart', toolType: 'local' }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: '\n' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('tool_complete', { toolId: 'tc_1', name: 'add_to_cart', success: true, completedAt: new Date().toISOString(), executionTime: 20 }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
     await client.dispatch(
@@ -1683,25 +1448,16 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
     expect(toolMsgs[0].toolCall?.status).toBe('complete');
   });
 
-  it('should not split when partId is absent (backward compatible)', async () => {
+  it('should keep consecutive deltas in one bubble when there is no segment boundary', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: Record<string, unknown>) =>
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_delta', id: 's1', text: 'Hello ' });
-          e({ type: 'step_delta', id: 's1', text: 'world' });
-          e({ type: 'flow_complete', success: true });
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
+    // No text_end / tool boundary between the two deltas → one text block → one bubble.
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      sseEvent('step_delta', { id: 's1', text: 'Hello ' }),
+      sseEvent('step_delta', { id: 's1', text: 'world' }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
     await client.dispatch(
@@ -1727,32 +1483,28 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should handle multiple tool calls with proper text interleaving', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: Record<string, unknown>) =>
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          // text_0: preamble
-          e({ type: 'step_delta', id: 's1', text: 'Searching...', partId: 'text_0' });
-          // tool 1
-          e({ type: 'tool_start', toolId: 'tc_1', name: 'search', toolType: 'mcp' });
-          e({ type: 'tool_complete', toolId: 'tc_1', name: 'search', result: { id: 27 }, success: true, executionTime: 100 });
-          // text_1: between tools
-          e({ type: 'step_delta', id: 's1', text: 'Adding to cart...', partId: 'text_1' });
-          // tool 2
-          e({ type: 'tool_start', toolId: 'tc_2', name: 'add_to_cart', toolType: 'mcp' });
-          e({ type: 'tool_complete', toolId: 'tc_2', name: 'add_to_cart', result: { success: true }, success: true, executionTime: 50 });
-          // text_2: final
-          e({ type: 'step_delta', id: 's1', text: 'Done! Item added.', partId: 'text_2' });
-          e({ type: 'flow_complete', success: true });
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      // preamble segment
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Searching...' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      // tool 1
+      sseEvent('tool_start', { toolId: 'tc_1', name: 'search', toolType: 'mcp' }),
+      sseEvent('tool_complete', { toolId: 'tc_1', name: 'search', result: { id: 27 }, success: true, executionTime: 100 }),
+      // between-tools segment
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Adding to cart...' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      // tool 2
+      sseEvent('tool_start', { toolId: 'tc_2', name: 'add_to_cart', toolType: 'mcp' }),
+      sseEvent('tool_complete', { toolId: 'tc_2', name: 'add_to_cart', result: { success: true }, success: true, executionTime: 50 }),
+      // final segment
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Done! Item added.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
     await client.dispatch(
@@ -1798,24 +1550,18 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should give split messages unique IDs even when assistantMessageId is provided', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: Record<string, unknown>) =>
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_delta', id: 's1', text: 'Before tool.', partId: 'text_0' });
-          e({ type: 'tool_start', toolId: 'tc_1', name: 'lookup', toolType: 'mcp' });
-          e({ type: 'tool_complete', toolId: 'tc_1', name: 'lookup', result: {}, success: true, executionTime: 50 });
-          e({ type: 'step_delta', id: 's1', text: 'After tool.', partId: 'text_1' });
-          e({ type: 'flow_complete', success: true });
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Before tool.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('tool_start', { toolId: 'tc_1', name: 'lookup', toolType: 'mcp' }),
+      sseEvent('tool_complete', { toolId: 'tc_1', name: 'lookup', result: {}, success: true, executionTime: 50 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'After tool.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
 
     // Use agent mode so assistantMessageId is forwarded to streamResponse
     const client = new AgentWidgetClient({
@@ -1844,35 +1590,34 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
     expect(assistantTexts.length).toBe(2);
     // First message uses the provided ID
     expect(assistantTexts[0].id).toBe('ast_pre_generated_id');
-    // Second message composes baseId + partId for traceability
-    expect(assistantTexts[1].id).toBe('ast_pre_generated_id_text_1');
+    // Second message composes baseId + the unified text block id for traceability
+    expect(assistantTexts[1].id).toBe('ast_pre_generated_id_text_2');
     // Content is correct per segment
     expect(assistantTexts[0].content).toBe('Before tool.');
     expect(assistantTexts[1].content).toBe('After tool.');
   });
 
-  it('should not overwrite last segment content with full response in flow_complete', async () => {
+  it('should not overwrite last segment content with the full step response (flow)', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: Record<string, unknown>) =>
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_delta', id: 's1', text: 'First part.', partId: 'text_0' });
-          e({ type: 'tool_start', toolId: 'tc_1', name: 'action', toolType: 'mcp' });
-          e({ type: 'tool_complete', toolId: 'tc_1', name: 'action', result: {}, success: true, executionTime: 10 });
-          e({ type: 'step_delta', id: 's1', text: 'Second part.', partId: 'text_1' });
-          // flow_complete with full concatenated response
-          e({ type: 'flow_complete', success: true, result: { response: 'First part.Second part.' } });
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
+    // Unified wire: two flow text segments split by a tool, each its own block
+    // (sealed by text_end → text_complete). The step's full structured response
+    // (`step_complete.result.response`) reconciles rawContent without clobbering
+    // either sealed bubble's displayed content.
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1, executionId: 'exec_f1' }),
+      sseEvent('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 0, totalSteps: 1 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'First part.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('tool_start', { toolId: 'tc_1', name: 'action', toolType: 'mcp', startedAt: new Date().toISOString() }),
+      sseEvent('tool_complete', { toolId: 'tc_1', name: 'action', result: {}, success: true, completedAt: new Date().toISOString(), executionTime: 10 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Second part.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('step_complete', { id: 's1', name: 'Prompt', stepType: 'prompt', success: true, result: { response: 'First part.Second part.' }, executionTime: 500 }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
     await client.dispatch(
@@ -1902,29 +1647,19 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should not duplicate text when step_complete follows text_end', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (eventType: string, data: Record<string, unknown>) =>
-            controller.enqueue(encoder.encode(`event: ${eventType}\ndata: ${JSON.stringify({ type: eventType, ...data })}\n\n`));
-
-          e('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          // Tools fire first (no text before them)
-          e('tool_start', { toolId: 'tc_1', name: 'test_tool', toolType: 'custom', startedAt: new Date().toISOString() });
-          e('tool_complete', { toolId: 'tc_1', name: 'test_tool', success: true, completedAt: new Date().toISOString(), executionTime: 0 });
-          // Then text segment
-          e('text_start', { partId: 'text_1', messageId: 'msg_s1', seq: 1 });
-          e('step_delta', { id: 's1', text: 'Tool returned a result.', partId: 'text_1', messageId: 'msg_s1', seq: 2 });
-          e('text_end', { partId: 'text_1', messageId: 'msg_s1', seq: 3 });
-          // step_complete with full response (should NOT create a duplicate)
-          e('step_complete', { id: 's1', name: 'Response', stepType: 'prompt', success: true, result: { response: 'Tool returned a result.' }, executionTime: 500 });
-          e('flow_complete', { success: true });
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      // Tools fire first (no text before them)
+      sseEvent('tool_start', { toolId: 'tc_1', name: 'test_tool', toolType: 'custom', startedAt: new Date().toISOString() }),
+      sseEvent('tool_complete', { toolId: 'tc_1', name: 'test_tool', success: true, completedAt: new Date().toISOString(), executionTime: 0 }),
+      // Then text segment
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Tool returned a result.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      // step_complete with full response (should NOT create a duplicate)
+      sseEvent('step_complete', { id: 's1', name: 'Response', stepType: 'prompt', success: true, result: { response: 'Tool returned a result.' }, executionTime: 500 }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
     await client.dispatch(
@@ -1980,39 +1715,27 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
       };
     };
 
-    const encoder = new TextEncoder();
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (eventType: string, data: Record<string, unknown>) =>
-            controller.enqueue(encoder.encode(`event: ${eventType}\ndata: ${JSON.stringify({ type: eventType, ...data })}\n\n`));
-
-          e('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e('tool_start', { toolId: 'tc_1', name: 'test_tool', toolType: 'custom', startedAt: new Date().toISOString() });
-          e('tool_complete', { toolId: 'tc_1', name: 'test_tool', success: true, completedAt: new Date().toISOString(), executionTime: 0 });
-          e('text_start', { partId: 'text_1', messageId: 'msg_s1', seq: 1 });
-          e('step_delta', {
-            id: 's1',
-            text: '{"text":"Tool returned a re',
-            partId: 'text_1',
-            messageId: 'msg_s1',
-            seq: 2
-          });
-          e('text_end', { partId: 'text_1', messageId: 'msg_s1', seq: 3 });
-          e('step_complete', {
-            id: 's1',
-            name: 'Response',
-            stepType: 'prompt',
-            success: true,
-            result: { response: opts.stepCompleteResponse },
-            executionTime: 500
-          });
-          e('flow_complete', { success: true });
-          controller.close();
-        }
-      });
-      return { ok: true, body: stream };
-    });
+    // Unified wire (via the oracle): a single flow text block carrying partial
+    // structured JSON, sealed by text_end, then the authoritative final structured
+    // response on step_complete. Exercises the async structured-content parser +
+    // sealed-segment reconciliation on the unified flow path.
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      sseEvent('tool_start', { toolId: 'tc_1', name: 'test_tool', toolType: 'custom', startedAt: new Date().toISOString() }),
+      sseEvent('tool_complete', { toolId: 'tc_1', name: 'test_tool', success: true, completedAt: new Date().toISOString(), executionTime: 0 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: '{"text":"Tool returned a re' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('step_complete', {
+        id: 's1',
+        name: 'Response',
+        stepType: 'prompt',
+        success: true,
+        result: { response: opts.stepCompleteResponse },
+        executionTime: 500
+      }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
 
     const client = new AgentWidgetClient({
       apiUrl: 'http://localhost:8000',
@@ -2058,6 +1781,98 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
       stepCompleteResponse: '{"text":"Tool returned a result."}',
       expectedRawContent: '{"text":"Tool returned a result."}',
     });
+  });
+});
+
+describe('AgentWidgetClient - nested flow-as-tool (parentToolCallId)', () => {
+  // PR #4602: a flow running as a tool enriches its streamed text/reasoning with
+  // toolContext.toolId; the unified wire surfaces it as text_start/reasoning_start
+  // .parentToolCallId, and the widget routes that block into the parent tool's row.
+  it('routes nested flow text into the parent tool row, not the top-level assistant', async () => {
+    const events: AgentWidgetEvent[] = [];
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      // top-level parent text
+      sseEvent('text_start', { messageId: 'msg_parent' }),
+      sseEvent('step_delta', { id: 's1', text: 'Parent says hi.' }),
+      sseEvent('text_end', { messageId: 'msg_parent' }),
+      // a nested flow runs as a tool
+      sseEvent('tool_start', { toolId: 'tool_nested_1', name: 'run_subflow', toolType: 'flow', startedAt: new Date().toISOString() }),
+      // nested flow text, enriched with toolContext.toolId
+      sseEvent('text_start', { messageId: 'msg_nested', toolContext: { toolId: 'tool_nested_1' } }),
+      sseEvent('step_delta', { id: 's2', text: 'Nested result.', toolContext: { toolId: 'tool_nested_1' } }),
+      sseEvent('text_end', { messageId: 'msg_nested', toolContext: { toolId: 'tool_nested_1' } }),
+      sseEvent('tool_complete', { toolId: 'tool_nested_1', name: 'run_subflow', success: true, executionTime: 100 }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'Go', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const byId = new Map<string, AgentWidgetMessage>();
+    for (const ev of events) if (ev.type === 'message') byId.set(ev.message.id, ev.message);
+    const all = Array.from(byId.values());
+    const assistantTexts = all.filter((m) => m.role === 'assistant' && !m.variant);
+    const tools = all.filter((m) => m.variant === 'tool');
+
+    const topLevel = assistantTexts.find((m) => !m.agentMetadata?.parentToolId);
+    const nested = assistantTexts.find((m) => m.agentMetadata?.parentToolId === 'tool_nested_1');
+
+    expect(topLevel?.content).toBe('Parent says hi.');
+    expect(nested).toBeDefined();
+    expect(nested?.content).toBe('Nested result.');
+    expect(nested?.streaming).toBe(false);
+    expect(tools.some((t) => t.toolCall?.name === 'run_subflow')).toBe(true);
+  });
+
+  it('does not tag top-level flow text with a parentToolId', async () => {
+    const events: AgentWidgetEvent[] = [];
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      sseEvent('text_start', { messageId: 'msg_1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Just top-level.' }),
+      sseEvent('text_end', { messageId: 'msg_1' }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'u', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+    const byId = new Map<string, AgentWidgetMessage>();
+    for (const ev of events) if (ev.type === 'message') byId.set(ev.message.id, ev.message);
+    const texts = Array.from(byId.values()).filter((m) => m.role === 'assistant' && !m.variant);
+    expect(texts.length).toBe(1);
+    expect(texts[0].content).toBe('Just top-level.');
+    expect(texts[0].agentMetadata?.parentToolId).toBeUndefined();
+  });
+
+  it('routes nested flow reasoning into the parent tool row', async () => {
+    const events: AgentWidgetEvent[] = [];
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
+      sseEvent('tool_start', { toolId: 'tool_nested_2', name: 'run_subflow', toolType: 'flow', startedAt: new Date().toISOString() }),
+      sseEvent('reason_start', { toolContext: { toolId: 'tool_nested_2' } }),
+      sseEvent('reason_delta', { reasoningText: 'thinking nested', toolContext: { toolId: 'tool_nested_2' } }),
+      sseEvent('reason_complete', { toolContext: { toolId: 'tool_nested_2' } }),
+      sseEvent('tool_complete', { toolId: 'tool_nested_2', name: 'run_subflow', success: true, executionTime: 50 }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'u', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+    const byId = new Map<string, AgentWidgetMessage>();
+    for (const ev of events) if (ev.type === 'message') byId.set(ev.message.id, ev.message);
+    const reasoning = Array.from(byId.values()).filter((m) => m.variant === 'reasoning');
+    const nested = reasoning.find((m) => m.agentMetadata?.parentToolId === 'tool_nested_2');
+    expect(nested).toBeDefined();
+    expect(nested?.reasoning?.chunks.join('')).toBe('thinking nested');
+    expect(nested?.streaming).toBe(false);
   });
 });
 
@@ -2136,493 +1951,6 @@ describe('preferFinalStructuredContent', () => {
       '[{"text":"par',
       '[{"text":"partial"}]'
     )).toBe('[{"text":"partial"}]');
-  });
-});
-
-describe('AgentWidgetClient - Out-of-Order Sequence Reordering', () => {
-  it('should reorder step_delta chunks by seq when events arrive out of order', async () => {
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // Send chunks out of order (seq 3 before seq 2)
-          e({ type: 'step_delta', id: 's1', text: 'Hello', partId: 'text_0', seq: 1 });
-          e({ type: 'step_delta', id: 's1', text: ' world', partId: 'text_0', seq: 3 });
-          e({ type: 'step_delta', id: 's1', text: ' beautiful', partId: 'text_0', seq: 2 });
-          e({ type: 'step_delta', id: 's1', text: '!', partId: 'text_0', seq: 4 });
-          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
-          e({ type: 'flow_complete', success: true });
-          controller.close();
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    await client.dispatch({ messages: [] }, (event) => events.push(event));
-
-    const messageEvents = events.filter(
-      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
-    );
-    const finalMessages = messageEvents.filter((e) => !e.message.streaming);
-    expect(finalMessages.length).toBeGreaterThan(0);
-
-    const lastFinal = finalMessages[finalMessages.length - 1];
-    // Content should be in seq order, not arrival order
-    expect(lastFinal.message.content).toBe('Hello beautiful world!');
-  });
-
-  it('repairs a delayed step_delta that arrives after the gap-timeout flush', async () => {
-    vi.useFakeTimers();
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          e({ type: 'text_start', partId: 'text_0', messageId: 'msg_1', seq: 1 });
-          e({ type: 'step_delta', id: 's1', text: 'a', partId: 'text_0', messageId: 'msg_1', seq: 2 });
-          // seq=3 is delayed long enough for the reorder buffer to flush seq=4 and seq=5.
-          e({ type: 'step_delta', id: 's1', text: 'c', partId: 'text_0', messageId: 'msg_1', seq: 4 });
-          e({ type: 'text_end', partId: 'text_0', messageId: 'msg_1', seq: 5 });
-
-          setTimeout(() => {
-            e({ type: 'step_delta', id: 's1', text: 'b', partId: 'text_0', messageId: 'msg_1', seq: 3 });
-          }, 60);
-
-          setTimeout(() => {
-            e({ type: 'flow_complete', success: true });
-            controller.close();
-          }, 70);
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    const dispatchPromise = client.dispatch({ messages: [] }, (event) => events.push(event));
-    await vi.advanceTimersByTimeAsync(80);
-    await dispatchPromise;
-    vi.useRealTimers();
-
-    const messageEvents = events.filter(
-      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
-    );
-    const assistantMessages = messageEvents
-      .filter((e) => e.message.role === 'assistant' && !e.message.variant)
-      .map((e) => e.message);
-    expect(assistantMessages.length).toBeGreaterThan(0);
-
-    const repairedMessage = assistantMessages[assistantMessages.length - 1];
-    expect(repairedMessage.content).toBe('abc');
-    expect(repairedMessage.partId).toBe('text_0');
-  });
-
-  it('should reorder reason_delta chunks by sequenceIndex', async () => {
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          e({ type: 'reason_start', reasoningId: 'r1', hidden: false, done: false });
-          // Send reasoning chunks out of order
-          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'I ', hidden: false, done: false, sequenceIndex: 1 });
-          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'about', hidden: false, done: false, sequenceIndex: 3 });
-          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'think ', hidden: false, done: false, sequenceIndex: 2 });
-          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: ' this.', hidden: false, done: false, sequenceIndex: 4 });
-          e({ type: 'reason_complete', reasoningId: 'r1', hidden: false, done: true });
-          e({ type: 'step_delta', id: 's1', text: 'Result', partId: 'text_0' });
-          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
-          e({ type: 'flow_complete', success: true });
-          controller.close();
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    await client.dispatch({ messages: [] }, (event) => events.push(event));
-
-    const messageEvents = events.filter(
-      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
-    );
-    const reasoningMsgs = messageEvents.filter(
-      (e) => e.message.reasoning && e.message.reasoning.chunks.length > 0
-    );
-    expect(reasoningMsgs.length).toBeGreaterThan(0);
-
-    const lastReasoning = reasoningMsgs[reasoningMsgs.length - 1];
-    // Reasoning chunks should be in sequenceIndex order
-    const fullReasoning = lastReasoning.message.reasoning!.chunks.join('');
-    expect(fullReasoning).toBe('I think about this.');
-  });
-
-  it('repairs a delayed reason_delta that arrives after the gap-timeout flush', async () => {
-    vi.useFakeTimers();
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          e({ type: 'reason_start', reasoningId: 'r1', hidden: false, done: false, sequenceIndex: 1 });
-          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'a', hidden: false, done: false, sequenceIndex: 2 });
-          // sequenceIndex=3 is delayed long enough for the gap-timeout to flush sequenceIndex=4
-          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'c', hidden: false, done: false, sequenceIndex: 4 });
-
-          setTimeout(() => {
-            // Late arrival after gap-timeout flush
-            e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'b', hidden: false, done: false, sequenceIndex: 3 });
-          }, 60);
-
-          setTimeout(() => {
-            e({ type: 'reason_complete', reasoningId: 'r1', hidden: false, done: true, sequenceIndex: 5 });
-            e({ type: 'step_delta', id: 's1', text: 'Result', partId: 'text_0', sequenceIndex: 6 });
-            e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
-            e({ type: 'flow_complete', success: true });
-            controller.close();
-          }, 70);
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    const dispatchPromise = client.dispatch({ messages: [] }, (event) => events.push(event));
-    await vi.advanceTimersByTimeAsync(80);
-    await dispatchPromise;
-    vi.useRealTimers();
-
-    const messageEvents = events.filter(
-      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
-    );
-    const reasoningMsgs = messageEvents.filter(
-      (e) => e.message.reasoning && e.message.reasoning.chunks.length > 0
-    );
-    expect(reasoningMsgs.length).toBeGreaterThan(0);
-
-    const lastReasoning = reasoningMsgs[reasoningMsgs.length - 1];
-    const fullReasoning = lastReasoning.message.reasoning!.chunks.join('');
-    expect(fullReasoning).toBe('abc');
-  });
-
-  it('should handle step_delta without seq gracefully (no reordering)', async () => {
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // No seq field: should append in arrival order
-          e({ type: 'step_delta', id: 's1', text: 'Hello ' });
-          e({ type: 'step_delta', id: 's1', text: 'world' });
-          e({ type: 'step_delta', id: 's1', text: '!' });
-          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
-          e({ type: 'flow_complete', success: true });
-          controller.close();
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    await client.dispatch({ messages: [] }, (event) => events.push(event));
-
-    const messageEvents = events.filter(
-      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
-    );
-    const finalMessages = messageEvents.filter((e) => !e.message.streaming);
-    expect(finalMessages.length).toBeGreaterThan(0);
-
-    const lastFinal = finalMessages[finalMessages.length - 1];
-    expect(lastFinal.message.content).toBe('Hello world!');
-  });
-
-  it('should handle leading-gap arrival (first event is not seq=1)', async () => {
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // seq=3 arrives first (leading gap: seq 1 and 2 arrive later)
-          e({ type: 'step_delta', id: 's1', text: 'c', partId: 'text_0', seq: 3 });
-          e({ type: 'step_delta', id: 's1', text: 'a', partId: 'text_0', seq: 1 });
-          e({ type: 'step_delta', id: 's1', text: 'b', partId: 'text_0', seq: 2 });
-          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
-          e({ type: 'flow_complete', success: true });
-          controller.close();
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    await client.dispatch({ messages: [] }, (event) => events.push(event));
-
-    const messageEvents = events.filter(
-      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
-    );
-    const finalMessages = messageEvents.filter((e) => !e.message.streaming);
-    expect(finalMessages.length).toBeGreaterThan(0);
-
-    const lastFinal = finalMessages[finalMessages.length - 1];
-    // Must be in seq order, not arrival order
-    expect(lastFinal.message.content).toBe('abc');
-  });
-
-  it('should handle mixed seq + sequenceIndex in one stream', async () => {
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // reason_delta uses sequenceIndex, step_delta uses seq: same counter
-          e({ type: 'reason_start', reasoningId: 'r1', hidden: false, done: false });
-          e({ type: 'reason_delta', reasoningId: 'r1', reasoningText: 'thinking', hidden: false, done: false, sequenceIndex: 1 });
-          e({ type: 'reason_complete', reasoningId: 'r1', hidden: false, done: true });
-          // step_delta seq=2 continues from the same counter
-          e({ type: 'step_delta', id: 's1', text: 'Result', partId: 'text_0', seq: 2 });
-          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
-          e({ type: 'flow_complete', success: true });
-          controller.close();
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    await client.dispatch({ messages: [] }, (event) => events.push(event));
-
-    const messageEvents = events.filter(
-      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
-    );
-    // Should have both reasoning and text messages, properly ordered
-    const reasoningMsgs = messageEvents.filter(e => e.message.reasoning?.chunks?.length);
-    expect(reasoningMsgs.length).toBeGreaterThan(0);
-    expect(reasoningMsgs[reasoningMsgs.length - 1].message.reasoning!.chunks.join('')).toBe('thinking');
-
-    const textMsgs = messageEvents.filter(e => e.message.role === 'assistant' && !e.message.variant && e.message.content);
-    expect(textMsgs.length).toBeGreaterThan(0);
-    expect(textMsgs[textMsgs.length - 1].message.content).toContain('Result');
-  });
-
-  it('should handle cross-event buffering around tool events', async () => {
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // text_start and step_delta with seq, then tool events (no seq), then more text
-          e({ type: 'text_start', partId: 'text_0', messageId: 'msg_1', seq: 1 });
-          e({ type: 'step_delta', id: 's1', text: 'Before tool ', partId: 'text_0', seq: 2 });
-          e({ type: 'text_end', partId: 'text_0', messageId: 'msg_1', seq: 3 });
-          // Tool events don't carry top-level seq in non-agent flows
-          e({ type: 'tool_start', toolCallId: 'tc1', name: 'fetch', parameters: {} });
-          e({ type: 'tool_complete', toolCallId: 'tc1', name: 'fetch', result: { data: 'ok' }, executionTime: 100 });
-          e({ type: 'text_start', partId: 'text_1', messageId: 'msg_1', seq: 4 });
-          e({ type: 'step_delta', id: 's1', text: 'after tool', partId: 'text_1', seq: 5 });
-          e({ type: 'text_end', partId: 'text_1', messageId: 'msg_1', seq: 6 });
-          e({ type: 'step_complete', id: 's1', name: 'Prompt', success: true });
-          e({ type: 'flow_complete', success: true });
-          controller.close();
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    await client.dispatch({ messages: [] }, (event) => events.push(event));
-
-    const messageEvents = events.filter(
-      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
-    );
-    // Should have text content from both segments
-    const allContent = messageEvents
-      .filter(e => e.message.role === 'assistant' && !e.message.variant)
-      .map(e => e.message.content);
-    const combinedContent = allContent.join('');
-    expect(combinedContent).toContain('Before tool ');
-    expect(combinedContent).toContain('after tool');
-  });
-
-  it('delivers sequenced events still buffered when the stream closes', async () => {
-    // Regression: if the SSE stream ends while the reorder buffer is still
-    // waiting for a missing seq number, previously those events were silently
-    // dropped (destroy() cancelled the gap timer without flushing). The fix
-    // is an end-of-stream flush + drain; this test guards against regression.
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          // Only a seq=3 event arrives: seq=1 and seq=2 are never delivered.
-          // Without the end-of-stream flush, this event would be stranded in
-          // the reorder buffer and never emitted.
-          e({ type: 'step_delta', id: 's1', text: 'tail', partId: 'text_0', seq: 3 });
-          // Stream closes immediately, well inside the 50ms gap timer window.
-          controller.close();
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    await client.dispatch({ messages: [] }, (event) => events.push(event));
-
-    const messageEvents = events.filter(
-      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
-    );
-    const assistantContent = messageEvents
-      .filter((e) => e.message.role === 'assistant' && !e.message.variant)
-      .map((e) => e.message.content)
-      .join('');
-
-    expect(assistantContent).toContain('tail');
-  });
-
-  it('drains timer-flushed sequenced events before the next SSE chunk arrives', async () => {
-    vi.useFakeTimers();
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          e({ type: 'step_start', id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 });
-          e({ type: 'step_delta', id: 's1', text: 'a', partId: 'text_0', seq: 1 });
-          // seq=3 buffers while seq=2 is missing.
-          e({ type: 'step_delta', id: 's1', text: 'c', partId: 'text_0', seq: 3 });
-
-          // Keep the stream open without delivering another SSE event until after
-          // the gap timeout has fired. The buffered seq=3 event should still render.
-          setTimeout(() => {
-            e({ type: 'flow_complete', success: true });
-            controller.close();
-          }, 120);
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    const dispatchPromise = client.dispatch({ messages: [] }, (event) => events.push(event));
-
-    await vi.advanceTimersByTimeAsync(60);
-
-    const messageEventsDuringPause = events.filter(
-      (e): e is AgentWidgetEvent & { type: 'message' } => e.type === 'message'
-    );
-    const assistantContentDuringPause = messageEventsDuringPause
-      .filter((e) => e.message.role === 'assistant' && !e.message.variant)
-      .map((e) => e.message.content)
-      .join('');
-
-    expect(assistantContentDuringPause).toContain('ac');
-
-    await vi.advanceTimersByTimeAsync(70);
-    await dispatchPromise;
-    vi.useRealTimers();
-  });
-
-  it('delivers a buffered error event when the stream closes mid-gap', async () => {
-    // Regression: an error event with seq > 1 arriving right before the
-    // stream closes was being swallowed by the reorder buffer, leaving the
-    // widget stuck in a streaming state with no error surfaced.
-    const events: AgentWidgetEvent[] = [];
-
-    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
-
-    global.fetch = vi.fn().mockImplementation(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          const e = (data: any) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          };
-          e({ type: 'flow_start', flowId: 'f1', flowName: 'Test', totalSteps: 1 });
-          // Only sequenced event, but seq > 1 so it would be buffered.
-          e({ type: 'error', error: 'boom', seq: 2 });
-          controller.close();
-        },
-      });
-      return { ok: true, body: stream };
-    });
-
-    await client.dispatch({ messages: [] }, (event) => events.push(event));
-
-    const errorEvents = events.filter((e) => e.type === 'error');
-    expect(errorEvents.length).toBe(1);
-    if (errorEvents[0].type === 'error') {
-      expect(errorEvents[0].error.message).toBe('boom');
-    }
   });
 });
 
@@ -3006,6 +2334,20 @@ describe('AgentWidgetClient - agent_turn text/tool interleaving', () => {
 // ============================================================================
 
 describe('AgentWidgetClient: step_await parsing', () => {
+  // Unified collapses the legacy flow `step_await` (a `local_tool_required` pause)
+  // into the neutral `await` event the native handler consumes.
+  const buildUnifiedAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
+    const encoder = new TextEncoder();
+    const body = `event: await\ndata: ${JSON.stringify({ type: 'await', ...payload })}\n\n`;
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(body));
+        controller.close();
+      },
+    });
+  };
+  // Legacy raw `step_await` frame — still exercised by the approval-reason guard
+  // below until Phase C removes the legacy approval branch from the handler.
   const buildStepAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
     const encoder = new TextEncoder();
     const body = `event: step_await\ndata: ${JSON.stringify({ type: 'step_await', ...payload })}\n\n`;
@@ -3020,7 +2362,7 @@ describe('AgentWidgetClient: step_await parsing', () => {
   it('emits a complete tool message with awaitingLocalTool=true for local_tool_required', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      body: buildStepAwaitStream({
+      body: buildUnifiedAwaitStream({
         awaitReason: 'local_tool_required',
         id: 'step-1',
         name: 'Test Step',
@@ -3060,7 +2402,7 @@ describe('AgentWidgetClient: step_await parsing', () => {
   it('emits a running tool message for WebMCP local_tool_required until the browser tool resolves', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      body: buildStepAwaitStream({
+      body: buildUnifiedAwaitStream({
         awaitReason: 'local_tool_required',
         id: 'step-1',
         name: 'Test Step',
@@ -3131,9 +2473,11 @@ describe('AgentWidgetClient: step_await parsing', () => {
 // ============================================================================
 
 describe('AgentWidgetClient: agent_await parsing', () => {
+  // Unified collapses the legacy `step_await`/`agent_await` pair into one `await`
+  // event; the dispatch origin survives as the `origin` field on the payload.
   const buildAgentAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
     const encoder = new TextEncoder();
-    const body = `event: agent_await\ndata: ${JSON.stringify({ type: 'agent_await', ...payload })}\n\n`;
+    const body = `event: await\ndata: ${JSON.stringify({ type: 'await', ...payload })}\n\n`;
     return new ReadableStream({
       start(controller) {
         controller.enqueue(encoder.encode(body));
@@ -3555,8 +2899,11 @@ describe('AgentWidgetClient - agent_media events', () => {
       (e) => events.push(e)
     );
 
-    const parts = collectMediaMessages(events)[0]!.contentParts!;
-    expect(parts).toHaveLength(3);
+    // Unified streams each media item as its own block (media_start/complete),
+    // so each renders as its own synthetic message with a single content part.
+    const mediaMessages = collectMediaMessages(events);
+    expect(mediaMessages).toHaveLength(3);
+    const parts = mediaMessages.map((m) => m.contentParts![0]);
     expect(parts[0].type).toBe('audio');
     expect(parts[1].type).toBe('video');
     expect(parts[2].type).toBe('file');
@@ -3569,7 +2916,7 @@ describe('AgentWidgetClient - agent_media events', () => {
     }
   });
 
-  it('renders mixed media parts in a single message', async () => {
+  it('renders each mixed media part as its own synthetic message', async () => {
     const execId = 'exec_media_mixed';
     global.fetch = createAgentStreamFetch([
       sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
@@ -3597,9 +2944,8 @@ describe('AgentWidgetClient - agent_media events', () => {
     );
 
     const mediaMessages = collectMediaMessages(events);
-    expect(mediaMessages).toHaveLength(1);
-    const parts = mediaMessages[0]!.contentParts!;
-    expect(parts).toHaveLength(3);
+    expect(mediaMessages).toHaveLength(3);
+    const parts = mediaMessages.map((m) => m.contentParts![0]);
     expect(parts[0].type).toBe('image');
     expect(parts[1].type).toBe('image');
     expect(parts[2].type).toBe('file');
@@ -4314,7 +3660,7 @@ describe('AgentWidgetClient - version header', () => {
   });
 });
 
-describe('AgentWidgetClient - Unified event vocabulary (events: "unified")', () => {
+describe('AgentWidgetClient - Unified event vocabulary (default in 4.0)', () => {
   const unifiedTextStream = (execId: string) => [
     sseEvent('execution_start', { kind: 'agent', executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
     sseEvent('turn_start', { executionId: execId, id: 'turn_1', iteration: 1, role: 'assistant', seq: 2 }),
@@ -4326,7 +3672,7 @@ describe('AgentWidgetClient - Unified event vocabulary (events: "unified")', () 
     sseEvent('execution_complete', { kind: 'agent', executionId: execId, success: true, completedAt: new Date().toISOString(), seq: 8 }),
   ];
 
-  it('appends ?events=unified to the dispatch URL when opted in', async () => {
+  it('does not append an events param to the dispatch URL (unified is the default wire)', async () => {
     let capturedUrl = '';
     global.fetch = vi.fn().mockImplementation(async (url: string) => {
       capturedUrl = url;
@@ -4342,24 +3688,22 @@ describe('AgentWidgetClient - Unified event vocabulary (events: "unified")', () 
 
     const client = new AgentWidgetClient({
       apiUrl: 'http://localhost:8000',
-      events: 'unified',
       agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
     });
     await client.dispatch(
       { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
       () => {}
     );
-    expect(capturedUrl).toContain('events=unified');
+    expect(capturedUrl).not.toContain('events=');
   });
 
-  it('renders a unified stream by bridging it back to the legacy handlers', async () => {
+  it('renders a unified stream through the internal handlers with no config flag', async () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_u1';
-    global.fetch = createAgentStreamFetch(unifiedTextStream(execId));
+    global.fetch = createRawStreamFetch(unifiedTextStream(execId));
 
     const client = new AgentWidgetClient({
       apiUrl: 'http://localhost:8000',
-      events: 'unified',
       agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
     });
     await client.dispatch(
@@ -4376,38 +3720,6 @@ describe('AgentWidgetClient - Unified event vocabulary (events: "unified")', () 
       expect(last.message.streaming).toBe(false);
       expect(last.message.role).toBe('assistant');
       expect(last.message.agentMetadata?.executionId).toBe(execId);
-    }
-  });
-
-  it('auto-falls-back to legacy when "unified" was requested but the API streamed legacy frames', async () => {
-    const events: AgentWidgetEvent[] = [];
-    const execId = 'exec_legacy_fallback';
-    // Same content, LEGACY vocabulary — the API ignored ?events=unified.
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_turn_start', { executionId: execId, iteration: 1, turnId: 'turn_1', role: 'assistant', seq: 2 }),
-      sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: 'Hello', contentType: 'text', turnId: 'turn_1', seq: 3 }),
-      sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: ' World', contentType: 'text', turnId: 'turn_1', seq: 4 }),
-      sseEvent('agent_turn_complete', { executionId: execId, iteration: 1, turnId: 'turn_1', completedAt: new Date().toISOString(), seq: 5 }),
-      sseEvent('agent_complete', { executionId: execId, success: true, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 6 }),
-    ]);
-
-    const client = new AgentWidgetClient({
-      apiUrl: 'http://localhost:8000',
-      events: 'unified',
-      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
-    });
-    await client.dispatch(
-      { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
-      (e) => events.push(e)
-    );
-
-    const messageEvents = events.filter((e) => e.type === 'message');
-    const last = messageEvents[messageEvents.length - 1];
-    expect(last.type).toBe('message');
-    if (last.type === 'message') {
-      expect(last.message.content).toBe('Hello World');
-      expect(last.message.streaming).toBe(false);
     }
   });
 });

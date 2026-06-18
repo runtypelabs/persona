@@ -2920,7 +2920,7 @@ export class AgentWidgetSession {
           awaitingLocalTool: false,
         };
       }
-      // Approval equivalent: `agent_approval_complete` carries only the
+      // Approval equivalent: `approval_complete` carries only the
       // resolution (approvalId, decision, resolvedBy): the runtime does not
       // re-send toolName/description/toolType/reason/parameters, so client.ts
       // rebuilds the approval with empty required fields and the optional

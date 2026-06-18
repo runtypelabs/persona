@@ -6,10 +6,11 @@ into Persona's SSE protocol without writing Persona frames in every route:
 - **Vercel AI SDK**: wraps `streamText().fullStream`
 - **OpenAI Responses SDK**: wraps `openai.responses.create({ stream: true })`
 
-The adapters emit Persona's neutral **agent** vocabulary
-(`agent_start` / `agent_turn_delta` / `agent_complete`) — the protocol any
-backend can speak. (The `step_*` / `flow_complete` events you may see elsewhere
-are Runtype's flow-automation dialect; you don't need them here.)
+The adapters emit Persona's neutral **unified** vocabulary
+(`execution_start` / `turn_start` / `text_start`·`text_delta`·`text_complete` /
+`turn_complete` / `execution_complete`) — the one protocol any backend can
+speak, and the same wire the Runtype API emits. The widget consumes the unified
+vocabulary natively.
 
 The local adapter helpers live in `app/lib/` so they are easy to lift into a
 future package export such as `@runtypelabs/persona-proxy/adapters`.
@@ -42,25 +43,37 @@ Both routes accept the normal Persona proxy-mode dispatch body:
 }
 ```
 
-Both routes return Persona-compatible SSE. The streamed `agent_turn_delta`s are
+Both routes return Persona-compatible SSE. The streamed `text_delta`s are
 authoritative — there's no need to re-send the full text at the end, and one
-`executionId` (`exec_…`) is carried across every event of the run:
+`executionId` (`exec_…`) plus `kind:"agent"` are carried across the run:
 
 ```txt
-event: agent_start
-data: {"type":"agent_start","executionId":"exec_...","agentId":"virtual","startedAt":"..."}
+event: execution_start
+data: {"type":"execution_start","executionId":"exec_...","seq":0,"kind":"agent","agentId":"virtual","startedAt":"..."}
 
-event: agent_turn_delta
-data: {"type":"agent_turn_delta","executionId":"exec_...","iteration":1,"turnId":"turn_...","contentType":"text","delta":"..."}
+event: turn_start
+data: {"type":"turn_start","executionId":"exec_...","seq":1,"id":"turn_...","iteration":1}
 
-event: agent_complete
-data: {"type":"agent_complete","executionId":"exec_...","success":true,"completedAt":"..."}
+event: text_start
+data: {"type":"text_start","executionId":"exec_...","seq":2,"id":"text_..."}
+
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_...","seq":3,"id":"text_...","delta":"...","iteration":1}
+
+event: text_complete
+data: {"type":"text_complete","executionId":"exec_...","seq":4,"id":"text_..."}
+
+event: turn_complete
+data: {"type":"turn_complete","executionId":"exec_...","seq":5,"id":"turn_...","iteration":1,"stopReason":"end_turn","completedAt":"..."}
+
+event: execution_complete
+data: {"type":"execution_complete","executionId":"exec_...","seq":6,"kind":"agent","success":true,"completedAt":"..."}
 ```
 
 ## What this intentionally does not show
 
 This example is plain streaming chat. It does not include WebMCP, local tools,
-`agent_await`, or `/resume`. Those belong in the advanced example at
+the `await` pause, or `/resume`. Those belong in the advanced example at
 `examples/ai-sdk-webmcp`.
 
 The split is deliberate:

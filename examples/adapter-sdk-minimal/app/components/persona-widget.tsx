@@ -18,6 +18,8 @@ export function PersonaWidget({ apiUrl, title }: PersonaWidgetProps) {
 
     let handle: ReturnType<typeof createAgentExperience> | null = createAgentExperience(host, {
       apiUrl,
+      // The adapters emit Persona's neutral UNIFIED vocabulary, which the widget
+      // consumes natively (the same wire the Runtype API emits).
       launcher: { enabled: false },
       copy: {
         welcomeTitle: title,

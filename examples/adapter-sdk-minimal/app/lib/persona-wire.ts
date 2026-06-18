@@ -12,27 +12,31 @@ export type PersonaDispatchBody = {
   metadata?: Record<string, unknown>;
 };
 
-type PersonaFrame = {
+type UnifiedFrame = {
   type: string;
   executionId: string;
+  seq: number;
+  // lifecycle (execution_start / execution_complete / execution_error)
+  kind?: "agent" | "flow";
   agentId?: string;
+  agentName?: string;
   startedAt?: string;
   completedAt?: string;
-  iteration?: number;
-  turnId?: string;
-  contentType?: "text";
-  delta?: string;
   success?: boolean;
-  recoverable?: boolean;
+  stopReason?: string;
   error?: { message: string };
+  // turn / block (turn_start, text_start/_delta/_complete, turn_complete)
+  id?: string;
+  iteration?: number;
+  delta?: string;
 };
 
 export type PersonaStreamEmitter = {
-  /** Stream a chunk of assistant text (agent_turn_delta, contentType: "text"). */
+  /** Stream a chunk of assistant text (unified `text_delta`). */
   textDelta(text: string): void;
-  /** Finalize the turn successfully (agent_complete). */
+  /** Finalize the turn successfully (`text_complete` → `turn_complete` → `execution_complete`). */
   complete(): void;
-  /** Abort the turn with an error (agent_error). */
+  /** Abort the run with a terminal error (`execution_error`). */
   error(message: string): void;
 };
 
@@ -45,19 +49,29 @@ export type PersonaStreamContext = {
 const encoder = new TextEncoder();
 
 /**
- * Wrap a streaming handler in Persona's **agent** SSE vocabulary.
+ * Wrap a streaming handler in Persona's neutral **unified** SSE vocabulary.
  *
- * This is the neutral protocol any backend can speak — not Runtype's flow
- * dialect (`step_*` / `flow_complete`). One agent turn looks like:
+ * This is the one protocol any backend can speak — and the exact same wire the
+ * Runtype API emits. The widget consumes the unified vocabulary natively. One
+ * agent turn looks like:
  *
- *   event: agent_start        { executionId, agentId, startedAt }
- *   event: agent_turn_delta   { executionId, iteration, turnId, contentType:"text", delta }
+ *   event: execution_start   { executionId, kind:"agent", agentId, startedAt }
+ *   event: turn_start        { executionId, id:"turn_…", iteration:1 }
+ *   event: text_start        { executionId, id:"text_…" }
+ *   event: text_delta        { executionId, id:"text_…", delta, iteration:1 }
  *   …more deltas…
- *   event: agent_complete     { executionId, success:true, completedAt }
+ *   event: text_complete     { executionId, id:"text_…" }
+ *   event: turn_complete     { executionId, id:"turn_…", iteration:1, stopReason, completedAt }
+ *   event: execution_complete{ executionId, kind:"agent", success:true, completedAt }
  *
- * The streamed deltas are authoritative — unlike the flow vocabulary there is
- * no need to re-send the full text at the end. A single `executionId`
- * (`exec_…`) is carried across every event of the run.
+ * The streamed deltas are authoritative — there is no need to re-send the full
+ * text at the end. One `executionId` (`exec_…`) and `kind:"agent"` are carried
+ * across the run. Because this adapter IS a genuine agent (kind:"agent"), a
+ * `/resume` continuation — which has no `execution_start` to re-announce the
+ * kind — is correct by construction: the widget bridge defaults a fresh stream
+ * to kind:"agent", which matches. (A backend that wrapped an agent in a virtual
+ * flow would have to re-announce kind on resume; this one never claims to be
+ * something it isn't.)
  */
 export function createPersonaSSEStream(
   handler: (context: PersonaStreamContext) => Promise<void> | void,
@@ -67,28 +81,83 @@ export function createPersonaSSEStream(
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (event: string, payload: Omit<PersonaFrame, "type" | "executionId">) => {
+      // `seq` is the unified envelope's monotonic sequence number. The widget
+      // reads a single in-order connection so it isn't load-bearing here, but a
+      // faithful reference emits it.
+      let seq = 0;
+      const send = (event: string, payload: Omit<UnifiedFrame, "type" | "executionId" | "seq">) => {
         controller.enqueue(
           encoder.encode(
-            `event: ${event}\ndata: ${JSON.stringify({ type: event, executionId, ...payload })}\n\n`,
+            `event: ${event}\ndata: ${JSON.stringify({ type: event, executionId, seq: seq++, ...payload })}\n\n`,
           ),
         );
       };
 
+      // One turn, lazily opened. The text block opens on the first delta so an
+      // empty turn never emits a stray `text_start`.
+      let turnOpen = false;
+      let textBlockId: string | null = null;
+      let finished = false;
+
+      const openTurn = () => {
+        if (!turnOpen) {
+          send("turn_start", { id: turnId, iteration: 1 });
+          turnOpen = true;
+        }
+      };
+      const openTextBlock = () => {
+        openTurn();
+        if (textBlockId === null) {
+          textBlockId = `text_${crypto.randomUUID()}`;
+          send("text_start", { id: textBlockId });
+        }
+      };
+      const closeTextBlock = () => {
+        if (textBlockId !== null) {
+          send("text_complete", { id: textBlockId });
+          textBlockId = null;
+        }
+      };
+
       const emit: PersonaStreamEmitter = {
         textDelta(text) {
-          send("agent_turn_delta", { iteration: 1, turnId, contentType: "text", delta: text });
+          openTextBlock();
+          send("text_delta", { id: textBlockId!, delta: text, iteration: 1 });
         },
         complete() {
-          send("agent_complete", { success: true, completedAt: new Date().toISOString() });
+          if (finished) return;
+          finished = true;
+          closeTextBlock();
+          if (turnOpen) {
+            send("turn_complete", {
+              id: turnId,
+              iteration: 1,
+              stopReason: "end_turn",
+              completedAt: new Date().toISOString(),
+            });
+            turnOpen = false;
+          }
+          send("execution_complete", {
+            kind: "agent",
+            success: true,
+            completedAt: new Date().toISOString(),
+          });
         },
         error(message) {
-          send("agent_error", { recoverable: false, error: { message } });
+          if (finished) return;
+          finished = true;
+          send("execution_error", { kind: "agent", error: { message } });
         },
       };
 
-      // agent_start opens the run; agent_turn_delta + agent_complete come from the handler.
-      send("agent_start", { agentId: "virtual", startedAt: new Date().toISOString() });
+      // execution_start opens the run; the turn/text/complete frames come from
+      // the handler via `emit`.
+      send("execution_start", {
+        kind: "agent",
+        agentId: "virtual",
+        agentName: "Adapter Agent",
+        startedAt: new Date().toISOString(),
+      });
 
       try {
         await handler({ emit, executionId, turnId });

@@ -18,9 +18,6 @@ interface SiteAgentInstallConfig {
   clientToken?: string;
   flowId?: string;
   apiUrl?: string;
-  /** Wire vocabulary requested from the dispatch endpoint; 'unified' opts into the
-   *  API's neutral event schema (transparently bridged back to the same rendering). */
-  events?: "legacy" | "unified";
   // Optional query param key that gates widget installation in preview mode
   previewQueryParam?: string;
   // Shadow DOM option (defaults to false for better CSS compatibility)
@@ -360,7 +357,6 @@ declare global {
     if (config.apiUrl && !widgetConfig.apiUrl) widgetConfig.apiUrl = config.apiUrl;
     if (config.clientToken && !widgetConfig.clientToken) widgetConfig.clientToken = config.clientToken;
     if (config.flowId && !widgetConfig.flowId) widgetConfig.flowId = config.flowId;
-    if (config.events && !widgetConfig.events) widgetConfig.events = config.events;
 
     const hasApiConfig = !!(widgetConfig.apiUrl || widgetConfig.clientToken);
     return { target, widgetConfig, hasApiConfig };

@@ -15,13 +15,13 @@ behind the widget: instead of Runtype, an AI SDK route handler running Claude.
 
 ## What this shows / what it costs
 
-The Persona widget's WebMCP loop runs over **Persona's agent wire protocol** (an
-`agent_await` SSE pause → `/resume` round-trip) — the neutral vocabulary any
-backend can speak, not Runtype's flow-automation dialect. To keep the widget UI
+The Persona widget's WebMCP loop runs over **Persona's neutral unified wire
+protocol** (an `await` SSE pause → `/resume` round-trip) — the one vocabulary any
+backend can speak, and the same wire the Runtype API emits. To keep the widget UI
 while talking directly to the AI SDK, this example ships a **protocol shim**: two
-route handlers that emit that agent protocol on top of `streamText`
-(`app/api/chat/shim.ts`). The widget is unchanged and never learns it isn't
-talking to a hosted agent runtime.
+route handlers that emit that unified protocol on top of `streamText`
+(`app/api/chat/shim.ts`). The widget consumes the unified wire natively and is
+otherwise unchanged — it never learns it isn't talking to a hosted agent runtime.
 
 - **You keep:** the full Persona widget UI, WebMCP page-tool discovery,
   per-call approval gating, and parallel/multi-step tool calls.
@@ -79,17 +79,21 @@ pnpm --filter ai-sdk-webmcp dev
 `app/lib/widget.ts` mounts the widget in **proxy mode** (`apiUrl:
 "/api/chat/dispatch"`, no `clientToken`); resume is POSTed to `${apiUrl}/resume`.
 
-| Widget expects (SSE `event`) | Shim emits from `streamText` |
+| Widget reads (unified SSE `event`) | Shim emits from `streamText` |
 | --- | --- |
-| `agent_start` `{executionId, agentId}` | run start (dispatch only) |
-| `agent_turn_delta` `{contentType:"text", delta}` | `text-delta` parts |
-| `agent_await` `{toolName:"<bare>", origin:"webmcp", toolCallId, parameters, executionId}` | `tool-call` parts (paused: no `agent_complete`) |
-| `agent_complete` `{executionId, success}` | end of a turn with no tool calls |
+| `execution_start` `{executionId, kind:"agent", agentId}` | run start (dispatch only) |
+| `turn_start` `{id:"turn_…", iteration}` | opens each reasoning turn |
+| `text_start`·`text_delta`·`text_complete` `{id:"text_…", delta}` | `text-delta` parts |
+| `await` `{toolName:"<bare>", origin:"webmcp", toolCallId, parameters, executionId}` | `tool-call` parts (paused: no completion frames) |
+| `turn_complete` + `execution_complete` `{kind:"agent", success}` | end of a turn with no tool calls |
 | POST `/resume` `{executionId, toolOutputs}` | tool-result message appended → `streamText` continues at `iteration + 1` |
 
-One `exec_…` `executionId` is carried across the whole run — dispatch, every
-`agent_await`, every `/resume`, and `agent_complete` — and `iteration` advances
-on each resume.
+One `exec_…` `executionId` and `kind:"agent"` are carried across the whole run —
+dispatch, every `await`, every `/resume`, and `execution_complete` — and
+`iteration` advances on each resume. Because the shim is an honest agent
+(`kind:"agent"`), a `/resume` continuation — which has no `execution_start` to
+re-announce kind — bridges correctly: a fresh stream defaults to `kind:"agent"`,
+which is exactly what this backend is.
 
 ## Deploy on Vercel
 

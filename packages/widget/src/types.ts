@@ -4062,16 +4062,6 @@ export type AgentWidgetConfig = {
    */
   parseSSEEvent?: AgentWidgetSSEEventParser;
   /**
-   * Wire vocabulary requested from the dispatch endpoint.
-   * - `'legacy'` (default): the current `agent_*` / `flow_*` SSE events.
-   * - `'unified'`: opt into the API's neutral unified event vocabulary by sending
-   *   `?events=unified`; incoming frames are transparently bridged back to the same
-   *   handlers, so rendering is unchanged. Requires an upstream that honors the
-   *   param — the widget detects the actual wire mode from the first stream frame
-   *   and falls back to legacy automatically if the param was ignored.
-   */
-  events?: "legacy" | "unified";
-  /**
    * Called for every parsed SSE frame (after JSON parse), before native handling.
    * Use for lightweight side effects (e.g. telemetry). Does not replace native
    * streaming; pair with {@link parseSSEEvent} only when you need to override text mapping.
@@ -4259,6 +4249,12 @@ export type AgentWidgetReasoning = {
   id: string;
   status: "pending" | "streaming" | "complete";
   chunks: string[];
+  /**
+   * Reasoning channel scope (unified spec). `"turn"` is ordinary per-turn
+   * thinking; `"loop"` is a cross-iteration agent reflection (the fold that
+   * replaced the legacy `agent_reflection` event). Absent for legacy streams.
+   */
+  scope?: "turn" | "loop";
   startedAt?: number;
   completedAt?: number;
   durationMs?: number;
