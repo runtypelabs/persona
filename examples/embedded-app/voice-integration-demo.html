@@ -16,6 +16,49 @@
         margin-top: 1rem;
         flex-wrap: wrap;
       }
+      .tts-voice-select-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: stretch;
+        flex-wrap: nowrap;
+        margin-bottom: 0.5rem;
+      }
+      .tts-voice-select-row select {
+        flex: 1;
+        min-width: 0;
+      }
+      .tts-voice-copy-button {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.75rem;
+        padding-left: 0;
+        padding-right: 0;
+      }
+      .tts-voice-copy-button svg {
+        width: 1rem;
+        height: 1rem;
+        pointer-events: none;
+      }
+      .tts-voice-copy-button [data-voice-copy-icon] {
+        display: none;
+      }
+      .tts-voice-copy-button[data-copy-icon-state="copy"] [data-voice-copy-icon="copy"],
+      .tts-voice-copy-button[data-copy-icon-state="check"] [data-voice-copy-icon="check"] {
+        display: block;
+      }
+      .tts-test-voice-button {
+        flex: 0 0 auto;
+        min-width: 120px;
+        white-space: nowrap;
+      }
+      .config-action-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
       /* Voice-specific accent: highlight the toggle button while actively listening. */
       .voice-button.listening {
         background: var(--warn);
@@ -93,7 +136,7 @@
         <aside class="stage-controls">
           <header class="demo-meta">
             <h1>Voice Integration</h1>
-            <p>Real-time speech-to-text and text-to-speech via the Persona widget over WebSocket, with server-side voice processing through the Runtype backend.</p>
+            <p>Try Persona voice input with browser or Runtype speech-to-text, plus browser, Runtype, or OpenAI-backed text-to-speech output.</p>
           </header>
 
         <div data-config-inspector></div>
@@ -106,7 +149,7 @@
               type="text"
               id="clientTokenInput"
               placeholder="REPLACE_WITH_YOUR_CLIENT_TOKEN"
-              value="REPLACE_WITH_YOUR_CLIENT_TOKEN"
+              value=""
             />
           </div>
           <div class="field">
@@ -115,14 +158,14 @@
               type="text"
               id="agentIdInput"
               placeholder="REPLACE_WITH_YOUR_AGENT_ID"
-              value="REPLACE_WITH_YOUR_AGENT_ID"
+              value=""
             />
           </div>
           <div class="field" style="margin-top: 1rem">
             <h4>Voice Input (Speech-to-Text)</h4>
             <select id="voiceInputProvider">
-              <option value="runtype">Runtype (Server)</option>
               <option value="browser">Browser (Web Speech API)</option>
+              <option value="runtype">Runtype (Server)</option>
             </select>
           </div>
 
@@ -131,12 +174,24 @@
             <select
               id="voiceOutputProvider"
             >
-              <option value="none">None (Text only)</option>
               <option value="browser">Browser (Web Speech API)</option>
               <option value="runtype">Runtype (Server)</option>
+              <option value="openai">OpenAI (Proxy)</option>
+              <option value="none">None (Text only)</option>
             </select>
 
-            <div id="ttsOptions" style="display: none; margin-top: 0.5rem">
+            <div id="ttsOptions" style="display: block; margin-top: 0.5rem">
+              <div style="margin-top: 0.75rem; margin-bottom: 0.75rem">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="autoSpeakReplies" />
+                  Auto-speak assistant replies
+                </label>
+                <span class="hint">
+                  When off, the selected voice is still used by the per-message
+                  read-aloud button without autoplaying every response.
+                </span>
+              </div>
+
               <div id="ttsBrowserFallbackOption" style="display: none; margin-top: 0.75rem; margin-bottom: 0.75rem">
                 <label class="checkbox-label">
                   <input type="checkbox" id="ttsBrowserFallback" />
@@ -149,11 +204,53 @@
 
               <div id="ttsBrowserVoiceControls">
                 <div class="field">
-                  <select id="ttsVoice">
-                    <option value="">Auto-detect best voice</option>
-                  </select>
+                  <div class="tts-voice-select-row">
+                    <select id="ttsVoice" aria-label="Browser voice name">
+                      <option value="">Auto-detect best voice</option>
+                    </select>
+                    <button
+                      id="copyTtsVoice"
+                      type="button"
+                      class="btn tts-voice-copy-button"
+                      data-copy-icon-state="copy"
+                      aria-label="Copy selected browser voice name value"
+                      title="Copy selected browser voice name value"
+                    >
+                      <svg
+                        data-voice-copy-icon="copy"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                      <svg
+                        data-voice-copy-icon="check"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    </button>
+                    <button
+                      id="ttsTestVoice"
+                      type="button"
+                      class="btn tts-test-voice-button"
+                    >
+                      &#9654; Test voice
+                    </button>
+                  </div>
                 </div>
-                <button id="ttsTestVoice" class="btn" style="width: 100%; margin-bottom: 0.5rem;">&#9654; Test voice</button>
                 <div class="range-row">
                   <input
                     type="range"
@@ -179,6 +276,31 @@
                   <span id="ttsPitchValue">1.0</span>
                 </div>
                 <label class="control-label">Pitch</label>
+              </div>
+
+              <div id="ttsOpenAiControls" style="display: none">
+                <div class="field">
+                  <label>OpenAI voice</label>
+                  <select id="openAiVoice">
+                    <option value="alloy">alloy</option>
+                    <option value="echo">echo</option>
+                    <option value="fable">fable</option>
+                    <option value="onyx">onyx</option>
+                    <option value="nova">nova</option>
+                    <option value="shimmer">shimmer</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>OpenAI model</label>
+                  <select id="openAiModel">
+                    <option value="tts-1">tts-1 · fast start</option>
+                    <option value="gpt-4o-mini-tts">gpt-4o-mini-tts · higher quality, slower</option>
+                  </select>
+                </div>
+                <p class="hint">
+                  Uses the demo proxy's <code>/api/tts</code> route, so
+                  <code>OPENAI_API_KEY</code> stays server-side.
+                </p>
               </div>
             </div>
           </div>
@@ -218,7 +340,7 @@
               <input
                 type="text"
                 id="processingTextInput"
-                value="🎤 Processing voice..."
+                value="Processing voice..."
               />
             </div>
             <div class="field">
@@ -246,9 +368,14 @@
             </p>
           </div>
 
-          <button id="applyConfigBtn" class="btn btn-primary" style="margin-top: 1rem">
-            Apply Configuration
-          </button>
+          <div class="config-action-row">
+            <button id="applyConfigBtn" class="btn btn-primary">
+              Apply Configuration
+            </button>
+            <button id="resetConfigBtn" class="btn" type="button">
+              Reset to Defaults
+            </button>
+          </div>
           <p id="configStatus" class="hint" style="margin-top: 1rem">
             Configuration not applied yet
           </p>
@@ -261,7 +388,7 @@
          <p>• <strong>Typing indicator</strong>: shows while server processes audio</p>
          <p>• <strong>User transcript placeholder</strong>: appears instantly on recording stop</p>
          <p>• <strong>Customizable processing UI</strong>: text config or full <code>postprocessMessage</code> override via <code>voiceProcessing</code> flag</p>
-         <p>• Text-to-speech with ElevenLabs voices over WebSocket stream</p>
+         <p>• Text-to-speech via browser voices, Runtype hosted voices, or OpenAI through the demo proxy</p>
          <p>• WebSocket-based bidirectional communication</p>
          <p>• Automatic fallback to browser speech API when WebSocket unavailable</p>
        </div>
@@ -349,6 +476,7 @@
             <li>Use Chrome or Edge for best voice support</li>
             <li>Grant microphone permissions when prompted</li>
             <li>Speak clearly for best transcription accuracy</li>
+            <li>OpenAI output requires the demo proxy running with <code>OPENAI_API_KEY</code> set</li>
             <li>Check console for detailed logs and errors</li>
           </ul>
         </div>
@@ -368,6 +496,16 @@
       import { renderDemoScaffold } from "./src/demo-scaffold.ts";
       import { setupMountMode, squareInlinePanel } from "./src/mount-mode.ts";
       import { createVoiceIndicatorPlugin } from "./src/plugins/voice-indicator-plugin.js";
+      import { ServerTtsEngine } from "./src/server-tts-engine.ts";
+      import {
+        clearVoiceIntegrationSavedConfig,
+        createVoiceIntegrationTextToSpeechConfig,
+        getBrowserVoiceClipboardValue,
+        getBrowserVoiceCopyIconName,
+        getTestVoiceButtonLabel,
+        getVoiceIntegrationCredentialMode,
+        requiresVoiceIntegrationDirectCredentials,
+      } from "./src/voice-integration-config.ts";
 
       renderDemoScaffold({ slug: "voice-integration-demo" });
 
@@ -375,6 +513,13 @@
         title: "Voice Integration",
         root: "[data-config-inspector]",
       });
+
+      const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
+      const proxyBase = import.meta.env.VITE_PROXY_URL
+        ? import.meta.env.VITE_PROXY_URL
+        : `http://localhost:${proxyPort}`;
+      const openAiTtsUrl = `${proxyBase}/api/tts`;
+      const proxiedAgentUrl = `${proxyBase}/api/chat/dispatch-assistant`;
 
       // UI Elements - these will be initialized in the function
       let statusIndicator,
@@ -384,22 +529,27 @@
         voiceFeedback,
         transcriptionResults;
 
-      // Configuration variables
-      let currentConfig = {
-        clientToken: "REPLACE_WITH_YOUR_CLIENT_TOKEN",
-        agentId: "REPLACE_WITH_YOUR_AGENT_ID",
-        voiceInputProvider: "runtype",
-        voiceOutputProvider: "none",
+      const defaultConfig = Object.freeze({
+        clientToken: "",
+        agentId: "",
+        voiceInputProvider: "browser",
+        voiceOutputProvider: "browser",
+        autoSpeakReplies: false,
         ttsBrowserFallback: false,
         ttsVoice: "",
         ttsRate: 1.0,
         ttsPitch: 1.0,
+        openAiVoice: "alloy",
+        openAiModel: "tts-1",
         pauseDuration: 2000,
         silenceThreshold: 0.01,
-        processingText: "\u{1F3A4} Processing voice...",
+        processingText: "Processing voice...",
         processingErrorText: "Voice processing failed. Please try again.",
         customProcessingUI: false,
-      };
+      });
+
+      // Configuration variables
+      let currentConfig = { ...defaultConfig };
 
       // Function to create config dynamically based on current configuration
       // Mount mode (inline/launcher) driven by setupMountMode. createConfig()
@@ -409,11 +559,18 @@
       function createConfig() {
         // Store host in a variable first to avoid circular reference
         const websocketHost = window.location.hostname.includes("localhost") ? "localhost:8787" : "api.runtype.com";
+        const credentialMode = getVoiceIntegrationCredentialMode(currentConfig);
+        const directCredentials =
+          credentialMode === "direct"
+            ? {
+                clientToken: currentConfig.clientToken,
+                agentId: currentConfig.agentId,
+                flowId: currentConfig.agentId,
+              }
+            : {};
 
         return {
-          clientToken: currentConfig.clientToken,
-          agentId: currentConfig.agentId,
-          flowId: currentConfig.agentId,
+          ...directCredentials,
           voiceWebSocketHost: websocketHost,
 
           // Voice recognition configuration
@@ -452,17 +609,29 @@
           } : {}),
 
           // Text-to-speech configuration
-          textToSpeech:
-            currentConfig.voiceOutputProvider !== "none"
-              ? {
-                  enabled: true,
-                  provider: currentConfig.voiceOutputProvider,
-                  browserFallback: currentConfig.ttsBrowserFallback,
-                  voice: currentConfig.ttsVoice || undefined,
-                  rate: currentConfig.ttsRate,
-                  pitch: currentConfig.ttsPitch,
-                }
-              : undefined,
+          textToSpeech: createVoiceIntegrationTextToSpeechConfig({
+            voiceOutputProvider: currentConfig.voiceOutputProvider,
+            autoSpeakReplies: currentConfig.autoSpeakReplies,
+            ttsBrowserFallback: currentConfig.ttsBrowserFallback,
+            ttsVoice: currentConfig.ttsVoice,
+            ttsRate: currentConfig.ttsRate,
+            ttsPitch: currentConfig.ttsPitch,
+            agentId: credentialMode === "direct" ? currentConfig.agentId : undefined,
+            openAiVoice: currentConfig.openAiVoice,
+            createOpenAiEngine: () =>
+              new ServerTtsEngine({
+                endpoint: openAiTtsUrl,
+                getVoice: () => currentConfig.openAiVoice || undefined,
+                getModel: () => currentConfig.openAiModel || undefined,
+                onError: (error) => {
+                  console.warn("[VoiceIntegration] OpenAI TTS failed:", error);
+                  if (voiceFeedback) {
+                    voiceFeedback.textContent = "OpenAI TTS failed: " + error.message;
+                    voiceFeedback.style.color = "#ef4444";
+                  }
+                },
+              }),
+          }),
 
           // Per-message "Read aloud" button (play / pause / resume) next to the
           // copy/feedback actions. Speaks via the browser Web Speech API by
@@ -475,9 +644,11 @@
           },
 
            // Basic widget configuration
-           apiUrl: window.location.hostname.includes("localhost")
-             ? "http://localhost:8787"
-             : "https://api.runtype.com",
+           apiUrl: credentialMode === "direct"
+             ? window.location.hostname.includes("localhost")
+               ? "http://localhost:8787"
+               : "https://api.runtype.com"
+             : proxiedAgentUrl,
            
            // Ensure WebSocket uses the correct host for voice
            voiceWebSocketHost: window.location.hostname.includes("localhost")
@@ -522,13 +693,33 @@
           "voiceOutputProvider",
         );
         const ttsVoiceInput = document.getElementById("ttsVoice");
+        const autoSpeakRepliesCheckbox = document.getElementById("autoSpeakReplies");
+        const openAiVoiceSelect = document.getElementById("openAiVoice");
+        const openAiModelSelect = document.getElementById("openAiModel");
         const configStatus = document.getElementById("configStatus");
 
         const clientToken = clientTokenInput.value.trim();
         const agentId = agentIdInput.value.trim();
+        const nextVoiceInputProvider = voiceInputProviderSelect
+          ? voiceInputProviderSelect.value
+          : currentConfig.voiceInputProvider;
+        const nextVoiceOutputProvider = voiceOutputProviderSelect
+          ? voiceOutputProviderSelect.value
+          : currentConfig.voiceOutputProvider;
+        const nextCredentialMode = getVoiceIntegrationCredentialMode({
+          clientToken,
+          agentId,
+        });
 
-        if (!clientToken || !agentId) {
-          configStatus.textContent = "Please fill in both fields";
+        if (
+          nextCredentialMode !== "direct" &&
+          requiresVoiceIntegrationDirectCredentials({
+            voiceInputProvider: nextVoiceInputProvider,
+            voiceOutputProvider: nextVoiceOutputProvider,
+          })
+        ) {
+          configStatus.textContent =
+            "Runtype voice providers require both Client Token and Agent ID.";
           configStatus.style.color = "#ef4444";
           return;
         }
@@ -538,11 +729,15 @@
         currentConfig.agentId = agentId;
 
         if (voiceInputProviderSelect) {
-          currentConfig.voiceInputProvider = voiceInputProviderSelect.value;
+          currentConfig.voiceInputProvider = nextVoiceInputProvider;
         }
 
         if (voiceOutputProviderSelect) {
-          currentConfig.voiceOutputProvider = voiceOutputProviderSelect.value;
+          currentConfig.voiceOutputProvider = nextVoiceOutputProvider;
+        }
+
+        if (autoSpeakRepliesCheckbox) {
+          currentConfig.autoSpeakReplies = autoSpeakRepliesCheckbox.checked;
         }
 
         const ttsBrowserFallbackCheckbox = document.getElementById("ttsBrowserFallback");
@@ -552,6 +747,14 @@
 
         if (ttsVoiceInput) {
           currentConfig.ttsVoice = ttsVoiceInput.value;
+        }
+
+        if (openAiVoiceSelect) {
+          currentConfig.openAiVoice = openAiVoiceSelect.value;
+        }
+
+        if (openAiModelSelect) {
+          currentConfig.openAiModel = openAiModelSelect.value;
         }
 
         // Read silence detection and processing text inputs
@@ -595,8 +798,11 @@
           "voiceDemoVoiceOutputProvider",
           currentConfig.voiceOutputProvider,
         );
+        localStorage.setItem("voiceDemoAutoSpeakReplies", currentConfig.autoSpeakReplies ? "true" : "false");
         localStorage.setItem("voiceDemoTtsBrowserFallback", currentConfig.ttsBrowserFallback ? "true" : "false");
         localStorage.setItem("voiceDemoTtsVoice", currentConfig.ttsVoice);
+        localStorage.setItem("voiceDemoOpenAiVoice", currentConfig.openAiVoice);
+        localStorage.setItem("voiceDemoOpenAiModel", currentConfig.openAiModel);
         localStorage.setItem(
           "voiceDemoTtsRate",
           currentConfig.ttsRate.toString(),
@@ -613,7 +819,7 @@
 
         console.log("Configuration updated:", currentConfig);
         console.log("New config:", config);
-        console.log("FlowId for client init:", config.flowId);
+        console.log("Credential mode for client init:", nextCredentialMode);
 
         // Reinitialize widget with new configuration
         try {
@@ -627,7 +833,9 @@
 
           await initWidget();
           configStatus.textContent =
-            "Configuration applied and widget reinitialized!";
+            nextCredentialMode === "direct"
+              ? "Configuration applied and widget reinitialized!"
+              : "Configuration applied with the demo proxy and widget reinitialized!";
         } catch (error) {
           console.error("Failed to reinitialize widget:", error);
           configStatus.textContent =
@@ -646,6 +854,9 @@
           "voiceOutputProvider",
         );
         const ttsVoiceInput = document.getElementById("ttsVoice");
+        const autoSpeakRepliesCheckbox = document.getElementById("autoSpeakReplies");
+        const openAiVoiceSelect = document.getElementById("openAiVoice");
+        const openAiModelSelect = document.getElementById("openAiModel");
         const ttsRateSlider = document.getElementById("ttsRate");
         const ttsPitchSlider = document.getElementById("ttsPitch");
 
@@ -657,8 +868,11 @@
         const savedVoiceOutputProvider = localStorage.getItem(
           "voiceDemoVoiceOutputProvider",
         );
+        const savedAutoSpeakReplies = localStorage.getItem("voiceDemoAutoSpeakReplies");
         const savedTtsBrowserFallback = localStorage.getItem("voiceDemoTtsBrowserFallback");
         const savedTtsVoice = localStorage.getItem("voiceDemoTtsVoice");
+        const savedOpenAiVoice = localStorage.getItem("voiceDemoOpenAiVoice");
+        const savedOpenAiModel = localStorage.getItem("voiceDemoOpenAiModel");
         const savedTtsRate = localStorage.getItem("voiceDemoTtsRate");
         const savedTtsPitch = localStorage.getItem("voiceDemoTtsPitch");
 
@@ -682,6 +896,12 @@
           currentConfig.voiceOutputProvider = savedVoiceOutputProvider;
         }
 
+        if (savedAutoSpeakReplies && autoSpeakRepliesCheckbox) {
+          const isChecked = savedAutoSpeakReplies === "true";
+          autoSpeakRepliesCheckbox.checked = isChecked;
+          currentConfig.autoSpeakReplies = isChecked;
+        }
+
         const ttsBrowserFallbackCheckbox = document.getElementById("ttsBrowserFallback");
         if (savedTtsBrowserFallback && ttsBrowserFallbackCheckbox) {
           const isChecked = savedTtsBrowserFallback === "true";
@@ -692,6 +912,16 @@
         if (savedTtsVoice && ttsVoiceInput) {
           ttsVoiceInput.value = savedTtsVoice;
           currentConfig.ttsVoice = savedTtsVoice;
+        }
+
+        if (savedOpenAiVoice && openAiVoiceSelect) {
+          openAiVoiceSelect.value = savedOpenAiVoice;
+          currentConfig.openAiVoice = savedOpenAiVoice;
+        }
+
+        if (savedOpenAiModel && openAiModelSelect) {
+          openAiModelSelect.value = savedOpenAiModel;
+          currentConfig.openAiModel = savedOpenAiModel;
         }
 
         if (savedTtsRate && ttsRateSlider) {
@@ -742,8 +972,9 @@
 
         // Show/hide TTS options based on saved voice output provider
         const ttsOptionsDiv = document.getElementById("ttsOptions");
-        if (ttsOptionsDiv && currentConfig.voiceOutputProvider !== "none") {
-          ttsOptionsDiv.style.display = "block";
+        if (ttsOptionsDiv) {
+          ttsOptionsDiv.style.display =
+            currentConfig.voiceOutputProvider === "none" ? "none" : "block";
         }
         // Show browserFallback option only for Runtype TTS provider
         const ttsBrowserFallbackOptionLoad = document.getElementById("ttsBrowserFallbackOption");
@@ -756,6 +987,11 @@
           const showBrowserControls = currentConfig.voiceOutputProvider === "browser" ||
             (currentConfig.voiceOutputProvider === "runtype" && currentConfig.ttsBrowserFallback);
           browserVoiceControlsLoad.style.display = showBrowserControls ? "block" : "none";
+        }
+        const openAiControlsLoad = document.getElementById("ttsOpenAiControls");
+        if (openAiControlsLoad) {
+          openAiControlsLoad.style.display =
+            currentConfig.voiceOutputProvider === "openai" ? "block" : "none";
         }
 
         // Recreate config with loaded values
@@ -832,26 +1068,18 @@
             return;
           }
 
-          // Validate configuration
+          // Browser/OpenAI voice defaults can use the server-pinned demo proxy.
+          // Direct credentials are only required when a Runtype voice provider
+          // needs browser-side agent credentials.
+          const credentialMode = getVoiceIntegrationCredentialMode(currentConfig);
           if (
-            !currentConfig.clientToken ||
-            currentConfig.clientToken === "REPLACE_WITH_YOUR_CLIENT_TOKEN"
+            credentialMode !== "direct" &&
+            requiresVoiceIntegrationDirectCredentials(currentConfig)
           ) {
             voiceFeedback.textContent =
-              "Please set clientToken in the configuration section above";
+              "Please set Client Token and Agent ID to use Runtype voice providers.";
             voiceFeedback.style.color = "#ef4444";
-            console.error("Configuration error: clientToken not set");
-            return;
-          }
-
-          if (
-            !currentConfig.agentId ||
-            currentConfig.agentId === "REPLACE_WITH_YOUR_AGENT_ID"
-          ) {
-            voiceFeedback.textContent =
-              "Please set agentId in the configuration section above";
-            voiceFeedback.style.color = "#ef4444";
-            console.error("Configuration error: agentId not set");
+            console.error("Configuration error: Runtype voice credentials not set");
             return;
           }
 
@@ -1213,6 +1441,7 @@
         if (applyConfigBtn) {
           applyConfigBtn.addEventListener("click", applyConfiguration);
         }
+        const resetConfigBtn = document.getElementById("resetConfigBtn");
 
         // Setup TTS options toggle
         const voiceOutputProviderSelect = document.getElementById(
@@ -1222,14 +1451,88 @@
 
         const ttsBrowserFallbackOption = document.getElementById("ttsBrowserFallbackOption");
         const ttsBrowserVoiceControls = document.getElementById("ttsBrowserVoiceControls");
+        const ttsOpenAiControls = document.getElementById("ttsOpenAiControls");
+        const autoSpeakRepliesCheckbox = document.getElementById("autoSpeakReplies");
         const ttsBrowserFallbackCheckbox = document.getElementById("ttsBrowserFallback");
+        const openAiVoiceSelect = document.getElementById("openAiVoice");
+        const openAiModelSelect = document.getElementById("openAiModel");
 
-        function updateBrowserVoiceControlsVisibility() {
-          if (!ttsBrowserVoiceControls) return;
+        function updateTtsControlsVisibility() {
           const provider = voiceOutputProviderSelect ? voiceOutputProviderSelect.value : "none";
           const fallbackChecked = ttsBrowserFallbackCheckbox ? ttsBrowserFallbackCheckbox.checked : false;
-          const show = provider === "browser" || (provider === "runtype" && fallbackChecked);
-          ttsBrowserVoiceControls.style.display = show ? "block" : "none";
+          if (ttsBrowserVoiceControls) {
+            const show = provider === "browser" || (provider === "runtype" && fallbackChecked);
+            ttsBrowserVoiceControls.style.display = show ? "block" : "none";
+          }
+          if (ttsOpenAiControls) {
+            ttsOpenAiControls.style.display = provider === "openai" ? "block" : "none";
+          }
+        }
+
+        async function resetConfiguration() {
+          clearVoiceIntegrationSavedConfig(localStorage);
+          window.speechSynthesis.cancel();
+          currentConfig = { ...defaultConfig };
+
+          const setValue = (id, value) => {
+            const element = document.getElementById(id);
+            if (element) element.value = value;
+          };
+          const setChecked = (id, checked) => {
+            const element = document.getElementById(id);
+            if (element) element.checked = checked;
+          };
+          const formatRangeValue = (value) => value.toFixed(1);
+
+          setValue("clientTokenInput", currentConfig.clientToken);
+          setValue("agentIdInput", currentConfig.agentId);
+          setValue("voiceInputProvider", currentConfig.voiceInputProvider);
+          setValue("voiceOutputProvider", currentConfig.voiceOutputProvider);
+          setChecked("autoSpeakReplies", currentConfig.autoSpeakReplies);
+          setChecked("ttsBrowserFallback", currentConfig.ttsBrowserFallback);
+          setValue("ttsVoice", currentConfig.ttsVoice);
+          setValue("openAiVoice", currentConfig.openAiVoice);
+          setValue("openAiModel", currentConfig.openAiModel);
+          setValue("ttsRate", currentConfig.ttsRate.toString());
+          setValue("ttsPitch", currentConfig.ttsPitch.toString());
+          setValue("pauseDurationInput", currentConfig.pauseDuration.toString());
+          setValue("silenceThresholdInput", currentConfig.silenceThreshold.toString());
+          setValue("processingTextInput", currentConfig.processingText);
+          setValue("processingErrorTextInput", currentConfig.processingErrorText);
+          setChecked("customProcessingUIToggle", currentConfig.customProcessingUI);
+
+          const ttsRateDisplay = document.getElementById("ttsRateValue");
+          if (ttsRateDisplay) ttsRateDisplay.textContent = formatRangeValue(currentConfig.ttsRate);
+          const ttsPitchDisplay = document.getElementById("ttsPitchValue");
+          if (ttsPitchDisplay) ttsPitchDisplay.textContent = formatRangeValue(currentConfig.ttsPitch);
+          if (ttsOptionsDiv) ttsOptionsDiv.style.display = "block";
+          if (ttsBrowserFallbackOption) ttsBrowserFallbackOption.style.display = "none";
+          updateTtsControlsVisibility();
+          updateTtsVoiceCopyButton();
+          document.querySelector(".stage-widget .voice-dock")?.remove();
+
+          config = createConfig();
+          reportDemoConfig(configInspector, { config, mode: activeMountMode });
+
+          const configStatus = document.getElementById("configStatus");
+          try {
+            await initWidget();
+            if (configStatus) {
+              configStatus.textContent = "Configuration reset to defaults.";
+              configStatus.style.color = "#10b981";
+            }
+          } catch (error) {
+            console.error("Failed to reinitialize widget after reset:", error);
+            if (configStatus) {
+              configStatus.textContent =
+                "Configuration reset, but widget initialization failed. See console.";
+              configStatus.style.color = "#f59e0b";
+            }
+          }
+        }
+
+        if (resetConfigBtn) {
+          resetConfigBtn.addEventListener("click", resetConfiguration);
         }
 
         if (voiceOutputProviderSelect && ttsOptionsDiv) {
@@ -1243,7 +1546,13 @@
             if (ttsBrowserFallbackOption) {
               ttsBrowserFallbackOption.style.display = this.value === "runtype" ? "block" : "none";
             }
-            updateBrowserVoiceControlsVisibility();
+            updateTtsControlsVisibility();
+          });
+        }
+
+        if (autoSpeakRepliesCheckbox) {
+          autoSpeakRepliesCheckbox.addEventListener("change", function () {
+            currentConfig.autoSpeakReplies = this.checked;
           });
         }
 
@@ -1251,9 +1560,23 @@
         if (ttsBrowserFallbackCheckbox) {
           ttsBrowserFallbackCheckbox.addEventListener("change", function () {
             currentConfig.ttsBrowserFallback = this.checked;
-            updateBrowserVoiceControlsVisibility();
+            updateTtsControlsVisibility();
           });
         }
+
+        if (openAiVoiceSelect) {
+          openAiVoiceSelect.addEventListener("change", function () {
+            currentConfig.openAiVoice = this.value;
+          });
+        }
+
+        if (openAiModelSelect) {
+          openAiModelSelect.addEventListener("change", function () {
+            currentConfig.openAiModel = this.value;
+          });
+        }
+
+        updateTtsControlsVisibility();
 
         // Setup TTS slider value displays
         const ttsRateSlider = document.getElementById("ttsRate");
@@ -1277,6 +1600,49 @@
 
         // Populate TTS voice picker dropdown with available voices
         const ttsVoiceSelect = document.getElementById("ttsVoice");
+        const ttsVoiceCopyBtn = document.getElementById("copyTtsVoice");
+
+        let voiceCopyResetTimer = null;
+
+        function updateTtsVoiceCopyButton() {
+          if (!ttsVoiceCopyBtn) return;
+          const copyValue = getBrowserVoiceClipboardValue(ttsVoiceSelect ? ttsVoiceSelect.value : "");
+          ttsVoiceCopyBtn.disabled = !copyValue;
+          ttsVoiceCopyBtn.title = copyValue
+            ? `Copy "${copyValue}"`
+            : "Select a browser voice to copy its name value";
+          ttsVoiceCopyBtn.setAttribute("aria-label", ttsVoiceCopyBtn.title);
+          ttsVoiceCopyBtn.dataset.copyIconState = getBrowserVoiceCopyIconName(false);
+        }
+
+        async function copyTextToClipboard(text) {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return;
+          }
+
+          const textArea = document.createElement("textarea");
+          textArea.value = text;
+          textArea.setAttribute("readonly", "");
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          document.body.appendChild(textArea);
+          textArea.select();
+          try {
+            document.execCommand("copy");
+          } finally {
+            document.body.removeChild(textArea);
+          }
+        }
+
+        function showVoiceCopyFeedback(label, isCopied) {
+          if (!ttsVoiceCopyBtn) return;
+          if (voiceCopyResetTimer) window.clearTimeout(voiceCopyResetTimer);
+          ttsVoiceCopyBtn.title = label;
+          ttsVoiceCopyBtn.setAttribute("aria-label", label);
+          ttsVoiceCopyBtn.dataset.copyIconState = getBrowserVoiceCopyIconName(isCopied);
+          voiceCopyResetTimer = window.setTimeout(updateTtsVoiceCopyButton, 1400);
+        }
 
         function populateVoiceList() {
           if (!ttsVoiceSelect) return;
@@ -1322,6 +1688,7 @@
           if (currentConfig.ttsVoice) {
             ttsVoiceSelect.value = currentConfig.ttsVoice;
           }
+          updateTtsVoiceCopyButton();
         }
 
         // Voices load asynchronously in Chrome
@@ -1330,11 +1697,51 @@
           window.speechSynthesis.onvoiceschanged = populateVoiceList;
         }
 
+        if (ttsVoiceSelect) {
+          ttsVoiceSelect.addEventListener("change", function () {
+            currentConfig.ttsVoice = this.value;
+            updateTtsVoiceCopyButton();
+          });
+        }
+
+        if (ttsVoiceCopyBtn) {
+          ttsVoiceCopyBtn.addEventListener("click", async function () {
+            const copyValue = getBrowserVoiceClipboardValue(ttsVoiceSelect ? ttsVoiceSelect.value : "");
+            if (!copyValue) return;
+
+            try {
+              await copyTextToClipboard(copyValue);
+              showVoiceCopyFeedback("Copied", true);
+            } catch (error) {
+              console.warn("[VoiceIntegration] Failed to copy voice value:", error);
+              showVoiceCopyFeedback("Copy failed", false);
+            }
+          });
+          updateTtsVoiceCopyButton();
+        }
+
         // Test voice button
         const ttsTestVoiceBtn = document.getElementById("ttsTestVoice");
+        let testVoiceUtterance = null;
+        let testVoicePlaying = false;
+
+        function setTestVoicePlaying(isPlaying) {
+          testVoicePlaying = isPlaying;
+          if (!ttsTestVoiceBtn) return;
+          ttsTestVoiceBtn.textContent = getTestVoiceButtonLabel(isPlaying);
+          ttsTestVoiceBtn.setAttribute("aria-pressed", isPlaying ? "true" : "false");
+        }
+
         if (ttsTestVoiceBtn) {
           ttsTestVoiceBtn.addEventListener("click", function () {
             const synth = window.speechSynthesis;
+            if (testVoicePlaying) {
+              synth.cancel();
+              testVoiceUtterance = null;
+              setTestVoicePlaying(false);
+              return;
+            }
+
             synth.cancel();
             const utterance = new SpeechSynthesisUtterance(
               "Hello! This is a test of the text-to-speech voice."
@@ -1367,8 +1774,20 @@
             }
             utterance.rate = currentConfig.ttsRate;
             utterance.pitch = currentConfig.ttsPitch;
-            setTimeout(function () { synth.speak(utterance); }, 50);
+            utterance.onend = function () {
+              if (testVoiceUtterance === utterance) {
+                testVoiceUtterance = null;
+                setTestVoicePlaying(false);
+              }
+            };
+            utterance.onerror = utterance.onend;
+            testVoiceUtterance = utterance;
+            setTestVoicePlaying(true);
+            setTimeout(function () {
+              if (testVoiceUtterance === utterance) synth.speak(utterance);
+            }, 50);
           });
+          setTestVoicePlaying(false);
         }
       });
 
