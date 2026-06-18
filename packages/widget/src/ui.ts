@@ -98,7 +98,7 @@ import {
 } from "./suggest-replies-tool";
 import { formatElapsedMs } from "./utils/formatting";
 import { approvalDetailsExpansionState, createApprovalBubble, updateApprovalDetailsUI } from "./components/approval-bubble";
-import { createBuiltInApprovalPlugin, teardownAllBuiltInApprovals } from "./components/approval-actions";
+import { createBuiltInApprovalPlugin } from "./components/approval-actions";
 import { createSuggestions } from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
@@ -542,7 +542,8 @@ export const createAgentExperience = (
   // The built-in approval renderer, shaped as a plugin. Resolved as a FALLBACK
   // (not pushed into `plugins`) so a user `renderApproval` plugin always wins
   // and a later config-update plugin push can't reorder ahead of it.
-  const builtInApprovalPlugin = createBuiltInApprovalPlugin();
+  const { plugin: builtInApprovalPlugin, teardown: teardownBuiltInApprovals } =
+    createBuiltInApprovalPlugin();
 
   // Register components from config
   if (config.components) {
@@ -2744,9 +2745,10 @@ export const createAgentExperience = (
     }
   });
 
-  // Release any pending built-in approval's global keydown listener + "Allow
-  // once" popover if the widget is destroyed while an approval is still open.
-  destroyCallbacks.push(teardownAllBuiltInApprovals);
+  // Release this widget's pending built-in approval listeners + "Allow once"
+  // popovers if it's destroyed while an approval is still open. Scoped to this
+  // instance's state, so other widgets on the page are unaffected.
+  destroyCallbacks.push(teardownBuiltInApprovals);
 
   // Activate the stream-animation plugin for this widget instance. Plugins
   // with `styles` inject their CSS into the widget root once; plugins with

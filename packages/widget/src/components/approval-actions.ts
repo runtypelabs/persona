@@ -34,34 +34,46 @@ import { humanizeToolName, approvalDetailsExpansionState } from "./approval-bubb
 type Approval = NonNullable<AgentWidgetMessage["approval"]>;
 type Decide = (options?: { remember?: boolean }) => void;
 
-// Per-message runtime state. The document `keydown` handler (re-bound on each
-// render to the freshest approve/deny closures) and the "Allow once" popover
-// are torn down when the approval resolves, the bubble rebuilds, or the widget
-// is destroyed.
-const keyHandlers = new Map<string, (e: KeyboardEvent) => void>();
-const popovers = new Map<string, PopoverHandle>();
-// Only the most-recently-built pending approval owns the keyboard shortcuts, so
-// Enter/Esc don't fire on every pending card at once.
-let latestPendingApprovalId: string | null = null;
+/**
+ * Per-widget-instance runtime state. The document `keydown` handler (re-bound on
+ * each render to the freshest approve/deny closures) and the "Allow once"
+ * popover are torn down when the approval resolves, the bubble rebuilds, or the
+ * widget is destroyed. This lives on the plugin instance (NOT module scope) so
+ * tearing down one widget never clears listeners/popovers another widget on the
+ * same page still owns.
+ */
+interface InstanceState {
+  keyHandlers: Map<string, (e: KeyboardEvent) => void>;
+  popovers: Map<string, PopoverHandle>;
+  // Only one pending approval owns the keyboard shortcuts at a time, so Enter/Esc
+  // don't fire on every pending card at once.
+  latestPendingApprovalId: string | null;
+}
 
-const teardownMessage = (messageId: string): void => {
-  const prevKey = keyHandlers.get(messageId);
+const createInstanceState = (): InstanceState => ({
+  keyHandlers: new Map(),
+  popovers: new Map(),
+  latestPendingApprovalId: null,
+});
+
+const teardownMessage = (state: InstanceState, messageId: string): void => {
+  const prevKey = state.keyHandlers.get(messageId);
   if (prevKey) {
     document.removeEventListener("keydown", prevKey);
-    keyHandlers.delete(messageId);
+    state.keyHandlers.delete(messageId);
   }
-  const popover = popovers.get(messageId);
+  const popover = state.popovers.get(messageId);
   if (popover) {
     popover.destroy();
-    popovers.delete(messageId);
+    state.popovers.delete(messageId);
   }
-  if (latestPendingApprovalId === messageId) latestPendingApprovalId = null;
-};
-
-/** Release every pending approval's global listener + popover. Pushed into the widget's destroy callbacks. */
-export const teardownAllBuiltInApprovals = (): void => {
-  for (const id of [...keyHandlers.keys(), ...popovers.keys()]) teardownMessage(id);
-  latestPendingApprovalId = null;
+  // If the keyboard owner just went away, promote the most-recently-registered
+  // approval that still has a live handler so Enter/Esc keep working instead of
+  // going dead while another pending card remains.
+  if (state.latestPendingApprovalId === messageId) {
+    const remaining = [...state.keyHandlers.keys()];
+    state.latestPendingApprovalId = remaining.length ? remaining[remaining.length - 1] : null;
+  }
 };
 
 const resolveApprovalConfig = (
@@ -140,6 +152,7 @@ const buildResolvedTrace = (approval: Approval): HTMLElement => {
 };
 
 const buildPending = (
+  state: InstanceState,
   message: AgentWidgetMessage,
   approval: Approval,
   approvalConfig: AgentWidgetApprovalConfig | undefined,
@@ -158,13 +171,20 @@ const buildPending = (
   }
 
   const detailsMode = approvalConfig?.detailsDisplay ?? "collapsed";
+  // The disclosure surfaces the agent-facing description (prompt prose, usage
+  // rules) and the raw call parameters. `buildTitle` never falls back to the
+  // raw description (it uses formatDescription → declared title → humanized
+  // name), so the description is only ever visible here. Mirrors the legacy
+  // bubble, which also opened a disclosure when only a description was present.
+  const hasDescription = Boolean(approval.description) && detailsMode !== "hidden";
   const hasParams = approval.parameters != null && detailsMode !== "hidden";
-  const expanded = hasParams && isDetailsExpanded(message.id, approvalConfig);
+  const hasDetails = hasDescription || hasParams;
+  const expanded = hasDetails && isDetailsExpanded(message.id, approvalConfig);
 
-  // Header. When params exist, the whole header toggles their visibility.
+  // Header. When a disclosure exists, the whole header toggles its visibility.
   const head = createElement("button", "persona-approval-head") as HTMLButtonElement;
   head.type = "button";
-  if (hasParams) {
+  if (hasDetails) {
     head.setAttribute("data-action", "toggle-params");
     head.setAttribute("aria-expanded", expanded ? "true" : "false");
   } else {
@@ -177,7 +197,7 @@ const buildPending = (
   head.appendChild(logo);
 
   const title = buildTitle(approval, approvalConfig);
-  if (hasParams) {
+  if (hasDetails) {
     const toggle = createElement("span", "persona-approval-toggle");
     toggle.setAttribute("aria-hidden", "true");
     const chevron = renderLucideIcon("chevron-down", 14, "currentColor", 2);
@@ -190,14 +210,27 @@ const buildPending = (
 
   const body = createElement("div", "persona-approval-body");
 
-  if (hasParams) {
-    const pre = createElement("pre", "persona-approval-params");
-    pre.setAttribute("data-role", "params");
-    pre.hidden = !expanded;
-    if (approvalConfig?.parameterBackgroundColor) pre.style.background = approvalConfig.parameterBackgroundColor;
-    if (approvalConfig?.parameterTextColor) pre.style.color = approvalConfig.parameterTextColor;
-    pre.textContent = formatUnknownValue(approval.parameters);
-    body.appendChild(pre);
+  if (hasDetails) {
+    const details = createElement("div", "persona-approval-details");
+    details.setAttribute("data-role", "params");
+    details.hidden = !expanded;
+
+    if (hasDescription) {
+      const desc = createElement("p", "persona-approval-desc");
+      if (approvalConfig?.descriptionColor) desc.style.color = approvalConfig.descriptionColor;
+      desc.textContent = approval.description as string;
+      details.appendChild(desc);
+    }
+
+    if (hasParams) {
+      const pre = createElement("pre", "persona-approval-params");
+      if (approvalConfig?.parameterBackgroundColor) pre.style.background = approvalConfig.parameterBackgroundColor;
+      if (approvalConfig?.parameterTextColor) pre.style.color = approvalConfig.parameterTextColor;
+      pre.textContent = formatUnknownValue(approval.parameters);
+      details.appendChild(pre);
+    }
+
+    body.appendChild(details);
   }
 
   // Agent-authored justification: attacker-writable, so plain text + attributed.
@@ -258,9 +291,9 @@ const buildPending = (
       placement: "bottom-start",
       matchAnchorWidth: true,
     });
-    popovers.set(message.id, popover);
+    state.popovers.set(message.id, popover);
     once.addEventListener("click", () => {
-      teardownMessage(message.id);
+      teardownMessage(state, message.id);
       approve(); // Allow once
     });
   } else {
@@ -298,17 +331,17 @@ const buildPending = (
       return;
     }
     if (action === "always") {
-      teardownMessage(message.id);
+      teardownMessage(state, message.id);
       approve({ remember: true });
       return;
     }
     if (action === "allow") {
-      teardownMessage(message.id);
+      teardownMessage(state, message.id);
       approve();
       return;
     }
     if (action === "deny") {
-      teardownMessage(message.id);
+      teardownMessage(state, message.id);
       deny();
       return;
     }
@@ -320,53 +353,74 @@ const buildPending = (
 /**
  * The built-in approval renderer, shaped as a plugin so ui.ts can run it through
  * the same `renderApproval` pipeline as user plugins (which still take
- * precedence). Reads `config` from the render context, so a single instance
- * serves every widget.
+ * precedence). Reads `config` from the render context, so a single plugin
+ * serves every render for one widget instance.
+ *
+ * Returns the plugin alongside a `teardown` the host pushes into its destroy
+ * callbacks — both close over the SAME per-instance state, so destroying one
+ * widget never disturbs another widget's open approvals on the same page.
  */
-export const createBuiltInApprovalPlugin = (): AgentWidgetPlugin => ({
-  id: "persona-built-in-approval",
-  renderApproval: ({ message, approve, deny, config }) => {
-    const approval = message?.approval;
-    if (!approval) return null;
-    const approvalConfig = resolveApprovalConfig(config);
+export const createBuiltInApprovalPlugin = (): {
+  plugin: AgentWidgetPlugin;
+  teardown: () => void;
+} => {
+  const state = createInstanceState();
 
-    if (approval.status !== "pending") {
-      teardownMessage(message.id);
-      // Approved → render nothing; the tool call takes over the transcript.
-      // (An empty hidden element, not null, suppresses the legacy fallback.)
-      if (approval.status === "approved") {
-        const hidden = document.createElement("div");
-        hidden.style.display = "none";
-        return hidden;
-      }
-      return buildResolvedTrace(approval);
-    }
+  const plugin: AgentWidgetPlugin = {
+    id: "persona-built-in-approval",
+    renderApproval: ({ message, approve, deny, config }) => {
+      const approval = message?.approval;
+      if (!approval) return null;
+      const approvalConfig = resolveApprovalConfig(config);
 
-    // Rebuild: drop any prior listener/popover before (re)binding fresh closures.
-    teardownMessage(message.id);
-    const enableAlways = approvalConfig?.enableAlwaysAllow === true;
-    const card = buildPending(message, approval, approvalConfig, approve, deny, enableAlways);
-
-    if (enableAlways) {
-      latestPendingApprovalId = message.id;
-      const onKeydown = (e: KeyboardEvent): void => {
-        if (isEditableEventTarget(e)) return;
-        if (message.id !== latestPendingApprovalId) return;
-        if (e.key === "Escape") {
-          e.preventDefault();
-          teardownMessage(message.id);
-          deny();
-        } else if (e.key === "Enter") {
-          e.preventDefault();
-          teardownMessage(message.id);
-          if (e.metaKey || e.ctrlKey) approve(); // Allow once
-          else approve({ remember: true }); // Always allow
+      if (approval.status !== "pending") {
+        teardownMessage(state, message.id);
+        // Approved → render nothing; the tool call takes over the transcript.
+        // (An empty hidden element, not null, suppresses the legacy fallback.)
+        if (approval.status === "approved") {
+          const hidden = document.createElement("div");
+          hidden.style.display = "none";
+          return hidden;
         }
-      };
-      keyHandlers.set(message.id, onKeydown);
-      document.addEventListener("keydown", onKeydown);
-    }
+        return buildResolvedTrace(approval);
+      }
 
-    return card;
-  },
-});
+      // Rebuild: drop any prior listener/popover before (re)binding fresh closures.
+      teardownMessage(state, message.id);
+      const enableAlways = approvalConfig?.enableAlwaysAllow === true;
+      const card = buildPending(state, message, approval, approvalConfig, approve, deny, enableAlways);
+
+      if (enableAlways) {
+        state.latestPendingApprovalId = message.id;
+        const onKeydown = (e: KeyboardEvent): void => {
+          if (isEditableEventTarget(e)) return;
+          if (message.id !== state.latestPendingApprovalId) return;
+          if (e.key === "Escape") {
+            e.preventDefault();
+            teardownMessage(state, message.id);
+            deny();
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            teardownMessage(state, message.id);
+            if (e.metaKey || e.ctrlKey) approve(); // Allow once
+            else approve({ remember: true }); // Always allow
+          }
+        };
+        state.keyHandlers.set(message.id, onKeydown);
+        document.addEventListener("keydown", onKeydown);
+      }
+
+      return card;
+    },
+  };
+
+  // Release every pending approval's global listener + popover for THIS widget.
+  const teardown = (): void => {
+    for (const id of [...state.keyHandlers.keys(), ...state.popovers.keys()]) {
+      teardownMessage(state, id);
+    }
+    state.latestPendingApprovalId = null;
+  };
+
+  return { plugin, teardown };
+};

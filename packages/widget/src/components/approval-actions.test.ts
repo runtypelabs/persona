@@ -1,16 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  createBuiltInApprovalPlugin,
-  teardownAllBuiltInApprovals,
-} from "./approval-actions";
+import { createBuiltInApprovalPlugin } from "./approval-actions";
 import { approvalDetailsExpansionState } from "./approval-bubble";
 import type {
   AgentWidgetApproval,
   AgentWidgetConfig,
   AgentWidgetMessage,
 } from "../types";
+import type { AgentWidgetPlugin } from "../plugins/types";
 
 const makeMessage = (
   approval: Partial<AgentWidgetApproval> = {},
@@ -33,13 +31,24 @@ const makeMessage = (
   },
 });
 
-const render = (
+// Each widget owns its own plugin instance + teardown (state is per-instance).
+// Track teardowns so afterEach can release any leftover document listeners.
+let teardowns: Array<() => void> = [];
+
+const makePlugin = (): { plugin: AgentWidgetPlugin; teardown: () => void } => {
+  const handle = createBuiltInApprovalPlugin();
+  teardowns.push(handle.teardown);
+  return handle;
+};
+
+const renderWith = (
+  plugin: AgentWidgetPlugin,
   config: AgentWidgetConfig = {},
   message: AgentWidgetMessage = makeMessage()
 ) => {
   const approve = vi.fn();
   const deny = vi.fn();
-  const el = createBuiltInApprovalPlugin().renderApproval!({
+  const el = plugin.renderApproval!({
     message,
     defaultRenderer: () => document.createElement("div"),
     config,
@@ -50,12 +59,19 @@ const render = (
   return { el, approve, deny };
 };
 
+// Convenience for single-render tests: fresh widget instance each call.
+const render = (
+  config: AgentWidgetConfig = {},
+  message: AgentWidgetMessage = makeMessage()
+) => renderWith(makePlugin().plugin, config, message);
+
 const click = (el: Element | null | undefined): void => {
   el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 };
 
 afterEach(() => {
-  teardownAllBuiltInApprovals();
+  teardowns.forEach((t) => t());
+  teardowns = [];
   approvalDetailsExpansionState.clear();
   document.body.innerHTML = "";
 });
@@ -138,19 +154,43 @@ describe("built-in approval — flag on (enableAlwaysAllow)", () => {
     expect(approve).not.toHaveBeenCalled();
   });
 
-  it("teardownAllBuiltInApprovals releases the document keydown listener", () => {
-    const { approve } = render(cfg);
-    teardownAllBuiltInApprovals();
+  it("teardown releases the document keydown listener", () => {
+    const { plugin, teardown } = makePlugin();
+    const { approve } = renderWith(plugin, cfg);
+    teardown();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(approve).not.toHaveBeenCalled();
   });
 
-  it("only the latest pending approval owns the keyboard shortcuts", () => {
-    const first = render(cfg, makeMessage({}, "msg-A"));
-    const second = render(cfg, makeMessage({}, "msg-B"));
+  it("within one widget, only the latest pending approval owns the keyboard shortcuts", () => {
+    const { plugin } = makePlugin();
+    const first = renderWith(plugin, cfg, makeMessage({}, "msg-A"));
+    const second = renderWith(plugin, cfg, makeMessage({}, "msg-B"));
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(first.approve).not.toHaveBeenCalled();
     expect(second.approve).toHaveBeenCalledWith({ remember: true });
+  });
+
+  it("promotes an older pending approval to keyboard owner when the latest resolves", () => {
+    const { plugin } = makePlugin();
+    const first = renderWith(plugin, cfg, makeMessage({}, "msg-A"));
+    const second = renderWith(plugin, cfg, makeMessage({}, "msg-B"));
+    // Resolve the current owner (B); A should inherit the shortcuts.
+    click(second.el?.querySelector('[data-action="deny"]'));
+    expect(second.deny).toHaveBeenCalledTimes(1);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(first.approve).toHaveBeenCalledWith({ remember: true });
+  });
+
+  it("tearing down one widget leaves another widget's approval shortcuts intact", () => {
+    const widgetA = makePlugin();
+    const widgetB = makePlugin();
+    const a = renderWith(widgetA.plugin, cfg, makeMessage({}, "msg-A"));
+    const b = renderWith(widgetB.plugin, cfg, makeMessage({}, "msg-B"));
+    widgetA.teardown(); // destroy only widget A
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(a.approve).not.toHaveBeenCalled();
+    expect(b.approve).toHaveBeenCalledWith({ remember: true });
   });
 });
 
@@ -172,8 +212,44 @@ describe("built-in approval — parameters disclosure", () => {
     expect(el?.querySelector<HTMLElement>('[data-role="params"]')?.hidden).toBe(false);
   });
 
-  it("detailsDisplay:'hidden' omits the params block and header toggle", () => {
+  it("detailsDisplay:'hidden' omits the disclosure and header toggle", () => {
     const { el } = render({ approval: { detailsDisplay: "hidden" } }, withParams());
+    expect(el?.querySelector('[data-role="params"]')).toBeNull();
+    expect(el?.querySelector('[data-action="toggle-params"]')).toBeNull();
+  });
+});
+
+describe("built-in approval — agent description in disclosure", () => {
+  it("surfaces approval.description in the collapsible details even without parameters", () => {
+    const { el } = render(
+      {},
+      makeMessage({ description: "Reads your calendar", parameters: undefined })
+    );
+    const details = el?.querySelector<HTMLElement>('[data-role="params"]');
+    expect(details).not.toBeNull();
+    expect(el?.querySelector('[data-action="toggle-params"]')).not.toBeNull();
+    expect(details?.querySelector(".persona-approval-desc")?.textContent).toContain(
+      "Reads your calendar"
+    );
+  });
+
+  it("shows the description alongside the parameters block", () => {
+    const { el } = render(
+      {},
+      makeMessage({ description: "Reads your calendar", parameters: { when: "today" } })
+    );
+    const details = el?.querySelector<HTMLElement>('[data-role="params"]');
+    expect(details?.querySelector(".persona-approval-desc")?.textContent).toContain(
+      "Reads your calendar"
+    );
+    expect(details?.querySelector(".persona-approval-params")?.textContent).toContain("today");
+  });
+
+  it("detailsDisplay:'hidden' omits the description disclosure too", () => {
+    const { el } = render(
+      { approval: { detailsDisplay: "hidden" } },
+      makeMessage({ description: "Reads your calendar", parameters: undefined })
+    );
     expect(el?.querySelector('[data-role="params"]')).toBeNull();
     expect(el?.querySelector('[data-action="toggle-params"]')).toBeNull();
   });

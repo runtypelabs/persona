@@ -5,9 +5,9 @@
 Redesign the default tool-approval bubble as a neutral surface card
 
 The built-in approval UI is now a neutral "permission card" — a tool icon, a
-"The assistant wants to use **tool**" title, the call arguments collapsed behind
-a "show more" disclosure, and a primary action anchored to the brand
-`--persona-primary` token. On resolve, approved approvals disappear (the tool
+"The assistant wants to use **tool**" title, the agent-facing description and
+call arguments collapsed behind a "show more" disclosure, and a primary action
+anchored to the brand `--persona-primary` token. On resolve, approved approvals disappear (the tool
 call takes over the transcript) and denied/timed-out ones collapse to a subtle
 one-line trace.
 

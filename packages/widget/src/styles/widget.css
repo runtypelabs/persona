@@ -2469,8 +2469,20 @@
   padding: 0.5rem 0.6rem 0.35rem calc(24px + 0.75rem + 0.6rem);
 }
 
-.persona-approval-params {
+.persona-approval-details {
   margin: 0 0 0.75rem;
+}
+.persona-approval-details[hidden] { display: none; }
+
+.persona-approval-desc {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--persona-muted, #6b7280);
+}
+
+.persona-approval-params {
+  margin: 0;
   padding: 0.7rem 0.85rem;
   border-radius: 0.625rem;
   background: var(--persona-container, rgba(11, 11, 11, 0.04));
@@ -2480,7 +2492,6 @@
   overflow-x: auto;
   max-height: 9rem;
 }
-.persona-approval-params[hidden] { display: none; }
 
 .persona-approval-reason {
   margin: 0 0 0.6rem;
