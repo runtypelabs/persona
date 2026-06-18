@@ -2,13 +2,16 @@ import "@runtypelabs/persona/widget.css";
 import { renderDemoScaffold } from "./demo-scaffold";
 
 import {
-  createLocalStorageAdapter,
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetConfig,
   type AgentWidgetController,
 } from "@runtypelabs/persona";
-import { createMockSSEResponse, createMockSSEStream } from "@runtypelabs/persona/testing";
+import {
+  createMockSSEResponse,
+  createMockSSEStream,
+  type MockSSEFrame,
+} from "@runtypelabs/persona/testing";
 import { setupMountMode, runWidgetMountWithInspector } from "./mount-mode";
 import { createDemoConfigInspector } from "./demo-config-inspector";
 // `renderApproval` plugin example: shows an alternative permission prompt
@@ -42,24 +45,56 @@ const buildApprovalPlugin = () => {
 let activeController: AgentWidgetController | null = null;
 let lastApprovalDecision: "approved" | "denied" | null = null;
 
+// The widget consumes the *unified* event vocabulary (`execution_start`,
+// `turn_start`, `text_*`, `tool_*`, `approval_*`, …). On a real deployment the
+// Runtype API translates the agent runtime's legacy `agent_*` frames into these
+// before they reach the browser, so a `customFetch` mock — which bypasses the
+// server — must emit unified frames directly. Emitting legacy `agent_*` names
+// here is silently dropped by the client and nothing renders.
+//
+// Builds one assistant turn: turn_start → text_start → text_delta(s) →
+// text_complete → turn_complete. `text_complete` seals the bubble so the
+// trailing approval/tool bubble renders below it instead of leaving an
+// open streaming bubble.
+const assistantTurn = (
+  executionId: string,
+  turnId: string,
+  iteration: number,
+  deltas: string[],
+  stopReason?: string,
+): MockSSEFrame[] => {
+  const blockId = `${turnId}-text`;
+  return [
+    { type: "turn_start", executionId, id: turnId, iteration },
+    { type: "text_start", executionId, id: blockId },
+    ...deltas.map((delta) => ({ type: "text_delta", executionId, id: blockId, delta })),
+    { type: "text_complete", executionId, id: blockId },
+    { type: "turn_complete", executionId, id: turnId, ...(stopReason ? { stopReason } : {}) },
+  ];
+};
+
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const launcherChrome = mode === "launcher";
   return {
     ...DEFAULT_WIDGET_CONFIG,
-    storageAdapter: createLocalStorageAdapter(
-      `persona-state-approval-demo-${mode}-${variant}`,
-    ),
+    // Ephemeral: this is a canned mock demo (every send replays the same
+    // scripted approval flow), so persisting the conversation only leaves stale
+    // user bubbles on the next load — which look identical to the dark
+    // suggestion chips and suppress the real chips (they hide once any user
+    // message exists). `persistState: false` is the kill-switch: no history is
+    // read or written (the built-in localStorage adapter isn't even created), so
+    // a fresh load always shows the working chips — like the other mock-driven
+    // demo (fullscreen-assistant-demo-sse).
+    persistState: false,
     plugins: variant === "plugin" ? [buildApprovalPlugin()] : [],
     customFetch: async () => {
-      const events = [
-        { type: "agent_start", executionId: "exec-demo-1", agentId: "demo-agent", agentName: "Demo Agent", maxTurns: 3, startedAt: Date.now() },
-        { type: "agent_iteration_start", executionId: "exec-demo-1", iteration: 1 },
-        { type: "agent_turn_start", executionId: "exec-demo-1", turnId: "turn-1" },
-        { type: "agent_turn_delta", executionId: "exec-demo-1", turnId: "turn-1", delta: "Let me look that up in the documentation..." },
-        { type: "agent_turn_complete", executionId: "exec-demo-1", turnId: "turn-1" },
+      const executionId = "exec-demo-1";
+      const events: MockSSEFrame[] = [
+        { type: "execution_start", kind: "agent", executionId, agentId: "demo-agent", agentName: "Demo Agent", maxTurns: 3, startedAt: Date.now() },
+        ...assistantTurn(executionId, "turn-1", 1, ["Let me look that up in the documentation..."]),
         {
-          type: "agent_approval_start",
-          executionId: "exec-demo-1",
+          type: "approval_start",
+          executionId,
           approvalId: `approval-${Date.now()}`,
           toolName: "Search documentation",
           // `toolType` is a free-form string; the plugin renders it as the
@@ -77,25 +112,25 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
         const remember = options?.remember ? " (remember)" : "";
         updateLog(`Decision: ${decision}${remember} for tool "${data.toolName}" (approval: ${data.approvalId})`);
         if (decision === "denied") {
-          const events = [
-            { type: "agent_turn_start", executionId: data.executionId, turnId: "turn-denied" },
-            { type: "agent_turn_delta", executionId: data.executionId, turnId: "turn-denied", delta: "The tool execution was denied. I'll try to help without using that tool." },
-            { type: "agent_turn_complete", executionId: data.executionId, turnId: "turn-denied" },
-            { type: "agent_complete", executionId: data.executionId, success: true, stopReason: "complete" },
+          const events: MockSSEFrame[] = [
+            ...assistantTurn(data.executionId, "turn-denied", 2, [
+              "The tool execution was denied. I'll try to help without using that tool.",
+            ]),
+            { type: "execution_complete", kind: "agent", executionId: data.executionId, success: true, stopReason: "complete" },
           ];
           return createMockSSEStream(events, { delayMs: 150 });
         }
-        const events = [
-          { type: "agent_approval_complete", executionId: data.executionId, approvalId: data.approvalId, decision: "approved", toolName: data.toolName },
-          { type: "agent_tool_start", executionId: data.executionId, toolCallId: "tool-1", toolName: data.toolName, parameters: { query: "latest AI news 2025", numResults: 5 } },
-          { type: "agent_tool_delta", executionId: data.executionId, toolCallId: "tool-1", delta: "Searching..." },
-          { type: "agent_tool_complete", executionId: data.executionId, toolCallId: "tool-1", result: { results: ["Result 1: AI breakthrough", "Result 2: New model released"] }, executionTime: 1200 },
-          { type: "agent_turn_start", executionId: data.executionId, turnId: "turn-2" },
-          { type: "agent_turn_delta", executionId: data.executionId, turnId: "turn-2", delta: "Based on the search results, here are the latest AI developments:\n\n" },
-          { type: "agent_turn_delta", executionId: data.executionId, turnId: "turn-2", delta: "1. **AI Breakthrough** - Major advances in reasoning capabilities\n" },
-          { type: "agent_turn_delta", executionId: data.executionId, turnId: "turn-2", delta: "2. **New Model Released** - Next-gen models with improved performance\n" },
-          { type: "agent_turn_complete", executionId: data.executionId, turnId: "turn-2" },
-          { type: "agent_complete", executionId: data.executionId, success: true, stopReason: "complete" },
+        const events: MockSSEFrame[] = [
+          { type: "approval_complete", executionId: data.executionId, approvalId: data.approvalId, decision: "approved", toolName: data.toolName },
+          { type: "tool_start", executionId: data.executionId, toolCallId: "tool-1", toolName: data.toolName, parameters: { query: "latest AI news 2025", numResults: 5 } },
+          { type: "tool_output_delta", executionId: data.executionId, toolCallId: "tool-1", delta: "Searching..." },
+          { type: "tool_complete", executionId: data.executionId, toolCallId: "tool-1", result: { results: ["Result 1: AI breakthrough", "Result 2: New model released"] }, executionTime: 1200 },
+          ...assistantTurn(data.executionId, "turn-2", 2, [
+            "Based on the search results, here are the latest AI developments:\n\n",
+            "1. **AI Breakthrough** - Major advances in reasoning capabilities\n",
+            "2. **New Model Released** - Next-gen models with improved performance\n",
+          ]),
+          { type: "execution_complete", kind: "agent", executionId: data.executionId, success: true, stopReason: "complete" },
         ];
         return createMockSSEStream(events, { delayMs: 150 });
       },
