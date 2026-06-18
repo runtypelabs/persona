@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.0.2
+
+### Patch Changes
+
+- 0d2ada8: Switch the Fullscreen Assistant demo's `CHAT_ASSISTANT_AGENT` to `zai/glm-5.2`.
+
 ## 4.0.1
 
 ### Patch Changes
