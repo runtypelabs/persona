@@ -19,24 +19,16 @@
 
         <div class="info-section">
           <h3>Renderer</h3>
-          <p>The built-in approval card, or a <code>renderApproval</code> plugin that fully customizes it (e.g. a source icon and different copy).</p>
+          <p>The built-in approval card, or a <code>renderApproval</code> plugin that takes over the approval entirely — here, a pixel-art "Gatekeeper" who guards every tool call.</p>
           <div class="mode-group" id="variant-selector" style="margin-top: 0.5rem;">
             <button class="mode-btn active" data-variant="builtin">Built-in</button>
-            <button class="mode-btn" data-variant="plugin">Plugin (alternative)</button>
+            <button class="mode-btn" data-variant="plugin">Plugin (Pixel Guardian)</button>
           </div>
           <div id="always-allow-row" style="margin-top: 0.85rem;">
             <p style="margin: 0 0 0.4rem; font-size: 0.85rem;">"Always allow" affordance (<code>approval.enableAlwaysAllow</code>). Off by default — it needs a backend to persist the don't-ask-again policy.</p>
             <div class="mode-group" id="always-allow-selector">
               <button class="mode-btn active" data-always="off">Allow / Deny</button>
               <button class="mode-btn" data-always="on">Always allow + dropdown</button>
-            </div>
-          </div>
-          <div id="icon-mode-row" style="margin-top: 0.85rem; display: none;">
-            <p style="margin: 0 0 0.4rem; font-size: 0.85rem;">Source icon: explicit <code>icons</code> map vs. Google favicon service vs. the built-in default tool icon.</p>
-            <div class="mode-group" id="icon-selector">
-              <button class="mode-btn active" data-icon="map">Square icon</button>
-              <button class="mode-btn" data-icon="google">Google favicon</button>
-              <button class="mode-btn" data-icon="default">Default tool</button>
             </div>
           </div>
         </div>
@@ -85,9 +77,9 @@
       </div>
 
       <div class="notes-section">
-        <h3 class="notes-section-title">Plugin renderer (alternative)</h3>
-        <p>Switch the <strong>Renderer</strong> to <em>Plugin</em> to swap the built-in bubble for a <code>renderApproval</code> plugin that shows an alternative permission prompt: an expandable "BotName wants to use <em>{tool}</em>" header and a split <strong>Always allow ⏎ / Allow once ⌘⏎</strong> control plus <strong>Deny Esc</strong>, with keyboard shortcuts.</p>
-        <p>A fully custom renderer resolves the approval via the <code>approve</code> / <code>deny</code> callbacks passed into the hook. An approval is a single binary gate, so "Always allow" is just <code>approve({ remember: true })</code>: the current approval resolves the same as "Allow once", and the <code>remember</code> flag is forwarded to <code>onDecision</code> so your app can persist a don't-ask-again policy for future approvals. See <code>src/plugins/approval-actions-plugin.js</code>.</p>
+        <h3 class="notes-section-title">Plugin renderer (Pixel Guardian)</h3>
+        <p>Switch the <strong>Renderer</strong> to <em>Plugin</em> to replace the built-in card with a fully custom <code>renderApproval</code> plugin: a pixel-art "Gatekeeper" who blocks the path with a speech bubble — <em>Halt! The assistant wants to use "{tool}". Shall I let it pass?</em> — and his own <strong>✦ Allow</strong>, <strong>Always let this through</strong>, and <strong>Deny</strong> buttons. He idles with a bob and a flickering torch, then opens the gate on approve or raises his shield on deny.</p>
+        <p>A custom renderer resolves the approval via the <code>approve</code> / <code>deny</code> callbacks passed into the hook, and branches on <code>approval.status</code> to render the resolved state. An approval is a single binary gate, so "Always let this through" is just <code>approve({ remember: true })</code>: it resolves the current approval the same as a plain allow, and the <code>remember</code> flag is forwarded to <code>onDecision</code> so your app can persist a don't-ask-again policy for future approvals (watch the Event log for "(remember)"). The whole character is self-contained — an inline SVG sprite, CSS keyframes, and the widget's <code>plugin-kit</code> for shadow-DOM-safe styles. See <code>src/plugins/pixel-guardian-plugin.js</code>.</p>
       </div>
 
       <div class="notes-section">
