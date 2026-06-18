@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.0.3
+
+### Patch Changes
+
+- f1a6fd1: Switch the Fullscreen Assistant demo's `CHAT_ASSISTANT_AGENT` to `moonshotai/kimi-k2.7-code` (Kimi K2.7 Code via Mixlayer).
+
 ## 4.0.2
 
 ### Patch Changes
