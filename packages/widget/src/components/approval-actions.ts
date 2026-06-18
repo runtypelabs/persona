@@ -45,18 +45,25 @@ type Decide = (options?: { remember?: boolean }) => void;
 interface InstanceState {
   keyHandlers: Map<string, (e: KeyboardEvent) => void>;
   popovers: Map<string, PopoverHandle>;
-  // Only one pending approval owns the keyboard shortcuts at a time, so Enter/Esc
-  // don't fire on every pending card at once.
+  // Order in which approvals FIRST became pending — not re-render order. The
+  // newest pending approval (bottom of the thread) owns the keyboard shortcuts,
+  // so Enter/Esc don't fire on every pending card at once, and an older card
+  // re-rendering can't steal ownership from a newer one.
+  pendingOrder: string[];
   latestPendingApprovalId: string | null;
 }
 
 const createInstanceState = (): InstanceState => ({
   keyHandlers: new Map(),
   popovers: new Map(),
+  pendingOrder: [],
   latestPendingApprovalId: null,
 });
 
-const teardownMessage = (state: InstanceState, messageId: string): void => {
+// Drop a message's transient listener + popover WITHOUT touching its place in
+// the pending order. Used when a still-pending card re-renders and rebinds fresh
+// closures (so a rebuild of an older card doesn't reorder it to "newest").
+const detachMessage = (state: InstanceState, messageId: string): void => {
   const prevKey = state.keyHandlers.get(messageId);
   if (prevKey) {
     document.removeEventListener("keydown", prevKey);
@@ -67,12 +74,20 @@ const teardownMessage = (state: InstanceState, messageId: string): void => {
     popover.destroy();
     state.popovers.delete(messageId);
   }
-  // If the keyboard owner just went away, promote the most-recently-registered
-  // approval that still has a live handler so Enter/Esc keep working instead of
-  // going dead while another pending card remains.
+};
+
+// Fully retire a message (resolved, denied, or widget destroyed): detach its
+// listener/popover AND remove it from the pending order. If the keyboard owner
+// just went away, promote the newest remaining pending approval so Enter/Esc
+// keep working instead of going dead while another pending card remains.
+const teardownMessage = (state: InstanceState, messageId: string): void => {
+  detachMessage(state, messageId);
+  const idx = state.pendingOrder.indexOf(messageId);
+  if (idx !== -1) state.pendingOrder.splice(idx, 1);
   if (state.latestPendingApprovalId === messageId) {
-    const remaining = [...state.keyHandlers.keys()];
-    state.latestPendingApprovalId = remaining.length ? remaining[remaining.length - 1] : null;
+    state.latestPendingApprovalId = state.pendingOrder.length
+      ? state.pendingOrder[state.pendingOrder.length - 1]
+      : null;
   }
 };
 
@@ -181,12 +196,20 @@ const buildPending = (
   const hasDetails = hasDescription || hasParams;
   const expanded = hasDetails && isDetailsExpanded(message.id, approvalConfig);
 
+  // The card uses the whole header as the disclosure toggle (chevron-only, no
+  // separate text button), but the legacy `showDetailsLabel`/`hideDetailsLabel`
+  // strings are still honored as the toggle's accessible label so integrators
+  // who localized them keep a meaningful, customizable name on the control.
+  const showDetailsLabel = approvalConfig?.showDetailsLabel ?? "Show details";
+  const hideDetailsLabel = approvalConfig?.hideDetailsLabel ?? "Hide details";
+
   // Header. When a disclosure exists, the whole header toggles its visibility.
   const head = createElement("button", "persona-approval-head") as HTMLButtonElement;
   head.type = "button";
   if (hasDetails) {
     head.setAttribute("data-action", "toggle-params");
     head.setAttribute("aria-expanded", expanded ? "true" : "false");
+    head.setAttribute("aria-label", expanded ? hideDetailsLabel : showDetailsLabel);
   } else {
     head.setAttribute("data-static", "true");
   }
@@ -322,6 +345,7 @@ const buildPending = (
         const willOpen = pre.hidden;
         pre.hidden = !willOpen;
         head.setAttribute("aria-expanded", willOpen ? "true" : "false");
+        head.setAttribute("aria-label", willOpen ? hideDetailsLabel : showDetailsLabel);
         approvalDetailsExpansionState.set(message.id, willOpen);
       }
       return;
@@ -385,25 +409,36 @@ export const createBuiltInApprovalPlugin = (): {
         return buildResolvedTrace(approval);
       }
 
-      // Rebuild: drop any prior listener/popover before (re)binding fresh closures.
-      teardownMessage(state, message.id);
+      // Rebuild: drop any prior listener/popover before (re)binding fresh
+      // closures, but KEEP this approval's place in the pending order so a
+      // re-render of an older card doesn't reorder it ahead of a newer one.
+      detachMessage(state, message.id);
       const enableAlways = approvalConfig?.enableAlwaysAllow === true;
       const card = buildPending(state, message, approval, approvalConfig, approve, deny, enableAlways);
 
       if (enableAlways) {
-        state.latestPendingApprovalId = message.id;
+        if (!state.pendingOrder.includes(message.id)) state.pendingOrder.push(message.id);
+        // The newest first-seen pending approval owns the shortcuts, regardless
+        // of which card happens to be re-rendering right now.
+        state.latestPendingApprovalId = state.pendingOrder[state.pendingOrder.length - 1];
         const onKeydown = (e: KeyboardEvent): void => {
           if (isEditableEventTarget(e)) return;
           if (message.id !== state.latestPendingApprovalId) return;
+          if (e.key !== "Escape" && e.key !== "Enter") return;
+          e.preventDefault();
+          // Resolving here promotes the next-newest pending approval to owner.
+          // Stop immediate propagation so the SAME keypress doesn't then reach
+          // that freshly-promoted card's listener and resolve it too — one
+          // keypress resolves exactly one approval; the next owner waits for the
+          // next press.
+          e.stopImmediatePropagation();
+          teardownMessage(state, message.id);
           if (e.key === "Escape") {
-            e.preventDefault();
-            teardownMessage(state, message.id);
             deny();
-          } else if (e.key === "Enter") {
-            e.preventDefault();
-            teardownMessage(state, message.id);
-            if (e.metaKey || e.ctrlKey) approve(); // Allow once
-            else approve({ remember: true }); // Always allow
+          } else if (e.metaKey || e.ctrlKey) {
+            approve(); // Allow once
+          } else {
+            approve({ remember: true }); // Always allow
           }
         };
         state.keyHandlers.set(message.id, onKeydown);

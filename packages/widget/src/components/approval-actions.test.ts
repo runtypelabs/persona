@@ -182,6 +182,19 @@ describe("built-in approval — flag on (enableAlwaysAllow)", () => {
     expect(first.approve).toHaveBeenCalledWith({ remember: true });
   });
 
+  it("re-rendering an older approval does not steal shortcuts from the newest", () => {
+    const { plugin } = makePlugin();
+    const first = renderWith(plugin, cfg, makeMessage({}, "msg-A"));
+    const second = renderWith(plugin, cfg, makeMessage({}, "msg-B"));
+    // Older card (A) re-renders, e.g. via idiomorph — it must NOT claim the
+    // shortcuts back from the newer card B at the bottom of the thread.
+    const reA = renderWith(plugin, cfg, makeMessage({}, "msg-A"));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(first.approve).not.toHaveBeenCalled();
+    expect(reA.approve).not.toHaveBeenCalled();
+    expect(second.approve).toHaveBeenCalledWith({ remember: true });
+  });
+
   it("tearing down one widget leaves another widget's approval shortcuts intact", () => {
     const widgetA = makePlugin();
     const widgetB = makePlugin();
@@ -216,6 +229,25 @@ describe("built-in approval — parameters disclosure", () => {
     const { el } = render({ approval: { detailsDisplay: "hidden" } }, withParams());
     expect(el?.querySelector('[data-role="params"]')).toBeNull();
     expect(el?.querySelector('[data-action="toggle-params"]')).toBeNull();
+  });
+
+  it("honors config show/hideDetailsLabel as the toggle's accessible label", () => {
+    const { el } = render(
+      { approval: { showDetailsLabel: "Reveal call", hideDetailsLabel: "Hide call" } },
+      withParams()
+    );
+    const head = el?.querySelector<HTMLElement>('[data-action="toggle-params"]');
+    expect(head?.getAttribute("aria-label")).toBe("Reveal call");
+    click(head);
+    expect(head?.getAttribute("aria-label")).toBe("Hide call");
+  });
+
+  it("defaults the toggle's accessible label to Show/Hide details", () => {
+    const { el } = render({}, withParams());
+    const head = el?.querySelector<HTMLElement>('[data-action="toggle-params"]');
+    expect(head?.getAttribute("aria-label")).toBe("Show details");
+    click(head);
+    expect(head?.getAttribute("aria-label")).toBe("Hide details");
   });
 });
 
