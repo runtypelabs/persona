@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 4.3.0
+
+### Minor Changes
+
+- 900016c: Add agent-first routing config. The widget now accepts a saved-agent `agentId` and a normalized, backend-neutral `target` string (`"agent_…"`/`"flow_…"` Runtype TypeIDs, or `"<provider>:<id>"` resolved via a pluggable `targetProviders` registry). The proxy sends saved-agent dispatches using Runtype's `agent.agentId` payload shape.
+
 ## 4.2.1
 
 ### Patch Changes
