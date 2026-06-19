@@ -431,7 +431,7 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       const formattedMessages = sortAndFormatMessages(clientPayload.messages);
 
       runtypePayload = {
-        agent: options.agentId ? { id: options.agentId } : options.agentConfig,
+        agent: options.agentId ? { agentId: options.agentId } : options.agentConfig,
         messages: formattedMessages,
         options: {
           streamResponse: true,

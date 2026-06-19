@@ -49,6 +49,7 @@ vi.mock('./voice', async (importOriginal) => {
 });
 
 import { AgentWidgetSession } from './session';
+import { setRuntypeTtsLoader } from './voice/runtype-tts-loader';
 
 describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
   let session: AgentWidgetSession;
@@ -142,5 +143,69 @@ describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
   it('forwards metrics to the config hook', () => {
     h.state.metricsCb!({ llmMs: 100, totalMs: 250 });
     expect(metricsSeen).toEqual([{ llmMs: 100, totalMs: 250 }]);
+  });
+});
+
+describe('AgentWidgetSession - Runtype TTS config', () => {
+  it('uses top-level agentId as the default Runtype TTS agent', async () => {
+    let capturedOptions: { agentId?: string; clientToken?: string; host?: string } | null = null;
+
+    class FakeRuntypeSpeechEngine {
+      readonly id = 'runtype';
+      readonly supportsPause = false;
+
+      constructor(options: { agentId?: string; clientToken?: string; host?: string }) {
+        capturedOptions = options;
+      }
+
+      speak() {}
+      pause() {}
+      resume() {}
+      stop() {}
+    }
+
+    class FakeFallbackSpeechEngine {}
+
+    setRuntypeTtsLoader(async () => ({
+      RuntypeSpeechEngine: FakeRuntypeSpeechEngine as any,
+      FallbackSpeechEngine: FakeFallbackSpeechEngine as any,
+    }));
+
+    try {
+      const session = new AgentWidgetSession(
+        {
+          apiUrl: 'https://api.runtype.com',
+          clientToken: 'ct_live_demo',
+          agentId: 'agent_top_level',
+          textToSpeech: { enabled: true, provider: 'runtype', browserFallback: false },
+          initialMessages: [
+            {
+              id: 'assistant-1',
+              role: 'assistant',
+              content: 'Read this',
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+        {
+          onMessagesChanged: () => {},
+          onStatusChanged: () => {},
+          onStreamingChanged: () => {},
+          onError: () => {},
+        },
+      );
+
+      session.toggleReadAloud('assistant-1');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(capturedOptions).toMatchObject({
+        agentId: 'agent_top_level',
+        clientToken: 'ct_live_demo',
+        host: 'https://api.runtype.com',
+      });
+    } finally {
+      setRuntypeTtsLoader(null);
+    }
   });
 });

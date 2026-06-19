@@ -126,9 +126,22 @@ The full reference lives in [`docs/`](./docs/) and the theming guide:
 
 ### Optional Runtype proxy server
 
-The `@runtypelabs/persona-proxy` package handles flow configuration and forwards requests to Runtype. You can configure it in three ways:
+The `@runtypelabs/persona-proxy` package handles server-side API-key control and forwards requests to Runtype. You can configure it around a saved agent (recommended for most chat widgets) or a flow.
 
-**Option 1: Use default flow (recommended for getting started)**
+**Option 1: Reference a Runtype agent ID (recommended)**
+
+```ts
+// api/chat.ts
+import { createChatProxyApp } from '@runtypelabs/persona-proxy';
+
+export default createChatProxyApp({
+  path: '/api/chat/dispatch',
+  allowedOrigins: ['https://www.example.com'],
+  agentId: 'agent_abc123'
+});
+```
+
+**Option 2: Use default flow**
 
 ```ts
 // api/chat.ts
@@ -140,7 +153,7 @@ export default createChatProxyApp({
 });
 ```
 
-**Option 2: Reference a Runtype flow ID**
+**Option 3: Reference a Runtype flow ID**
 
 ```ts
 import { createChatProxyApp } from '@runtypelabs/persona-proxy';
@@ -152,7 +165,7 @@ export default createChatProxyApp({
 });
 ```
 
-**Option 3: Define a custom flow**
+**Option 4: Define a custom flow**
 
 ```ts
 import { createChatProxyApp } from '@runtypelabs/persona-proxy';

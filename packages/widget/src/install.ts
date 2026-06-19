@@ -17,6 +17,7 @@ interface SiteAgentInstallConfig {
   // Client token mode options (can also be set via data attributes)
   clientToken?: string;
   flowId?: string;
+  agentId?: string;
   apiUrl?: string;
   // Optional query param key that gates widget installation in preview mode
   previewQueryParam?: string;
@@ -69,7 +70,7 @@ declare global {
 
   /**
    * Read configuration from data attributes on the current script tag.
-   * Supports: data-config (JSON), data-runtype-token, data-flow-id, data-api-url
+   * Supports: data-config (JSON), data-runtype-token, data-flow-id, data-agent-id, data-api-url
    */
   const getConfigFromScript = (): Partial<SiteAgentInstallConfig> => {
     // Try to get the current script element
@@ -110,6 +111,12 @@ declare global {
     const flowId = script.getAttribute('data-flow-id');
     if (flowId) {
       scriptConfig.flowId = flowId;
+    }
+
+    // Optional agent ID
+    const agentId = script.getAttribute('data-agent-id');
+    if (agentId) {
+      scriptConfig.agentId = agentId;
     }
 
     // Optional API URL override
@@ -357,6 +364,7 @@ declare global {
     if (config.apiUrl && !widgetConfig.apiUrl) widgetConfig.apiUrl = config.apiUrl;
     if (config.clientToken && !widgetConfig.clientToken) widgetConfig.clientToken = config.clientToken;
     if (config.flowId && !widgetConfig.flowId) widgetConfig.flowId = config.flowId;
+    if (config.agentId && !widgetConfig.agentId) widgetConfig.agentId = config.agentId;
 
     const hasApiConfig = !!(widgetConfig.apiUrl || widgetConfig.clientToken);
     return { target, widgetConfig, hasApiConfig };

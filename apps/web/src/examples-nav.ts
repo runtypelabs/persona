@@ -321,7 +321,9 @@ export function renderExamplesShell(
   const header = document.createElement("nav");
   header.className = "shell-header";
   header.innerHTML = `
-    <a class="shell-brand" href="/">Persona</a>
+    <a class="shell-brand" href="/" aria-label="Persona home">
+      <img class="shell-brand-logo" src="/persona-js.svg" alt="" width="112" height="35">
+    </a>
     <span class="shell-sep" aria-hidden="true">/</span>
     <a class="shell-crumb" href="/advanced.html">Advanced Examples</a>
     <span class="shell-sep" aria-hidden="true">/</span>

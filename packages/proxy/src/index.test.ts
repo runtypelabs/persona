@@ -55,7 +55,9 @@ describe("CORS middleware", () => {
     const res = await preflight(app, "https://example.com", {
       "Access-Control-Request-Headers": "X-Evil-Header, X-Custom",
     });
-    expect(res.headers.get("Access-Control-Allow-Headers")).toBe("Content-Type, Authorization");
+    expect(res.headers.get("Access-Control-Allow-Headers")).toBe(
+      "Content-Type, Authorization, X-Persona-Version"
+    );
   });
 
   it("returns 204 for OPTIONS preflight", async () => {
@@ -368,7 +370,7 @@ describe("dispatch: server-pinned agent config", () => {
       messages: [{ role: "user", content: "hi" }],
     });
 
-    expect(calls[0]!.body?.agent).toEqual({ id: "agent_123" });
+    expect(calls[0]!.body?.agent).toEqual({ agentId: "agent_123" });
   });
 
   it("throws when server agent options are combined with flow options", () => {

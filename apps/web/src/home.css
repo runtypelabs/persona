@@ -115,18 +115,17 @@ section[id], aside[id] {
 }
 
 .site-wordmark {
-  font-family: var(--font-wordmark);
-  font-optical-sizing: auto;
-  font-variation-settings:
-    "slnt" 0,
-    "CRSV" 0.5,
-    "ELSH" 0,
-    "ELXP" 0;
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
   color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
   text-decoration: none;
+}
+
+.site-wordmark img {
+  display: block;
+  width: 124px;
+  height: auto;
 }
 
 .site-nav {
@@ -1620,7 +1619,11 @@ section[id], aside[id] {
   }
 
   .site-wordmark {
-    font-size: 22px;
+    flex: 0 0 auto;
+  }
+
+  .site-wordmark img {
+    width: 112px;
   }
 
   .site-command-trigger span {

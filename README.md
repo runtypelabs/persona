@@ -50,7 +50,7 @@ See the [**`runtypelabs/persona-examples`**](https://github.com/runtypelabs/pers
 ### Protocol Documentation
 
 - [**WebMCP without Runtype**](./docs/webmcp-without-runtype.md): Deep dive into shimming the Persona protocol over the Vercel AI SDK.
-- [**Adapter SDK Minimal**](./examples/adapter-sdk-minimal): Minimal reference implementations for AI SDK and OpenAI Responses.
+- [**Adapter SDK Minimal**](./examples/adapter-sdk-minimal): Minimal reference implementations for AI SDK and OpenAI Responses, including [choosing a model/assistant with `target`](./examples/adapter-sdk-minimal#choosing-a-modelassistant-with-target).
 
 ## Quick Start
 

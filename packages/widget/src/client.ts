@@ -24,6 +24,7 @@ import {
   WebMcpConfirmHandler
 } from "./types";
 import { WebMcpBridge, computeClientToolsFingerprint, isWebMcpToolName } from "./webmcp-bridge";
+import { resolveTarget } from "./utils/target";
 import { builtInClientToolsForDispatch } from "./ask-user-question-tool";
 import {
   extractTextFromJson,
@@ -185,6 +186,11 @@ export class AgentWidgetClient {
   private readonly webMcpBridge: WebMcpBridge | null;
 
   constructor(private config: AgentWidgetConfig = {}) {
+    if (config.target && (config.agentId || config.flowId || config.agent)) {
+      throw new Error(
+        "[Persona] `target` is mutually exclusive with `agentId`, `flowId`, and `agent`. Set only one routing field.",
+      );
+    }
     this.apiUrl = config.apiUrl ?? DEFAULT_ENDPOINT;
     this.headers = {
       "Content-Type": "application/json",
@@ -285,10 +291,32 @@ export class AgentWidgetClient {
   }
 
   /**
+   * Resolve the effective backend routing for the current config. Combines the
+   * explicit `agentId`/`flowId` fields with the normalized `target` string
+   * (resolved via `resolveTarget`). Computed on demand so it stays correct
+   * across `update()`; the `target`/explicit-field conflict is rejected in the
+   * constructor, so at most one source is set here.
+   */
+  private routing(): {
+    agentId?: string;
+    flowId?: string;
+    targetPayload?: Record<string, unknown>;
+  } {
+    const { agentId, flowId, target, targetProviders } = this.config;
+    if (!target) {
+      return { agentId, flowId };
+    }
+    const resolved = resolveTarget(target, targetProviders);
+    if (resolved.kind === "agentId") return { agentId: resolved.agentId };
+    if (resolved.kind === "flowId") return { flowId: resolved.flowId };
+    return { targetPayload: resolved.payload };
+  }
+
+  /**
    * Check if operating in agent execution mode
    */
   public isAgentMode(): boolean {
-    return !!this.config.agent;
+    return !!(this.config.agent || this.routing().agentId);
   }
 
   /**
@@ -346,9 +374,11 @@ export class AgentWidgetClient {
     // Get stored session_id if available (for session resumption)
     const storedSessionId = this.config.getStoredSessionId?.() || null;
     
+    const routed = this.routing();
+    const sessionTargetId = routed.agentId ?? routed.flowId;
     const requestBody: Record<string, unknown> = {
       token: this.config.clientToken,
-      ...(this.config.flowId && { flowId: this.config.flowId }),
+      ...(sessionTargetId && { flowId: sessionTargetId }),
       ...(storedSessionId && { sessionId: storedSessionId }),
     };
 
@@ -584,11 +614,11 @@ export class AgentWidgetClient {
    * Send a message - handles both proxy and client token modes
    */
   public async dispatch(options: DispatchOptions, onEvent: SSEHandler) {
-    if (this.isAgentMode()) {
-      return this.dispatchAgent(options, onEvent);
-    }
     if (this.isClientTokenMode()) {
       return this.dispatchClientToken(options, onEvent);
+    }
+    if (this.isAgentMode()) {
+      return this.dispatchAgent(options, onEvent);
     }
     return this.dispatchProxy(options, onEvent);
   }
@@ -1040,7 +1070,8 @@ export class AgentWidgetClient {
   private async buildAgentPayload(
     messages: AgentWidgetMessage[]
   ): Promise<AgentWidgetAgentRequestPayload> {
-    if (!this.config.agent) {
+    const routedAgentId = this.routing().agentId;
+    if (!this.config.agent && !routedAgentId) {
       throw new Error('Agent configuration required for agent mode');
     }
 
@@ -1062,7 +1093,7 @@ export class AgentWidgetClient {
       }));
 
     const payload: AgentWidgetAgentRequestPayload = {
-      agent: this.config.agent,
+      agent: this.config.agent ?? { agentId: routedAgentId! },
       messages: normalizedMessages,
       options: {
         streamResponse: true,
@@ -1134,10 +1165,26 @@ export class AgentWidgetClient {
         createdAt: message.createdAt
       }));
 
+    const routed = this.routing();
     const payload: AgentWidgetRequestPayload = {
       messages: normalizedMessages,
-      ...(this.config.flowId && { flowId: this.config.flowId })
+      ...(routed.agentId
+        ? { agent: { agentId: routed.agentId } }
+        : routed.flowId
+          ? { flowId: routed.flowId }
+          : {})
     };
+
+    // Custom-provider targets (e.g. `eve:support`) resolve to a payload
+    // fragment that is merged into the dispatch body so a BYO backend can read
+    // whatever routing keys its resolver chose. `messages` is authoritative and
+    // can never be overridden by a resolver.
+    if (routed.targetPayload) {
+      for (const [key, value] of Object.entries(routed.targetPayload)) {
+        if (key === "messages") continue;
+        (payload as Record<string, unknown>)[key] = value;
+      }
+    }
 
     // Client tools: same built-in + WebMCP merge as buildAgentPayload
     // (flow-dispatch path).

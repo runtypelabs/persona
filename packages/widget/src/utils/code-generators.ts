@@ -605,6 +605,8 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
 
   if (config.apiUrl) lines.push(`    apiUrl: "${config.apiUrl}",`);
   if (config.clientToken) lines.push(`    clientToken: "${config.clientToken}",`);
+  if (config.agentId) lines.push(`    agentId: "${config.agentId}",`);
+  if (config.target) lines.push(`    target: "${config.target}",`);
   if (config.flowId) lines.push(`    flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`    parserType: "${parserType}",`);
 
@@ -751,6 +753,8 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
 
   if (config.apiUrl) lines.push(`        apiUrl: "${config.apiUrl}",`);
   if (config.clientToken) lines.push(`        clientToken: "${config.clientToken}",`);
+  if (config.agentId) lines.push(`        agentId: "${config.agentId}",`);
+  if (config.target) lines.push(`        target: "${config.target}",`);
   if (config.flowId) lines.push(`        flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`        parserType: "${parserType}",`);
 
@@ -1015,6 +1019,8 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
 
   if (config.apiUrl) lines.push(`        apiUrl: "${config.apiUrl}",`);
   if (config.clientToken) lines.push(`        clientToken: "${config.clientToken}",`);
+  if (config.agentId) lines.push(`        agentId: "${config.agentId}",`);
+  if (config.target) lines.push(`        target: "${config.target}",`);
   if (config.flowId) lines.push(`        flowId: "${config.flowId}",`);
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
@@ -1270,6 +1276,8 @@ function buildSerializableConfig(config: any): Record<string, any> {
   
   if (config.apiUrl) serializableConfig.apiUrl = config.apiUrl;
   if (config.clientToken) serializableConfig.clientToken = config.clientToken;
+  if (config.agentId) serializableConfig.agentId = config.agentId;
+  if (config.target) serializableConfig.target = config.target;
   if (config.flowId) serializableConfig.flowId = config.flowId;
   if (shouldEmitParserType) serializableConfig.parserType = parserType;
   if (config.theme) serializableConfig.theme = config.theme;
@@ -1419,6 +1427,8 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
 
   if (config.apiUrl) lines.push(`      apiUrl: "${config.apiUrl}",`);
   if (config.clientToken) lines.push(`      clientToken: "${config.clientToken}",`);
+  if (config.agentId) lines.push(`      agentId: "${config.agentId}",`);
+  if (config.target) lines.push(`      target: "${config.target}",`);
   if (config.flowId) lines.push(`      flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`      parserType: "${parserType}",`);
 

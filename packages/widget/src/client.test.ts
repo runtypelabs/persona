@@ -638,7 +638,224 @@ describe('AgentWidgetClient - Agent Mode Detection', () => {
   });
 });
 
+describe('AgentWidgetClient - target routing', () => {
+  const streamingFetch = () =>
+    vi.fn().mockImplementation(async (_url: string, options: any) => {
+      const capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              sseEvent('agent_complete', {
+                executionId: 'exec_1',
+                agentId: 'virtual',
+                success: true,
+                iterations: 1,
+                completedAt: new Date().toISOString(),
+                seq: 1,
+              }),
+            ),
+          );
+          controller.close();
+        },
+      });
+      (streamingFetch as any).lastBody = capturedPayload;
+      return { ok: true, body: stream };
+    });
+
+  const userMessage = (): AgentWidgetMessage[] => [
+    { id: 'u1', role: 'user', content: 'hi', createdAt: '2025-01-01T00:00:00.000Z' },
+  ];
+
+  it('routes a Runtype agent TypeID target through agent mode', async () => {
+    let captured: any = null;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+      captured = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      return {
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+              executionId: 'exec_1', agentId: 'agent_123', success: true, iterations: 1,
+              completedAt: new Date().toISOString(), seq: 1,
+            })));
+            controller.close();
+          },
+        }),
+      };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000', target: 'agent_123' });
+    expect(client.isAgentMode()).toBe(true);
+    await client.dispatch({ messages: userMessage() }, () => {});
+
+    expect(captured.agent).toEqual({ agentId: 'agent_123' });
+  });
+
+  it('routes a Runtype flow TypeID target through flow dispatch', async () => {
+    let captured: any = null;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+      captured = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      return {
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+            controller.close();
+          },
+        }),
+      };
+    });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000', target: 'flow_123' });
+    expect(client.isAgentMode()).toBe(false);
+    await client.dispatch({ messages: userMessage() }, () => {});
+
+    expect(captured.flowId).toBe('flow_123');
+    expect(captured.agent).toBeUndefined();
+  });
+
+  it('spreads a custom provider target payload into the proxy dispatch body', async () => {
+    let captured: any = null;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+      captured = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      return {
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+            controller.close();
+          },
+        }),
+      };
+    });
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      target: 'eve:support',
+      targetProviders: { eve: (id) => ({ payload: { assistant: id } }) },
+    });
+    expect(client.isAgentMode()).toBe(false);
+    await client.dispatch({ messages: userMessage() }, () => {});
+
+    expect(captured.assistant).toBe('support');
+    expect(Array.isArray(captured.messages)).toBe(true);
+  });
+
+  it('throws when target is combined with agentId', () => {
+    expect(
+      () => new AgentWidgetClient({ apiUrl: 'http://localhost:8000', target: 'agent_1', agentId: 'agent_2' }),
+    ).toThrow(/mutually exclusive/i);
+  });
+});
+
 describe('AgentWidgetClient - Agent Payload Building', () => {
+  it('should build a saved agent-id payload from top-level agentId', async () => {
+    let capturedPayload: any = null;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+            executionId: 'exec_1',
+            agentId: 'agent_123',
+            success: true,
+            iterations: 1,
+            completedAt: new Date().toISOString(),
+            seq: 1,
+          })));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agentId: 'agent_123',
+    });
+
+    await client.dispatch({
+      messages: [{
+        id: 'usr_1',
+        role: 'user',
+        content: 'Hello saved agent',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      }],
+    }, () => {});
+
+    expect(capturedPayload).toBeDefined();
+    expect(capturedPayload.agent).toEqual({ agentId: 'agent_123' });
+    expect(capturedPayload.flowId).toBeUndefined();
+    expect(capturedPayload.messages).toHaveLength(1);
+    expect(capturedPayload.messages[0].content).toBe('Hello saved agent');
+    expect(capturedPayload.options.streamResponse).toBe(true);
+    expect(capturedPayload.options.recordMode).toBe('virtual');
+  });
+
+  it('uses top-level agentId as the client-token session target', async () => {
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+    global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
+      requests.push({ url, body: JSON.parse(options.body) });
+      if (url.endsWith('/v1/client/init')) {
+        return {
+          ok: true,
+          json: async () => ({
+            sessionId: 'sess_agent',
+            expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+            config: {},
+          }),
+        };
+      }
+      const encoder = new TextEncoder();
+      return {
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+              executionId: 'exec_1',
+              agentId: 'agent_123',
+              success: true,
+              iterations: 1,
+              completedAt: new Date().toISOString(),
+              seq: 1,
+            })));
+            controller.close();
+          },
+        }),
+      };
+    });
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'https://api.runtype.com',
+      clientToken: 'ct_live_demo',
+      agentId: 'agent_123',
+    });
+
+    await client.dispatch({
+      messages: [{
+        id: 'usr_1',
+        role: 'user',
+        content: 'Hello agent token',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      }],
+    }, () => {});
+
+    expect(requests[0]).toMatchObject({
+      url: 'https://api.runtype.com/v1/client/init',
+      body: { token: 'ct_live_demo', flowId: 'agent_123' },
+    });
+    expect(requests[1]).toMatchObject({
+      url: 'https://api.runtype.com/v1/client/chat',
+      body: { sessionId: 'sess_agent' },
+    });
+  });
+
   it('should build agent payload with agent config', async () => {
     let capturedPayload: any = null;
     global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {

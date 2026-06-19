@@ -70,6 +70,81 @@ event: execution_complete
 data: {"type":"execution_complete","executionId":"exec_...","seq":6,"kind":"agent","success":true,"completedAt":"..."}
 ```
 
+## Choosing a model/assistant with `target`
+
+The routes above hardcode one model per route — the simplest setup, and all most
+apps need. If you want the **browser to choose** the model or assistant, use the
+widget's normalized `target` field plus a `targetProviders` resolver. The
+resolver runs in the browser and maps a friendly string to extra wire fields;
+your route reads them and constructs the model server-side. (The resolver is a
+wire mapping, not a model factory — model instantiation stays on the server.)
+
+Mount the widget with a `target` and a resolver:
+
+```ts
+import { createAgentExperience } from "@runtypelabs/persona";
+
+createAgentExperience(host, {
+  apiUrl: "/api/ai-sdk/dispatch",
+  target: "openai:gpt-4.1-mini",
+  targetProviders: {
+    // "openai:gpt-4.1-mini" -> { model: "gpt-4.1-mini" } merged into the body
+    openai: (id) => ({ payload: { model: id } }),
+  },
+});
+```
+
+The dispatch body becomes `{ messages, model: "gpt-4.1-mini" }`. Read it in the
+route and **allowlist** it — never pass a client-supplied model straight to the
+provider:
+
+```ts
+// app/api/ai-sdk/dispatch/route.ts
+import { streamText } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { createPersonaSSEStream, personaMessagesToModelMessages } from "../../../lib/persona-wire";
+
+export const runtime = "nodejs";
+
+const ALLOWED = new Set(["gpt-4.1-mini", "gpt-4.1"]);
+
+export async function POST(req: Request) {
+  const body = await req.json();
+  const modelId = ALLOWED.has(body.model) ? body.model : "gpt-4.1-mini";
+
+  return createPersonaSSEStream(async ({ emit }) => {
+    const result = streamText({
+      model: openai(modelId),
+      messages: personaMessagesToModelMessages(body.messages),
+    });
+    for await (const part of result.fullStream) {
+      if (part.type === "text-delta") emit.textDelta(part.text);
+      else if (part.type === "error") {
+        emit.error(part.error instanceof Error ? part.error.message : String(part.error));
+        return;
+      }
+    }
+    emit.complete();
+  });
+}
+```
+
+This route reads `req.json()` directly instead of using `createAISDKPersonaHandler()`,
+because that helper takes a fixed `model`. For per-request selection, inline the
+handler as above (or extend the helper to accept `model: (body) => LanguageModel`).
+
+Notes:
+
+- **OpenAI SDK** is the same shape: read `body.model` and pass it to
+  `responses.create({ model, ... })`. To target a saved OpenAI assistant instead
+  of a model, resolve to `{ payload: { assistantId: id } }` and read
+  `body.assistantId` in the route.
+- **Runtype TypeIDs** route automatically: `target: "agent_…"` / `"flow_…"` need
+  no resolver (the prefix is self-describing).
+- `target` is mutually exclusive with `agentId`, `flowId`, and inline `agent`.
+- See `packages/widget/docs/CONFIGURATION-REFERENCE.md` ("Routing targets") for
+  the full resolution rules.
+
 ## What this intentionally does not show
 
 This example is plain streaming chat. It does not include WebMCP, local tools,
