@@ -2,6 +2,25 @@
 
 Thanks for your interest in contributing!
 
+## Ways to contribute
+
+Persona uses a **hybrid** contribution model so the right kind of work lands in
+the right place:
+
+- **Core fixes & features** → open a pull request against this monorepo. Follow
+  the [development workflow](#development-workflow) and the
+  [changeset rules](#what-needs-a-changeset) below.
+- **A small, reusable UI component** → PR it into the in-repo gallery using the
+  ~2-minute copy-template flow. No package to publish; see the
+  [gallery README](./apps/web/src/gallery-components/README.md).
+- **A full plugin, theme plugin, or backend adapter** → publish it to npm under
+  the `persona-plugin-*` / `persona-theme-*` / `persona-adapter-*` naming +
+  keyword convention ([PUBLISHING-PLUGINS.md](./packages/widget/docs/PUBLISHING-PLUGINS.md)).
+
+New to extending Persona? Start with the extensibility map
+([EXTENDING.md](./packages/widget/docs/EXTENDING.md)) and the plugin authoring
+guide ([PLUGINS.md](./packages/widget/docs/PLUGINS.md)).
+
 ## Setup
 
 **Requirements:** Node.js 20+, pnpm
@@ -32,7 +51,7 @@ spec into `packages/widget/src/generated/runtype-openapi-contract.ts`, which is
 committed to the repo.
 
 `pnpm typecheck` re-fetches the live spec and **fails if the committed contract
-is out of date** — so if typecheck reports a contract mismatch (and you didn't
+is out of date**, so if typecheck reports a contract mismatch (and you didn't
 touch the generated file), regenerate it:
 
 ```bash

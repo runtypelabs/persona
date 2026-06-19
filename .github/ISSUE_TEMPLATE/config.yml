@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Extending Persona (docs)
+    url: https://github.com/runtypelabs/persona/blob/main/packages/widget/docs/EXTENDING.md
+    about: The map of every extension point (plugins, components, themes, parsers, voice, and more).
+  - name: Security vulnerability
+    url: https://github.com/runtypelabs/persona/blob/main/SECURITY.md
+    about: Report security issues privately per our security policy. Do not open a public issue.
