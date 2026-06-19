@@ -6,11 +6,10 @@ into Persona's SSE protocol without writing Persona frames in every route:
 - **Vercel AI SDK**: wraps `streamText().fullStream`
 - **OpenAI Responses SDK**: wraps `openai.responses.create({ stream: true })`
 
-The adapters emit Persona's neutral **unified** vocabulary
+The adapters emit Persona's SSE event vocabulary
 (`execution_start` / `turn_start` / `text_start`·`text_delta`·`text_complete` /
-`turn_complete` / `execution_complete`) — the one protocol any backend can
-speak, and the same wire the Runtype API emits. The widget consumes the unified
-vocabulary natively.
+`turn_complete` / `execution_complete`). Any backend can speak this protocol, and it matches the
+wire the Runtype API emits. The widget consumes the wire natively.
 
 The local adapter helpers live in `app/lib/` so they are easy to lift into a
 future package export such as `@runtypelabs/persona-proxy/adapters`.
@@ -19,9 +18,9 @@ future package export such as `@runtypelabs/persona-proxy/adapters`.
 
 ```bash
 pnpm --filter @runtypelabs/persona build
-cp examples/adapter-sdk-minimal/.env.example examples/adapter-sdk-minimal/.env.local
+cp examples/ai-sdk-next/.env.example examples/ai-sdk-next/.env.local
 # edit .env.local and set OPENAI_API_KEY
-pnpm --filter adapter-sdk-minimal dev
+pnpm --filter ai-sdk-next dev
 ```
 
 Open `http://localhost:3000`.
@@ -44,7 +43,7 @@ Both routes accept the normal Persona proxy-mode dispatch body:
 ```
 
 Both routes return Persona-compatible SSE. The streamed `text_delta`s are
-authoritative — there's no need to re-send the full text at the end, and one
+authoritative. You don't need to re-send the full text at the end, and one
 `executionId` (`exec_…`) plus `kind:"agent"` are carried across the run:
 
 ```txt
@@ -72,12 +71,12 @@ data: {"type":"execution_complete","executionId":"exec_...","seq":6,"kind":"agen
 
 ## Choosing a model/assistant with `target`
 
-The routes above hardcode one model per route — the simplest setup, and all most
+The routes above hardcode one model per route: the simplest setup, and all most
 apps need. If you want the **browser to choose** the model or assistant, use the
 widget's normalized `target` field plus a `targetProviders` resolver. The
 resolver runs in the browser and maps a friendly string to extra wire fields;
 your route reads them and constructs the model server-side. (The resolver is a
-wire mapping, not a model factory — model instantiation stays on the server.)
+wire mapping, not a model factory: model instantiation stays on the server.)
 
 Mount the widget with a `target` and a resolver:
 
@@ -95,7 +94,7 @@ createAgentExperience(host, {
 ```
 
 The dispatch body becomes `{ messages, model: "gpt-4.1-mini" }`. Read it in the
-route and **allowlist** it — never pass a client-supplied model straight to the
+route and **allowlist** it. Never pass a client-supplied model straight to the
 provider:
 
 ```ts

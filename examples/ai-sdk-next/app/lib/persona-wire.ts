@@ -12,7 +12,7 @@ export type PersonaDispatchBody = {
   metadata?: Record<string, unknown>;
 };
 
-type UnifiedFrame = {
+type WireFrame = {
   type: string;
   executionId: string;
   seq: number;
@@ -32,7 +32,7 @@ type UnifiedFrame = {
 };
 
 export type PersonaStreamEmitter = {
-  /** Stream a chunk of assistant text (unified `text_delta`). */
+  /** Stream a chunk of assistant text (`text_delta`). */
   textDelta(text: string): void;
   /** Finalize the turn successfully (`text_complete` → `turn_complete` → `execution_complete`). */
   complete(): void;
@@ -49,10 +49,10 @@ export type PersonaStreamContext = {
 const encoder = new TextEncoder();
 
 /**
- * Wrap a streaming handler in Persona's neutral **unified** SSE vocabulary.
+ * Wrap a streaming handler in Persona's SSE event vocabulary.
  *
- * This is the one protocol any backend can speak — and the exact same wire the
- * Runtype API emits. The widget consumes the unified vocabulary natively. One
+ * Any backend can speak this protocol, and it matches the exact same wire the
+ * Runtype API emits. The widget consumes the wire natively. One
  * agent turn looks like:
  *
  *   event: execution_start   { executionId, kind:"agent", agentId, startedAt }
@@ -64,14 +64,12 @@ const encoder = new TextEncoder();
  *   event: turn_complete     { executionId, id:"turn_…", iteration:1, stopReason, completedAt }
  *   event: execution_complete{ executionId, kind:"agent", success:true, completedAt }
  *
- * The streamed deltas are authoritative — there is no need to re-send the full
+ * The streamed deltas are authoritative. You don't need to re-send the full
  * text at the end. One `executionId` (`exec_…`) and `kind:"agent"` are carried
  * across the run. Because this adapter IS a genuine agent (kind:"agent"), a
- * `/resume` continuation — which has no `execution_start` to re-announce the
- * kind — is correct by construction: the widget bridge defaults a fresh stream
- * to kind:"agent", which matches. (A backend that wrapped an agent in a virtual
- * flow would have to re-announce kind on resume; this one never claims to be
- * something it isn't.)
+ * `/resume` continuation (which has no `execution_start` to re-announce the
+ * kind) is correct by construction: the widget bridge defaults a fresh stream
+ * to kind:"agent", which matches.
  */
 export function createPersonaSSEStream(
   handler: (context: PersonaStreamContext) => Promise<void> | void,
@@ -81,11 +79,11 @@ export function createPersonaSSEStream(
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      // `seq` is the unified envelope's monotonic sequence number. The widget
+      // `seq` is the wire envelope's monotonic sequence number. The widget
       // reads a single in-order connection so it isn't load-bearing here, but a
       // faithful reference emits it.
       let seq = 0;
-      const send = (event: string, payload: Omit<UnifiedFrame, "type" | "executionId" | "seq">) => {
+      const send = (event: string, payload: Omit<WireFrame, "type" | "executionId" | "seq">) => {
         controller.enqueue(
           encoder.encode(
             `event: ${event}\ndata: ${JSON.stringify({ type: event, executionId, seq: seq++, ...payload })}\n\n`,
