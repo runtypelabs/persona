@@ -1,0 +1,97 @@
+@import "@runtypelabs/persona/widget.css";
+
+:root {
+  color-scheme: light;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #f7f8fb;
+  color: #121826;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  min-height: 100dvh;
+  padding: 40px;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: minmax(280px, 440px) minmax(360px, 1fr);
+  gap: 24px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.intro,
+.widgetHost {
+  border: 1px solid #d9dee9;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgb(18 24 38 / 8%);
+}
+
+.intro {
+  padding: 24px;
+}
+
+.intro h1 {
+  margin: 0 0 12px;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.intro p {
+  margin: 0 0 16px;
+  color: #526070;
+  line-height: 1.55;
+}
+
+.intro code {
+  border-radius: 4px;
+  background: #eef2f7;
+  padding: 2px 5px;
+}
+
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  background: #e8f7f9;
+  color: #0d6370;
+  font-size: 13px;
+  font-weight: 650;
+  padding: 4px 12px;
+  margin-bottom: 16px;
+}
+
+.widgetHost {
+  min-height: 680px;
+  overflow: hidden;
+}
+
+#persona-root {
+  height: 680px;
+}
+
+@media (max-width: 860px) {
+  main {
+    padding: 20px;
+  }
+
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .widgetHost,
+  #persona-root {
+    min-height: 620px;
+    height: 620px;
+  }
+}
