@@ -12,7 +12,7 @@ Yes, and there are two paths depending on whether you keep the Persona widget UI
 
 The widget owns the WebMCP loop internally: it snapshots page tools into
 `clientTools[]`, and when the agent calls one it executes the tool on the page
-and posts the result back. That loop runs over **Persona's neutral unified wire
+and posts the result back. That loop runs over **Persona's SSE wire
 protocol** (vendor-neutral — the same wire the Runtype API emits): an `await` SSE
 event pauses the run, and the widget POSTs the tool output to `${apiUrl}/resume`
 to continue. The control events (`await` / `executionId` / `/resume`) are part of
@@ -21,7 +21,7 @@ pause/resume contract is fixed.
 
 So:
 
-- **Keep the Persona widget UI** → your backend must **speak Persona's unified
+- **Keep the Persona widget UI** → your backend must **speak Persona's
   protocol** (the widget consumes it natively). Build a thin shim over the
   AI SDK (Path A).
 - **Don't need the widget UI** → reuse just the transport-agnostic
@@ -44,9 +44,9 @@ createAgentExperience(el, {
 });
 ```
 
-> Your shim must speak the unified vocabulary on **both** the dispatch stream and
+> Your shim must speak the SSE event vocabulary on **both** the dispatch stream and
 > the `/resume` continuation — a `/resume` stream continues mid-run with no
-> `execution_start` frame, so the wire format has to be unified throughout. The
+> `execution_start` frame, so the wire format has to stay consistent throughout. The
 > widget consumes it natively (no per-widget opt-in).
 
 ### The wire contract your shim emits
