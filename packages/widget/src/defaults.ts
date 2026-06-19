@@ -72,6 +72,8 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   apiUrl: "https://api.runtype.com/api/chat/dispatch",
   // Client token mode defaults (optional, only used when clientToken is set)
   clientToken: undefined,
+  agentId: undefined,
+  target: undefined,
   theme: undefined,
   darkTheme: undefined,
   colorScheme: "light",

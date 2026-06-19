@@ -1,0 +1,15 @@
+{
+  "extends": "../../packages/widget/tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "noEmit": true,
+    "baseUrl": ".",
+    "types": ["@cloudflare/workers-types", "node"],
+    "paths": {
+      "@runtypelabs/persona-proxy": ["../../packages/proxy/src"]
+    }
+  },
+  "include": ["src", "api"]
+}

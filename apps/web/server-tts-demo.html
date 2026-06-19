@@ -19,7 +19,7 @@
 
         <div class="info-section">
           <h3>Voice &amp; model</h3>
-          <p class="hint">Both are read at speak time — change them, then press “Read aloud” again. No widget rebuild.</p>
+          <p class="hint">Both are read at speak time. Change them, then press “Read aloud” again. No widget rebuild.</p>
           <select id="voice-select">
             <option value="alloy">alloy</option>
             <option value="echo">echo</option>
@@ -47,7 +47,7 @@
             },
             <span class="prop">messageActions</span>: { <span class="prop">showReadAloud</span>: <span class="keyword">true</span> },
           </div>
-          <p class="hint">The engine POSTs the message text to <code>/api/tts</code> and feeds the streamed 24&nbsp;kHz PCM into <code>createPcmStreamPlayer()</code> — Persona's jitter-buffered AudioWorklet player — chunk-by-chunk. See <code>src/server-tts-engine.ts</code> and the route in <code>examples/vercel-edge</code>.</p>
+          <p class="hint">The engine POSTs the message text to <code>/api/tts</code> and feeds the streamed 24&nbsp;kHz PCM into <code>createPcmStreamPlayer()</code>, Persona's jitter-buffered AudioWorklet player, chunk-by-chunk. See <code>src/server-tts-engine.ts</code> and the route in <code>examples/runtype-hono-proxy</code>.</p>
         </div>
 
         <div data-config-inspector></div>
@@ -66,12 +66,12 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">Requirements</h3>
-        <p>This demo needs the proxy running (<code>pnpm dev</code>) with <code>OPENAI_API_KEY</code> set in <code>examples/vercel-edge/.env</code> (see <code>.env.example</code>). Without it, the reply still streams normally but “Read aloud” reports an error in the log.</p>
+        <p>This demo needs the proxy running (<code>pnpm dev</code>) with <code>OPENAI_API_KEY</code> set in <code>examples/runtype-hono-proxy/.env</code> (see <code>.env.example</code>). Without it, the reply still streams normally but “Read aloud” reports an error in the log.</p>
       </div>
 
       <div class="notes-section">
         <h3 class="notes-section-title">Why a server engine?</h3>
-        <p>The default <code>BrowserSpeechEngine</code> uses the Web Speech API: zero backend, but the voices are whatever the OS/browser ships and vary per device. A hosted engine gives one consistent, higher-quality voice everywhere — at the cost of a server call. <code>textToSpeech.createEngine</code> is the seam: return any object implementing <code>SpeechEngine</code> and the read-aloud button, the four-state icon, and the <code>message:read-aloud</code> event all work unchanged.</p>
+        <p>The default <code>BrowserSpeechEngine</code> uses the Web Speech API: zero backend, but the voices are whatever the OS/browser ships and vary per device. A hosted engine gives one consistent, higher-quality voice everywhere, at the cost of a server call. <code>textToSpeech.createEngine</code> is the seam: return any object implementing <code>SpeechEngine</code> and the read-aloud button, the four-state icon, and the <code>message:read-aloud</code> event all work unchanged.</p>
       </div>
 
       <div class="notes-section">

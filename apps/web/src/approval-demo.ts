@@ -37,11 +37,11 @@ let alwaysAllow = false;
 let activeController: AgentWidgetController | null = null;
 let lastApprovalDecision: "approved" | "denied" | null = null;
 
-// The widget consumes the *unified* event vocabulary (`execution_start`,
+// The widget consumes Persona's event vocabulary (`execution_start`,
 // `turn_start`, `text_*`, `tool_*`, `approval_*`, …). On a real deployment the
 // Runtype API translates the agent runtime's legacy `agent_*` frames into these
 // before they reach the browser, so a `customFetch` mock — which bypasses the
-// server — must emit unified frames directly. Emitting legacy `agent_*` names
+// server — must emit wire frames directly. Emitting legacy `agent_*` names
 // here is silently dropped by the client and nothing renders.
 //
 // Builds one assistant turn: turn_start → text_start → text_delta(s) →

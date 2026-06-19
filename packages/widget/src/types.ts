@@ -5,6 +5,9 @@ import type {
   RuntypeClientFeedbackRequest,
   RuntypeStopReasonKind,
 } from "./generated/runtype-openapi-contract";
+import type { TargetResolver } from "./utils/target";
+
+export type { TargetResolver, ResolvedTarget } from "./utils/target";
 
 // ============================================================================
 // Multi-Modal Content Types
@@ -100,6 +103,7 @@ export type AgentWidgetRequestPayloadMessage = {
 export type AgentWidgetRequestPayload = {
   messages: AgentWidgetRequestPayloadMessage[];
   flowId?: string;
+  agent?: { agentId: string };
   context?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   /** Per-turn template variables for /v1/client/chat (merged as root-level {{var}} in Runtype). */
@@ -212,6 +216,11 @@ export type AgentConfig = {
   loopConfig?: AgentLoopConfig;
 };
 
+export type SavedAgentConfig = {
+  /** Persisted Runtype agent ID to execute. */
+  agentId: string;
+};
+
 /**
  * Options for agent execution requests.
  */
@@ -230,7 +239,7 @@ export type AgentRequestOptions = {
  * Request payload for agent execution mode.
  */
 export type AgentWidgetAgentRequestPayload = {
-  agent: AgentConfig;
+  agent: AgentConfig | SavedAgentConfig;
   messages: AgentWidgetRequestPayloadMessage[];
   options: AgentRequestOptions;
   context?: Record<string, unknown>;
@@ -3574,6 +3583,52 @@ export type AgentWidgetConfig = {
   apiUrl?: string;
   flowId?: string;
   /**
+   * Persisted Runtype agent ID to execute.
+   *
+   * This is the primary Runtype entry point for simple agent-backed widgets.
+   * It is mutually exclusive with `flowId` and with inline `agent` configs.
+   * Voice and Runtype TTS providers inherit this value unless they specify their
+   * own feature-scoped agent ID.
+   */
+  agentId?: string;
+  /**
+   * Normalized, backend-neutral routing target. A single string that selects
+   * the backend resource to talk to, optimized for portability across
+   * frameworks (it is always serializable: no live objects).
+   *
+   * Shapes:
+   * - Runtype TypeID (no prefix): `"agent_…"` / `"flow_…"` route to the
+   *   Runtype agent/flow paths (the prefix is self-describing).
+   * - Provider-prefixed: `"<provider>:<id>"` is resolved by
+   *   `targetProviders[provider]` (e.g. `"eve:support"`). `"runtype:…"` is a
+   *   built-in that re-detects a TypeID.
+   * - Bare name: `"support"` requires a `targetProviders.default` resolver.
+   *
+   * Mutually exclusive with `agentId`, `flowId`, and inline `agent`. Prefer
+   * `target` for backend-agnostic apps; use `agentId`/`flowId` for the explicit
+   * Runtype path.
+   *
+   * @example
+   * ```typescript
+   * config: { target: "agent_01k..." }            // Runtype agent
+   * config: { target: "flow_01k..." }             // Runtype flow
+   * config: {                                       // custom backend
+   *   apiUrl: "/api/chat",
+   *   target: "eve:support",
+   *   targetProviders: { eve: (id) => ({ payload: { assistant: id } }) },
+   * }
+   * ```
+   */
+  target?: string;
+  /**
+   * Prefix-keyed resolvers for `target` strings of the form
+   * `"<provider>:<id>"`. Each resolver maps the id to the dispatch-payload
+   * fragment its backend expects. Register a `default` resolver to also accept
+   * bare (unprefixed, non-TypeID) target names. The built-in `runtype` provider
+   * is always available and does not need to be registered.
+   */
+  targetProviders?: Record<string, TargetResolver>;
+  /**
    * Override the assistant-bubble copy shown when a dispatch fails before any
    * response streams back (connection refused, CORS, 4xx/5xx, malformed
    * stream). Provide a static string, or a function of the error so you can
@@ -4265,7 +4320,7 @@ export type AgentWidgetReasoning = {
   status: "pending" | "streaming" | "complete";
   chunks: string[];
   /**
-   * Reasoning channel scope (unified spec). `"turn"` is ordinary per-turn
+   * Reasoning channel scope (wire spec). `"turn"` is ordinary per-turn
    * thinking; `"loop"` is a cross-iteration agent reflection (the fold that
    * replaced the legacy `agent_reflection` event). Absent for legacy streams.
    */

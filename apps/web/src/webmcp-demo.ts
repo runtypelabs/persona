@@ -678,7 +678,7 @@ if (!modelContext) {
 // the page's clientTools[] upstream and proxies the /resume round-trip. No
 // hosted Runtype agent or client token is involved. The proxy's
 // `/api/chat/dispatch-webmcp` route mounts that agent (see
-// examples/vercel-edge/src/server.ts).
+// examples/runtype-hono-proxy/src/app.ts).
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyApiUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-webmcp`

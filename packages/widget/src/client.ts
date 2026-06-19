@@ -24,6 +24,7 @@ import {
   WebMcpConfirmHandler
 } from "./types";
 import { WebMcpBridge, computeClientToolsFingerprint, isWebMcpToolName } from "./webmcp-bridge";
+import { resolveTarget } from "./utils/target";
 import { builtInClientToolsForDispatch } from "./ask-user-question-tool";
 import {
   extractTextFromJson,
@@ -185,6 +186,11 @@ export class AgentWidgetClient {
   private readonly webMcpBridge: WebMcpBridge | null;
 
   constructor(private config: AgentWidgetConfig = {}) {
+    if (config.target && (config.agentId || config.flowId || config.agent)) {
+      throw new Error(
+        "[Persona] `target` is mutually exclusive with `agentId`, `flowId`, and `agent`. Set only one routing field.",
+      );
+    }
     this.apiUrl = config.apiUrl ?? DEFAULT_ENDPOINT;
     this.headers = {
       "Content-Type": "application/json",
@@ -285,10 +291,32 @@ export class AgentWidgetClient {
   }
 
   /**
+   * Resolve the effective backend routing for the current config. Combines the
+   * explicit `agentId`/`flowId` fields with the normalized `target` string
+   * (resolved via `resolveTarget`). Computed on demand so it stays correct
+   * across `update()`; the `target`/explicit-field conflict is rejected in the
+   * constructor, so at most one source is set here.
+   */
+  private routing(): {
+    agentId?: string;
+    flowId?: string;
+    targetPayload?: Record<string, unknown>;
+  } {
+    const { agentId, flowId, target, targetProviders } = this.config;
+    if (!target) {
+      return { agentId, flowId };
+    }
+    const resolved = resolveTarget(target, targetProviders);
+    if (resolved.kind === "agentId") return { agentId: resolved.agentId };
+    if (resolved.kind === "flowId") return { flowId: resolved.flowId };
+    return { targetPayload: resolved.payload };
+  }
+
+  /**
    * Check if operating in agent execution mode
    */
   public isAgentMode(): boolean {
-    return !!this.config.agent;
+    return !!(this.config.agent || this.routing().agentId);
   }
 
   /**
@@ -346,9 +374,11 @@ export class AgentWidgetClient {
     // Get stored session_id if available (for session resumption)
     const storedSessionId = this.config.getStoredSessionId?.() || null;
     
+    const routed = this.routing();
+    const sessionTargetId = routed.agentId ?? routed.flowId;
     const requestBody: Record<string, unknown> = {
       token: this.config.clientToken,
-      ...(this.config.flowId && { flowId: this.config.flowId }),
+      ...(sessionTargetId && { flowId: sessionTargetId }),
       ...(storedSessionId && { sessionId: storedSessionId }),
     };
 
@@ -584,11 +614,11 @@ export class AgentWidgetClient {
    * Send a message - handles both proxy and client token modes
    */
   public async dispatch(options: DispatchOptions, onEvent: SSEHandler) {
-    if (this.isAgentMode()) {
-      return this.dispatchAgent(options, onEvent);
-    }
     if (this.isClientTokenMode()) {
       return this.dispatchClientToken(options, onEvent);
+    }
+    if (this.isAgentMode()) {
+      return this.dispatchAgent(options, onEvent);
     }
     return this.dispatchProxy(options, onEvent);
   }
@@ -1040,7 +1070,8 @@ export class AgentWidgetClient {
   private async buildAgentPayload(
     messages: AgentWidgetMessage[]
   ): Promise<AgentWidgetAgentRequestPayload> {
-    if (!this.config.agent) {
+    const routedAgentId = this.routing().agentId;
+    if (!this.config.agent && !routedAgentId) {
       throw new Error('Agent configuration required for agent mode');
     }
 
@@ -1062,7 +1093,7 @@ export class AgentWidgetClient {
       }));
 
     const payload: AgentWidgetAgentRequestPayload = {
-      agent: this.config.agent,
+      agent: this.config.agent ?? { agentId: routedAgentId! },
       messages: normalizedMessages,
       options: {
         streamResponse: true,
@@ -1134,10 +1165,26 @@ export class AgentWidgetClient {
         createdAt: message.createdAt
       }));
 
+    const routed = this.routing();
     const payload: AgentWidgetRequestPayload = {
       messages: normalizedMessages,
-      ...(this.config.flowId && { flowId: this.config.flowId })
+      ...(routed.agentId
+        ? { agent: { agentId: routed.agentId } }
+        : routed.flowId
+          ? { flowId: routed.flowId }
+          : {})
     };
+
+    // Custom-provider targets (e.g. `eve:support`) resolve to a payload
+    // fragment that is merged into the dispatch body so a BYO backend can read
+    // whatever routing keys its resolver chose. `messages` is authoritative and
+    // can never be overridden by a resolver.
+    if (routed.targetPayload) {
+      for (const [key, value] of Object.entries(routed.targetPayload)) {
+        if (key === "messages") continue;
+        (payload as Record<string, unknown>)[key] = value;
+      }
+    }
 
     // Client tools: same built-in + WebMCP merge as buildAgentPayload
     // (flow-dispatch path).
@@ -1378,10 +1425,10 @@ export class AgentWidgetClient {
     // Reference to track assistant message for custom event handler
     const assistantMessageRef = { current: null as AgentWidgetMessage | null };
     // Segmentation state for the `parseSSEEvent` extensibility callback (the
-    // consumer's own `partId` field) — independent of the unified wire.
+    // consumer's own `partId` field) — independent of the wire.
     const customParsePartId = { current: null as string | null };
     // Unified text-channel block id (from `text_start`/`text_delta` `id`). Drives
-    // bubble-id segmentation on the unified wire in place of the legacy `partId`:
+    // bubble-id segmentation on the wire in place of the legacy `partId`:
     // a new block id means a new bubble, sealed at `text_complete`/tool boundaries.
     let currentTextBlockId: string | null = null;
     // Raw text accumulated for the open flow block before its bubble is
@@ -1389,7 +1436,7 @@ export class AgentWidgetClient {
     let pendingFlowRaw = "";
     // Nested flow-as-tool attribution (PR #4602): a text/reasoning block whose
     // `parentToolCallId` matches a `tool_start.toolCallId` belongs to a flow
-    // running as that tool. Keyed by the unified block id, these route the block's
+    // running as that tool. Keyed by the wire block id, these route the block's
     // deltas into a message tagged `agentMetadata.parentToolId` (the parent tool's
     // row) instead of the top-level assistant/reasoning channel.
     const nestedBlockParent = new Map<string, string>();
@@ -1769,7 +1816,7 @@ export class AgentWidgetClient {
     // `text_start`/`text_complete`) and can be structured JSON, so each block
     // runs through the per-bubble structured-content parser — agent text stays
     // plain. This is the legacy step_delta parser core, re-keyed from `partId`
-    // to the unified block-id bubble. The caller materializes the bubble lazily
+    // to the wire block-id bubble. The caller materializes the bubble lazily
     // (whitespace-only blocks around tool boundaries never leave a stray bubble)
     // and `step_complete.result.response` reconciles the authoritative final.
     let lastSealedFlowBubble: AgentWidgetMessage | null = null;
@@ -1947,16 +1994,16 @@ export class AgentWidgetClient {
       return message;
     };
 
-    // Ready queue of parsed unified frames awaiting a drain. The API streams the
-    // neutral 33-event unified vocabulary; each frame is parsed in the SSE loop
+    // Ready queue of parsed wire frames awaiting a drain. The API streams the
+    // 33-event wire vocabulary; each frame is parsed in the SSE loop
     // below and rendered directly by the handler (no translation bridge), then
-    // pushed here. The unified stream is a single, in-order SSE connection, so
+    // pushed here. The wire stream is a single, in-order SSE connection, so
     // frames drain straight through with no reordering.
     const seqReadyQueue: Array<{ payloadType: string; payload: any }> = [];
     // Declared here so later closures can reference it; assigned after all
     // handler-scoped variables are initialised (before the SSE loop).
     let drainReadyQueue: () => void;
-    // Per-stream media-block buffer: the unified media triad
+    // Per-stream media-block buffer: the media triad
     // (media_start/media_delta/media_complete) is reassembled here into a single
     // synthetic message at media_complete, keyed by the block id.
     const mediaBuffers = new Map<
@@ -1967,7 +2014,7 @@ export class AgentWidgetClient {
     // `turn_start` advancing the iteration rotates the bubble in 'separate' mode.
     let lastIterationSeen = 0;
     // Execution kind, resolved from the leading `execution_start` frame. Drives
-    // the agent-vs-flow branches that the single unified vocabulary collapses.
+    // the agent-vs-flow branches that the single wire vocabulary collapses.
     let executionKind: "agent" | "flow" = "agent";
     // Whether `executionKind` was set authoritatively by an `execution_start`
     // frame. Continuation streams (e.g. a tool-driven `/resume`) do NOT re-emit
@@ -2498,7 +2545,7 @@ export class AgentWidgetClient {
           }
 
           // A failed step (`success:false`) — including the legacy `step_error`
-          // event, which the unified encoder folds into a failed `step_complete`
+          // event, which the wire encoder folds into a failed `step_complete`
           // — surfaces as a terminal error and finalizes the stream.
           if (payload.success === false) {
             const e = payload.error;
@@ -2620,7 +2667,7 @@ export class AgentWidgetClient {
           // Authoritative args are set at tool_start; nothing to render here.
           continue;
         } else if (payloadType === "turn_complete") {
-          // Reasoning is sealed by its own reasoning_complete in the unified
+          // Reasoning is sealed by its own reasoning_complete on the wire
           // vocabulary; this only attaches the turn-level stopReason to the
           // assistant message produced by this turn. Falls back to
           // lastAssistantInTurn when the bubble was sealed at a tool boundary
@@ -2640,7 +2687,7 @@ export class AgentWidgetClient {
           }
           if (openTurnId === payload.id) openTurnId = null;
         } else if (payloadType === "media_start") {
-          // Open a unified media block; buffer fragments until media_complete.
+          // Open a media block; buffer fragments until media_complete.
           const id = String(payload.id);
           mediaBuffers.set(id, {
             mediaType: typeof payload.mediaType === "string" ? payload.mediaType : undefined,
@@ -2676,7 +2723,7 @@ export class AgentWidgetClient {
           if (completeData) {
             reconstructed = { type: "media", data: completeData, mediaType: completeMediaType };
           } else if (completeUrl) {
-            // The unified wire is mediaType-only; a URL part with no declared MIME
+            // The wire is mediaType-only; a URL part with no declared MIME
             // arrives as the bare bucket hint "image" (per the API encoder). Treat
             // that — and any real `image/*` — as a hosted image so we don't misroute
             // generated images into the file bucket.
@@ -2832,7 +2879,7 @@ export class AgentWidgetClient {
 
           onEvent({ type: "status", status: "idle" });
         } else if (payloadType === "execution_error") {
-          // Terminal failure. The unified non-terminal `error` is handled
+          // Terminal failure. The non-terminal `error` is handled
           // separately (recoverable → warn).
           const errorMessage = typeof payload.error === 'string'
             ? payload.error
@@ -3047,7 +3094,7 @@ export class AgentWidgetClient {
           // retrying" — and the execution continues, so it must NOT surface as a
           // fatal error or finalize the stream. The API routes terminal failures
           // through `execution_error`. Only an explicit `recoverable: false`
-          // promotes a unified `error` to terminal.
+          // promotes an `error` to terminal.
           if (
             payload.recoverable === false &&
             payload.error != null &&
@@ -3165,7 +3212,7 @@ export class AgentWidgetClient {
           if (handled) continue; // Skip default handling if custom handler processed it
         }
 
-        // The wire is the neutral unified vocabulary; the handler consumes it
+        // The wire is the wire vocabulary; the handler consumes it
         // natively. The stream is single-connection and in order, so each frame
         // drains straight through.
         seqReadyQueue.push({ payloadType, payload });

@@ -1,0 +1,28 @@
+{
+  "name": "runtype-hono-proxy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/node.ts",
+    "dev:workers": "wrangler dev",
+    "deploy:workers": "wrangler deploy",
+    "start": "node dist/node.js",
+    "build": "tsup src/node.ts --format esm,cjs --dts --out-dir dist --clean",
+    "types-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@runtypelabs/persona-proxy": "workspace:^",
+    "@hono/node-server": "^1.19.10",
+    "dotenv": "^16.4.5",
+    "get-port": "^7.2.0",
+    "hono": "^4.12.25"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260612.1",
+    "@types/node": "^20.12.7",
+    "tsup": "^8.0.1",
+    "tsx": "^4.22.4",
+    "typescript": "^5.4.5",
+    "wrangler": "^4.100.0"
+  }
+}

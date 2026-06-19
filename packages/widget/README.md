@@ -114,6 +114,9 @@ With **`dock.reveal: 'resize'`** (default), a **closed** dock uses a **`0px`** c
 
 The full reference lives in [`docs/`](./docs/) and the theming guide:
 
+- [Extending Persona](./docs/EXTENDING.md): the map of every extension point: plugins, components, postprocessors, themes, stream parsers, animations, voice, sanitization, actions, context/WebMCP, layout slots, storage, and UI builders, each linked to its deep dive
+- [Authoring Plugins](./docs/PLUGINS.md): the `AgentWidgetPlugin` contract, all 14 render hooks, global vs per-instance registration, lifecycle, and the `@runtypelabs/persona/plugin-kit` helpers
+- [Publishing Plugins](./docs/PUBLISHING-PLUGINS.md): naming + npm-keyword convention, peer/external setup, and a package skeleton for shipping plugins, themes, and adapters
 - [Programmatic Control & Events](./docs/PROGRAMMATIC-CONTROL.md): controller API, message hooks and injection, enriched DOM context, WebMCP page tools, DOM and controller events, state loading
 - [UI Features & Components](./docs/UI-COMPONENTS.md): message actions and feedback, loading/idle indicators, approvals, built-in `ask_user_question` and `suggest_replies` tools, dropdown menus, button utilities, dynamic forms
 - [Script Tag Installation & Framework Integration](./docs/INSTALLATION-FRAMEWORKS.md): automatic installer, deferred launcher lifecycle hooks, manual script tag setup, React, Next.js, Remix, Gatsby, and Astro guides
@@ -126,9 +129,22 @@ The full reference lives in [`docs/`](./docs/) and the theming guide:
 
 ### Optional Runtype proxy server
 
-The `@runtypelabs/persona-proxy` package handles flow configuration and forwards requests to Runtype. You can configure it in three ways:
+The `@runtypelabs/persona-proxy` package handles server-side API-key control and forwards requests to Runtype. You can configure it around a saved agent (recommended for most chat widgets) or a flow.
 
-**Option 1: Use default flow (recommended for getting started)**
+**Option 1: Reference a Runtype agent ID (recommended)**
+
+```ts
+// api/chat.ts
+import { createChatProxyApp } from '@runtypelabs/persona-proxy';
+
+export default createChatProxyApp({
+  path: '/api/chat/dispatch',
+  allowedOrigins: ['https://www.example.com'],
+  agentId: 'agent_abc123'
+});
+```
+
+**Option 2: Use default flow**
 
 ```ts
 // api/chat.ts
@@ -140,7 +156,7 @@ export default createChatProxyApp({
 });
 ```
 
-**Option 2: Reference a Runtype flow ID**
+**Option 3: Reference a Runtype flow ID**
 
 ```ts
 import { createChatProxyApp } from '@runtypelabs/persona-proxy';
@@ -152,7 +168,7 @@ export default createChatProxyApp({
 });
 ```
 
-**Option 3: Define a custom flow**
+**Option 4: Define a custom flow**
 
 ```ts
 import { createChatProxyApp } from '@runtypelabs/persona-proxy';
@@ -200,9 +216,9 @@ Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payl
 
 ### Development notes
 
-- The widget streams results using SSE and mirrors Persona's unified flow/agent events (which Runtype implements natively), including `await` local-tool pauses and `/resume` continuations.
+- The widget streams results using SSE and mirrors Persona's flow/agent events (which Runtype implements natively), including `await` local-tool pauses and `/resume` continuations.
 - Tailwind classes are prefixed with `tvw-` and scoped to `[data-persona-root]`, so they won't collide with the host page.
-- Run `pnpm dev` from the repository root to boot the example Runtype proxy (`examples/vercel-edge`) and the vanilla demo (`apps/web`).
+- Run `pnpm dev` from the repository root to boot the example Runtype proxy (`examples/runtype-hono-proxy`) and the vanilla demo (`apps/web`).
 - The proxy prefers port `43111` but automatically selects the next free port if needed.
 - `features.askUserQuestion.expose` and `features.suggestReplies.expose` advertise built-in LOCAL client tools through `clientTools[]`; leave `expose` off if the flow already declares those tools server-side.
 - `webmcp: { enabled: true }` snapshots page-registered tools on `document.modelContext`, sends them as `clientTools[]`, executes returned `webmcp:*` calls in the browser, and resumes the paused execution.

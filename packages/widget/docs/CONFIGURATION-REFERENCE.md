@@ -43,8 +43,11 @@ For detailed theme styling properties, see [THEME-CONFIG.md](../THEME-CONFIG.md)
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `apiUrl` | `string` | Proxy endpoint for your chat backend. Defaults to Runtype's cloud API. |
-| `flowId` | `string` | Runtype flow ID. The client sends it to the proxy to select a specific flow. |
+| `apiUrl` | `string` | Your chat SSE endpoint. Set this to your proxy, custom backend, or Runtype API host. |
+| `target` | `string` | Normalized, backend-neutral routing target. `"agent_…"`/`"flow_…"` route to Runtype; `"<provider>:<id>"` resolves via `targetProviders`. Mutually exclusive with `agentId`, `flowId`, and inline `agent`. Preferred for backend-agnostic apps. |
+| `targetProviders` | `Record<string, (id) => { payload }>` | Prefix-keyed resolvers for `target` strings like `"eve:support"`. Register a `default` resolver to accept bare names. The built-in `runtype` provider is always available. |
+| `agentId` | `string` | Persisted Runtype agent ID. Explicit Runtype entry point for agent-backed widgets. Mutually exclusive with `flowId`, `target`, and inline `agent`. |
+| `flowId` | `string` | Runtype flow ID. Explicit flow-backed path; mutually exclusive with `agentId` and `target`. |
 | `debug` | `boolean` | Emits verbose logs to `console`. Default: `false`. |
 | `headers` | `Record<string, string>` | Static headers forwarded with each request. |
 | `getHeaders` | `() => Record<string, string> \| Promise<...>` | Dynamic headers function called before each request. Use for auth tokens that may change. |
@@ -53,13 +56,37 @@ For detailed theme styling properties, see [THEME-CONFIG.md](../THEME-CONFIG.md)
 | `onSSEEvent` | `(eventType, payload) => void` | Observe every parsed SSE frame before Persona handles it. Useful for lightweight telemetry; does not replace native streaming. |
 | `errorMessage` | `string \| (error: Error) => string` | Override the fallback assistant bubble shown when a dispatch fails before streaming. Return an empty string to suppress the bubble while still firing `onError`. |
 
-### Client Token Mode
+#### Routing targets
 
-When `clientToken` is set, the widget uses `/v1/client/*` endpoints directly from the browser instead of `/v1/dispatch`.
+`target` is a single, serializable string that selects the backend resource. It is the backend-agnostic alternative to `agentId`/`flowId` and resolves as follows:
+
+- `"agent_…"` / `"flow_…"` — Runtype TypeIDs route to the agent/flow paths (no prefix needed; the TypeID is self-describing).
+- `"<provider>:<id>"` — handed to `targetProviders[provider]`, which returns the dispatch-payload fragment for that backend. `"runtype:…"` is built in.
+- `"<bare-name>"` — requires a `targetProviders.default` resolver, otherwise it throws.
+
+```typescript
+// Runtype agent (equivalent to agentId: "agent_…")
+config: { target: "agent_01k..." }
+
+// Custom backend: resolver returns the payload your endpoint expects
+config: {
+  apiUrl: "/api/chat",
+  target: "eve:support",
+  targetProviders: {
+    eve: (id) => ({ payload: { assistant: id } }),
+  },
+}
+```
+
+Custom-provider payloads are merged into the proxy dispatch body (`messages` always wins). `target` is mutually exclusive with `agentId`, `flowId`, and inline `agent`.
+
+### Runtype Client Token Mode
+
+When `clientToken` is set, the widget uses `/v1/client/*` endpoints directly from the browser. Pair it with `agentId` for the common saved-agent path, or with `flowId` for flow-backed surfaces.
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `clientToken` | `string` | Client token for direct browser-to-API communication (e.g. `ct_live_flow01k7_...`). Mutually exclusive with `headers` auth. |
+| `clientToken` | `string` | Runtype client token for direct browser-to-API communication (e.g. `ct_live_...`). Mutually exclusive with `headers` auth. |
 | `onSessionInit` | `(session: ClientSession) => void` | Called when the session is initialized. Receives session ID, expiry, flow info. |
 | `onSessionExpired` | `() => void` | Called when the session expires or errors. Prompt the user to refresh. |
 | `getStoredSessionId` | `() => string \| null` | Return a previously stored session ID for session resumption. |
@@ -68,6 +95,7 @@ When `clientToken` is set, the widget uses `/v1/client/*` endpoints directly fro
 ```typescript
 config: {
   clientToken: 'ct_live_flow01k7_a8b9c0d1e2f3g4h5i6j7k8l9',
+  agentId: 'agent_01k...',
   onSessionInit: (session) => console.log('Session:', session.sessionId),
   onSessionExpired: () => alert('Session expired: please refresh.'),
   getStoredSessionId: () => localStorage.getItem('session_id'),
@@ -77,7 +105,7 @@ config: {
 
 ### Agent Mode
 
-Use agent loop execution instead of flow dispatch. Mutually exclusive with `flowId`.
+Use inline agent loop execution instead of flow dispatch. For saved Runtype agents, prefer top-level `agentId`. Inline `agent` configs are for authorized custom backends or advanced direct dispatch.
 
 | Option | Type | Description |
 | --- | --- | --- |
@@ -321,8 +349,8 @@ config: {
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `agentId` | `string` | Runtype agent ID for server-side voice. |
-| `clientToken` | `string` | Client token for authentication. |
+| `agentId` | `string?` | Runtype agent ID for server-side voice. Defaults to top-level `agentId` when omitted. |
+| `clientToken` | `string?` | Runtype client token for authentication. Defaults to top-level `clientToken` when omitted. |
 | `host` | `string?` | API host override. |
 | `voiceId` | `string?` | Voice ID for TTS. |
 | `pauseDuration` | `number?` | Silence duration (ms) before auto-stop. Default: `2000`. |
@@ -362,6 +390,7 @@ config: {
 | `enabled` | `boolean` | Enable text-to-speech for assistant messages. |
 | `provider` | `'browser' \| 'runtype'?` | `'browser'` uses Web Speech API (default). `'runtype'` delegates to server. |
 | `browserFallback` | `boolean?` | When provider is `'runtype'`, fall back to browser TTS for text-typed responses. Default: `false`. |
+| `agentId` | `string?` | Runtype agent ID for hosted read-aloud/TTS. Defaults to `voiceRecognition.provider.runtype.agentId`, then top-level `agentId`. |
 | `voice` | `string?` | Browser TTS voice name (e.g. `'Google US English'`). |
 | `pickVoice` | `(voices: SpeechSynthesisVoice[]) => SpeechSynthesisVoice?` | Custom voice picker when `voice` is not set. |
 | `rate` | `number?` | Speech rate (0.1–10). Default: `1`. |

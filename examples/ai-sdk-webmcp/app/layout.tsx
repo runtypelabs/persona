@@ -4,16 +4,16 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://ai-sdk-webmcp.persona-chat.dev"),
-  title: "Switchback: WebMCP on a direct AI SDK backend",
+  title: "Switchback: WebMCP on AI SDK",
   description:
-    "Persona's WebMCP page tools driven by a direct Vercel AI SDK backend, no Runtype.",
+    "Persona's WebMCP page tools driven by AI SDK.",
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Switchback: WebMCP on a direct AI SDK backend",
+    title: "Switchback: WebMCP on AI SDK",
     description:
-      "Persona's WebMCP page tools driven by a direct Vercel AI SDK backend, no Runtype.",
+      "Persona's WebMCP page tools driven by AI SDK.",
     url: "/",
     siteName: "Persona WebMCP demo",
     type: "website",
@@ -28,9 +28,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Switchback: WebMCP on a direct AI SDK backend",
+    title: "Switchback: WebMCP on a AI SDK",
     description:
-      "Persona's WebMCP page tools driven by a direct Vercel AI SDK backend, no Runtype.",
+      "Persona's WebMCP page tools driven by AI SDK.",
     images: ["/og-image.png"],
   },
 };

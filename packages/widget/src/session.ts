@@ -70,6 +70,9 @@ const CONNECTION_CONFIG_KEYS = [
   "apiUrl",
   "clientToken",
   "flowId",
+  "agentId",
+  "target",
+  "targetProviders",
   "agent",
   "agentOptions",
   "headers",
@@ -286,7 +289,7 @@ export class AgentWidgetSession {
     // clientToken) falls back to the browser voice, so the fetch would be wasted.
     const host = tts.host ?? this.config.apiUrl;
     const agentId =
-      tts.agentId ?? this.config.voiceRecognition?.provider?.runtype?.agentId;
+      tts.agentId ?? this.config.voiceRecognition?.provider?.runtype?.agentId ?? this.config.agentId;
     if (!host || !agentId || !this.config.clientToken) return;
     void loadRuntypeTts().catch(() => {});
   }
@@ -415,7 +418,7 @@ export class AgentWidgetSession {
     if (tts?.provider === "runtype") {
       const host = tts.host ?? this.config.apiUrl;
       const agentId =
-        tts.agentId ?? this.config.voiceRecognition?.provider?.runtype?.agentId;
+        tts.agentId ?? this.config.voiceRecognition?.provider?.runtype?.agentId ?? this.config.agentId;
       const clientToken = this.config.clientToken;
       const wantFallback = tts.browserFallback !== false;
 
@@ -659,7 +662,7 @@ export class AgentWidgetSession {
         return {
           type: 'runtype',
           runtype: {
-            agentId: providerConfig.runtype?.agentId || '',
+            agentId: providerConfig.runtype?.agentId ?? this.config.agentId ?? '',
             // Default credentials/endpoint from the widget config so the minimum
             // voice config collapses to just `agentId`.
             clientToken: providerConfig.runtype?.clientToken ?? this.config.clientToken,

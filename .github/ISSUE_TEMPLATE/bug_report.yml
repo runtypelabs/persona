@@ -1,0 +1,52 @@
+name: Bug report
+description: Report something that isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. A minimal reproduction is the
+        single most helpful thing you can include.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected instead.
+      placeholder: When I enable `webmcp`, the widget...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Ideally a minimal code snippet or a link to a reproduction.
+      placeholder: |
+        1. initAgentWidget({ ... })
+        2. Open the panel
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Persona version
+      description: The `@runtypelabs/persona` (and/or `@runtypelabs/persona-proxy`) version.
+      placeholder: "4.1.0"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser / environment
+      description: Browser + version, OS, and Node version if relevant.
+      placeholder: "Chrome 130 on macOS 15; Node 20"
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output / errors
+      description: Any relevant console errors or network failures.
+      render: shell
+    validations:
+      required: false

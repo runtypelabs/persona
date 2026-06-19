@@ -1,4 +1,6 @@
-# Persona
+<p align="center">
+  <img src="apps/web/public/persona-js-github.png" alt="Persona.js" width="300" />
+</p>
 
 [![npm](https://img.shields.io/npm/v/@runtypelabs/persona?style=flat&color=262626&label=npm)](https://www.npmjs.com/package/@runtypelabs/persona)
 [![Live demo](https://img.shields.io/badge/live_demo-persona--chat.dev-0d9488?style=flat)](https://persona-chat.dev)
@@ -8,7 +10,7 @@ A themeable, pluggable AI chat widget for websites: built in Typescript with zer
 
 Persona gives you a drop-in UI for your AI assistant that works on basically any site or product on the web. It ships with support for streaming responses, direct client-token installs, WebMCP/page tools, built-in local client tools, voice I/O, multi-modal content, tool call visualization, approval gates, artifact rendering, safe markdown/HTML rendering, and a plugin system so you can customize every layer of the UI.
 
-Persona works with any SSE-capable backend. It includes first-party support for [Runtype](https://runtype.com) out of the box (via `clientToken` or `@runtypelabs/persona-proxy`), and can be easily wired into any other streaming backend using the Persona unified SSE protocol.
+Persona works with any SSE-capable backend. It includes first-party support for [Runtype](https://runtype.com) out of the box (via `clientToken` or `@runtypelabs/persona-proxy`), and can be easily wired into any other streaming backend using the Persona SSE protocol.
 
 ## Live demo
 
@@ -25,32 +27,54 @@ Persona works with any SSE-capable backend. It includes first-party support for 
 
 | App | Platform | Description |
 |-----|----------|-------------|
-| [`apps/web`](./apps/web) | Vite | The Persona showcase — 35+ interactive demo pages ([live](https://persona-chat.dev)) |
+| [`apps/web`](./apps/web) | Vite | The Persona showcase: 35+ interactive demo pages ([live](https://persona-chat.dev)) |
 
 ## Examples
 
 | Example | Platform | Description |
 |---------|----------|-------------|
-| [`examples/ai-sdk-webmcp`](./examples/ai-sdk-webmcp) | Next.js | WebMCP page tools on a direct Vercel AI SDK backend, no Runtype ([live](https://ai-sdk-webmcp.persona-chat.dev)) |
-| [`examples/vercel-edge`](./examples/vercel-edge) | Vercel / Railway / Fly.io | Node.js proxy server for Runtype |
-| [`examples/cloudflare-workers`](./examples/cloudflare-workers) | Cloudflare Workers | Edge proxy server for Runtype |
+| [`examples/ai-sdk-webmcp`](./examples/ai-sdk-webmcp) | Next.js | WebMCP page tools using Vercel AI SDK ([live](https://ai-sdk-webmcp.persona-chat.dev)) |
+| [`examples/ai-sdk-next`](./examples/ai-sdk-next) | Next.js | Minimal SSE adapters for AI SDK and OpenAI Responses |
+| [`examples/eve-next`](./examples/eve-next) | Next.js | Vercel [eve](https://github.com/vercel/eve) agent backend (beta; needs Node 24 + a running eve server) |
+| [`examples/openai-agents-next`](./examples/openai-agents-next) | Next.js | OpenAI Agents SDK (`@openai/agents`) backend |
+| [`examples/langgraph-next`](./examples/langgraph-next) | Next.js | LangGraph.js (`@langchain/langgraph`) backend |
+| [`examples/echo-hono`](./examples/echo-hono) | Hono | Host matrix: same adapter on Hono (Node/Bun/Deno/Workers) |
+| [`examples/echo-script-tag`](./examples/echo-script-tag) | Bare HTML + `node:http` | Host matrix: zero-framework `<script>` install + bare Node backend |
+| [`examples/echo-express`](./examples/echo-express) | Express | Host matrix: the `(req, res)` callback-style bridge |
+| [`examples/echo-sveltekit`](./examples/echo-sveltekit) | SvelteKit | Host matrix: one-line `+server.ts` Web-standard route |
+| [`examples/runtype-script-tag`](./examples/runtype-script-tag) | Static / Runtype | Hosted backend: a `clientToken` embed with no backend at all |
+| [`examples/runtype-hono-proxy`](./examples/runtype-hono-proxy) | Hono (Node / Vercel / Workers) | Runtype API proxy: powers local dev and `proxy.persona-chat.dev` |
 
 ## Bring Your Own Backend
 
-Persona is designed to be backend-agnostic. You can plug it into any streaming agent or model SDK using the Persona unified SSE protocol.
+Persona is designed to be backend-agnostic. You can plug it into any streaming agent or model SDK using the Persona SSE protocol.
+
+Prefer not to run a backend at all? [`examples/runtype-script-tag`](./examples/runtype-script-tag) embeds the widget against a hosted Runtype backend with a browser-safe `clientToken`. No server code: the direct counterpart to the self-hosted [`echo-script-tag`](./examples/echo-script-tag) example.
 
 ### Featured Adapters
 
-See the [**`runtypelabs/persona-examples`**](https://github.com/runtypelabs/persona-examples) repository for official adapters:
+Backend adapters in this repo, each emitting Persona's SSE wire from a different SDK:
 
-- [**Vercel Eve**](https://github.com/runtypelabs/persona-examples/tree/main/examples/eve-minimal): Vercel's newest filesystem-first agent framework.
-- [**OpenAI Agents**](https://github.com/runtypelabs/persona-examples/tree/main/examples/openai-agents-minimal): Official OpenAI Agents SDK integration.
-- [**LangGraph.js**](https://github.com/runtypelabs/persona-examples/tree/main/examples/langgraph-minimal): LangChain's orchestration framework.
+- [**Vercel Eve**](./examples/eve-next): Vercel's filesystem-first agent framework (beta; Node 24 + a running eve server).
+- [**OpenAI Agents**](./examples/openai-agents-next): Official OpenAI Agents SDK integration.
+- [**LangGraph.js**](./examples/langgraph-next): LangChain's orchestration framework.
+- [**AI SDK & OpenAI Responses**](./examples/ai-sdk-next): Minimal stream adapters, plus [choosing a model/assistant with `target`](./examples/ai-sdk-next#choosing-a-modelassistant-with-target).
+
+More adapters (Anthropic Claude Agent SDK, Google Gen AI, Mastra, Cloudflare Agents) live in [**`runtypelabs/persona-examples`**](https://github.com/runtypelabs/persona-examples).
+
+### Host Matrix
+
+The adapter is a plain Web `(Request) => Response`, so it runs anywhere, not just in Next.js. These four examples re-host **the same canonical agent**: `persona-wire.ts` and the adapter are byte-identical in all of them, and only the thin host wrapper changes. Diff them to see exactly what each framework needs (and what it gives you for free). All four run with **no API key** (a zero-dependency echo agent, with a documented one-line swap to a real model).
+
+- [**Hono**](./examples/echo-hono): one `app.fetch` handler that runs on Node, Bun, Deno, and Cloudflare Workers.
+- [**Bare HTML + `<script>`**](./examples/echo-script-tag): no framework, no bundler: the drop-in script-tag install over a bare `node:http` backend.
+- [**Express**](./examples/echo-express): the callback-style host. It shows the `(req, res)` → Web `Response` bridge.
+- [**SvelteKit**](./examples/echo-sveltekit): a one-line Web-standard `+server.ts` route.
 
 ### Protocol Documentation
 
 - [**WebMCP without Runtype**](./docs/webmcp-without-runtype.md): Deep dive into shimming the Persona protocol over the Vercel AI SDK.
-- [**Adapter SDK Minimal**](./examples/adapter-sdk-minimal): Minimal reference implementations for AI SDK and OpenAI Responses.
+- [**Adapter SDK Minimal**](./examples/ai-sdk-next): Minimal reference implementations for AI SDK and OpenAI Responses, including [choosing a model/assistant with `target`](./examples/ai-sdk-next#choosing-a-modelassistant-with-target).
 
 ## Quick Start
 
@@ -82,7 +106,7 @@ SSE-based message streaming with pluggable parsers (plain text, JSON, XML, regex
 Text, images (PNG, JPEG, GIF, WebP, SVG), and documents (PDF, DOCX, TXT, CSV, JSON, Excel). Configure allowed file types, size limits, and previews through the attachments config.
 
 ### Voice Input & Output
-Optional speech-to-text via the Web Speech API or Runtype's WebSocket voice service with barge-in interruption and voice activity detection. Text-to-speech playback for assistant responses — auto-speak via `textToSpeech`, or a per-message "Read aloud" button with play/pause/resume via `messageActions.showReadAloud`. TTS is backed by a pluggable `SpeechEngine` (browser Web Speech API by default, or a hosted engine via `textToSpeech.createEngine`). Enable via `voiceRecognition` and `textToSpeech`.
+Optional speech-to-text via the Web Speech API or Runtype's WebSocket voice service with barge-in interruption and voice activity detection. Text-to-speech playback for assistant responses: auto-speak via `textToSpeech`, or a per-message "Read aloud" button with play/pause/resume via `messageActions.showReadAloud`. TTS is backed by a pluggable `SpeechEngine` (browser Web Speech API by default, or a hosted engine via `textToSpeech.createEngine`). Enable via `voiceRecognition` and `textToSpeech`.
 
 ### Reasoning & Extended Thinking
 Collapsible reasoning bubbles that display model chain-of-thought with duration tracking and streaming. Controlled by `features.showReasoning`: on by default, or override the renderer with a plugin hook.
@@ -108,11 +132,11 @@ Start from a built-in preset (shop, minimal, fullscreen) or configure from scrat
 ### Plugin System
 14 render hooks covering the launcher, header, composer, messages, reasoning, tool calls, ask-user-question sheets, approvals, loading/idle indicators, and the event stream. Priority-based ordering with automatic fallback to defaults. Replace any piece of the UI without forking; use the optional `@runtypelabs/persona/plugin-kit` helpers for Shadow-DOM-safe styles and popovers.
 
+### Extending Persona
+Persona ships mechanisms, not opinions: plugins, an inline component registry, postprocessors, theme plugins, stream parsers and animations, voice providers, sanitization hooks, action parsers/handlers, context providers/WebMCP, layout slots, and a storage adapter are all replaceable seams. The [Extending Persona](./packages/widget/docs/EXTENDING.md) guide maps every extension point to its public API and deep-dive doc; [Authoring Plugins](./packages/widget/docs/PLUGINS.md) and [Publishing Plugins](./packages/widget/docs/PUBLISHING-PLUGINS.md) cover building and shipping your own.
+
 ### Feedback & Analytics
 Optional message-level upvote/downvote/copy with automatic backend submission in client-token mode. CSAT and NPS survey components. Script-tag lifecycle callbacks/events (`onScriptLoad`, `onLauncherShown`, `onChatReady`, `onError`) and controller events make it easy to wire custom analytics.
-
-### Agent Execution
-Renders multi-turn agent loops as they stream from the backend: displaying iteration progress, reflections, and stop reasons. Agent metadata is attached to every message. Customize how execution events appear through plugin hooks.
 
 ### Component System
 Register custom components and render them inline via directives. Stream-aware parser and middleware support dynamic UI insertion during streaming, with live DOM element hydration so event listeners survive transcript re-renders.
@@ -120,12 +144,19 @@ Register custom components and render them inline via directives. Stream-aware p
 ### Message Injection, Context & Page Tools
 Programmatically insert messages (`injectMessage`, `injectAssistantMessage`, `injectUserMessage`, `injectSystemMessage`) with dual-content support: display one thing to the user while sending different content to the LLM. Inject page/editor context with `contextProviders` and `requestMiddleware`; use `webmcp: { enabled: true }` to expose page actions through `document.modelContext`. For richer page context, import the optional `@runtypelabs/persona/smart-dom-reader` provider.
 
+## Extending & publishing
+
+Built a plugin, theme, backend adapter, or product with Persona? See the
+extensibility map ([EXTENDING.md](./packages/widget/docs/EXTENDING.md)), publish
+reusable packages under the `persona-plugin-*` / `persona-theme-*` /
+`persona-adapter-*` convention ([Publishing Plugins](./packages/widget/docs/PUBLISHING-PLUGINS.md)),
+and [CONTRIBUTING.md](./CONTRIBUTING.md) for all the ways to contribute.
+
 ## Proxy Deployment
 
 Both proxy examples handle secure API key management, CORS, and multiple flow configurations.
 
-- **vercel-edge**: best for quick deployment to Vercel or any Node.js host
-- **cloudflare-workers**: best for global edge deployment with low latency
+- **runtype-hono-proxy**: Runtype API proxy on Hono. Node (`pnpm dev`), Vercel (`api/`), or Cloudflare Workers (`pnpm dev:runtype-workers`)
 
 ## Publishing
 

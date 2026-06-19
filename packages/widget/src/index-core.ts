@@ -5,6 +5,8 @@ import {
 
 export type {
   AgentWidgetConfig,
+  TargetResolver,
+  ResolvedTarget,
   AgentWidgetFeatureFlags,
   AgentWidgetArtifactsFeature,
   AgentWidgetArtifactsLayoutConfig,

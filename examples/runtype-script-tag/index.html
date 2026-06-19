@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Persona × Runtype</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        background: #f7f8fb;
+        color: #121826;
+      }
+      .shell { max-width: 720px; margin: 0 auto; padding: 48px 20px; }
+      .badge {
+        display: inline-block; font-size: 12px; letter-spacing: 0.04em;
+        text-transform: uppercase; color: #0d9488; font-weight: 600;
+      }
+      h1 { margin: 8px 0 4px; font-size: 28px; }
+      p { color: #475067; }
+      code { background: #eceef3; padding: 1px 6px; border-radius: 5px; font-size: 14px; }
+      .widget-host {
+        margin-top: 28px; height: 520px; border: 1px solid #e3e6ee;
+        border-radius: 14px; overflow: hidden; background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <span class="badge">Hosted Runtype example</span>
+      <h1>Persona × Runtype</h1>
+      <p>
+        This example shows the hosted Runtype path for Persona. Instead of running a
+        local adapter or <code>/dispatch</code> route, the widget uses a browser-safe
+        <code>clientToken</code> to call the Runtype API directly. The token is scoped
+        server-side to an allowed agent or flow and embed origin.
+      </p>
+      <p>Active backend: <code>api.runtype.com</code>. There is no local server to run for this example.</p>
+      <div id="persona-root" class="widget-host"></div>
+    </div>
+
+    <!--
+      The script-tag install, pointed at Runtype. Replace ct_live_… with your own
+      clientToken (see the README): the token is scoped server-side to a flow or
+      agent and to the origins allowed to embed it. No /dispatch route, no adapter.
+
+      This loads the PUBLISHED widget from the jsDelivr CDN (the real drop-in embed),
+      unlike the backend examples which serve the local workspace build.
+    -->
+    <script>
+      window.siteAgentConfig = {
+        target: "#persona-root",
+        clientToken: "ct_live_REPLACE_ME",
+        // Optional: pin a specific flow/agent. Omit when the token is already
+        // scoped to one (the `persona init` CLI scopes it for you).
+        // flowId: "flow_…",
+        // agent: { agentId: "agent_…" },
+        launcher: { enabled: false },
+        copy: {
+          welcomeTitle: "Persona × Runtype",
+          welcomeSubtitle: "Talking straight to the Runtype API. No backend in this example.",
+          inputPlaceholder: "Ask anything...",
+        },
+        theme: {
+          semantic: {
+            colors: {
+              accent: "#0d9488",
+              surface: "#ffffff",
+              background: "#f7f8fb",
+              primary: "#121826",
+            },
+          },
+        },
+        suggestionChips: [
+          "What can you help me with?",
+          "How is this different from the other examples?",
+          "What's a clientToken?",
+        ],
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
+  </body>
+</html>

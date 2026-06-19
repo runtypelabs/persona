@@ -19,125 +19,19 @@ export type AdvancedExample = {
   tier: Tier;
   tags: readonly string[];
   modes: readonly Mode[];
+  /** When false, omitted from the gallery and command palette. Defaults to true. */
+  gallery?: boolean;
 };
 
 export const TIER_LABELS: Readonly<Record<Tier, string>> = {
-  start: "Start here",
   patterns: "Patterns",
+  start: "Generative UX",
   reference: "Reference & debugging",
 };
 
-export const TIER_ORDER: readonly Tier[] = ["start", "patterns", "reference"];
+export const TIER_ORDER: readonly Tier[] = ["patterns", "start", "reference"];
 
 export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
-  {
-    slug: "dynamic-components",
-    href: "/dynamic-components.html",
-    title: "Dynamic Components",
-    blurb: "Stream interactive forms, cards, charts, and badges from JSON directives.",
-    tier: "start",
-    tags: ["components", "forms", "interaction"],
-    modes: ["inline", "launcher"],
-  },
-  {
-    slug: "artifact-demo",
-    href: "/artifact-demo.html",
-    title: "Artifact Sidebar",
-    blurb: "Resizable split view for rich streaming content.",
-    tier: "start",
-    tags: ["layout", "content"],
-    modes: ["inline"],
-  },
-  {
-    slug: "voice-integration-demo",
-    href: "/voice-integration-demo.html",
-    title: "Voice Input & Output",
-    blurb: "Speech-to-text and text-to-speech in the composer.",
-    tier: "start",
-    tags: ["voice", "audio"],
-    modes: ["inline"],
-  },
-  {
-    slug: "custom-voice-provider-demo",
-    href: "/custom-voice-provider-demo.html",
-    title: "Bring-Your-Own Voice",
-    blurb: "Plug a custom speech provider in via provider.custom.",
-    tier: "patterns",
-    tags: ["voice", "audio", "integration"],
-    modes: ["inline", "launcher"],
-  },
-  {
-    slug: "server-tts-demo",
-    href: "/server-tts-demo.html",
-    title: "Server TTS (streaming)",
-    blurb: "Read aloud with hosted voices via a streaming SpeechEngine.",
-    tier: "patterns",
-    tags: ["voice", "audio", "integration"],
-    modes: ["inline", "launcher"],
-  },
-  {
-    slug: "agent-demo",
-    href: "/agent-demo.html",
-    title: "Agent Loop",
-    blurb: "Multi-turn reasoning with tool calls.",
-    tier: "start",
-    tags: ["agent", "tool-use", "streaming"],
-    modes: ["inline", "launcher"],
-  },
-  {
-    slug: "approval-demo",
-    href: "/approval-demo.html",
-    title: "Tool Approval",
-    blurb: "Human-in-the-loop confirmation before tool execution.",
-    tier: "patterns",
-    tags: ["agent", "tool-use", "interaction"],
-    modes: ["inline", "launcher"],
-  },
-  {
-    slug: "action-middleware",
-    href: "/action-middleware.html",
-    title: "Tool Action Handlers",
-    blurb: "Live DOM context with structured navigation and cart actions.",
-    tier: "patterns",
-    tags: ["agent", "tool-use", "integration"],
-    modes: ["inline"],
-  },
-  {
-    slug: "ask-user-question-demo",
-    href: "/ask-user-question-demo.html",
-    title: "Ask User Question & Suggested Replies",
-    blurb: "Blocking answer sheets and fire-and-forget quick-reply chips.",
-    tier: "patterns",
-    tags: ["interaction", "forms"],
-    modes: ["inline"],
-  },
-  {
-    slug: "attachments-demo",
-    href: "/attachments-demo.html",
-    title: "File Attachments",
-    blurb: "File and image uploads in the composer.",
-    tier: "patterns",
-    tags: ["attachments", "interaction"],
-    modes: ["inline", "launcher"],
-  },
-  {
-    slug: "feedback-integration-demo",
-    href: "/feedback-integration-demo.html",
-    title: "Feedback Events",
-    blurb: "Wire upvote, downvote, and copy events to your backend.",
-    tier: "patterns",
-    tags: ["feedback", "events"],
-    modes: ["inline", "launcher"],
-  },
-  {
-    slug: "focus-input-demo",
-    href: "/focus-input-demo.html",
-    title: "Programmatic Input Focus",
-    blurb: "Three APIs for controlling composer focus.",
-    tier: "patterns",
-    tags: ["interaction", "dev"],
-    modes: ["inline", "launcher"],
-  },
   {
     slug: "tool-loading-demo",
     href: "/tool-loading-demo.html",
@@ -175,6 +69,115 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "approval-demo",
+    href: "/approval-demo.html",
+    title: "Tool Approval",
+    blurb: "Human-in-the-loop confirmation before tool execution.",
+    tier: "patterns",
+    tags: ["agent", "tool-use", "interaction"],
+    modes: ["inline", "launcher"],
+  },
+  {
+    slug: "action-middleware",
+    href: "/action-middleware.html",
+    title: "Tool Action Handlers",
+    blurb: "Live DOM context with structured navigation and cart actions.",
+    tier: "patterns",
+    tags: ["agent", "tool-use", "integration"],
+    modes: ["inline"],
+  },
+  {
+    slug: "attachments-demo",
+    href: "/attachments-demo.html",
+    title: "File Attachments",
+    blurb: "File and image uploads in the composer.",
+    tier: "patterns",
+    tags: ["attachments", "interaction"],
+    modes: ["inline", "launcher"],
+  },
+  {
+    slug: "feedback-integration-demo",
+    href: "/feedback-integration-demo.html",
+    title: "Feedback Events",
+    blurb: "Wire upvote, downvote, and copy events to your backend.",
+    tier: "patterns",
+    tags: ["feedback", "events"],
+    modes: ["inline", "launcher"],
+  },
+  {
+    slug: "focus-input-demo",
+    href: "/focus-input-demo.html",
+    title: "Programmatic Input Focus",
+    blurb: "Three APIs for controlling composer focus.",
+    tier: "patterns",
+    tags: ["interaction", "dev"],
+    modes: ["inline", "launcher"],
+  },
+  {
+    slug: "ask-user-question-demo",
+    href: "/ask-user-question-demo.html",
+    title: "Ask User Question & Suggested Replies",
+    blurb: "Blocking answer sheets and fire-and-forget quick-reply chips.",
+    tier: "start",
+    tags: ["interaction", "forms"],
+    modes: ["inline"],
+  },
+  {
+    slug: "artifact-demo",
+    href: "/artifact-demo.html",
+    title: "Artifact Sidebar",
+    blurb: "Resizable split view for rich streaming content.",
+    tier: "start",
+    tags: ["layout", "content"],
+    modes: ["inline"],
+  },
+  {
+    slug: "dynamic-components",
+    href: "/dynamic-components.html",
+    title: "Dynamic Components",
+    blurb: "Stream interactive forms, cards, charts, and badges from JSON directives.",
+    tier: "start",
+    tags: ["components", "forms", "interaction"],
+    modes: ["inline", "launcher"],
+  },
+  {
+    slug: "voice-integration-demo",
+    href: "/voice-integration-demo.html",
+    title: "Voice Input & Output",
+    blurb: "Speech-to-text and text-to-speech in the composer.",
+    tier: "start",
+    tags: ["voice", "audio"],
+    modes: ["inline"],
+  },
+  {
+    slug: "custom-voice-provider-demo",
+    href: "/custom-voice-provider-demo.html",
+    title: "Bring-Your-Own Voice",
+    blurb: "Plug a custom speech provider in via provider.custom.",
+    tier: "start",
+    tags: ["voice", "audio", "integration"],
+    modes: ["inline", "launcher"],
+  },
+  {
+    slug: "server-tts-demo",
+    href: "/server-tts-demo.html",
+    title: "Server TTS (streaming)",
+    blurb: "Read aloud with hosted voices via a streaming SpeechEngine.",
+    tier: "start",
+    tags: ["voice", "audio", "integration"],
+    modes: ["inline", "launcher"],
+  },
+  {
+    slug: "agent-demo",
+    href: "/agent-demo.html",
+    title: "Agent Loop",
+    blurb: "Multi-turn reasoning with tool calls.",
+    tier: "start",
+    tags: ["agent", "tool-use", "streaming"],
+    modes: ["inline", "launcher"],
+    gallery: false,
+  },
+  {
     slug: "dynamic-form-fields",
     href: "/dynamic-form-fields.html",
     title: "Form Field Reference",
@@ -202,6 +205,28 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["launcher"],
   },
 ];
+
+export function isGalleryExample(example: AdvancedExample): boolean {
+  return example.gallery !== false;
+}
+
+export const GALLERY_EXAMPLES = ADVANCED_EXAMPLES.filter(isGalleryExample);
+
+function getAdjacentGalleryExamples(
+  items: readonly AdvancedExample[],
+  currentSlug: string,
+): { prev: AdvancedExample | null; next: AdvancedExample | null } {
+  const currentIndex = items.findIndex((e) => e.slug === currentSlug);
+  if (currentIndex < 0) return { prev: null, next: null };
+
+  const prev =
+    items
+      .slice(0, currentIndex)
+      .reverse()
+      .find(isGalleryExample) ?? null;
+  const next = items.slice(currentIndex + 1).find(isGalleryExample) ?? null;
+  return { prev, next };
+}
 
 const escapeHtml = (s: string): string =>
   s.replace(/[&<>"']/g, (c) =>
@@ -256,17 +281,6 @@ export function getExample(slug: string): AdvancedExample | undefined {
   return ADVANCED_EXAMPLES.find((e) => e.slug === slug);
 }
 
-/** 1-based position of an example in the gallery, or -1. */
-export function getExampleIndex(slug: string): number {
-  return ADVANCED_EXAMPLES.findIndex((e) => e.slug === slug);
-}
-
-/** Zero-padded "NN/TT" counter, e.g. "03/15". */
-export function formatExampleIndex(index: number): string {
-  const total = ADVANCED_EXAMPLES.length;
-  return `${String(index + 1).padStart(2, "0")}/${String(total).padStart(2, "0")}`;
-}
-
 export type ExamplesShellOptions = {
   onCommandSelect?: (href: string, item: CommandPaletteItem) => void;
 };
@@ -290,11 +304,9 @@ export function renderExamplesShell(
     ? items.findIndex((e) => e.slug === currentSlug)
     : -1;
   const current = currentIndex >= 0 ? items[currentIndex] : null;
-  const prev = currentIndex > 0 ? items[currentIndex - 1] : null;
-  const next =
-    currentIndex >= 0 && currentIndex < items.length - 1
-      ? items[currentIndex + 1]
-      : null;
+  const { prev, next } = currentSlug
+    ? getAdjacentGalleryExamples(items, currentSlug)
+    : { prev: null, next: null };
 
   document.querySelector(".shell-header")?.remove();
 
@@ -321,7 +333,9 @@ export function renderExamplesShell(
   const header = document.createElement("nav");
   header.className = "shell-header";
   header.innerHTML = `
-    <a class="shell-brand" href="/">Persona</a>
+    <a class="shell-brand" href="/" aria-label="Persona home">
+      <img class="shell-brand-logo" src="/persona-js.svg" alt="" width="112" height="35">
+    </a>
     <span class="shell-sep" aria-hidden="true">/</span>
     <a class="shell-crumb" href="/advanced.html">Advanced Examples</a>
     <span class="shell-sep" aria-hidden="true">/</span>
@@ -344,7 +358,7 @@ export function renderExamplesShell(
     ".shell-picker-trigger",
   );
   const commandItems = createPersonaCommandItems({
-    advancedExamples: items,
+    advancedExamples: items.filter(isGalleryExample),
     standaloneExamples: STANDALONE_EXAMPLES,
     currentPath: current?.href,
   });

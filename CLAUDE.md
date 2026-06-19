@@ -15,8 +15,11 @@ Persona is a pnpm monorepo containing a themeable, pluggable streaming chat UI l
 
 **Examples:**
 - `examples/ai-sdk-webmcp` - Next.js / Vercel AI SDK WebMCP demo without Runtype
-- `examples/vercel-edge` - Node.js proxy for Vercel/Railway/Fly.io
-- `examples/cloudflare-workers` - Edge proxy for Cloudflare Workers
+- `examples/ai-sdk-next` - Next.js; minimal SSE adapters for the Vercel AI SDK and OpenAI Responses
+- `examples/eve-next`, `examples/openai-agents-next`, `examples/langgraph-next` - Next.js; SDK-specific backend adapters (Next.js because each SDK's own examples standardize on it). Each vendors a zero-dep `persona-wire.ts` + a `tests/wire-testing.ts` helper and is validated by an offline vitest run.
+- **Host matrix** (`examples/echo-hono`, `examples/echo-script-tag`, `examples/echo-express`, `examples/echo-sveltekit`) - the SAME canonical echo adapter re-hosted four ways. `persona-wire.ts` + the adapter are byte-identical across all four; only the host wrapper changes. Hono/SvelteKit return the Web `Response` directly; Express/bare-`node:http` bridge the `(req, res)` callback style. All run keyless (echo agent) with a documented one-line swap to a real model.
+- `examples/runtype-script-tag` - the no-backend path: a static `clientToken` embed talking directly to `api.runtype.com`. Mirrors `echo-script-tag` but swaps `apiUrl: "/dispatch"` for a `clientToken` (zero-dep static server; loads the published widget from jsDelivr, not the workspace build). The hosted counterpart to the BYO examples.
+- `examples/runtype-hono-proxy` - Runtype API proxy on Hono (Node/Vercel/Workers; powers `pnpm dev`)
 
 ## Requirements
 
@@ -29,8 +32,8 @@ Persona is a pnpm monorepo containing a themeable, pluggable streaming chat UI l
 # Development
 pnpm dev                # Start proxy (port 43111) + widget demo (port 5173) concurrently
 pnpm dev:widget         # Start widget demo only
-pnpm dev:vercel         # Start vercel-edge proxy only
-pnpm dev:cloudflare     # Start cloudflare-workers proxy only
+pnpm dev:runtype-hono-proxy    # Start the Runtype API proxy only
+pnpm dev:runtype-workers # Wrangler dev for the same proxy on Cloudflare Workers
 
 # Build
 pnpm build              # Build both widget and proxy packages
@@ -152,22 +155,19 @@ Hono-based server that proxies requests to the Runtype API:
   - `webmcp-*.ts` / `theme-assistant.ts` / `page-context.ts` - WebMCP demo, theme copilot, and page-context flows
 - `agents/` - Pre-configured server-pinned `AgentConfig` definitions for single-agent proxy routes such as WebMCP storefront, theme copilot, and page context
 
-**CORS / `NODE_ENV`:** The proxy only enables permissive CORS when `NODE_ENV` is **exactly** `"development"`. An unset `NODE_ENV` is treated as production (origins must match the `allowedOrigins` list). The root `pnpm dev` script sets `NODE_ENV=development` automatically. If you start the proxy directly (e.g. `pnpm dev:vercel`), set it yourself or configure it in your `.env` file.
+**CORS / `NODE_ENV`:** The proxy only enables permissive CORS when `NODE_ENV` is **exactly** `"development"`. An unset `NODE_ENV` is treated as production (origins must match the `allowedOrigins` list). The root `pnpm dev` script sets `NODE_ENV=development` automatically. If you start the proxy directly (e.g. `pnpm dev:runtype-hono-proxy`), set it yourself or configure it in your `.env` file.
 
 **Server-pinned agents:** `createChatProxyApp()` supports `agentConfig` and `agentId` for agent-shaped routes with server-side security. These options are mutually exclusive with `flowId` / `flowConfig`; the proxy builds the upstream agent payload itself and ignores any client-supplied `agent`. The old client-agent passthrough still exists when a widget sends `config.agent`, but that mode is browser-controlled and should be treated as an open relay unless the surrounding deployment has separate auth/rate limits.
 
 ### Adding a proxy route for a new demo
 
-The proxy has **two entry points that must be kept in sync**: this has caused production 404s more than once, because a demo works locally but its route was never added to the deployed entry:
-
-- `examples/vercel-edge/src/server.ts`: the **local dev** server (`pnpm dev`)
-- `examples/vercel-edge/api/index.ts`: the **deployed** proxy (Vercel serverless entry behind `https://proxy.persona-chat.dev`)
+The proxy routes live in a **single shared app** (`src/app.ts`). Node, Vercel, and Workers each import it. Add new routes there only once.
 
 Checklist for a new demo flow or server-pinned agent:
 
 1. Define the flow in `packages/proxy/src/flows/<name>.ts` or the agent in `packages/proxy/src/agents/<name>.ts`, then export it from that directory's `index.ts` (this is a `packages/proxy` change: **changeset required**).
-2. Mount it in **BOTH** `src/server.ts` and `api/index.ts`: import the flow/agent, add a `createChatProxyApp({ path: "/api/chat/dispatch-<name>", … })` block (follow the existing `FLOW_ID_*` / `AGENT_ID_*` env-override pattern), and add the `app.route("/", …)` line. If you only touched `src/server.ts`, the demo will 404 in production.
-3. Run `pnpm build:proxy` before testing locally: both entries import the **built** `@runtypelabs/persona-proxy`, so a new flow isn't visible to the dev server until the package is rebuilt.
+2. Mount it in **`examples/runtype-hono-proxy/src/app.ts`**: import the flow/agent, add a `createChatProxyApp({ path: "/api/chat/dispatch-<name>", … })` block (follow the existing `FLOW_ID_*` / `AGENT_ID_*` env-override pattern), and add the `app.route("/", …)` line. All hosts (Node, Vercel, Workers) import this file. No separate `api/index.ts` wiring needed.
+3. Run `pnpm build:proxy` before testing locally: the example imports `@runtypelabs/persona-proxy`, so a new flow isn't visible until the package is rebuilt.
 4. Point the demo page's `apiUrl` at the new route (see any `src/webmcp-*/main.*` in `apps/web` for the proxy-port pattern).
 5. After merging, verify the route on the deployed proxy: `curl -X OPTIONS https://proxy.persona-chat.dev/api/chat/dispatch-<name>` should not 404.
 

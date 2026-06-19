@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest a new capability or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, consider whether the idea is better shipped as a plugin or
+        adapter you publish yourself. See
+        [EXTENDING.md](https://github.com/runtypelabs/persona/blob/main/packages/widget/docs/EXTENDING.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the use case, not just the solution. What can't you do today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would the API or behavior look like? Sketch config or code if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing extension points, workarounds, or other designs you weighed.
+    validations:
+      required: false
