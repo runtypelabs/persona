@@ -1,0 +1,10 @@
+{
+  "name": "runtype-script-tag",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node serve.mjs",
+    "start": "node serve.mjs"
+  }
+}
