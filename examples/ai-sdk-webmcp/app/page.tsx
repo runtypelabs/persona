@@ -188,7 +188,7 @@ export default function Home() {
             This storefront publishes its own page tools through{" "}
             <code>document.modelContext.registerTool()</code>. Persona snapshots
             them on every turn, ships them as <code>clientTools[]</code> to a{" "}
-            <strong>direct Vercel AI SDK backend</strong> (no Runtype), and when
+            <strong>Vercel AI SDK backend</strong>, and when
             the agent calls one the widget runs it <em>here on the page</em> and
             posts the result back via <code>/resume</code>. Ask the assistant →
             and watch the catalog, cart, and wire log react.

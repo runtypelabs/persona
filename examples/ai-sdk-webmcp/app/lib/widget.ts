@@ -4,7 +4,7 @@
 // Proxy mode: `apiUrl` is the full dispatch URL and resume is POSTed to
 // `${apiUrl}/resume`. We point both at this app's own API routes
 // (app/api/chat/dispatch/route.ts + .../resume/route.ts), which speak Runtype's
-// proxy wire protocol on top of the Vercel AI SDK. No clientToken, no Runtype.
+// proxy wire protocol on top of the Vercel AI SDK.
 
 import {
   DEFAULT_WIDGET_CONFIG,
@@ -295,9 +295,9 @@ export function buildWidgetConfig(): AgentWidgetConfig {
     ...DEFAULT_WIDGET_CONFIG,
     // Proxy mode → our own Next.js route. resume hits `${apiUrl}/resume`.
     apiUrl: "/api/chat/dispatch",
-    // The shim speaks Persona's neutral UNIFIED vocabulary (execution_start /
+    // The shim speaks Persona's SSE event vocabulary (execution_start /
     // turn_* / text_* / await / execution_complete). As of Persona 4.0 the widget
-    // consumes the unified wire natively, so no `events` opt-in is needed — the
+    // consumes the wire natively, so no `events` opt-in is needed. The
     // /resume continuation (which streams mid-run with no `execution_start`) is
     // handled directly.
     features: {

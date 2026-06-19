@@ -1,12 +1,12 @@
 // ───────────────────────────────────────────────────────────────────────────
-// Persona's neutral **unified** wire protocol, implemented on top of the Vercel
+// Persona's SSE wire protocol, implemented on top of the Vercel
 // AI SDK.
 //
 // The Persona widget POSTs a dispatch request, reads an SSE stream, and, for
 // WebMCP page tools, pauses on an `await` event, runs the tool on the page, and
 // POSTs the result to `${apiUrl}/resume`. This is the one protocol any backend
 // can speak — the same wire the Runtype API emits. The widget consumes the
-// unified wire natively; it is otherwise unchanged and never learns it isn't
+// wire natively; it is otherwise unchanged and never learns it isn't
 // talking to a hosted agent runtime.
 //
 // Wire contract (verified against packages/widget/src/client.ts, the native handler):
@@ -138,7 +138,7 @@ export function sseResponse(
         await handler(send);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        // Terminal failure of the handler → unified `execution_error` (the bridge
+        // Terminal failure of the handler → `execution_error` (the bridge
         // maps it to a non-recoverable agent_error). Unified `error` is the
         // NON-terminal one, so it's the wrong frame for an uncaught throw.
         send.send("execution_error", { kind: "agent", error: { message } });
@@ -217,7 +217,7 @@ function resultToOutput(raw: unknown): ToolResultPart["output"] {
 // ── Core turn: stream text, surface tool calls, pause or complete ───────────
 
 /**
- * Run one model turn over `messages`, streaming text as unified `text_delta`. If
+ * Run one model turn over `messages`, streaming text as `text_delta`. If
  * the model calls page tools, emit an `await` per call and PAUSE (store state,
  * no `turn_complete`/`execution_complete`). Otherwise finalize the turn and run.
  *
