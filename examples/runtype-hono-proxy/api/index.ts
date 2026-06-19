@@ -1,5 +1,5 @@
 import { handle } from "hono/vercel";
-import { createRuntypeProxyApp, type ProxyEnv } from "../src/app";
+import { createRuntypeProxyApp, type ProxyEnv } from "../src/app.js";
 
 const app = createRuntypeProxyApp(process.env as ProxyEnv);
 

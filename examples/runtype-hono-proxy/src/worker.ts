@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createRuntypeProxyApp, type ProxyEnv } from "./app";
+import { createRuntypeProxyApp, type ProxyEnv } from "./app.js";
 
 /**
  * Cloudflare Workers entry. Bindings arrive as `c.env` per request, so the

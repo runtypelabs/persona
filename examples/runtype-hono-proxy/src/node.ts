@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { serve } from "@hono/node-server";
 import getPort from "get-port";
-import { createRuntypeProxyApp, type ProxyEnv } from "./app";
+import { createRuntypeProxyApp, type ProxyEnv } from "./app.js";
 
 const preferredPort = Number(process.env.PORT ?? 43111);
 const env = process.env as ProxyEnv;

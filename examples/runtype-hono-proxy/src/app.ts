@@ -26,7 +26,7 @@ import {
   frontendBaseUrl,
   parseAllowedOrigins,
   resolveCorsOrigin,
-} from "./env";
+} from "./env.js";
 
 export type { ProxyEnv };
 
