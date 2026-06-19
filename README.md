@@ -138,9 +138,6 @@ Persona ships mechanisms, not opinions: plugins, an inline component registry, p
 ### Feedback & Analytics
 Optional message-level upvote/downvote/copy with automatic backend submission in client-token mode. CSAT and NPS survey components. Script-tag lifecycle callbacks/events (`onScriptLoad`, `onLauncherShown`, `onChatReady`, `onError`) and controller events make it easy to wire custom analytics.
 
-### Agent Execution
-Renders multi-turn agent loops as they stream from the backend: displaying iteration progress, reflections, and stop reasons. Agent metadata is attached to every message. Customize how execution events appear through plugin hooks.
-
 ### Component System
 Register custom components and render them inline via directives. Stream-aware parser and middleware support dynamic UI insertion during streaming, with live DOM element hydration so event listeners survive transcript re-renders.
 

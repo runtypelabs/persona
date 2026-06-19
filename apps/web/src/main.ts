@@ -12,13 +12,13 @@ import {
   createPersonaCommandItems,
   installCommandPalette,
 } from "./command-palette";
-import { ADVANCED_EXAMPLES } from "./examples-nav";
+import { GALLERY_EXAMPLES } from "./examples-nav";
 import { STANDALONE_EXAMPLES } from "./standalone-nav";
 
 installCommandPalette({
   trigger: document.querySelector<HTMLElement>("[data-command-palette-trigger]"),
   items: createPersonaCommandItems({
-    advancedExamples: ADVANCED_EXAMPLES,
+    advancedExamples: GALLERY_EXAMPLES,
     standaloneExamples: STANDALONE_EXAMPLES,
     currentPath: window.location.pathname,
     includeHomeSections: true,

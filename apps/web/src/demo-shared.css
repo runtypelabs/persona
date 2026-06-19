@@ -1574,16 +1574,6 @@ body.is-fullscreen .fullscreen-exit { display: inline-flex !important; }
   overflow: hidden;
   transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
-/* Index number watermark, top-right. */
-.demo-card-index {
-  position: absolute;
-  top: 0.7rem;
-  right: 0.85rem;
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--faint);
-}
 .demo-card::after {
   content: "";
   position: absolute;
@@ -1600,14 +1590,12 @@ body.is-fullscreen .fullscreen-exit { display: inline-flex !important; }
   box-shadow: var(--shadow-md);
 }
 .demo-card:hover::after { transform: scaleY(1); }
-.demo-card:hover .demo-card-index { color: var(--signal); }
 .demo-card-title {
   font-family: var(--font-display);
   font-size: 0.92rem;
   font-weight: 600;
   letter-spacing: -0.02em;
   margin: 0;
-  padding-right: 2rem;
   display: flex;
   align-items: center;
   gap: 0.4rem;

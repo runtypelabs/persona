@@ -4,12 +4,12 @@ import {
   createPersonaCommandItems,
   installCommandPalette,
 } from "./command-palette";
-import { ADVANCED_EXAMPLES } from "./examples-nav";
+import { GALLERY_EXAMPLES } from "./examples-nav";
 import { STANDALONE_EXAMPLES } from "./standalone-nav";
 
 installCommandPalette({
   items: createPersonaCommandItems({
-    advancedExamples: ADVANCED_EXAMPLES,
+    advancedExamples: GALLERY_EXAMPLES,
     standaloneExamples: STANDALONE_EXAMPLES,
     currentPath: window.location.pathname,
     includeHomeSections: window.location.pathname === "/" || window.location.pathname === "/index.html",

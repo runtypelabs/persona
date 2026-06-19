@@ -11,7 +11,7 @@
   <main class="shell-main">
     <header class="title-strip">
       <h1>Advanced Examples</h1>
-      <p>Configuration patterns, plugin hooks, and integration recipes. Start with the highlighted demos, then explore patterns as you need them. Press <kbd class="shell-kbd">⌘K</kbd> anywhere to jump between examples.</p>
+      <p>Configuration patterns, UX references, and debugging tools. Mix these to create your unique experience. Press <kbd class="shell-kbd">⌘K</kbd> anywhere to jump between examples.</p>
     </header>
 
     <div class="gallery-search">
@@ -28,19 +28,21 @@
 
   <script type="module">
     import {
-      ADVANCED_EXAMPLES,
+      GALLERY_EXAMPLES,
       TIER_LABELS,
       TIER_ORDER,
       renderExamplesShell,
-      formatExampleIndex,
     } from "/src/examples-nav.ts";
 
     renderExamplesShell();
 
     const TIER_BLURBS = {
-      start: "Evaluate Persona's biggest features first. Each runs without configuration.",
-      patterns: "Drop-in recipes for specific behaviors: approval gates, attachments, focus control, theming, and more.",
-      reference: "Catalogs and debugging surfaces. Useful when wiring up the widget against your own backend.",
+      patterns:
+        "Drop-in recipes for specific behaviors: approval gates, attachments, focus control, theming, and more.",
+      start:
+        "AI-driven surfaces that appear as the model responds — streaming components, artifact panes, voice I/O, answer sheets, and quick replies.",
+      reference:
+        "Catalogs and debugging surfaces. Useful when wiring up the widget against your own backend.",
     };
 
     const searchInput = document.getElementById("gallery-search");
@@ -64,7 +66,7 @@
       const root = document.getElementById("advanced-tiers");
       if (!root) return;
       root.innerHTML = TIER_ORDER.map((tier) => {
-        const entries = ADVANCED_EXAMPLES.filter(
+        const entries = GALLERY_EXAMPLES.filter(
           (e) => e.tier === tier && matchesSearch(e),
         );
         if (entries.length === 0) return "";
@@ -76,9 +78,7 @@
           const tags = entry.tags
             .map((t) => `<span class="demo-card-tag">${t}</span>`)
             .join("");
-          const index = formatExampleIndex(ADVANCED_EXAMPLES.indexOf(entry));
           return `<a class="demo-card" href="${entry.href}">
-            <span class="demo-card-index">${index}</span>
             <h3 class="demo-card-title">${entry.title}${badge}</h3>
             <p class="demo-card-subtitle">${entry.blurb}</p>
             <div class="demo-card-foot">
