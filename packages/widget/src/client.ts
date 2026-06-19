@@ -1969,6 +1969,15 @@ export class AgentWidgetClient {
     // Execution kind, resolved from the leading `execution_start` frame. Drives
     // the agent-vs-flow branches that the single unified vocabulary collapses.
     let executionKind: "agent" | "flow" = "agent";
+    // Whether `executionKind` was set authoritatively by an `execution_start`
+    // frame. Continuation streams (e.g. a tool-driven `/resume`) do NOT re-emit
+    // `execution_start`, so a fresh `streamResponse` for the continuation starts
+    // with the default `"agent"`. For a flow that mis-routes the final
+    // prompt-step finalization and duplicates the last message (the streamed
+    // text block is sealed, then `step_complete.result.response` re-renders it as
+    // a second bubble). When `execution_start` is absent we recover the flow kind
+    // from the first flow `step_*` frame below.
+    let executionKindResolved = false;
     // Open turn id (from `turn_start`). Unified text/reasoning deltas carry their
     // own block id, not the turn id, so the turn id is threaded onto agentMetadata
     // from here.
@@ -1986,6 +1995,21 @@ export class AgentWidgetClient {
       for (let i = 0; i < seqReadyQueue.length; i++) {
         const payloadType = seqReadyQueue[i].payloadType;
         const payload = seqReadyQueue[i].payload;
+
+        // Recover the execution kind on continuation streams that omit
+        // `execution_start` (e.g. a tool-driven `/resume`). Flow `step_*` frames
+        // carry a `stepType`; agent loops never do (they use `turn_*`). Without
+        // this, the continuation defaults to `"agent"` and a flow's final
+        // prompt-step finalization is duplicated. We only infer when no
+        // `execution_start` resolved the kind, so an explicit `agent` is never
+        // overridden.
+        if (
+          !executionKindResolved &&
+          executionKind !== "flow" &&
+          typeof (payload as { stepType?: unknown }).stepType === "string"
+        ) {
+          executionKind = "flow";
+        }
 
         if (payloadType === "reasoning_start") {
           // Nested flow-as-tool thinking (PR #4602): route to the parent tool's row.
@@ -2543,6 +2567,7 @@ export class AgentWidgetClient {
         // ================================================================
         } else if (payloadType === "execution_start") {
           executionKind = payload.kind === "flow" ? "flow" : "agent";
+          executionKindResolved = true;
           if (executionKind === "agent") {
             agentExecution = {
               executionId: payload.executionId,

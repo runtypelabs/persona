@@ -1784,6 +1784,134 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   });
 });
 
+describe('AgentWidgetClient - flow continuation stream without execution_start', () => {
+  // A tool-driven `/resume` continues a flow on a brand-new stream that does NOT
+  // re-emit `execution_start` (`flow_start`). Each stream resolves its execution
+  // kind independently and defaults to `"agent"`, so the continuation used to
+  // mis-route the final prompt-step finalization: the streamed text block was
+  // sealed via the agent path (which never records it as the sealed flow bubble),
+  // then `step_complete.result.response` re-rendered the same text as a SECOND
+  // bubble. The client now recovers the flow kind from the leading `step_*`
+  // frame (a `stepType` is flow-only), so the finalization reconciles in place.
+  function collectAssistantTexts(events: AgentWidgetEvent[]) {
+    const messagesById = new Map<string, AgentWidgetMessage>();
+    for (const event of events) {
+      if (event.type === 'message') messagesById.set(event.message.id, event.message);
+    }
+    return Array.from(messagesById.values())
+      .filter(m => m.role === 'assistant' && !m.variant)
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+  }
+
+  it('does not duplicate the final message when a flow resumes without execution_start', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    // No `flow_start`/`execution_start`: this is exactly the wire a tool-driven
+    // `/resume` continuation delivers.
+    global.fetch = createAgentStreamFetch([
+      sseEvent('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 0, totalSteps: 1 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Done! Added to your cart.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      // The authoritative final response mirrors the streamed text.
+      sseEvent('step_complete', { id: 's1', name: 'Prompt', stepType: 'prompt', success: true, result: { response: 'Done! Added to your cart.' }, executionTime: 500 }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'add it to my cart', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const assistantTexts = collectAssistantTexts(events);
+
+    // Exactly ONE assistant bubble — not duplicated by the step_complete finalization.
+    expect(assistantTexts.length).toBe(1);
+    expect(assistantTexts[0].content).toBe('Done! Added to your cart.');
+    expect(assistantTexts[0].streaming).toBe(false);
+  });
+
+  it('still reconciles in place when execution_start IS present (initial flow stream)', async () => {
+    const events: AgentWidgetEvent[] = [];
+
+    // Same shape but WITH flow_start — the pre-existing, already-correct path.
+    global.fetch = createAgentStreamFetch([
+      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1, executionId: 'exec_f1' }),
+      sseEvent('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 0, totalSteps: 1 }),
+      sseEvent('text_start', { messageId: 'msg_s1' }),
+      sseEvent('step_delta', { id: 's1', text: 'Done! Added to your cart.' }),
+      sseEvent('text_end', { messageId: 'msg_s1' }),
+      sseEvent('step_complete', { id: 's1', name: 'Prompt', stepType: 'prompt', success: true, result: { response: 'Done! Added to your cart.' }, executionTime: 500 }),
+      sseEvent('flow_complete', { success: true }),
+    ]);
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'add it to my cart', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const assistantTexts = collectAssistantTexts(events);
+    expect(assistantTexts.length).toBe(1);
+    expect(assistantTexts[0].content).toBe('Done! Added to your cart.');
+    expect(assistantTexts[0].streaming).toBe(false);
+  });
+
+  it('does not misclassify an agent stream as a flow (no stepType present)', async () => {
+    const events: AgentWidgetEvent[] = [];
+    const execId = 'exec_a1';
+
+    // Agent loops use `agent_*`/turn_* frames and never carry a `stepType`, so the
+    // flow recovery must not engage. A single streamed turn yields exactly one
+    // bubble (regression guard so the recovery can't over-fire on agents).
+    global.fetch = createAgentStreamFetch([
+      sseEvent('agent_start', {
+        executionId: execId, agentId: 'virtual', agentName: 'Test',
+        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
+      }),
+      sseEvent('agent_iteration_start', {
+        executionId: execId, iteration: 1, maxTurns: 1,
+        startedAt: new Date().toISOString(), seq: 2,
+      }),
+      sseEvent('agent_turn_start', {
+        executionId: execId, iteration: 1, turnIndex: 0,
+        role: 'assistant', turnId: 'turn_1', seq: 3,
+      }),
+      sseEvent('agent_turn_delta', {
+        executionId: execId, iteration: 1, delta: 'Hi there!',
+        contentType: 'text', turnId: 'turn_1', seq: 4,
+      }),
+      sseEvent('agent_turn_complete', {
+        executionId: execId, iteration: 1, role: 'assistant',
+        turnId: 'turn_1', completedAt: new Date().toISOString(), seq: 5,
+      }),
+      sseEvent('agent_iteration_complete', {
+        executionId: execId, iteration: 1, toolCallsMade: 0,
+        stopConditionMet: false, completedAt: new Date().toISOString(), seq: 6,
+      }),
+      sseEvent('agent_complete', {
+        executionId: execId, agentId: 'virtual', success: true,
+        iterations: 1, stopReason: 'max_iterations',
+        completedAt: new Date().toISOString(), seq: 7,
+      }),
+    ]);
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+    });
+    await client.dispatch(
+      { messages: [{ id: 'usr_1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+      (event) => events.push(event)
+    );
+
+    const assistantTexts = collectAssistantTexts(events);
+    expect(assistantTexts.length).toBe(1);
+    expect(assistantTexts[0].content).toBe('Hi there!');
+  });
+});
+
 describe('AgentWidgetClient - nested flow-as-tool (parentToolCallId)', () => {
   // PR #4602: a flow running as a tool enriches its streamed text/reasoning with
   // toolContext.toolId; the unified wire surfaces it as text_start/reasoning_start
