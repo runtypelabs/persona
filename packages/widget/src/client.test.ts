@@ -639,31 +639,6 @@ describe('AgentWidgetClient - Agent Mode Detection', () => {
 });
 
 describe('AgentWidgetClient - target routing', () => {
-  const streamingFetch = () =>
-    vi.fn().mockImplementation(async (_url: string, options: any) => {
-      const capturedPayload = JSON.parse(options.body);
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(
-            encoder.encode(
-              sseEvent('agent_complete', {
-                executionId: 'exec_1',
-                agentId: 'virtual',
-                success: true,
-                iterations: 1,
-                completedAt: new Date().toISOString(),
-                seq: 1,
-              }),
-            ),
-          );
-          controller.close();
-        },
-      });
-      (streamingFetch as any).lastBody = capturedPayload;
-      return { ok: true, body: stream };
-    });
-
   const userMessage = (): AgentWidgetMessage[] => [
     { id: 'u1', role: 'user', content: 'hi', createdAt: '2025-01-01T00:00:00.000Z' },
   ];
