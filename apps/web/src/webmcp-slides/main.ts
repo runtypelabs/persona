@@ -101,7 +101,7 @@ setupSlidesTools(store);
 // Proxy mode, like the other example demos: the agent is defined in code as
 // WEBMCP_SLIDES_FLOW (packages/proxy/src/flows/webmcp-slides.ts) and the local
 // proxy mounts it at /api/chat/dispatch-slides (see
-// examples/vercel-edge/src/server.ts). No hosted agent or client token needed.
+// examples/runtype-hono-proxy/src/app.ts). No hosted agent or client token needed.
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyApiUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-slides`

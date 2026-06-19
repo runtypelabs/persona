@@ -1,0 +1,11 @@
+# Copy to .dev.vars for `pnpm dev:workers` (Wrangler local dev).
+# Node/Vercel use .env instead. See .env.example.
+
+RUNTYPE_API_KEY=rt_test_your_api_key_here
+
+# FLOW_ID_FORM_DIRECTIVE=flow_your_form_directive_flow_id_here
+# FLOW_ID_SHOPPING_ASSISTANT=flow_your_shopping_assistant_flow_id_here
+# FLOW_ID_SHOPPING_ASSISTANT_METADATA=flow_your_shopping_metadata_flow_id_here
+# STRIPE_SECRET_KEY=sk_test_your_stripe_key_here
+# STRIPE_CONTEXT=acct_xxxxxxxxxxxxx
+# ALLOWED_ORIGINS=http://localhost:5173,http://localhost:4173

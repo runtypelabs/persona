@@ -148,13 +148,13 @@ The action middleware example demonstrates:
 
 #### Wiring: same pattern as the other demos
 
-Like the bakery and storefront demos, the WebMCP demos run entirely through the **local proxy**: there is no client token and no hosted Runtype agent. Each agent is defined **in code** (`WEBMCP_STOREFRONT_FLOW`, `WEBMCP_CALENDAR_FLOW`, `WEBMCP_SLIDES_FLOW`) and mounted by the proxy server (`examples/vercel-edge/src/server.ts`) at its matching route (`/api/chat/dispatch-webmcp`, `/api/chat/dispatch-calendar`, `/api/chat/dispatch-slides`). The page code simply points `apiUrl` at that route.
+Like the bakery and storefront demos, the WebMCP demos run entirely through the **local proxy**: there is no client token and no hosted Runtype agent. Each agent is defined **in code** (`WEBMCP_STOREFRONT_FLOW`, `WEBMCP_CALENDAR_FLOW`, `WEBMCP_SLIDES_FLOW`) and mounted by the proxy server (`examples/runtype-hono-proxy/src/app.ts`) at its matching route (`/api/chat/dispatch-webmcp`, `/api/chat/dispatch-calendar`, `/api/chat/dispatch-slides`). The page code simply points `apiUrl` at that route.
 
 How the page tools reach the agent: the page registers its tools on `document.modelContext`; the widget snapshots them every turn and sends them on the dispatch payload as `clientTools[]`; the proxy forwards `clientTools[]` upstream, where the Runtype runtime threads them into the flow's prompt step. When the model calls one, the widget executes it on the page and posts the result back via `/resume`. The agent definition, system prompt, and model (`claude-sonnet-4-6`, chosen because WebMCP needs reliable **native** tool calls) all live in the repo.
 
 `pnpm dev` starts this proxy automatically (port 43111). The page log at the top of each WebMCP demo prints the resolved backend, e.g. `mode: proxy → http://localhost:43111/api/chat/dispatch-webmcp`.
 
-To run against your own Runtype flow instead of the in-code definitions, set the matching `FLOW_ID_*` override on the proxy (`FLOW_ID_WEBMCP`, `FLOW_ID_CALENDAR`, or `FLOW_ID_SLIDES` in `examples/vercel-edge/src/server.ts`).
+To run against your own Runtype flow instead of the in-code definitions, set the matching `FLOW_ID_*` override on the proxy (`FLOW_ID_WEBMCP`, `FLOW_ID_CALENDAR`, or `FLOW_ID_SLIDES` in `examples/runtype-hono-proxy/src/app.ts`).
 
 > **Note on parallel local tool calls.** "Add SHOE-001 and SHOE-007 at the same time" makes the model emit *parallel* local tool calls in one turn, which depends on **runtypelabs/core#3878** / **#3870** being deployed upstream; single-tool turns work regardless.
 

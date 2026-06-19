@@ -32,7 +32,7 @@ const MB = 1024 * 1024;
 // @runtypelabs/persona-proxy), which forwards the page's clientTools[] upstream
 // and proxies the /resume round-trip: including the image blocks from
 // screenshot_preview. To back it with a hosted Runtype agent instead, set
-// AGENT_ID_THEME_ASSISTANT on the proxy (examples/vercel-edge/src/server.ts).
+// AGENT_ID_THEME_ASSISTANT on the proxy (examples/runtype-hono-proxy/src/app.ts).
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-theme`

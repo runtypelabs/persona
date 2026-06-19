@@ -1,0 +1,14 @@
+name = "persona-proxy"
+main = "src/worker.ts"
+compatibility_date = "2024-01-01"
+
+# Allow up to 5 minutes of active CPU time per request
+[limits]
+cpu_ms = 300_000
+
+# Secrets (set with: wrangler secret put <KEY>)
+# Required:
+#   RUNTYPE_API_KEY
+# Optional:
+#   FLOW_ID_* / AGENT_ID_* overrides, STRIPE_SECRET_KEY, ALLOWED_ORIGINS, etc.
+# Local dev: copy .dev.vars.example → .dev.vars

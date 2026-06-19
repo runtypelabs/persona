@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["cloudflare-workers", "web", "vercel-edge"]
+  "ignore": ["web", "runtype-hono-proxy"]
 }
