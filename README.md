@@ -1,4 +1,6 @@
-# Persona
+<p align="center">
+  <img src="apps/web/public/persona-js-github.png" alt="Persona.js" width="300" />
+</p>
 
 [![npm](https://img.shields.io/npm/v/@runtypelabs/persona?style=flat&color=262626&label=npm)](https://www.npmjs.com/package/@runtypelabs/persona)
 [![Live demo](https://img.shields.io/badge/live_demo-persona--chat.dev-0d9488?style=flat)](https://persona-chat.dev)
