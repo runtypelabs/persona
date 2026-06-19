@@ -316,6 +316,21 @@ import { contextProviders } from "@runtypelabs/persona/smart-dom-reader";
 WebMCP execution, approval gating, and resume semantics are documented in
 **[PROGRAMMATIC-CONTROL.md](./PROGRAMMATIC-CONTROL.md)**.
 
+### Designing good WebMCP tools
+
+A WebMCP tool is an MCP tool that happens to run in the browser, so the same
+tool-design discipline applies: clear names, focused scope, well-described
+inputs, and outputs an agent can actually act on.
+
+- **[WebMCP — Chrome for Developers](https://developer.chrome.com/docs/ai/webmcp)** —
+  Google's guide to the imperative and declarative APIs, with end-to-end examples.
+- **[WebMCP explainer (W3C Web Machine Learning CG)](https://github.com/webmachinelearning/webmcp)** —
+  the spec proposal and rationale behind `navigator.modelContext`.
+- **[Debug WebMCP tools in Chrome DevTools](https://developer.chrome.com/docs/devtools/application/webmcp)** —
+  inspect tool registration, schema validation, and invocation history.
+- **[MCP tool design patterns (Arcade)](https://www.arcade.dev/blog/mcp-tool-patterns/)** —
+  general MCP tool-design practices that apply directly to WebMCP tools too.
+
 ## Layout slots
 
 Slots inject your own UI into fixed regions of the panel without replacing the
