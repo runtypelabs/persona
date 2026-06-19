@@ -64,7 +64,7 @@ More adapters (Anthropic Claude Agent SDK, Google Gen AI, Mastra, Cloudflare Age
 
 ### Host Matrix
 
-The adapter is a plain Web `(Request) => Response`, so it runs anywhere, not just in Next.js. These four examples re-host **the same canonical agent**: `persona-wire.ts` and the adapter are byte-identical in all of them, and only the thin host wrapper changes. Diff them to see exactly what each framework needs (and what it gives you for free). All four run with **no API key** (a zero-dependency echo agent, with a documented one-line swap to a real model).
+The adapter is a plain Web `(Request) => Response`, so it runs anywhere, not just React. These four examples re-host **the same canonical agent**: each uses the same `persona-wire.ts` and adapter, and only the thin host wrapper changes. Diff them to see exactly what each framework needs (and what it gives you for free). All four run with **no API key** (a zero-dependency echo agent, with a documented one-line swap to a real model).
 
 - [**Hono**](./examples/echo-hono): one `app.fetch` handler that runs on Node, Bun, Deno, and Cloudflare Workers.
 - [**Bare HTML + `<script>`**](./examples/echo-script-tag): no framework, no bundler: the drop-in script-tag install over a bare `node:http` backend.
