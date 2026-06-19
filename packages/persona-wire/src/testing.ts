@@ -1,7 +1,7 @@
 /**
  * Shared test helper, exported from `@persona-examples/wire/testing`.
  *
- * Parses a Persona unified SSE response and summarizes it so adapter tests can
+ * Parses a Persona SSE response and summarizes it so adapter tests can
  * assert the run is well-formed without re-implementing SSE parsing each time.
  */
 
@@ -24,7 +24,7 @@ export async function collectSSE(res: Response): Promise<ParsedFrame[]> {
   return frames;
 }
 
-export type UnifiedSummary = {
+export type WireSummary = {
   /** Ordered list of SSE event names. */
   events: string[];
   /** Assistant text reconstructed from `text_delta` frames. */
@@ -41,7 +41,7 @@ export type UnifiedSummary = {
   seqMonotonic: boolean;
 };
 
-export function summarizeUnified(frames: ParsedFrame[]): UnifiedSummary {
+export function summarizeWire(frames: ParsedFrame[]): WireSummary {
   const events = frames.map((f) => f.event);
   const text = frames
     .filter((f) => f.event === "text_delta")

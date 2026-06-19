@@ -1,9 +1,9 @@
 /**
  * TEST ORACLE — vendored copy of the runtype-core `createUnifiedEventWrite`
- * translator (the api-side legacy → unified 33-event encoder).
+ * translator (the api-side legacy → wire 33-event encoder).
  *
- * NOT shipped. Used only by `unified-event-bridge.test.ts` as the inverse
- * reference: `legacy frames → THIS oracle → unified frames → UnifiedToLegacyBridge
+ * NOT shipped. Used only by legacy-wire handler tests as the inverse
+ * reference: `legacy frames → THIS oracle → wire frames → client handlers
  * → legacy frames'` must be semantically equal to the original. Keeping a real
  * copy here means the round-trip test fails loudly if the api mapping and the
  * widget bridge ever drift.

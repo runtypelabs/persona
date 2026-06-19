@@ -1425,10 +1425,10 @@ export class AgentWidgetClient {
     // Reference to track assistant message for custom event handler
     const assistantMessageRef = { current: null as AgentWidgetMessage | null };
     // Segmentation state for the `parseSSEEvent` extensibility callback (the
-    // consumer's own `partId` field) — independent of the unified wire.
+    // consumer's own `partId` field) — independent of the wire.
     const customParsePartId = { current: null as string | null };
     // Unified text-channel block id (from `text_start`/`text_delta` `id`). Drives
-    // bubble-id segmentation on the unified wire in place of the legacy `partId`:
+    // bubble-id segmentation on the wire in place of the legacy `partId`:
     // a new block id means a new bubble, sealed at `text_complete`/tool boundaries.
     let currentTextBlockId: string | null = null;
     // Raw text accumulated for the open flow block before its bubble is
@@ -1436,7 +1436,7 @@ export class AgentWidgetClient {
     let pendingFlowRaw = "";
     // Nested flow-as-tool attribution (PR #4602): a text/reasoning block whose
     // `parentToolCallId` matches a `tool_start.toolCallId` belongs to a flow
-    // running as that tool. Keyed by the unified block id, these route the block's
+    // running as that tool. Keyed by the wire block id, these route the block's
     // deltas into a message tagged `agentMetadata.parentToolId` (the parent tool's
     // row) instead of the top-level assistant/reasoning channel.
     const nestedBlockParent = new Map<string, string>();
@@ -1816,7 +1816,7 @@ export class AgentWidgetClient {
     // `text_start`/`text_complete`) and can be structured JSON, so each block
     // runs through the per-bubble structured-content parser — agent text stays
     // plain. This is the legacy step_delta parser core, re-keyed from `partId`
-    // to the unified block-id bubble. The caller materializes the bubble lazily
+    // to the wire block-id bubble. The caller materializes the bubble lazily
     // (whitespace-only blocks around tool boundaries never leave a stray bubble)
     // and `step_complete.result.response` reconciles the authoritative final.
     let lastSealedFlowBubble: AgentWidgetMessage | null = null;
@@ -1994,16 +1994,16 @@ export class AgentWidgetClient {
       return message;
     };
 
-    // Ready queue of parsed unified frames awaiting a drain. The API streams the
-    // neutral 33-event unified vocabulary; each frame is parsed in the SSE loop
+    // Ready queue of parsed wire frames awaiting a drain. The API streams the
+    // 33-event wire vocabulary; each frame is parsed in the SSE loop
     // below and rendered directly by the handler (no translation bridge), then
-    // pushed here. The unified stream is a single, in-order SSE connection, so
+    // pushed here. The wire stream is a single, in-order SSE connection, so
     // frames drain straight through with no reordering.
     const seqReadyQueue: Array<{ payloadType: string; payload: any }> = [];
     // Declared here so later closures can reference it; assigned after all
     // handler-scoped variables are initialised (before the SSE loop).
     let drainReadyQueue: () => void;
-    // Per-stream media-block buffer: the unified media triad
+    // Per-stream media-block buffer: the media triad
     // (media_start/media_delta/media_complete) is reassembled here into a single
     // synthetic message at media_complete, keyed by the block id.
     const mediaBuffers = new Map<
@@ -2014,7 +2014,7 @@ export class AgentWidgetClient {
     // `turn_start` advancing the iteration rotates the bubble in 'separate' mode.
     let lastIterationSeen = 0;
     // Execution kind, resolved from the leading `execution_start` frame. Drives
-    // the agent-vs-flow branches that the single unified vocabulary collapses.
+    // the agent-vs-flow branches that the single wire vocabulary collapses.
     let executionKind: "agent" | "flow" = "agent";
     // Open turn id (from `turn_start`). Unified text/reasoning deltas carry their
     // own block id, not the turn id, so the turn id is threaded onto agentMetadata
@@ -2521,7 +2521,7 @@ export class AgentWidgetClient {
           }
 
           // A failed step (`success:false`) — including the legacy `step_error`
-          // event, which the unified encoder folds into a failed `step_complete`
+          // event, which the wire encoder folds into a failed `step_complete`
           // — surfaces as a terminal error and finalizes the stream.
           if (payload.success === false) {
             const e = payload.error;
@@ -2642,7 +2642,7 @@ export class AgentWidgetClient {
           // Authoritative args are set at tool_start; nothing to render here.
           continue;
         } else if (payloadType === "turn_complete") {
-          // Reasoning is sealed by its own reasoning_complete in the unified
+          // Reasoning is sealed by its own reasoning_complete on the wire
           // vocabulary; this only attaches the turn-level stopReason to the
           // assistant message produced by this turn. Falls back to
           // lastAssistantInTurn when the bubble was sealed at a tool boundary
@@ -2662,7 +2662,7 @@ export class AgentWidgetClient {
           }
           if (openTurnId === payload.id) openTurnId = null;
         } else if (payloadType === "media_start") {
-          // Open a unified media block; buffer fragments until media_complete.
+          // Open a media block; buffer fragments until media_complete.
           const id = String(payload.id);
           mediaBuffers.set(id, {
             mediaType: typeof payload.mediaType === "string" ? payload.mediaType : undefined,
@@ -2698,7 +2698,7 @@ export class AgentWidgetClient {
           if (completeData) {
             reconstructed = { type: "media", data: completeData, mediaType: completeMediaType };
           } else if (completeUrl) {
-            // The unified wire is mediaType-only; a URL part with no declared MIME
+            // The wire is mediaType-only; a URL part with no declared MIME
             // arrives as the bare bucket hint "image" (per the API encoder). Treat
             // that — and any real `image/*` — as a hosted image so we don't misroute
             // generated images into the file bucket.
@@ -2854,7 +2854,7 @@ export class AgentWidgetClient {
 
           onEvent({ type: "status", status: "idle" });
         } else if (payloadType === "execution_error") {
-          // Terminal failure. The unified non-terminal `error` is handled
+          // Terminal failure. The non-terminal `error` is handled
           // separately (recoverable → warn).
           const errorMessage = typeof payload.error === 'string'
             ? payload.error
@@ -3069,7 +3069,7 @@ export class AgentWidgetClient {
           // retrying" — and the execution continues, so it must NOT surface as a
           // fatal error or finalize the stream. The API routes terminal failures
           // through `execution_error`. Only an explicit `recoverable: false`
-          // promotes a unified `error` to terminal.
+          // promotes an `error` to terminal.
           if (
             payload.recoverable === false &&
             payload.error != null &&
@@ -3187,7 +3187,7 @@ export class AgentWidgetClient {
           if (handled) continue; // Skip default handling if custom handler processed it
         }
 
-        // The wire is the neutral unified vocabulary; the handler consumes it
+        // The wire is the wire vocabulary; the handler consumes it
         // natively. The stream is single-connection and in order, so each frame
         // drains straight through.
         seqReadyQueue.push({ payloadType, payload });

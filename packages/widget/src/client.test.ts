@@ -469,12 +469,12 @@ describe('AgentWidgetClient - JSON Streaming', () => {
       'data: {"type":"flow_complete","flowId":"flow_01k9pfnztzfag9tfz4t65c9c5q","success":true,"duration":2968,"completedAt":"2025-11-12T23:47:42.234Z","totalTokensUsed":0}'
     ];
 
-    // Route the legacy step_chunk fixtures through the oracle as the 4.0 unified
-    // wire (step_chunk → step_delta → text_delta), exercising the structured
-    // JSON parser on the unified flow path: incremental text extraction, never
+    // Route the legacy step_chunk fixtures through the oracle as the 4.0 wire
+    // (step_chunk → step_delta → text_delta), exercising the structured
+    // JSON parser on the wire flow path: incremental text extraction, never
     // showing raw JSON, with the assembled response reconciled at step_complete.
     global.fetch = createRawStreamFetch(
-      toUnifiedFrames(
+      legacyToWireFrames(
         sseEvents
           .filter((f) => f.startsWith('data:'))
           .map((f) => f.replace('"type":"step_chunk"', '"type":"step_delta"') + '\n\n')
@@ -581,13 +581,13 @@ function sseEvent(eventType: string, data: Record<string, unknown>): string {
 
 /**
  * Re-encode legacy `agent_*` / `flow_*` / `step_*` / `tool_*` SSE frames into the
- * neutral UNIFIED wire the 4.0 API now emits, using the same encoder the API uses
+ * Persona wire the 4.0 API now emits, using the same encoder the API uses
  * (the vendored `createUnifiedEventWrite` oracle). The 4.0 widget only consumes the
- * unified vocabulary, so these handler tests author the rendering intent in the
+ * wire vocabulary, so these handler tests author the rendering intent in the
  * (more readable) legacy frames and inject exactly what the client sees off the
  * wire — the bridge translates it straight back before the dispatch chain renders.
  */
-function toUnifiedFrames(legacyFrames: string[]): string[] {
+function legacyToWireFrames(legacyFrames: string[]): string[] {
   const out: string[] = [];
   const write = createUnifiedEventWrite((chunk) => out.push(chunk));
   for (const frame of legacyFrames) write(frame);
@@ -595,7 +595,7 @@ function toUnifiedFrames(legacyFrames: string[]): string[] {
 }
 
 /** Stream pre-built SSE frames verbatim (no re-encode) — for fixtures already in
- *  the unified vocabulary. */
+ *  the wire vocabulary. */
 function createRawStreamFetch(frames: string[]) {
   return vi.fn().mockImplementation(async (_url?: string, _options?: any) => {
     const encoder = new TextEncoder();
@@ -610,10 +610,10 @@ function createRawStreamFetch(frames: string[]) {
 }
 
 /**
- * Mock fetch that streams the given legacy events as the 4.0 unified wire.
+ * Mock fetch that streams the given legacy events as the 4.0 wire.
  */
 function createAgentStreamFetch(events: string[]) {
-  return createRawStreamFetch(toUnifiedFrames(events));
+  return createRawStreamFetch(legacyToWireFrames(events));
 }
 
 describe('AgentWidgetClient - Agent Mode Detection', () => {
@@ -1456,7 +1456,7 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
       }
     }
 
-    // Reflection now folds into a loop-scoped reasoning bubble (unified spec):
+    // Reflection now folds into a loop-scoped reasoning bubble (wire spec):
     // `agent_reflection` → reasoning_start{scope:"loop"} + reasoning_complete{text}.
     const reflectionMessages = Array.from(messagesById.values())
       .filter(m => m.variant === 'reasoning' && m.reasoning?.scope === 'loop');
@@ -1513,7 +1513,7 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
 });
 
 // ============================================================================
-// Unified Event Name Support (chunk → delta, agent_tool_* → tool_* with agentContext)
+// Wire event name support (chunk → delta, agent_tool_* → tool_* with agentContext)
 // ============================================================================
 
 // ============================================================================
@@ -1807,7 +1807,7 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
     expect(assistantTexts.length).toBe(2);
     // First message uses the provided ID
     expect(assistantTexts[0].id).toBe('ast_pre_generated_id');
-    // Second message composes baseId + the unified text block id for traceability
+    // Second message composes baseId + the wire text block id for traceability
     expect(assistantTexts[1].id).toBe('ast_pre_generated_id_text_2');
     // Content is correct per segment
     expect(assistantTexts[0].content).toBe('Before tool.');
@@ -1817,7 +1817,7 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should not overwrite last segment content with the full step response (flow)', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    // Unified wire: two flow text segments split by a tool, each its own block
+    // Wire: two flow text segments split by a tool, each its own block
     // (sealed by text_end → text_complete). The step's full structured response
     // (`step_complete.result.response`) reconciles rawContent without clobbering
     // either sealed bubble's displayed content.
@@ -1932,10 +1932,10 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
       };
     };
 
-    // Unified wire (via the oracle): a single flow text block carrying partial
+    // Wire (via the oracle): a single flow text block carrying partial
     // structured JSON, sealed by text_end, then the authoritative final structured
     // response on step_complete. Exercises the async structured-content parser +
-    // sealed-segment reconciliation on the unified flow path.
+    // sealed-segment reconciliation on the wire flow path.
     global.fetch = createAgentStreamFetch([
       sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
       sseEvent('tool_start', { toolId: 'tc_1', name: 'test_tool', toolType: 'custom', startedAt: new Date().toISOString() }),
@@ -2003,7 +2003,7 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
 
 describe('AgentWidgetClient - nested flow-as-tool (parentToolCallId)', () => {
   // PR #4602: a flow running as a tool enriches its streamed text/reasoning with
-  // toolContext.toolId; the unified wire surfaces it as text_start/reasoning_start
+  // toolContext.toolId; the wire surfaces it as text_start/reasoning_start
   // .parentToolCallId, and the widget routes that block into the parent tool's row.
   it('routes nested flow text into the parent tool row, not the top-level assistant', async () => {
     const events: AgentWidgetEvent[] = [];
@@ -2551,9 +2551,9 @@ describe('AgentWidgetClient - agent_turn text/tool interleaving', () => {
 // ============================================================================
 
 describe('AgentWidgetClient: step_await parsing', () => {
-  // Unified collapses the legacy flow `step_await` (a `local_tool_required` pause)
+  // Wire collapses the legacy flow `step_await` (a `local_tool_required` pause)
   // into the neutral `await` event the native handler consumes.
-  const buildUnifiedAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
+  const buildAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
     const encoder = new TextEncoder();
     const body = `event: await\ndata: ${JSON.stringify({ type: 'await', ...payload })}\n\n`;
     return new ReadableStream({
@@ -2579,7 +2579,7 @@ describe('AgentWidgetClient: step_await parsing', () => {
   it('emits a complete tool message with awaitingLocalTool=true for local_tool_required', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      body: buildUnifiedAwaitStream({
+      body: buildAwaitStream({
         awaitReason: 'local_tool_required',
         id: 'step-1',
         name: 'Test Step',
@@ -2619,7 +2619,7 @@ describe('AgentWidgetClient: step_await parsing', () => {
   it('emits a running tool message for WebMCP local_tool_required until the browser tool resolves', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      body: buildUnifiedAwaitStream({
+      body: buildAwaitStream({
         awaitReason: 'local_tool_required',
         id: 'step-1',
         name: 'Test Step',
@@ -2690,7 +2690,7 @@ describe('AgentWidgetClient: step_await parsing', () => {
 // ============================================================================
 
 describe('AgentWidgetClient: agent_await parsing', () => {
-  // Unified collapses the legacy `step_await`/`agent_await` pair into one `await`
+  // Wire collapses the legacy `step_await`/`agent_await` pair into one `await`
   // event; the dispatch origin survives as the `origin` field on the payload.
   const buildAgentAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
     const encoder = new TextEncoder();
@@ -3116,7 +3116,7 @@ describe('AgentWidgetClient - agent_media events', () => {
       (e) => events.push(e)
     );
 
-    // Unified streams each media item as its own block (media_start/complete),
+    // Wire streams each media item as its own block (media_start/complete),
     // so each renders as its own synthetic message with a single content part.
     const mediaMessages = collectMediaMessages(events);
     expect(mediaMessages).toHaveLength(3);
@@ -3877,8 +3877,8 @@ describe('AgentWidgetClient - version header', () => {
   });
 });
 
-describe('AgentWidgetClient - Unified event vocabulary (default in 4.0)', () => {
-  const unifiedTextStream = (execId: string) => [
+describe('AgentWidgetClient - Wire event vocabulary (default in 4.0)', () => {
+  const sampleTextStream = (execId: string) => [
     sseEvent('execution_start', { kind: 'agent', executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
     sseEvent('turn_start', { executionId: execId, id: 'turn_1', iteration: 1, role: 'assistant', seq: 2 }),
     sseEvent('text_start', { executionId: execId, id: 'text_1', role: 'assistant', seq: 3 }),
@@ -3889,14 +3889,14 @@ describe('AgentWidgetClient - Unified event vocabulary (default in 4.0)', () => 
     sseEvent('execution_complete', { kind: 'agent', executionId: execId, success: true, completedAt: new Date().toISOString(), seq: 8 }),
   ];
 
-  it('does not append an events param to the dispatch URL (unified is the default wire)', async () => {
+  it('does not append an events param to the dispatch URL (the wire is the only format)', async () => {
     let capturedUrl = '';
     global.fetch = vi.fn().mockImplementation(async (url: string) => {
       capturedUrl = url;
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(c) {
-          for (const e of unifiedTextStream('exec_u')) c.enqueue(encoder.encode(e));
+          for (const e of sampleTextStream('exec_u')) c.enqueue(encoder.encode(e));
           c.close();
         },
       });
@@ -3914,10 +3914,10 @@ describe('AgentWidgetClient - Unified event vocabulary (default in 4.0)', () => 
     expect(capturedUrl).not.toContain('events=');
   });
 
-  it('renders a unified stream through the internal handlers with no config flag', async () => {
+  it('renders a wire stream through the internal handlers with no config flag', async () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_u1';
-    global.fetch = createRawStreamFetch(unifiedTextStream(execId));
+    global.fetch = createRawStreamFetch(sampleTextStream(execId));
 
     const client = new AgentWidgetClient({
       apiUrl: 'http://localhost:8000',

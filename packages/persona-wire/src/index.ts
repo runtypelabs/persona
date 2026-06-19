@@ -1,16 +1,15 @@
 /**
- * Persona unified-wire helper. Framework-agnostic, zero runtime dependencies.
+ * Persona wire helper. Framework-agnostic, zero runtime dependencies.
  *
  * Published as the `@persona-examples/wire` workspace package and imported by
  * every example, so the only per-example file is the adapter that sits on top of
  * it. To use it outside this repo, copy this file into your app (there's no
  * public npm release yet). It depends on nothing.
  *
- * `createPersonaSSEStream` wraps a streaming handler in Persona's neutral
- * **unified** SSE vocabulary: the protocol any backend can speak, and the
- * exact same wire the Runtype API emits when a caller requests `?events=unified`.
- * The widget either auto-detects it from the leading `execution_start` frame or
- * engages it from `events: 'unified'` in the widget config. One agent turn:
+ * `createPersonaSSEStream` wraps a streaming handler in Persona's SSE event
+ * vocabulary: the protocol any backend can speak, and the same wire the Runtype
+ * API emits. The widget auto-detects it from the leading `execution_start` frame.
+ * One agent turn:
  *
  *   event: execution_start   { executionId, kind:"agent", agentId, startedAt }
  *   event: turn_start        { executionId, id:"turn_…", iteration:1 }
@@ -41,7 +40,7 @@ export type PersonaDispatchBody = {
 /** The neutral chat message shape every adapter maps from. */
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-type UnifiedFrame = {
+type WireFrame = {
   type: string;
   executionId: string;
   seq: number;
@@ -61,7 +60,7 @@ type UnifiedFrame = {
 };
 
 export type PersonaStreamEmitter = {
-  /** Stream a chunk of assistant text (unified `text_delta`). */
+  /** Stream a chunk of assistant text (`text_delta`). */
   textDelta(text: string): void;
   /** Finalize the turn successfully (`text_complete` → `turn_complete` → `execution_complete`). */
   complete(): void;
@@ -85,13 +84,13 @@ export function createPersonaSSEStream(
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      // `seq` is the unified envelope's monotonic sequence number. The widget
+      // `seq` is the wire envelope's monotonic sequence number. The widget
       // reads a single in-order connection so it isn't load-bearing here, but a
       // faithful reference emits it.
       let seq = 0;
       const send = (
         event: string,
-        payload: Omit<UnifiedFrame, "type" | "executionId" | "seq">,
+        payload: Omit<WireFrame, "type" | "executionId" | "seq">,
       ) => {
         controller.enqueue(
           encoder.encode(

@@ -4305,7 +4305,7 @@ export type AgentWidgetReasoning = {
   status: "pending" | "streaming" | "complete";
   chunks: string[];
   /**
-   * Reasoning channel scope (unified spec). `"turn"` is ordinary per-turn
+   * Reasoning channel scope (wire spec). `"turn"` is ordinary per-turn
    * thinking; `"loop"` is a cross-iteration agent reflection (the fold that
    * replaced the legacy `agent_reflection` event). Absent for legacy streams.
    */

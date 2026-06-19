@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Framework-agnostic Persona unified-wire helper shared by every example.",
+  "description": "Framework-agnostic Persona wire helper shared by every example.",
   "exports": {
     ".": "./src/index.ts",
     "./testing": "./src/testing.ts"

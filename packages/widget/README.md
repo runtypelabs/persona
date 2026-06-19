@@ -213,7 +213,7 @@ Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payl
 
 ### Development notes
 
-- The widget streams results using SSE and mirrors Persona's unified flow/agent events (which Runtype implements natively), including `await` local-tool pauses and `/resume` continuations.
+- The widget streams results using SSE and mirrors Persona's flow/agent events (which Runtype implements natively), including `await` local-tool pauses and `/resume` continuations.
 - Tailwind classes are prefixed with `tvw-` and scoped to `[data-persona-root]`, so they won't collide with the host page.
 - Run `pnpm dev` from the repository root to boot the example Runtype proxy (`examples/runtype-hono-proxy`) and the vanilla demo (`apps/web`).
 - The proxy prefers port `43111` but automatically selects the next free port if needed.
