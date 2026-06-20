@@ -13,7 +13,7 @@
 :root {
   --margin: clamp(16px, 4vw, 64px);
   --header-h: 72px;
-  --rail-w: 420px;
+  --rail-w: clamp(420px, 30vw, 600px);
 }
 
 *, *::before, *::after {
