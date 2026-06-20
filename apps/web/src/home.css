@@ -357,7 +357,7 @@ section[id], aside[id] {
 }
 
 .hero-sub {
-  font-family: var(--font-editorial);
+  font-family: 'Space Grotesk', sans-serif;
   font-size: clamp(19px, 2.1vw, 27px);
   font-weight: 400;
   letter-spacing: 0.06em;
@@ -1626,6 +1626,7 @@ section[id], aside[id] {
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--ink);
   text-decoration: none;
   transition: color 0.25s ease;
