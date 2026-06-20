@@ -4,18 +4,20 @@ Thanks for your interest in contributing!
 
 ## Ways to contribute
 
-Persona uses a **hybrid** contribution model so the right kind of work lands in
-the right place:
+Persona is early, so we want useful customizations to land in this monorepo
+where contributors can learn from them and maintainers can keep the extension
+points honest:
 
 - **Core fixes & features** → open a pull request against this monorepo. Follow
   the [development workflow](#development-workflow) and the
   [changeset rules](#what-needs-a-changeset) below.
-- **A small, reusable UI component** → PR it into the in-repo gallery using the
-  ~2-minute copy-template flow. No package to publish; see the
+- **Small, reusable UI components** → PR them into the in-repo gallery using the
+  ~2-minute copy-template flow; see the
   [gallery README](./apps/web/src/gallery-components/README.md).
-- **A full plugin, theme plugin, or backend adapter** → publish it to npm under
-  the `persona-plugin-*` / `persona-theme-*` / `persona-adapter-*` naming +
-  keyword convention ([PUBLISHING-PLUGINS.md](./packages/widget/docs/PUBLISHING-PLUGINS.md)).
+- **Plugins, theme customizations, stream parsers, voice providers, backend
+  adapters, and other extension examples** → add them to the repo as demos,
+  examples, docs, or package source changes. If you are unsure where something
+  belongs, open an issue or draft PR and we will help place it.
 
 New to extending Persona? Start with the extensibility map
 ([EXTENDING.md](./packages/widget/docs/EXTENDING.md)) and the plugin authoring

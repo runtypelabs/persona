@@ -147,7 +147,7 @@ Start from a built-in preset (shop, minimal, fullscreen) or configure from scrat
 14 render hooks covering the launcher, header, composer, messages, reasoning, tool calls, ask-user-question sheets, approvals, loading/idle indicators, and the event stream. Priority-based ordering with automatic fallback to defaults. Replace any piece of the UI without forking; use the optional `@runtypelabs/persona/plugin-kit` helpers for Shadow-DOM-safe styles and popovers.
 
 ### Extending Persona
-Persona ships mechanisms, not opinions: plugins, an inline component registry, postprocessors, theme plugins, stream parsers and animations, voice providers, sanitization hooks, action parsers/handlers, context providers/WebMCP, layout slots, and a storage adapter are all replaceable seams. The [Extending Persona](./packages/widget/docs/EXTENDING.md) guide maps every extension point to its public API and deep-dive doc; [Authoring Plugins](./packages/widget/docs/PLUGINS.md) and [Publishing Plugins](./packages/widget/docs/PUBLISHING-PLUGINS.md) cover building and shipping your own.
+Persona ships various ways to extend it. Plugins, an inline component registry, postprocessors, theme plugins, stream parsers and animations, voice providers, sanitization hooks, action parsers/handlers, context providers/WebMCP, layout slots, and a storage adapter are all replaceable seams. The [Extending Persona](./packages/widget/docs/EXTENDING.md) guide maps every extension point to its public API and deep-dive doc; [Authoring Plugins](./packages/widget/docs/PLUGINS.md) covers building your own.
 
 ### Feedback & Analytics
 Optional message-level upvote/downvote/copy with automatic backend submission in client-token mode. CSAT and NPS survey components. Script-tag lifecycle callbacks/events (`onScriptLoad`, `onLauncherShown`, `onChatReady`, `onError`) and controller events make it easy to wire custom analytics.
@@ -158,13 +158,13 @@ Register custom components and render them inline via directives. Stream-aware p
 ### Message Injection, Context & Page Tools
 Programmatically insert messages (`injectMessage`, `injectAssistantMessage`, `injectUserMessage`, `injectSystemMessage`) with dual-content support: display one thing to the user while sending different content to the LLM. Inject page/editor context with `contextProviders` and `requestMiddleware`; use `webmcp: { enabled: true }` to expose page actions through `document.modelContext`. For richer page context, import the optional `@runtypelabs/persona/smart-dom-reader` provider.
 
-## Extending & publishing
+## Extending & contributing
 
 Built a plugin, theme, backend adapter, or product with Persona? See the
-extensibility map ([EXTENDING.md](./packages/widget/docs/EXTENDING.md)), publish
-reusable packages under the `persona-plugin-*` / `persona-theme-*` /
-`persona-adapter-*` convention ([Publishing Plugins](./packages/widget/docs/PUBLISHING-PLUGINS.md)),
-and [CONTRIBUTING.md](./CONTRIBUTING.md) for all the ways to contribute.
+extensibility map ([EXTENDING.md](./packages/widget/docs/EXTENDING.md)) and
+[CONTRIBUTING.md](./CONTRIBUTING.md). While Persona is launching, please
+contribute customizations back to this monorepo as demos, examples, docs, or
+package changes so the ecosystem grows in one place.
 
 ## Proxy Deployment
 
@@ -179,7 +179,7 @@ This monorepo uses [Changesets](https://github.com/changesets/changesets) for ve
 ```bash
 pnpm changeset            # create a changeset after making changes
 pnpm changeset version    # bump versions and generate changelogs
-pnpm release              # build and publish to npm
+pnpm release              # maintainer-only release workflow
 ```
 
 See [`packages/widget/README.md`](./packages/widget/README.md) for the full configuration reference.

@@ -421,7 +421,7 @@ Plugins transform theme tokens before they are resolved.
 import { createTheme, createPlugin } from '@runtypelabs/persona';
 
 const myPlugin = createPlugin({
-  name: '@mycompany/persona-theme',
+  name: 'company-theme',
   version: '1.0.0',
   transform(theme) {
     return { ...theme, /* modifications */ };

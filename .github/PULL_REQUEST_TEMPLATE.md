@@ -25,6 +25,7 @@ Closes #
 - [ ] Docs updated if I changed public API or behavior
 
 <!--
-Contributing a plugin/theme/adapter as a package instead of a monorepo change?
-You don't need a PR here: publish to npm per packages/widget/docs/PUBLISHING-PLUGINS.md.
+Contributing a plugin, theme customization, adapter, or other extension?
+Please include it in this monorepo as a demo, example, docs update, or package
+source change so the ecosystem grows in one place.
 -->

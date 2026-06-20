@@ -10,7 +10,7 @@ This page is the **map**. Each extension point below links to its deep-dive doc,
 names the public symbol(s) you import from `@runtypelabs/persona` (or a subpath),
 and shows the smallest snippet that does something real. When you build
 something reusable, the **"Contribute it back"** pointer at the end of each
-section tells you how to share it.
+section tells you where it can live in this monorepo.
 
 > Every symbol named here is exported from the package. Verify against
 > [`src/index-core.ts`](../src/index-core.ts) and the `exports` map in
@@ -65,8 +65,8 @@ pluginRegistry.register(badgePlugin); // global: affects every widget instance
 
 **→ Use a plugin / contribute it back:** the full hook reference, priority and
 lifecycle rules, and the `@runtypelabs/persona/plugin-kit` helpers live in
-**[PLUGINS.md](./PLUGINS.md)**. To ship one as a package, see
-**[PUBLISHING-PLUGINS.md](./PUBLISHING-PLUGINS.md)**.
+**[PLUGINS.md](./PLUGINS.md)**. While Persona is launching, contribute reusable
+plugins as in-repo demos, examples, docs, or package source changes.
 
 ## Components
 
@@ -96,9 +96,8 @@ stream. See the directive format and streaming details in
 belong in the in-repo gallery: copy
 [`apps/web/src/gallery-components/_template.ts`](../../../apps/web/src/gallery-components/_template.ts)
 and open a PR (the [gallery README](../../../apps/web/src/gallery-components/README.md)
-walks through the ~2-minute flow). Larger packaged components publish to npm
-under the `persona-component` keyword. See
-**[PUBLISHING-PLUGINS.md](./PUBLISHING-PLUGINS.md)**.
+walks through the ~2-minute flow). Larger components can land as in-repo demos
+or examples so maintainers can help shape the extension pattern.
 
 ## Postprocessors
 
@@ -153,9 +152,9 @@ Built-in theme plugins: `brandPlugin`, `accessibilityPlugin`, `animationsPlugin`
 `reducedMotionPlugin`, `highContrastPlugin`. The full token reference and the
 `PersonaThemePlugin` contract are in **[THEME-CONFIG.md](../THEME-CONFIG.md)**.
 
-**→ Contribute it back:** a reusable theme plugin publishes to npm under the
-`persona-theme-<name>` convention. See
-**[PUBLISHING-PLUGINS.md](./PUBLISHING-PLUGINS.md)**.
+**→ Contribute it back:** reusable theme plugins and theme examples should land
+in this monorepo while Persona is launching, either as package source, demos,
+examples, or docs.
 
 ## Stream parsers
 
@@ -392,13 +391,13 @@ These pair naturally with the plugin-kit helpers; see
 
 ## Contributing what you build
 
-Persona uses a **hybrid** contribution model:
+Persona is early, so we want reusable customizations to land in this monorepo:
 
 - **A small, self-contained UI component** → PR it into the in-repo gallery using
   the copy-template flow ([gallery README](../../../apps/web/src/gallery-components/README.md)).
-- **A full plugin, theme plugin, or backend adapter** → publish to npm under the
-  `persona-plugin` / `persona-theme` / `persona-adapter` naming + keyword
-  convention (**[PUBLISHING-PLUGINS.md](./PUBLISHING-PLUGINS.md)**).
+- **A full plugin, theme plugin, backend adapter, or other extension** → PR it as
+  a demo, example, docs update, or package source change. If the right location
+  is not obvious, open a draft PR and maintainers can help place it.
 - **A core fix or feature** → PR to the monorepo (see
   [CONTRIBUTING.md](../../../CONTRIBUTING.md); `packages/*` changes need a
   changeset).
