@@ -417,7 +417,7 @@ function previewEmbedCheck(): Plugin {
 // headings, JetBrains Mono labels + code), so the gallery/demo (demo-shared.css)
 // and misc (index.css) pages load the same families as home.css.
 const HOME_FONTS_HREF =
-  "https://fonts.googleapis.com/css2?family=Bitcount+Prop+Single:wght@100..900&family=Geist:wght@400;500&family=JetBrains+Mono:wght@200;400;500;700&family=Syne:wght@400;500;700;800&display=swap";
+  "https://fonts.googleapis.com/css2?family=Bitcount+Prop+Single:wght@100..900&family=Geist:wght@400;500&family=JetBrains+Mono:wght@200;400;500;700&family=Space+Grotesk:wght@400;500;700&family=Syne:wght@400;500;700;800&display=swap";
 
 const GALLERY_FONTS_HREF = HOME_FONTS_HREF;
 
