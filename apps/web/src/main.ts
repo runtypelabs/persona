@@ -235,8 +235,6 @@ const sharedWidgetConfig: NonNullable<
     provider: "runtype",
     browserFallback: true,
   },
-  // Per-message "Read aloud" alongside the copy action. Votes stay off (they
-  // need a backend).
   messageActions: {
     ...DEFAULT_WIDGET_CONFIG.messageActions,
     showReadAloud: true,
@@ -300,6 +298,10 @@ function mountWidget(mobile: boolean) {
             width: "min(440px, 95vw)",
             title: "Persona in action",
             subtitle: "Ask the docs agent anything",
+            callToActionIconColor: "#006b5b",
+            callToActionIconBackgroundColor: "transparent",
+            iconUrl: "/persona-js-icon.svg",
+            agentIconName: "",
           },
         }
       : {

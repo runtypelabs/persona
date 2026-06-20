@@ -5,19 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "next dev -p 3100",
+    "dev:eve": "eve dev",
     "build": "pnpm --filter @runtypelabs/persona build && next build",
     "start": "next start",
     "lint": "tsc --noEmit",
     "test": "vitest run"
   },
+  "engines": {
+    "node": ">=24"
+  },
   "dependencies": {
     "@runtypelabs/persona": "workspace:^",
+    "eve": "^0.11.6",
     "next": "^16.2.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
-  },
-  "optionalDependencies": {
-    "eve": "^0.11.4"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

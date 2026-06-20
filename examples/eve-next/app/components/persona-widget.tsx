@@ -27,7 +27,7 @@ export function PersonaWidget({
       // emits Persona's SSE event vocabulary, which the widget auto-detects
       // from the leading `execution_start` frame (the same wire the Runtype API emits).
       apiUrl,
-      launcher: { enabled: false },
+      launcher: { enabled: false, width: "100%" },
       copy: {
         welcomeTitle: title,
         welcomeSubtitle: subtitle,
@@ -41,6 +41,17 @@ export function PersonaWidget({
             background: "#f7f8fb",
             primary: "#121826",
           },
+        },
+        components: {
+          introCard: {
+            background: "transparent",
+            shadow: "none",
+          },
+          panel: {
+            border: "1px solid #e0e0e0",
+            borderRadius: "8px",
+            shadow: "0 12px 32px rgb(18 24 38 / 8%)",
+          }
         },
       },
       suggestionChips,
