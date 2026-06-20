@@ -562,6 +562,7 @@ When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target c
 | `agentIconName` | Icon name |
 | `agentIconHidden` | Hide agent icon |
 | `agentIconSize` | Icon size |
+| `agentIconBackgroundColor` | Background color of the agent icon circle (any CSS color; overrides the default primary color) |
 
 ### Call to Action Icon
 | Property | Description |

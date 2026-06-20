@@ -64,7 +64,17 @@ export const createLauncherButton = (
         const iconSize = launcher.agentIconSize ?? "40px";
         icon.style.height = iconSize;
         icon.style.width = iconSize;
-        
+
+        // Optional custom background color for the agent icon circle. When set,
+        // override the default primary-color background; otherwise restore it.
+        if (launcher.agentIconBackgroundColor) {
+          icon.style.backgroundColor = launcher.agentIconBackgroundColor;
+          icon.classList.remove("persona-bg-persona-primary");
+        } else {
+          icon.style.backgroundColor = "";
+          icon.classList.add("persona-bg-persona-primary");
+        }
+
         // Clear existing content
         icon.innerHTML = "";
         

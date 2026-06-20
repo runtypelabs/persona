@@ -17,9 +17,10 @@ export default function Page() {
             Active backend: <code>/api/eve/dispatch</code>
           </p>
           <p>
-            eve is filesystem-first and runs its own server. Start it with{" "}
-            <code>npx eve@latest dev</code> and set <code>EVE_HOST</code>. The session stream is
-            injected, so the validation test runs without it.
+            The eve agent lives in <code>./agent</code> and auto-starts with the dev server via{" "}
+            <code>withEve()</code> in <code>next.config.mjs</code>, so there&apos;s no separate
+            server to run. Set <code>AI_GATEWAY_API_KEY</code> for real responses. The session
+            stream is injected, so the validation test runs without any of it.
           </p>
         </section>
 

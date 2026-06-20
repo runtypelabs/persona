@@ -131,7 +131,11 @@ if (!inlineMount) {
   throw new Error("Inline widget mount node missing");
 }
 
-const inlineController = createAgentExperience(inlineMount, {
+// Shared widget config for both mount modes; mountWidget() merges in the
+// per-mode launcher/layout bits below.
+const sharedWidgetConfig: NonNullable<
+  Parameters<typeof createAgentExperience>[1]
+> = {
   ...DEFAULT_WIDGET_CONFIG,
   apiUrl: proxyUrl,
   ...homeDemoSharedAssistant,
@@ -212,14 +216,6 @@ const inlineController = createAgentExperience(inlineMount, {
       panel: { border: "none", borderRadius: "0px", shadow: "none" },
     },
   },
-  // The chat rail supplies its own terminal-style header; hide the widget's.
-  layout: { showHeader: false },
-  launcher: {
-    ...DEFAULT_WIDGET_CONFIG.launcher,
-    width: "100%",
-    enabled: false,
-    fullHeight: true,
-  },
   statusIndicator: {
     idleText: "Powered by Runtype",
     idleLink: "https://runtype.com",
@@ -239,8 +235,6 @@ const inlineController = createAgentExperience(inlineMount, {
     provider: "runtype",
     browserFallback: true,
   },
-  // Per-message "Read aloud" alongside the copy action. Votes stay off (they
-  // need a backend).
   messageActions: {
     ...DEFAULT_WIDGET_CONFIG.messageActions,
     showReadAloud: true,
@@ -251,13 +245,90 @@ const inlineController = createAgentExperience(inlineMount, {
   storageAdapter: sharedWidgetStorage,
   suggestionChips: [...homeDemoSuggestionChips],
   postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
-});
-setupCodeCopyHandler(inlineMount);
+};
 
-// Rail header clear-chat button (the widget's own header is hidden).
+// On small screens the docked rail takes over the page (a tall, full-width
+// panel below the content), so swap it for the widget's floating launcher. We
+// re-mount whenever the viewport crosses the breakpoint; chat history survives
+// the swap via the shared persistState keyPrefix + storage adapter.
+const chatRailEl = document.querySelector<HTMLElement>(".chat-rail");
+const mobileQuery = window.matchMedia("(max-width: 760px)");
+
+let inlineController: ReturnType<typeof createAgentExperience> | null = null;
+let launcherRoot: HTMLElement | null = null;
+
+function mountWidget(mobile: boolean) {
+  // Tear down the previous instance and any mode-specific DOM first.
+  inlineController?.destroy();
+  inlineController = null;
+  if (launcherRoot) {
+    launcherRoot.remove();
+    launcherRoot = null;
+  }
+
+  let mount: HTMLElement;
+  if (mobile) {
+    if (chatRailEl) chatRailEl.style.display = "none";
+    // Strip leftover widget markers from the embedded mount we're not using, so
+    // the launcher is the only [data-persona-root] on the page.
+    inlineMount.replaceChildren();
+    inlineMount.removeAttribute("data-persona-root");
+    inlineMount.removeAttribute("data-persona-instance");
+    launcherRoot = document.createElement("div");
+    launcherRoot.id = "home-launcher-root";
+    document.body.appendChild(launcherRoot);
+    mount = launcherRoot;
+  } else {
+    if (chatRailEl) chatRailEl.style.display = "";
+    inlineMount.replaceChildren();
+    mount = inlineMount;
+  }
+
+  inlineController = createAgentExperience(mount, {
+    ...sharedWidgetConfig,
+    // Desktop embeds into the page's chat rail (which supplies its own
+    // terminal-style header). Mobile shows a floating launcher with the
+    // widget's own header instead.
+    ...(mobile
+      ? {
+          launcher: {
+            ...DEFAULT_WIDGET_CONFIG.launcher,
+            enabled: true,
+            position: "bottom-right" as const,
+            width: "min(440px, 95vw)",
+            title: "Persona in action",
+            subtitle: "Ask the docs agent anything",
+            callToActionIconColor: "#006b5b",
+            callToActionIconBackgroundColor: "transparent",
+            iconUrl: "/persona-js-icon.svg",
+            agentIconName: "",
+          },
+        }
+      : {
+          layout: { showHeader: false },
+          launcher: {
+            ...DEFAULT_WIDGET_CONFIG.launcher,
+            width: "100%",
+            enabled: false,
+            fullHeight: true,
+          },
+        }),
+  });
+}
+
+mountWidget(mobileQuery.matches);
+mobileQuery.addEventListener("change", (e) => mountWidget(e.matches));
+
+// Code-block copy works in either mode: bind once to <body> (both the embedded
+// mount and the floating launcher live inside it) so re-mounting never
+// double-binds the handler.
+setupCodeCopyHandler(document.body);
+
+// Rail header clear-chat button (only visible in the desktop embedded rail);
+// bound once and always targets the current controller.
 document
   .querySelector<HTMLButtonElement>("[data-rail-clear]")
-  ?.addEventListener("click", () => inlineController.clearChat());
+  ?.addEventListener("click", () => inlineController?.clearChat());
 
 // ---------------------------------------------------------------------------
 // Hero 3D Carousel

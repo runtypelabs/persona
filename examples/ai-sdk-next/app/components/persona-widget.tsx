@@ -9,9 +9,18 @@ import {
 type PersonaWidgetProps = {
   apiUrl: string;
   title: string;
+  subtitle: string;
+  accent?: string;
+  suggestionChips?: string[];
 };
 
-export function PersonaWidget({ apiUrl, title }: PersonaWidgetProps) {
+export function PersonaWidget({
+  apiUrl,
+  title,
+  subtitle,
+  accent = "#157f8f",
+  suggestionChips,
+}: PersonaWidgetProps) {
   useEffect(() => {
     const host = document.getElementById("persona-root");
     if (!host) return;
@@ -20,27 +29,34 @@ export function PersonaWidget({ apiUrl, title }: PersonaWidgetProps) {
       apiUrl,
       // The adapters emit Persona's SSE event vocabulary, which the widget
       // consumes natively (the same wire the Runtype API emits).
-      launcher: { enabled: false },
+      launcher: { enabled: false, width: "100%" },
       copy: {
         welcomeTitle: title,
-        welcomeSubtitle: "Ask a question and the selected SDK stream will be wrapped for Persona.",
+        welcomeSubtitle: subtitle,
         inputPlaceholder: "Ask anything...",
       },
       theme: {
         semantic: {
           colors: {
-            accent: "#157f8f",
+            accent,
             surface: "#ffffff",
             background: "#f7f8fb",
             primary: "#121826",
           },
         },
+        components: {
+          introCard: {
+            background: "transparent",
+            shadow: "none",
+          },
+          panel: {
+            border: "1px solid #e0e0e0",
+            borderRadius: "8px",
+            shadow: "0 12px 32px rgb(18 24 38 / 8%)",
+          },
+        },
       },
-      suggestionChips: [
-        "Explain what this adapter does",
-        "Write a haiku about streaming",
-        "Give me a short checklist for production",
-      ],
+      suggestionChips,
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     });
 
@@ -49,7 +65,7 @@ export function PersonaWidget({ apiUrl, title }: PersonaWidgetProps) {
       handle = null;
       host.replaceChildren();
     };
-  }, [apiUrl, title]);
+  }, [apiUrl, title, subtitle, accent, suggestionChips]);
 
   return <div id="persona-root" />;
 }

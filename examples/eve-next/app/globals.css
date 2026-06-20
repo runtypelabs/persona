@@ -30,8 +30,8 @@ main {
   margin: 0 auto;
 }
 
-.intro,
-.widgetHost {
+/* Both sides are matching cards: same border, radius, background, and shadow. */
+.intro {
   border: 1px solid #d9dee9;
   border-radius: 8px;
   background: #ffffff;
@@ -71,9 +71,11 @@ main {
   margin-bottom: 16px;
 }
 
+/* The widget panel fills this card (fullHeight) and is clipped to the 8px
+   radius, so its dark header rounds to match the left card. */
 .widgetHost {
   min-height: 680px;
-  overflow: hidden;
+  border: none;
 }
 
 #persona-root {
