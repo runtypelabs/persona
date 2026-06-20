@@ -252,6 +252,10 @@ section[id], aside[id] {
 .editorial {
   flex: 1;
   min-width: 0;
+  /* Clip horizontal bleed (full-bleed carousel + its 3D side cards) so
+     decorative overflow never creates page-level horizontal scroll on mobile.
+     overflow-x: clip leaves vertical flow and sticky/fixed descendants intact. */
+  overflow-x: clip;
   border-right: 1px solid var(--hairline);
 }
 
@@ -372,10 +376,12 @@ section[id], aside[id] {
   align-items: stretch;
   gap: 0;
   max-width: 620px;
+  min-width: 0;
 }
 
 .hero-install-row code {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1225,7 +1231,10 @@ section[id], aside[id] {
 
 .webmcp-grid {
   display: grid;
-  grid-template-columns: 5fr 7fr;
+  /* minmax(0, …) lets the code-frame track shrink below its content's
+     intrinsic width so the code block scrolls internally instead of forcing
+     the grid (and the page) wider than the viewport. */
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   gap: 56px;
   align-items: start;
 }
@@ -1777,7 +1786,7 @@ section[id], aside[id] {
   }
 
   .webmcp-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 40px;
   }
 
@@ -1866,6 +1875,13 @@ section[id], aside[id] {
   .btn-caps {
     padding: 9px 14px;
     letter-spacing: 0.12em;
+  }
+
+  /* Drop the secondary header CTA on compact screens: the nav is already
+     hidden here and the hero install command is the primary call to action,
+     so this keeps the fixed header row from overflowing the viewport. */
+  .site-actions .btn-caps {
+    display: none;
   }
 
   .demo-lightbox {
