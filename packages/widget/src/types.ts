@@ -1609,6 +1609,12 @@ export type AgentWidgetLauncherConfig = {
   agentIconText?: string;
   agentIconName?: string;
   agentIconHidden?: boolean;
+  /**
+   * Background color for the agent icon circle in the launcher button. Accepts
+   * any CSS color value. When set, overrides the default primary-color
+   * background (the `persona-bg-persona-primary` utility).
+   */
+  agentIconBackgroundColor?: string;
   position?: "bottom-right" | "bottom-left" | "top-right" | "top-left";
   /**
    * Controls how the launcher panel is mounted relative to the host page.
