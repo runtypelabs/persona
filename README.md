@@ -6,7 +6,7 @@
 [![Live demo](https://img.shields.io/badge/live_demo-persona--chat.dev-0d9488?style=flat)](https://persona-chat.dev)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/runtypelabs/persona)
 
-A themeable, pluggable AI chat widget for websites: built in Typescript with zero framework dependencies. It renders using Vanilla JS. It's initial bundle tries hard to be small.
+A themeable, pluggable AI chat widget for websites: built in TypeScript with zero framework dependencies. It renders using Vanilla JS. Its initial bundle tries hard to be small.
 
 Persona gives you a drop-in UI for your AI assistant that works on basically any site or product on the web. It ships with support for streaming responses, direct client-token installs, WebMCP/page tools, built-in local client tools, voice I/O, multi-modal content, tool call visualization, approval gates, artifact rendering, safe markdown/HTML rendering, and a plugin system so you can customize every layer of the UI.
 
@@ -20,15 +20,15 @@ Persona works with any SSE-capable backend. See the "examples" section below for
 
 ## Live demo
 
-**[persona-chat.dev](https://persona-chat.dev)** hosts the interactive showcase: streaming chat, voice, docked and fullscreen layouts, themes, tool calls, artifacts, and more. It the hosted version of [`apps/web`](./apps/web). To run the same pages on your machine with hot reload while you edit code, run `pnpm dev` from the repository root: the Vite dev server reloads the demo, and the app resolves `@runtypelabs/persona` from the workspace (`packages/widget`), so widget changes apply without publishing to npm.
+**[persona-chat.dev](https://persona-chat.dev)** hosts the interactive showcase: streaming chat, voice, docked and fullscreen layouts, themes, tool calls, artifacts, and more. It's the hosted version of [`apps/web`](./apps/web). To run the same pages on your machine with hot reload while you edit code, run `pnpm dev` from the repository root: the Vite dev server reloads the demo, and the app resolves `@runtypelabs/persona` from the workspace (`packages/widget`), so widget changes apply without publishing to npm.
 
-## When should use this?
+## When should you use this?
 
 If you want to create AI experiences quickly within your site or app, configured in a declarative manner, and love building with plain TS/JS hooks... Persona will be one of your best friends!
 
 This includes layering on top of what's already been built with React, Vue, or any other FE framework. Persona is lightweight and is built to work alongside.
 
-That said, if you really don't like the idea of building AI without JSX... you probably want to check out Assistant UI, CopilotKit, or Vercel's AI Elements. No worries Persona still thinks you are cool.
+That said, if you really don't like the idea of building AI without JSX... you probably want to check out Assistant UI, CopilotKit, or Vercel's AI Elements. No worries, Persona still thinks you are cool.
 
 ## Packages
 
@@ -135,7 +135,7 @@ Optional side-panel for rendering markdown and component content. Desktop split 
 Optional real-time event capture with search/filter, badge coloring, timestamps, expandable payloads, and output-throughput diagnostics. Enable via `features.showEventStreamToggle`. Customize rows, toolbar, and payload rendering through plugin hooks.
 
 ### Composer, Scrolling & Keyboard Shortcuts
-`Enter` sends a message (`Shift+Enter` for a newline) and is inert while a response is streaming: it never interrupts generation. Press `Esc` within the widget to stop an in-flight response (the visible Stop button does the same). `Up`/`Down` navigate previously sent messages for quick re-entry or editing : entered only when the caret is at the start of the input, so multi-line editing is preserved, and your in-progress draft is restored when you page back to the present. History navigation is on by default; disable via `features.composerHistory: false`. Streaming scroll behavior is configurable with `features.scrollBehavior` (`follow`, `anchor-top`, or `none`), and the shared scroll-to-bottom affordance shows a new-message count while you're scrolled away.
+`Enter` sends a message (`Shift+Enter` for a newline) and is inert while a response is streaming: it never interrupts generation. Press `Esc` within the widget to stop an in-flight response (the visible Stop button does the same). `Up`/`Down` navigate previously sent messages for quick re-entry or editing: entered only when the caret is at the start of the input, so multi-line editing is preserved, and your in-progress draft is restored when you page back to the present. History navigation is on by default; disable via `features.composerHistory: false`. Streaming scroll behavior is configurable with `features.scrollBehavior` (`follow`, `anchor-top`, or `none`), and the shared scroll-to-bottom affordance shows a new-message count while you're scrolled away.
 
 ### Themes & Styling
 Light and dark themes included. Full design token system (palette, semantic, component-level) with CSS variable support. Extend with built-in plugins for accessibility, reduced motion, high contrast, and branding, or create your own.
