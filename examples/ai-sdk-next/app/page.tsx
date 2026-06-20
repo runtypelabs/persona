@@ -54,7 +54,18 @@ export default function Page() {
         </section>
 
         <section className="widgetHost" aria-label={`${endpoint.label} widget`}>
-          <PersonaWidget key={active} apiUrl={endpoint.apiUrl} title={endpoint.label} />
+          <PersonaWidget
+            key={active}
+            apiUrl={endpoint.apiUrl}
+            title={endpoint.label}
+            subtitle="Ask a question and the selected SDK stream will be wrapped for Persona."
+            accent="#157f8f"
+            suggestionChips={[
+              "Explain what this adapter does",
+              "Write a haiku about streaming",
+              "Give me a short checklist for production",
+            ]}
+          />
         </section>
       </div>
     </main>
