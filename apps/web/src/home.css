@@ -423,24 +423,6 @@ section[id], aside[id] {
   color: var(--ink);
 }
 
-.hero-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 28px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(29, 28, 23, 0.55);
-}
-
-.hero-meta span::before {
-  content: '/';
-  margin-right: 10px;
-  color: var(--teal-dim);
-}
-
 /* Framework / platform logo strip ----------------------------------------------- */
 
 .stack-strip {
@@ -752,9 +734,11 @@ section[id], aside[id] {
   font-size: clamp(26px, 2.6vw, 38px);
   font-weight: 500;
   letter-spacing: 0.08em;
-  line-height: 1.15;
+  line-height: 1.32;
   color: var(--ink);
-  margin: 0 0 20px;
+  margin: 0 0 18px;
+  overflow: visible;
+  padding-bottom: 0.08em;
 }
 
 .module p {
