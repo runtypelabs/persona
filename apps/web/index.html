@@ -26,6 +26,25 @@
   <meta name="twitter:image:alt" content="Persona: open-source AI UI Library in VanillaJS">
 </head>
 <body>
+  <!-- Brand logo sprite (frameworks + platforms). Paths sourced from the Simple Icons set
+       used by the Runtype marketing site; referenced via <use> in the stack strip + template cards. -->
+  <svg width="0" height="0" class="brand-sprite" aria-hidden="true" focusable="false" style="position:absolute">
+    <defs>
+      <symbol id="logo-nextjs" viewBox="0 0 24 24"><path d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></symbol>
+      <symbol id="logo-vercel" viewBox="0 0 24 24"><path d="m12 1.608 12 20.784H0Z"/></symbol>
+      <symbol id="logo-openai" viewBox="0 0 24 24"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></symbol>
+      <symbol id="logo-langgraph" viewBox="0 0 24 24"><path d="M6.099 5.88H17.9C21.264 5.88 24 8.625 24 12s-2.736 6.12-6.099 6.12H6.1C2.736 18.12 0 15.375 0 12s2.736-6.12 6.099-6.12Zm5.419 9.487c.148.156.367.148.561.108h.002c.09-.073-.038-.166-.16-.254-.074-.054-.145-.105-.166-.15.068-.083-.132-.27-.289-.417a1.539 1.539 0 0 1-.15-.151c-.11-.12-.155-.273-.2-.427a1.575 1.575 0 0 0-.11-.297c-.304-.708-.653-1.41-1.143-2.01-.315-.398-.674-.755-1.033-1.112-.232-.23-.463-.46-.683-.701-.226-.234-.362-.521-.499-.81-.114-.24-.228-.482-.396-.693-.507-.75-2.107-.955-2.342.105 0 .033-.01.054-.039.075-.13.095-.245.203-.342.334-.238.332-.274.895.022 1.193l.001-.02c.01-.15.02-.29.139-.399.228.198.576.268.841.12.32.46.422 1.015.525 1.572.085.464.17.93.382 1.341l.014.022c.124.208.25.419.41.6.059.09.178.187.297.284.157.128.314.256.329.366v.146c-.001.29-.002.59.184.83.103.208-.15.418-.352.392a.989.989 0 0 1-.354-.043c-.165-.04-.329-.08-.462-.003-.038.04-.091.042-.145.043-.064.002-.129.004-.167.07a.29.29 0 0 1-.045.066c-.042.051-.087.107-.033.149l.015-.011c.082-.063.16-.123.27-.085-.014.082.039.103.092.125l.027.012a.357.357 0 0 1-.008.057c-.009.046-.017.09.018.13a.605.605 0 0 0 .046-.056c.037-.046.073-.094.139-.11.144.192.289.112.471.012.206-.114.459-.253.81-.056-.135-.007-.255.01-.345.121-.023.025-.042.054-.002.087.207-.135.294-.086.375-.04.06.032.115.063.212.024l.07-.037c.155-.084.314-.17.499-.14-.139.04-.188.127-.242.223-.026.047-.054.097-.094.143-.021.021-.03.046-.007.082.29-.024.4-.098.548-.197.07-.047.15-.1.261-.157.124-.076.248-.028.368.02.13.05.255.1.371-.013.037-.035.083-.035.129-.036.016 0 .033 0 .05-.002-.037-.194-.24-.191-.448-.189-.24.003-.483.005-.475-.295.222-.152.224-.415.226-.665 0-.06 0-.119.005-.176.163.092.336.163.508.234.162.066.323.133.474.215.157.254.404.59.732.568.008-.026.016-.048.026-.074.019.003.039.008.059.014.086.021.178.045.223-.057zm6.429-2.886a1.014 1.014 0 0 0 1.729-.715 1.01 1.01 0 0 0-1.013-1.01c-.126 0-.25.023-.364.068l-.58-.848-.405.278.583.851a1.009 1.009 0 0 0 .05 1.376zm-1.818-2.744a1.014 1.014 0 0 0 1.42-.615 1.008 1.008 0 0 0-.845-1.293 1.015 1.015 0 0 0-1.095.712 1.008 1.008 0 0 0 .52 1.196zm0 5.867a1.015 1.015 0 0 0 1.42-.615 1.008 1.008 0 0 0-.845-1.293 1.015 1.015 0 0 0-1.095.712 1.008 1.008 0 0 0 .52 1.196zm.932-3.586v-.503h-1.55a1.003 1.003 0 0 0-.218-.412l.583-.864-.424-.28-.583.863a1.014 1.014 0 0 0-.333-.06c-.268 0-.525.106-.714.294a1.002 1.002 0 0 0 1.047 1.655l.583.864.42-.281-.579-.864c.104-.119.178-.26.217-.412z"/></symbol>
+      <symbol id="logo-hono" viewBox="0 0 24 24"><path d="M12.445.002a45.529 45.529 0 0 0-5.252 8.146 8.595 8.595 0 0 1-.555-.53 27.796 27.796 0 0 0-1.205-1.542 8.762 8.762 0 0 0-1.251 2.12 20.743 20.743 0 0 0-1.448 5.88 8.867 8.867 0 0 0 .338 3.468c1.312 3.48 3.794 5.593 7.445 6.337 3.055.438 5.755-.333 8.097-2.312 2.677-2.59 3.359-5.634 2.047-9.132a33.287 33.287 0 0 0-2.988-5.59A91.34 91.34 0 0 0 12.615.053a.216.216 0 0 0-.17-.051Zm-.336 3.906a50.93 50.93 0 0 1 4.794 6.552c.448.767.817 1.57 1.108 2.41.606 2.386-.044 4.354-1.951 5.904-1.845 1.298-3.87 1.683-6.072 1.156-2.376-.737-3.75-2.335-4.121-4.794a5.107 5.107 0 0 1 .242-2.266c.358-.908.79-1.774 1.3-2.601l1.446-2.121a397.33 397.33 0 0 0 3.254-4.24Z"/></symbol>
+      <symbol id="logo-express" viewBox="0 0 24 24"><path d="M24 18.588a1.529 1.529 0 01-1.895-.72l-3.45-4.771-.5-.667-4.003 5.444a1.466 1.466 0 01-1.802.708l5.158-6.92-4.798-6.251a1.595 1.595 0 011.9.666l3.576 4.83 3.596-4.81a1.435 1.435 0 011.788-.668L21.708 7.9l-2.522 3.283a.666.666 0 000 .994l4.804 6.412zM.002 11.576l.42-2.075c1.154-4.103 5.858-5.81 9.094-3.27 1.895 1.489 2.368 3.597 2.275 5.973H1.116C.943 16.447 4.005 19.009 7.92 17.7a4.078 4.078 0 002.582-2.876c.207-.666.548-.78 1.174-.588a5.417 5.417 0 01-2.589 3.957 6.272 6.272 0 01-7.306-.933 6.575 6.575 0 01-1.64-3.858c0-.235-.08-.455-.134-.666A88.33 88.33 0 010 11.577zm1.127-.286h9.654c-.06-3.076-2.001-5.258-4.59-5.278-2.882-.04-4.944 2.094-5.071 5.264z"/></symbol>
+      <symbol id="logo-svelte" viewBox="0 0 24 24"><path d="M10.354 21.125a4.44 4.44 0 0 1-4.765-1.767 4.109 4.109 0 0 1-.703-3.107 3.898 3.898 0 0 1 .134-.522l.105-.321.287.21a7.21 7.21 0 0 0 2.186 1.092l.208.063-.02.208a1.253 1.253 0 0 0 .226.83 1.337 1.337 0 0 0 1.435.533 1.231 1.231 0 0 0 .343-.15l5.59-3.562a1.164 1.164 0 0 0 .524-.778 1.242 1.242 0 0 0-.211-.937 1.338 1.338 0 0 0-1.435-.533 1.23 1.23 0 0 0-.343.15l-2.133 1.36a4.078 4.078 0 0 1-1.135.499 4.44 4.44 0 0 1-4.765-1.766 4.108 4.108 0 0 1-.702-3.108 3.855 3.855 0 0 1 1.742-2.582l5.589-3.563a4.072 4.072 0 0 1 1.135-.499 4.44 4.44 0 0 1 4.765 1.767 4.109 4.109 0 0 1 .703 3.107 3.943 3.943 0 0 1-.134.522l-.105.321-.286-.21a7.204 7.204 0 0 0-2.187-1.093l-.208-.063.02-.207a1.255 1.255 0 0 0-.226-.831 1.337 1.337 0 0 0-1.435-.532 1.231 1.231 0 0 0-.343.15L8.62 9.368a1.162 1.162 0 0 0-.524.778 1.24 1.24 0 0 0 .211.937 1.338 1.338 0 0 0 1.435.533 1.235 1.235 0 0 0 .344-.151l2.132-1.36a4.067 4.067 0 0 1 1.135-.498 4.44 4.44 0 0 1 4.765 1.766 4.108 4.108 0 0 1 .702 3.108 3.857 3.857 0 0 1-1.742 2.583l-5.589 3.562a4.072 4.072 0 0 1-1.135.499m10.358-17.95C18.484-.015 14.082-.96 10.9 1.068L5.31 4.63a6.412 6.412 0 0 0-2.896 4.295 6.753 6.753 0 0 0 .666 4.336 6.43 6.43 0 0 0-.96 2.396 6.833 6.833 0 0 0 1.168 5.167c2.229 3.19 6.63 4.135 9.812 2.108l5.59-3.562a6.41 6.41 0 0 0 2.896-4.295 6.756 6.756 0 0 0-.665-4.336 6.429 6.429 0 0 0 .958-2.396 6.831 6.831 0 0 0-1.167-5.168Z"/></symbol>
+      <symbol id="logo-node" viewBox="0 0 24 24"><path d="M11.998,24c-0.321,0-0.641-0.084-0.922-0.247l-2.936-1.737c-0.438-0.245-0.224-0.332-0.08-0.383 c0.585-0.203,0.703-0.25,1.328-0.604c0.065-0.037,0.151-0.023,0.218,0.017l2.256,1.339c0.082,0.045,0.197,0.045,0.272,0l8.795-5.076 c0.082-0.047,0.134-0.141,0.134-0.238V6.921c0-0.099-0.053-0.192-0.137-0.242l-8.791-5.072c-0.081-0.047-0.189-0.047-0.271,0 L3.075,6.68C2.99,6.729,2.936,6.825,2.936,6.921v10.15c0,0.097,0.054,0.189,0.139,0.235l2.409,1.392 c1.307,0.654,2.108-0.116,2.108-0.89V7.787c0-0.142,0.114-0.253,0.256-0.253h1.115c0.139,0,0.255,0.112,0.255,0.253v10.021 c0,1.745-0.95,2.745-2.604,2.745c-0.508,0-0.909,0-2.026-0.551L2.28,18.675c-0.57-0.329-0.922-0.945-0.922-1.604V6.921 c0-0.659,0.353-1.275,0.922-1.603l8.795-5.082c0.557-0.315,1.296-0.315,1.848,0l8.794,5.082c0.57,0.329,0.924,0.944,0.924,1.603 v10.15c0,0.659-0.354,1.273-0.924,1.604l-8.794,5.078C12.643,23.916,12.324,24,11.998,24z M19.099,13.993 c0-1.9-1.284-2.406-3.987-2.763c-2.731-0.361-3.009-0.548-3.009-1.187c0-0.528,0.235-1.233,2.258-1.233 c1.807,0,2.473,0.389,2.747,1.607c0.024,0.115,0.129,0.199,0.247,0.199h1.141c0.071,0,0.138-0.031,0.186-0.081 c0.048-0.054,0.074-0.123,0.067-0.196c-0.177-2.098-1.571-3.076-4.388-3.076c-2.508,0-4.004,1.058-4.004,2.833 c0,1.925,1.488,2.457,3.895,2.695c2.88,0.282,3.103,0.703,3.103,1.269c0,0.983-0.789,1.402-2.642,1.402 c-2.327,0-2.839-0.584-3.011-1.742c-0.02-0.124-0.126-0.215-0.253-0.215h-1.137c-0.141,0-0.254,0.112-0.254,0.253 c0,1.482,0.806,3.248,4.655,3.248C17.501,17.007,19.099,15.91,19.099,13.993z"/></symbol>
+      <symbol id="logo-cloudflare" viewBox="0 0 24 24"><path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727"/></symbol>
+      <symbol id="logo-javascript" viewBox="0 0 24 24"><path d="M0 0h24v24H0V0zm22.034 18.276c-.175-1.095-.888-2.015-3.003-2.873-.736-.345-1.554-.585-1.797-1.14-.091-.33-.105-.51-.046-.705.15-.646.915-.84 1.515-.66.39.12.75.42.976.9 1.034-.676 1.034-.676 1.755-1.125-.27-.42-.404-.601-.586-.78-.63-.705-1.469-1.065-2.834-1.034l-.705.089c-.676.165-1.32.525-1.71 1.005-1.14 1.291-.811 3.541.569 4.471 1.365 1.02 3.361 1.244 3.616 2.205.24 1.17-.87 1.545-1.966 1.41-.811-.18-1.26-.586-1.755-1.336l-1.83 1.051c.21.48.45.689.81 1.109 1.74 1.756 6.09 1.666 6.871-1.004.029-.09.24-.705.074-1.65l.046.067zm-8.983-7.245h-2.248c0 1.938-.009 3.864-.009 5.805 0 1.232.063 2.363-.138 2.711-.33.689-1.18.601-1.566.48-.396-.196-.597-.466-.83-.855-.063-.105-.11-.196-.127-.196l-1.825 1.125c.305.63.75 1.172 1.324 1.517.855.51 2.004.675 3.207.405.783-.226 1.458-.691 1.811-1.411.51-.93.402-2.07.397-3.346.012-2.054 0-4.109 0-6.179l.004-.056z"/></symbol>
+      <symbol id="logo-eve" viewBox="0 0 78 25"><path d="M77.7002 3.89551H54.0762L37.5781 24.3818H32.3486L36.5322 19.1729L51.958 0H77.7002V3.89551ZM21.0898 24.3721H0V20.4766H21.0898V24.3721ZM77.7012 20.4766V24.3721H56.6104V20.4766H77.7012ZM17.7744 14.0537H0V10.1582H17.7744V14.0537ZM77.7012 14.0537H59.9268V10.1582H77.7012V14.0537ZM34.7197 3.89551H0V0H34.7197V3.89551Z"/></symbol>
+      <symbol id="logo-runtype" viewBox="0 0 12.7 12.7"><g transform="matrix(0.75837457,0,0,0.75837457,-597.36163,-129.28708)" fill="currentColor"><path opacity="0.5" fill-opacity="0.247723" d="m 787.71092,172.60866 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14292 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.1429 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.7143 0.022 h 0.022 1.71431 0.022 v -0.022 -1.7143 -0.022 h -0.022 z m 2.141,-12.85744 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14292 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.1429 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.7143 0.022 h 0.022 1.71431 0.022 v -0.022 -1.7143 -0.022 h -0.022 z m 2.141,-12.85744 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14292 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.1429 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.7143 0.022 h 0.022 1.71431 0.022 v -0.022 -1.7143 -0.022 h -0.022 z m 2.14099,-12.85744 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14292 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.1429 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.7143 0.022 h 0.022 1.71432 0.022 v -0.022 -1.7143 -0.022 h -0.022 z m 2.14097,-12.85744 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71435 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14292 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71435 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.1429 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71435 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71435 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71435 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71435 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.7143 0.022 h 0.022 1.71435 0.022 v -0.022 -1.7143 -0.022 h -0.022 z m 2.141,-12.85744 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71433 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14292 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71433 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.1429 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71433 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71433 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71433 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71433 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.7143 0.022 h 0.022 1.71433 0.022 v -0.022 -1.7143 -0.022 h -0.022 z m 2.141,-12.85744 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14292 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.1429 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.7143 0.022 h 0.022 1.71432 0.022 v -0.022 -1.7143 -0.022 h -0.022 z m 2.141,-12.85744 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14292 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.1429 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 0,2.14288 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14293 v 0 h -0.022 v 0.022 1.7143 0.022 h 0.022 1.71432 0.022 v -0.022 -1.7143 -0.022 h -0.022 z M 787.7161,170.49114 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 2.141,0 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 2.141,0 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71431 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 2.14099,0 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 2.14097,0 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71435 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 2.141,0 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71433 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 2.141,0 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71431 -0.022 h -0.022 z m 2.141,0 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71431 -0.022 h -0.022 z"/><path d="m 794.12787,176.89498 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 4.28581,0 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71433 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 2.14289,0 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m -6.4287,2.1429 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 2.1429,0 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71433 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m 6.42872,0 v 0 h -0.022 v 0.022 1.71432 0.022 h 0.022 1.71433 0.022 v -0.022 -1.71432 -0.022 h -0.022 z m -8.57162,2.14292 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14289 v 0 h -0.022 v 0.022 1.71433 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71433 -0.022 h -0.022 z m 0,2.14292 v 0 h -0.022 v 0.022 1.71431 0.022 h 0.022 1.71432 0.022 v -0.022 -1.71431 -0.022 h -0.022 z"/></g></symbol>
+    </defs>
+  </svg>
+
   <!-- Background layer: paper grain -->
   <div class="bg-layer" aria-hidden="true">
     <div class="bg-grain"></div>
@@ -87,6 +106,25 @@
             <span>Voice Built In</span>
             <span>Any Backend</span>
           </div>
+        </section>
+
+        <!-- Framework / platform logo strip -->
+        <section class="stack-strip reveal-el" aria-label="Frameworks and platforms Persona runs on">
+          <span class="stack-strip-label">Runs on any stack</span>
+          <ul class="stack-logos" role="list">
+            <li class="stack-logo" title="JavaScript and bare script tag"><svg class="stack-logo-svg" role="img" aria-label="JavaScript"><use href="#logo-javascript" /></svg></li>
+            <li class="stack-logo" title="Node.js"><svg class="stack-logo-svg" role="img" aria-label="Node.js"><use href="#logo-node" /></svg></li>
+            <li class="stack-logo" title="Next.js"><svg class="stack-logo-svg" role="img" aria-label="Next.js"><use href="#logo-nextjs" /></svg></li>
+            <li class="stack-logo" title="Vercel AI SDK"><svg class="stack-logo-svg" role="img" aria-label="Vercel AI SDK"><use href="#logo-vercel" /></svg></li>
+            <li class="stack-logo" title="OpenAI"><svg class="stack-logo-svg" role="img" aria-label="OpenAI"><use href="#logo-openai" /></svg></li>
+            <li class="stack-logo" title="LangGraph"><svg class="stack-logo-svg" role="img" aria-label="LangGraph"><use href="#logo-langgraph" /></svg></li>
+            <li class="stack-logo" title="Hono"><svg class="stack-logo-svg" role="img" aria-label="Hono"><use href="#logo-hono" /></svg></li>
+            <li class="stack-logo" title="Express"><svg class="stack-logo-svg" role="img" aria-label="Express"><use href="#logo-express" /></svg></li>
+            <li class="stack-logo" title="SvelteKit"><svg class="stack-logo-svg" role="img" aria-label="SvelteKit"><use href="#logo-svelte" /></svg></li>
+            <li class="stack-logo" title="Cloudflare Workers"><svg class="stack-logo-svg" role="img" aria-label="Cloudflare Workers"><use href="#logo-cloudflare" /></svg></li>
+            <li class="stack-logo" title="Vercel eve agent framework"><svg class="stack-logo-svg stack-logo-svg-eve" role="img" aria-label="eve"><use href="#logo-eve" /></svg></li>
+          </ul>
+          <span class="stack-strip-note">+ any SSE backend</span>
         </section>
 
         <!-- Showcase carousel -->
@@ -192,7 +230,7 @@
           <div class="section-head">
             <span class="label-caps">06 / Quick Start</span>
             <h2 class="editorial-h">Choose Your Integration Path</h2>
-            <p class="body-copy">Ship to prod with Runtype in minutes, or wire Persona into your own SSE backend.</p>
+            <p class="body-copy">Start from a pre-built example for your stack, or ship a hosted widget with Runtype.</p>
           </div>
 
           <div class="quick-start-tabs" role="tablist" aria-label="Quick start paths">
@@ -229,53 +267,175 @@
             data-quick-start-panel="sse"
           >
             <div class="quick-start-intro">
-              <strong>Bring your own backend:</strong> point Persona at any SSE endpoint and adapt the request or event format if needed.
+              <strong>Start from a pre-built example.</strong> Each one mounts the real widget against a working backend you can clone, read, and adapt.
             </div>
-            <div class="quick-start-steps">
-              <div class="quick-start-step">
-                <div class="quick-start-step-meta">
-                  <span class="quick-start-step-index">01</span>
-                  <div class="quick-start-step-copy">
-                    <h3 class="quick-start-step-title">Install Persona</h3>
-                    <p>Add the widget package to your app.</p>
-                  </div>
+
+            <div class="template-gallery">
+              <div class="template-card">
+                <div class="template-card-logos">
+                  <svg class="template-card-logo" role="img" aria-label="JavaScript"><use href="#logo-javascript" /></svg>
                 </div>
-                <button
-                  type="button"
-                  class="install-command quick-start-install"
-                  data-copy-text="npm install @runtypelabs/persona"
-                  data-copy-default="Copy"
-                  data-copy-success="Copied"
-                  aria-label="Copy npm install command"
-                >
-                  <span class="install-prefix">$</span>
-                  <span>npm install @runtypelabs/persona</span>
-                  <span class="install-copy" data-copy-label>Copy</span>
-                </button>
+                <span class="template-card-name">Bare script tag</span>
+                <span class="template-card-desc">No framework: a script-tag install over a <code>node:http</code> backend.</span>
+                <span class="template-card-links">
+                  <a class="template-card-source" href="https://github.com/runtypelabs/persona/tree/main/examples/echo-script-tag" target="_blank" rel="noopener">Source</a>
+                </span>
               </div>
 
-              <div class="quick-start-step">
-                <div class="quick-start-step-meta">
-                  <span class="quick-start-step-index">02</span>
-                  <div class="quick-start-step-copy">
-                    <h3 class="quick-start-step-title">Mount the widget</h3>
-                    <p>Import the stylesheet, initialize Persona, and point it at your SSE endpoint.</p>
-                  </div>
+              <div class="template-card">
+                <div class="template-card-logos">
+                  <svg class="template-card-logo" role="img" aria-label="Next.js"><use href="#logo-nextjs" /></svg>
+                  <svg class="template-card-logo" role="img" aria-label="Vercel AI SDK"><use href="#logo-vercel" /></svg>
                 </div>
-                <div class="code-showcase">
-                  <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
+                <span class="template-card-name">AI SDK + WebMCP</span>
+                <span class="template-card-desc">WebMCP page tools on a Vercel AI SDK backend.</span>
+                <span class="template-card-links">
+                  <a class="template-card-source" href="https://github.com/runtypelabs/persona/tree/main/examples/ai-sdk-webmcp" target="_blank" rel="noopener">Source</a>
+                  <a class="template-card-live" href="https://ai-sdk-webmcp.persona-chat.dev" target="_blank" rel="noopener">Live demo</a>
+                </span>
+              </div>
+
+              <div class="template-card">
+                <div class="template-card-logos">
+                  <svg class="template-card-logo" role="img" aria-label="OpenAI"><use href="#logo-openai" /></svg>
+                </div>
+                <span class="template-card-name">OpenAI Agents</span>
+                <span class="template-card-desc">OpenAI Agents SDK (<code>@openai/agents</code>) backend.</span>
+                <span class="template-card-links">
+                  <a class="template-card-source" href="https://github.com/runtypelabs/persona/tree/main/examples/openai-agents-next" target="_blank" rel="noopener">Source</a>
+                </span>
+              </div>
+
+              <div class="template-card">
+                <div class="template-card-logos">
+                  <svg class="template-card-logo" role="img" aria-label="LangGraph"><use href="#logo-langgraph" /></svg>
+                </div>
+                <span class="template-card-name">LangGraph.js</span>
+                <span class="template-card-desc">A LangGraph.js graph streamed to the widget.</span>
+                <span class="template-card-links">
+                  <a class="template-card-source" href="https://github.com/runtypelabs/persona/tree/main/examples/langgraph-next" target="_blank" rel="noopener">Source</a>
+                </span>
+              </div>
+
+              <div class="template-card">
+                <div class="template-card-logos">
+                  <svg class="template-card-logo" role="img" aria-label="Vercel AI SDK"><use href="#logo-vercel" /></svg>
+                  <svg class="template-card-logo" role="img" aria-label="OpenAI"><use href="#logo-openai" /></svg>
+                </div>
+                <span class="template-card-name">AI SDK + Responses</span>
+                <span class="template-card-desc">Minimal AI SDK and OpenAI Responses adapters.</span>
+                <span class="template-card-links">
+                  <a class="template-card-source" href="https://github.com/runtypelabs/persona/tree/main/examples/ai-sdk-next" target="_blank" rel="noopener">Source</a>
+                </span>
+              </div>
+
+              <div class="template-card">
+                <div class="template-card-logos">
+                  <svg class="template-card-logo template-card-logo-eve" role="img" aria-label="eve"><use href="#logo-eve" /></svg>
+                </div>
+                <span class="template-card-name">eve</span>
+                <span class="template-card-desc">Vercel eve agent backend (beta).</span>
+                <span class="template-card-links">
+                  <a class="template-card-source" href="https://github.com/runtypelabs/persona/tree/main/examples/eve-next" target="_blank" rel="noopener">Source</a>
+                </span>
+              </div>
+
+              <div class="template-card">
+                <div class="template-card-logos">
+                  <svg class="template-card-logo" role="img" aria-label="Hono"><use href="#logo-hono" /></svg>
+                </div>
+                <span class="template-card-name">Hono</span>
+                <span class="template-card-desc">One <code>app.fetch</code> handler on Node, Bun, Deno, Workers.</span>
+                <span class="template-card-links">
+                  <a class="template-card-source" href="https://github.com/runtypelabs/persona/tree/main/examples/echo-hono" target="_blank" rel="noopener">Source</a>
+                </span>
+              </div>
+
+              <div class="template-card">
+                <div class="template-card-logos">
+                  <svg class="template-card-logo" role="img" aria-label="Express"><use href="#logo-express" /></svg>
+                </div>
+                <span class="template-card-name">Express</span>
+                <span class="template-card-desc">The callback-style <code>(req, res)</code> bridge.</span>
+                <span class="template-card-links">
+                  <a class="template-card-source" href="https://github.com/runtypelabs/persona/tree/main/examples/echo-express" target="_blank" rel="noopener">Source</a>
+                </span>
+              </div>
+
+              <div class="template-card">
+                <div class="template-card-logos">
+                  <svg class="template-card-logo" role="img" aria-label="SvelteKit"><use href="#logo-svelte" /></svg>
+                </div>
+                <span class="template-card-name">SvelteKit</span>
+                <span class="template-card-desc">A one-line Web-standard <code>+server.ts</code> route.</span>
+                <span class="template-card-links">
+                  <a class="template-card-source" href="https://github.com/runtypelabs/persona/tree/main/examples/echo-sveltekit" target="_blank" rel="noopener">Source</a>
+                </span>
+              </div>
+
+              <div class="template-card">
+                <div class="template-card-logos">
+                  <svg class="template-card-logo" role="img" aria-label="Runtype"><use href="#logo-runtype" /></svg>
+                  <svg class="template-card-logo" role="img" aria-label="Hono"><use href="#logo-hono" /></svg>
+                </div>
+                <span class="template-card-name">Runtype proxy</span>
+                <span class="template-card-desc">Runtype API proxy on Hono (Node, Vercel, Workers).</span>
+                <span class="template-card-links">
+                  <a class="template-card-source" href="https://github.com/runtypelabs/persona/tree/main/examples/runtype-hono-proxy" target="_blank" rel="noopener">Source</a>
+                </span>
+              </div>
+            </div>
+
+            <details class="quick-start-manual">
+              <summary>Or wire your own SSE backend by hand</summary>
+              <div class="quick-start-manual-body">
+                <div class="quick-start-steps">
+                  <div class="quick-start-step">
+                    <div class="quick-start-step-meta">
+                      <span class="quick-start-step-index">01</span>
+                      <div class="quick-start-step-copy">
+                        <h3 class="quick-start-step-title">Install Persona</h3>
+                        <p>Add the widget package to your app.</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="install-command quick-start-install"
+                      data-copy-text="npm install @runtypelabs/persona"
+                      data-copy-default="Copy"
+                      data-copy-success="Copied"
+                      aria-label="Copy npm install command"
+                    >
+                      <span class="install-prefix">$</span>
+                      <span>npm install @runtypelabs/persona</span>
+                      <span class="install-copy" data-copy-label>Copy</span>
+                    </button>
+                  </div>
+
+                  <div class="quick-start-step">
+                    <div class="quick-start-step-meta">
+                      <span class="quick-start-step-index">02</span>
+                      <div class="quick-start-step-copy">
+                        <h3 class="quick-start-step-title">Mount the widget</h3>
+                        <p>Import the stylesheet, initialize Persona, and point it at your SSE endpoint. Adapt any request or event shape with <code>customFetch</code> and <code>parseSSEEvent</code>.</p>
+                      </div>
+                    </div>
+                    <div class="code-showcase">
+                      <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
 <span class="code-keyword">import</span> { <span class="code-function">initAgentWidget</span> } <span class="code-keyword">from</span> <span class="code-string">"@runtypelabs/persona"</span>;
 
 <span class="code-function">initAgentWidget</span>({
   <span class="code-keyword">target</span>: <span class="code-string">"#chat"</span>,
   <span class="code-keyword">config</span>: { apiUrl: <span class="code-string">"https://your-api.com/chat"</span> },
 });</code></pre>
+                    </div>
+                  </div>
                 </div>
+                <p class="quick-start-footnote quick-start-manual-note">
+                  Built an adapter for your stack? <a href="https://github.com/runtypelabs/persona/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contribute it back.</a>
+                </p>
               </div>
-            </div>
-            <p class="quick-start-footnote">
-              See the <a href="https://github.com/runtypelabs/persona-examples" target="_blank" rel="noopener">Official Adapters</a> for <strong>Vercel Eve</strong>, <strong>OpenAI Agents</strong>, and <strong>LangGraph</strong>.
-            </p>
+            </details>
           </div>
 
           <div
@@ -286,6 +446,11 @@
             data-quick-start-panel="runtype"
             hidden
           >
+            <div class="quick-start-intro">
+              <strong>Persona is built by the team at Runtype.</strong> 
+              The Runtype CLI spins up a Persona agent and client token in seconds.
+            </div>
+
             <div class="quick-start-steps">
               <div class="quick-start-step">
                 <div class="quick-start-step-meta">
@@ -363,14 +528,14 @@ document.modelContext.registerTool({
   },
 });
 
-<span class="code-comment">// …and the Persona agent can call
-// it. That's the whole integration.</span></code></pre>
+<span class="code-comment">// Persona discovers it through WebMCP
+// and asks before calling it.</span></code></pre>
               </div>
             </div>
             <div class="webmcp-body">
-              <span class="label-caps">07 / Arch_Protocol</span>
-              <h3>The New Standard For Tool Use</h3>
-              <p class="body-copy">Persona isn't just a chat UI: it's a communication layer. By implementing the <a href="https://github.com/webmachinelearning/webmcp" target="_blank" rel="noopener">WebMCP</a> standard, it discovers and executes tools that live directly in your page, search, carts, bookings, forms, with user approval gating every call. No backend integration required.</p>
+              <span class="label-caps">07 / WebMCP Standard</span>
+              <h3>Let Agents Use The Tools Already On Your Page</h3>
+              <p class="body-copy"><a href="https://github.com/webmachinelearning/webmcp" target="_blank" rel="noopener">WebMCP</a> gives the browser a standard place for page tools: <code>document.modelContext</code>. Persona discovers those tools, asks the user before calling them, and streams the result back into the conversation. Search, carts, bookings, and forms stay in your page code. The chat UI just becomes another way to use them.</p>
               <div class="webmcp-actions">
                 <a class="btn-caps" href="/webmcp-demo.html">Open Storefront Demo</a>
                 <a class="btn-caps" href="/webmcp-calendar.html">Open Calendar Demo</a>
@@ -448,15 +613,63 @@ document.modelContext.registerTool({
   <footer class="site-footer">
     <div class="footer-id">
       <span class="label-caps">Persona OSS Project / 2026</span>
-      <p class="footer-copy">Built by <a href="https://runtype.com" target="_blank" rel="noopener" style="color: inherit;">Runtype</a> &middot; &copy; 2026 Travrse Labs, Inc.</p>
+      <p class="footer-copy">Created by <a href="https://runtype.com" target="_blank" rel="noopener" style="color: inherit;">Runtype</a>, extended by you.</p>
     </div>
     <div class="footer-links">
       <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noopener">GITHUB</a>
       <a href="https://www.npmjs.com/package/@runtypelabs/persona" target="_blank" rel="noopener">NPM</a>
-      <a class="footer-license" href="https://github.com/runtypelabs/persona/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>
+      <a class="footer-license" href="https://github.com/runtypelabs/persona/blob/main/LICENSE" target="_blank" rel="noopener">MIT LICENSE</a>
       <a href="https://deepwiki.com/runtypelabs/persona" target="_blank" rel="noopener">DEEPWIKI</a>
     </div>
   </footer>
+
+  <!-- Quick start CLI flags dialog (persona init --help) -->
+  <dialog class="quick-start-dialog" id="quick-start-flags-dialog" data-quick-start-flags-dialog aria-labelledby="quick-start-flags-title">
+    <div class="quick-start-dialog-titlebar">
+      <div class="quick-start-dialog-dots">
+        <span class="quick-start-dialog-dot"></span>
+        <span class="quick-start-dialog-dot"></span>
+        <span class="quick-start-dialog-dot"></span>
+      </div>
+      <span class="quick-start-dialog-titlebar-label" id="quick-start-flags-title">persona init --help</span>
+      <button type="button" class="quick-start-dialog-close" data-quick-start-flags-close aria-label="Close">esc</button>
+    </div>
+    <div class="quick-start-dialog-body">
+      <pre>
+<span class="term-heading">Usage</span>
+  $ npx @runtypelabs/cli@latest persona init <span class="term-muted">[options]</span>
+
+<span class="term-heading">Description</span>
+  Create agent + client token and output a Persona embed snippet.
+
+<span class="term-heading">Options</span>
+  <span class="term-flag">--agent-name</span> <span class="term-meta">&lt;name&gt;</span>         Name for the new agent
+  <span class="term-flag">--agent-description</span> <span class="term-meta">&lt;text&gt;</span>  Optional agent description
+  <span class="term-flag">--token-name</span> <span class="term-meta">&lt;name&gt;</span>         Custom name for the client token
+  <span class="term-flag">--environment</span> <span class="term-meta">&lt;env&gt;</span>         test or live <span class="term-muted">(default: test)</span>
+  <span class="term-flag">--origins</span> <span class="term-meta">&lt;origins...&gt;</span>     Allowed origins <span class="term-muted">(default: *)</span>
+  <span class="term-flag">--format</span> <span class="term-meta">&lt;fmt&gt;</span>             script-installer | script-manual | esm | react
+                              <span class="term-muted">(default: script-installer)</span>
+  <span class="term-flag">--print-snippet</span>             Print the snippet to stdout
+  <span class="term-flag">--target-selector</span> <span class="term-meta">&lt;sel&gt;</span>    Widget mount target <span class="term-muted">(default: body)</span>
+  <span class="term-flag">--api-url</span> <span class="term-meta">&lt;url&gt;</span>            Override API base URL
+  <span class="term-flag">--json</span>                      Structured JSON output (includes snippet)
+  <span class="term-flag">--yes</span>                       Accept defaults without prompting
+  <span class="term-flag">--tty</span> / <span class="term-flag">--no-tty</span>            Force interactive or non-interactive mode
+
+<span class="term-heading">Examples</span>
+  <span class="term-muted"># Interactive, just run it</span>
+  $ npx @runtypelabs/cli@latest persona init
+
+  <span class="term-muted"># Non-interactive for CI</span>
+  $ RUNTYPE_API_KEY=sk_... npx @runtypelabs/cli@latest persona init \
+      --agent-name "Support" --no-tty --json
+
+  <span class="term-muted"># ESM snippet for a bundled app</span>
+  $ npx @runtypelabs/cli@latest persona init --format esm
+</pre>
+    </div>
+  </dialog>
 
   <!-- Demo Lightbox -->
   <dialog class="demo-lightbox" id="demo-lightbox">
@@ -524,7 +737,10 @@ document.modelContext.registerTool({
       });
 
       if (quickStartTabs.length && quickStartPanels.length) {
-        activateQuickStartTab('runtype');
+        var defaultTab = quickStartTabs.find(function(tab) {
+          return tab.getAttribute('aria-selected') === 'true';
+        }) || quickStartTabs[0];
+        activateQuickStartTab(defaultTab.getAttribute('data-quick-start-tab'));
       }
 
       var quickStartFlagsDialog = document.querySelector('[data-quick-start-flags-dialog]');

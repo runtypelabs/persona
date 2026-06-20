@@ -441,6 +441,73 @@ section[id], aside[id] {
   color: var(--teal-dim);
 }
 
+/* Framework / platform logo strip ----------------------------------------------- */
+
+.stack-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+}
+
+/* The hero's section border-bottom already separates the strip above, so it
+   needs no second top rule — just its own (tighter than default) padding. */
+.editorial-inner > section.stack-strip {
+  padding: 34px 0;
+}
+
+.stack-strip-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(29, 28, 23, 0.55);
+  flex-shrink: 0;
+}
+
+.stack-logos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stack-logo {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-soft);
+  opacity: 0.62;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.stack-logo:hover {
+  color: var(--ink);
+  opacity: 1;
+}
+
+.stack-logo-svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.stack-logo-svg-eve {
+  width: 53px;
+  height: 17px;
+}
+
+.stack-strip-note {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--teal-ink);
+  flex-shrink: 0;
+}
+
 /* Carousel showcase ------------------------------------------------------------- */
 
 .carousel-3d {
@@ -824,6 +891,163 @@ section[id], aside[id] {
   border-left: 2px solid var(--teal-dim);
   padding: 4px 0 4px 18px;
   margin-bottom: 36px;
+}
+
+/* Pre-built example gallery ----------------------------------------------------- */
+
+.template-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+}
+
+.template-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--paper);
+  padding: 22px 24px;
+  transition: background 0.2s ease;
+}
+
+.template-card:hover {
+  background: var(--paper-low);
+}
+
+.template-card-logos {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-soft);
+  min-height: 24px;
+}
+
+.template-card-logo {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.template-card-logo-eve {
+  width: 62px;
+  height: 20px;
+}
+
+.template-card-name {
+  font-family: var(--font-editorial);
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.template-card-desc {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.template-card-desc code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--paper-high);
+  padding: 1px 5px;
+}
+
+.template-card-links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.template-card-source {
+  color: var(--ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.template-card-source::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.template-card-source::after {
+  content: '\2197';
+  letter-spacing: 0;
+}
+
+.template-card-live {
+  position: relative;
+  z-index: 1;
+  color: var(--teal-ink);
+  text-decoration: none;
+}
+
+.template-card-live:hover {
+  text-decoration: underline;
+}
+
+/* Manual SSE fallback (collapsed) ----------------------------------------------- */
+
+.quick-start-manual {
+  margin-top: 28px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 20px;
+}
+
+.quick-start-manual > summary {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: color 0.2s ease;
+}
+
+.quick-start-manual > summary:hover {
+  color: var(--ink);
+}
+
+.quick-start-manual > summary::-webkit-details-marker {
+  display: none;
+}
+
+.quick-start-manual > summary::before {
+  content: '+';
+  color: var(--teal-ink);
+  font-size: 14px;
+}
+
+.quick-start-manual[open] > summary::before {
+  content: '\2212';
+}
+
+.quick-start-manual-body {
+  margin-top: 28px;
+}
+
+.quick-start-manual-note {
+  margin-top: 28px;
 }
 
 .quick-start-steps {
@@ -1539,6 +1763,10 @@ section[id], aside[id] {
   }
 
   .modules-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .template-gallery {
     grid-template-columns: 1fr;
   }
 
