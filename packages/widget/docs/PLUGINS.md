@@ -4,8 +4,8 @@ A plugin is the most powerful way to customize Persona's UI: it can take over an
 rendered region (a message bubble, the launcher, the composer, an approval
 prompt, the event stream) without forking the widget. This guide is the
 authoring contract. For the wider map of *all* extension points, start at
-[EXTENDING.md](./EXTENDING.md); to ship a plugin as an npm package, see
-[PUBLISHING-PLUGINS.md](./PUBLISHING-PLUGINS.md).
+[EXTENDING.md](./EXTENDING.md); for the current contribution path, see
+[CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 > **Source of truth.** The interface lives in
 > [`src/plugins/types.ts`](../src/plugins/types.ts) and the registry in
@@ -198,5 +198,7 @@ own app**:
 
 ## Contributing a plugin
 
-When your plugin is reusable, publish it to npm under the `persona-plugin`
-naming + keyword convention. See **[PUBLISHING-PLUGINS.md](./PUBLISHING-PLUGINS.md)**.
+When your plugin is reusable, please contribute it to this monorepo while Persona
+is launching. Good homes include showcase demos, example apps, docs, or package
+source changes. If the right location is not obvious, open a draft PR and
+maintainers can help place it.

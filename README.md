@@ -6,15 +6,29 @@
 [![Live demo](https://img.shields.io/badge/live_demo-persona--chat.dev-0d9488?style=flat)](https://persona-chat.dev)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/runtypelabs/persona)
 
-A themeable, pluggable AI chat widget for websites: built in Typescript with zero framework dependencies. It renders using Vanilla JS.
+A themeable, pluggable AI chat widget for websites: built in Typescript with zero framework dependencies. It renders using Vanilla JS. It's initial bundle tries hard to be small.
 
 Persona gives you a drop-in UI for your AI assistant that works on basically any site or product on the web. It ships with support for streaming responses, direct client-token installs, WebMCP/page tools, built-in local client tools, voice I/O, multi-modal content, tool call visualization, approval gates, artifact rendering, safe markdown/HTML rendering, and a plugin system so you can customize every layer of the UI.
 
-Persona works with any SSE-capable backend. It includes first-party support for [Runtype](https://runtype.com) out of the box (via `clientToken` or `@runtypelabs/persona-proxy`), and can be easily wired into any other streaming backend using the Persona SSE protocol.
+<p align="center">
+  <img src="apps/web/public/persona-slideshow.gif" alt="Persona chat widget slideshow" width="720" />
+</p>
+
+Persona works with any SSE-capable backend. See the "examples" section below for pre-built framework / platform / frontend combos.
+
+*Built something cool that you'd like to contribute back? Awesome! We'd love that.*
 
 ## Live demo
 
-**[persona-chat.dev](https://persona-chat.dev)** hosts the interactive gallery (35+ pages): streaming chat, voice, docked and fullscreen layouts, themes, tool calls, artifacts, and more. It mirrors [`apps/web`](./apps/web). To run the same pages on your machine with hot reload while you edit code, run `pnpm dev` from the repository root: the Vite dev server reloads the demo, and the app resolves `@runtypelabs/persona` from the workspace (`packages/widget`), so widget changes apply without publishing to npm.
+**[persona-chat.dev](https://persona-chat.dev)** hosts the interactive showcase: streaming chat, voice, docked and fullscreen layouts, themes, tool calls, artifacts, and more. It the hosted version of [`apps/web`](./apps/web). To run the same pages on your machine with hot reload while you edit code, run `pnpm dev` from the repository root: the Vite dev server reloads the demo, and the app resolves `@runtypelabs/persona` from the workspace (`packages/widget`), so widget changes apply without publishing to npm.
+
+## When should use this?
+
+If you want to create AI experiences quickly within your site or app, configured in a declarative manner, and love building with plain TS/JS hooks... Persona will be one of your best friends!
+
+This includes layering on top of what's already been built with React, Vue, or any other FE framework. Persona is lightweight and is built to work alongside.
+
+That said, if you really don't like the idea of building AI without JSX... you probably want to check out Assistant UI, CopilotKit, or Vercel's AI Elements. No worries Persona still thinks you are cool.
 
 ## Packages
 
@@ -133,7 +147,7 @@ Start from a built-in preset (shop, minimal, fullscreen) or configure from scrat
 14 render hooks covering the launcher, header, composer, messages, reasoning, tool calls, ask-user-question sheets, approvals, loading/idle indicators, and the event stream. Priority-based ordering with automatic fallback to defaults. Replace any piece of the UI without forking; use the optional `@runtypelabs/persona/plugin-kit` helpers for Shadow-DOM-safe styles and popovers.
 
 ### Extending Persona
-Persona ships mechanisms, not opinions: plugins, an inline component registry, postprocessors, theme plugins, stream parsers and animations, voice providers, sanitization hooks, action parsers/handlers, context providers/WebMCP, layout slots, and a storage adapter are all replaceable seams. The [Extending Persona](./packages/widget/docs/EXTENDING.md) guide maps every extension point to its public API and deep-dive doc; [Authoring Plugins](./packages/widget/docs/PLUGINS.md) and [Publishing Plugins](./packages/widget/docs/PUBLISHING-PLUGINS.md) cover building and shipping your own.
+Persona ships various ways to extend it. Plugins, an inline component registry, postprocessors, theme plugins, stream parsers and animations, voice providers, sanitization hooks, action parsers/handlers, context providers/WebMCP, layout slots, and a storage adapter are all replaceable seams. The [Extending Persona](./packages/widget/docs/EXTENDING.md) guide maps every extension point to its public API and deep-dive doc; [Authoring Plugins](./packages/widget/docs/PLUGINS.md) covers building your own.
 
 ### Feedback & Analytics
 Optional message-level upvote/downvote/copy with automatic backend submission in client-token mode. CSAT and NPS survey components. Script-tag lifecycle callbacks/events (`onScriptLoad`, `onLauncherShown`, `onChatReady`, `onError`) and controller events make it easy to wire custom analytics.
@@ -144,13 +158,13 @@ Register custom components and render them inline via directives. Stream-aware p
 ### Message Injection, Context & Page Tools
 Programmatically insert messages (`injectMessage`, `injectAssistantMessage`, `injectUserMessage`, `injectSystemMessage`) with dual-content support: display one thing to the user while sending different content to the LLM. Inject page/editor context with `contextProviders` and `requestMiddleware`; use `webmcp: { enabled: true }` to expose page actions through `document.modelContext`. For richer page context, import the optional `@runtypelabs/persona/smart-dom-reader` provider.
 
-## Extending & publishing
+## Extending & contributing
 
 Built a plugin, theme, backend adapter, or product with Persona? See the
-extensibility map ([EXTENDING.md](./packages/widget/docs/EXTENDING.md)), publish
-reusable packages under the `persona-plugin-*` / `persona-theme-*` /
-`persona-adapter-*` convention ([Publishing Plugins](./packages/widget/docs/PUBLISHING-PLUGINS.md)),
-and [CONTRIBUTING.md](./CONTRIBUTING.md) for all the ways to contribute.
+extensibility map ([EXTENDING.md](./packages/widget/docs/EXTENDING.md)) and
+[CONTRIBUTING.md](./CONTRIBUTING.md). While Persona is launching, please
+contribute customizations back to this monorepo as demos, examples, docs, or
+package changes so the ecosystem grows in one place.
 
 ## Proxy Deployment
 
@@ -165,7 +179,7 @@ This monorepo uses [Changesets](https://github.com/changesets/changesets) for ve
 ```bash
 pnpm changeset            # create a changeset after making changes
 pnpm changeset version    # bump versions and generate changelogs
-pnpm release              # build and publish to npm
+pnpm release              # maintainer-only release workflow
 ```
 
 See [`packages/widget/README.md`](./packages/widget/README.md) for the full configuration reference.

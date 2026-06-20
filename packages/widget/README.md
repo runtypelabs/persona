@@ -116,7 +116,7 @@ The full reference lives in [`docs/`](./docs/) and the theming guide:
 
 - [Extending Persona](./docs/EXTENDING.md): the map of every extension point: plugins, components, postprocessors, themes, stream parsers, animations, voice, sanitization, actions, context/WebMCP, layout slots, storage, and UI builders, each linked to its deep dive
 - [Authoring Plugins](./docs/PLUGINS.md): the `AgentWidgetPlugin` contract, all 14 render hooks, global vs per-instance registration, lifecycle, and the `@runtypelabs/persona/plugin-kit` helpers
-- [Publishing Plugins](./docs/PUBLISHING-PLUGINS.md): naming + npm-keyword convention, peer/external setup, and a package skeleton for shipping plugins, themes, and adapters
+- [Contributing](../../CONTRIBUTING.md): current guidance for contributing plugins, themes, adapters, examples, and other customizations back to this monorepo
 - [Programmatic Control & Events](./docs/PROGRAMMATIC-CONTROL.md): controller API, message hooks and injection, enriched DOM context, WebMCP page tools, DOM and controller events, state loading
 - [UI Features & Components](./docs/UI-COMPONENTS.md): message actions and feedback, loading/idle indicators, approvals, built-in `ask_user_question` and `suggest_replies` tools, dropdown menus, button utilities, dynamic forms
 - [Script Tag Installation & Framework Integration](./docs/INSTALLATION-FRAMEWORKS.md): automatic installer, deferred launcher lifecycle hooks, manual script tag setup, React, Next.js, Remix, Gatsby, and Astro guides
