@@ -1745,6 +1745,9 @@
 /* Make message bubble position relative for overlay positioning */
 .persona-message-bubble {
   position: relative;
+  /* Break long unbreakable tokens (e.g. URLs, package names) so they wrap
+     inside the bubble's max-width instead of overflowing horizontally. */
+  overflow-wrap: break-word;
 }
 
 /* Fade-in animation for action buttons */
