@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 100 100">
+  <style>
+    :root { --ink: #111111; }
+    @media (prefers-color-scheme: dark) { :root { --ink: #f5f5f5; } }
+    .ink-stroke { stroke: var(--ink); }
+    .ink-fill { fill: var(--ink); }
+  </style>
+  <path class="ink-stroke" d="M26 20 L74 20 L86 32 L86 68 L74 80 L48 80 L24 96 L36 80 L26 80 L14 68 L14 32 Z" fill="none" stroke-width="4" stroke-linejoin="miter"/>
+  <line class="ink-stroke" x1="14" y1="34" x2="86" y2="34" stroke-width="4"/>
+  <circle cx="31" cy="27" r="2.6" fill="#FF5F57"/>
+  <circle cx="39" cy="27" r="2.6" fill="#FEBC2E"/>
+  <circle cx="47" cy="27" r="2.6" fill="#28C840"/>
+  <path class="ink-fill" d="M33 58.4 L34.564 61.436 L37.6 63 L34.564 64.564 L33 67.6 L31.436 64.564 L28.4 63 L31.436 61.436 Z"/>
+  <text class="ink-fill" x="56" y="66" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-weight="700" font-size="26">js</text>
+</svg>
