@@ -627,11 +627,19 @@ function initDemoLightbox() {
   const iframe = lightbox.querySelector('.demo-lightbox-iframe') as HTMLIFrameElement;
   let closedByPopstate = false;
 
+  const openLightbox = (href: string, title: string) => {
+    iframe.src = href;
+    iframe.title = title || 'Demo preview';
+    lightbox.showModal();
+    history.pushState({ demoLightbox: true }, '');
+  };
+
   document.querySelectorAll('.carousel-3d-card-link').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
 
-      // Clicking a back card brings it to the front instead of opening it:      // its visible edge reads as a "next card" affordance, not a link.
+      // Clicking a back card brings it to the front instead of opening it:
+      // its visible edge reads as a "next card" affordance, not a link.
       const card = link.closest('.carousel-3d-card') as HTMLElement | null;
       const win = window as Window & {
         __heroCarouselStack?: HTMLElement[];
@@ -646,10 +654,16 @@ function initDemoLightbox() {
       }
 
       const anchor = link as HTMLAnchorElement;
-      iframe.src = anchor.href;
-      iframe.title = link.querySelector('.carousel-3d-card-title')?.textContent || 'Demo preview';
-      lightbox.showModal();
-      history.pushState({ demoLightbox: true }, '');
+      openLightbox(anchor.href, link.querySelector('.carousel-3d-card-title')?.textContent || 'Demo preview');
+    });
+  });
+
+  // Layout-mode "Open demo" buttons reuse the same modal instead of navigating
+  // away. The href stays a real link, so it still works without JS.
+  document.querySelectorAll<HTMLAnchorElement>('[data-demo-lightbox]').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      openLightbox(link.href, link.dataset.demoTitle || link.textContent?.trim() || 'Demo preview');
     });
   });
 

@@ -833,6 +833,83 @@ section[id], aside[id] {
 .code-showcase .code-string  { color: #7eb1ff; }
 .code-showcase .code-function { color: #26fedc; }
 
+/* The one line that changes between layout modes; highlighted so the small
+   delta between pill / docked / fullscreen is obvious when switching tabs. */
+.code-showcase .code-diff {
+  background: rgba(38, 254, 220, 0.13);
+  box-shadow: inset 2px 0 0 var(--teal);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding: 1px 6px 1px 8px;
+}
+
+/* Layout modes (one widget, three shapes) -------------------------------------- */
+
+/* Two segmented controls on one row: layout (left) + delivery (right). */
+.layout-modes-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  margin-bottom: 32px;
+}
+
+.layout-modes-controls .quick-start-tabs {
+  margin-bottom: 0;
+}
+
+.layout-modes-tabs {
+  flex-wrap: wrap;
+}
+
+/* Delivery toggle (npm vs script tag): same config, different loader. */
+.layout-delivery {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.layout-delivery-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.layout-delivery-tabs .quick-start-tab[aria-pressed='true'] {
+  background: var(--black);
+  color: var(--teal);
+}
+
+.layout-modes-panel[hidden] {
+  display: none;
+}
+
+.layout-mode-caption {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--teal-dim);
+  padding: 4px 0 4px 18px;
+  margin-bottom: 24px;
+  max-width: 620px;
+}
+
+.layout-mode-caption code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--paper-high);
+  padding: 1px 5px;
+}
+
+.layout-mode-actions {
+  margin-top: 24px;
+}
+
 /* Quick start ------------------------------------------------------------------ */
 
 .quick-start-tabs {

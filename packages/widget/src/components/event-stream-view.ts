@@ -507,7 +507,6 @@ export function createEventStreamView(
 
     // Elements we need references to across functions
     // These are assigned inside buildDefaultToolbar() which always runs
-    let countBadge!: HTMLElement;
     let filterSelect!: HTMLSelectElement;
     let copyAllBtn!: HTMLButtonElement;
     let searchInput!: HTMLInputElement;
@@ -522,7 +521,7 @@ export function createEventStreamView(
     function buildDefaultToolbar(): HTMLElement {
       const toolbarOuter = createElement(
         "div",
-        "persona-relative persona-flex persona-flex-col persona-flex-shrink-0"
+        "persona-event-toolbar persona-relative persona-flex persona-flex-col persona-flex-shrink-0"
       );
 
       // --- Header bar ---
@@ -532,36 +531,20 @@ export function createEventStreamView(
       );
       applyCustomClasses(headerBar, customClasses?.headerBar);
 
-      // Title
-      const title = createElement(
-        "span",
-        "persona-text-sm persona-font-medium persona-text-persona-primary persona-whitespace-nowrap"
-      );
-      title.textContent = "Events";
+      // The header leads straight into the controls. Context already names
+      // itself: the "All events (N)" filter option carries the total, the search
+      // placeholder names event payloads, and every row is an event.
 
-      // Count badge
-      countBadge = createElement(
-        "span",
-        "persona-text-[11px] persona-font-mono persona-bg-persona-container persona-text-persona-muted persona-px-2 persona-py-0.5 persona-rounded persona-border persona-border-persona-border"
-      );
-      countBadge.textContent = "0";
-
-      // Inline throughput group: "Throughput  146.3 tok/s", grouped with the
-      // Events count. Hover reveals tokens · duration · source via a custom
-      // tooltip (shown instantly, unlike the slow native `title` delay).
+      // Inline throughput value, e.g. "146.3 tok/s". The "tok/s" unit is
+      // self-describing for this developer-facing inspector, so the value stands
+      // alone; its accessible name ("Throughput: <value>") and detailed breakdown
+      // live on the container's aria-label / hover tooltip (see updateThroughputSummary).
       if (getThroughput) {
         throughputContainer = createElement(
           "div",
-          "persona-relative persona-flex persona-items-center persona-gap-1.5 persona-whitespace-nowrap persona-ml-1"
+          "persona-relative persona-flex persona-items-center persona-gap-1.5 persona-whitespace-nowrap"
         );
         throughputContainer.style.cursor = "help";
-        // Label styled to match the "Events" title.
-        const throughputLabel = createElement(
-          "span",
-          "persona-text-sm persona-font-medium persona-text-persona-primary persona-whitespace-nowrap"
-        );
-        throughputLabel.textContent = "Throughput";
-        // Same bounding box + styling as the Events count badge.
         throughputValueEl = createElement(
           "span",
           "persona-text-[11px] persona-font-mono persona-bg-persona-container persona-text-persona-muted persona-px-2 persona-py-0.5 persona-rounded persona-border persona-border-persona-border persona-tabular-nums"
@@ -594,7 +577,6 @@ export function createEventStreamView(
         throughputContainer.addEventListener("mouseenter", showTooltip);
         throughputContainer.addEventListener("mouseleave", hideTooltip);
 
-        throughputContainer.appendChild(throughputLabel);
         throughputContainer.appendChild(throughputValueEl);
       }
 
@@ -607,7 +589,7 @@ export function createEventStreamView(
       ) as HTMLSelectElement;
       const allOption = createElement("option", "") as HTMLOptionElement;
       allOption.value = "";
-      allOption.textContent = "All events";
+      allOption.textContent = "All events (0)";
       filterSelect.appendChild(allOption);
 
       // Copy All button
@@ -629,13 +611,11 @@ export function createEventStreamView(
       if (copyAllIcon) copyAllBtn.appendChild(copyAllIcon);
       const copyAllLabel = createElement(
         "span",
-        "persona-text-xs"
+        "persona-event-copy-all persona-text-xs"
       );
       copyAllLabel.textContent = "Copy All";
       copyAllBtn.appendChild(copyAllLabel);
 
-      headerBar.appendChild(title);
-      headerBar.appendChild(countBadge);
       if (throughputContainer) headerBar.appendChild(throughputContainer);
       headerBar.appendChild(headerSpacer);
       headerBar.appendChild(filterSelect);
@@ -734,20 +714,21 @@ export function createEventStreamView(
     function updateThroughputSummary(): void {
       if (!getThroughput || !throughputValueEl || !throughputContainer) return;
       const metric = getThroughput();
-      throughputValueEl.textContent = formatThroughputValue(metric);
-      // Detailed breakdown is revealed on hover via the custom tooltip; mirror
-      // it into aria-label for assistive tech. When there's nothing to show,
-      // hide the tooltip so an empty box never flashes on hover.
+      const value = formatThroughputValue(metric);
+      throughputValueEl.textContent = value;
+      // There's no visible "Throughput" label, so the accessible name carries it
+      // (plus the value). The detailed breakdown is revealed on hover via the
+      // custom tooltip and appended to the aria-label for assistive tech; when
+      // there's nothing to show, hide the tooltip so an empty box never flashes.
       const meta = formatThroughputMeta(metric);
       if (throughputTooltipEl) {
         throughputTooltipEl.textContent = meta;
         if (!meta) throughputTooltipEl.style.display = "none";
       }
-      if (meta) {
-        throughputContainer.setAttribute("aria-label", meta);
-      } else {
-        throughputContainer.removeAttribute("aria-label");
-      }
+      throughputContainer.setAttribute(
+        "aria-label",
+        meta ? `Throughput: ${value}, ${meta}` : `Throughput: ${value}`
+      );
     }
 
     // ========================================================================
@@ -838,8 +819,10 @@ export function createEventStreamView(
 
       const currentValue = filterSelect.value;
 
-      // Update "All events" option
-      filterSelect.options[0].textContent = `All events`;
+      // Update "All events" option. The total is carried here (like each type
+      // option carries its own count) so a narrow panel can hide the standalone
+      // "Events" label + count badge without losing the total.
+      filterSelect.options[0].textContent = `All events (${allEvents.length})`;
 
       if (typesChanged) {
         while (filterSelect.options.length > 1) {
@@ -939,11 +922,6 @@ export function createEventStreamView(
       filteredEvents = getFilteredEvents();
       const newCount = filteredEvents.length;
       const bufferHasEvents = buffer.getSize() > 0;
-
-      // Update count badge
-      if (countBadge) {
-        countBadge.textContent = String(buffer.getSize());
-      }
 
       // Show/hide no-results message
       if (newCount === 0 && bufferHasEvents && hasActiveFilters()) {

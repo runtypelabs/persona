@@ -109,6 +109,52 @@ npm install @runtypelabs/persona        # widget
 npm install @runtypelabs/persona-proxy   # proxy (optional)
 ```
 
+## Three primary layouts
+
+While Persona supports much more, the majority of the frontend AI experiences you see fit into the three buckets below. We recommend starting here.
+
+You move between them by changing the `launcher` config:
+
+- **Floating** (the default): a launcher in the corner that opens a floating panel. The entry point for support, docs, sales, or onboarding, no layout config required.
+- **Docked:** a copilot docked beside your app. Wrap a page region and reveal a side panel that resizes, pushes, or overlays your layout.
+- **Fullscreen:** a full-height assistant that owns the page. Fill a container as an app surface, with an optional artifact split.
+
+**With npm** (any bundler):
+
+```ts
+import { initAgentWidget } from "@runtypelabs/persona";
+
+// 1. Floating: the launcher in the corner is the default
+initAgentWidget({ target: "#chat", config: { apiUrl } });
+
+// 2. Docked: wrap a region, reveal a side panel
+initAgentWidget({
+  target: "#workspace",
+  config: { apiUrl, launcher: { mountMode: "docked", dock: { side: "right", width: "420px" } } },
+});
+
+// 3. Fullscreen: turn the launcher off, let the widget own the page
+initAgentWidget({
+  target: "#app",
+  config: { apiUrl, launcher: { enabled: false, fullHeight: true } },
+});
+```
+
+**Or with a script tag** (no build step): the same config via `window.siteAgentConfig`, and the installer loads the widget and its CSS for you. Swap in the same `launcher` field for docked or fullscreen.
+
+```html
+<script>
+  window.siteAgentConfig = {
+    target: "#chat",
+    apiUrl: "https://your-api.com/chat",
+    // floating launcher is the default
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4/dist/install.global.js"></script>
+```
+
+See the live [launcher](https://persona-chat.dev/launcher-demo.html), [docked panel](https://persona-chat.dev/docked-panel-demo.html), and [fullscreen assistant](https://persona-chat.dev/fullscreen-assistant-demo.html) demos. The [widget configuration reference](./packages/widget/README.md) covers `mountMode`, every `dock.reveal` mode (`resize`, `emerge`, `overlay`, `push`), and the docked height contract. 
+
 ## Features
 
 Everything below is opt-in and configurable via the widget config, feature flags, or the plugin system.
