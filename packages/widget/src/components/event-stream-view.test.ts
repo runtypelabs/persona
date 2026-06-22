@@ -223,7 +223,10 @@ async function loadModule() {
 // Helper: navigate the new DOM structure
 // container.children = [toolbarOuter, truncationBanner, eventsListWrapper]
 // toolbarOuter.children = [headerBar, searchBar]
-// headerBar.children = [title, countBadge, spacer, filterSelect, copyAllBtn]
+// headerBar.children = [spacer, filterSelect, copyAllBtn]
+//   (the total event count is shown in the "All events (N)" filter option; an
+//   optional throughput readout is prepended only when a getThroughput option
+//   is passed, which these tests don't)
 // searchBar.children = [searchIconWrapper, searchInput, searchClearBtn]
 // eventsListWrapper.children = [eventsList, noResultsMsg, scrollIndicator]
 
@@ -236,17 +239,15 @@ function getHeaderBar(element: any) {
 function getSearchBar(element: any) {
   return getToolbar(element).children[1]; // searchBar
 }
-function getTitle(element: any) {
-  return getHeaderBar(element).children[0]; // title span
-}
-function getCountBadge(element: any) {
-  return getHeaderBar(element).children[1]; // count badge span
-}
 function getFilterSelect(element: any) {
-  return getHeaderBar(element).children[3]; // filterSelect (after title, badge, spacer)
+  return getHeaderBar(element).children[1]; // filterSelect (after spacer)
 }
 function getCopyAllBtn(element: any) {
-  return getHeaderBar(element).children[4]; // copyAllBtn
+  return getHeaderBar(element).children[2]; // copyAllBtn
+}
+// The total count is carried by the "All events (N)" option, not a badge.
+function getAllEventsOptionText(element: any) {
+  return getFilterSelect(element).options[0].textContent;
 }
 function getSearchInput(element: any) {
   return getSearchBar(element).children[1]; // searchInput (after searchIconWrapper)
@@ -290,7 +291,7 @@ describe("createEventStreamView", () => {
   });
 
   describe("header bar", () => {
-    it("should show 'Event Stream' title and count badge", async () => {
+    it("should carry the total in the All events option (no title or count badge)", async () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
       const buffer = createMockBuffer(events);
@@ -298,11 +299,10 @@ describe("createEventStreamView", () => {
 
       update();
 
-      expect(getTitle(element).textContent).toBe("Events");
-      expect(getCountBadge(element).textContent).toBe("1");
+      expect(getAllEventsOptionText(element)).toBe("All events (1)");
     });
 
-    it("should update count badge when events change", async () => {
+    it("should update the total in the All events option when events change", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("step_chunk", 1)];
@@ -310,13 +310,13 @@ describe("createEventStreamView", () => {
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       update();
-      expect(getCountBadge(element).textContent).toBe("1");
+      expect(getAllEventsOptionText(element)).toBe("All events (1)");
 
       vi.advanceTimersByTime(150);
       buffer.push(makeEvent("step_chunk", 2));
       update();
 
-      expect(getCountBadge(element).textContent).toBe("2");
+      expect(getAllEventsOptionText(element)).toBe("All events (2)");
       vi.useRealTimers();
     });
   });
@@ -336,9 +336,9 @@ describe("createEventStreamView", () => {
 
       const filterSelect = getFilterSelect(element);
 
-      // Should have "All events" + 2 type options
+      // Should have "All events" (with total) + 2 type options
       expect(filterSelect.options.length).toBe(3);
-      expect(filterSelect.options[0].textContent).toBe("All events");
+      expect(filterSelect.options[0].textContent).toBe("All events (3)");
       expect(filterSelect.options[1].textContent).toBe("flow_complete (1)");
       expect(filterSelect.options[2].textContent).toBe("step_chunk (2)");
     });
@@ -353,7 +353,7 @@ describe("createEventStreamView", () => {
       update();
 
       const filterSelect = getFilterSelect(element);
-      expect(filterSelect.options[0].textContent).toBe("All events");
+      expect(filterSelect.options[0].textContent).toBe("All events (1)");
       expect(filterSelect.options[1].textContent).toBe("step_chunk (1)");
 
       // Add another event and advance past throttle window
@@ -361,6 +361,7 @@ describe("createEventStreamView", () => {
       vi.advanceTimersByTime(150);
       update();
 
+      expect(filterSelect.options[0].textContent).toBe("All events (2)");
       expect(filterSelect.options[1].textContent).toBe("step_chunk (2)");
       vi.useRealTimers();
     });
@@ -1073,15 +1074,15 @@ describe("createEventStreamView", () => {
       update();
 
       const filterSelect = getFilterSelect(element);
-      expect(filterSelect.options[0].textContent).toBe("All events");
+      expect(filterSelect.options[0].textContent).toBe("All events (2)");
 
       // Simulate clearChat: buffer.clear() + view.update()
       vi.advanceTimersByTime(150);
       buffer.clear();
       update();
 
-      // Filter should show "All events"
-      expect(filterSelect.options[0].textContent).toBe("All events");
+      // Filter should show "All events" with a zero total
+      expect(filterSelect.options[0].textContent).toBe("All events (0)");
       // No type-specific options remain
       expect(filterSelect.options.length).toBe(1);
       vi.useRealTimers();
@@ -1102,7 +1103,7 @@ describe("createEventStreamView", () => {
       update();
 
       const filterSelect = getFilterSelect(element);
-      expect(filterSelect.options[0].textContent).toBe("All events");
+      expect(filterSelect.options[0].textContent).toBe("All events (0)");
 
       // New events arrive in new session
       vi.advanceTimersByTime(150);
