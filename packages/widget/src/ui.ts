@@ -2408,6 +2408,15 @@ export const createAgentExperience = (
     body.style.cssText = '';
     footer.style.cssText = '';
 
+    // Preserve the event-stream takeover across a layout-mode change. The
+    // cssText reset above wiped the `display: none` that toggleEventStreamOn
+    // set on the messages body, and none of the per-mode reapply branches below
+    // touch `display` — so without this the messages would reappear and stack
+    // above the event panel when the window crosses the fullscreen breakpoint.
+    if (eventStreamVisible) {
+      body.style.display = "none";
+    }
+
     const restoreBodyScrollTop = (): void => {
       if (prevBodyScrollTop <= 0) return;
       const ownerWindow = body.ownerDocument.defaultView ?? window;
