@@ -1586,6 +1586,18 @@
 /* ============================================
    Markdown Table Styles
    ============================================ */
+/* Tables span the full chat column. The assistant bubble is a flex item that
+   sizes to its content, so a width:100% table only fills that shrunk box — and
+   once the streaming `table-layout: fixed` lock is released the table visibly
+   collapses to content width ("renders full-width, then snaps narrow"). When the
+   bubble holds a table, let it grow to fill the row so the table keeps the full
+   column width. */
+.persona-message-bubble:has(table) {
+  width: 100%;
+  max-width: 100%;
+  flex-grow: 1;
+}
+
 .persona-message-bubble table {
   width: 100%;
   border-collapse: collapse;
