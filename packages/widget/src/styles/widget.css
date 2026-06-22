@@ -4028,15 +4028,8 @@
   }
 }
 
-/* ---------------------------------------------------------------------------
- * Event stream toolbar: responsive header
- *
- * The header is text-lean by design: the total count rides in the "All events
- * (N)" option, and the tok/s value plus surrounding context are self-describing,
- * so the toolbar stays compact enough to fit tablet widths. The toolbar is a
- * size container so that in a very narrow panel the "Copy All" word can drop to
- * an icon-only button as a last resort before the filter dropdown gets clipped.
- * ------------------------------------------------------------------------- */
+/* Event stream toolbar: a size container so "Copy All" collapses to icon-only
+ * in a narrow panel before the filter dropdown gets clipped. */
 [data-persona-root] .persona-event-toolbar {
   container-type: inline-size;
 }
