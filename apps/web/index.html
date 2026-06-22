@@ -58,7 +58,6 @@
       <img src="/persona-js.svg" alt="" width="124" height="39">
     </a>
     <nav class="site-nav" aria-label="Page sections">
-      <a href="#quick-start">Quick Start</a>
       <a href="#webmcp">WebMCP</a>
       <a href="#demos">Demos</a>
       <a href="/theme.html">Theme Editor</a>
@@ -192,6 +191,177 @@
             </div>
             <p class="carousel-3d-hint" aria-hidden="true">Click a card to open it full size</p>
             <span class="visually-hidden" aria-live="polite" data-carousel-status></span>
+          </div>
+        </section>
+
+        <!-- Layout modes: one widget, three shapes -->
+        <section id="layouts" class="reveal-el">
+          <div class="section-head">
+            <span class="label-caps">Start in a few lines</span>
+            <h2 class="editorial-h">Floating, docked, or fullscreen UX</h2>
+            <p class="body-copy">Pick your jump-off point and customize from there: a launcher floating in the corner, a copilot docked beside your app, or a fullscreen assistant. You move between them by changing the <code>launcher</code> config, not your agent or app.</p>
+          </div> 
+
+          <div class="layout-modes-controls">
+            <div class="quick-start-tabs layout-modes-tabs" role="tablist" aria-label="Layout">
+              <button
+                type="button"
+                class="quick-start-tab"
+                id="layout-mode-tab-floating"
+                role="tab"
+                aria-selected="true"
+                aria-controls="layout-mode-panel-floating"
+                data-layout-mode-tab="floating"
+              >
+                Floating
+              </button>
+              <button
+                type="button"
+                class="quick-start-tab"
+                id="layout-mode-tab-docked"
+                role="tab"
+                aria-selected="false"
+                aria-controls="layout-mode-panel-docked"
+                data-layout-mode-tab="docked"
+                tabindex="-1"
+              >
+                Docked
+              </button>
+              <button
+                type="button"
+                class="quick-start-tab"
+                id="layout-mode-tab-fullscreen"
+                role="tab"
+                aria-selected="false"
+                aria-controls="layout-mode-panel-fullscreen"
+                data-layout-mode-tab="fullscreen"
+                tabindex="-1"
+              >
+                Fullscreen
+              </button>
+            </div>
+            <div class="layout-delivery" role="group" aria-label="Install method">
+              <span class="layout-delivery-label">Install via</span>
+              <div class="quick-start-tabs layout-delivery-tabs">
+                <button
+                  type="button"
+                  class="quick-start-tab"
+                  data-delivery-tab="npm"
+                  aria-pressed="true"
+                >
+                  npm
+                </button>
+                <button
+                  type="button"
+                  class="quick-start-tab"
+                  data-delivery-tab="script"
+                  aria-pressed="false"
+                >
+                  Script tag
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="layout-modes-panel"
+            id="layout-mode-panel-floating"
+            role="tabpanel"
+            aria-labelledby="layout-mode-tab-floating"
+            data-layout-mode-panel="floating"
+          >
+            <p class="layout-mode-caption">A launcher in the corner that opens a floating panel. The drop-in default for support, docs, sales, or onboarding. No layout config required.</p>
+            <div class="code-showcase layout-delivery-block" data-delivery="npm">
+              <pre><code><span class="code-keyword">import</span> <span class="code-string">"@runtypelabs/persona/widget.css"</span>;
+<span class="code-keyword">import</span> { <span class="code-function">initAgentWidget</span> } <span class="code-keyword">from</span> <span class="code-string">"@runtypelabs/persona"</span>;
+
+<span class="code-function">initAgentWidget</span>({
+  <span class="code-keyword">target</span>: <span class="code-string">"#chat"</span>,
+  <span class="code-keyword">config</span>: {
+    apiUrl: <span class="code-string">"https://your-api.com/chat"</span>,
+    <span class="code-diff"><span class="code-comment">// floating launcher is the default</span></span>
+  },
+});</code></pre>
+            </div>
+            <div class="code-showcase layout-delivery-block" data-delivery="script" hidden>
+              <pre><code>&lt;script&gt;
+  window.siteAgentConfig = {
+    target: <span class="code-string">"#chat"</span>,
+    apiUrl: <span class="code-string">"https://your-api.com/chat"</span>,
+    <span class="code-diff"><span class="code-comment">// floating launcher is the default</span></span>
+  };
+&lt;/script&gt;
+&lt;script src=<span class="code-string">"https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4/dist/install.global.js"</span>&gt;&lt;/script&gt;</code></pre>
+            </div>
+            <div class="layout-mode-actions">
+              <a class="btn-caps" href="/launcher-demo.html" data-demo-lightbox data-demo-title="Floating launcher demo">Open Launcher Demo</a>
+            </div>
+          </div>
+
+          <div
+            class="layout-modes-panel"
+            id="layout-mode-panel-docked"
+            role="tabpanel"
+            aria-labelledby="layout-mode-tab-docked"
+            data-layout-mode-panel="docked"
+            hidden
+          >
+            <p class="layout-mode-caption">A copilot docked beside your app: wrap a page region and Persona reveals a side panel that resizes, pushes, or overlays your layout. Point <code>target</code> at the column to wrap.</p>
+            <div class="code-showcase layout-delivery-block" data-delivery="npm">
+              <pre><code><span class="code-function">initAgentWidget</span>({
+  <span class="code-keyword">target</span>: <span class="code-string">"#workspace"</span>,
+  <span class="code-keyword">config</span>: {
+    apiUrl: <span class="code-string">"https://your-api.com/chat"</span>,
+    <span class="code-diff">launcher: { mountMode: <span class="code-string">"docked"</span>, dock: { side: <span class="code-string">"right"</span>, width: <span class="code-string">"420px"</span> } },</span>
+  },
+});</code></pre>
+            </div>
+            <div class="code-showcase layout-delivery-block" data-delivery="script" hidden>
+              <pre><code>&lt;script&gt;
+  window.siteAgentConfig = {
+    target: <span class="code-string">"#workspace"</span>,
+    apiUrl: <span class="code-string">"https://your-api.com/chat"</span>,
+    <span class="code-diff">launcher: { mountMode: <span class="code-string">"docked"</span>, dock: { side: <span class="code-string">"right"</span>, width: <span class="code-string">"420px"</span> } },</span>
+  };
+&lt;/script&gt;
+&lt;script src=<span class="code-string">"https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4/dist/install.global.js"</span>&gt;&lt;/script&gt;</code></pre>
+            </div>
+            <div class="layout-mode-actions">
+              <a class="btn-caps" href="/docked-panel-demo.html" data-demo-lightbox data-demo-title="Docked panel demo">Open Docked Demo</a>
+            </div>
+          </div>
+
+          <div
+            class="layout-modes-panel"
+            id="layout-mode-panel-fullscreen"
+            role="tabpanel"
+            aria-labelledby="layout-mode-tab-fullscreen"
+            data-layout-mode-panel="fullscreen"
+            hidden
+          >
+            <p class="layout-mode-caption">A full-height assistant that owns the page: fill a container as an app surface, with an optional artifact split. Turn the launcher off.</p>
+            <div class="code-showcase layout-delivery-block" data-delivery="npm">
+              <pre><code><span class="code-function">initAgentWidget</span>({
+  <span class="code-keyword">target</span>: <span class="code-string">"#app"</span>,
+  <span class="code-keyword">config</span>: {
+    apiUrl: <span class="code-string">"https://your-api.com/chat"</span>,
+    <span class="code-diff">launcher: { enabled: <span class="code-keyword">false</span>, fullHeight: <span class="code-keyword">true</span> },</span>
+  },
+});</code></pre>
+            </div>
+            <div class="code-showcase layout-delivery-block" data-delivery="script" hidden>
+              <pre><code>&lt;script&gt;
+  window.siteAgentConfig = {
+    target: <span class="code-string">"#app"</span>,
+    apiUrl: <span class="code-string">"https://your-api.com/chat"</span>,
+    <span class="code-diff">launcher: { enabled: <span class="code-keyword">false</span>, fullHeight: <span class="code-keyword">true</span> },</span>
+  };
+&lt;/script&gt;
+&lt;script src=<span class="code-string">"https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4/dist/install.global.js"</span>&gt;&lt;/script&gt;</code></pre>
+            </div>
+            <div class="layout-mode-actions">
+              <a class="btn-caps" href="/fullscreen-assistant-demo.html" data-demo-lightbox data-demo-title="Fullscreen assistant demo">Open Fullscreen Demo</a>
+            </div>
           </div>
         </section>
 
@@ -492,7 +662,7 @@
                 </div>
                 <div class="code-showcase">
                   <pre><code>&lt;script
-  src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"
+  src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4/dist/install.global.js"
   data-runtype-token="ct_test_..."
 &gt;&lt;/script&gt;</code></pre>
                 </div>
@@ -737,6 +907,72 @@ document.modelContext.registerTool({
           return tab.getAttribute('aria-selected') === 'true';
         }) || quickStartTabs[0];
         activateQuickStartTab(defaultTab.getAttribute('data-quick-start-tab'));
+      }
+
+      // Layout mode tabs (one widget, three shapes)
+      var layoutModeTabs = Array.prototype.slice.call(document.querySelectorAll('[data-layout-mode-tab]'));
+      var layoutModePanels = Array.prototype.slice.call(document.querySelectorAll('[data-layout-mode-panel]'));
+
+      function activateLayoutMode(name) {
+        layoutModeTabs.forEach(function(tab) {
+          var isActive = tab.getAttribute('data-layout-mode-tab') === name;
+          tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          tab.tabIndex = isActive ? 0 : -1;
+        });
+
+        layoutModePanels.forEach(function(panel) {
+          panel.hidden = panel.getAttribute('data-layout-mode-panel') !== name;
+        });
+      }
+
+      layoutModeTabs.forEach(function(tab, index) {
+        tab.addEventListener('click', function() {
+          activateLayoutMode(tab.getAttribute('data-layout-mode-tab'));
+        });
+
+        tab.addEventListener('keydown', function(event) {
+          if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+          event.preventDefault();
+          var direction = event.key === 'ArrowRight' ? 1 : -1;
+          var nextIndex = (index + direction + layoutModeTabs.length) % layoutModeTabs.length;
+          var nextTab = layoutModeTabs[nextIndex];
+          activateLayoutMode(nextTab.getAttribute('data-layout-mode-tab'));
+          nextTab.focus();
+        });
+      });
+
+      if (layoutModeTabs.length && layoutModePanels.length) {
+        var defaultLayoutTab = layoutModeTabs.find(function(tab) {
+          return tab.getAttribute('aria-selected') === 'true';
+        }) || layoutModeTabs[0];
+        activateLayoutMode(defaultLayoutTab.getAttribute('data-layout-mode-tab'));
+      }
+
+      // Delivery toggle (npm vs script tag): swaps every layout panel's code
+      // block. The config is identical across both, only the loader differs.
+      var deliveryTabs = Array.prototype.slice.call(document.querySelectorAll('[data-delivery-tab]'));
+      var deliveryBlocks = Array.prototype.slice.call(document.querySelectorAll('[data-delivery]'));
+
+      function activateDelivery(name) {
+        deliveryTabs.forEach(function(tab) {
+          tab.setAttribute('aria-pressed', tab.getAttribute('data-delivery-tab') === name ? 'true' : 'false');
+        });
+        deliveryBlocks.forEach(function(block) {
+          block.hidden = block.getAttribute('data-delivery') !== name;
+        });
+      }
+
+      deliveryTabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          activateDelivery(tab.getAttribute('data-delivery-tab'));
+        });
+      });
+
+      if (deliveryTabs.length) {
+        var defaultDelivery = deliveryTabs.find(function(tab) {
+          return tab.getAttribute('aria-pressed') === 'true';
+        }) || deliveryTabs[0];
+        activateDelivery(defaultDelivery.getAttribute('data-delivery-tab'));
       }
 
       var quickStartFlagsDialog = document.querySelector('[data-quick-start-flags-dialog]');

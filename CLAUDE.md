@@ -75,6 +75,10 @@ Use `patch` for bug fixes, `minor` for new features, and `major` for breaking ch
 
 **Does NOT need a changeset:** Changes to `examples/`, `docs/`, CI config, tooling, or `CLAUDE.md`.
 
+### Major version bumps and doc CDN URLs
+
+The hand-written docs (`README.md`, `apps/web/index.html`) pin their jsDelivr script-tag install URLs to the **major** range, e.g. `@runtypelabs/persona@4/dist/install.global.js` (never `@latest` or unversioned). On a **major** release these must move to `@5`, etc.
+
 ## Architecture
 
 ### Widget Package (`packages/widget/src/`)
