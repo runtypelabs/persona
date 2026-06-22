@@ -1,5 +1,13 @@
 # @runtypelabs/persona
 
+## 4.4.1
+
+### Patch Changes
+
+- 62dcd56: Fix the event stream inspector reappearing stacked above the chat messages when the window is resized across the mobile/fullscreen breakpoint. The fullscreen layout reset was wiping the `display: none` that hides the messages body while the stream is open; it's now preserved, so the event panel keeps taking over the full chat area at every width.
+- 71c9066: Simplify and fix the event stream toolbar so it no longer overflows in narrow panels. The total event count now lives in the "All events (N)" filter option (matching the per-type options) instead of a separate count badge, and the redundant "Events" and "Throughput" labels are removed (the tok/s value is self-describing and the throughput's accessible name is preserved via aria-label). At very narrow widths the "Copy All" button collapses to icon-only as a last resort.
+- 4e85f3f: Markdown tables now span the full chat column. A table-bearing assistant bubble grows to fill the row (`:has(table)`) instead of shrink-wrapping to its content, which fixes the table visibly collapsing to a narrow width when the streaming column-width lock is released.
+
 ## 4.4.0
 
 ### Minor Changes
