@@ -108,6 +108,40 @@ const emitAssistantMessage = (
   });
 };
 
+const emitUserMessage = (
+  controller: ReturnType<typeof createAgentExperience>,
+  id: string,
+  content: string
+) => {
+  controller.injectTestMessage({
+    type: "message",
+    message: { id, role: "user", content, createdAt: CREATED_AT },
+  });
+};
+
+const emitStreamingAssistant = (
+  controller: ReturnType<typeof createAgentExperience>,
+  id: string,
+  content: string
+) => {
+  controller.injectTestMessage({
+    type: "message",
+    message: { id, role: "assistant", content, createdAt: CREATED_AT, streaming: true },
+  });
+};
+
+// Establish a real anchor-top turn: a prior assistant message seeds
+// send-detection, then a user send anchors. The next assistant message is the
+// anchored response (so it does NOT hit the no-anchor follow fallback) — the
+// scenario `showActivityWhilePinned` is about: the answer streaming in below a
+// pinned question the reader is still reading from the top.
+const anchorUserTurn = (
+  controller: ReturnType<typeof createAgentExperience>
+) => {
+  emitAssistantMessage(controller, "seed", "Earlier reply");
+  emitUserMessage(controller, "u1", "Question");
+};
+
 const baseConfig = (overrides: AgentWidgetConfig): AgentWidgetConfig => ({
   apiUrl: "https://api.example.com/chat",
   launcher: { enabled: false },
@@ -182,17 +216,17 @@ describe("scrollBehavior.showActivityWhilePinned (Principle 8)", () => {
     installRafMock();
   });
 
-  it("counts new messages in anchor-top mode only when opted in", () => {
+  it("counts the anchored response arriving below the pinned turn by default", () => {
     const mount = createMount();
+    // showActivityWhilePinned now defaults on (alongside the anchor-top default).
     const controller = createAgentExperience(
       mount,
-      baseConfig({
-        features: { scrollBehavior: { mode: "anchor-top", showActivityWhilePinned: true } },
-      })
+      baseConfig({ features: { scrollBehavior: { mode: "anchor-top" } } })
     );
     const sc = getScrollContainer(mount);
     const metrics = installScrollMetrics(sc, { scrollHeight: 1000, clientHeight: 400 });
-    metrics.setScrollTop(0); // away from the bottom (reading the pinned turn)
+    anchorUserTurn(controller);
+    metrics.setScrollTop(0); // reading the pinned question, away from the bottom
 
     emitAssistantMessage(controller, "a1", "Arrived below");
 
@@ -201,19 +235,91 @@ describe("scrollBehavior.showActivityWhilePinned (Principle 8)", () => {
     controller.destroy();
   });
 
-  it("stays silent in anchor-top mode by default", () => {
+  it("stays silent when showActivityWhilePinned is disabled", () => {
     const mount = createMount();
     const controller = createAgentExperience(
       mount,
-      baseConfig({ features: { scrollBehavior: { mode: "anchor-top" } } })
+      baseConfig({
+        features: {
+          scrollBehavior: { mode: "anchor-top", showActivityWhilePinned: false },
+        },
+      })
     );
     const sc = getScrollContainer(mount);
     const metrics = installScrollMetrics(sc, { scrollHeight: 1000, clientHeight: 400 });
+    anchorUserTurn(controller);
     metrics.setScrollTop(0);
 
     emitAssistantMessage(controller, "a1", "Arrived below");
 
     expect(getCountBadge(mount).textContent).toBe("");
+    controller.destroy();
+  });
+});
+
+describe("scrollBehavior anchor-top no-anchor fallback", () => {
+  let raf: ReturnType<typeof installRafMock>;
+  beforeEach(() => {
+    raf = installRafMock();
+  });
+
+  const makeAnchorTop = (mount: HTMLElement) =>
+    createAgentExperience(
+      mount,
+      baseConfig({ features: { scrollBehavior: { mode: "anchor-top" } } })
+    );
+
+  it("follows to the bottom for an assistant turn with no user anchor", () => {
+    const mount = createMount();
+    const controller = makeAnchorTop(mount);
+    const sc = getScrollContainer(mount);
+    const metrics = installScrollMetrics(sc, { scrollHeight: 1000, clientHeight: 400 });
+
+    // A proactive/first-load assistant stream with no preceding user send: it
+    // has no anchor, so it falls back to follow-to-bottom rather than streaming
+    // in off-screen.
+    emitStreamingAssistant(controller, "a1", "Proactive reply");
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottom());
+    controller.destroy();
+  });
+
+  it("anchors near the top (does not follow) when the turn follows a user send", () => {
+    const mount = createMount();
+    const controller = makeAnchorTop(mount);
+    const sc = getScrollContainer(mount);
+    const metrics = installScrollMetrics(sc, { scrollHeight: 1000, clientHeight: 400 });
+
+    anchorUserTurn(controller); // seed + user send → real anchor
+    raf.flush();
+    emitStreamingAssistant(controller, "a1", "Answer below the pinned question");
+    raf.flush();
+
+    // The anchored response is pinned near the top (jsdom offsetTop 0 → 0), not
+    // chased to the bottom.
+    expect(metrics.getScrollTop()).toBe(0);
+    controller.destroy();
+  });
+
+  it("re-arms the fallback for a proactive turn after an anchored turn", () => {
+    const mount = createMount();
+    const controller = makeAnchorTop(mount);
+    const sc = getScrollContainer(mount);
+    const metrics = installScrollMetrics(sc, { scrollHeight: 1000, clientHeight: 400 });
+
+    // Complete an anchored turn, then a later proactive assistant message with
+    // no fresh user send re-arms the fallback and follows to the bottom.
+    anchorUserTurn(controller);
+    raf.flush();
+    emitAssistantMessage(controller, "a1", "Anchored answer");
+    raf.flush();
+    metrics.setScrollTop(0);
+
+    emitStreamingAssistant(controller, "a2", "Proactive follow-up");
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(metrics.getBottom());
     controller.destroy();
   });
 });

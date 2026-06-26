@@ -842,16 +842,26 @@ export const createAgentExperience = (
   const getScrollToBottomLabel = () => scrollToBottomFeature.label ?? "";
   const getScrollToBottomIconName = () => scrollToBottomFeature.iconName ?? "arrow-down";
   const isScrollToBottomEnabled = () => scrollToBottomFeature.enabled !== false;
-  const getScrollMode = () => scrollBehaviorFeature.mode ?? "follow";
+  // Default is "anchor-top" (see DEFAULT_WIDGET_CONFIG). This `??` only applies
+  // when a partial config sets `scrollBehavior.mode` to undefined explicitly;
+  // it must agree with the declared default.
+  const getScrollMode = () => scrollBehaviorFeature.mode ?? "anchor-top";
+  // "Effectively following the bottom" for streaming auto-scroll: true in
+  // follow mode, and in anchor-top when the current turn has no anchor (the
+  // no-anchor fallback). Drives `scheduleAutoScroll`, `handleContentResize`,
+  // and `isAwayFromLatest` so a no-anchor anchor-top turn behaves like follow.
+  const isFollowEffective = () =>
+    getScrollMode() === "follow" ||
+    (getScrollMode() === "anchor-top" && followFallbackActive);
   const getAnchorTopOffset = () => scrollBehaviorFeature.anchorTopOffset ?? 16;
-  // Additive, opt-in scroll behaviors. Each defaults to the historical
-  // behavior so existing embeds are unaffected unless they opt in.
   const getScrollRestorePosition = () =>
     scrollBehaviorFeature.restorePosition ?? "bottom";
   const isPauseOnInteractionEnabled = () =>
     scrollBehaviorFeature.pauseOnInteraction === true;
+  // Defaults on alongside the anchor-top default so the pinned-turn UX keeps the
+  // unread count + "streaming below" hint; opt out with `false`.
   const isActivityWhilePinnedEnabled = () =>
-    scrollBehaviorFeature.showActivityWhilePinned === true;
+    scrollBehaviorFeature.showActivityWhilePinned !== false;
   const isAnnounceEnabled = () => scrollBehaviorFeature.announce === true;
   const scrollToBottomButton = createElement(
     "button",
@@ -2917,6 +2927,19 @@ export const createAgentExperience = (
   let scrollSendSeeded = false;
   let suppressScrollSend = false;
   let lastSentUserMessageId: string | null = null;
+  // anchor-top no-anchor fallback: anchor-top only pins on a fresh USER send.
+  // Assistant-initiated turns (proactive greeting, injectAssistantMessage,
+  // resubmit, first-load streaming) have no anchor, so they fall back to
+  // follow-to-bottom for that turn — otherwise their content streams in
+  // off-screen. `true` by default (no anchor yet); a user send sets it false
+  // (the anchor takes over); a new assistant turn with no preceding user send
+  // re-arms it. Inert in follow/none mode (see `isFollowEffective`).
+  let followFallbackActive = true;
+  // Set when a user send anchors in anchor-top; the next NEW assistant message
+  // is that anchored response (so it keeps the anchor, not the fallback).
+  let awaitingAnchorResponse = false;
+  // Dedupes assistant-turn detection across token-by-token re-renders.
+  let lastHandledAssistantId: string | null = null;
 
   // Scroll events caused by layout, scroll anchoring, and smooth-scroll
   // easing can easily move by a couple pixels. Keep manual wheel intent
@@ -3085,11 +3108,11 @@ export const createAgentExperience = (
   };
 
   // Whether the user is currently away from the latest content: drives both
-  // the scroll-to-bottom affordance and the new-messages badge. In follow
-  // mode that's "auto-follow paused"; in anchor-top/none modes (where there
-  // is no follow state) it's simply "not near the bottom".
+  // the scroll-to-bottom affordance and the new-messages badge. When following
+  // the bottom (follow mode, or a no-anchor anchor-top fallback turn) that's
+  // "auto-follow paused"; otherwise it's simply "not near the bottom".
   const isAwayFromLatest = () =>
-    getScrollMode() === "follow"
+    isFollowEffective()
       ? !autoFollow.isFollowing()
       : !isElementNearBottom(body, BOTTOM_THRESHOLD);
 
@@ -3129,9 +3152,10 @@ export const createAgentExperience = (
   };
 
   const scheduleAutoScroll = (force = false) => {
-    // Auto-follow only applies in "follow" mode; anchor-top and none never
-    // chase the bottom during streaming.
-    if (getScrollMode() !== "follow") return;
+    // Auto-follow applies in "follow" mode, and in anchor-top only for a
+    // no-anchor fallback turn (see `isFollowEffective`). Anchored anchor-top
+    // turns and "none" never chase the bottom during streaming.
+    if (!isFollowEffective()) return;
 
     if (!autoFollow.isFollowing()) return;
 
@@ -3178,6 +3202,17 @@ export const createAgentExperience = (
 
     // Cancel any ongoing smooth scroll animation
     cancelSmoothScroll();
+
+    // Nothing to scroll: land exactly on target and skip the rAF loop. Avoids a
+    // no-op animation when already in place (e.g. anchoring with zero overflow),
+    // which also keeps environments with a synchronous rAF from spinning.
+    if (Math.abs(distance) < 1) {
+      isAutoScrolling = true;
+      element.scrollTop = target;
+      lastScrollTop = element.scrollTop;
+      isAutoScrolling = false;
+      return;
+    }
 
     const startTime = performance.now();
     isAutoScrolling = true;
@@ -3388,7 +3423,7 @@ export const createAgentExperience = (
   // back as the streamed response grows (shrink-only, so total scroll height
   // stays constant and nothing jumps).
   const handleContentResize = () => {
-    if (getScrollMode() === "follow") {
+    if (isFollowEffective()) {
       if (!autoFollow.isFollowing()) return;
       if (isElementNearBottom(body, 1)) return;
       scheduleAutoScroll(!isStreaming);
@@ -3418,8 +3453,30 @@ export const createAgentExperience = (
       resumeAutoScroll();
       scheduleAutoScroll(true);
     } else if (mode === "anchor-top") {
+      // A real anchor now drives this turn: disarm the no-anchor fallback and
+      // mark the next new assistant message as this send's anchored response.
+      followFallbackActive = false;
+      awaitingAnchorResponse = true;
       scheduleAnchorToUserMessage(messageId);
     }
+  };
+
+  // Reacts to a new assistant turn that arrived without a fresh user send.
+  // Only meaningful in anchor-top: if the turn is the response to a just-sent
+  // user message it keeps the anchor; otherwise (proactive greeting, injected
+  // assistant message, resubmit) it has no anchor, so fall back to
+  // follow-to-bottom for the turn instead of streaming in off-screen.
+  const handleAssistantTurnStarted = () => {
+    if (getScrollMode() !== "anchor-top") return;
+    if (awaitingAnchorResponse) {
+      awaitingAnchorResponse = false;
+      followFallbackActive = false;
+      return;
+    }
+    followFallbackActive = true;
+    resetAnchorState();
+    resumeAutoScroll();
+    scheduleAutoScroll(true);
   };
 
   const trackMessages = (messages: AgentWidgetMessage[]) => {
@@ -5124,19 +5181,38 @@ export const createAgentExperience = (
       const lastUserMessage = [...messages]
         .reverse()
         .find((msg) => msg.role === "user");
+      const lastAssistantMessage = [...messages]
+        .reverse()
+        .find((msg) => msg.role === "assistant");
 
       // Scroll-on-send / anchor-top. Seeded so restored history (constructor
       // initialMessages and async storage hydration) never reads as a fresh
       // send; clearing the chat resets any anchor spacer.
       if (messages.length === 0) {
         resetAnchorState();
+        // Cleared: no anchor, so re-arm the no-anchor follow fallback.
+        followFallbackActive = true;
+        awaitingAnchorResponse = false;
       }
       if (!scrollSendSeeded || suppressScrollSend) {
         scrollSendSeeded = true;
         lastSentUserMessageId = lastUserMessage?.id ?? null;
+        // Seed assistant-turn tracking too, so restored history doesn't read
+        // as a fresh assistant turn and trigger the no-anchor fallback.
+        lastHandledAssistantId = lastAssistantMessage?.id ?? null;
       } else if (lastUserMessage && lastUserMessage.id !== lastSentUserMessageId) {
         lastSentUserMessageId = lastUserMessage.id;
         handleUserMessageSent(lastUserMessage.id);
+      } else if (
+        lastAssistantMessage &&
+        lastAssistantMessage.id !== lastHandledAssistantId
+      ) {
+        // A new assistant turn with no fresh user send: the anchor-top
+        // no-anchor fallback (proactive/injected/resubmit/first-load streaming).
+        handleAssistantTurnStarted();
+      }
+      if (lastAssistantMessage) {
+        lastHandledAssistantId = lastAssistantMessage.id;
       }
 
       // Emit user:message event when a new user message is detected
@@ -5173,6 +5249,9 @@ export const createAgentExperience = (
       }
       if (!streaming) {
         scheduleAutoScroll(true);
+        // Turn complete: clear the one-shot "next assistant is the anchored
+        // response" arm so a later proactive/injected turn still falls back.
+        awaitingAnchorResponse = false;
       }
       // Keep the "streaming below" hint and its announcement in sync with the
       // streaming lifecycle (Principles 8 + 15).
@@ -6238,9 +6317,9 @@ export const createAgentExperience = (
     const bottomOffsetShrank = currentBottomOffset < lastBottomOffset;
     lastBottomOffset = currentBottomOffset;
 
-    if (getScrollMode() !== "follow") {
-      // No follow state to manage: just keep the scroll-to-bottom
-      // affordance in sync with the user's position.
+    if (!isFollowEffective()) {
+      // No follow state to manage (anchored anchor-top / none): just keep the
+      // scroll-to-bottom affordance in sync with the user's position.
       lastScrollTop = scrollTop;
       syncScrollToBottomButton();
       return;
@@ -6298,7 +6377,7 @@ export const createAgentExperience = (
   // left in the transcript fires no further events, so it can't re-pause
   // after the user resumes following.
   const handleSelectionChange = () => {
-    if (getScrollMode() !== "follow") return;
+    if (!isFollowEffective()) return;
     if (!autoFollow.isFollowing()) return;
     if (hasActiveTranscriptSelection()) {
       pauseAutoScroll();
@@ -6325,7 +6404,7 @@ export const createAgentExperience = (
   ]);
   const handleTranscriptKeydown = (event: KeyboardEvent) => {
     if (!isPauseOnInteractionEnabled()) return;
-    if (getScrollMode() !== "follow") return;
+    if (!isFollowEffective()) return;
     if (!autoFollow.isFollowing()) return;
     if (NAV_KEYS.has(event.key)) {
       pauseAutoScroll();
@@ -6333,7 +6412,7 @@ export const createAgentExperience = (
   };
   const handleTranscriptFocusIn = (event: FocusEvent) => {
     if (!isPauseOnInteractionEnabled()) return;
-    if (getScrollMode() !== "follow") return;
+    if (!isFollowEffective()) return;
     if (!autoFollow.isFollowing()) return;
     const target = event.target as Element | null;
     if (target && target.closest("a, button, [tabindex], input, textarea, select")) {
@@ -6348,7 +6427,7 @@ export const createAgentExperience = (
   });
 
   const handleWheel = (event: WheelEvent) => {
-    if (getScrollMode() !== "follow") return;
+    if (!isFollowEffective()) return;
     const action = resolveFollowStateFromWheel({
       following: autoFollow.isFollowing(),
       deltaY: event.deltaY,

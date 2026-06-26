@@ -128,8 +128,8 @@
         <div class="btn-group">
           <label>Scroll mode</label>
           <select id="scroll-mode">
-            <option value="follow" selected>follow: stick to bottom (default)</option>
-            <option value="anchor-top">anchor-top: pin sent message to top</option>
+            <option value="anchor-top" selected>anchor-top: pin sent message to top (default)</option>
+            <option value="follow">follow: stick to bottom</option>
             <option value="none">none: never auto-scroll</option>
           </select>
         </div>
@@ -240,7 +240,7 @@
         },
       });
 
-      const controller = createAgentExperience(mount, buildWidgetConfig("follow"));
+      const controller = createAgentExperience(mount, buildWidgetConfig("anchor-top"));
 
       document.getElementById("scroll-mode").addEventListener("change", (event) => {
         const mode = event.target.value;

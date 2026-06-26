@@ -847,12 +847,15 @@ export type AgentWidgetArtifactsFeature = {
 /**
  * How the transcript scrolls while an assistant response streams in.
  *
- * - `"follow"` (default): keep the newest content pinned to the bottom of the
- *   viewport, pausing when the user scrolls up and resuming when they return
- *   to the bottom.
- * - `"anchor-top"`: on send, scroll the user's message near the top of the
- *   viewport and hold it there while the response streams in beneath it
- *   (ChatGPT-style). The transcript never auto-scrolls during streaming.
+ * - `"anchor-top"` (default): on send, scroll the user's message near the top
+ *   of the viewport and hold it there while the response streams in beneath it
+ *   (ChatGPT-style). When a turn has no user send to anchor to (a proactive
+ *   greeting, an injected assistant message, a resubmit, or first-load
+ *   streaming), it falls back to `"follow"` for that turn so content never
+ *   streams in off-screen.
+ * - `"follow"`: keep the newest content pinned to the bottom of the viewport,
+ *   pausing when the user scrolls up and resuming when they return to the
+ *   bottom. This was the default before 4.x.
  * - `"none"`: never auto-scroll; the scroll-to-bottom affordance is the only
  *   way back to the latest content.
  */
@@ -871,7 +874,7 @@ export type AgentWidgetScrollMode = "follow" | "anchor-top" | "none";
 export type AgentWidgetScrollRestorePosition = "bottom" | "last-user-turn";
 
 export type AgentWidgetScrollBehaviorFeature = {
-  /** Scroll behavior during streamed responses. @default "follow" */
+  /** Scroll behavior during streamed responses. @default "anchor-top" */
   mode?: AgentWidgetScrollMode;
   /**
    * Gap (px) kept between the anchored user message and the top of the
@@ -899,9 +902,10 @@ export type AgentWidgetScrollBehaviorFeature = {
   /**
    * When true, the scroll-to-bottom affordance also surfaces new-content and
    * still-streaming activity while the reader is pinned away from the latest
-   * content in `"anchor-top"` mode (where the new-message count is normally
-   * suppressed). Lets the reader know a response is arriving offscreen below.
-   * @default false
+   * content in `"anchor-top"` mode. Lets the reader know a response is arriving
+   * offscreen below. Defaults on alongside the `"anchor-top"` default; set
+   * `false` to keep the count + streaming hint silent while pinned.
+   * @default true
    */
   showActivityWhilePinned?: boolean;
   /**

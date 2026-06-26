@@ -23,7 +23,7 @@ type ScrollOptions = {
 };
 
 const options: ScrollOptions = {
-  mode: "follow",
+  mode: "anchor-top",
   pauseOnInteraction: true,
   showActivityWhilePinned: true,
   announce: true,

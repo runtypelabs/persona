@@ -129,8 +129,16 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       label: "",
     },
     scrollBehavior: {
-      mode: "follow",
+      // ChatGPT-style default: pin the just-sent message near the top and let
+      // the reply stream into the space below. Restore the old "stick to the
+      // bottom" behavior with `mode: "follow"`.
+      mode: "anchor-top",
       anchorTopOffset: 16,
+      // Surface the unread count + "streaming below" hint while pinned, so the
+      // reader still sees activity arriving off-screen under the pinned turn.
+      // (Suppressed by default historically; opted on alongside the anchor-top
+      // default so the default UX keeps the affordance.)
+      showActivityWhilePinned: true,
     },
     toolCallDisplay: {
       collapsedMode: "tool-call",

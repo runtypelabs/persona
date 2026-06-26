@@ -151,9 +151,9 @@ const sharedWidgetConfig: NonNullable<
   },
   features: {
     showEventStreamToggle: true,
-    // ChatGPT-style: pin the sent message near the top and let the reply stream
-    // into the space below (opt-in; the library default is still "follow").
-    scrollBehavior: { mode: "anchor-top" }
+    // Scroll: anchor-top (ChatGPT-style — pin the sent message near the top and
+    // stream the reply below) is now the library default, so no per-instance
+    // scrollBehavior override is needed here.
   },
   // Read aloud uses Runtype-hosted TTS (provider: 'runtype'): the button
   // streams audio from Runtype's per-agent `/speak` endpoint. This demo talks

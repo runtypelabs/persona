@@ -912,9 +912,12 @@ describe("createAgentExperience streaming scroll", () => {
   it("re-sticks to the bottom when the user sends a message after scrolling up", () => {
     const raf = installRafMock();
     const mount = createMount();
+    // Follow-specific: a user send re-sticks to the bottom (anchor-top, the
+    // default, would pin the sent message near the top instead).
     const controller = createAgentExperience(mount, {
       apiUrl: "https://api.example.com/chat",
-      launcher: { enabled: false }
+      launcher: { enabled: false },
+      features: { scrollBehavior: { mode: "follow" } }
     });
 
     const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
@@ -941,9 +944,12 @@ describe("createAgentExperience streaming scroll", () => {
   it("shows a count badge for messages that arrive while paused", () => {
     const raf = installRafMock();
     const mount = createMount();
+    // Follow-specific paused-badge semantics (wheel-up pauses auto-follow, then
+    // a message arrives while paused and below the fold).
     const controller = createAgentExperience(mount, {
       apiUrl: "https://api.example.com/chat",
-      launcher: { enabled: false }
+      launcher: { enabled: false },
+      features: { scrollBehavior: { mode: "follow" } }
     });
 
     const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
