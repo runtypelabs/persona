@@ -204,6 +204,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     tags: ["context", "dev"],
     modes: ["launcher"],
   },
+  {
+    slug: "scroll-engineering",
+    href: "/scroll-engineering.html",
+    title: "Scroll Engineering",
+    blurb: "All 15 principles of a great streaming scroll, wired through additive scrollBehavior config.",
+    tier: "reference",
+    tags: ["streaming", "scroll", "a11y", "dev"],
+    modes: ["launcher"],
+  },
 ];
 
 export function isGalleryExample(example: AdvancedExample): boolean {

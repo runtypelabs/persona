@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>Scroll Engineering - Persona</title>
+    <style>
+      /* Wider shell so three columns have room on desktop. */
+      .shell-main.se-shell {
+        max-width: min(1640px, 96vw);
+      }
+
+      .se-grid {
+        display: grid;
+        gap: var(--stage-gap, 1.5rem);
+        align-items: start;
+        /* Default (narrow / tablet): foreword + controls stacked side by side,
+           widget collapses to the floating pill. */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      /* Wide desktop: three columns — foreword | controls | live widget. */
+      @media (min-width: 1180px) {
+        .se-grid {
+          grid-template-columns: minmax(280px, 340px) minmax(300px, 360px) minmax(420px, 1fr);
+        }
+      }
+      /* Mobile: single column; widget is the floating pill. */
+      @media (max-width: 760px) {
+        /* The shared mobile rule drops the fixed-nav offset, so re-add it. */
+        .shell-main.se-shell {
+          padding-top: calc(var(--shell-header, 56px) + 0.75rem);
+        }
+        .se-grid {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 1rem;
+        }
+        .se-col {
+          padding: 1rem;
+        }
+        /* Lead with the interactive controls; the foreword + principle list is
+           reference material, so it follows. (The widget is the floating pill.) */
+        #se-controls-col {
+          order: 1;
+        }
+        #se-foreword-col {
+          order: 2;
+        }
+      }
+
+      .se-col {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg, 16px);
+        box-shadow: var(--shadow-sm);
+        padding: 1.25rem;
+        min-width: 0;
+      }
+      .se-col-head {
+        font-size: 1.05rem;
+        margin: 0 0 0.35rem;
+      }
+      .se-col-foreword {
+        color: var(--muted);
+        font-size: 0.85rem;
+        line-height: 1.5;
+        margin: 0 0 1rem;
+      }
+      .se-col-foreword a {
+        color: var(--foreground);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      /* The live widget column: a fixed-height, sticky chat pane on desktop. */
+      .se-widget-col {
+        padding: 0;
+        overflow: hidden;
+        height: calc(100vh - var(--shell-header, 56px) - 5rem);
+        min-height: 520px;
+        position: sticky;
+        top: calc(var(--shell-header, 56px) + 1.75rem);
+      }
+      .se-widget-host {
+        width: 100%;
+        height: 100%;
+      }
+      /* Hidden when the widget is in floating-pill mode. */
+      .se-widget-col[hidden] {
+        display: none;
+      }
+
+      /* Status line: reserve two lines so its label never reflows the rail. */
+      #follow-status {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-start;
+        font-size: 0.8125rem;
+        min-height: 2.4em;
+      }
+      #follow-status .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 0.45em;
+      }
+      #follow-status .status-dot.following {
+        background: #22c55e;
+      }
+      #follow-status .status-dot.paused {
+        background: #f59e0b;
+      }
+      #follow-status .status-dot.idle {
+        background: #94a3b8;
+      }
+
+      #log {
+        font-size: 0.72rem;
+        font-family: var(--font-mono);
+        background: #0f172a;
+        color: #cbd5e1;
+        border-radius: var(--radius);
+        padding: 0.5rem;
+        max-height: 150px;
+        overflow-y: auto;
+        line-height: 1.55;
+      }
+      #log .info {
+        color: #60a5fa;
+      }
+      #log .warn {
+        color: #fbbf24;
+      }
+
+      /* Live 15-principle checklist. */
+      .principle-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        counter-reset: principle;
+      }
+      .principle-list li {
+        display: flex;
+        gap: 0.55rem;
+        font-size: 0.78rem;
+        line-height: 1.4;
+        align-items: flex-start;
+      }
+      .principle-list li::before {
+        counter-increment: principle;
+        content: counter(principle);
+        flex-shrink: 0;
+        width: 1.25rem;
+        height: 1.25rem;
+        border-radius: 50%;
+        background: var(--border);
+        color: var(--foreground);
+        font-size: 0.7rem;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+      .principle-list li[data-on="true"]::before {
+        background: var(--signal, #0d9488);
+        color: var(--signal-ink, #fff);
+      }
+      .principle-list .pname {
+        font-weight: 600;
+        color: var(--foreground);
+      }
+      .principle-list .pcfg {
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+      }
+
+      /*
+       * Principle 8 made visible: the widget toggles a
+       * data-persona-scroll-to-bottom-streaming attribute on the jump-to-latest
+       * affordance while a response streams out of view. The widget ships no
+       * default visual (additive/opt-in), so the host styles it.
+       */
+      [data-persona-scroll-to-bottom-streaming] {
+        animation: persona-demo-pulse 1.4s ease-out infinite;
+      }
+      @keyframes persona-demo-pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.5);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(13, 148, 136, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(13, 148, 136, 0);
+        }
+      }
+
+      /* The Tweet embed (skeleton + swap + fallback) injects its own styles —
+       * see src/plugins/tweet-embed-plugin.ts. */
+      @media (prefers-reduced-motion: reduce) {
+        [data-persona-scroll-to-bottom-streaming] {
+          animation: none;
+          box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.4);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Floating-pill mount target (used when the viewport is too narrow for an
+         inline widget column). -->
+    <div id="se-launcher-root" aria-hidden="true"></div>
+
+    <main class="shell-main se-shell">
+      <div class="se-grid">
+        <!-- Column 1: foreword + the live 15-principle checklist -->
+        <section class="se-col" id="se-foreword-col">
+          <h2 class="se-col-head">Scroll Engineering</h2>
+          <p class="se-col-foreword">
+            The 15 principles of a great streaming-chat scroll, wired through additive
+            <code>features.scrollBehavior</code> config. Widget defaults are unchanged; this
+            page opts in. Each row lights up when the current config satisfies it. Principles
+            from
+            <a
+              href="https://x.com/shadcn/status/2070394918720221522"
+              target="_blank"
+              rel="noopener noreferrer"
+              >@shadcn&rsquo;s post on X</a
+            >
+            &mdash; embedded live inside the &ldquo;Long reply + tweet embed&rdquo; scenario.
+          </p>
+          <ol class="principle-list" id="principle-list"></ol>
+        </section>
+
+        <!-- Column 2: controls -->
+        <section class="se-col" id="se-controls-col">
+          <div class="info-section">
+            <h3>Status</h3>
+            <div id="follow-status">
+              <span class="status-dot idle"></span>
+              <span>Run a scenario to see scroll state</span>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Scroll mode (Principles 1&ndash;7)</h3>
+            <div class="section">
+              <label for="scroll-mode">Mode</label>
+              <select id="scroll-mode">
+                <option value="follow" selected>follow &mdash; stick to bottom (default)</option>
+                <option value="anchor-top">anchor-top &mdash; pin sent message near top</option>
+                <option value="none">none &mdash; never auto-scroll</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Additive opt-in behaviors</h3>
+            <div class="toggle-section">
+              <label for="opt-pause-interaction">pauseOnInteraction (P3)</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-pause-interaction" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-section">
+              <label for="opt-activity-pinned">showActivityWhilePinned (P8)</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-activity-pinned" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-section">
+              <label for="opt-announce">announce / aria-live (P15)</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-announce" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-section">
+              <label for="opt-restore">restorePosition: last-user-turn (P11)</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-restore" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Scenarios</h3>
+            <div class="btn-row">
+              <button class="btn" id="btn-seed">Seed conversation</button>
+              <button class="btn" id="btn-stream">Long reply + tweet embed</button>
+              <button class="btn" id="btn-rapid">Rapid messages</button>
+              <button class="btn" id="btn-mixed">Mixed content</button>
+              <button class="btn" id="btn-image">Late image load</button>
+              <button class="btn" id="btn-reopen">Reopen (restore)</button>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Utilities</h3>
+            <div class="btn-row">
+              <button class="btn" id="btn-cancel">Cancel scenario</button>
+              <button class="btn" id="btn-reset">Reset session</button>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Log</h3>
+            <div id="log"></div>
+          </div>
+        </section>
+
+        <!-- Column 3: the live Persona widget (inline on desktop) -->
+        <section class="se-col se-widget-col" id="se-widget-col">
+          <div class="se-widget-host" id="se-widget-host"></div>
+        </section>
+      </div>
+    </main>
+
+    <script type="module" src="/src/scroll-engineering.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("scroll-engineering");
+    </script>
+  </body>
+</html>

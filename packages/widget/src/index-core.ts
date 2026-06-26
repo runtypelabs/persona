@@ -263,6 +263,11 @@ export type {
   AgentWidgetStreamAnimationType,
   AgentWidgetStreamAnimationFeature,
   AgentWidgetStreamAnimationPlaceholder,
+  AgentWidgetScrollMode,
+  AgentWidgetScrollRestorePosition,
+  AgentWidgetScrollBehaviorFeature,
+  AgentWidgetScrollToBottomFeature,
+  AgentWidgetComponentRenderer,
 } from "./types";
 
 // Action system types: needed to type the `actionHandlers` / `actionParsers`
