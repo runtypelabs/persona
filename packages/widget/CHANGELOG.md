@@ -1,5 +1,40 @@
 # @runtypelabs/persona
 
+## 4.5.0
+
+### Minor Changes
+
+- 87bd7b8: Add additive, opt-in `features.scrollBehavior` options for scroll-engineering control. All default to the existing behavior, so nothing changes unless you opt in:
+
+  - `restorePosition: "last-user-turn"` — reopen a saved conversation with the last user message pinned near the top of the viewport instead of jumping to the absolute bottom.
+  - `pauseOnInteraction: true` — treat keyboard navigation (PageUp/PageDown/Home/End/arrows) and focusing a link/control inside the transcript as intent to stay put, pausing auto-follow (previously only wheel/scroll/text-selection did).
+  - `showActivityWhilePinned: true` — surface the "new messages below" count and a streaming-below hint (a `data-persona-scroll-to-bottom-streaming` attribute on the jump-to-latest affordance) even in `anchor-top` mode.
+  - `announce: true` — maintain a visually-hidden `aria-live="polite"` region that announces response start/finish and "N new messages below" at a calm, debounced cadence (never token-by-token).
+
+  Also exports the `AgentWidgetScrollMode`, `AgentWidgetScrollRestorePosition`, `AgentWidgetScrollBehaviorFeature`, `AgentWidgetScrollToBottomFeature`, and `AgentWidgetComponentRenderer` types from the package root.
+
+- 87bd7b8: **Default scroll behavior changed: `anchor-top` is now the default.**
+
+  The streaming transcript now defaults to `features.scrollBehavior.mode: "anchor-top"` (ChatGPT-style: the sent message pins near the top of the viewport and the reply streams into the space below) instead of `"follow"` (stick to the bottom). The unread-count + "streaming below" hint (`showActivityWhilePinned`) also now defaults **on**, so activity arriving off-screen under the pinned turn stays visible.
+
+  Turns with no user send to anchor to — a proactive greeting, an injected assistant message, a resubmit, or first-load streaming — automatically fall back to follow-to-bottom for that turn, so content never streams in off-screen.
+
+  **To restore the previous behavior**, set the mode explicitly:
+
+  ```js
+  initAgentWidget({
+    config: {
+      features: { scrollBehavior: { mode: "follow" } },
+    },
+  });
+  ```
+
+  To keep `anchor-top` but silence the pinned-turn activity hint, set `features.scrollBehavior.showActivityWhilePinned: false`.
+
+### Patch Changes
+
+- 156c69f: Fix `anchor-top` scroll: keep follow-on assistant content pinned instead of yanking the viewport to the bottom. Once a user send has anchored the conversation, the anchor now holds across the whole turn — a multi-part reply, an injected embed (tweet/image), or a tool result no longer re-arms the follow-to-bottom fallback, so a late-loading embed can't pop the scroll down to itself. The fallback now applies only when nothing has anchored the conversation yet (first-load or proactive-first streaming).
+
 ## 4.4.2
 
 ### Patch Changes
