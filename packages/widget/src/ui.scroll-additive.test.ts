@@ -145,6 +145,11 @@ const anchorUserTurn = (
 const baseConfig = (overrides: AgentWidgetConfig): AgentWidgetConfig => ({
   apiUrl: "https://api.example.com/chat",
   launcher: { enabled: false },
+  // Hermetic: never restore persisted history at construction. Otherwise a
+  // prior test's transcript (sharing message ids like "u1") leaks via
+  // localStorage and a user send reads as already-seen, so the anchor never
+  // takes and the assertion sees a follow-to-bottom instead.
+  persistState: false,
   ...overrides,
 });
 
@@ -302,24 +307,25 @@ describe("scrollBehavior anchor-top no-anchor fallback", () => {
     controller.destroy();
   });
 
-  it("re-arms the fallback for a proactive turn after an anchored turn", () => {
+  it("keeps follow-on assistant content in an anchored turn pinned (no late-embed yank)", () => {
     const mount = createMount();
     const controller = makeAnchorTop(mount);
     const sc = getScrollContainer(mount);
     const metrics = installScrollMetrics(sc, { scrollHeight: 1000, clientHeight: 400 });
 
-    // Complete an anchored turn, then a later proactive assistant message with
-    // no fresh user send re-arms the fallback and follows to the bottom.
-    anchorUserTurn(controller);
+    anchorUserTurn(controller); // user send → anchor
     raf.flush();
     emitAssistantMessage(controller, "a1", "Anchored answer");
     raf.flush();
-    metrics.setScrollTop(0);
+    metrics.setScrollTop(0); // reading the pinned question from the top
 
-    emitStreamingAssistant(controller, "a2", "Proactive follow-up");
+    // A second assistant message in the same anchored conversation — a
+    // multi-part reply or a late-injected embed (tweet/image/tool result) — must
+    // NOT re-arm the fallback or yank the viewport to the bottom.
+    emitStreamingAssistant(controller, "a2", "Late-injected embed content");
     raf.flush();
 
-    expect(metrics.getScrollTop()).toBe(metrics.getBottom());
+    expect(metrics.getScrollTop()).toBe(0);
     controller.destroy();
   });
 });

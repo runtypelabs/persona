@@ -2929,17 +2929,20 @@ export const createAgentExperience = (
   let scrollSendSeeded = false;
   let suppressScrollSend = false;
   let lastSentUserMessageId: string | null = null;
-  // anchor-top no-anchor fallback: anchor-top only pins on a fresh USER send.
-  // Assistant-initiated turns (proactive greeting, injectAssistantMessage,
-  // resubmit, first-load streaming) have no anchor, so they fall back to
-  // follow-to-bottom for that turn — otherwise their content streams in
-  // off-screen. `true` by default (no anchor yet); a user send sets it false
-  // (the anchor takes over); a new assistant turn with no preceding user send
-  // re-arms it. Inert in follow/none mode (see `isFollowEffective`).
+  // anchor-top no-anchor fallback: anchor-top pins on a USER send. An assistant
+  // message that streams when NO user send has anchored the conversation yet
+  // (first-load / proactive-first streaming) has nothing to anchor to, so it
+  // falls back to follow-to-bottom — otherwise its content streams in
+  // off-screen. `true` by default (nothing anchored yet); a user send clears it
+  // and the anchor takes over. Inert in follow/none mode (see
+  // `isFollowEffective`).
   let followFallbackActive = true;
-  // Set when a user send anchors in anchor-top; the next NEW assistant message
-  // is that anchored response (so it keeps the anchor, not the fallback).
-  let awaitingAnchorResponse = false;
+  // True once a user send has anchored the current conversation (until the chat
+  // is cleared). While anchored, follow-on assistant content — the response, a
+  // multi-part reply, an injected embed (tweet/image), a tool result — stays
+  // pinned and never re-arms the fallback, so a late-loading embed can't yank
+  // the viewport down to the bottom.
+  let currentTurnAnchored = false;
   // Dedupes assistant-turn detection across token-by-token re-renders.
   let lastHandledAssistantId: string | null = null;
 
@@ -3455,23 +3458,25 @@ export const createAgentExperience = (
       resumeAutoScroll();
       scheduleAutoScroll(true);
     } else if (mode === "anchor-top") {
-      // A real anchor now drives this turn: disarm the no-anchor fallback and
-      // mark the next new assistant message as this send's anchored response.
+      // A real anchor now drives the conversation: disarm the no-anchor
+      // fallback. Every follow-on assistant message stays anchored until the
+      // next user send.
       followFallbackActive = false;
-      awaitingAnchorResponse = true;
+      currentTurnAnchored = true;
       scheduleAnchorToUserMessage(messageId);
     }
   };
 
-  // Reacts to a new assistant turn that arrived without a fresh user send.
-  // Only meaningful in anchor-top: if the turn is the response to a just-sent
-  // user message it keeps the anchor; otherwise (proactive greeting, injected
-  // assistant message, resubmit) it has no anchor, so fall back to
-  // follow-to-bottom for the turn instead of streaming in off-screen.
+  // Reacts to a new assistant message that arrived without a fresh user send.
+  // Only meaningful in anchor-top. While the conversation is anchored (a user
+  // has sent at least once), follow-on assistant content — the response, a
+  // multi-part reply, an injected embed, a tool result — keeps the anchor so a
+  // late-loading embed never yanks the viewport. Only when nothing has anchored
+  // yet (first-load / proactive-first streaming) does it fall back to
+  // follow-to-bottom so the content isn't stranded off-screen.
   const handleAssistantTurnStarted = () => {
     if (getScrollMode() !== "anchor-top") return;
-    if (awaitingAnchorResponse) {
-      awaitingAnchorResponse = false;
+    if (currentTurnAnchored) {
       followFallbackActive = false;
       return;
     }
@@ -5192,9 +5197,9 @@ export const createAgentExperience = (
       // send; clearing the chat resets any anchor spacer.
       if (messages.length === 0) {
         resetAnchorState();
-        // Cleared: no anchor, so re-arm the no-anchor follow fallback.
+        // Cleared: nothing anchored, so re-arm the no-anchor follow fallback.
         followFallbackActive = true;
-        awaitingAnchorResponse = false;
+        currentTurnAnchored = false;
       }
       if (!scrollSendSeeded || suppressScrollSend) {
         scrollSendSeeded = true;
@@ -5251,9 +5256,6 @@ export const createAgentExperience = (
       }
       if (!streaming) {
         scheduleAutoScroll(true);
-        // Turn complete: clear the one-shot "next assistant is the anchored
-        // response" arm so a later proactive/injected turn still falls back.
-        awaitingAnchorResponse = false;
       }
       // Keep the "streaming below" hint and its announcement in sync with the
       // streaming lifecycle (Principles 8 + 15).
