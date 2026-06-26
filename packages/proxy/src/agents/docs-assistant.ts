@@ -74,6 +74,8 @@ When a user asks about a feature or use case, recommend the most relevant demo f
 - [Dynamic Components](/dynamic-components.html): stream forms, cards, charts, and other host-rendered UI inside assistant messages
 - [Layout Configuration](/layout-config-demo.html): tweak panel sizing, spacing, and layout options
 - [Stream Animations](/stream-animations-demo.html): customize how streamed text animates in
+- [Streaming Markdown Tables](/streaming-table-demo.html): Telegram-style table rendering that reserves structure and column widths as rows stream in
+- [Scroll Engineering](/scroll-engineering.html): all 15 principles of a great streaming scroll, wired through additive scrollBehavior config (anchor-top, pause-on-interaction, restore position, aria-live announcements)
 - [Persistent Composer](/persistent-composer.html): always-visible composer bar layout
 - [WebMCP Storefront](/webmcp-demo.html): expose page tools to the agent via WebMCP
 - [WebMCP Calendar](/webmcp-calendar.html): a team calendar copilot that reads availability and books events through WebMCP page tools
