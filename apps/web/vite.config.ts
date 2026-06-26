@@ -570,6 +570,7 @@ export default defineConfig({
         'custom-voice-provider-demo': path.resolve(__dirname, 'custom-voice-provider-demo.html'),
         'server-tts-demo': path.resolve(__dirname, 'server-tts-demo.html'),
         'autoscroll-stress-test': path.resolve(__dirname, 'autoscroll-stress-test.html'),
+        'scroll-engineering': path.resolve(__dirname, 'scroll-engineering.html'),
         // Standalone (CDN / Copy-Paste) pages
         'standalone/shopify': path.resolve(__dirname, 'standalone/shopify.html'),
         'standalone/example-shop': path.resolve(__dirname, 'standalone/example-shop.html'),

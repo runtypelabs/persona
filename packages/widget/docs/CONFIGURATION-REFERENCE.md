@@ -543,7 +543,7 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `showEventStreamToggle` | `boolean?` | Show the event stream inspector toggle in the header. Default: `false`. |
 | `composerHistory` | `boolean?` | `Up`/`Down` arrows in the composer navigate previously sent user messages for re-entry/editing (shell / Slack style). Entered only when the caret is at the start of the input, so multi-line cursor movement is preserved. Default: `true`. |
 | `scrollToBottom` | `AgentWidgetScrollToBottomFeature?` | Shared transcript/event-stream scroll-to-bottom affordance. Defaults: `enabled: true`, `iconName: "arrow-down"`, icon-only label. Shows a new-message count while scrolled away. |
-| `scrollBehavior` | `AgentWidgetScrollBehaviorFeature?` | Streaming transcript scroll mode. Defaults: `{ mode: "follow", anchorTopOffset: 16 }`. |
+| `scrollBehavior` | `AgentWidgetScrollBehaviorFeature?` | Streaming transcript scroll mode. Defaults: `{ mode: "anchor-top", anchorTopOffset: 16, showActivityWhilePinned: true }`. |
 | `toolCallDisplay` | `AgentWidgetToolCallDisplayFeature?` | Collapsed tool-call row behavior: summary mode, active preview, grouping, expandability, and loading animation. |
 | `reasoningDisplay` | `AgentWidgetReasoningDisplayFeature?` | Collapsed reasoning row behavior: active preview, expandability, and loading animation. |
 | `streamAnimation` | `AgentWidgetStreamAnimationFeature?` | Assistant text reveal animation while streaming (`none`, `typewriter`, `letter-rise`, `word-fade`, `wipe`, `glyph-cycle`, `pop-bubble`, or custom plugin). |
@@ -556,8 +556,9 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `mode` | `'follow' \| 'anchor-top' \| 'none'?` | `follow` keeps the latest content in view; `anchor-top` pins the sent user message near the top while the response streams; `none` disables streaming auto-scroll. Default: `'follow'`. |
+| `mode` | `'follow' \| 'anchor-top' \| 'none'?` | `anchor-top` (default) pins the sent user message near the top while the response streams (ChatGPT-style), falling back to `follow` for a turn with no user send to anchor to; `follow` keeps the latest content in view; `none` disables streaming auto-scroll. Default: `'anchor-top'`. |
 | `anchorTopOffset` | `number?` | Top gap in pixels for `anchor-top`. Default: `16`. |
+| `showActivityWhilePinned` | `boolean?` | In `anchor-top`, surface the new-message count + "streaming below" hint while the reader is pinned away from the latest content. Default: `true`. |
 
 **`features.scrollToBottom`**: `AgentWidgetScrollToBottomFeature`
 
