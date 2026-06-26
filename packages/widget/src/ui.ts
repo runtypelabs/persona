@@ -926,10 +926,12 @@ export const createAgentExperience = (
     if (announceTimer !== null) return;
     announceTimer = setTimeout(() => {
       announceTimer = null;
-      if (pendingAnnouncement) {
+      // Re-check: `update()` may have disabled `announce` within the debounce
+      // window, and a stale message must not slip through to the live region.
+      if (pendingAnnouncement && isAnnounceEnabled()) {
         liveRegion.textContent = pendingAnnouncement;
-        pendingAnnouncement = null;
       }
+      pendingAnnouncement = null;
     }, 400);
   };
 
@@ -3327,7 +3329,7 @@ export const createAgentExperience = (
     const escapedId =
       typeof CSS !== "undefined" && typeof CSS.escape === "function"
         ? CSS.escape(lastUser.id)
-        : lastUser.id.replace(/"/g, '\\"');
+        : lastUser.id.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     const bubble = body.querySelector<HTMLElement>(
       `[data-message-id="${escapedId}"]`
     );
@@ -3386,7 +3388,7 @@ export const createAgentExperience = (
       const escapedId =
         typeof CSS !== "undefined" && typeof CSS.escape === "function"
           ? CSS.escape(messageId)
-          : messageId.replace(/"/g, '\\"');
+          : messageId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       const bubble = body.querySelector<HTMLElement>(
         `[data-message-id="${escapedId}"]`
       );
