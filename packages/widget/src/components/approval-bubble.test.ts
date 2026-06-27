@@ -249,6 +249,58 @@ describe("createApprovalBubble summary and details", () => {
   });
 });
 
+describe("createApprovalBubble WebMCP provenance and security warning", () => {
+  const getProvenance = (bubble: HTMLElement) =>
+    bubble.querySelector("[data-approval-provenance]") as HTMLElement | null;
+  const getWarning = (bubble: HTMLElement) =>
+    bubble.querySelector("[data-approval-security-warning]") as HTMLElement | null;
+
+  it("renders the registering origin for a WebMCP tool", () => {
+    const bubble = createApprovalBubble(
+      makeDetailedMessage({ pageOrigin: "https://shop.example" })
+    );
+    expect(getProvenance(bubble)?.textContent).toContain("Runs code from:");
+    expect(getProvenance(bubble)?.textContent).toContain("https://shop.example");
+  });
+
+  it("omits provenance for a non-WebMCP approval even if pageOrigin is set", () => {
+    const bubble = createApprovalBubble(
+      makeDetailedMessage({ toolType: undefined, pageOrigin: "https://shop.example" })
+    );
+    expect(getProvenance(bubble)).toBeNull();
+  });
+
+  it("renders a prominent warning with reasons when suspicious", () => {
+    const bubble = createApprovalBubble(
+      makeDetailedMessage({
+        suspicious: true,
+        securityWarnings: ["This tool's definition changed since it was offered."],
+      })
+    );
+    const warning = getWarning(bubble);
+    expect(warning).not.toBeNull();
+    expect(warning?.textContent).toContain("Unverified tool");
+    expect(warning?.textContent).toContain("changed since it was offered");
+  });
+
+  it("renders the warning as plain text (page-controlled strings are not markup)", () => {
+    const bubble = createApprovalBubble(
+      makeDetailedMessage({
+        suspicious: true,
+        securityWarnings: ["<img src=x onerror=alert(1)>"],
+      })
+    );
+    const warning = getWarning(bubble);
+    expect(warning?.querySelector("img")).toBeNull();
+    expect(warning?.textContent).toContain("<img src=x onerror=alert(1)>");
+  });
+
+  it("shows no warning for an ordinary WebMCP approval", () => {
+    const bubble = createApprovalBubble(makeDetailedMessage());
+    expect(getWarning(bubble)).toBeNull();
+  });
+});
+
 describe("updateApprovalDetailsUI", () => {
   it("syncs visibility and toggle state after the expansion state changes", () => {
     const bubble = createApprovalBubble(makeDetailedMessage());

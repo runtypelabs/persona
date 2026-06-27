@@ -309,6 +309,27 @@ export type WebMcpConfirmInfo = {
     untrustedContentHint?: boolean;
   };
   /**
+   * Origin of the page that registered this tool (`location.origin`). Surfaced
+   * in the approval gate so the user can see whose code a `webmcp:*` call will
+   * run. `document.modelContext` is page-global and any same-origin script can
+   * register a tool, so this is provenance for the human, not a trust signal.
+   */
+  pageOrigin?: string;
+  /**
+   * Elevated-risk marker for the gate. Set when the tool's metadata tripped the
+   * sanitizer (a defanged injection delimiter), or when the live tool no longer
+   * matches the definition the user was offered at dispatch (a same-origin
+   * TOCTOU swap), or when the agent asked for a tool that was never in the
+   * dispatch snapshot. The default gate UI shows a prominent warning and the
+   * `autoApprove` fast-path is bypassed when this is set.
+   */
+  suspicious?: boolean;
+  /**
+   * Human-readable reasons behind `suspicious`, shown under the warning in the
+   * gate (e.g. "Tool definition changed since it was offered").
+   */
+  securityWarnings?: string[];
+  /**
    * Why the confirm was requested. Currently always `'gate'`: the default
    * confirm-by-default gate that fires before every `webmcp:*` call. (The
    * `@mcp-b/webmcp-polyfill` owns the spec's `requestUserInteraction` callback
@@ -4420,6 +4441,22 @@ export type AgentWidgetApproval = {
   reason?: string;
   parameters?: unknown;
   resolvedAt?: number;
+  /**
+   * For `toolType === "webmcp"`: origin of the page that registered the tool,
+   * shown in the approval bubble as provenance ("Runs code from …"). Page tools
+   * are same-origin code, never a remote MCP server, so the user should see
+   * whose code a call runs.
+   */
+  pageOrigin?: string;
+  /**
+   * For `toolType === "webmcp"`: elevated-risk marker. When set, the approval
+   * bubble renders a prominent warning (the tool's metadata was sanitized, or
+   * its definition changed since it was offered). Mirrors
+   * `WebMcpConfirmInfo.suspicious`.
+   */
+  suspicious?: boolean;
+  /** Human-readable reasons behind `suspicious`, shown in the approval bubble. */
+  securityWarnings?: string[];
 };
 
 export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool" | "approval";

@@ -14,6 +14,21 @@
  * enforcement live on the Runtype API; this bridge mirrors those checks
  * client-side as a usability convenience, not a security boundary.
  *
+ * Same-origin threat model (see `WEBMCP-SECURITY.md`): `document.modelContext`
+ * is page-global, so any same-origin script — a third-party tag, a compromised
+ * dependency, or a stored-XSS payload — can register a tool. Same-origin is NOT
+ * a provenance boundary. This bridge applies defense-in-depth on top of the
+ * server boundary and the per-call confirm gate:
+ *   - tool name + description are sanitized before they enter the agent's tool
+ *     catalog (`utils/webmcp-sanitize.ts`), neutralizing prompt-injection in
+ *     tool metadata;
+ *   - tool output is tagged `untrustedContentHint` so the agent treats it as
+ *     data, not instructions;
+ *   - the confirm gate carries the registering `pageOrigin` and an integrity
+ *     check: a tool whose contract changed since the dispatch snapshot, or that
+ *     was never offered, is flagged `suspicious` (which also bypasses the
+ *     `autoApprove` fast path).
+ *
  * About `@mcp-b/webmcp-polyfill`: it polyfills the *strict standard surface*
  * only (`registerTool` / `getTools` / `executeTool` on `document.modelContext`),
  * with no MCP-B-only extensions. The spec standardizes the *producer* side;
@@ -43,6 +58,11 @@ import type {
   WebMcpConfirmInfo,
   WebMcpToolResult,
 } from "./types";
+import {
+  sanitizeWebMcpDescription,
+  sanitizeWebMcpToolName,
+  webMcpToolFingerprint,
+} from "./utils/webmcp-sanitize";
 
 /**
  * Default per-call timeout for a WebMCP tool's `execute()`. Bounds how long
@@ -235,6 +255,16 @@ export class WebMcpBridge {
    */
   private incompatibleContextWarned = false;
 
+  /**
+   * Bare tool name → fingerprint of the (sanitized) definition last shipped in
+   * `snapshotForDispatch`. Re-checked at execute time so a same-origin script
+   * that swaps a tool's behavior between the dispatch the user saw and the call
+   * they approve (a TOCTOU swap), or an agent asking for a tool we never
+   * advertised, gets flagged as `suspicious` to the gate. Rebuilt every
+   * snapshot, so the map reflects only the most recent offer.
+   */
+  private snapshotFingerprints = new Map<string, string>();
+
   constructor(private readonly config: AgentWidgetWebMcpConfig) {
     this.confirmHandler = config.onConfirm ?? null;
     this.timeoutMs = DEFAULT_TOOL_TIMEOUT_MS;
@@ -290,19 +320,46 @@ export class WebMcpBridge {
 
     const pageOrigin = typeof location !== "undefined" ? location.origin : "";
 
+    // Rebuilt from scratch every snapshot so a tool that unregistered can't
+    // leave a stale fingerprint that would mask a later swap.
+    this.snapshotFingerprints.clear();
+
     return infos
       .filter((info) => this.passesClientAllowlist(info.name))
-      .map<ClientToolDefinition>((info) => {
+      .map<ClientToolDefinition | null>((info) => {
+        // Treat name + description as attacker-controllable (any same-origin
+        // script can register a tool). Sanitize before they enter the agent's
+        // tool catalog: a dropped name means the tool is unusable, so skip it.
+        const name = sanitizeWebMcpToolName(info.name);
+        if (!name) return null;
+        const description = sanitizeWebMcpDescription(info.description).text;
+
         const def: ClientToolDefinition = {
-          name: info.name,
-          description: info.description,
+          name,
+          description,
           origin: "webmcp",
           ...(pageOrigin ? { pageOrigin } : {}),
+          // Page tools run same-origin code we can't vouch for and frequently
+          // surface third-party data (comments, listings). Mark their output
+          // untrusted so the agent treats it as data, not instructions.
+          annotations: { untrustedContentHint: true },
         };
         const schema = parseSchema(info.inputSchema);
         if (schema) def.parametersSchema = schema;
+
+        // Key the fingerprint by the ORIGINAL registry name (what the agent
+        // calls back with), over the sanitized contract the user will be shown.
+        this.snapshotFingerprints.set(
+          info.name,
+          webMcpToolFingerprint({
+            name,
+            description,
+            schema: schema ? JSON.stringify(schema) : undefined,
+          }),
+        );
         return def;
-      });
+      })
+      .filter((def): def is ClientToolDefinition => def !== null);
   }
 
   /**
@@ -383,6 +440,36 @@ export class WebMcpBridge {
       );
     }
 
+    // Integrity + provenance for the gate. Sanitize the live description the
+    // same way the snapshot did, then compare the live tool's contract against
+    // what we offered at dispatch. A mismatch (or a tool absent from the last
+    // snapshot) means a same-origin script changed the tool after the user was
+    // shown it — surface it as suspicious rather than silently running it.
+    const sanitizedDescription = sanitizeWebMcpDescription(info.description);
+    const schema = parseSchema(info.inputSchema);
+    const liveFingerprint = webMcpToolFingerprint({
+      name: sanitizeWebMcpToolName(info.name) || bareName,
+      description: sanitizedDescription.text,
+      schema: schema ? JSON.stringify(schema) : undefined,
+    });
+    const offeredFingerprint = this.snapshotFingerprints.get(info.name);
+    const securityWarnings: string[] = [];
+    if (offeredFingerprint === undefined) {
+      securityWarnings.push(
+        "This tool was not in the list offered for this message.",
+      );
+    } else if (offeredFingerprint !== liveFingerprint) {
+      securityWarnings.push(
+        "This tool's definition changed since it was offered.",
+      );
+    }
+    if (sanitizedDescription.defanged) {
+      securityWarnings.push(
+        "This tool's description contains unusual instruction-like content.",
+      );
+    }
+    const pageOrigin = typeof location !== "undefined" ? location.origin : "";
+
     // Bail before the confirm renders: a late approval after cancel() would
     // otherwise fire a host-page side effect with no matching /resume.
     if (signal?.aborted) {
@@ -390,13 +477,18 @@ export class WebMcpBridge {
     }
 
     // Confirm-by-default gate. Every `webmcp:*` call routes through here,
-    // regardless of `annotations.readOnlyHint`.
+    // regardless of `annotations.readOnlyHint`. The gate sees the SANITIZED
+    // description, the registering origin, and any integrity warnings.
     const displayTitle = getWebMcpToolDisplayTitle(bareName);
     const gateInfo: WebMcpConfirmInfo = {
       toolName: bareName,
       args,
-      description: info.description,
+      description: sanitizedDescription.text,
       ...(displayTitle ? { title: displayTitle } : {}),
+      ...(pageOrigin ? { pageOrigin } : {}),
+      ...(securityWarnings.length > 0
+        ? { suspicious: true, securityWarnings }
+        : {}),
       reason: "gate",
     };
     if (!(await this.requestConfirm(gateInfo))) {
@@ -431,7 +523,10 @@ export class WebMcpBridge {
       const raw = await mc.executeTool(info, safeStringifyArgs(args), {
         signal: controller.signal,
       });
-      return normalizeSerializedResult(raw);
+      // Tag the page tool's output as untrusted content. It may carry
+      // attacker-controlled third-party data (comments, listings) laced with
+      // instructions, so the agent must treat it as data, not commands.
+      return markUntrusted(normalizeSerializedResult(raw));
     } catch (err) {
       if (timedOut) {
         return errorResult(
@@ -633,6 +728,16 @@ const normalizeSerializedResult = (raw: string | null): WebMcpToolResult => {
   const text = typeof parsed === "string" ? parsed : safeStringify(parsed);
   return { content: [{ type: "text", text }] };
 };
+
+/**
+ * Stamp `annotations.untrustedContentHint = true` on a tool result, preserving
+ * any annotations the tool set itself. Applied to every successful `webmcp:*`
+ * result so the agent treats page-tool output as untrusted data.
+ */
+const markUntrusted = (result: WebMcpToolResult): WebMcpToolResult => ({
+  ...result,
+  annotations: { ...result.annotations, untrustedContentHint: true },
+});
 
 const errorResult = (message: string): WebMcpToolResult => ({
   isError: true,

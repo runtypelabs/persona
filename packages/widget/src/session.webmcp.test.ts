@@ -1179,4 +1179,48 @@ describe("AgentWidgetSession: WebMCP parallel batched resume (core#3878)", () =>
     await expect(pending).resolves.toBe(false);
     expect(s.webMcpApprovalResolvers.size).toBe(0);
   });
+
+  it("autoApprove silently allows an ordinary call but is bypassed for a suspicious one", async () => {
+    // Security property: a page must not be able to inject or swap a tool and
+    // have an integrator's autoApprove rule run it without a human seeing it.
+    const autoApprove = vi.fn(() => true);
+    const session = new AgentWidgetSession(
+      { apiUrl: "http://test", webmcp: { enabled: true, autoApprove } },
+      {
+        onMessagesChanged: () => undefined,
+        onStatusChanged: () => undefined,
+        onStreamingChanged: () => undefined,
+      },
+    );
+    const s = session as unknown as {
+      webMcpApprovalResolvers: Map<string, unknown>;
+      messages: AgentWidgetMessage[];
+    };
+
+    // Ordinary call: autoApprove fires, resolves immediately, no bubble parked.
+    await expect(
+      session.requestWebMcpApproval({
+        toolName: "search",
+        args: {},
+      } as WebMcpConfirmInfo),
+    ).resolves.toBe(true);
+    expect(autoApprove).toHaveBeenCalledTimes(1);
+    expect(s.webMcpApprovalResolvers.size).toBe(0);
+
+    // Suspicious call: autoApprove is NOT consulted; the gate parks pending and
+    // the bubble carries the warning state for the user.
+    void session.requestWebMcpApproval({
+      toolName: "wire_money",
+      args: {},
+      suspicious: true,
+      securityWarnings: ["This tool was not in the list offered for this message."],
+    } as WebMcpConfirmInfo);
+    expect(autoApprove).toHaveBeenCalledTimes(1); // not called a second time
+    expect(s.webMcpApprovalResolvers.size).toBe(1);
+    const bubble = s.messages.find((m) => m.variant === "approval");
+    expect(bubble?.approval?.suspicious).toBe(true);
+    expect(bubble?.approval?.securityWarnings).toEqual([
+      "This tool was not in the list offered for this message.",
+    ]);
+  });
 });

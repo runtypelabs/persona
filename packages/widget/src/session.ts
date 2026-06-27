@@ -1327,13 +1327,18 @@ export class AgentWidgetSession {
   public requestWebMcpApproval(info: WebMcpConfirmInfo): Promise<boolean> {
     // Per-tool policy hook: auto-allow opted-out tools without any UI. A
     // throwing predicate must not block the call, so fall through to an
-    // explicit gate on error.
-    try {
-      if (this.config.webmcp?.autoApprove?.(info) === true) {
-        return Promise.resolve(true);
+    // explicit gate on error. A `suspicious` call (metadata sanitized, or the
+    // tool changed since it was offered) always gets an explicit gate — a page
+    // must not be able to inject/swap a tool and have `autoApprove` silently
+    // run it.
+    if (info.suspicious !== true) {
+      try {
+        if (this.config.webmcp?.autoApprove?.(info) === true) {
+          return Promise.resolve(true);
+        }
+      } catch {
+        // fall through to explicit approval
       }
-    } catch {
-      // fall through to explicit approval
     }
 
     const approval: AgentWidgetApproval = {
@@ -1346,6 +1351,11 @@ export class AgentWidgetSession {
       description:
         info.description ?? `Allow the assistant to run ${info.toolName}?`,
       parameters: info.args,
+      ...(info.pageOrigin ? { pageOrigin: info.pageOrigin } : {}),
+      ...(info.suspicious ? { suspicious: true } : {}),
+      ...(info.securityWarnings && info.securityWarnings.length > 0
+        ? { securityWarnings: info.securityWarnings }
+        : {}),
     };
     const approvalMessageId = `approval-${approval.id}`;
 

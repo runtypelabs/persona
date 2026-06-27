@@ -274,6 +274,60 @@ export const createApprovalBubble = (
   summary.textContent = summaryText;
   content.appendChild(summary);
 
+  // WebMCP security context. Page tools are same-origin code (any script on the
+  // page can register them), never a vetted remote server, so the gate shows
+  // provenance and an elevated warning when the tool's metadata was sanitized
+  // or its definition changed since it was offered. All values are rendered via
+  // textContent — they originate from page-controlled strings.
+  if (isWebMcpTool) {
+    if (approval.suspicious) {
+      const warning = createElement(
+        "div",
+        "persona-flex persona-items-start persona-gap-2 persona-mt-2 persona-p-2 persona-rounded-md persona-text-xs"
+      );
+      warning.setAttribute("data-approval-security-warning", "true");
+      warning.style.backgroundColor =
+        "var(--persona-palette-colors-warning-100, #fef3c7)";
+      warning.style.color = "var(--persona-palette-colors-warning-700, #b45309)";
+      const warnIconHolder = createElement("span", "persona-flex-shrink-0 persona-mt-0.5");
+      const warnIcon = renderLucideIcon(
+        "shield-alert",
+        14,
+        "var(--persona-palette-colors-warning-700, #b45309)",
+        2
+      );
+      if (warnIcon) warnIconHolder.appendChild(warnIcon);
+      const warnBody = createElement("div", "persona-flex-1 persona-min-w-0");
+      const warnTitle = createElement("p", "persona-font-medium");
+      warnTitle.textContent = "Unverified tool — review carefully";
+      warnBody.appendChild(warnTitle);
+      const reasons =
+        approval.securityWarnings && approval.securityWarnings.length > 0
+          ? approval.securityWarnings
+          : ["This tool's definition could not be verified."];
+      for (const reason of reasons) {
+        const line = createElement("p", "persona-mt-0.5");
+        line.textContent = reason;
+        warnBody.appendChild(line);
+      }
+      warning.append(warnIconHolder, warnBody);
+      content.appendChild(warning);
+    }
+
+    if (approval.pageOrigin) {
+      const provenance = createElement(
+        "p",
+        "persona-text-xs persona-mt-1 persona-text-persona-muted"
+      );
+      provenance.setAttribute("data-approval-provenance", "true");
+      const label = createElement("span", "persona-font-medium");
+      label.textContent = "Runs code from: ";
+      provenance.appendChild(label);
+      provenance.appendChild(document.createTextNode(approval.pageOrigin));
+      content.appendChild(provenance);
+    }
+  }
+
   // Agent-authored justification for this specific call. It is the agent's
   // own claim about its intent (attacker-writable under prompt injection), so
   // it is rendered as plain text via textContent, never markdown/HTML, and
