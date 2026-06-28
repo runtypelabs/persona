@@ -3460,14 +3460,15 @@ export class AgentWidgetClient {
       seqReadyQueue.length = 0;
     };
 
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split("\n\n");
-      buffer = events.pop() ?? "";
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
 
       for (const event of events) {
         const lines = event.split("\n");
@@ -3555,8 +3556,17 @@ export class AgentWidgetClient {
         drainReadyQueue();
         advanceCursor();
       }
-    }
+      }
 
-    drainReadyQueue();
+      drainReadyQueue();
+    } finally {
+      // Always clear an active durable pause when the stream ends — normal
+      // completion, an HTTP/read-layer failure (network drop, malformed body,
+      // reader throw), or an abort. The per-frame settler only fires when a
+      // later frame arrives; if the stream dies first, this is the only path
+      // that stops the passive "working in the background" indicator from
+      // lingering forever. Any error is still surfaced via its own error event.
+      settleDurablePause();
+    }
   }
 }
