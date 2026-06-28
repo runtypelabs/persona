@@ -26,6 +26,7 @@ export type FingerprintableMessage = {
   reasoning?: { chunks?: string[]; status?: string; [key: string]: unknown };
   contentParts?: unknown[];
   stopReason?: string;
+  durablePause?: { awaitReason?: string; resolved?: boolean; [key: string]: unknown };
 };
 
 export type MessageCacheEntry = {
@@ -72,6 +73,8 @@ export function computeMessageFingerprint(
     message.reasoning?.chunks?.[message.reasoning.chunks.length - 1]?.slice(-32) ?? "",
     message.contentParts?.length ?? 0,
     message.stopReason ?? "",
+    message.durablePause?.awaitReason ?? "",
+    message.durablePause?.resolved ? "1" : "0",
     configVersion,
   ].join("\x00");
 }
