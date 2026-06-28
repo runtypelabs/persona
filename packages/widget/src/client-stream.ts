@@ -1864,9 +1864,9 @@ export async function streamResponse(
     signal?.throwIfAborted();
     if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split("\n\n");
-    buffer = events.pop() ?? "";
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
 
     for (const event of events) {
       if (generation !== ctx.streamGeneration()) return;
@@ -1981,12 +1981,13 @@ export async function streamResponse(
       }
       advanceCursor();
     }
-  }
+    }
 
   drainReadyQueue();
   } finally {
     ctx.streamReaders.delete(reader);
     signal?.removeEventListener("abort", abortReader);
     reader.releaseLock();
+    settleDurablePause();
   }
 }
