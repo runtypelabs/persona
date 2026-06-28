@@ -290,6 +290,11 @@ class UnifiedEventTranslator {
           awaitedAt: data.awaitedAt,
           origin: data.origin,
           pageOrigin: data.pageOrigin,
+          // Durable-pause discriminator (additive; undefined → dropped by
+          // JSON.stringify). Present iff an auto-resuming pause, not a tool await.
+          awaitReason: data.awaitReason,
+          crawlId: data.crawlId,
+          stepId: data.stepId,
         });
         break;
       case "agent_reflection": {
@@ -416,6 +421,11 @@ class UnifiedEventTranslator {
           awaitedAt: data.awaitedAt,
           origin: data.origin,
           pageOrigin: data.pageOrigin,
+          // Durable-pause discriminator (additive; undefined → dropped by
+          // JSON.stringify). Present iff an auto-resuming pause, not a tool await.
+          awaitReason: data.awaitReason,
+          crawlId: data.crawlId,
+          stepId: data.stepId,
         });
         break;
       case "step_start":
@@ -477,6 +487,11 @@ class UnifiedEventTranslator {
           toolName: data.toolName,
           parameters: data.parameters,
           awaitedAt: data.awaitedAt,
+          // Durable-pause discriminator (additive; undefined → dropped by
+          // JSON.stringify). Present iff an auto-resuming pause, not a tool await.
+          awaitReason: data.awaitReason,
+          crawlId: data.crawlId,
+          stepId: data.stepId,
         });
         break;
 

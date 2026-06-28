@@ -658,6 +658,8 @@ export default defineConfig({
         'context-mentions-demo': path.resolve(__dirname, 'context-mentions-demo.html'),
         'slash-commands-demo': path.resolve(__dirname, 'slash-commands-demo.html'),
         'approval-demo': path.resolve(__dirname, 'approval-demo.html'),
+        // Durable pause (auto-resuming server pause; awaitReason)
+        'durable-pause-demo': path.resolve(__dirname, 'durable-pause-demo.html'),
         // Focus input demo
         'focus-input-demo': path.resolve(__dirname, 'focus-input-demo.html'),
         // Optional smart-dom-reader page-context provider (shadow DOM / iframes)
