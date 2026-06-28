@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Durable Pause Demo</title>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Durable Pause</h1>
+          <p>Some pauses resume themselves. When the API emits an <code>await</code> event with an <code>awaitReason</code> (e.g. <code>crawl_pending</code> or <code>durable_poll</code>), the server — not the user — continues the stream. The widget shows a passive "working in the background" indicator and waits; it never renders a resume/input affordance.</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
+
+        <div class="info-section">
+          <h3>Pause kind</h3>
+          <p>Both are auto-resuming server pauses — only the indicator copy differs. The suppression of the resume affordance is driven by the <em>presence</em> of <code>awaitReason</code>, not by matching a specific value.</p>
+          <div class="mode-group" id="kind-selector" style="margin-top: 0.5rem;">
+            <button class="mode-btn active" data-kind="crawl_pending">crawl_pending</button>
+            <button class="mode-btn" data-kind="durable_poll">durable_poll</button>
+          </div>
+        </div>
+
+        <div data-config-inspector></div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">How it works</h3>
+        <p>The unified <code>await</code> SSE event carries an optional <code>awaitReason</code> discriminator. When it is absent, the await is client-resolvable (a local tool / WebMCP call) and the widget renders the usual interactive affordance the client must fulfil. When it is a non-empty string, the pause is <strong>auto-resuming</strong>: the server (CrawlPollerDO for crawl, the wait-until Workflow for durable poll) resumes the same stream on its own, so the widget renders a passive <code>variant: "pause"</code> bubble and simply waits for subsequent frames.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Why no resume button</h3>
+        <p>An auto-resuming pause has nothing for the client to fulfil — any resume action would have no payload to send. Showing a resume/input control there is a dead end, so the widget suppresses it and shows a non-interactive indicator instead. <code>awaitReason</code> is treated as UX context only, never a control signal: it decides how to render, never authorization, gating, or auto-resume logic.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Forward compatibility</h3>
+        <p>Suppression keys on <code>awaitReason</code> being present and non-empty — not on an exact enum match — so a future durable-pause kind suppresses the affordance correctly without an SDK release. Copy can still special-case known kinds (and you can override it per-reason via <code>config.copy.durablePauseLabels</code>).</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">This demo</h3>
+        <p>A <code>customFetch</code> replays a scripted stream: an intro reply, an <code>await</code> frame with the selected <code>awaitReason</code>, a few keep-alive pings (which must not settle the indicator), then the resumed answer and <code>execution_complete</code> — all on one stream. Watch the passive indicator appear, hold, and then disappear as the answer streams in. No backend or API key required.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/durable-pause-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("durable-pause-demo");
+  </script>
+</body>
+</html>
