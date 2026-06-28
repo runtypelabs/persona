@@ -4467,7 +4467,7 @@ export type AgentWidgetDurablePause = {
    * resumes (a subsequent content frame) or the execution completes. The UI
    * stops the active indicator (and hides the bubble) once resolved.
    */
-  resolved?: boolean;
+  resolved: boolean;
 };
 
 /**

@@ -2906,6 +2906,51 @@ describe('AgentWidgetClient: durable-pause (awaitReason) parsing', () => {
     const text = messages.find((m) => !m.variant && m.content.includes('Done crawling.'));
     expect(text).toBeDefined();
   });
+
+  it('settles the pause if the stream fails at the read layer before any further frame', async () => {
+    // The server pauses, then the SSE connection dies (network drop / reader
+    // throw) before a content frame arrives. The per-frame settler never runs
+    // again, so without the finally-block settle the indicator would linger.
+    // `pull` delivers the await frame on the first read, then errors on the
+    // next read — a queued chunk would be discarded if we errored eagerly in
+    // `start`, so the frame must land before the failure.
+    let delivered = false;
+    const failingStream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (!delivered) {
+          delivered = true;
+          controller.enqueue(
+            encoder.encode(
+              `event: await\ndata: ${JSON.stringify({ type: 'await', executionId: 'exec_abc', awaitReason: 'crawl_pending', crawlId: 'crawl_1', stepId: 'step_1' })}\n\n`
+            )
+          );
+          return;
+        }
+        controller.error(new Error('network drop'));
+      },
+    });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, body: failingStream });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    // The stream read rejects, so dispatch rejects too (existing behavior — the
+    // caller handles it). The point of the fix is that the durable pause is
+    // settled in the finally block BEFORE the error propagates.
+    await expect(
+      client.dispatch(
+        { messages: [{ id: 'u1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+        (e) => events.push(e)
+      )
+    ).rejects.toThrow('network drop');
+
+    const pauseEmissions = events
+      .filter((e) => e.type === 'message')
+      .map((e) => (e as { message: AgentWidgetMessage }).message)
+      .filter((m) => m.variant === 'pause');
+    expect(pauseEmissions.length).toBeGreaterThan(0);
+    // The final pause emission is resolved → the passive indicator is cleared.
+    expect(pauseEmissions[pauseEmissions.length - 1].durablePause?.resolved).toBe(true);
+  });
 });
 
 // ============================================================================
