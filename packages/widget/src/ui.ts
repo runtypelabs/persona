@@ -79,6 +79,7 @@ import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer } fr
 import { createStandardBubble, createTypingIndicator } from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
+import { createPauseBubble } from "./components/pause-bubble";
 import {
   buildStructuredAnswers,
   ensureAskUserQuestionSheet,
@@ -4065,6 +4066,11 @@ export const createAgentExperience = (
         } else if (message.variant === "approval" && message.approval) {
           if (config.approval === false) return;
           bubble = createApprovalBubble(message, config);
+        } else if (message.variant === "pause") {
+          // Passive auto-resuming durable pause (server resumes the stream
+          // itself): a non-interactive "working in the background" indicator
+          // that self-hides once `durablePause.resolved` flips true.
+          bubble = createPauseBubble(message, config);
         } else {
           // Check for custom message renderers in layout config
           const messageLayoutConfig = config.layout?.messages;

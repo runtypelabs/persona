@@ -3857,6 +3857,14 @@ export type AgentWidgetConfig = {
      * key to an empty string to suppress the notice for that reason.
      */
     stopReasonNotice?: Partial<Record<StopReasonKind, string>>;
+    /**
+     * Label for the passive indicator shown during an auto-resuming durable
+     * pause (variant `"pause"`), keyed by the wire `awaitReason`
+     * (`crawl_pending` / `durable_poll` today; open-ended for fwd-compat). Use
+     * the `"default"` key to override the fallback label for unknown reasons.
+     * Omitted keys fall back to the built-in copy.
+     */
+    durablePauseLabels?: Record<string, string>;
   };
   /**
    * Semantic design tokens (`palette`, `semantic`, `components`).
@@ -4422,7 +4430,45 @@ export type AgentWidgetApproval = {
   resolvedAt?: number;
 };
 
-export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool" | "approval";
+export type AgentWidgetMessageVariant =
+  | "assistant"
+  | "reasoning"
+  | "tool"
+  | "approval"
+  | "pause";
+
+/**
+ * Passive state for a message with variant `"pause"` — an auto-resuming durable
+ * pause on the unified `await` event (`awaitReason` present, e.g. `crawl_pending`
+ * or `durable_poll`). Unlike a tool/WebMCP await, the SERVER resumes the same
+ * stream on its own (CrawlPollerDO for crawl, the wait-until Workflow for durable
+ * poll); the client renders a non-interactive "working in the background"
+ * indicator and waits for subsequent frames — it never shows a resume/input
+ * affordance and never auto-fires a resume off this data.
+ *
+ * `awaitReason` is **UX context only, never a control signal**: it decides how to
+ * render, never authorization, gating, or resume logic.
+ */
+export type AgentWidgetDurablePause = {
+  /**
+   * The durable-pause kind from the wire (`crawl_pending` / `durable_poll`
+   * today; open string for forward-compat). Suppression of the resume
+   * affordance is keyed on this being a non-empty string — NOT on an exact
+   * enum match — so a future durable-pause kind suppresses without an SDK
+   * release. Copy may still special-case known kinds.
+   */
+  awaitReason: string;
+  /** Present for `crawl_pending`: the async-crawl id the server is polling. */
+  crawlId?: string;
+  /** Present for `crawl_pending` and `durable_poll`: the paused step id. */
+  stepId?: string;
+  /**
+   * `false` while the execution is paused; flipped to `true` once the stream
+   * resumes (a subsequent content frame) or the execution completes. The UI
+   * stops the active indicator (and hides the bubble) once resolved.
+   */
+  resolved?: boolean;
+};
 
 /**
  * Per-turn / per-step stop reason emitted by the runtime on
@@ -4476,6 +4522,8 @@ export type AgentWidgetMessage = {
   tools?: AgentWidgetToolCall[];
   /** Approval data for messages with variant "approval" */
   approval?: AgentWidgetApproval;
+  /** Durable-pause data for messages with variant "pause" (auto-resuming server pause) */
+  durablePause?: AgentWidgetDurablePause;
   viaVoice?: boolean;
   /**
    * Set to `true` on placeholder messages injected during Runtype voice processing.

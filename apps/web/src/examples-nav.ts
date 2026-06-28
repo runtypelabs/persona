@@ -78,6 +78,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "durable-pause-demo",
+    href: "/durable-pause-demo.html",
+    title: "Durable Pause",
+    blurb: "Auto-resuming server pauses (awaitReason): a passive indicator, no resume button.",
+    tier: "patterns",
+    tags: ["agent", "streaming", "interaction"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "action-middleware",
     href: "/action-middleware.html",
     title: "Tool Action Handlers",

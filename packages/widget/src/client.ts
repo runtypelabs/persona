@@ -1,6 +1,7 @@
 import {
   AgentWidgetConfig,
   AgentWidgetMessage,
+  AgentWidgetDurablePause,
   AgentWidgetEvent,
   AgentWidgetStreamParser,
   AgentWidgetStreamParserResult,
@@ -1417,6 +1418,26 @@ export class AgentWidgetClient {
     };
 
     let assistantMessage: AgentWidgetMessage | null = null;
+    // The active auto-resuming durable-pause bubble (unified `await` +
+    // `awaitReason`), if any. The server resumes THIS stream on its own, so the
+    // bubble is a passive "working in the background" indicator with no resume
+    // affordance. It is settled (its indicator stopped, bubble hidden) the
+    // moment the stream resumes — see `settleDurablePause`.
+    let durablePauseMessage: AgentWidgetMessage | null = null;
+    // Flip the active durable pause to resolved and re-emit it. Called when any
+    // content frame arrives after the pause (the implicit "stream resumed"
+    // signal — the wire has no explicit pause-resolved event) and at
+    // execution_complete. No-op when there is no active pause.
+    const settleDurablePause = () => {
+      if (!durablePauseMessage || durablePauseMessage.durablePause?.resolved) return;
+      durablePauseMessage.streaming = false;
+      durablePauseMessage.durablePause = {
+        ...(durablePauseMessage.durablePause as AgentWidgetDurablePause),
+        resolved: true,
+      };
+      emitMessage(durablePauseMessage);
+      durablePauseMessage = null;
+    };
     // Tracks the most recently touched assistant text message for the
     // current agent turn so `agent_turn_complete.stopReason` can attach
     // to the final visible text segment even after `assistantMessage`
@@ -2058,6 +2079,22 @@ export class AgentWidgetClient {
           executionKind = "flow";
         }
 
+        // Settle any active durable pause as soon as the stream resumes. The
+        // wire has no explicit pause-resolved frame: the server simply continues
+        // emitting content after CrawlPollerDO / the wait-until Workflow finishes.
+        // So the first frame that is NEITHER a keep-alive `ping` NOR another
+        // durable-await poll for the same pause means "work resumed" — stop the
+        // passive indicator. (A `ping` keeps streaming during the pause; a fresh
+        // durable `await` with `awaitReason` just refreshes the same bubble.)
+        if (durablePauseMessage && payloadType !== "ping") {
+          const isDurableAwaitFrame =
+            payloadType === "await" &&
+            typeof payload.awaitReason === "string" &&
+            (payload.awaitReason as string).length > 0 &&
+            !payload.toolName;
+          if (!isDurableAwaitFrame) settleDurablePause();
+        }
+
         if (payloadType === "reasoning_start") {
           // Nested flow-as-tool thinking (PR #4602): route to the parent tool's row.
           const rStartBlockId = typeof payload.id === "string" ? payload.id : null;
@@ -2417,6 +2454,51 @@ export class AgentWidgetClient {
             ...(toolCallId ? { webMcpToolCallId: toolCallId } : {}),
           };
           emitMessage(toolMessage);
+        } else if (
+          payloadType === "await" &&
+          typeof payload.awaitReason === "string" &&
+          (payload.awaitReason as string).length > 0 &&
+          !payload.toolName
+        ) {
+          // AUTO-RESUMING durable pause (unified `await` + `awaitReason`:
+          // `crawl_pending` / `durable_poll` today, open-ended for fwd-compat).
+          // The server resumes THIS stream on its own (CrawlPollerDO for crawl,
+          // the wait-until Workflow for durable poll), so — unlike the local-tool
+          // / WebMCP await above — there is NO resume affordance to render and
+          // nothing for the client to fulfil. Render a passive "working in the
+          // background" bubble and wait for subsequent frames; it is settled the
+          // moment the stream resumes (see `settleDurablePause`).
+          //
+          // Discriminator is the PRESENCE of a non-empty `awaitReason` (durable
+          // pauses carry no `toolName`/`toolId`), NOT an enum match — a future
+          // durable-pause kind suppresses correctly without an SDK release.
+          // `awaitReason` is UX context only, never a control signal: we branch
+          // on it to choose rendering, and never auto-fire a resume from it.
+          const awaitReason = payload.awaitReason as string;
+          const executionId =
+            typeof payload.executionId === "string" ? payload.executionId : undefined;
+          const pauseId = `durable-pause-${executionId ?? `local-${nextSequence()}`}`;
+          const message: AgentWidgetMessage =
+            durablePauseMessage ?? {
+              id: pauseId,
+              role: "assistant",
+              variant: "pause",
+              content: "",
+              createdAt: new Date().toISOString(),
+              sequence: nextSequence(),
+            };
+          message.streaming = true;
+          message.durablePause = {
+            awaitReason,
+            crawlId: typeof payload.crawlId === "string" ? payload.crawlId : undefined,
+            stepId: typeof payload.stepId === "string" ? payload.stepId : undefined,
+            resolved: false,
+          };
+          if (executionId) {
+            message.agentMetadata = { ...message.agentMetadata, executionId };
+          }
+          durablePauseMessage = message;
+          emitMessage(message);
         } else if (payloadType === "text_start") {
           // Nested flow-as-tool text (PR #4602): a `parentToolCallId` means this
           // block belongs to a flow running as that tool — record the mapping and
