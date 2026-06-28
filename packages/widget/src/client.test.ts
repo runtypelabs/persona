@@ -2787,6 +2787,173 @@ describe('AgentWidgetClient: step_await parsing', () => {
 });
 
 // ============================================================================
+// await (AUTO-RESUMING durable pause) — `awaitReason` present, NO tool fields.
+// The server resumes the stream itself (CrawlPollerDO / wait-until Workflow), so
+// the client renders a passive `variant: "pause"` indicator and NEVER a resume
+// affordance. Discriminator is the PRESENCE of a non-empty `awaitReason`, not an
+// enum match (forward-compat). `awaitReason` is render-only, never a control
+// signal — see the persona-await-reason-rendering handoff.
+// ============================================================================
+
+describe('AgentWidgetClient: durable-pause (awaitReason) parsing', () => {
+  const encoder = new TextEncoder();
+  const buildFrameStream = (frames: Array<Record<string, unknown>>): ReadableStream<Uint8Array> => {
+    const body = frames
+      .map((frame) => `event: ${frame.type}\ndata: ${JSON.stringify(frame)}\n\n`)
+      .join('');
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(body));
+        controller.close();
+      },
+    });
+  };
+
+  const collectMessages = async (
+    frames: Array<Record<string, unknown>>
+  ): Promise<AgentWidgetMessage[]> => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, body: buildFrameStream(frames) });
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+    return events
+      .filter((e) => e.type === 'message')
+      .map((e) => (e as { message: AgentWidgetMessage }).message);
+  };
+
+  it.each(['crawl_pending', 'durable_poll'])(
+    'emits a passive pause message (no resume affordance) for awaitReason=%s',
+    async (awaitReason) => {
+      const messages = await collectMessages([
+        {
+          type: 'await',
+          executionId: 'exec_abc',
+          awaitReason,
+          crawlId: 'crawl_1',
+          stepId: 'step_1',
+        },
+      ]);
+
+      const pause = messages.find((m) => m.variant === 'pause');
+      expect(pause).toBeDefined();
+      expect(pause!.durablePause?.awaitReason).toBe(awaitReason);
+      expect(pause!.durablePause?.resolved).toBe(false);
+      expect(pause!.durablePause?.crawlId).toBe('crawl_1');
+      expect(pause!.durablePause?.stepId).toBe('step_1');
+      expect(pause!.agentMetadata?.executionId).toBe('exec_abc');
+      // A durable pause is NOT a client-resolvable tool await: no tool call and
+      // no `awaitingLocalTool` flag (which would drive the /resume affordance).
+      expect(pause!.toolCall).toBeUndefined();
+      expect(pause!.agentMetadata?.awaitingLocalTool).toBeUndefined();
+      // No tool-variant await message is produced for the durable pause.
+      expect(messages.some((m) => m.agentMetadata?.awaitingLocalTool)).toBe(false);
+    }
+  );
+
+  it('suppresses the resume affordance for a future (unknown) awaitReason (presence check, not enum)', async () => {
+    const messages = await collectMessages([
+      { type: 'await', executionId: 'exec_abc', awaitReason: 'some_future_kind', stepId: 'step_9' },
+    ]);
+
+    const pause = messages.find((m) => m.variant === 'pause');
+    expect(pause).toBeDefined();
+    expect(pause!.durablePause?.awaitReason).toBe('some_future_kind');
+    expect(pause!.durablePause?.resolved).toBe(false);
+    expect(messages.some((m) => m.agentMetadata?.awaitingLocalTool)).toBe(false);
+  });
+
+  it('keeps the interactive tool await for an `await` with no awaitReason (unchanged behavior)', async () => {
+    const messages = await collectMessages([
+      {
+        type: 'await',
+        executionId: 'exec_abc',
+        toolId: 'runtime_ask_user_question_1',
+        toolName: 'ask_user_question',
+        parameters: { questions: [] },
+      },
+    ]);
+
+    // No passive pause bubble; the existing client-resolvable tool await stands.
+    expect(messages.some((m) => m.variant === 'pause')).toBe(false);
+    const toolMsg = messages.find((m) => m.agentMetadata?.awaitingLocalTool);
+    expect(toolMsg).toBeDefined();
+    expect(toolMsg!.toolCall?.name).toBe('ask_user_question');
+  });
+
+  it('settles the pause (resolved=true) once the stream resumes with content', async () => {
+    const messages = await collectMessages([
+      { type: 'execution_start', kind: 'agent', executionId: 'exec_abc', agentId: 'a', agentName: 'A', maxTurns: 3 },
+      { type: 'await', executionId: 'exec_abc', awaitReason: 'crawl_pending', crawlId: 'crawl_1', stepId: 'step_1' },
+      { type: 'ping' },
+      { type: 'turn_start', executionId: 'exec_abc', id: 'turn-1', iteration: 1 },
+      { type: 'text_start', executionId: 'exec_abc', id: 'blk-1' },
+      { type: 'text_delta', executionId: 'exec_abc', id: 'blk-1', delta: 'Done crawling.' },
+      { type: 'text_complete', executionId: 'exec_abc', id: 'blk-1' },
+      { type: 'turn_complete', executionId: 'exec_abc', id: 'turn-1' },
+      { type: 'execution_complete', kind: 'agent', executionId: 'exec_abc', success: true, stopReason: 'complete' },
+    ]);
+
+    // The LAST emission of the pause bubble must be resolved (indicator stops,
+    // bubble hides). The ping must not have settled it prematurely.
+    const pauseEmissions = messages.filter((m) => m.variant === 'pause');
+    expect(pauseEmissions.length).toBeGreaterThan(0);
+    expect(pauseEmissions[pauseEmissions.length - 1].durablePause?.resolved).toBe(true);
+
+    // The resumed assistant text still renders.
+    const text = messages.find((m) => !m.variant && m.content.includes('Done crawling.'));
+    expect(text).toBeDefined();
+  });
+
+  it('settles the pause if the stream fails at the read layer before any further frame', async () => {
+    // The server pauses, then the SSE connection dies (network drop / reader
+    // throw) before a content frame arrives. The per-frame settler never runs
+    // again, so without the finally-block settle the indicator would linger.
+    // `pull` delivers the await frame on the first read, then errors on the
+    // next read — a queued chunk would be discarded if we errored eagerly in
+    // `start`, so the frame must land before the failure.
+    let delivered = false;
+    const failingStream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (!delivered) {
+          delivered = true;
+          controller.enqueue(
+            encoder.encode(
+              `event: await\ndata: ${JSON.stringify({ type: 'await', executionId: 'exec_abc', awaitReason: 'crawl_pending', crawlId: 'crawl_1', stepId: 'step_1' })}\n\n`
+            )
+          );
+          return;
+        }
+        controller.error(new Error('network drop'));
+      },
+    });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, body: failingStream });
+
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    // The stream read rejects, so dispatch rejects too (existing behavior — the
+    // caller handles it). The point of the fix is that the durable pause is
+    // settled in the finally block BEFORE the error propagates.
+    await expect(
+      client.dispatch(
+        { messages: [{ id: 'u1', role: 'user', content: 'hi', createdAt: new Date().toISOString() }] },
+        (e) => events.push(e)
+      )
+    ).rejects.toThrow('network drop');
+
+    const pauseEmissions = events
+      .filter((e) => e.type === 'message')
+      .map((e) => (e as { message: AgentWidgetMessage }).message)
+      .filter((m) => m.variant === 'pause');
+    expect(pauseEmissions.length).toBeGreaterThan(0);
+    // The final pause emission is resolved → the passive indicator is cleared.
+    expect(pauseEmissions[pauseEmissions.length - 1].durablePause?.resolved).toBe(true);
+  });
+});
+
+// ============================================================================
 // agent_await (AGENT-dispatch LOCAL tool pause) — resolves through the same
 // path as step_await; carries a bare tool name + origin instead of a webmcp:
 // prefix + awaitReason.

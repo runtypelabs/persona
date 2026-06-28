@@ -4,6 +4,7 @@ import { MessageTransform, MessageActionCallbacks } from "./message-bubble";
 import { createStandardBubble } from "./message-bubble";
 import { createReasoningBubble } from "./reasoning-bubble";
 import { createToolBubble } from "./tool-bubble";
+import { createPauseBubble } from "./pause-bubble";
 import {
   ensureAskUserQuestionSheet,
   isAskUserQuestionMessage,
@@ -53,6 +54,10 @@ export const renderMessages = (
     } else if (message.variant === "tool" && message.toolCall) {
       if (!showToolCalls) return;
       bubble = createToolBubble(message, config);
+    } else if (message.variant === "pause") {
+      // Passive auto-resuming durable pause: a non-interactive "working in the
+      // background" indicator. It self-hides once `durablePause.resolved` flips.
+      bubble = createPauseBubble(message, config);
     } else {
       bubble = createStandardBubble(
         message, 
