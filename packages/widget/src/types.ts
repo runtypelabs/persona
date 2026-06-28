@@ -685,6 +685,9 @@ export type AgentWidgetControllerEventMap = {
   "message:feedback": AgentWidgetMessageFeedback;
   "message:copy": AgentWidgetMessage;
   "message:read-aloud": AgentWidgetReadAloudEvent;
+  // Fired the first time a message bubble scrolls into view, when
+  // `features.scrollBehavior.visibilityTracking` is opted in.
+  "message:visible": AgentWidgetMessage;
   "eventStream:opened": { timestamp: number };
   "eventStream:closed": { timestamp: number };
   "approval:requested": { approval: AgentWidgetApproval; message: AgentWidgetMessage };
@@ -873,6 +876,16 @@ export type AgentWidgetScrollMode = "follow" | "anchor-top" | "none";
  */
 export type AgentWidgetScrollRestorePosition = "bottom" | "last-user-turn";
 
+/**
+ * Edge fade ("scroll-fade"): a soft gradient mask at the top and/or bottom of
+ * the transcript scrollport so messages dissolve under the header / composer
+ * instead of hard-clipping at the edge. Additive and purely visual.
+ * - `false` (default): no mask.
+ * - `true` / `"both"`: fade both the top and bottom edges.
+ * - `"top"` / `"bottom"`: fade only that edge.
+ */
+export type AgentWidgetScrollEdgeFade = boolean | "top" | "bottom" | "both";
+
 export type AgentWidgetScrollBehaviorFeature = {
   /** Scroll behavior during streamed responses. @default "anchor-top" */
   mode?: AgentWidgetScrollMode;
@@ -917,6 +930,38 @@ export type AgentWidgetScrollBehaviorFeature = {
    * @default false
    */
   announce?: boolean;
+  /**
+   * Soft gradient mask at the transcript edges ("scroll-fade") so content fades
+   * out under the header / composer instead of hard-clipping at the edge.
+   * Purely visual and opt-in.
+   * @default false
+   */
+  edgeFade?: AgentWidgetScrollEdgeFade;
+  /**
+   * When true, Persona observes message bubbles with an `IntersectionObserver`
+   * and, the first time each scrolls into view, marks it
+   * `data-persona-message-seen="true"` and emits a `message:visible` controller
+   * event. Opt-in so embeds that don't need read-tracking pay nothing, and a
+   * no-op where `IntersectionObserver` is unavailable.
+   * @default false
+   */
+  visibilityTracking?: boolean;
+};
+
+/**
+ * Entrance animation applied the first time each message bubble is rendered.
+ * Honors `prefers-reduced-motion` (reduced motion collapses to a brief opacity
+ * fade with no transform).
+ */
+export type AgentWidgetMessageEntranceMode = "fade" | "slide-up";
+
+export type AgentWidgetMessageEntranceFeature = {
+  /** Master switch. Opt-in; bubbles render with no entrance by default. @default false */
+  enabled?: boolean;
+  /** Animation style applied on first render of each message. @default "fade" */
+  mode?: AgentWidgetMessageEntranceMode;
+  /** Per-message animation duration (ms). @default 260 */
+  durationMs?: number;
 };
 
 export type AgentWidgetScrollToBottomFeature = {
@@ -1212,6 +1257,8 @@ export type AgentWidgetFeatureFlags = {
   scrollToBottom?: AgentWidgetScrollToBottomFeature;
   /** Transcript scroll behavior during streamed responses. */
   scrollBehavior?: AgentWidgetScrollBehaviorFeature;
+  /** Entrance animation for newly-rendered message bubbles. Opt-in. */
+  messageEntrance?: AgentWidgetMessageEntranceFeature;
   /** Collapsed transcript behavior for tool call rows. */
   toolCallDisplay?: AgentWidgetToolCallDisplayFeature;
   /** Collapsed transcript behavior for reasoning rows. */

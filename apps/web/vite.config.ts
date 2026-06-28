@@ -571,6 +571,7 @@ export default defineConfig({
         'server-tts-demo': path.resolve(__dirname, 'server-tts-demo.html'),
         'autoscroll-stress-test': path.resolve(__dirname, 'autoscroll-stress-test.html'),
         'scroll-engineering': path.resolve(__dirname, 'scroll-engineering.html'),
+        'scroll-followups': path.resolve(__dirname, 'scroll-followups.html'),
         // Standalone (CDN / Copy-Paste) pages
         'standalone/shopify': path.resolve(__dirname, 'standalone/shopify.html'),
         'standalone/example-shop': path.resolve(__dirname, 'standalone/example-shop.html'),

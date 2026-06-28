@@ -104,6 +104,9 @@ function deriveId(url: string, explicit?: string): string | null {
 }
 
 // ── Self-injected styles (so the module is drop-in) ─────────────────────────
+// The shimmer effect itself reuses the widget's `persona-shimmer-skeleton`
+// utility (shipped in widget.css), which any Persona host already loads; these
+// styles only handle layout/sizing of the placeholder.
 
 const STYLE_ID = "persona-tweet-embed-styles";
 function ensureStyles(reservedHeightPx: number): void {
@@ -129,28 +132,15 @@ function ensureStyles(reservedHeightPx: number): void {
   display:flex; flex-direction:column; gap:12px;
 }
 .persona-tweet-skeleton .sk-head { display:flex; align-items:center; gap:10px; }
+/* The shimmer itself comes from the widget's reusable .persona-shimmer-skeleton
+   utility (widget.css); these rules only size each placeholder bar. */
 .persona-tweet-skeleton .sk-avatar { width:44px; height:44px; border-radius:50%; flex-shrink:0; }
-.persona-tweet-skeleton .sk-line { height:11px; border-radius:6px; }
+.persona-tweet-skeleton .sk-line { height:11px; }
 .persona-tweet-skeleton .sk-media { flex:1; min-height:180px; border-radius:12px; margin-top:2px; }
-.persona-tweet-skeleton .sk,
-.persona-tweet-skeleton .sk-avatar,
-.persona-tweet-skeleton .sk-media {
-  background:linear-gradient(100deg,
-    color-mix(in srgb, var(--border,#e5e7eb) 55%, transparent) 30%,
-    color-mix(in srgb, var(--border,#e5e7eb) 18%, transparent) 50%,
-    color-mix(in srgb, var(--border,#e5e7eb) 55%, transparent) 70%);
-  background-size:200% 100%; animation:persona-tweet-shimmer 1.5s ease-in-out infinite;
-}
-@keyframes persona-tweet-shimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
 .persona-tweet-skeleton .sk-foot { color:var(--muted,#6b7280); font-size:0.72rem; margin-top:2px; }
 .persona-tweet-fallback {
   min-height:120px; display:flex; align-items:center; justify-content:center; text-align:center;
   border:1px solid var(--border,#e5e7eb); border-radius:14px; padding:16px; font-size:0.85rem;
-}
-@media (prefers-reduced-motion: reduce){
-  .persona-tweet-skeleton .sk,
-  .persona-tweet-skeleton .sk-avatar,
-  .persona-tweet-skeleton .sk-media { animation:none; }
 }
 `;
   document.head.appendChild(style);
@@ -169,7 +159,7 @@ function buildSkeleton(): HTMLElement {
   sk.setAttribute("role", "status");
   sk.setAttribute("aria-label", "Loading post from X");
   const line = (w: string) => {
-    const l = el("div", "sk-line sk");
+    const l = el("div", "sk-line persona-shimmer-skeleton");
     l.style.width = w;
     return l;
   };
@@ -177,13 +167,13 @@ function buildSkeleton(): HTMLElement {
   const headLines = el("div");
   headLines.style.cssText = "flex:1;display:flex;flex-direction:column;gap:6px";
   headLines.append(line("45%"), line("28%"));
-  head.append(el("div", "sk-avatar"), headLines);
+  head.append(el("div", "sk-avatar persona-shimmer-skeleton"), headLines);
   const body = el("div");
   body.style.cssText = "display:flex;flex-direction:column;gap:8px";
   body.append(line("96%"), line("90%"), line("74%"));
   const foot = el("div", "sk-foot");
   foot.textContent = "Loading post from X…";
-  sk.append(head, body, el("div", "sk-media"), foot);
+  sk.append(head, body, el("div", "sk-media persona-shimmer-skeleton"), foot);
   return sk;
 }
 

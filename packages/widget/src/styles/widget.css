@@ -4039,3 +4039,131 @@
     display: none;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Scroll-fade ("edge fade"): soft gradient mask at the transcript edges so
+ * messages dissolve under the header / composer instead of hard-clipping.
+ * Opt-in via features.scrollBehavior.edgeFade; ui.ts sets the attribute on the
+ * scrollport (#persona-scroll-container). The jump-to-latest affordance and the
+ * live region live on the parent container, so they are never masked.
+ * ────────────────────────────────────────────────────────────────────────── */
+[data-persona-root] #persona-scroll-container[data-persona-scroll-fade] {
+  --persona-scroll-fade-size: 2.5rem;
+}
+[data-persona-root] #persona-scroll-container[data-persona-scroll-fade="top"] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-scroll-fade-size)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-scroll-fade-size)
+  );
+}
+[data-persona-root] #persona-scroll-container[data-persona-scroll-fade="bottom"] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - var(--persona-scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - var(--persona-scroll-fade-size)),
+    transparent 100%
+  );
+}
+[data-persona-root] #persona-scroll-container[data-persona-scroll-fade="both"] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-scroll-fade-size),
+    #000 calc(100% - var(--persona-scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-scroll-fade-size),
+    #000 calc(100% - var(--persona-scroll-fade-size)),
+    transparent 100%
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Shimmer skeleton: a reusable loading placeholder for height-reserving blocks
+ * (pending embeds, late images, tool-result cards). Add `persona-shimmer-skeleton`
+ * to any sized box. Tints from `currentColor` so it inherits the theme; override
+ * --persona-skeleton-bg / --persona-skeleton-radius per use.
+ * ────────────────────────────────────────────────────────────────────────── */
+[data-persona-root] .persona-shimmer-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(
+    --persona-skeleton-bg,
+    color-mix(in srgb, currentColor 10%, transparent)
+  );
+  border-radius: var(--persona-skeleton-radius, 8px);
+}
+[data-persona-root] .persona-shimmer-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, currentColor 16%, transparent),
+    transparent
+  );
+  animation: persona-shimmer-skeleton-sweep 1.4s ease-in-out infinite;
+}
+@keyframes persona-shimmer-skeleton-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Message entrance: one-shot animation tagged onto a wrapper the first time it
+ * renders (features.messageEntrance). The attribute is removed after the run so
+ * idiomorph re-renders never replay it.
+ * ────────────────────────────────────────────────────────────────────────── */
+[data-persona-root] [data-persona-message-enter] {
+  animation: persona-message-enter-fade
+    var(--persona-message-enter-duration, 260ms) ease-out both;
+}
+[data-persona-root] [data-persona-message-enter="slide-up"] {
+  animation-name: persona-message-enter-slide-up;
+}
+@keyframes persona-message-enter-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes persona-message-enter-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Collapse the entrance to a brief opacity fade with no transform, and stop
+     the skeleton sweep. */
+  [data-persona-root] [data-persona-message-enter] {
+    animation-name: persona-message-enter-fade;
+    animation-duration: 120ms;
+  }
+  [data-persona-root] .persona-shimmer-skeleton::after {
+    animation: none;
+  }
+}

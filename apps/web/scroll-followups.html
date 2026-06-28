@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>Scroll Follow-ups — Before / After — Persona</title>
+    <style>
+      .shell-main.sf-shell {
+        max-width: min(1500px, 96vw);
+      }
+
+      .sf-intro {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg, 16px);
+        box-shadow: var(--shadow-sm);
+        padding: 1.25rem 1.4rem;
+        margin-bottom: 1.25rem;
+      }
+      .sf-intro h2 {
+        margin: 0 0 0.4rem;
+        font-size: 1.15rem;
+      }
+      .sf-intro p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.55;
+      }
+      .sf-intro a {
+        color: var(--foreground);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      .sf-grid {
+        display: grid;
+        gap: 1.25rem;
+        align-items: start;
+        grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+      }
+      @media (max-width: 920px) {
+        .sf-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+
+      .sf-col {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg, 16px);
+        box-shadow: var(--shadow-sm);
+        padding: 1.1rem 1.15rem;
+        min-width: 0;
+      }
+
+      /* The two widgets, side by side on desktop. */
+      .sf-panels {
+        display: grid;
+        gap: 1.25rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      @media (max-width: 760px) {
+        .sf-panels {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .sf-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+        min-width: 0;
+      }
+      .sf-panel-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+      .sf-panel-title {
+        font-weight: 700;
+        font-size: 0.95rem;
+        margin: 0;
+      }
+      .sf-panel-tag {
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        color: var(--muted);
+      }
+      .sf-panel.is-after .sf-panel-title {
+        color: var(--signal, #0d9488);
+      }
+      .sf-widget-host {
+        height: 540px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg, 16px);
+        overflow: hidden;
+        background: var(--card);
+      }
+      /* "Seen" counter fed by message:visible — only the After panel tracks it. */
+      .sf-seen {
+        font-size: 0.72rem;
+        color: var(--muted);
+        font-family: var(--font-mono);
+        min-height: 1.2em;
+      }
+      .sf-seen b {
+        color: var(--signal, #0d9488);
+      }
+
+      .sf-section {
+        margin-bottom: 1.1rem;
+      }
+      .sf-section h3 {
+        font-size: 0.95rem;
+        margin: 0 0 0.55rem;
+      }
+      .sf-section .btn-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+
+      .toggle-section {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.3rem 0;
+      }
+      .toggle-section label:first-child {
+        font-size: 0.82rem;
+      }
+      .toggle-section .hint {
+        display: block;
+        color: var(--muted);
+        font-size: 0.7rem;
+        margin-top: 1px;
+      }
+
+      .sf-look {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .sf-look li {
+        font-size: 0.76rem;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+      .sf-look b {
+        color: var(--foreground);
+      }
+
+      #sf-log {
+        font-size: 0.7rem;
+        font-family: var(--font-mono);
+        background: #0f172a;
+        color: #cbd5e1;
+        border-radius: var(--radius);
+        padding: 0.5rem;
+        max-height: 140px;
+        overflow-y: auto;
+        line-height: 1.55;
+      }
+      #sf-log .info {
+        color: #60a5fa;
+      }
+      #sf-log .warn {
+        color: #fbbf24;
+      }
+
+      /* Make the After panel's message:seen state faintly visible for the demo:
+         a thin teal marker on the inline edge of any bubble the reader has
+         actually scrolled past. The widget ships no default visual (additive),
+         so the host styles the data attribute it sets. */
+      [data-persona-message-seen="true"] [data-message-bubble],
+      [data-persona-message-seen="true"].persona-message-row {
+        position: relative;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell-main sf-shell">
+      <div class="sf-intro">
+        <h2>Scroll follow-ups — before / after</h2>
+        <p>
+          The same scripted conversation, driven into two widgets at once. The
+          left panel is today&rsquo;s Persona defaults; the right adds the four
+          follow-ups from
+          <a
+            href="https://x.com/shadcn/status/2070561306038653247"
+            target="_blank"
+            rel="noopener noreferrer"
+            >shadcn&rsquo;s chat-components thread</a
+          >: <code>edgeFade</code>, <code>messageEntrance</code>,
+          <code>visibilityTracking</code>, and <code>scrollToMessage()</code>.
+          Use the focus toggles to isolate one at a time.
+        </p>
+      </div>
+
+      <div class="sf-grid">
+        <!-- Controls -->
+        <section class="sf-col">
+          <div class="sf-section">
+            <h3>Run on both</h3>
+            <div class="btn-row">
+              <button class="btn" id="sf-seed">Seed thread</button>
+              <button class="btn" id="sf-long">Long reply + embed</button>
+              <button class="btn" id="sf-rapid">Rapid messages</button>
+              <button class="btn" id="sf-image">Late image</button>
+            </div>
+          </div>
+
+          <div class="sf-section">
+            <h3>Jump Nav (new API)</h3>
+            <div class="btn-row">
+              <button class="btn" id="sf-jump-first">scrollToMessage(first)</button>
+              <button class="btn" id="sf-jump-bottom">scrollToMessage(last)</button>
+            </div>
+          </div>
+
+          <div class="sf-section">
+            <h3>Focus (After panel only)</h3>
+            <div class="toggle-section">
+              <label for="sf-edge"
+                >edgeFade<span class="hint">soft mask at the edges</span></label
+              >
+              <label class="toggle-switch">
+                <input type="checkbox" id="sf-edge" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-section">
+              <label for="sf-entrance"
+                >messageEntrance<span class="hint">slide-up on arrival</span></label
+              >
+              <label class="toggle-switch">
+                <input type="checkbox" id="sf-entrance" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-section">
+              <label for="sf-visible"
+                >visibilityTracking<span class="hint"
+                  >message:visible events</span
+                ></label
+              >
+              <label class="toggle-switch">
+                <input type="checkbox" id="sf-visible" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="sf-section">
+            <h3>What to look for</h3>
+            <ul class="sf-look">
+              <li>
+                <b>edgeFade</b> — scroll either panel: the After transcript
+                dissolves under the header &amp; composer; the Before one hard-cuts.
+              </li>
+              <li>
+                <b>messageEntrance</b> — run a scenario: After bubbles slide-and-fade
+                in; Before bubbles pop.
+              </li>
+              <li>
+                <b>visibilityTracking</b> — scroll the After panel; the
+                &ldquo;seen&rdquo; counter and log update as bubbles cross into view.
+                Before emits nothing.
+              </li>
+              <li>
+                <b>scrollToMessage()</b> — a brand-new controller method; the Jump
+                buttons drive both panels (the API is new, not gated).
+              </li>
+            </ul>
+          </div>
+
+          <div class="sf-section">
+            <h3>Utilities</h3>
+            <div class="btn-row">
+              <button class="btn" id="sf-cancel">Cancel</button>
+              <button class="btn" id="sf-reset">Reset both</button>
+            </div>
+          </div>
+
+          <div class="sf-section">
+            <h3>message:visible log (After)</h3>
+            <div id="sf-log"></div>
+          </div>
+        </section>
+
+        <!-- The two live widgets -->
+        <section class="sf-col">
+          <div class="sf-panels">
+            <div class="sf-panel is-before">
+              <div class="sf-panel-head">
+                <p class="sf-panel-title">Before</p>
+                <span class="sf-panel-tag">today&rsquo;s defaults</span>
+              </div>
+              <div class="sf-widget-host" id="sf-host-before"></div>
+              <div class="sf-seen" id="sf-seen-before">no visibility tracking</div>
+            </div>
+            <div class="sf-panel is-after">
+              <div class="sf-panel-head">
+                <p class="sf-panel-title">After</p>
+                <span class="sf-panel-tag">+ thread follow-ups</span>
+              </div>
+              <div class="sf-widget-host" id="sf-host-after"></div>
+              <div class="sf-seen" id="sf-seen-after">seen: <b>0</b></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script type="module" src="/src/scroll-followups.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("scroll-followups");
+    </script>
+  </body>
+</html>

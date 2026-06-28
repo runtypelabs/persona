@@ -293,6 +293,40 @@
           </div>
 
           <div class="info-section">
+            <h3>Follow-ups from the newer thread</h3>
+            <p class="se-col-foreword" style="margin: 0 0 0.6rem">
+              From shadcn&rsquo;s
+              <a
+                href="https://x.com/shadcn/status/2070561306038653247"
+                target="_blank"
+                rel="noopener noreferrer"
+                >chat-components thread</a
+              >: scroll-fade, visibility tracking, message entrance, and jump-to-message.
+            </p>
+            <div class="toggle-section">
+              <label for="opt-edge-fade">edgeFade (scroll-fade)</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-edge-fade" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-section">
+              <label for="opt-visibility">visibilityTracking (message:visible)</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-visibility" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-section">
+              <label for="opt-entrance">messageEntrance (slide-up)</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-entrance" checked />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="info-section">
             <h3>Scenarios</h3>
             <div class="btn-row">
               <button class="btn" id="btn-seed">Seed conversation</button>
@@ -307,6 +341,7 @@
           <div class="info-section">
             <h3>Utilities</h3>
             <div class="btn-row">
+              <button class="btn" id="btn-jump-first">Jump to first message</button>
               <button class="btn" id="btn-cancel">Cancel scenario</button>
               <button class="btn" id="btn-reset">Reset session</button>
             </div>

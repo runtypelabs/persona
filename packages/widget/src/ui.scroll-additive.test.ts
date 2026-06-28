@@ -449,3 +449,207 @@ describe("scrollBehavior.announce (Principle 15)", () => {
     controller.destroy();
   });
 });
+
+// ── Follow-ups from shadcn's chat-components thread ─────────────────────────
+
+type IOCallback = (
+  entries: IntersectionObserverEntry[],
+  observer: IntersectionObserver
+) => void;
+
+const installIntersectionObserverMock = () => {
+  const observed = new Set<Element>();
+  let callback: IOCallback | null = null;
+  class IntersectionObserverMock {
+    constructor(cb: IOCallback) {
+      callback = cb;
+    }
+    observe(el: Element) {
+      observed.add(el);
+    }
+    unobserve(el: Element) {
+      observed.delete(el);
+    }
+    disconnect() {
+      observed.clear();
+    }
+    takeRecords() {
+      return [];
+    }
+  }
+  vi.stubGlobal("IntersectionObserver", IntersectionObserverMock);
+  return {
+    intersect(el: Element) {
+      callback?.(
+        [{ target: el, isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver
+      );
+    },
+    observedCount: () => observed.size,
+  };
+};
+
+describe("scrollBehavior.edgeFade (scroll-fade)", () => {
+  it("reflects the configured fade onto the scrollport and clears when off", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(
+      mount,
+      baseConfig({ features: { scrollBehavior: { edgeFade: "both" } } })
+    );
+    expect(getScrollContainer(mount).getAttribute("data-persona-scroll-fade")).toBe(
+      "both"
+    );
+
+    // `true` is an alias for "both".
+    controller.update(
+      baseConfig({ features: { scrollBehavior: { edgeFade: true } } })
+    );
+    expect(getScrollContainer(mount).getAttribute("data-persona-scroll-fade")).toBe(
+      "both"
+    );
+
+    // A single edge.
+    controller.update(
+      baseConfig({ features: { scrollBehavior: { edgeFade: "top" } } })
+    );
+    expect(getScrollContainer(mount).getAttribute("data-persona-scroll-fade")).toBe(
+      "top"
+    );
+
+    // Off (default): no attribute at all.
+    controller.update(baseConfig({ features: { scrollBehavior: {} } }));
+    expect(
+      getScrollContainer(mount).hasAttribute("data-persona-scroll-fade")
+    ).toBe(false);
+    controller.destroy();
+  });
+
+  it("adds no attribute by default", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, baseConfig({ features: {} }));
+    expect(
+      getScrollContainer(mount).hasAttribute("data-persona-scroll-fade")
+    ).toBe(false);
+    controller.destroy();
+  });
+});
+
+describe("scrollBehavior.visibilityTracking", () => {
+  it("marks a bubble seen and emits message:visible the first time it intersects", () => {
+    const raf = installRafMock();
+    const io = installIntersectionObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(
+      mount,
+      baseConfig({ features: { scrollBehavior: { visibilityTracking: true } } })
+    );
+    const seen: string[] = [];
+    controller.on("message:visible", (m) => seen.push(m.id));
+
+    emitAssistantMessage(controller, "a1", "Hello there");
+    raf.flush();
+
+    const bubble = mount.querySelector<HTMLElement>('[data-message-id="a1"]')!;
+    expect(bubble).toBeTruthy();
+
+    io.intersect(bubble);
+    expect(seen).toEqual(["a1"]);
+    expect(bubble.getAttribute("data-persona-message-seen")).toBe("true");
+
+    // A second intersection of the same bubble does not double-emit.
+    io.intersect(bubble);
+    expect(seen).toEqual(["a1"]);
+    controller.destroy();
+  });
+
+  it("observes nothing when the option is off (default)", () => {
+    const raf = installRafMock();
+    const io = installIntersectionObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, baseConfig({ features: {} }));
+    const seen: string[] = [];
+    controller.on("message:visible", (m) => seen.push(m.id));
+
+    emitAssistantMessage(controller, "a1", "Hello there");
+    raf.flush();
+
+    expect(io.observedCount()).toBe(0);
+    expect(seen).toEqual([]);
+    controller.destroy();
+  });
+});
+
+describe("features.messageEntrance", () => {
+  it("tags a newly-rendered wrapper with the configured mode", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(
+      mount,
+      baseConfig({
+        features: { messageEntrance: { enabled: true, mode: "slide-up" } },
+      })
+    );
+
+    emitUserMessage(controller, "u1", "Hi");
+    const wrapper = mount.querySelector<HTMLElement>("#wrapper-u1")!;
+    expect(wrapper).toBeTruthy();
+    expect(wrapper.getAttribute("data-persona-message-enter")).toBe("slide-up");
+    controller.destroy();
+  });
+
+  it("does not animate restored history seeded at construction", () => {
+    const restored: AgentWidgetMessage[] = [
+      { id: "u1", role: "user", content: "Earlier", createdAt: CREATED_AT },
+      { id: "a1", role: "assistant", content: "Earlier reply", createdAt: CREATED_AT },
+    ];
+    const mount = createMount();
+    const controller = createAgentExperience(
+      mount,
+      baseConfig({
+        initialMessages: restored,
+        features: { messageEntrance: { enabled: true, mode: "fade" } },
+      })
+    );
+    // Seeded on first render: existing history never gets the entrance attribute.
+    expect(
+      mount.querySelector<HTMLElement>("#wrapper-a1")!.hasAttribute(
+        "data-persona-message-enter"
+      )
+    ).toBe(false);
+
+    // A genuinely new message still animates.
+    emitAssistantMessage(controller, "a2", "Fresh reply");
+    expect(
+      mount.querySelector<HTMLElement>("#wrapper-a2")!.getAttribute(
+        "data-persona-message-enter"
+      )
+    ).toBe("fade");
+    controller.destroy();
+  });
+
+  it("adds no entrance attribute when disabled (default)", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, baseConfig({ features: {} }));
+    emitUserMessage(controller, "u1", "Hi");
+    expect(
+      mount.querySelector<HTMLElement>("#wrapper-u1")!.hasAttribute(
+        "data-persona-message-enter"
+      )
+    ).toBe(false);
+    controller.destroy();
+  });
+});
+
+describe("controller.scrollToMessage (Jump Nav)", () => {
+  it("returns true for a rendered message and false for an unknown id", () => {
+    installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, baseConfig({ features: {} }));
+    emitUserMessage(controller, "u1", "Hi");
+    emitAssistantMessage(controller, "a1", "Reply");
+
+    expect(controller.scrollToMessage("a1")).toBe(true);
+    expect(controller.scrollToMessage("a1", { block: "center" })).toBe(true);
+    expect(controller.scrollToMessage("does-not-exist")).toBe(false);
+    controller.destroy();
+  });
+});

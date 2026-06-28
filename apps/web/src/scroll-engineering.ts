@@ -20,6 +20,10 @@ type ScrollOptions = {
   showActivityWhilePinned: boolean;
   announce: boolean;
   restoreLastUserTurn: boolean;
+  // Follow-ups from the newer thread (shadcn's MessageScroller + utilities):
+  edgeFade: boolean;
+  visibilityTracking: boolean;
+  messageEntrance: boolean;
 };
 
 const options: ScrollOptions = {
@@ -28,6 +32,9 @@ const options: ScrollOptions = {
   showActivityWhilePinned: true,
   announce: true,
   restoreLastUserTurn: true,
+  edgeFade: true,
+  visibilityTracking: true,
+  messageEntrance: true,
 };
 
 // ── Tweet embed plugin (see src/plugins/tweet-embed-plugin.ts) ───
@@ -77,7 +84,11 @@ function buildConfig(inline: boolean): AgentWidgetConfig {
         showActivityWhilePinned: options.showActivityWhilePinned,
         announce: options.announce,
         restorePosition: options.restoreLastUserTurn ? "last-user-turn" : "bottom",
+        // Follow-ups from the newer thread:
+        edgeFade: options.edgeFade ? "both" : false,
+        visibilityTracking: options.visibilityTracking,
       },
+      messageEntrance: { enabled: options.messageEntrance, mode: "slide-up" },
     },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
@@ -117,6 +128,15 @@ function mountWidget(inline: boolean, initialMessages?: AgentWidgetMessage[]) {
     launcherRoot.innerHTML = "";
     controller = createAgentExperience(launcherRoot, config);
   }
+
+  // Visibility tracking (newer thread): log the first time each message bubble
+  // scrolls into view. Re-subscribed on every (re)mount since the controller is
+  // recreated. Only fires while features.scrollBehavior.visibilityTracking is on.
+  controller.on("message:visible", (message) => {
+    const preview =
+      typeof message.content === "string" ? message.content.slice(0, 32) : "";
+    log(`message:visible — ${message.role} ${message.id}${preview ? ` · "${preview}…"` : ""}`);
+  });
 }
 
 mountWidget(inlineMode);
@@ -250,6 +270,26 @@ bindToggle("opt-pause-interaction", "pauseOnInteraction", "pauseOnInteraction");
 bindToggle("opt-activity-pinned", "showActivityWhilePinned", "showActivityWhilePinned");
 bindToggle("opt-announce", "announce", "announce");
 bindToggle("opt-restore", "restoreLastUserTurn", "restorePosition");
+bindToggle("opt-edge-fade", "edgeFade", "edgeFade");
+bindToggle("opt-visibility", "visibilityTracking", "visibilityTracking");
+bindToggle("opt-entrance", "messageEntrance", "messageEntrance");
+
+// Jump Nav: scroll the *first* message of the thread back into view, near the
+// top. Demonstrates controller.scrollToMessage() from the newer thread.
+document.getElementById("btn-jump-first")!.addEventListener("click", () => {
+  const messages = controller.getMessages();
+  if (messages.length === 0) {
+    log("Seed or stream a conversation first, then Jump to first.", "warn");
+    return;
+  }
+  const ok = controller.scrollToMessage(messages[0].id, { block: "start" });
+  log(
+    ok
+      ? "scrollToMessage(firstId) — jumped to the first message (follow paused)."
+      : "scrollToMessage: first message not currently rendered.",
+    ok ? "info" : "warn",
+  );
+});
 
 // ── follow-state monitor ────────────────────────────────────────
 
@@ -340,8 +380,9 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
 const LATE_IMAGE_SRC = "/autoscroll-late-image.jpg";
 
 function setScenarioButtons(disabled: boolean) {
+  const alwaysEnabled = new Set(["btn-cancel", "btn-reset", "btn-jump-first"]);
   document.querySelectorAll<HTMLButtonElement>(".btn-row .btn").forEach((b) => {
-    if (b.id !== "btn-cancel" && b.id !== "btn-reset") b.disabled = disabled;
+    if (!alwaysEnabled.has(b.id)) b.disabled = disabled;
   });
 }
 

@@ -213,6 +213,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     tags: ["streaming", "scroll", "a11y", "dev"],
     modes: ["launcher"],
   },
+  {
+    slug: "scroll-followups",
+    href: "/scroll-followups.html",
+    title: "Scroll Follow-ups (before / after)",
+    blurb: "Two widgets side by side: today's defaults vs. edgeFade, messageEntrance, visibilityTracking, and scrollToMessage().",
+    tier: "reference",
+    tags: ["streaming", "scroll", "a11y", "dev"],
+    modes: ["inline"],
+  },
 ];
 
 export function isGalleryExample(example: AdvancedExample): boolean {

@@ -354,6 +354,16 @@ type Controller = {
     listener: (activeId: string | null, state: ReadAloudState) => void
   ) => () => void;
   getState: () => AgentWidgetStateSnapshot;
+  /**
+   * Scroll a specific message into view (Jump Nav). Lands it near the top
+   * (`block: "start"`, the default) or centered, pausing follow since the
+   * target is above the live edge. Returns false when the id isn't currently
+   * rendered in the transcript.
+   */
+  scrollToMessage: (
+    messageId: string,
+    options?: { block?: "start" | "center"; behavior?: "smooth" | "auto" }
+  ) => boolean;
   // Feedback methods (CSAT/NPS)
   showCSATFeedback: (options?: Partial<CSATFeedbackOptions>) => void;
   showNPSFeedback: (options?: Partial<NPSFeedbackOptions>) => void;
@@ -717,6 +727,7 @@ export const createAgentExperience = (
   let showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
   let scrollToBottomFeature = config.features?.scrollToBottom ?? {};
   let scrollBehaviorFeature = config.features?.scrollBehavior ?? {};
+  let messageEntranceFeature = config.features?.messageEntrance ?? {};
   const persistKeyPrefix = (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
   const eventStreamDbName = `${persistKeyPrefix}event-stream`;
   let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
@@ -863,6 +874,12 @@ export const createAgentExperience = (
   const isActivityWhilePinnedEnabled = () =>
     scrollBehaviorFeature.showActivityWhilePinned !== false;
   const isAnnounceEnabled = () => scrollBehaviorFeature.announce === true;
+  // Edge fade ("scroll-fade"): soft gradient mask at the transcript edges. Opt-in.
+  const getScrollEdgeFade = () => scrollBehaviorFeature.edgeFade ?? false;
+  // Visibility tracking: observe message bubbles and emit `message:visible` the
+  // first time each scrolls into view. Opt-in; a no-op without IntersectionObserver.
+  const isVisibilityTrackingEnabled = () =>
+    scrollBehaviorFeature.visibilityTracking === true;
   const scrollToBottomButton = createElement(
     "button",
     "persona-scroll-to-bottom-indicator persona-absolute persona-bottom-3 persona-left-1/2 persona-z-10 persona-flex persona-items-center persona-gap-1 persona-text-xs persona-transform persona--translate-x-1/2 persona-cursor-pointer"
@@ -3448,6 +3465,145 @@ export const createAgentExperience = (
     syncScrollToBottomButton();
   };
 
+  // ── Edge fade ("scroll-fade") ───────────────────────────────────────────
+  // Reflect the configured edge fade onto the scrollport via a data attribute;
+  // widget.css turns it into a `mask-image` gradient. Purely visual.
+  const applyEdgeFade = () => {
+    const fade = getScrollEdgeFade();
+    const value = fade === true ? "both" : fade || "";
+    if (value) body.setAttribute("data-persona-scroll-fade", value);
+    else body.removeAttribute("data-persona-scroll-fade");
+  };
+  applyEdgeFade();
+
+  // ── Visibility tracking ─────────────────────────────────────────────────
+  // One IntersectionObserver, created lazily the first time tracking is on.
+  // The first time a message bubble crosses the threshold we mark it seen,
+  // emit `message:visible`, and stop observing it. Re-observed after morphs
+  // because idiomorph re-imports nodes; a per-node WeakSet avoids double work.
+  const seenMessageIds = new Set<string>();
+  const observedVisibilityNodes = new WeakSet<Element>();
+  let visibilityObserver: IntersectionObserver | null = null;
+  destroyCallbacks.push(() => {
+    visibilityObserver?.disconnect();
+    visibilityObserver = null;
+  });
+  const ensureVisibilityObserver = (): IntersectionObserver | null => {
+    if (visibilityObserver || typeof IntersectionObserver === "undefined") {
+      return visibilityObserver;
+    }
+    visibilityObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const node = entry.target as HTMLElement;
+          const id = node.getAttribute("data-message-id");
+          visibilityObserver?.unobserve(node);
+          if (!id || seenMessageIds.has(id)) continue;
+          seenMessageIds.add(id);
+          node.setAttribute("data-persona-message-seen", "true");
+          const message = session?.getMessages().find((m) => m.id === id);
+          if (message) eventBus.emit("message:visible", message);
+        }
+      },
+      { root: body, threshold: 0.5 }
+    );
+    return visibilityObserver;
+  };
+  const observeMessageVisibility = () => {
+    if (!isVisibilityTrackingEnabled()) return;
+    const observer = ensureVisibilityObserver();
+    if (!observer) return;
+    messagesWrapper
+      .querySelectorAll<HTMLElement>("[data-message-id]")
+      .forEach((node) => {
+        const id = node.getAttribute("data-message-id");
+        if (!id || seenMessageIds.has(id) || observedVisibilityNodes.has(node)) {
+          return;
+        }
+        observedVisibilityNodes.add(node);
+        observer.observe(node);
+      });
+  };
+
+  // ── Message entrance animation ──────────────────────────────────────────
+  // Tag each message wrapper the first time it appears so widget.css can play a
+  // one-shot entrance, then clear the attribute so idiomorph re-renders don't
+  // replay it. The initial transcript is pre-seeded (restored/initial history
+  // must never animate), and hydration passes (`suppressScrollSend`) are also
+  // skipped to cover async persisted restore. The id set stays current even
+  // while the feature is off, so toggling it on never animates the backlog.
+  const enteredMessageIds = new Set<string>(
+    (config.initialMessages ?? []).map((m) => m.id)
+  );
+  const applyMessageEntrance = () => {
+    const enabled = messageEntranceFeature.enabled === true;
+    const mode = messageEntranceFeature.mode ?? "fade";
+    const duration = messageEntranceFeature.durationMs ?? 260;
+    // Restored/hydrated history must not animate, but must still be recorded so
+    // a later toggle-on doesn't sweep the backlog.
+    const animate = enabled && !suppressScrollSend;
+    messagesWrapper
+      .querySelectorAll<HTMLElement>(":scope > [id^='wrapper-']")
+      .forEach((wrapper) => {
+        const id = wrapper.id.slice("wrapper-".length);
+        if (!id || enteredMessageIds.has(id)) return;
+        enteredMessageIds.add(id);
+        if (!animate) return;
+        wrapper.style.setProperty(
+          "--persona-message-enter-duration",
+          `${duration}ms`
+        );
+        wrapper.setAttribute("data-persona-message-enter", mode);
+        const clear = () =>
+          wrapper.removeAttribute("data-persona-message-enter");
+        wrapper.addEventListener("animationend", clear, { once: true });
+        setTimeout(clear, duration + 150);
+      });
+  };
+
+  // Jump to a specific message by id (Jump Nav). Lands the message near the top
+  // (or centered) and, since that's above the live edge, pauses follow so a
+  // streaming token doesn't immediately yank the reader back down. Returns
+  // false when the id isn't currently rendered.
+  const scrollToMessageById = (
+    messageId: string,
+    options?: { block?: "start" | "center"; behavior?: "smooth" | "auto" }
+  ): boolean => {
+    const escapedId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(messageId)
+        : messageId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const bubble = body.querySelector<HTMLElement>(
+      `[data-message-id="${escapedId}"]`
+    );
+    if (!bubble) return false;
+    const block = options?.block ?? "start";
+    const behavior = options?.behavior ?? "smooth";
+    const top = offsetTopWithinBody(bubble);
+    const target = Math.min(
+      Math.max(
+        0,
+        block === "center"
+          ? top - Math.max(0, (body.clientHeight - bubble.offsetHeight) / 2)
+          : top - getAnchorTopOffset()
+      ),
+      getScrollBottomOffset(body)
+    );
+    // Landing above the bottom means we're no longer following.
+    if (isFollowEffective()) autoFollow.pause();
+    if (behavior === "auto") {
+      isAutoScrolling = true;
+      body.scrollTop = target;
+      lastScrollTop = body.scrollTop;
+      isAutoScrolling = false;
+      syncScrollToBottomButton();
+    } else {
+      animateScrollTo(body, () => target, 240);
+    }
+    return true;
+  };
+
   // Reacts to a user message the user just sent (seeded so restored history
   // never triggers it). Follow mode re-sticks to the bottom even if the user
   // had scrolled up: sending is an unambiguous "take me to the latest"
@@ -4447,6 +4603,10 @@ export const createAgentExperience = (
   ) => {
     renderMessagesWithPluginsImpl(container, messages, transform);
     refreshReadAloudButtons();
+    // Post-morph passes over the live DOM: tag fresh wrappers for the entrance
+    // animation and (re)observe message bubbles for visibility tracking.
+    applyMessageEntrance();
+    observeMessageVisibility();
   };
 
   /**
@@ -6708,12 +6868,16 @@ export const createAgentExperience = (
       scrollToBottomFeature = config.features?.scrollToBottom ?? {};
       const prevScrollMode = getScrollMode();
       scrollBehaviorFeature = config.features?.scrollBehavior ?? {};
+      messageEntranceFeature = config.features?.messageEntrance ?? {};
       if (prevScrollMode !== getScrollMode()) {
         // Leaving anchor-top drops any live spacer; entering a new mode
         // starts from a clean follow state.
         resetAnchorState();
         resumeAutoScroll();
       }
+      applyEdgeFade();
+      // Tracking may have just been turned on: pick up already-rendered bubbles.
+      observeMessageVisibility();
       renderScrollToBottomButton();
       syncScrollToBottomButton();
       const prevShowEventStreamToggle = showEventStreamToggle;
@@ -8303,6 +8467,9 @@ export const createAgentExperience = (
         voiceActive: voiceState.active,
         streaming: session.isStreaming()
       };
+    },
+    scrollToMessage(messageId, options) {
+      return scrollToMessageById(messageId, options);
     },
     // Feedback methods (CSAT/NPS)
     showCSATFeedback(options?: Partial<CSATFeedbackOptions>) {
