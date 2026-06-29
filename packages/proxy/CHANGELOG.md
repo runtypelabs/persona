@@ -1,5 +1,12 @@
 # @runtypelabs/persona-proxy
 
+## 4.6.0
+
+### Patch Changes
+
+- 41bb23a: Refresh the Persona docs assistant prompt to match current widget APIs, install guidance, demos, and voice/theming terminology.
+- 8739957: Docs assistant: recommend the Streaming Markdown Tables and Scroll Engineering demos for streaming questions.
+
 ## 4.3.0
 
 ### Patch Changes
