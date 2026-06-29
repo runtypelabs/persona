@@ -178,6 +178,11 @@
       } from "./src/demo-config-inspector.ts";
       import { renderDemoScaffold } from "./src/demo-scaffold.ts";
       import { setupMountMode, renderInlineMount, squareInlinePanel } from "./src/mount-mode.ts";
+      import { createDemoEchoFetch } from "./src/demo-echo-fetch.ts";
+
+      // No live backend: tool/reasoning bubbles are injected via the buttons.
+      // The echo keeps a typed message from erroring.
+      const echoFetch = createDemoEchoFetch();
 
       renderDemoScaffold({ slug: "tool-loading-demo" });
 
@@ -245,6 +250,7 @@
         return {
           ...DEFAULT_WIDGET_CONFIG,
           apiUrl: "https://noop.test/chat",
+          customFetch: echoFetch,
           launcher,
           suggestionChips: [],
           persistState: false,

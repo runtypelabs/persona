@@ -11,6 +11,28 @@ import {
 import { squareInlinePanel } from "./mount-mode";
 import { editorialWidgetTheme } from "./editorial-widget-theme";
 import { createTweetEmbedPlugin } from "./plugins/tweet-embed-plugin";
+import { createDemoEchoFetch } from "./demo-echo-fetch";
+
+// No live backend (this is a scroll-behavior testbed). A typed message streams
+// back a long, multi-paragraph echo so the scroll modes, pin-on-interaction,
+// and last-turn restore all have real content to work against instead of
+// erroring on a dead apiUrl.
+const echoFetch = createDemoEchoFetch({
+  reply: (userText) => {
+    const quoted = userText ? `"${userText}"` : "your message";
+    const para = (n: number) =>
+      `Paragraph ${n}. This is filler streamed token by token so the scroll engine has something to chew on: anchor-top pinning, pause-on-interaction, and last-user-turn restore all key off a growing assistant bubble like this one. Scroll up mid-stream to confirm the view stays where you left it.`;
+    return [
+      `Echoing ${quoted} back. There is no model behind this demo, so the text below is canned, but it streams through the exact same pipeline a real agent drives.`,
+      "",
+      para(1),
+      "",
+      para(2),
+      "",
+      para(3),
+    ].join("\n");
+  },
+});
 
 // ── toggle state ────────────────────────────────────────────────
 
@@ -44,6 +66,7 @@ function buildConfig(inline: boolean): AgentWidgetConfig {
   const base: AgentWidgetConfig = {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: "https://noop.test/chat",
+    customFetch: echoFetch,
     // Match the site's editorial/terminal design (paper surfaces, square
     // corners, ink text, teal accents) so the embedded widget reads identically
     // to the home page rail. Same source of truth as main.ts.

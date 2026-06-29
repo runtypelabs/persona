@@ -6726,6 +6726,7 @@ export const createAgentExperience = (
       const previousShowToolCalls = config.features?.showToolCalls;
       const previousToolCallDisplay = config.features?.toolCallDisplay;
       const previousReasoningDisplay = config.features?.reasoningDisplay;
+      const previousStreamAnimationType = config.features?.streamAnimation?.type;
       config = { ...config, ...nextConfig };
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
@@ -6973,6 +6974,29 @@ export const createAgentExperience = (
       if (messagesConfigChanged && session) {
         configVersion++;
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+      }
+
+      // Re-activate the stream-animation plugin when the type changes via
+      // update(). Built-in animations (typewriter, word-fade, letter-rise,
+      // pop-bubble) carry their CSS in widget.css, so swapping the type is
+      // enough. Plugin animations (wipe, glyph-cycle, and custom plugins
+      // registered via registerStreamAnimationPlugin) inject their styles and
+      // run onAttach only through ensurePluginActive, which the initial mount
+      // calls but update() otherwise skips. Without this, switching to a plugin
+      // animation live sets the type but never injects the CSS, so it silently
+      // does nothing. ensurePluginActive is idempotent (styles inject once per
+      // root), so re-selecting a previously-activated plugin is a no-op.
+      const nextStreamAnimationType = config.features?.streamAnimation?.type;
+      if (
+        nextStreamAnimationType !== previousStreamAnimationType &&
+        nextStreamAnimationType &&
+        nextStreamAnimationType !== "none"
+      ) {
+        const streamAnimationPlugin = resolveStreamAnimationPlugin(
+          nextStreamAnimationType,
+          config.features?.streamAnimation?.plugins
+        );
+        if (streamAnimationPlugin) ensurePluginActive(streamAnimationPlugin, mount);
       }
 
       // Update panel icon sizes
