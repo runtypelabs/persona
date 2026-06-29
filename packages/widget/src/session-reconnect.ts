@@ -180,6 +180,10 @@ export function createReconnectController(
 
     while (host.getResumable() && attempt < maxAttempts) {
       attempt += 1;
+      // An attempt is in flight. No-op for attempt 1 (the session's synchronous
+      // `beginReconnect` already set `resuming`); flips back from `paused` after
+      // each backoff wait.
+      host.setStatus("resuming");
       const handle = host.getResumable()!;
       const before = handle.lastEventId;
       const controller = new AbortController();
@@ -228,6 +232,9 @@ export function createReconnectController(
       }
 
       if (host.getResumable() && attempt < maxAttempts) {
+        // Dropped and waiting to retry: surface `paused` so
+        // `statusIndicator.pausedText` renders during the backoff sleep.
+        host.setStatus("paused");
         await waitBackoff(
           backoff[Math.min(attempt - 1, backoff.length - 1)] ?? 1000
         );

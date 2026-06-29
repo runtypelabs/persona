@@ -307,6 +307,53 @@ describe("AgentWidgetSession - durable reconnect", () => {
     expect(assistantText()).toContain("Hello");
   });
 
+  it("surfaces `paused` status during the backoff wait between attempts", async () => {
+    const initial = sseStream([
+      frame(1, "text_delta", {
+        id: "text_0",
+        delta: "Hello",
+        executionId: "exec_1",
+      }),
+    ]);
+    const resume = sseStream([
+      frame(2, "text_delta", {
+        id: "text_0",
+        delta: " world",
+        executionId: "exec_1",
+      }),
+      frame(3, "execution_complete", { success: true, kind: "agent" }),
+    ]);
+    let calls = 0;
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: "http://x",
+        customFetch: async () => ({ ok: true, body: initial }) as any,
+        reconnectStream: async () => {
+          calls += 1;
+          // First attempt fails (forcing a backoff wait), second succeeds.
+          if (calls === 1) return { ok: false } as any;
+          return { ok: true, body: resume } as any;
+        },
+        reconnect: { backoffMs: [5, 5], maxAttempts: 3 },
+      },
+      baseCallbacks()
+    );
+
+    await session.sendMessage("hi");
+    await waitFor(() => reconnectPhases.includes("resumed"));
+
+    // An in-flight attempt is `resuming`; the wait before the 2nd attempt is
+    // `paused`, so both appear before the turn settles.
+    expect(statusHistory).toContain("resuming");
+    expect(statusHistory).toContain("paused");
+    // `paused` is followed by another `resuming` (the retry), proving it's the
+    // inter-attempt wait and not a terminal state.
+    const pausedAt = statusHistory.indexOf("paused");
+    expect(statusHistory.slice(pausedAt + 1)).toContain("resuming");
+    expect(assistantText()).toBe("Hello world");
+    expect(status).toBe("idle");
+  });
+
   it("notifies onExecutionState on create and clears it on terminal", async () => {
     const stream = sseStream([
       frame(1, "text_delta", {
