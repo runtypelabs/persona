@@ -1,0 +1,184 @@
+/* On-device demo chrome: model picker bar, WebGPU warning, and the eval HUD.
+   Layers on top of ../webmcp-slides/slides.css (reused verbatim). */
+
+.lr-badge {
+  background: #111827;
+  color: #fff;
+}
+
+.lr-model-label {
+  font-weight: 600;
+}
+
+.lr-load-button {
+  background: #c2410c;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lr-load-button:hover:not(:disabled) {
+  background: #9a3412;
+}
+.lr-load-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.lr-status {
+  font-size: 12px;
+  color: #6b7280;
+  max-width: 360px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lr-divider {
+  width: 1px;
+  height: 22px;
+  background: #e7e5e0;
+  margin: 0 4px;
+}
+
+.lr-warning {
+  padding: 10px 16px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 13px;
+  border-bottom: 1px solid #fcd34d;
+}
+
+/* ---- Eval HUD ---- */
+
+.lr-hud {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2147483000;
+  width: 280px;
+  background: rgba(17, 24, 39, 0.96);
+  color: #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  overflow: hidden;
+}
+
+.lr-hud-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.lr-hud-title {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10px;
+  color: #fbbf24;
+}
+.lr-hud-toggle {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.lr-hud-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lr-hud-collapsed .lr-hud-body {
+  display: none;
+}
+
+.lr-hud-model {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.lr-hud-ok {
+  color: #34d399;
+  font-weight: 600;
+}
+.lr-hud-idle {
+  color: #9ca3af;
+}
+.lr-hud-err {
+  color: #f87171;
+}
+.lr-hud-mono {
+  color: #9ca3af;
+  margin-left: 6px;
+}
+.lr-hud-loadrow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.lr-hud-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.lr-hud-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #f97316);
+  transition: width 0.2s ease;
+}
+
+.lr-hud-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px 6px;
+}
+.lr-hud-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lr-hud-k {
+  color: #9ca3af;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.lr-hud-v {
+  color: #f9fafb;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.lr-hud-recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.lr-hud-chip {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fcd34d;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 10px;
+}
+.lr-hud-hint {
+  color: #6b7280;
+  font-size: 10px;
+}
+
+@media (max-width: 720px) {
+  .lr-hud {
+    width: calc(100vw - 32px);
+  }
+}

@@ -87,6 +87,14 @@ const FEATURED_DEMOS: readonly CommandPaletteItem[] = [
     keywords: ["slides", "deck", "presentation", "webmcp"],
   },
   {
+    id: "featured:litert-slides",
+    title: "On-device Slides (Gemma 4)",
+    href: "/litert-slides.html",
+    section: "Featured demos",
+    subtitle: "The slide editor driven by Gemma 4 running in-browser via LiteRT-LM.",
+    keywords: ["litert", "gemma", "on-device", "webgpu", "local", "slides", "webmcp"],
+  },
+  {
     id: "featured:webmcp-paint",
     title: "WebMCP Paint",
     href: "/webmcp-paint.html",
