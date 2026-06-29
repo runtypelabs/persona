@@ -189,7 +189,7 @@ export class AgentWidgetSession {
   // Agent execution state
   private agentExecution: AgentExecutionState | null = null;
 
-  // ── Durable-session reconnect (slice 3b) ──────────────────────────────────
+  // ── Durable-session reconnect ──────────────────────────────────
   // The in-flight resume handle for the durable lane (any resumable agent
   // execution the backend persists and can replay, e.g. Claude Managed agents
   // or async/background runs). Created when a stream that carries SSE `id:`
@@ -2882,7 +2882,7 @@ export class AgentWidgetSession {
     }
   };
 
-  // ── Durable-session reconnect (slice 3b) ──────────────────────────────────
+  // ── Durable-session reconnect ──────────────────────────────────
 
   /**
    * Record the latest SSE `id:` cursor and (lazily) form/advance the resume

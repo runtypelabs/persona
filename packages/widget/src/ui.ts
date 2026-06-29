@@ -5409,7 +5409,7 @@ export const createAgentExperience = (
     });
   }
 
-  // Durable-session reconnect boot path (slice 3b): once history is in place,
+  // Durable-session reconnect boot path: once history is in place,
   // if the host passed a non-terminal resume handle (+ a reconnect transport),
   // immediately re-enter `resuming` and replay everything past the cursor into
   // the restored conversation. Fires AFTER hydration so the trailing partial
