@@ -311,12 +311,15 @@ export type RuntypeExecutionStreamEvent = ({
   seq: number;
   type: "approval_complete";
 }) | ({
+  awaitReason?: string;
   awaitedAt?: string;
+  crawlId?: string;
   executionId: string;
   origin?: "webmcp" | "sdk";
   pageOrigin?: string;
   parameters?: Record<string, unknown>;
   seq: number;
+  stepId?: string;
   toolCallId?: string;
   toolId?: string;
   toolName?: string;
@@ -406,13 +409,16 @@ export type RuntypeFlowSSEEvent = {
   type: "flow_error";
   upgradeUrl?: string;
 }) | ({
+  awaitReason?: string;
   awaitedAt: string;
+  crawlId?: string;
   executionId?: string;
   flowId: string;
   origin?: "webmcp" | "sdk";
   pageOrigin?: string;
   parameters?: Record<string, unknown>;
   seq?: number;
+  stepId?: string;
   toolCallId?: string;
   toolId?: string;
   toolName?: string;
