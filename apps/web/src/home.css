@@ -429,66 +429,6 @@ section[id], aside[id] {
   color: var(--ink);
 }
 
-/* Launch-day Product Hunt call-out -------------------------------------------------- */
-.hero-producthunt {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  max-width: 620px;
-  margin-top: 2px;
-  padding: 14px 18px;
-  background: var(--paper-high);
-  border: 1px solid var(--ink);
-  box-shadow: 6px 6px 0 var(--teal-dim);
-  text-decoration: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.hero-producthunt:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 8px 8px 0 var(--teal-dim);
-}
-
-.hero-producthunt-pulse {
-  position: relative;
-  flex: none;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: #da552f;
-  box-shadow: 0 0 0 0 rgba(218, 85, 47, 0.6);
-  animation: hero-producthunt-pulse 1.8s ease-out infinite;
-}
-
-@keyframes hero-producthunt-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(218, 85, 47, 0.55); }
-  70% { box-shadow: 0 0 0 12px rgba(218, 85, 47, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(218, 85, 47, 0); }
-}
-
-.hero-producthunt-copy {
-  flex: 1;
-  min-width: 200px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  line-height: 1.4;
-  color: var(--ink);
-}
-
-.hero-producthunt-badge {
-  flex: none;
-  display: block;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hero-producthunt-pulse {
-    animation: none;
-  }
-}
-
 /* Framework / platform logo strip ----------------------------------------------- */
 
 .stack-strip {
