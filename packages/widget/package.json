@@ -73,7 +73,7 @@
     "build:markdown-parsers": "tsup --config tsup.markdown-parsers.config.ts",
     "build:plugin-kit": "tsup src/plugin-kit.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:theme-editor": "tsup src/theme-editor.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
-    "build:theme-editor-preview": "tsup src/theme-editor-preview.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
+    "build:theme-editor-preview": "tsup src/theme-editor-preview.ts --format esm,cjs --minify --dts --out-dir dist",
     "build:testing": "tsup src/testing.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:smart-dom-reader": "tsup src/smart-dom-reader.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:voice-worklet-player": "tsup src/voice-worklet-player.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",

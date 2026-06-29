@@ -45,6 +45,13 @@ import {
 } from "./voice";
 import { resolveSpeakableText } from "./utils/speech-text";
 import { loadRuntypeTts } from "./voice/runtype-tts-loader";
+// Type-only (erased at build): the runtime reconnect machinery is reached via a
+// dynamic import in `beginReconnect`, so it never lands in bundles that don't
+// opt into durable reconnect (see ./session-reconnect.ts).
+import type {
+  ReconnectController,
+  ReconnectHost,
+} from "./session-reconnect";
 
 export type AgentWidgetSessionStatus =
   | "idle"
@@ -204,13 +211,11 @@ export class AgentWidgetSession {
   // True while a reconnect run is active (guards against re-entry from a second
   // drop and tells the dispatch/connectStream catches to stay quiet).
   private reconnecting = false;
-  // 1-based attempt counter for the active reconnect run (0 = not reconnecting).
-  private reconnectAttempt = 0;
-  // Resolver for the current backoff wait, so a focus/online event can
-  // short-circuit the sleep and retry immediately.
-  private reconnectWaitResolve: (() => void) | null = null;
-  private reconnectWaitTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconnectListenersAttached = false;
+  // The reconnect orchestration (backoff loop, wake listeners, give-up
+  // finalizer) lives in a lazily-imported module so it stays out of bundles
+  // that never opt into durable reconnect. Created on the first reconnect.
+  private reconnectController: ReconnectController | null = null;
+  private reconnectControllerPromise: Promise<ReconnectController> | null = null;
   // Trailing-edge throttle for `onExecutionState` so it isn't fired per delta.
   private executionStateTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -2956,197 +2961,93 @@ export class AgentWidgetSession {
     if (!this.resumable || typeof this.config.reconnectStream !== "function") {
       return;
     }
+    // Flip the visible state synchronously — the bubble stays open and a
+    // `resuming` status is observable immediately (e.g. right after
+    // `resumeFromHandle`). The heavy backoff loop is loaded lazily below.
     this.reconnecting = true;
-    this.reconnectAttempt = 0;
     this.callbacks.onReconnect?.({ phase: "paused", handle: this.resumable });
     this.setStreaming(true);
     this.setStatus("resuming");
-    this.attachReconnectListeners();
-    void this.runReconnectLoop();
+    void this.loadReconnectController().then((controller) => {
+      // The run may have been torn down (new turn / cancel / hydrate) while the
+      // module was loading; only start the loop if we're still reconnecting.
+      if (this.reconnecting && this.resumable) controller.begin();
+    });
+  }
+
+  /**
+   * Lazily import and instantiate the reconnect controller. Cached so repeated
+   * reconnects reuse one controller (and one module load). Deliberately kept off
+   * every hot path (`sendMessage` / `cancel` / `teardownReconnect`) so a widget
+   * that never reconnects never pulls the chunk.
+   */
+  private loadReconnectController(): Promise<ReconnectController> {
+    if (this.reconnectController) {
+      return Promise.resolve(this.reconnectController);
+    }
+    if (!this.reconnectControllerPromise) {
+      this.reconnectControllerPromise = import("./session-reconnect").then(
+        ({ createReconnectController }) => {
+          const controller = createReconnectController(
+            this.buildReconnectHost()
+          );
+          this.reconnectController = controller;
+          return controller;
+        }
+      );
+    }
+    return this.reconnectControllerPromise;
+  }
+
+  /** The narrow surface the lazily-loaded reconnect loop drives. */
+  private buildReconnectHost(): ReconnectHost {
+    const session = this;
+    return {
+      get config() {
+        return session.config;
+      },
+      getResumable: () => session.resumable,
+      clearResumable: () => session.clearResumable(),
+      getStatus: () => session.status,
+      setStatus: (status) => session.setStatus(status),
+      setStreaming: (streaming) => session.setStreaming(streaming),
+      setReconnecting: (value) => {
+        session.reconnecting = value;
+      },
+      setAbortController: (controller) => {
+        session.abortController = controller;
+      },
+      getMessages: () => session.messages,
+      notifyMessagesChanged: () =>
+        session.callbacks.onMessagesChanged([...session.messages]),
+      resumeConnect: (body, assistantMessageId, seedContent) =>
+        session.connectStream(body, {
+          assistantMessageId,
+          allowReentry: true,
+          preserveAssistantId: true,
+          seedContent,
+        }),
+      appendMessage: (message) => session.appendMessage(message),
+      nextSequence: () => session.nextSequence(),
+      emitReconnect: (event) => session.callbacks.onReconnect?.(event),
+      buildErrorContent: (message) =>
+        buildDispatchErrorContent(
+          new Error(message),
+          session.config.errorMessage
+        ),
+      onError: (error) => session.callbacks.onError?.(error),
+    };
   }
 
   /** Public manual retry (e.g. a "Reconnect" button). */
   public reconnectNow(): void {
     if (this.reconnecting) {
-      // Already trying, so just short-circuit the current backoff.
-      this.wakeReconnect();
+      // Already trying, so just short-circuit the current backoff. (No-op if the
+      // controller is still loading; the first attempt hasn't slept yet.)
+      this.reconnectController?.wake();
       return;
     }
     this.beginReconnect();
-  }
-
-  private async runReconnectLoop(): Promise<void> {
-    const backoff = this.config.reconnect?.backoffMs ?? [1000, 2000, 4000, 8000, 8000];
-    const maxAttempts = this.config.reconnect?.maxAttempts ?? backoff.length;
-    const reconnectStream = this.config.reconnectStream;
-    if (!reconnectStream) {
-      this.reconnecting = false;
-      return;
-    }
-
-    while (this.resumable && this.reconnectAttempt < maxAttempts) {
-      this.reconnectAttempt += 1;
-      const handle = this.resumable;
-      const before = handle.lastEventId;
-      const controller = new AbortController();
-      this.abortController = controller;
-      this.callbacks.onReconnect?.({
-        phase: "resuming",
-        handle,
-        attempt: this.reconnectAttempt,
-      });
-
-      let body: ReadableStream<Uint8Array> | null = null;
-      try {
-        const res = await reconnectStream({
-          executionId: handle.executionId,
-          after: handle.lastEventId,
-          signal: controller.signal,
-        });
-        if (res && res.ok && res.body) body = res.body;
-      } catch {
-        body = null;
-      }
-      if (controller.signal.aborted) return; // torn down (cancel/new turn)
-
-      if (body) {
-        // Seed the resume with the text already shown so post-cursor deltas
-        // append rather than clobber the bubble.
-        const seedContent =
-          this.messages.find((m) => m.id === handle.assistantMessageId)
-            ?.content ?? "";
-        try {
-          await this.connectStream(body, {
-            assistantMessageId: handle.assistantMessageId,
-            allowReentry: true,
-            preserveAssistantId: true,
-            seedContent: typeof seedContent === "string" ? seedContent : "",
-          });
-        } catch {
-          // connectStream swallows resume-stream errors while `resuming`;
-          // anything escaping here just falls through to backoff/retry.
-        }
-        if (controller.signal.aborted) return;
-        // Reconnect reached a terminal: the idle(terminal)/error handler cleared
-        // the handle. We're done.
-        if (!this.resumable) {
-          this.reconnecting = false;
-          this.reconnectAttempt = 0;
-          this.detachReconnectListeners();
-          this.callbacks.onReconnect?.({ phase: "resumed", handle });
-          return;
-        }
-        // Made forward progress before dropping again → reset the attempt
-        // budget so a long, flaky run isn't capped by total drops.
-        if (this.resumable.lastEventId !== before) this.reconnectAttempt = 0;
-      }
-
-      if (this.resumable && this.reconnectAttempt < maxAttempts) {
-        await this.waitBackoff(
-          backoff[Math.min(this.reconnectAttempt - 1, backoff.length - 1)] ?? 1000
-        );
-        if (controller.signal.aborted) return;
-      }
-    }
-
-    if (this.resumable) this.finalizeReconnectFailure();
-  }
-
-  private waitBackoff(ms: number): Promise<void> {
-    return new Promise<void>((resolve) => {
-      this.reconnectWaitResolve = resolve;
-      this.reconnectWaitTimer = setTimeout(() => {
-        this.reconnectWaitTimer = null;
-        this.reconnectWaitResolve = null;
-        resolve();
-      }, ms);
-    });
-  }
-
-  /** Short-circuit the current backoff sleep (focus/online or manual retry). */
-  private wakeReconnect(): void {
-    if (this.reconnectWaitTimer) {
-      clearTimeout(this.reconnectWaitTimer);
-      this.reconnectWaitTimer = null;
-    }
-    if (this.reconnectWaitResolve) {
-      const resolve = this.reconnectWaitResolve;
-      this.reconnectWaitResolve = null;
-      resolve();
-    }
-  }
-
-  private handleReconnectWake = (): void => {
-    if (this.status !== "resuming" && this.status !== "paused") return;
-    // On a tab refocus only wake when actually visible; `online` always wakes.
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState === "hidden"
-    ) {
-      return;
-    }
-    this.wakeReconnect();
-  };
-
-  private attachReconnectListeners(): void {
-    if (this.reconnectListenersAttached) return;
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", this.handleReconnectWake);
-    }
-    if (typeof window !== "undefined") {
-      window.addEventListener("online", this.handleReconnectWake);
-    }
-    this.reconnectListenersAttached = true;
-  }
-
-  private detachReconnectListeners(): void {
-    if (!this.reconnectListenersAttached) return;
-    if (typeof document !== "undefined") {
-      document.removeEventListener("visibilitychange", this.handleReconnectWake);
-    }
-    if (typeof window !== "undefined") {
-      window.removeEventListener("online", this.handleReconnectWake);
-    }
-    this.reconnectListenersAttached = false;
-  }
-
-  /** Give up after exhausting attempts: finalize the bubble and surface error. */
-  private finalizeReconnectFailure(): void {
-    const handle = this.resumable;
-    this.clearResumable();
-    this.reconnecting = false;
-    this.reconnectAttempt = 0;
-    this.detachReconnectListeners();
-    this.abortController = null;
-
-    let changed = false;
-    for (const msg of this.messages) {
-      if (msg.streaming) {
-        msg.streaming = false;
-        changed = true;
-      }
-    }
-
-    const content = buildDispatchErrorContent(
-      new Error("Connection lost and the response could not be resumed."),
-      this.config.errorMessage
-    );
-    if (content) {
-      this.appendMessage({
-        id: `reconnect-failed-${handle?.executionId ?? this.nextSequence()}`,
-        role: "assistant",
-        content,
-        createdAt: new Date().toISOString(),
-        streaming: false,
-        sequence: this.nextSequence(),
-      });
-    } else if (changed) {
-      this.callbacks.onMessagesChanged([...this.messages]);
-    }
-
-    this.setStreaming(false);
-    this.setStatus("idle");
-    this.callbacks.onError?.(new Error("Durable session reconnect failed."));
   }
 
   /**
@@ -3208,16 +3109,14 @@ export class AgentWidgetSession {
     return null;
   }
 
-  /** Tear down any in-flight/pending reconnect and clear the resume handle. */
+  /**
+   * Tear down any in-flight/pending reconnect and clear the resume handle. Runs
+   * on every new turn / cancel / hydrate, so it must NOT pull the reconnect
+   * chunk: it only delegates to the controller if one was already created.
+   */
   private teardownReconnect(): void {
-    if (this.reconnectWaitTimer) {
-      clearTimeout(this.reconnectWaitTimer);
-      this.reconnectWaitTimer = null;
-    }
-    this.reconnectWaitResolve = null;
     this.reconnecting = false;
-    this.reconnectAttempt = 0;
-    this.detachReconnectListeners();
+    this.reconnectController?.teardown();
     this.clearResumable();
   }
 
