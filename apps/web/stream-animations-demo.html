@@ -30,7 +30,7 @@
         <aside class="stage-controls">
           <header class="demo-meta">
             <h1>Stream Animations</h1>
-            <p>Switch <code>features.streamAnimation.type</code> on the widget, then replay a canned streamed reply. Config re-applies each time so the widget resets.</p>
+            <p>Switch <code>features.streamAnimation.type</code> on the widget, then stream a canned reply to watch the effect. The selection re-applies in place, so each reply appends to the conversation.</p>
           </header>
 
           <div class="controls">
@@ -81,9 +81,9 @@
             </div>
 
             <div class="info-section">
-              <h3>Replay</h3>
+              <h3>Demo replies</h3>
               <div class="section">
-                <label>Canned reply</label>
+                <label>Content</label>
                 <div class="mode-group" id="preset-selector">
                   <button class="mode-btn active" data-preset="default">Default</button>
                   <button class="mode-btn" data-preset="code">Code block</button>
@@ -92,7 +92,7 @@
                 </div>
                 <div class="reply-row">
                   <textarea id="reply-text" spellcheck="false"></textarea>
-                  <button class="btn btn-primary" id="btn-play">Replay stream</button>
+                  <button class="btn btn-primary" id="btn-play">Stream reply</button>
                 </div>
               </div>
             </div>
@@ -125,6 +125,12 @@
       } from "./src/demo-config-inspector.ts";
       import { renderDemoScaffold } from "./src/demo-scaffold.ts";
       import { setupMountMode, renderInlineMount, squareInlinePanel } from "./src/mount-mode.ts";
+      import { createDemoEchoFetch } from "./src/demo-echo-fetch.ts";
+
+      // No live backend here (the demo streams its samples via injection). The
+      // echo keeps a typed message from erroring and doubles as a reveal-effect
+      // testbed.
+      const echoFetch = createDemoEchoFetch();
 
       renderDemoScaffold({ slug: "stream-animations-demo" });
 
@@ -228,6 +234,7 @@ Both were captured at *golden hour*.`,
       const getConfig = () => ({
         ...DEFAULT_WIDGET_CONFIG,
         apiUrl: "https://noop.test/chat",
+        customFetch: echoFetch,
         launcher: activeMountMode === "launcher"
           ? {
               ...DEFAULT_WIDGET_CONFIG.launcher,
@@ -252,7 +259,7 @@ Both were captured at *golden hour*.`,
         copy: {
           ...DEFAULT_WIDGET_CONFIG.copy,
           welcomeTitle: "Stream animations",
-          welcomeSubtitle: "Pick a mode and press Replay to see it stream in.",
+          welcomeSubtitle: "Pick a mode, then press Stream reply to see the effect.",
         },
         postprocessMessage: ({ text }) => markdownPostprocessor(text),
       });
@@ -263,7 +270,7 @@ Both were captured at *golden hour*.`,
         let mount;
         if (activeMountMode === "launcher") {
           stageEl.innerHTML =
-            '<div class="preview-hint">The widget mounts as a floating launcher in the bottom-right corner.<br>Pick an animation type and click "Replay stream" to preview.</div>';
+            '<div class="preview-hint">The widget mounts as a floating launcher in the bottom-right corner.<br>Pick an animation type and click "Stream reply" to preview.</div>';
           mount = document.createElement("div");
           stageEl.appendChild(mount);
         } else {
@@ -275,24 +282,26 @@ Both were captured at *golden hour*.`,
         reportDemoConfig(configInspector, { config: cfg, mode: activeMountMode });
       };
 
-      // Re-mount the widget in the current mode (used before each replay).
-      const createWidget = () => {
-        if (currentTeardown) {
-          try { currentTeardown(); } catch (e) { /* ignore */ }
-          currentTeardown = null;
-        }
-        doMount();
-      };
-
       const refreshConfigPreview = () => {
-        reportDemoConfig(configInspector, { config: getConfig(), mode: activeMountMode });
+        const cfg = getConfig();
+        reportDemoConfig(configInspector, { config: cfg, mode: activeMountMode });
+        // Apply the selection to the LIVE widget so both "Stream reply" and a
+        // message typed into the composer animate with the current pick. The
+        // widget is mounted once (at boot and on mount-mode switch); selections
+        // and replays reconfigure it in place via update() rather than
+        // re-mounting, so the conversation is preserved across replays.
+        if (controller) controller.update({ features: cfg.features });
       };
 
       const playReply = async () => {
         const token = freshCancel();
         const playBtn = document.getElementById("btn-play");
         playBtn.disabled = true;
-        createWidget();
+        // Reconfigure the live widget with the current selection, then append a
+        // fresh turn to the existing conversation (no re-mount, so earlier
+        // replays stay in the thread). Use the widget's "Clear chat" control to
+        // reset.
+        refreshConfigPreview();
         await sleep(100);
         log(`Playing stream: type=${currentType}, placeholder=${currentPlaceholder}`);
 
@@ -384,8 +393,8 @@ Both were captured at *golden hour*.`,
       });
 
       // Boot. setupMountMode renders the "View as" Inline / Launcher toggle and
-      // does the initial mount; replay/config changes call createWidget() to
-      // re-mount in the current mode.
+      // does the (single) mount per mode; replay/config changes reconfigure the
+      // mounted widget in place via controller.update() instead of re-mounting.
       replyTextarea.value = PRESETS.default;
       setupMountMode({
         slug: "stream-animations-demo",
@@ -401,7 +410,7 @@ Both were captured at *golden hour*.`,
           };
         },
       });
-      log("Ready: pick a type and click Replay.");
+      log("Ready: pick a type and click Stream reply.");
     </script>
     <script type="module">
       import { renderExamplesShell } from "/src/examples-nav.ts";

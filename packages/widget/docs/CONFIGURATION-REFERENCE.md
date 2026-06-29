@@ -526,7 +526,7 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `statusIndicator` | `AgentWidgetStatusIndicatorConfig` | Connection status display: `visible`, `idleText`, `connectingText`, `connectedText`, `errorText`. |
+| `statusIndicator` | `AgentWidgetStatusIndicatorConfig` | Connection status display: `visible`, `idleText`, `connectingText`, `connectedText`, `errorText`, plus `pausedText` / `resumingText` for the durable-reconnect states. |
 
 ### Features
 
@@ -667,6 +667,19 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `persist.voiceState` | `boolean?` | Persist voice recognition state. Default: `true`. |
 | `persist.focusInput` | `boolean?` | Focus input when restoring open state. Default: `true`. |
 | `clearOnChatClear` | `boolean?` | Clear persisted state when chat is cleared. Default: `true`. |
+
+### Durable Session Reconnect
+
+Resume a dropped durable agent turn from the SSE cursor instead of finalizing a truncated answer. Works for any resumable, server-persisted execution (e.g. Claude Managed agents, or async/background agent runs). Self-gating: arms only on the durable lane (streams carrying SSE `id:` lines). See the [Durable session reconnect guide](../../../docs/durable-reconnect.md) for the full walkthrough.
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `reconnectStream` | `(ctx: { executionId, after, signal }) => Promise<Response>` | Host-owned reconnect transport (symmetric to `customFetch`). Fetch the read-only events stream for `executionId` from cursor `after`; resolve with a `text/event-stream` `Response`. Throw or resolve non-ok to fail the attempt (the widget backs off and retries). Without this, a durable drop finalizes as before. |
+| `reconnect` | `{ maxAttempts?: number; backoffMs?: number[] }` | Backoff tuning. Default ~5 attempts over ~30s (`backoffMs: [1000, 2000, 4000, 8000, 8000]`). |
+| `onExecutionState` | `(handle: ResumableHandle \| null) => void` | Called when the resume handle changes: created on a durable turn, advanced as the cursor climbs (throttled), `null` on finish/error/teardown. Persist `{ executionId, lastEventId }` next to your `conversationId` for the tab-reload path. |
+| `resume` | `{ executionId: string; after: string }` | Boot-time resume (tab reload). With `reconnectStream` set, the widget enters `resuming` on mount and replays from `after` into the restored conversation. |
+
+Reconnect lifecycle is also surfaced as controller events (`stream:paused`, `stream:resuming`, `stream:resumed`) and a manual `controller.reconnect()`; status copy is configurable via `statusIndicator.pausedText` / `resumingText`.
 
 ### Extensibility
 

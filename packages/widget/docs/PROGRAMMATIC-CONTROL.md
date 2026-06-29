@@ -17,6 +17,10 @@ const chat = initAgentWidget({
 document.getElementById('open-chat')?.addEventListener('click', () => chat.open())
 document.getElementById('toggle-chat')?.addEventListener('click', () => chat.toggle())
 document.getElementById('close-chat')?.addEventListener('click', () => chat.close())
+
+// Manually retry a dropped durable stream (e.g. a "Reconnect" button). No-op
+// unless a durable turn dropped and `reconnectStream` is configured.
+document.getElementById('reconnect-chat')?.addEventListener('click', () => chat.reconnect())
 ```
 
 ### Message hooks
@@ -571,6 +575,7 @@ The widget controller exposes an event system for reacting to chat events. Use `
 | `assistant:message` | `AgentWidgetMessage` | Emitted when an assistant message starts streaming |
 | `assistant:complete` | `AgentWidgetMessage` | Emitted when an assistant message finishes streaming |
 | `voice:state` | `AgentWidgetVoiceStateEvent` | Emitted when voice recognition state changes |
+| `voice:status` | `AgentWidgetVoiceStatusEvent` | Emitted when the voice pipeline status changes (e.g. listening, processing, speaking) |
 | `action:detected` | `AgentWidgetActionEventPayload` | Emitted when an action is parsed from an assistant message |
 | `action:resubmit` | `AgentWidgetActionEventPayload` | Emitted when an action handler requests a follow-up/resubmit after injection |
 | `widget:opened` | `AgentWidgetStateEvent` | Emitted when the widget panel opens |
@@ -578,10 +583,22 @@ The widget controller exposes an event system for reacting to chat events. Use `
 | `widget:state` | `AgentWidgetStateSnapshot` | Emitted on any widget state change |
 | `message:feedback` | `AgentWidgetMessageFeedback` | Emitted when user provides feedback (upvote/downvote) |
 | `message:copy` | `AgentWidgetMessage` | Emitted when user copies a message |
+| `message:read-aloud` | `AgentWidgetReadAloudEvent` | Emitted when text-to-speech playback for a message starts, stops, or finishes |
 | `eventStream:opened` | `{ timestamp: number }` | Emitted when the event stream panel opens |
 | `eventStream:closed` | `{ timestamp: number }` | Emitted when the event stream panel closes |
 | `approval:requested` | `{ approval, message }` | Emitted when an approval bubble is created |
 | `approval:resolved` | `{ approval, decision }` | Emitted when an approval is approved/denied |
+| `stream:paused` | `{ executionId, after }` | Emitted when a durable stream drops and a reconnect is pending |
+| `stream:resuming` | `{ executionId, after, attempt }` | Emitted on each durable reconnect attempt |
+| `stream:resumed` | `{ executionId, after }` | Emitted when a durable turn resumes to its terminal after a reconnect |
+
+Every event is subscribed the same way (`controller.on(name, cb)`); the
+[combined example](#example-listening-to-events) below wires up one of each. For
+the common "what did the agent actually do" debugging case, the tool name,
+inputs, approval decision, and result are spread across `approval:requested`,
+`approval:resolved`, and the tool fields on `assistant:complete`. See
+[Recipe: auditing a tool action](#recipe-auditing-a-tool-action-the-receipt-after-a-mutative-step)
+for the assembled picture.
 
 ### Event Payload Types
 
@@ -619,6 +636,55 @@ type AgentWidgetMessageFeedback = {
   type: "upvote" | "downvote";
   messageId: string;
   message: AgentWidgetMessage;
+};
+
+// Voice pipeline status (distinct from voice:state on/off)
+type AgentWidgetVoiceStatusEvent = {
+  status: VoiceStatus; // e.g. "idle" | "listening" | "processing" | "speaking"
+  timestamp: number;
+};
+
+// Text-to-speech playback transitions (message:read-aloud)
+type AgentWidgetReadAloudEvent = {
+  messageId: string | null;            // the message being read (or that just stopped)
+  message: AgentWidgetMessage | null;  // the message object, when still in the thread
+  state: ReadAloudState;               // the new playback state
+  timestamp: number;
+};
+
+// Approval bubble (approval:requested → { approval, message },
+// approval:resolved → { approval, decision })
+type AgentWidgetApproval = {
+  id: string;
+  status: "pending" | "approved" | "denied" | "timeout";
+  agentId: string;
+  executionId: string;
+  toolName: string;          // the tool the agent wants to run
+  toolType?: string;
+  description: string;       // human-readable summary line
+  reason?: string;           // agent-authored justification, if provided
+  parameters?: unknown;      // the inputs the agent proposed
+  resolvedAt?: number;
+};
+
+// Tool call as it appears on a streamed/completed assistant message
+// (message.toolCall, or each entry of message.tools[])
+type AgentWidgetToolCall = {
+  id: string;
+  name?: string;             // tool name
+  status: "pending" | "running" | "complete";
+  args?: unknown;            // the inputs that were sent
+  result?: unknown;          // the tool's return value (the "receipt")
+  durationMs?: number;       // wall-clock duration once complete
+  startedAt?: number;
+  completedAt?: number;
+};
+
+// Durable reconnect events (stream:paused / stream:resuming / stream:resumed)
+type AgentWidgetStreamEvent = {
+  executionId: string;
+  after: string;             // the SSE cursor the reconnect resumes from
+  attempt?: number;          // 1-based, present on stream:resuming
 };
 ```
 
@@ -661,7 +727,83 @@ chat.on('widget:closed', (event) => {
 chat.on('action:detected', ({ action, message }) => {
   console.log('Action detected:', action.type, action.payload);
 });
+
+// Approvals: requested before a gated tool runs, resolved on the user's choice
+chat.on('approval:requested', ({ approval }) => {
+  console.log('Approval needed for', approval.toolName, approval.parameters);
+});
+chat.on('approval:resolved', ({ approval, decision }) => {
+  console.log(approval.toolName, 'was', decision); // "approved" | "denied" | ...
+});
+
+// Feedback and copy
+chat.on('message:feedback', ({ type, messageId }) => {
+  console.log(type, 'on', messageId); // "upvote" | "downvote"
+});
+chat.on('message:copy', (message) => {
+  console.log('Copied:', message.content);
+});
+
+// Any widget state change (open, launcher, voice, streaming) in one event
+chat.on('widget:state', (snapshot) => {
+  console.log('State:', snapshot);
+});
+
+// Durable reconnect lifecycle (only fires when reconnectStream is configured)
+chat.on('stream:paused',   (e) => console.log('Dropped, will retry from', e.after));
+chat.on('stream:resuming', (e) => console.log('Reconnect attempt', e.attempt));
+chat.on('stream:resumed',  (e) => console.log('Resumed', e.executionId));
 ```
+
+### Recipe: auditing a tool action (the receipt after a mutative step)
+
+A common need is to inspect what an agent actually *did*, not just what it said:
+the tool name, the inputs it used, whether it was approved, and the result it got
+back. That information lives across two boundaries, the approval (before the call)
+and the completed assistant message (after it). Subscribe to both to assemble the
+full receipt:
+
+```ts
+const chat = initAgentWidget({
+  target: 'body',
+  config: { apiUrl: '/api/chat/dispatch' }
+});
+
+// 1. Before a gated tool runs: the proposed call and its inputs.
+chat.on('approval:requested', ({ approval }) => {
+  console.log('Proposed:', approval.toolName, {
+    inputs: approval.parameters,   // what the agent wants to pass
+    reason: approval.reason,       // the agent's own justification, if any
+    summary: approval.description, // the human-readable line shown in the bubble
+  });
+});
+
+// 2. The user's decision on that call.
+chat.on('approval:resolved', ({ approval, decision }) => {
+  console.log('Decision:', approval.toolName, '→', decision);
+});
+
+// 3. After the turn completes: the result of each tool that ran.
+chat.on('assistant:complete', (message) => {
+  for (const tool of message.tools ?? []) {
+    console.log('Receipt:', tool.name, {
+      inputs: tool.args,        // the inputs actually sent
+      result: tool.result,      // the tool's return value
+      durationMs: tool.durationMs,
+      status: tool.status,      // "complete" once finished
+    });
+  }
+});
+```
+
+`message.tools` is the array of every tool call in that assistant turn;
+`message.toolCall` is the single-call shorthand when there is exactly one. Both
+carry the `AgentWidgetToolCall` shape documented above.
+
+For WebMCP tools specifically, the `toolName` matches the tool you registered on
+`document.modelContext`, and `approval.parameters` / `tool.args` are the same
+inputs that tool's `execute(args)` received in the page. See
+[WebMCP page tools](#webmcp-page-tools) above.
 
 ### Example: Voice Mode Persistence
 

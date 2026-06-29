@@ -387,6 +387,28 @@ export type AgentExecutionState = {
 };
 
 /**
+ * The coordinates needed to resume a durable agent turn after the SSE
+ * connection drops (any resumable, server-persisted execution, e.g. Claude
+ * Managed agents or async/background runs). Held on the session while a
+ * resumable stream is in flight
+ * and surfaced to the host via {@link AgentWidgetConfig.onExecutionState} so it
+ * can persist `{ executionId, lastEventId }` next to its own `conversationId`
+ * for the tab-reload path.
+ *
+ * `conversationId` is intentionally absent: it is host-owned (it lives in the
+ * host's `reconnectStream`/`customFetch` closure; the widget never sees it).
+ */
+export type ResumableHandle = {
+  /** The durable turn to reconnect to (from `agentMetadata.executionId`). */
+  executionId: string;
+  /** Highest SSE `id:` seq applied: the `?after=` reconnect cursor. */
+  lastEventId: string;
+  /** The open assistant message being streamed into, kept open on resume. */
+  assistantMessageId: string;
+  status: 'running';
+};
+
+/**
  * Metadata attached to messages created during agent execution.
  */
 export type AgentMessageMetadata = {
@@ -689,6 +711,12 @@ export type AgentWidgetControllerEventMap = {
   "eventStream:closed": { timestamp: number };
   "approval:requested": { approval: AgentWidgetApproval; message: AgentWidgetMessage };
   "approval:resolved": { approval: AgentWidgetApproval; decision: string };
+  /** A durable stream dropped; the widget is about to reconnect. */
+  "stream:paused": { executionId: string; after: string };
+  /** A reconnect attempt is in flight (`attempt` is 1-based). */
+  "stream:resuming": { executionId: string; after: string; attempt: number };
+  /** The durable turn resumed and reached its terminal after a reconnect. */
+  "stream:resumed": { executionId: string; after: string };
 };
 
 /**
@@ -1851,6 +1879,10 @@ export type AgentWidgetStatusIndicatorConfig = {
   connectingText?: string;
   connectedText?: string;
   errorText?: string;
+  /** Status text while a dropped durable stream is awaiting reconnect. */
+  pausedText?: string;
+  /** Status text while a reconnect attempt is in flight. */
+  resumingText?: string;
 };
 
 export type AgentWidgetVoiceRecognitionConfig = {
@@ -4161,6 +4193,62 @@ export type AgentWidgetConfig = {
    */
   customFetch?: AgentWidgetCustomFetch;
   /**
+   * Durable-session reconnect transport (host-owned, symmetric to
+   * {@link customFetch}). When a durable agent stream drops mid-turn (any
+   * resumable, server-persisted execution, e.g. Claude Managed agents or
+   * async/background runs), the widget calls this to fetch the read-only
+   * reconnect stream and pipes its body through the normal event pipeline to
+   * resume from where it left off.
+   *
+   * The host closure owns `agentId` / `conversationId` / base URL / auth and
+   * builds the events request, e.g.:
+   *
+   * ```typescript
+   * reconnectStream: ({ executionId, after, signal }) =>
+   *   fetch(
+   *     `${baseUrl}/v1/agents/${agentId}/executions/${executionId}` +
+   *       `/events?conversationId=${conversationId}&after=${after}`,
+   *     { headers: { Authorization: `Bearer ${token}`, "X-Persona-Version": ver }, signal }
+   *   )
+   * ```
+   *
+   * Resolve with a `text/event-stream` `Response`. Throw or resolve non-ok to
+   * signal "this attempt failed" (the widget backs off and retries, then gives
+   * up after the bounded attempts). Reconnect only ever arms on the durable
+   * lane (streams carrying SSE `id:` lines); without this hook a drop finalizes
+   * exactly as before.
+   */
+  reconnectStream?: (ctx: {
+    executionId: string;
+    after: string;
+    signal: AbortSignal;
+  }) => Promise<Response>;
+  /**
+   * Tuning for the auto-reconnect backoff. Defaults to ~5 attempts over ~30s
+   * (`backoffMs: [1000, 2000, 4000, 8000, 8000]`).
+   */
+  reconnect?: {
+    /** Max reconnect attempts before giving up and finalizing. @default backoffMs.length */
+    maxAttempts?: number;
+    /** Per-attempt delay (ms) before each retry. @default [1000, 2000, 4000, 8000, 8000] */
+    backoffMs?: number[];
+  };
+  /**
+   * Called whenever the durable resume handle changes: created when a durable
+   * turn starts streaming, updated as the cursor advances (throttled), and
+   * `null` when the turn finishes, errors, or is torn down. Persist
+   * `{ executionId, lastEventId }` next to your `conversationId` and pass it
+   * back via {@link resume} on the next mount to survive a tab reload.
+   */
+  onExecutionState?: (handle: ResumableHandle | null) => void;
+  /**
+   * Resume a durable turn on boot (tab-reload path). When present alongside
+   * {@link reconnectStream}, the widget enters `resuming` immediately on mount
+   * and reconnects from `after`, replaying everything past the cursor into the
+   * restored conversation.
+   */
+  resume?: { executionId: string; after: string };
+  /**
    * Custom SSE event parser for non-standard streaming response formats.
    *
    * Use this when your API returns SSE events in a different format than expected.
@@ -4736,8 +4824,26 @@ export type PersonaArtifactManualUpsert =
 
 export type AgentWidgetEvent =
   | { type: "message"; message: AgentWidgetMessage }
-  | { type: "status"; status: "connecting" | "connected" | "error" | "idle" }
+  | {
+      type: "status";
+      status: "connecting" | "connected" | "error" | "idle";
+      /**
+       * Set on the `idle` emitted from a graceful execution terminal
+       * (`execution_complete`). Distinguishes a real finish from the plain
+       * `idle` the dispatch wrappers emit in their `finally` on a dropped
+       * connection. The durable-reconnect drop detection keys off this.
+       */
+      terminal?: boolean;
+    }
   | { type: "error"; error: Error }
+  /**
+   * Durable-session reconnect cursor. Carries the SSE `id:` line (the durable
+   * row seq) of a fully-parsed frame so the session can track `lastEventId`
+   * and resume from `?after=<id>` after a drop. Only emitted on the durable
+   * lane (any resumable execution that stamps `id:` lines, e.g. Claude Managed
+   * agents or async/background runs).
+   */
+  | { type: "cursor"; id: string }
   | {
       type: "artifact_start";
       id: string;

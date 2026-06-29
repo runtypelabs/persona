@@ -294,6 +294,11 @@ type Controller = {
   clearChat: () => void;
   setMessage: (message: string) => boolean;
   submitMessage: (message?: string) => boolean;
+  /**
+   * Manually retry a dropped durable stream (e.g. from a "Reconnect" button).
+   * No-op unless a resumable durable turn dropped and `reconnectStream` is set.
+   */
+  reconnect: () => void;
   startVoiceRecognition: () => boolean;
   stopVoiceRecognition: () => boolean;
   /**
@@ -775,6 +780,8 @@ export const createAgentExperience = (
     if (status === "connecting") return statusConfig.connectingText ?? statusCopy.connecting;
     if (status === "connected") return statusConfig.connectedText ?? statusCopy.connected;
     if (status === "error") return statusConfig.errorText ?? statusCopy.error;
+    if (status === "paused") return statusConfig.pausedText ?? statusCopy.paused;
+    if (status === "resuming") return statusConfig.resumingText ?? statusCopy.resuming;
     return statusCopy[status];
   };
 
@@ -5243,6 +5250,8 @@ export const createAgentExperience = (
         if (s === "connecting") return currentStatusConfig.connectingText ?? statusCopy.connecting;
         if (s === "connected") return currentStatusConfig.connectedText ?? statusCopy.connected;
         if (s === "error") return currentStatusConfig.errorText ?? statusCopy.error;
+        if (s === "paused") return currentStatusConfig.pausedText ?? statusCopy.paused;
+        if (s === "resuming") return currentStatusConfig.resumingText ?? statusCopy.resuming;
         return statusCopy[s];
       };
       applyStatusToElement(statusText, getCurrentStatusText(status), currentStatusConfig, status);
@@ -5310,10 +5319,30 @@ export const createAgentExperience = (
       lastArtifactsState = state;
       syncArtifactPane();
       persistState();
+    },
+    onReconnect(event) {
+      // Map the durable-reconnect lifecycle to public controller events.
+      const { executionId, lastEventId } = event.handle;
+      if (event.phase === "paused") {
+        eventBus.emit("stream:paused", { executionId, after: lastEventId });
+      } else if (event.phase === "resuming") {
+        eventBus.emit("stream:resuming", {
+          executionId,
+          after: lastEventId,
+          attempt: event.attempt ?? 1,
+        });
+      } else {
+        eventBus.emit("stream:resumed", { executionId, after: lastEventId });
+      }
     }
   });
 
   sessionRef.current = session;
+
+  // On teardown, cancel any in-flight turn/reconnect so a pending durable
+  // reconnect's backoff timer and focus/online listeners don't outlive the
+  // widget (cancel() → teardownReconnect()).
+  destroyCallbacks.push(() => session.cancel());
 
   // Mirror read-aloud playback state into the action buttons, and surface it as
   // a controller event (parallel to message:copy / message:feedback).
@@ -5380,6 +5409,17 @@ export const createAgentExperience = (
     });
   }
 
+  // Durable-session reconnect boot path: once history is in place,
+  // if the host passed a non-terminal resume handle (+ a reconnect transport),
+  // immediately re-enter `resuming` and replay everything past the cursor into
+  // the restored conversation. Fires AFTER hydration so the trailing partial
+  // assistant bubble exists for the replay to append to.
+  const maybeBootResume = () => {
+    if (config.resume && typeof config.reconnectStream === "function") {
+      session.resumeFromHandle(config.resume);
+    }
+  };
+
   if (pendingStoredState) {
     pendingStoredState
       .then((state) => {
@@ -5410,7 +5450,10 @@ export const createAgentExperience = (
           // eslint-disable-next-line no-console
           console.error("[AgentWidget] Failed to hydrate stored state:", error);
         }
-      });
+      })
+      .finally(() => maybeBootResume());
+  } else {
+    maybeBootResume();
   }
 
   // Centralized so both the default composer (`handleSubmit`) and the plugin
@@ -6683,6 +6726,7 @@ export const createAgentExperience = (
       const previousShowToolCalls = config.features?.showToolCalls;
       const previousToolCallDisplay = config.features?.toolCallDisplay;
       const previousReasoningDisplay = config.features?.reasoningDisplay;
+      const previousStreamAnimationType = config.features?.streamAnimation?.type;
       config = { ...config, ...nextConfig };
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
@@ -6930,6 +6974,29 @@ export const createAgentExperience = (
       if (messagesConfigChanged && session) {
         configVersion++;
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+      }
+
+      // Re-activate the stream-animation plugin when the type changes via
+      // update(). Built-in animations (typewriter, word-fade, letter-rise,
+      // pop-bubble) carry their CSS in widget.css, so swapping the type is
+      // enough. Plugin animations (wipe, glyph-cycle, and custom plugins
+      // registered via registerStreamAnimationPlugin) inject their styles and
+      // run onAttach only through ensurePluginActive, which the initial mount
+      // calls but update() otherwise skips. Without this, switching to a plugin
+      // animation live sets the type but never injects the CSS, so it silently
+      // does nothing. ensurePluginActive is idempotent (styles inject once per
+      // root), so re-selecting a previously-activated plugin is a no-op.
+      const nextStreamAnimationType = config.features?.streamAnimation?.type;
+      if (
+        nextStreamAnimationType !== previousStreamAnimationType &&
+        nextStreamAnimationType &&
+        nextStreamAnimationType !== "none"
+      ) {
+        const streamAnimationPlugin = resolveStreamAnimationPlugin(
+          nextStreamAnimationType,
+          config.features?.streamAnimation?.plugins
+        );
+        if (streamAnimationPlugin) ensurePluginActive(streamAnimationPlugin, mount);
       }
 
       // Update panel icon sizes
@@ -7953,6 +8020,9 @@ export const createAgentExperience = (
     toggle() {
       if (!isPanelToggleable()) return;
       setOpenState(!open, "api");
+    },
+    reconnect() {
+      session.reconnectNow();
     },
     clearChat() {
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)

@@ -329,6 +329,7 @@ function llmsTxt(): Plugin {
   ].map((p) => path.resolve(widgetDir, p));
   const integrationDocPaths = [
     "docs/webmcp-without-runtype.md",
+    "docs/durable-reconnect.md",
   ].map((p) => path.resolve(repoDir, p));
   const proxyDocPaths = [
     "packages/proxy/README.md",
