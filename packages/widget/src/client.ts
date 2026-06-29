@@ -954,11 +954,12 @@ export class AgentWidgetClient {
   public async processStream(
     body: ReadableStream<Uint8Array>,
     onEvent: SSEHandler,
-    assistantMessageId?: string
+    assistantMessageId?: string,
+    seedContent?: string
   ): Promise<void> {
     onEvent({ type: "status", status: "connected" });
     try {
-      await this.streamResponse(body, onEvent, assistantMessageId);
+      await this.streamResponse(body, onEvent, assistantMessageId, seedContent);
     } finally {
       onEvent({ type: "status", status: "idle" });
     }
@@ -1353,7 +1354,12 @@ export class AgentWidgetClient {
   private async streamResponse(
     body: ReadableStream<Uint8Array>,
     onEvent: SSEHandler,
-    assistantMessageId?: string
+    assistantMessageId?: string,
+    // Durable reconnect: seed the assistant accumulator with the text already
+    // shown before the drop, so replayed post-cursor deltas APPEND to it
+    // instead of a fresh stream clobbering it (the replay carries only
+    // `seq > after`, i.e. the new deltas, not the full text).
+    seedContent?: string
   ) {
     const reader = body.getReader();
     const decoder = new TextDecoder();
@@ -1490,10 +1496,14 @@ export class AgentWidgetClient {
     const ensureAssistantMessage = () => {
       if (assistantMessage) return assistantMessage;
       let id: string;
+      let initialContent = "";
       const segment = currentTextBlockId;
       if (!assistantIdConsumed && baseAssistantId) {
         id = baseAssistantId;
         assistantIdConsumed = true;
+        // First (and only) time we reuse the caller-supplied id: this is the
+        // bubble a durable reconnect resumes into, so continue its text.
+        initialContent = seedContent ?? "";
       } else if (baseAssistantId && segment) {
         id = `${baseAssistantId}_${segment}`;
       } else {
@@ -1502,7 +1512,7 @@ export class AgentWidgetClient {
       assistantMessage = {
         id,
         role: "assistant",
-        content: "",
+        content: initialContent,
         createdAt: new Date().toISOString(),
         streaming: true,
         sequence: nextSequence()
@@ -2877,7 +2887,11 @@ export class AgentWidgetClient {
           pendingFlowRaw = "";
           lastSealedFlowBubble = null;
 
-          onEvent({ type: "status", status: "idle" });
+          // `terminal: true` marks this as a graceful finish (not a drop). The
+          // session uses it to distinguish the real end-of-turn from the plain
+          // `idle` the dispatch wrappers emit in their `finally` when a durable
+          // connection drops mid-stream (durable-reconnect drop detection).
+          onEvent({ type: "status", status: "idle", terminal: true });
         } else if (payloadType === "execution_error") {
           // Terminal failure. The non-terminal `error` is handled
           // separately (recoverable → warn).
@@ -3163,20 +3177,43 @@ export class AgentWidgetClient {
         const lines = event.split("\n");
         let eventType = "message";
         let data = "";
+        // Durable-reconnect cursor: the SSE `id:` line (the durable row seq).
+        // Only durable, resumable agent executions stamp these (e.g. Claude
+        // Managed agents, or any async/background run the backend persists and
+        // can replay); other streams carry no cursor. We emit a `cursor`
+        // event AFTER the frame is fully parsed and dispatched, so the session's
+        // `lastEventId` only advances past frames it has actually applied, so the
+        // happy path has no dupes against the server's `seq > after` replay.
+        let frameId: string | null = null;
 
         for (const line of lines) {
           if (line.startsWith("event:")) {
             eventType = line.replace("event:", "").trim();
           } else if (line.startsWith("data:")) {
             data += line.replace("data:", "").trim();
+          } else if (line.startsWith("id:")) {
+            frameId = line.slice(3).trim();
           }
         }
 
-        if (!data) continue;
+        const advanceCursor = () => {
+          if (frameId !== null && frameId !== "") {
+            onEvent({ type: "cursor", id: frameId });
+          }
+        };
+
+        // A frame with an `id:` but no `data:` (e.g. a bare keepalive line) is
+        // still a received durable row, so advance the cursor past it.
+        if (!data) {
+          advanceCursor();
+          continue;
+        }
         let payload: any;
         try {
           payload = JSON.parse(data);
         } catch (error) {
+          // Parse failure: the frame was NOT applied. Do NOT advance the cursor
+          // so a reconnect re-fetches this row.
           onEvent({
             type: "error",
             error:
@@ -3209,7 +3246,10 @@ export class AgentWidgetClient {
           if (assistantMessageRef.current && assistantMessageRef.current !== assistantMessage) {
             assistantMessage = assistantMessageRef.current;
           }
-          if (handled) continue; // Skip default handling if custom handler processed it
+          if (handled) {
+            advanceCursor();
+            continue; // Skip default handling if custom handler processed it
+          }
         }
 
         // The wire is the wire vocabulary; the handler consumes it
@@ -3217,6 +3257,7 @@ export class AgentWidgetClient {
         // drains straight through.
         seqReadyQueue.push({ payloadType, payload });
         drainReadyQueue();
+        advanceCursor();
       }
     }
 

@@ -685,6 +685,8 @@ Controls spoken playback of assistant messages. Two entry points share this conf
 | `connectingText` | `"Connecting..."` | Connecting text |
 | `connectedText` | `"Connected"` | Connected text |
 | `errorText` | `"Error"` | Error text |
+| `pausedText` | `"Connection lost…"` | Shown when a durable stream dropped and is awaiting reconnect |
+| `resumingText` | `"Reconnecting…"` | Shown while a durable reconnect attempt is in flight |
 
 ## Tool Call Display (`config.toolCall.*`)
 

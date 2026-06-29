@@ -12,6 +12,7 @@ import {
   AgentWidgetApprovalDecisionOptions,
   WebMcpConfirmInfo,
   AgentExecutionState,
+  ResumableHandle,
   ClientSession,
   ContentPart,
   InjectMessageOptions,
@@ -49,7 +50,13 @@ export type AgentWidgetSessionStatus =
   | "idle"
   | "connecting"
   | "connected"
-  | "error";
+  | "error"
+  // Durable-session reconnect states. `paused`: a durable stream dropped and a
+  // reconnect is pending. `resuming`: a reconnect attempt is in flight. While
+  // in either, the in-progress assistant bubble stays open (not finalized) and
+  // `streaming` stays true so the typing indicator persists.
+  | "paused"
+  | "resuming";
 
 /**
  * Config fields the `AgentWidgetClient` reads to shape the connection and each
@@ -106,6 +113,17 @@ type SessionCallbacks = {
   onArtifactsState?: (state: {
     artifacts: PersonaArtifactRecord[];
     selectedId: string | null;
+  }) => void;
+  /**
+   * Durable-session reconnect lifecycle, surfaced so the UI can map it to the
+   * public `stream:paused` / `stream:resuming` / `stream:resumed` controller
+   * events. `paused` fires once on the drop, `resuming` once per attempt,
+   * `resumed` when a reconnect reaches its terminal.
+   */
+  onReconnect?: (event: {
+    phase: "paused" | "resuming" | "resumed";
+    handle: ResumableHandle;
+    attempt?: number;
   }) => void;
 };
 
@@ -170,6 +188,31 @@ export class AgentWidgetSession {
 
   // Agent execution state
   private agentExecution: AgentExecutionState | null = null;
+
+  // ── Durable-session reconnect (slice 3b) ──────────────────────────────────
+  // The in-flight resume handle for the durable lane (any resumable agent
+  // execution the backend persists and can replay, e.g. Claude Managed agents
+  // or async/background runs). Created when a stream that carries SSE `id:`
+  // lines first yields a cursor (and an executionId is known); advanced as the
+  // cursor climbs; cleared on a graceful terminal, a terminal error, or any
+  // teardown. Drives both in-session reconnect and host persistence
+  // (`onExecutionState`).
+  private resumable: ResumableHandle | null = null;
+  // The assistant message id of the current turn, so a reconnect keeps filling
+  // the SAME bubble instead of opening a new one.
+  private activeAssistantMessageId: string | null = null;
+  // True while a reconnect run is active (guards against re-entry from a second
+  // drop and tells the dispatch/connectStream catches to stay quiet).
+  private reconnecting = false;
+  // 1-based attempt counter for the active reconnect run (0 = not reconnecting).
+  private reconnectAttempt = 0;
+  // Resolver for the current backoff wait, so a focus/online event can
+  // short-circuit the sleep and retry immediately.
+  private reconnectWaitResolve: (() => void) | null = null;
+  private reconnectWaitTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectListenersAttached = false;
+  // Trailing-edge throttle for `onExecutionState` so it isn't fired per delta.
+  private executionStateTimer: ReturnType<typeof setTimeout> | null = null;
 
   private artifacts = new Map<string, PersonaArtifactRecord>();
   private selectedArtifactId: string | null = null;
@@ -1096,10 +1139,17 @@ export class AgentWidgetSession {
     // one) so a lingering resolve can't race the new dispatch or post a stale
     // /resume against a superseded execution.
     this.abortWebMcpResolves();
+    // A new turn also supersedes any pending durable reconnect from the prior
+    // turn (cancels backoff/listeners, clears the old resume handle).
+    this.teardownReconnect();
 
     // Generate IDs for both user message and expected assistant response
     const userMessageId = generateUserMessageId();
     const assistantMessageId = generateAssistantMessageId();
+    // The active assistant bubble for a durable reconnect is captured from the
+    // real streamed message events (see handleEvent), not pre-assigned here:
+    // the proxy path auto-generates a different id than `assistantMessageId`.
+    this.activeAssistantMessageId = null;
 
     const userMessage: AgentWidgetMessage = {
       id: userMessageId,
@@ -1132,6 +1182,11 @@ export class AgentWidgetSession {
         this.handleEvent
       );
     } catch (error) {
+      // A durable drop fired the dispatch wrapper's `finally` (plain `idle`)
+      // first, which already flipped us into `resuming` and armed reconnect.
+      // The subsequent dispatch rejection must NOT paint a dispatch-error
+      // bubble: the turn is being resumed, not failed.
+      if (this.status === "resuming" || this.reconnecting) return;
       // Check if this is an abort error (user canceled, navigated away, etc.)
       // In these cases, don't show fallback - the request was intentionally interrupted
       const isAbortError =
@@ -1191,8 +1246,10 @@ export class AgentWidgetSession {
     if (this.streaming) return;
 
     this.abortController?.abort();
+    this.teardownReconnect();
 
     const assistantMessageId = generateAssistantMessageId();
+    this.activeAssistantMessageId = null;
 
     this.setStreaming(true);
 
@@ -1211,6 +1268,7 @@ export class AgentWidgetSession {
         this.handleEvent
       );
     } catch (error) {
+      if (this.status === "resuming" || this.reconnecting) return;
       // Check if this is an abort error (a prior in-flight stream was canceled,
       // the user navigated away, etc.). In these cases, don't show fallback or
       // fire onError - the request was intentionally interrupted.
@@ -1258,18 +1316,44 @@ export class AgentWidgetSession {
    */
   public async connectStream(
     stream: ReadableStream<Uint8Array>,
-    options?: { assistantMessageId?: string; allowReentry?: boolean }
+    options?: {
+      assistantMessageId?: string;
+      allowReentry?: boolean;
+      /**
+       * Durable reconnect: keep the assistant message identified by
+       * `assistantMessageId` OPEN so the replayed deltas keep filling it. The
+       * default stale-finalize pass would otherwise seal the very bubble we're
+       * resuming into.
+       */
+      preserveAssistantId?: boolean;
+      /**
+       * Durable reconnect: text already shown in the resumed bubble, so the
+       * fresh stream's accumulator continues from it (the replay carries only
+       * post-cursor deltas, not the full text).
+       */
+      seedContent?: string;
+    }
   ): Promise<void> {
     if (this.streaming && !options?.allowReentry) return;
     if (!options?.allowReentry) {
       this.abortController?.abort();
     }
 
+    // Durable reconnect keeps filling the same bubble: track its id so the
+    // cursor handler attaches to it.
+    if (options?.preserveAssistantId && options.assistantMessageId) {
+      this.activeAssistantMessageId = options.assistantMessageId;
+    }
+
     // Finalize any stale streaming messages from the previous stream
-    // (e.g., tool messages interrupted by approval pause)
+    // (e.g., tool messages interrupted by approval pause), except the bubble
+    // an active reconnect is resuming into.
+    const preserveId = options?.preserveAssistantId
+      ? options.assistantMessageId
+      : undefined;
     let hasStale = false;
     for (const msg of this.messages) {
-      if (msg.streaming) {
+      if (msg.streaming && msg.id !== preserveId) {
         msg.streaming = false;
         hasStale = true;
       }
@@ -1284,9 +1368,14 @@ export class AgentWidgetSession {
       await this.client.processStream(
         stream,
         this.handleEvent,
-        options?.assistantMessageId
+        options?.assistantMessageId,
+        options?.seedContent
       );
     } catch (error) {
+      // During a durable reconnect a thrown resume stream is just another drop:
+      // the reconnect loop owns the retry/backoff. Don't paint an error or tear
+      // down, stay in `resuming`.
+      if (this.status === "resuming" || this.reconnecting) return;
       this.setStatus("error");
       // Mirror the idle/error handlers: a failed resume stream must not tear
       // down streaming/abortController while another WebMCP resolve is still
@@ -2446,6 +2535,9 @@ export class AgentWidgetSession {
   public cancel() {
     this.abortController?.abort();
     this.abortController = null;
+    // A user stop also cancels any pending/in-flight durable reconnect and
+    // clears the resume handle (the abort above already killed its fetch).
+    this.teardownReconnect();
     // Tear down every in-flight WebMCP resolve (each owns its own controller,
     // independent of the shared one above). Clear the inflight set so retries
     // are possible if the user re-issues the same step_await context.
@@ -2464,6 +2556,7 @@ export class AgentWidgetSession {
     this.stopSpeaking();
     this.abortController?.abort();
     this.abortController = null;
+    this.teardownReconnect();
     // Tear down every in-flight WebMCP resolve too: their messages are about
     // to be wiped, and a microtask-deferred resolve must not survive the clear.
     this.abortWebMcpResolves();
@@ -2603,6 +2696,9 @@ export class AgentWidgetSession {
   public hydrateMessages(messages: AgentWidgetMessage[]) {
     this.abortController?.abort();
     this.abortController = null;
+    // Hydration replaces the conversation: also cancel any pending reconnect and
+    // clear the resume handle (a boot resume re-arms via resumeFromHandle after).
+    this.teardownReconnect();
     // Hydration replaces the conversation: abort and forget every in-flight
     // WebMCP resolve; their messages are about to be replaced.
     this.abortWebMcpResolves();
@@ -2637,6 +2733,18 @@ export class AgentWidgetSession {
   private handleEvent = (event: AgentWidgetEvent) => {
     if (event.type === "message") {
       this.upsertMessage(event.message);
+
+      // Track the open assistant text bubble's REAL streamed id so a durable
+      // reconnect keeps filling the same message. The proxy path auto-generates
+      // this id (it isn't the session's pre-generated one), so we must read it
+      // off the actual message events, not assume it.
+      if (
+        event.message.role === "assistant" &&
+        !event.message.variant &&
+        event.message.streaming
+      ) {
+        this.activeAssistantMessageId = event.message.id;
+      }
 
       // Local-tool auto-resolve: when a step_await emits a tool-variant
       // message for a `webmcp:*` tool, or the built-in fire-and-forget
@@ -2694,11 +2802,27 @@ export class AgentWidgetSession {
           this.agentExecution.currentIteration = event.message.agentMetadata.iteration;
         }
       }
+    } else if (event.type === "cursor") {
+      // Durable-reconnect cursor. Track the highest SSE `id:` seq as the resume
+      // cursor and (lazily) form the resume handle once the executionId is
+      // known. Only durable, resumable executions emit these, so this is the
+      // natural gate: no `id:` lines → no handle → reconnect never arms.
+      this.trackCursor(event.id);
     } else if (event.type === "status") {
+      // A plain `idle` (no `terminal`) on the durable lane, while the run is
+      // genuinely mid-turn, is a dropped connection, not a finish and not an
+      // intentional `step_await` pause. Reconnect instead of finalizing.
+      if (event.status === "idle" && !event.terminal && this.isDurableDrop()) {
+        this.beginReconnect();
+        return;
+      }
       this.setStatus(event.status);
       if (event.status === "connecting") {
         this.setStreaming(true);
       } else if (event.status === "idle" || event.status === "error") {
+        // Graceful terminal or terminal error: the durable turn is over, so
+        // drop the resume handle (no reconnect should arm after this).
+        this.clearResumable();
         // Keep the typing indicator up while a WebMCP resolve is still in
         // flight: in a chained turn the intermediate resume stream ends with an
         // idle status, but the successor tool is still executing. The resolve's
@@ -2733,6 +2857,8 @@ export class AgentWidgetSession {
       }
     } else if (event.type === "error") {
       this.setStatus("error");
+      // Terminal error: drop the resume handle so no reconnect arms.
+      this.clearResumable();
       // Mirror the idle/status handler: don't tear down streaming while a
       // WebMCP resolve is still confirming/executing on another stream: an
       // error on one chained resume stream must not hide the typing indicator
@@ -2755,6 +2881,384 @@ export class AgentWidgetSession {
       this.applyArtifactStreamEvent(event);
     }
   };
+
+  // ── Durable-session reconnect (slice 3b) ──────────────────────────────────
+
+  /**
+   * Record the latest SSE `id:` cursor and (lazily) form/advance the resume
+   * handle. Needs an executionId (lifted into `agentExecution` from the same
+   * frame's metadata, handled before this trailing cursor event) and the active
+   * assistant message id.
+   */
+  private trackCursor(id: string): void {
+    const executionId = this.agentExecution?.executionId;
+    if (!executionId || !this.activeAssistantMessageId) return;
+    // Only track while the run is live. A graceful terminal sets the execution
+    // to 'complete'/'error' and clears the handle BEFORE its own frame's
+    // trailing cursor fires; without this guard that cursor would re-arm the
+    // handle and the next plain `idle` would look like a spurious drop.
+    if (this.agentExecution?.status !== "running") return;
+    const isNew = this.resumable === null;
+    this.resumable = {
+      executionId,
+      lastEventId: id,
+      assistantMessageId: this.activeAssistantMessageId,
+      status: "running",
+    };
+    // Fire immediately when the handle first appears (so the host can persist
+    // the executionId promptly); throttle subsequent cursor advances.
+    this.notifyExecutionState(isNew);
+  }
+
+  /**
+   * The drop gate: is this stream-end a dropped connection we should reconnect,
+   * rather than a graceful finish or an intentional `step_await` pause? ALL must
+   * hold (see plan §Design overview keystone 3).
+   */
+  private isDurableDrop(): boolean {
+    return (
+      this.resumable !== null &&
+      typeof this.config.reconnectStream === "function" &&
+      this.abortController?.signal.aborted !== true &&
+      this.webMcpResolveControllers.size === 0 &&
+      this.webMcpAwaitBatches.size === 0 &&
+      !this.isAwaitPending()
+    );
+  }
+
+  /**
+   * True when the run is parked awaiting user input (an unanswered
+   * `ask_user_question` / local-tool await, or a pending approval). Those end
+   * the stream with `idle` and no terminal too, but are NOT drops.
+   */
+  private isAwaitPending(): boolean {
+    return this.messages.some((m) => {
+      if (
+        m.agentMetadata?.awaitingLocalTool === true &&
+        m.agentMetadata?.askUserQuestionAnswered !== true
+      ) {
+        return true;
+      }
+      if (m.variant === "approval" && m.approval?.status === "pending") {
+        return true;
+      }
+      return false;
+    });
+  }
+
+  /**
+   * Enter the reconnect flow. Keeps the assistant bubble open and `streaming`
+   * true, flips to `resuming`, and kicks the bounded backoff loop. Re-entrant
+   * calls (a second drop while reconnecting) are no-ops.
+   */
+  private beginReconnect(): void {
+    if (this.reconnecting) return;
+    if (!this.resumable || typeof this.config.reconnectStream !== "function") {
+      return;
+    }
+    this.reconnecting = true;
+    this.reconnectAttempt = 0;
+    this.callbacks.onReconnect?.({ phase: "paused", handle: this.resumable });
+    this.setStreaming(true);
+    this.setStatus("resuming");
+    this.attachReconnectListeners();
+    void this.runReconnectLoop();
+  }
+
+  /** Public manual retry (e.g. a "Reconnect" button). */
+  public reconnectNow(): void {
+    if (this.reconnecting) {
+      // Already trying, so just short-circuit the current backoff.
+      this.wakeReconnect();
+      return;
+    }
+    this.beginReconnect();
+  }
+
+  private async runReconnectLoop(): Promise<void> {
+    const backoff = this.config.reconnect?.backoffMs ?? [1000, 2000, 4000, 8000, 8000];
+    const maxAttempts = this.config.reconnect?.maxAttempts ?? backoff.length;
+    const reconnectStream = this.config.reconnectStream;
+    if (!reconnectStream) {
+      this.reconnecting = false;
+      return;
+    }
+
+    while (this.resumable && this.reconnectAttempt < maxAttempts) {
+      this.reconnectAttempt += 1;
+      const handle = this.resumable;
+      const before = handle.lastEventId;
+      const controller = new AbortController();
+      this.abortController = controller;
+      this.callbacks.onReconnect?.({
+        phase: "resuming",
+        handle,
+        attempt: this.reconnectAttempt,
+      });
+
+      let body: ReadableStream<Uint8Array> | null = null;
+      try {
+        const res = await reconnectStream({
+          executionId: handle.executionId,
+          after: handle.lastEventId,
+          signal: controller.signal,
+        });
+        if (res && res.ok && res.body) body = res.body;
+      } catch {
+        body = null;
+      }
+      if (controller.signal.aborted) return; // torn down (cancel/new turn)
+
+      if (body) {
+        // Seed the resume with the text already shown so post-cursor deltas
+        // append rather than clobber the bubble.
+        const seedContent =
+          this.messages.find((m) => m.id === handle.assistantMessageId)
+            ?.content ?? "";
+        try {
+          await this.connectStream(body, {
+            assistantMessageId: handle.assistantMessageId,
+            allowReentry: true,
+            preserveAssistantId: true,
+            seedContent: typeof seedContent === "string" ? seedContent : "",
+          });
+        } catch {
+          // connectStream swallows resume-stream errors while `resuming`;
+          // anything escaping here just falls through to backoff/retry.
+        }
+        if (controller.signal.aborted) return;
+        // Reconnect reached a terminal: the idle(terminal)/error handler cleared
+        // the handle. We're done.
+        if (!this.resumable) {
+          this.reconnecting = false;
+          this.reconnectAttempt = 0;
+          this.detachReconnectListeners();
+          this.callbacks.onReconnect?.({ phase: "resumed", handle });
+          return;
+        }
+        // Made forward progress before dropping again → reset the attempt
+        // budget so a long, flaky run isn't capped by total drops.
+        if (this.resumable.lastEventId !== before) this.reconnectAttempt = 0;
+      }
+
+      if (this.resumable && this.reconnectAttempt < maxAttempts) {
+        await this.waitBackoff(
+          backoff[Math.min(this.reconnectAttempt - 1, backoff.length - 1)] ?? 1000
+        );
+        if (controller.signal.aborted) return;
+      }
+    }
+
+    if (this.resumable) this.finalizeReconnectFailure();
+  }
+
+  private waitBackoff(ms: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this.reconnectWaitResolve = resolve;
+      this.reconnectWaitTimer = setTimeout(() => {
+        this.reconnectWaitTimer = null;
+        this.reconnectWaitResolve = null;
+        resolve();
+      }, ms);
+    });
+  }
+
+  /** Short-circuit the current backoff sleep (focus/online or manual retry). */
+  private wakeReconnect(): void {
+    if (this.reconnectWaitTimer) {
+      clearTimeout(this.reconnectWaitTimer);
+      this.reconnectWaitTimer = null;
+    }
+    if (this.reconnectWaitResolve) {
+      const resolve = this.reconnectWaitResolve;
+      this.reconnectWaitResolve = null;
+      resolve();
+    }
+  }
+
+  private handleReconnectWake = (): void => {
+    if (this.status !== "resuming" && this.status !== "paused") return;
+    // On a tab refocus only wake when actually visible; `online` always wakes.
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden"
+    ) {
+      return;
+    }
+    this.wakeReconnect();
+  };
+
+  private attachReconnectListeners(): void {
+    if (this.reconnectListenersAttached) return;
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", this.handleReconnectWake);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", this.handleReconnectWake);
+    }
+    this.reconnectListenersAttached = true;
+  }
+
+  private detachReconnectListeners(): void {
+    if (!this.reconnectListenersAttached) return;
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this.handleReconnectWake);
+    }
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.handleReconnectWake);
+    }
+    this.reconnectListenersAttached = false;
+  }
+
+  /** Give up after exhausting attempts: finalize the bubble and surface error. */
+  private finalizeReconnectFailure(): void {
+    const handle = this.resumable;
+    this.clearResumable();
+    this.reconnecting = false;
+    this.reconnectAttempt = 0;
+    this.detachReconnectListeners();
+    this.abortController = null;
+
+    let changed = false;
+    for (const msg of this.messages) {
+      if (msg.streaming) {
+        msg.streaming = false;
+        changed = true;
+      }
+    }
+
+    const content = buildDispatchErrorContent(
+      new Error("Connection lost and the response could not be resumed."),
+      this.config.errorMessage
+    );
+    if (content) {
+      this.appendMessage({
+        id: `reconnect-failed-${handle?.executionId ?? this.nextSequence()}`,
+        role: "assistant",
+        content,
+        createdAt: new Date().toISOString(),
+        streaming: false,
+        sequence: this.nextSequence(),
+      });
+    } else if (changed) {
+      this.callbacks.onMessagesChanged([...this.messages]);
+    }
+
+    this.setStreaming(false);
+    this.setStatus("idle");
+    this.callbacks.onError?.(new Error("Durable session reconnect failed."));
+  }
+
+  /**
+   * Resume a durable turn on boot (tab-reload path). Re-opens the trailing
+   * assistant bubble (or mints one), restores the execution/handle, and
+   * reconnects from the persisted cursor. No-op without `reconnectStream`.
+   */
+  public resumeFromHandle(resume: { executionId: string; after: string }): void {
+    if (typeof this.config.reconnectStream !== "function") return;
+    if (this.reconnecting) return;
+
+    let assistantId = this.reopenTrailingAssistant();
+    if (!assistantId) {
+      assistantId = generateAssistantMessageId();
+      this.appendMessage({
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+        streaming: true,
+        sequence: this.nextSequence(),
+      });
+    }
+    this.activeAssistantMessageId = assistantId;
+    if (!this.agentExecution) {
+      this.agentExecution = {
+        executionId: resume.executionId,
+        agentId: "",
+        agentName: "",
+        status: "running",
+        currentIteration: 0,
+        maxTurns: 0,
+      };
+    }
+    this.resumable = {
+      executionId: resume.executionId,
+      lastEventId: resume.after,
+      assistantMessageId: assistantId,
+      status: "running",
+    };
+    this.beginReconnect();
+  }
+
+  /**
+   * Reopen the trailing assistant bubble (the persisted partial) so replayed
+   * deltas append to it. Returns its id, or null if the last turn doesn't end
+   * in a plain assistant message.
+   */
+  private reopenTrailingAssistant(): string | null {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const m = this.messages[i];
+      if (m.role === "assistant" && !m.variant) {
+        m.streaming = true;
+        this.callbacks.onMessagesChanged([...this.messages]);
+        return m.id;
+      }
+      if (m.role === "user") break;
+    }
+    return null;
+  }
+
+  /** Tear down any in-flight/pending reconnect and clear the resume handle. */
+  private teardownReconnect(): void {
+    if (this.reconnectWaitTimer) {
+      clearTimeout(this.reconnectWaitTimer);
+      this.reconnectWaitTimer = null;
+    }
+    this.reconnectWaitResolve = null;
+    this.reconnecting = false;
+    this.reconnectAttempt = 0;
+    this.detachReconnectListeners();
+    this.clearResumable();
+  }
+
+  /** Drop the resume handle and notify the host (`onExecutionState(null)`). */
+  private clearResumable(): void {
+    if (this.executionStateTimer) {
+      clearTimeout(this.executionStateTimer);
+      this.executionStateTimer = null;
+    }
+    const had = this.resumable !== null;
+    this.resumable = null;
+    if (had) this.config.onExecutionState?.(null);
+  }
+
+  /**
+   * Surface the resume handle to the host for persistence. Immediate on
+   * create/clear; trailing-edge throttled on cursor advances so it isn't called
+   * per delta.
+   */
+  private notifyExecutionState(immediate: boolean): void {
+    const cb = this.config.onExecutionState;
+    if (!cb) return;
+    if (immediate) {
+      if (this.executionStateTimer) {
+        clearTimeout(this.executionStateTimer);
+        this.executionStateTimer = null;
+      }
+      cb(this.resumable);
+      return;
+    }
+    if (this.executionStateTimer) return; // a trailing call is already queued
+    this.executionStateTimer = setTimeout(() => {
+      this.executionStateTimer = null;
+      this.config.onExecutionState?.(this.resumable);
+    }, 500);
+  }
+
+  /** The current durable resume handle, if any (read-only). */
+  public getResumableHandle(): ResumableHandle | null {
+    return this.resumable;
+  }
 
   private setStatus(status: AgentWidgetSessionStatus) {
     if (this.status === status) return;

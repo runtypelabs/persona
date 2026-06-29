@@ -17,6 +17,10 @@ const chat = initAgentWidget({
 document.getElementById('open-chat')?.addEventListener('click', () => chat.open())
 document.getElementById('toggle-chat')?.addEventListener('click', () => chat.toggle())
 document.getElementById('close-chat')?.addEventListener('click', () => chat.close())
+
+// Manually retry a dropped durable stream (e.g. a "Reconnect" button). No-op
+// unless a durable turn dropped and `reconnectStream` is configured.
+document.getElementById('reconnect-chat')?.addEventListener('click', () => chat.reconnect())
 ```
 
 ### Message hooks
@@ -582,6 +586,9 @@ The widget controller exposes an event system for reacting to chat events. Use `
 | `eventStream:closed` | `{ timestamp: number }` | Emitted when the event stream panel closes |
 | `approval:requested` | `{ approval, message }` | Emitted when an approval bubble is created |
 | `approval:resolved` | `{ approval, decision }` | Emitted when an approval is approved/denied |
+| `stream:paused` | `{ executionId, after }` | Emitted when a durable stream drops and a reconnect is pending |
+| `stream:resuming` | `{ executionId, after, attempt }` | Emitted on each durable reconnect attempt |
+| `stream:resumed` | `{ executionId, after }` | Emitted when a durable turn resumes to its terminal after a reconnect |
 
 ### Event Payload Types
 
