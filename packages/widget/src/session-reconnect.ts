@@ -89,23 +89,40 @@ export function createReconnectController(
     }
   };
 
-  const handleWake = (): void => {
+  // Short-circuit the active backoff sleep, but only while a reconnect is
+  // genuinely in flight (`resuming`/`paused`).
+  const wakeIfActive = (): void => {
     const status = host.getStatus();
     if (status !== "resuming" && status !== "paused") return;
-    // On a tab refocus only wake when actually visible; `online` always wakes.
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    wake();
+  };
+
+  // `visibilitychange` fires on both show and hide; only wake on the show
+  // transition (ignore the tab being backgrounded).
+  const handleVisibility = (): void => {
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden"
+    ) {
       return;
     }
-    wake();
+    wakeIfActive();
+  };
+
+  // Connectivity restored: retry immediately, even in a background tab — the
+  // whole point of the `online` listener is to react before the backoff timer,
+  // so it must NOT inherit the visibility guard above.
+  const handleOnline = (): void => {
+    wakeIfActive();
   };
 
   const attachListeners = (): void => {
     if (listenersAttached) return;
     if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", handleWake);
+      document.addEventListener("visibilitychange", handleVisibility);
     }
     if (typeof window !== "undefined") {
-      window.addEventListener("online", handleWake);
+      window.addEventListener("online", handleOnline);
     }
     listenersAttached = true;
   };
@@ -113,10 +130,10 @@ export function createReconnectController(
   const detachListeners = (): void => {
     if (!listenersAttached) return;
     if (typeof document !== "undefined") {
-      document.removeEventListener("visibilitychange", handleWake);
+      document.removeEventListener("visibilitychange", handleVisibility);
     }
     if (typeof window !== "undefined") {
-      window.removeEventListener("online", handleWake);
+      window.removeEventListener("online", handleOnline);
     }
     listenersAttached = false;
   };
