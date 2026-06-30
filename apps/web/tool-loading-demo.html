@@ -389,14 +389,23 @@
       document.getElementById("group-tools")?.addEventListener("change", refreshConfigPreview);
 
       // ── tool injection helper ───────────────────────────────────
+      // Stamp `createdAt` ONCE per tool id and reuse it on the completion
+      // re-injection, mirroring the widget's real wire path (client.ts
+      // `ensureToolMessage` sets createdAt once at tool_start). The session
+      // sorts messages by createdAt ascending, so re-stamping it to "now" on
+      // completion would float a still-running tool above the finished ones.
+      const toolCreatedAt = new Map();
       function injectToolMessage({ id, name, status = "running", chunks = [], args, result, startedAt, completedAt, duration }) {
+        if (!toolCreatedAt.has(id)) {
+          toolCreatedAt.set(id, new Date().toISOString());
+        }
         controller.injectTestMessage({
           type: "message",
           message: {
             id,
             role: "assistant",
             content: "",
-            createdAt: new Date().toISOString(),
+            createdAt: toolCreatedAt.get(id),
             streaming: status !== "complete",
             variant: "tool",
             toolCall: {
