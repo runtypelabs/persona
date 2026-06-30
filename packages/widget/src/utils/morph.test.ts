@@ -83,4 +83,51 @@ describe("morphMessages", () => {
       expect(container.querySelector("span")!.textContent).toBe("New text");
     });
   });
+
+  describe("data-tool-elapsed (live duration counter)", () => {
+    it("preserves the live span's timer-owned text while the same tool is active", () => {
+      // The 100ms global timer wrote "0.3s"; a re-render arrives carrying the
+      // render-time value "<0.1s". Morphing it in would make the boundary
+      // flicker, so the still-live span (same startedAt) must be left alone.
+      const container = makeContainer(
+        '<span data-tool-elapsed="1000">0.3s</span>'
+      );
+      const oldSpan = container.querySelector("span")!;
+
+      morphMessages(
+        container,
+        makeNewContent('<span data-tool-elapsed="1000">&lt;0.1s</span>')
+      );
+
+      expect(container.querySelector("span")).toBe(oldSpan);
+      expect(container.querySelector("span")!.textContent).toBe("0.3s");
+    });
+
+    it("allows morph to the final static duration once the tool completes", () => {
+      const container = makeContainer(
+        '<span data-tool-elapsed="1000">0.7s</span>'
+      );
+
+      morphMessages(container, makeNewContent("<span>0.8s</span>"));
+
+      const span = container.querySelector("span")!;
+      expect(span.textContent).toBe("0.8s");
+      expect(span.hasAttribute("data-tool-elapsed")).toBe(false);
+    });
+
+    it("allows morph when the slot is reused by a different tool (startedAt changed)", () => {
+      const container = makeContainer(
+        '<span data-tool-elapsed="1000">0.5s</span>'
+      );
+
+      morphMessages(
+        container,
+        makeNewContent('<span data-tool-elapsed="2000">&lt;0.1s</span>')
+      );
+
+      const span = container.querySelector("span")!;
+      expect(span.getAttribute("data-tool-elapsed")).toBe("2000");
+      expect(span.textContent).toBe("<0.1s");
+    });
+  });
 });

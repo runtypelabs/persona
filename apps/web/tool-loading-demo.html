@@ -121,23 +121,24 @@
                 </div>
               </div>
               <div class="section">
-                <label>Sequence Reorder (QA)</label>
+                <label>Streamed Render (QA)</label>
                 <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
-                  Exercises <code>SequenceReorderBuffer</code> end-to-end via <code>connectStream</code>. Chunks are emitted out of server order.
+                  Pipes the real 4.0 unified wire (<code>text_*</code> / <code>reasoning_*</code> channels) through <code>connectStream</code>, in server order. Ordering is the API's job now; the widget renders the wire as received.
                 </small>
                 <div class="btn-group">
-                  <button id="btn-seq-reason-text">Reasoning + text (scrambled seq)</button>
-                  <button id="btn-seq-markdown">Markdown table + box-drawing (scrambled seq)</button>
-                  <button id="btn-seq-reason-freeze">Long sequenced reasoning (~9s, in order)</button>
+                  <button id="btn-seq-reason-text">Reasoning + text</button>
+                  <button id="btn-seq-markdown">Markdown table + box-drawing</button>
+                  <button id="btn-seq-reason-freeze">Long sequenced reasoning (~9s)</button>
                 </div>
               </div>
               <div class="section">
                 <label>Nested Flow (QA)</label>
                 <small style="color:var(--muted);font-size:0.6875rem;margin-top:-0.25rem">
-                  Exercises nested-flow-as-tool routing: <code>step_delta</code> with
-                  <code>toolContext</code>, partId-based segmentation, and outer-stream
-                  isolation. Simulates what Runtype emits when an outer agent calls a
-                  flow as a tool.
+                  Exercises nested-flow-as-tool routing on the unified wire: nested
+                  <code>text_start</code> / <code>reasoning_start</code> carry
+                  <code>parentToolCallId</code>, so streamed output routes into the
+                  parent tool's row. Matches what Runtype emits when an outer agent
+                  calls a flow as a tool.
                 </small>
                 <div class="btn-group">
                   <button id="btn-nested-send-stream">Nested send-streams + reasoning</button>
@@ -150,8 +151,7 @@
             <div class="info-section">
               <h3>Actions</h3>
               <div class="btn-row">
-                <button id="btn-apply">Apply Config</button>
-                <button id="btn-reset">Reset</button>
+                <button id="btn-reset">Reset to defaults</button>
               </div>
             </div>
 
@@ -301,7 +301,7 @@
             welcomeTitle: "Tool & Reasoning Loading Animations",
             welcomeSubtitle: "Use the controls to change animation settings, then run a tool or reasoning scenario.",
           },
-          // Needed so the Sequence Reorder QA scenarios render their
+          // Needed so the Streamed Render QA scenarios render their
           // markdown table + box-drawing output instead of raw text.
           postprocessMessage: ({ text }) => markdownPostprocessor(text),
         };
@@ -330,7 +330,9 @@
         log("Widget created with loadingAnimation: " + currentMode, "info");
       }
 
-      // Re-mount the widget in the current mode (used by Apply / Reset).
+      // Re-mount the widget in the current mode (used by Reset and mount-mode
+      // switch). Control changes never re-mount: they reconfigure the live
+      // widget in place via refreshConfigPreview().
       function createWidget() {
         if (currentTeardown) {
           try { currentTeardown(); } catch (e) { /* ignore */ }
@@ -339,15 +341,13 @@
         doMount();
       }
 
+      // Apply the current control selection to the LIVE widget (no re-mount) and
+      // refresh the config inspector. Every control handler calls this, so
+      // changes take effect immediately with no "Apply" step: controller.update()
+      // re-applies theme + features + tool/reasoning templates and re-renders the
+      // existing transcript in place (no messages lost). The widget is mounted
+      // once — at boot and on mount-mode switch.
       function refreshConfigPreview() {
-        reportDemoConfig(configInspector, { config: getConfig(), mode: activeMountMode });
-      }
-
-      // Apply config to the live widget without re-mounting, so the existing
-      // transcript re-renders in place (no messages lost). Used by the Tool
-      // Display toggles: controller.update() reads showToolCalls and
-      // toolCallDisplay.grouped on each render pass.
-      function applyLive() {
         const cfg = getConfig();
         if (controller) {
           controller.update(activeMountMode === "launcher" ? cfg : squareInlinePanel(cfg));
@@ -385,18 +385,27 @@
       document.getElementById("reason-complete-template")?.addEventListener("change", refreshConfigPreview);
       document.getElementById("color-primary")?.addEventListener("input", refreshConfigPreview);
       document.getElementById("color-secondary")?.addEventListener("input", refreshConfigPreview);
-      document.getElementById("show-tool-calls")?.addEventListener("change", applyLive);
-      document.getElementById("group-tools")?.addEventListener("change", applyLive);
+      document.getElementById("show-tool-calls")?.addEventListener("change", refreshConfigPreview);
+      document.getElementById("group-tools")?.addEventListener("change", refreshConfigPreview);
 
       // ── tool injection helper ───────────────────────────────────
+      // Stamp `createdAt` ONCE per tool id and reuse it on the completion
+      // re-injection, mirroring the widget's real wire path (client.ts
+      // `ensureToolMessage` sets createdAt once at tool_start). The session
+      // sorts messages by createdAt ascending, so re-stamping it to "now" on
+      // completion would float a still-running tool above the finished ones.
+      const toolCreatedAt = new Map();
       function injectToolMessage({ id, name, status = "running", chunks = [], args, result, startedAt, completedAt, duration }) {
+        if (!toolCreatedAt.has(id)) {
+          toolCreatedAt.set(id, new Date().toISOString());
+        }
         controller.injectTestMessage({
           type: "message",
           message: {
             id,
             role: "assistant",
             content: "",
-            createdAt: new Date().toISOString(),
+            createdAt: toolCreatedAt.get(id),
             streaming: status !== "complete",
             variant: "tool",
             toolCall: {
@@ -795,20 +804,26 @@
         }
       }
 
-      // ── sequence reorder QA scenarios ───────────────────────────
+      // ── streamed render QA scenarios ────────────────────────────
       //
-      // These scenarios build a real SSE ReadableStream and pipe it
-      // through controller.connectStream(), which routes through the
-      // same client.processStream() pipeline a live dispatch uses.
-      // That means events go through SequenceReorderBuffer: the
-      // subject of PR #168, so scrambled `seq` / `sequenceIndex`
-      // ordering here actually exercises the reorder/repair code.
+      // These scenarios build a real SSE ReadableStream in the 4.0
+      // unified wire vocabulary (`execution_start` / `step_*` /
+      // `reasoning_*` / `text_*` / `execution_complete`) and pipe it
+      // through controller.connectStream(), the same client.processStream()
+      // pipeline a live dispatch uses. The frames are exactly what the
+      // Runtype API now emits at the edge: ordered, single-connection,
+      // each text/reasoning channel bracketed by start/complete. (Pre-4.0
+      // the widget re-ordered scrambled `seq` itself; that buffer moved
+      // server-side, so the wire arrives in order and the widget renders
+      // it as received.) The unified frames here were captured from the
+      // real runtype-core edge translator (createUnifiedEventWrite) and
+      // validate against the source-of-truth Zod schema.
 
       /**
-       * Build a ReadableStream<Uint8Array> of SSE events. Each entry is
-       * { data: <object>, delayMs?: number }: delay is applied BEFORE
-       * the event is enqueued, so you can simulate gap-timeout flushes
-       * by delaying a mid-sequence chunk past the buffer's 50ms gap.
+       * Build a ReadableStream<Uint8Array> of unified SSE frames. Each entry
+       * is { data: <frame>, delayMs?: number }: the delay is applied BEFORE
+       * the frame is enqueued, to simulate streaming cadence. Emitted as
+       * `event: <type>\ndata: <json>\n\n`, matching the real wire.
        */
       function buildSSEStream(entries) {
         const encoder = new TextEncoder();
@@ -816,17 +831,33 @@
           async start(controller) {
             for (const entry of entries) {
               if (entry.delayMs) await sleep(entry.delayMs);
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify(entry.data)}\n\n`)
-              );
+              const type = entry.data && entry.data.type;
+              const frame = type
+                ? `event: ${type}\ndata: ${JSON.stringify(entry.data)}\n\n`
+                : `data: ${JSON.stringify(entry.data)}\n\n`;
+              controller.enqueue(encoder.encode(frame));
             }
             controller.close();
           },
         });
       }
 
-      async function reasoningPlusTextScrambled() {
-        log("Starting: Reasoning + text (scrambled seq)", "info");
+      /**
+       * Turn a flat list of unified frame specs into connectStream entries.
+       * A spec is either a frame object, or `[frame, delayMs]` to pause
+       * before it. `seq` is auto-assigned monotonically (the wire is a
+       * single in-order connection), mirroring the real edge encoder.
+       */
+      function unifiedEntries(specs) {
+        let seq = 0;
+        return specs.map((spec) => {
+          const [data, delayMs] = Array.isArray(spec) ? spec : [spec, 0];
+          return { data: { ...data, seq: seq++ }, ...(delayMs ? { delayMs } : {}) };
+        });
+      }
+
+      async function reasoningPlusText() {
+        log("Starting: Reasoning + text", "info");
         setAllScenarioButtons(true);
         document.getElementById("btn-seq-reason-text").classList.add("running");
 
@@ -836,55 +867,33 @@
         });
         await sleep(200);
 
-        const flowId = nextId("flow");
+        const ex = nextId("exec");
         const stepId = nextId("step");
-        const reasoningId = nextId("reason");
-        const partId = nextId("part");
-        const messageId = nextId("msg");
+        const reasonId = nextId("reason");
+        const textId = nextId("text");
 
-        // Reasoning chunks that should concatenate to "Rayleigh scattering is why."
-        // Sent with sequenceIndex out of order: 2,4,3,5,6 → buffer reorders.
-        const r1 = "Rayleigh ";
-        const r2 = "scattering ";
-        const r3 = "is why.";
+        const entries = unifiedEntries([
+          { type: "execution_start", executionId: ex, kind: "flow", flowId: nextId("flow"), flowName: "QA", totalSteps: 1, startedAt: new Date().toISOString() },
+          { type: "step_start", executionId: ex, id: stepId, name: "Prompt", stepType: "prompt", index: 1, totalSteps: 1 },
 
-        // Text chunks → "Short wavelengths dominate, so the sky looks blue."
-        // One chunk (seq=10) arrives AFTER a late gap so that the gap timer
-        // flushes seq 11 first, then the late seq=10 repairs via
-        // insertOrderedChunk: the exact path the PR adds regression tests
-        // for.
-        const t1 = "Short wavelengths ";
-        const t2 = "dominate, ";
-        const t3 = "so the sky ";
-        const t4 = "looks blue.";
+          // Reasoning channel → "Rayleigh scattering is why."
+          { type: "reasoning_start", executionId: ex, id: reasonId },
+          [{ type: "reasoning_delta", executionId: ex, id: reasonId, delta: "Rayleigh " }, 120],
+          [{ type: "reasoning_delta", executionId: ex, id: reasonId, delta: "scattering " }, 120],
+          [{ type: "reasoning_delta", executionId: ex, id: reasonId, delta: "is why." }, 120],
+          [{ type: "reasoning_complete", executionId: ex, id: reasonId, text: "Rayleigh scattering is why." }, 120],
 
-        const entries = [
-          { data: { type: "flow_start", flowId, flowName: "QA", totalSteps: 1 } },
-          { data: { type: "step_start", id: stepId, name: "Prompt", stepType: "prompt", index: 1, totalSteps: 1 } },
+          // Text channel → "Short wavelengths dominate, so the sky looks blue."
+          [{ type: "text_start", executionId: ex, id: textId }, 150],
+          [{ type: "text_delta", executionId: ex, id: textId, delta: "Short wavelengths " }, 120],
+          [{ type: "text_delta", executionId: ex, id: textId, delta: "dominate, " }, 120],
+          [{ type: "text_delta", executionId: ex, id: textId, delta: "so the sky " }, 120],
+          [{ type: "text_delta", executionId: ex, id: textId, delta: "looks blue." }, 120],
+          [{ type: "text_complete", executionId: ex, id: textId, text: "Short wavelengths dominate, so the sky looks blue." }, 60],
 
-          // Reasoning, scrambled: send indices 2, 4, 3 then 5 (done)
-          { data: { type: "reason_start", reasoningId, hidden: false, done: false, sequenceIndex: 1 } },
-          { data: { type: "reason_delta", reasoningId, reasoningText: r1, hidden: false, done: false, sequenceIndex: 2 }, delayMs: 120 },
-          { data: { type: "reason_delta", reasoningId, reasoningText: r3, hidden: false, done: false, sequenceIndex: 4 }, delayMs: 30 },
-          { data: { type: "reason_delta", reasoningId, reasoningText: r2, hidden: false, done: false, sequenceIndex: 3 }, delayMs: 30 },
-          { data: { type: "reason_complete", reasoningId, hidden: false, done: true, sequenceIndex: 5 }, delayMs: 120 },
-
-          // Text: first two chunks arrive in order, then a GAP (seq=10 is
-          // missing) while seq=11 arrives; buffer waits 50ms then flushes
-          // seq=11. Then seq=10 shows up late and insertOrderedChunk
-          // repairs the rendered content back into correct order.
-          { data: { type: "text_start", partId, messageId, seq: 6 }, delayMs: 150 },
-          { data: { type: "step_delta", id: stepId, text: t1, partId, messageId, seq: 7 }, delayMs: 120 },
-          { data: { type: "step_delta", id: stepId, text: t2, partId, messageId, seq: 8 }, delayMs: 120 },
-          // seq=9 withheld until after the gap timeout to trigger late repair
-          { data: { type: "step_delta", id: stepId, text: t4, partId, messageId, seq: 10 }, delayMs: 120 },
-          // Gap timer (50ms) fires here; buffer flushes seq=10 prematurely
-          { data: { type: "step_delta", id: stepId, text: t3, partId, messageId, seq: 9 }, delayMs: 120 },
-          { data: { type: "text_end", partId, messageId, seq: 11 }, delayMs: 60 },
-
-          { data: { type: "step_complete", id: stepId, name: "Prompt", success: true } },
-          { data: { type: "flow_complete", success: true } },
-        ];
+          { type: "step_complete", executionId: ex, id: stepId, name: "Prompt", stepType: "prompt", success: true },
+          { type: "execution_complete", executionId: ex, kind: "flow", success: true, durationMs: 900 },
+        ]);
 
         try {
           await controller.connectStream(buildSSEStream(entries));
@@ -896,18 +905,17 @@
 
         document.getElementById("btn-seq-reason-text").classList.remove("running");
         setAllScenarioButtons(false);
-        log("Done: Reasoning + text (scrambled seq)");
+        log("Done: Reasoning + text");
       }
 
       // ── Long sequenced reasoning (regression guard) ────────────
-      // Streams many reason_delta events IN ORDER, each carrying a
-      // `sequenceIndex`, so the client takes the ordered path in client.ts
-      // and collapses `reasoning.chunks` to a single accumulated string:      // `chunks.length` stays 1 for the whole stream. This is the path that
-      // regressed once: when the reasoning fingerprint (message-fingerprint.ts)
-      // only hashed `chunks.length`, the message cache never invalidated and
-      // the bubble froze if you opened the "Thinking…" accordion mid-stream.
-      // QA check: open the accordion ~2s in and confirm the text keeps
-      // streaming live (and toggling open/close never freezes it).
+      // Streams many reasoning_delta frames IN ORDER on a single reasoning
+      // block, so the client accumulates `reasoning.chunks` live. This is the
+      // path that regressed once: when the reasoning fingerprint
+      // (message-fingerprint.ts) only hashed `chunks.length`, the message
+      // cache never invalidated and the bubble froze if you opened the
+      // "Thinking…" accordion mid-stream. QA check: open the accordion ~2s in
+      // and confirm the text keeps streaming live (toggling never freezes it).
       async function longSequencedReasoning() {
         log("Starting: Long sequenced reasoning", "info");
         setAllScenarioButtons(true);
@@ -919,9 +927,9 @@
         });
         await sleep(200);
 
-        const flowId = nextId("flow");
+        const ex = nextId("exec");
         const stepId = nextId("step");
-        const reasoningId = nextId("reason");
+        const reasonId = nextId("reason");
 
         const thoughts = [
           "Let me start by restating the problem. ",
@@ -940,20 +948,15 @@
           "Everything lines up: ready to answer.",
         ];
 
-        const entries = [
-          { data: { type: "flow_start", flowId, flowName: "QA", totalSteps: 1 } },
-          { data: { type: "step_start", id: stepId, name: "Prompt", stepType: "prompt", index: 1, totalSteps: 1 } },
-          { data: { type: "reason_start", reasoningId, hidden: false, done: false, sequenceIndex: 1 } },
-        ];
-        thoughts.forEach((t, i) => {
-          entries.push({
-            data: { type: "reason_delta", reasoningId, reasoningText: t, hidden: false, done: false, sequenceIndex: 2 + i },
-            delayMs: 650,
-          });
-        });
-        entries.push({ data: { type: "reason_complete", reasoningId, hidden: false, done: true, sequenceIndex: 2 + thoughts.length }, delayMs: 650 });
-        entries.push({ data: { type: "step_complete", id: stepId, name: "Prompt", success: true } });
-        entries.push({ data: { type: "flow_complete", success: true } });
+        const entries = unifiedEntries([
+          { type: "execution_start", executionId: ex, kind: "flow", flowId: nextId("flow"), flowName: "QA", totalSteps: 1, startedAt: new Date().toISOString() },
+          { type: "step_start", executionId: ex, id: stepId, name: "Prompt", stepType: "prompt", index: 1, totalSteps: 1 },
+          { type: "reasoning_start", executionId: ex, id: reasonId },
+          ...thoughts.map((t) => [{ type: "reasoning_delta", executionId: ex, id: reasonId, delta: t }, 650]),
+          [{ type: "reasoning_complete", executionId: ex, id: reasonId, text: thoughts.join("") }, 650],
+          { type: "step_complete", executionId: ex, id: stepId, name: "Prompt", stepType: "prompt", success: true },
+          { type: "execution_complete", executionId: ex, kind: "flow", success: true, durationMs: 9000 },
+        ]);
 
         try {
           await controller.connectStream(buildSSEStream(entries));
@@ -967,8 +970,8 @@
         log("Done: Long sequenced reasoning");
       }
 
-      async function markdownTableScrambled() {
-        log("Starting: Markdown table + box-drawing (scrambled seq)", "info");
+      async function markdownTable() {
+        log("Starting: Markdown table + box-drawing", "info");
         setAllScenarioButtons(true);
         document.getElementById("btn-seq-markdown").classList.add("running");
 
@@ -978,16 +981,14 @@
         });
         await sleep(200);
 
-        const flowId = nextId("flow");
+        const ex = nextId("exec");
         const stepId = nextId("step");
-        const partId = nextId("part");
-        const messageId = nextId("msg");
+        const textId = nextId("text");
 
-        // Full expected output, split into 10 chunks. Sent with `seq`
-        // scrambled so the buffer has to reorder to rebuild correctly.
-        // A broken order here is instantly visible: table rows fall
-        // apart, column separators misalign, or box-drawing characters
-        // land in the wrong cells.
+        // One text block, streamed in order across 10 chunks. On the unified
+        // wire the server delivers chunks in order, so a clean render here
+        // confirms the widget's incremental markdown postprocessor keeps table
+        // rows and box-drawing cells aligned as the block fills.
         const chunks = [
           "Here is a small table:\n\n",
           "| Item | Qty | Price |\n",
@@ -1001,36 +1002,15 @@
           "└───┴───┴───┘\n```\n",
         ];
 
-        // Scrambled send order (1-based seqs after text_start@seq=1):
-        // text_start=1, then chunks at seqs 2..11, but sent in this order:
-        //   2, 4, 3, 6, 5, 7, 9, 8, 11, 10
-        // That exercises both "small gap + fill" and "later-than-expected"
-        // reordering for every chunk boundary in the table.
-        const sendOrder = [
-          { seq: 2, text: chunks[0], delay: 80 },
-          { seq: 4, text: chunks[2], delay: 40 },
-          { seq: 3, text: chunks[1], delay: 40 },
-          { seq: 6, text: chunks[4], delay: 60 },
-          { seq: 5, text: chunks[3], delay: 40 },
-          { seq: 7, text: chunks[5], delay: 40 },
-          { seq: 9, text: chunks[7], delay: 60 },
-          { seq: 8, text: chunks[6], delay: 40 },
-          { seq: 11, text: chunks[9], delay: 60 },
-          { seq: 10, text: chunks[8], delay: 40 },
-        ];
-
-        const entries = [
-          { data: { type: "flow_start", flowId, flowName: "QA", totalSteps: 1 } },
-          { data: { type: "step_start", id: stepId, name: "Prompt", stepType: "prompt", index: 1, totalSteps: 1 } },
-          { data: { type: "text_start", partId, messageId, seq: 1 } },
-          ...sendOrder.map((c) => ({
-            data: { type: "step_delta", id: stepId, text: c.text, partId, messageId, seq: c.seq },
-            delayMs: c.delay,
-          })),
-          { data: { type: "text_end", partId, messageId, seq: 12 }, delayMs: 60 },
-          { data: { type: "step_complete", id: stepId, name: "Prompt", success: true } },
-          { data: { type: "flow_complete", success: true } },
-        ];
+        const entries = unifiedEntries([
+          { type: "execution_start", executionId: ex, kind: "flow", flowId: nextId("flow"), flowName: "QA", totalSteps: 1, startedAt: new Date().toISOString() },
+          { type: "step_start", executionId: ex, id: stepId, name: "Prompt", stepType: "prompt", index: 1, totalSteps: 1 },
+          { type: "text_start", executionId: ex, id: textId },
+          ...chunks.map((text) => [{ type: "text_delta", executionId: ex, id: textId, delta: text }, 80]),
+          [{ type: "text_complete", executionId: ex, id: textId, text: chunks.join("") }, 60],
+          { type: "step_complete", executionId: ex, id: stepId, name: "Prompt", stepType: "prompt", success: true },
+          { type: "execution_complete", executionId: ex, kind: "flow", success: true, durationMs: 900 },
+        ]);
 
         try {
           await controller.connectStream(buildSSEStream(entries));
@@ -1041,33 +1021,30 @@
 
         document.getElementById("btn-seq-markdown").classList.remove("running");
         setAllScenarioButtons(false);
-        log("Done: Markdown table + box-drawing (scrambled seq)");
+        log("Done: Markdown table + box-drawing");
       }
 
       // ── nested flow QA scenarios ────────────────────────────────
       //
-      // These simulate what Runtype emits when an outer agent calls a
-      // flow as a tool (`executionMode: 'tool_nested'`):
-      //   • outer `tool_start` / `tool_complete` bracket the invocation
-      //   • nested `flow_start` / `step_start` / `step_delta` /
-      //     `step_complete` / `flow_complete` all carry `toolContext:
-      //     { toolId, stepId, executionId }` (enriched by
-      //     FilteredStream on the API side)
-      //   • `text_start` / `text_end` inside the nested flow are also
-      //     enriched, and Persona should early-return on them so outer
-      //     assistant state is never touched
+      // These reproduce the real 4.0 unified wire for an outer agent calling
+      // a flow as a tool (`executionMode: 'tool_nested'`). The frames were
+      // captured from the runtype-core edge translator and validate against
+      // its Zod schema. The shape:
+      //   • outer `execution_start` (kind: agent) → `turn_start`
+      //   • `tool_start` (toolType: 'flow') opens the parent tool row
+      //   • the nested flow runs INSIDE it, emitting its own
+      //     `execution_start` (kind: flow) … `execution_complete` plus
+      //     `step_*` boundaries
+      //   • its streamed `text_start` / `reasoning_start` carry
+      //     `parentToolCallId` = the parent tool's call id, so Persona routes
+      //     that text/thinking into the parent tool's row (PR #4602) instead
+      //     of the top-level assistant message
+      //   • `tool_complete` → `turn_complete` → outer `execution_complete`
       //
       // If Persona's nested routing regresses, the visual symptoms are:
-      //   - nested send-stream text buried inside the tool card instead
-      //     of its own assistant bubble
-      //   - multi-segment nested prompts concatenated into one bubble
-      //   - the outer assistant message prematurely sealed/rotated by a
-      //     nested `text_start`
-
-      /** Wrap a payload with nested-flow toolContext enrichment. */
-      function withToolContext(data, ctx) {
-        return { ...data, toolContext: { ...ctx } };
-      }
+      //   - nested send-stream text landing in the top-level assistant bubble
+      //     instead of the parent tool's row
+      //   - outer assistant text merged with nested text into one bubble
 
       async function nestedSendStreams() {
         log("Starting: Nested send-streams + reasoning", "info");
@@ -1080,61 +1057,62 @@
         });
         await sleep(200);
 
-        const outerToolId = nextId("toolu");
-        const outerStepId = nextId("outer-step");
-        const executionId = nextId("exec");
-        const ctx = {
-          toolId: outerToolId,
-          stepId: outerStepId,
-          executionId,
-        };
+        const ex = nextId("exec");
+        const turnId = nextId("turn");
+        const call = nextId("call");
+        const intro = nextId("step");
+        const think = nextId("step");
+        const outro = nextId("step");
+        const t1 = nextId("text");
+        const reasonId = nextId("reason");
+        const t2 = nextId("text");
 
-        const nestedFlowId = nextId("flow");
-        const stream1Id = nextId("step");
-        const reasoningStepId = nextId("step");
-        const reasoningId = nextId("reason");
-        const stream2Id = nextId("step");
+        const entries = unifiedEntries([
+          { type: "execution_start", executionId: ex, kind: "agent", agentId: "agent_demo", maxTurns: 1, startedAt: new Date().toISOString() },
+          { type: "turn_start", executionId: ex, id: turnId, iteration: 1, role: "assistant" },
+          // Agent calls the flow as a tool → opens the parent tool row.
+          { type: "tool_start", executionId: ex, toolCallId: call, toolName: "sample_flow", toolType: "flow", iteration: 1, parameters: { input: "hi" } },
 
-        const entries = [
-          // Outer: agent calls the flow as a tool.
-          { data: { type: "tool_start", toolId: outerToolId, name: "sample_flow", args: { input: "hi" }, seq: 1 } },
+          // Nested flow lifecycle (kind: flow) runs inside the tool.
+          { type: "execution_start", executionId: ex, kind: "flow", flowId: nextId("flow"), flowName: "sample_flow", totalSteps: 3, startedAt: new Date().toISOString() },
 
-          // Nested flow begins (all events carry toolContext).
-          { data: withToolContext({ type: "flow_start", flowId: nestedFlowId, flowName: "sample_flow", totalSteps: 3, seq: 2 }, ctx) },
+          // Nested step 1: send-stream "Testing stream begin" → parent tool row.
+          { type: "step_start", executionId: ex, id: intro, name: "Intro", stepType: "send-stream", index: 1, totalSteps: 3 },
+          { type: "text_start", executionId: ex, id: t1, parentToolCallId: call },
+          [{ type: "text_delta", executionId: ex, id: t1, delta: "Testing " }, 80],
+          [{ type: "text_delta", executionId: ex, id: t1, delta: "stream " }, 80],
+          [{ type: "text_delta", executionId: ex, id: t1, delta: "begin" }, 80],
+          { type: "text_complete", executionId: ex, id: t1, text: "Testing stream begin" },
+          { type: "step_complete", executionId: ex, id: intro, name: "Intro", stepType: "send-stream", success: true },
 
-          // Nested step 1: send-stream "Testing stream begin"
-          { data: withToolContext({ type: "step_start", id: stream1Id, name: "Intro", stepType: "send-stream", index: 1, totalSteps: 3, seq: 3 }, ctx) },
-          { data: withToolContext({ type: "step_delta", id: stream1Id, stepType: "send-stream", text: "Testing ", seq: 4 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_delta", id: stream1Id, stepType: "send-stream", text: "stream ", seq: 5 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_delta", id: stream1Id, stepType: "send-stream", text: "begin", seq: 6 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_complete", id: stream1Id, name: "Intro", stepType: "send-stream", success: true, duration: 240, seq: 7 }, ctx) },
+          // Nested step 2: reasoning between the two send-streams → parent row.
+          { type: "step_start", executionId: ex, id: think, name: "Think", stepType: "prompt", index: 2, totalSteps: 3 },
+          { type: "reasoning_start", executionId: ex, id: reasonId, parentToolCallId: call },
+          [{ type: "reasoning_delta", executionId: ex, id: reasonId, delta: "Considering next streamed line... " }, 150],
+          [{ type: "reasoning_delta", executionId: ex, id: reasonId, delta: "ready." }, 120],
+          { type: "reasoning_complete", executionId: ex, id: reasonId, text: "Considering next streamed line... ready." },
+          { type: "step_complete", executionId: ex, id: think, name: "Think", stepType: "prompt", success: true },
 
-          // Nested step 2: reasoning between the two send-streams
-          { data: withToolContext({ type: "step_start", id: reasoningStepId, name: "Think", stepType: "prompt", index: 2, totalSteps: 3, seq: 8 }, ctx) },
-          { data: withToolContext({ type: "reason_start", reasoningId, hidden: false, done: false, seq: 9 }, ctx) },
-          { data: withToolContext({ type: "reason_delta", reasoningId, reasoningText: "Considering next streamed line... ", hidden: false, done: false, seq: 10 }, ctx), delayMs: 150 },
-          { data: withToolContext({ type: "reason_delta", reasoningId, reasoningText: "ready.", hidden: false, done: false, seq: 11 }, ctx), delayMs: 120 },
-          { data: withToolContext({ type: "reason_complete", reasoningId, hidden: false, done: true, seq: 12 }, ctx), delayMs: 60 },
-          { data: withToolContext({ type: "step_complete", id: reasoningStepId, name: "Think", stepType: "prompt", success: true, duration: 330, seq: 13 }, ctx) },
+          // Nested step 3: send-stream "End of stream" → parent tool row.
+          { type: "step_start", executionId: ex, id: outro, name: "Outro", stepType: "send-stream", index: 3, totalSteps: 3 },
+          { type: "text_start", executionId: ex, id: t2, parentToolCallId: call },
+          [{ type: "text_delta", executionId: ex, id: t2, delta: "End " }, 80],
+          [{ type: "text_delta", executionId: ex, id: t2, delta: "of " }, 80],
+          [{ type: "text_delta", executionId: ex, id: t2, delta: "stream" }, 80],
+          { type: "text_complete", executionId: ex, id: t2, text: "End of stream" },
+          { type: "step_complete", executionId: ex, id: outro, name: "Outro", stepType: "send-stream", success: true },
 
-          // Nested step 3: send-stream "End of stream"
-          { data: withToolContext({ type: "step_start", id: stream2Id, name: "Outro", stepType: "send-stream", index: 3, totalSteps: 3, seq: 14 }, ctx) },
-          { data: withToolContext({ type: "step_delta", id: stream2Id, stepType: "send-stream", text: "End ", seq: 15 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_delta", id: stream2Id, stepType: "send-stream", text: "of ", seq: 16 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_delta", id: stream2Id, stepType: "send-stream", text: "stream", seq: 17 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_complete", id: stream2Id, name: "Outro", stepType: "send-stream", success: true, duration: 240, seq: 18 }, ctx) },
-
-          // Nested flow ends.
-          { data: withToolContext({ type: "flow_complete", flowId: nestedFlowId, success: true, duration: 900, seq: 19 }, ctx) },
-
-          // Outer: tool call completes.
-          { data: { type: "tool_complete", toolId: outerToolId, result: { ok: true }, duration: 900, seq: 20 } },
-        ];
+          // Nested flow + tool + turn close out.
+          { type: "execution_complete", executionId: ex, kind: "flow", success: true, durationMs: 900 },
+          { type: "tool_complete", executionId: ex, toolCallId: call, toolName: "sample_flow", success: true, result: { ok: true }, iteration: 1 },
+          { type: "turn_complete", executionId: ex, id: turnId, iteration: 1, role: "assistant", completedAt: new Date().toISOString() },
+          { type: "execution_complete", executionId: ex, kind: "agent", success: true, completedAt: new Date().toISOString() },
+        ]);
 
         try {
           await controller.connectStream(buildSSEStream(entries));
-          log("Expected: one tool bubble for sample_flow, two assistant bubbles");
-          log("  ('Testing stream begin' and 'End of stream'), reasoning between.");
+          log("Expected: one sample_flow tool row holding two streamed lines");
+          log("  ('Testing stream begin', 'End of stream') with reasoning between.");
         } catch (err) {
           log(`Error: ${err?.message ?? err}`);
         }
@@ -1155,70 +1133,59 @@
         });
         await sleep(200);
 
-        const outerToolId = nextId("toolu");
-        const outerStepId = nextId("outer-step");
-        const executionId = nextId("exec");
-        const ctx = {
-          toolId: outerToolId,
-          stepId: outerStepId,
-          executionId,
-        };
+        const ex = nextId("exec");
+        const turnId = nextId("turn");
+        const call = nextId("call");
+        const research = nextId("step");
+        const t1 = nextId("text");
+        const advisor = nextId("call");
+        const t2 = nextId("text");
 
-        const nestedFlowId = nextId("flow");
-        const nestedPromptStepId = nextId("step");
-        const partA = nextId("part");
-        const partB = nextId("part");
-        const messageIdA = nextId("msg");
-        const messageIdB = nextId("msg");
-        const innerToolId = nextId("toolu");
+        const entries = unifiedEntries([
+          { type: "execution_start", executionId: ex, kind: "agent", agentId: "agent_demo", maxTurns: 1, startedAt: new Date().toISOString() },
+          { type: "turn_start", executionId: ex, id: turnId, iteration: 1, role: "assistant" },
+          { type: "tool_start", executionId: ex, toolCallId: call, toolName: "research_flow", toolType: "flow", iteration: 1, parameters: { topic: "birds" } },
 
-        const entries = [
-          // Outer: agent calls the flow as a tool.
-          { data: { type: "tool_start", toolId: outerToolId, name: "research_flow", args: { topic: "birds" }, seq: 1 } },
+          { type: "execution_start", executionId: ex, kind: "flow", flowId: nextId("flow"), flowName: "research_flow", totalSteps: 1, startedAt: new Date().toISOString() },
+          { type: "step_start", executionId: ex, id: research, name: "Research", stepType: "prompt", index: 1, totalSteps: 1 },
 
-          { data: withToolContext({ type: "flow_start", flowId: nestedFlowId, flowName: "research_flow", totalSteps: 1, seq: 2 }, ctx) },
-          { data: withToolContext({ type: "step_start", id: nestedPromptStepId, name: "Research", stepType: "prompt", index: 1, totalSteps: 1, seq: 3 }, ctx) },
+          // Segment A: nested prompt text (→ research_flow's tool row).
+          { type: "text_start", executionId: ex, id: t1, parentToolCallId: call },
+          [{ type: "text_delta", executionId: ex, id: t1, delta: "Let me look " }, 80],
+          [{ type: "text_delta", executionId: ex, id: t1, delta: "that up." }, 80],
+          { type: "text_complete", executionId: ex, id: t1, text: "Let me look that up." },
 
-          // Segment A: prompt begins, streams some text.
-          { data: withToolContext({ type: "text_start", partId: partA, messageId: messageIdA, seq: 4 }, ctx) },
-          { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "Let me look ", partId: partA, messageId: messageIdA, seq: 5 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "that up.", partId: partA, messageId: messageIdA, seq: 6 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "text_end", partId: partA, messageId: messageIdA, seq: 7 }, ctx), delayMs: 40 },
+          // Inner tool call: its own top-level tool row (no parentToolCallId).
+          // `advisor` is used because it is the real producer of streamed tool
+          // output (`tool_output_delta`); flow / mcp / builtin tools go
+          // tool_start → tool_complete with a result blob only.
+          [{ type: "tool_start", executionId: ex, toolCallId: advisor, toolName: "advisor", toolType: "builtin", parameters: { question: "What about bird migration?" } }, 40],
+          [{ type: "tool_output_delta", executionId: ex, toolCallId: advisor, delta: "Let me think. " }, 150],
+          [{ type: "tool_output_delta", executionId: ex, toolCallId: advisor, delta: "Consider seasonality, " }, 150],
+          [{ type: "tool_output_delta", executionId: ex, toolCallId: advisor, delta: "species variance, and routes." }, 150],
+          { type: "tool_complete", executionId: ex, toolCallId: advisor, toolName: "advisor", success: true, result: { guidance: "Focus on seasonality." } },
 
-          // Inner tool call: own tool bubble (independent toolId).
-          // Using `advisor` because that is the real producer of `tool_delta`
-          // events in production. External / custom / builtin / mcp / flow
-          // tools do NOT emit tool_delta: they go tool_start → tool_complete
-          // with a result blob only. Swapping to advisor makes the "Activity"
-          // block in this demo reflect production behavior faithfully.
-          { data: { type: "tool_start", toolId: innerToolId, name: "advisor", args: { question: "What should I consider about bird migration?" }, seq: 8 } },
-          { data: { type: "tool_delta", toolId: innerToolId, delta: "Let me think about this. ", seq: 9 }, delayMs: 150 },
-          { data: { type: "tool_delta", toolId: innerToolId, delta: "Consider seasonality, ", seq: 10 }, delayMs: 150 },
-          { data: { type: "tool_delta", toolId: innerToolId, delta: "species variance, and routes.", seq: 11 }, delayMs: 150 },
-          { data: { type: "tool_complete", toolId: innerToolId, result: { guidance: "Focus on seasonality and species." }, duration: 500, seq: 12 } },
+          // Segment B: nested prompt resumes in a NEW text block (→ same tool
+          // row). The block-id rotation around the inner tool is the scenario
+          // under test.
+          [{ type: "text_start", executionId: ex, id: t2, parentToolCallId: call }, 40],
+          [{ type: "text_delta", executionId: ex, id: t2, delta: "Based on " }, 80],
+          [{ type: "text_delta", executionId: ex, id: t2, delta: "the advisor's guidance, " }, 80],
+          [{ type: "text_delta", executionId: ex, id: t2, delta: "birds migrate seasonally." }, 80],
+          { type: "text_complete", executionId: ex, id: t2, text: "Based on the advisor's guidance, birds migrate seasonally." },
 
-          // Segment B: prompt continues in a new text segment (new partId).
-          // This is the key scenario the partId-rotation code handles.
-          { data: withToolContext({ type: "text_start", partId: partB, messageId: messageIdB, seq: 13 }, ctx), delayMs: 40 },
-          { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "Based on ", partId: partB, messageId: messageIdB, seq: 14 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "the advisor's guidance, ", partId: partB, messageId: messageIdB, seq: 15 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_delta", id: nestedPromptStepId, stepType: "prompt", text: "birds migrate seasonally.", partId: partB, messageId: messageIdB, seq: 16 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "text_end", partId: partB, messageId: messageIdB, seq: 17 }, ctx), delayMs: 40 },
-
-          // step_complete sweeps both partId segments under this nested step.
-          { data: withToolContext({ type: "step_complete", id: nestedPromptStepId, name: "Research", stepType: "prompt", success: true, duration: 900, seq: 18 }, ctx) },
-          { data: withToolContext({ type: "flow_complete", flowId: nestedFlowId, success: true, duration: 1100, seq: 19 }, ctx) },
-
-          // Outer tool_complete.
-          { data: { type: "tool_complete", toolId: outerToolId, result: { ok: true }, duration: 1100, seq: 20 } },
-        ];
+          { type: "step_complete", executionId: ex, id: research, name: "Research", stepType: "prompt", success: true },
+          { type: "execution_complete", executionId: ex, kind: "flow", success: true, durationMs: 1100 },
+          { type: "tool_complete", executionId: ex, toolCallId: call, toolName: "research_flow", success: true, result: { ok: true }, iteration: 1 },
+          { type: "turn_complete", executionId: ex, id: turnId, iteration: 1, role: "assistant", completedAt: new Date().toISOString() },
+          { type: "execution_complete", executionId: ex, kind: "agent", success: true, completedAt: new Date().toISOString() },
+        ]);
 
         try {
           await controller.connectStream(buildSSEStream(entries));
-          log("Expected: one outer research_flow tool bubble, two nested");
-          log("  assistant bubbles (pre-advisor and post-advisor text), and a");
-          log("  separate inner advisor tool bubble (with streaming Activity)");
-          log("  between them.");
+          log("Expected: a research_flow tool row holding two nested text");
+          log("  segments (pre-advisor and post-advisor), with a separate inner");
+          log("  advisor tool bubble (streaming Activity) between them.");
         } catch (err) {
           log(`Error: ${err?.message ?? err}`);
         }
@@ -1239,51 +1206,51 @@
         });
         await sleep(200);
 
-        const outerPartA = nextId("part");
-        const outerMsgA = nextId("msg");
-        const outerPartB = nextId("part");
-        const outerMsgB = nextId("msg");
+        const ex = nextId("exec");
+        const turnId = nextId("turn");
+        const call = nextId("call");
+        const outerA = nextId("text");
+        const nested = nextId("text");
+        const outerB = nextId("text");
+        const streamStep = nextId("step");
 
-        const outerToolId = nextId("toolu");
-        const outerStepId = nextId("outer-step");
-        const executionId = nextId("exec");
-        const ctx = { toolId: outerToolId, stepId: outerStepId, executionId };
+        const entries = unifiedEntries([
+          { type: "execution_start", executionId: ex, kind: "agent", agentId: "agent_demo", maxTurns: 1, startedAt: new Date().toISOString() },
+          { type: "turn_start", executionId: ex, id: turnId, iteration: 1, role: "assistant" },
 
-        const nestedFlowId = nextId("flow");
-        const nestedStreamId = nextId("step");
+          // Outer assistant text (top-level, no parentToolCallId).
+          { type: "text_start", executionId: ex, id: outerA, role: "assistant" },
+          [{ type: "text_delta", executionId: ex, id: outerA, delta: "Sure, one " }, 80],
+          [{ type: "text_delta", executionId: ex, id: outerA, delta: "moment..." }, 80],
+          { type: "text_complete", executionId: ex, id: outerA, text: "Sure, one moment..." },
 
-        // Outer agent flow id/step id for the outer text segments.
-        const outerFlowStepId = nextId("step");
+          // Tool call: nested flow runs in between.
+          { type: "tool_start", executionId: ex, toolCallId: call, toolName: "sample_flow", toolType: "flow", iteration: 1, parameters: { input: "hi" } },
+          { type: "execution_start", executionId: ex, kind: "flow", flowId: nextId("flow"), flowName: "sample_flow", totalSteps: 1, startedAt: new Date().toISOString() },
+          { type: "step_start", executionId: ex, id: streamStep, name: "Stream", stepType: "send-stream", index: 1, totalSteps: 1 },
+          { type: "text_start", executionId: ex, id: nested, parentToolCallId: call },
+          [{ type: "text_delta", executionId: ex, id: nested, delta: "Working " }, 80],
+          [{ type: "text_delta", executionId: ex, id: nested, delta: "on it." }, 80],
+          { type: "text_complete", executionId: ex, id: nested, text: "Working on it." },
+          { type: "step_complete", executionId: ex, id: streamStep, name: "Stream", stepType: "send-stream", success: true },
+          { type: "execution_complete", executionId: ex, kind: "flow", success: true, durationMs: 300 },
+          { type: "tool_complete", executionId: ex, toolCallId: call, toolName: "sample_flow", success: true, result: { ok: true }, iteration: 1 },
 
-        const entries = [
-          { data: { type: "text_start", partId: outerPartA, messageId: outerMsgA, seq: 1 } },
-          { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "Sure, one ", partId: outerPartA, messageId: outerMsgA, seq: 2 }, delayMs: 80 },
-          { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "moment...", partId: outerPartA, messageId: outerMsgA, seq: 3 }, delayMs: 80 },
-          { data: { type: "text_end", partId: outerPartA, messageId: outerMsgA, seq: 4 }, delayMs: 40 },
+          // Outer text resumes in a new top-level block: must NOT merge with
+          // the pre-tool outer text or with the nested flow's text.
+          [{ type: "text_start", executionId: ex, id: outerB }, 40],
+          [{ type: "text_delta", executionId: ex, id: outerB, delta: "All done: " }, 80],
+          [{ type: "text_delta", executionId: ex, id: outerB, delta: "anything else?" }, 80],
+          { type: "text_complete", executionId: ex, id: outerB, text: "All done: anything else?" },
 
-          // Outer tool call starts: nested flow runs in between.
-          { data: { type: "tool_start", toolId: outerToolId, name: "sample_flow", args: { input: "hi" }, seq: 5 } },
-          { data: withToolContext({ type: "flow_start", flowId: nestedFlowId, flowName: "sample_flow", totalSteps: 1, seq: 6 }, ctx) },
-          { data: withToolContext({ type: "step_start", id: nestedStreamId, name: "Stream", stepType: "send-stream", index: 1, totalSteps: 1, seq: 7 }, ctx) },
-          { data: withToolContext({ type: "step_delta", id: nestedStreamId, stepType: "send-stream", text: "Working ", seq: 8 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_delta", id: nestedStreamId, stepType: "send-stream", text: "on it.", seq: 9 }, ctx), delayMs: 80 },
-          { data: withToolContext({ type: "step_complete", id: nestedStreamId, name: "Stream", stepType: "send-stream", success: true, duration: 240, seq: 10 }, ctx) },
-          { data: withToolContext({ type: "flow_complete", flowId: nestedFlowId, success: true, duration: 300, seq: 11 }, ctx) },
-          { data: { type: "tool_complete", toolId: outerToolId, result: { ok: true }, duration: 300, seq: 12 } },
-
-          // Outer text resumes in a new partId segment: must NOT be corrupted
-          // by nested text_start/text_end that fired in between.
-          { data: { type: "text_start", partId: outerPartB, messageId: outerMsgB, seq: 13 }, delayMs: 40 },
-          { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "All done: ", partId: outerPartB, messageId: outerMsgB, seq: 14 }, delayMs: 80 },
-          { data: { type: "step_delta", id: outerFlowStepId, stepType: "prompt", text: "anything else?", partId: outerPartB, messageId: outerMsgB, seq: 15 }, delayMs: 80 },
-          { data: { type: "text_end", partId: outerPartB, messageId: outerMsgB, seq: 16 }, delayMs: 40 },
-          { data: { type: "step_complete", id: outerFlowStepId, stepType: "prompt", success: true, duration: 600, seq: 17 } },
-        ];
+          { type: "turn_complete", executionId: ex, id: turnId, iteration: 1, role: "assistant", completedAt: new Date().toISOString() },
+          { type: "execution_complete", executionId: ex, kind: "agent", success: true, completedAt: new Date().toISOString() },
+        ]);
 
         try {
           await controller.connectStream(buildSSEStream(entries));
           log("Expected: outer bubble 'Sure, one moment...' → sample_flow tool");
-          log("  bubble → nested 'Working on it.' → outer bubble 'All done: ");
+          log("  row holding nested 'Working on it.' → outer bubble 'All done:");
           log("  anything else?' (NOT merged into a single outer message).");
         } catch (err) {
           log(`Error: ${err?.message ?? err}`);
@@ -1303,16 +1270,12 @@
       document.getElementById("btn-names").addEventListener("click", nameVariants);
       document.getElementById("btn-reason-short").addEventListener("click", shortReasoning);
       document.getElementById("btn-reason-long").addEventListener("click", longReasoning);
-      document.getElementById("btn-seq-reason-text").addEventListener("click", reasoningPlusTextScrambled);
-      document.getElementById("btn-seq-markdown").addEventListener("click", markdownTableScrambled);
+      document.getElementById("btn-seq-reason-text").addEventListener("click", reasoningPlusText);
+      document.getElementById("btn-seq-markdown").addEventListener("click", markdownTable);
       document.getElementById("btn-seq-reason-freeze").addEventListener("click", longSequencedReasoning);
       document.getElementById("btn-nested-send-stream").addEventListener("click", nestedSendStreams);
       document.getElementById("btn-nested-prompt-split").addEventListener("click", nestedPromptSplitByInnerTool);
       document.getElementById("btn-nested-interleave").addEventListener("click", nestedOuterInterleave);
-
-      document.getElementById("btn-apply").addEventListener("click", () => {
-        createWidget();
-      });
 
       document.getElementById("btn-reset").addEventListener("click", () => {
         cancelToken.cancelled = true;
@@ -1340,8 +1303,8 @@
       // ── init ────────────────────────────────────────────────────
       // setupMountMode renders the "View as" Inline / Launcher toggle and
       // drives the active mount mode. Its mount factory does the initial mount
-      // and re-mounts on mode switch; Apply / Reset call createWidget() to
-      // re-mount in the current mode.
+      // and re-mounts on mode switch; Reset calls createWidget() to re-mount in
+      // the current mode. All other controls apply live via refreshConfigPreview().
       setupMountMode({
         slug: "tool-loading-demo",
         modes: ["inline", "launcher"],
