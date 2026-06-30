@@ -151,8 +151,7 @@
             <div class="info-section">
               <h3>Actions</h3>
               <div class="btn-row">
-                <button id="btn-apply">Apply Config</button>
-                <button id="btn-reset">Reset</button>
+                <button id="btn-reset">Reset to defaults</button>
               </div>
             </div>
 
@@ -331,7 +330,9 @@
         log("Widget created with loadingAnimation: " + currentMode, "info");
       }
 
-      // Re-mount the widget in the current mode (used by Apply / Reset).
+      // Re-mount the widget in the current mode (used by Reset and mount-mode
+      // switch). Control changes never re-mount: they reconfigure the live
+      // widget in place via refreshConfigPreview().
       function createWidget() {
         if (currentTeardown) {
           try { currentTeardown(); } catch (e) { /* ignore */ }
@@ -340,15 +341,13 @@
         doMount();
       }
 
+      // Apply the current control selection to the LIVE widget (no re-mount) and
+      // refresh the config inspector. Every control handler calls this, so
+      // changes take effect immediately with no "Apply" step: controller.update()
+      // re-applies theme + features + tool/reasoning templates and re-renders the
+      // existing transcript in place (no messages lost). The widget is mounted
+      // once — at boot and on mount-mode switch.
       function refreshConfigPreview() {
-        reportDemoConfig(configInspector, { config: getConfig(), mode: activeMountMode });
-      }
-
-      // Apply config to the live widget without re-mounting, so the existing
-      // transcript re-renders in place (no messages lost). Used by the Tool
-      // Display toggles: controller.update() reads showToolCalls and
-      // toolCallDisplay.grouped on each render pass.
-      function applyLive() {
         const cfg = getConfig();
         if (controller) {
           controller.update(activeMountMode === "launcher" ? cfg : squareInlinePanel(cfg));
@@ -386,8 +385,8 @@
       document.getElementById("reason-complete-template")?.addEventListener("change", refreshConfigPreview);
       document.getElementById("color-primary")?.addEventListener("input", refreshConfigPreview);
       document.getElementById("color-secondary")?.addEventListener("input", refreshConfigPreview);
-      document.getElementById("show-tool-calls")?.addEventListener("change", applyLive);
-      document.getElementById("group-tools")?.addEventListener("change", applyLive);
+      document.getElementById("show-tool-calls")?.addEventListener("change", refreshConfigPreview);
+      document.getElementById("group-tools")?.addEventListener("change", refreshConfigPreview);
 
       // ── tool injection helper ───────────────────────────────────
       function injectToolMessage({ id, name, status = "running", chunks = [], args, result, startedAt, completedAt, duration }) {
@@ -1269,10 +1268,6 @@
       document.getElementById("btn-nested-prompt-split").addEventListener("click", nestedPromptSplitByInnerTool);
       document.getElementById("btn-nested-interleave").addEventListener("click", nestedOuterInterleave);
 
-      document.getElementById("btn-apply").addEventListener("click", () => {
-        createWidget();
-      });
-
       document.getElementById("btn-reset").addEventListener("click", () => {
         cancelToken.cancelled = true;
         currentMode = "none";
@@ -1299,8 +1294,8 @@
       // ── init ────────────────────────────────────────────────────
       // setupMountMode renders the "View as" Inline / Launcher toggle and
       // drives the active mount mode. Its mount factory does the initial mount
-      // and re-mounts on mode switch; Apply / Reset call createWidget() to
-      // re-mount in the current mode.
+      // and re-mounts on mode switch; Reset calls createWidget() to re-mount in
+      // the current mode. All other controls apply live via refreshConfigPreview().
       setupMountMode({
         slug: "tool-loading-demo",
         modes: ["inline", "launcher"],
