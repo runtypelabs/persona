@@ -37,6 +37,24 @@ export const morphMessages = (
           if (oldNode.hasAttribute("data-preserve-runtime")) {
             return false;
           }
+          // The live tool-elapsed span's text is owned by the 100ms global
+          // timer in ui.ts (it rewrites `now - startedAt` on a fixed cadence).
+          // Re-morphing it to the render-time value fights that timer, so while
+          // a tool stays active across frequent re-renders the "<0.1s" boundary
+          // flickers. Preserve it while the SAME tool is still live (matching
+          // `data-tool-elapsed`, i.e. startedAt); allow the morph once the tool
+          // completes (new node drops the marker → final static duration) or the
+          // slot is reused by another tool (marker value changed).
+          if (oldNode.hasAttribute("data-tool-elapsed")) {
+            const sameLiveTool =
+              newNode instanceof HTMLElement &&
+              newNode.getAttribute("data-tool-elapsed") ===
+                oldNode.getAttribute("data-tool-elapsed");
+            if (sameLiveTool) {
+              return false;
+            }
+            return;
+          }
           if (oldNode.hasAttribute("data-preserve-animation")) {
             // Allow morph when the new node drops the attribute (e.g. tool completed)
             if (newNode instanceof HTMLElement && !newNode.hasAttribute("data-preserve-animation")) {
