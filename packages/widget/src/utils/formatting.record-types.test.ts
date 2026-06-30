@@ -29,7 +29,15 @@ import type { AgentWidgetStreamParser } from "../types";
 const readText = (
   result: ReturnType<AgentWidgetStreamParser["processChunk"]>
 ): string | null => {
-  const r = result as Exclude<typeof result, Promise<unknown>>;
+  // Guard loudly against an async parser slipping in: a Promise would fail the
+  // `typeof === "string"` / `.text` checks below and silently read as `null` —
+  // indistinguishable from a real "no text extracted", masking failures.
+  if (result instanceof Promise) {
+    throw new Error(
+      "readText received an async parser result; this suite only covers the synchronous parsers"
+    );
+  }
+  const r = result;
   if (r === null) return null;
   return typeof r === "string" ? r : r?.text ?? null;
 };
@@ -40,8 +48,10 @@ const parseComplete = (
 ): string | null => readText(make().processChunk(JSON.stringify(record)));
 
 // Feed a JSON string into a fresh parser one code point at a time, mirroring
-// how an SSE stream accumulates. Returns the final extracted text and asserts
-// that no chunk along the way threw.
+// how an SSE stream accumulates. Mid-stream throw detection is intentional and
+// implicit: each prefix is fed to `processChunk`, and any throw propagates out
+// of the loop and fails the calling test — so a parser that chokes on some
+// partial prefix is caught even though only the final text is returned/asserted.
 const streamCodePointByCodePoint = (
   make: () => AgentWidgetStreamParser,
   full: string
@@ -199,6 +209,19 @@ describe("record-type validation: non-string text field", () => {
 
     it(`does not crash when text is a ${name} (extractTextFromJson)`, () => {
       expect(extractTextFromJson(JSON.stringify({ text: value }))).toBeNull();
+    });
+
+    // The flexible parser never returns null from processChunk (it always
+    // returns { text, raw } so middleware can inspect raw), so assert via its
+    // returned text and getExtractedText() instead.
+    it(`does not extract text when text is a ${name} (flexible parser)`, () => {
+      const parser = createFlexibleJsonStreamParser();
+      let result: ReturnType<AgentWidgetStreamParser["processChunk"]> = null;
+      expect(() => {
+        result = parser.processChunk(JSON.stringify({ text: value }));
+      }).not.toThrow();
+      expect(readText(result)).toBe("");
+      expect(parser.getExtractedText()).toBeNull();
     });
   }
 });
