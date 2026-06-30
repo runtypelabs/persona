@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Context Mentions Demo</title>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Context Mentions</h1>
+          <p>Pull external context into a turn: click the <strong>@</strong> button or type <code>@</code> to open one searchable menu of host-provided sources. Selecting an item attaches it as a removable pill chip; the resolved content reaches the model via <code>llmAppend</code>.</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
+
+        <div class="info-section" id="page-content">
+          <h3>Page sections (try mentioning these)</h3>
+          <p data-section="overview">The widget ships the mechanism plus a high baseline: a default fuzzy matcher and a static-source helper, so integrators get day-one value.</p>
+          <p data-section="pricing">Mentions are free to add; the runtime is lazy-loaded only when the feature is enabled, so unused installs pay no bundle cost.</p>
+          <p data-section="roadmap">v2 adds inline contenteditable tokens, @agent routing, and mention persistence in composer history.</p>
+        </div>
+
+        <div class="info-section">
+          <h3>Event log</h3>
+          <div class="event-log" id="log">
+            <div style="color: var(--muted);">Waiting for mention events…</div>
+          </div>
+        </div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">How it works</h3>
+        <p>Set <code>contextMentions.enabled: true</code> and register one or more <code>sources</code>. Each source has a <code>search(query)</code> (filter items) and a <code>resolve(item)</code> (return a dispatch payload). The widget ships <code>createStaticMentionSource</code> + <code>defaultMentionFilter</code> for the common client-side case.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Try it</h3>
+        <ul>
+          <li>Click the <strong>@</strong> button in the composer, or type <code>@</code></li>
+          <li>Filter by typing (e.g. <code>@app</code>), navigate with ↑/↓, select with Enter</li>
+          <li>Remove a chip with its ×, or Backspace on an empty composer</li>
+          <li>The <strong>Files</strong> source resolves on select; the <strong>Page</strong> source resolves at submit (reads the live DOM)</li>
+        </ul>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Config snippet</h3>
+        <div class="code-block">
+          <span class="keyword">import</span> { createStaticMentionSource } <span class="keyword">from</span> <span class="string">"@runtypelabs/persona"</span>;
+
+          <span class="keyword">const</span> config = {
+            <span class="prop">contextMentions</span>: {
+              <span class="prop">enabled</span>: <span class="keyword">true</span>,
+              <span class="prop">sources</span>: [
+                createStaticMentionSource({
+                  <span class="prop">id</span>: <span class="string">"files"</span>,
+                  <span class="prop">label</span>: <span class="string">"Files"</span>,
+                  <span class="prop">items</span>: [{ <span class="prop">id</span>: <span class="string">"app"</span>, <span class="prop">label</span>: <span class="string">"App.tsx"</span> }],
+                  <span class="prop">resolve</span>: (item) => ({ <span class="prop">llmAppend</span>: readFile(item.id) }),
+                }),
+              ],
+            },
+          };
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/context-mentions-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("context-mentions-demo");
+  </script>
+</body>
+</html>

@@ -7,7 +7,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   collectSmartDomContext,
-  createSmartDomReaderContextProvider
+  createSmartDomReaderContextProvider,
+  createSmartDomMentionSource
 } from "./smart-dom-reader";
 
 // jsdom implements no layout, so getBoundingClientRect()/offsetParent report the
@@ -114,6 +115,32 @@ describe("smart-dom-reader entry (jsdom)", () => {
     });
     const texts = elements.map((e) => e.text).join(" | ");
     expect(texts).toContain("Scoped shadow action");
+  });
+
+  it("mention source surfaces page elements as items and resolves text at submit", async () => {
+    document.body.innerHTML = `<main><button id="go">Continue to checkout</button></main>`;
+    const source = createSmartDomMentionSource({ label: "Page", ...JSDOM_OPTS });
+    expect(source.id).toBe("page");
+    expect(source.resolveOn).toBe("submit");
+
+    const items = await source.search("", { messages: [], config: {} as never, signal: new AbortController().signal });
+    const go = items.find((i) => i.label.includes("Continue"));
+    expect(go).toBeTruthy();
+    expect(go!.id).toMatch(/#go|go/); // selector is the item id
+
+    // Filtering narrows the snapshot client-side.
+    const filtered = await source.search("checkout", { messages: [], config: {} as never, signal: new AbortController().signal });
+    expect(filtered.some((i) => i.label.includes("Continue"))).toBe(true);
+
+    // resolve() reads the live element text at submit.
+    const payload = await source.resolve(go!, {
+      messages: [],
+      config: {} as never,
+      composerText: "",
+      signal: new AbortController().signal,
+    });
+    expect(payload.llmAppend).toContain("Continue to checkout");
+    expect(payload.context).toMatchObject({ selector: go!.id });
   });
 
   it("provider returns formatted context under the configured key", async () => {

@@ -137,3 +137,33 @@ setRuntypeTtsLoader(() => {
   }
   return import(/* @vite-ignore */ chunkUrl);
 });
+
+// ---------------------------------------------------------------------------
+// Deferred Context Mentions loading.
+//
+// This bundle is built with `./context-mentions-entry` external (see
+// `tsup.global.config.ts`): the mention controller/manager/menu runtime is kept
+// out of the CDN payload. Register a loader that imports the self-contained
+// `context-mentions.js` chunk from a sibling URL; the orchestrator calls it on
+// the first `@`/affordance-button interaction (and can prefetch on composer
+// focus) only when `contextMentions.enabled`. Same pattern as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setContextMentionsLoader } from "./context-mentions-loader";
+
+setContextMentionsLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "context-mentions.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the context-mentions.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host context-mentions.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});

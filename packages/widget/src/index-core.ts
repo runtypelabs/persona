@@ -29,6 +29,16 @@ export type {
   // Context provider types (e.g. for config.contextProviders)
   AgentWidgetContextProvider,
   AgentWidgetContextProviderContext,
+  // Context mention types (e.g. for config.contextMentions)
+  AgentWidgetContextMentionConfig,
+  AgentWidgetContextMentionSource,
+  AgentWidgetContextMentionItem,
+  AgentWidgetContextMentionPayload,
+  AgentWidgetContextMentionRef,
+  AgentWidgetContextMentionSearchContext,
+  AgentWidgetContextMentionResolveContext,
+  AgentWidgetContextMentionMenuRenderContext,
+  AgentWidgetContextMentionChipRenderContext,
   AgentWidgetCustomFetch,
   AgentWidgetSSEEventParser,
   AgentWidgetSSEEventResult,
@@ -226,6 +236,11 @@ export {
   fileToImagePart,
   validateImageFile
 } from "./utils/content";
+// Context mention helpers (for building config.contextMentions.sources)
+export {
+  defaultMentionFilter,
+  createStaticMentionSource,
+} from "./utils/mention-matcher";
 export {
   collectEnrichedPageContext,
   formatEnrichedContext,

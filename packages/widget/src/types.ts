@@ -95,6 +95,202 @@ export type AgentWidgetContextProvider = (
   | void
   | Promise<Record<string, unknown> | void>;
 
+// ============================================================================
+// Context Mentions (composer @-mentions / context attachment)
+// ============================================================================
+//
+// Two entry points (a visible affordance button and the `@` trigger) over one
+// shared menu. Selecting a mention strips the typed `@query` and adds a compact
+// removable pill chip to the composer context row; the resolved content reaches
+// the model via `llmAppend`/`contentParts` (default, no backend changes) or the
+// opt-in structured `context` channel. See `docs/context-mentions-plan.md`.
+
+/** A single selectable item in the mention menu (host-provided). */
+export type AgentWidgetContextMentionItem = {
+  /** Stable key within its source. */
+  id: string;
+  /** Shown in the menu and on the chip (e.g. "App.tsx"). */
+  label: string;
+  /** Subtitle line in the menu. */
+  description?: string;
+  /** Lucide icon name. */
+  iconName?: string;
+  /** Group header override; defaults to the source's `label`. */
+  group?: string;
+  /** Optional recency/popularity hint the default matcher boosts on. */
+  recencyScore?: number;
+};
+
+/** Reference stored on a sent message for transcript fidelity + chip rendering. */
+export type AgentWidgetContextMentionRef = {
+  sourceId: string;
+  itemId: string;
+  label: string;
+  iconName?: string;
+};
+
+/**
+ * The payload a source returns from `resolve()` for one selected item.
+ * Lead with `llmAppend` — it is the only channel guaranteed to reach the model
+ * with no backend changes.
+ */
+export type AgentWidgetContextMentionPayload = {
+  /**
+   * PRIMARY, model-visible channel. Appended to this user message's LLM content
+   * so the model actually sees the context with no backend changes.
+   */
+  llmAppend?: string;
+  /** Extra content parts (e.g. file text / image) via the multi-modal path. */
+  contentParts?: ContentPart[];
+  /**
+   * OPT-IN structured channel. Merged into request `context` under
+   * `mentions.<sourceId>.<itemId>` for flows/agents that read it. NOTE: ambient
+   * `context` is NOT guaranteed to reach the model — use `llmAppend` if you need
+   * the model to see it.
+   */
+  context?: Record<string, unknown>;
+};
+
+export type AgentWidgetContextMentionSearchContext = {
+  messages: AgentWidgetMessage[];
+  config: AgentWidgetConfig;
+  /** Aborts when the next keystroke supersedes this in-flight search. */
+  signal: AbortSignal;
+};
+
+export type AgentWidgetContextMentionResolveContext =
+  AgentWidgetContextMentionSearchContext & {
+    /** Plain-text composer value at resolve time. */
+    composerText: string;
+  };
+
+export type AgentWidgetContextMentionSource = {
+  id: string;
+  /** Group header shown in the menu. */
+  label: string;
+  /**
+   * Filter items for the current `@query` (empty query → recent/popular).
+   * Implement server-side search for large/remote sets, or return all items and
+   * let the widget rank them with `defaultMentionFilter`
+   * (see `createStaticMentionSource` for the common case).
+   */
+  search: (
+    query: string,
+    ctx: AgentWidgetContextMentionSearchContext
+  ) =>
+    | AgentWidgetContextMentionItem[]
+    | Promise<AgentWidgetContextMentionItem[]>;
+  /**
+   * Fetch the payload for dispatch. Called once when the user SELECTS the item
+   * (eagerly, cached on the chip, abortable on removal) unless `resolveOn` is
+   * `"submit"`. A throw/abort drops the mention via `onMentionResolveError`.
+   */
+  resolve: (
+    item: AgentWidgetContextMentionItem,
+    ctx: AgentWidgetContextMentionResolveContext
+  ) =>
+    | AgentWidgetContextMentionPayload
+    | Promise<AgentWidgetContextMentionPayload>;
+  /**
+   * When to call `resolve()`:
+   *  - `"select"` (default): eager on pick; parallelizes the fetch with the user
+   *    finishing their sentence so submit stays instant.
+   *  - `"submit"`: defer to send time, for time-sensitive sources (e.g. current
+   *    page state that may change between select and send).
+   * @default "select"
+   */
+  resolveOn?: "select" | "submit";
+};
+
+/** Context passed to the optional `renderMentionMenu` override. */
+export type AgentWidgetContextMentionMenuRenderContext = {
+  /** Current trigger query ("" when freshly opened). */
+  query: string;
+  /** Grouped, ranked, capped results ready to paint. */
+  groups: {
+    source: AgentWidgetContextMentionSource;
+    items: AgentWidgetContextMentionItem[];
+  }[];
+  /** Per-source async state for loading/empty/error rendering, keyed by source id. */
+  status: Record<string, "loading" | "ready" | "empty" | "error">;
+  /** Index into the flat keyboard-traversal order. */
+  activeIndex: number;
+  /** Commit a selection (strips `@query`, adds chip, resolves on select). */
+  select: (item: AgentWidgetContextMentionItem) => void;
+  /** Close the menu, keeping a literal `@`. */
+  close: () => void;
+};
+
+/** Context passed to the optional `renderMentionChip` override. */
+export type AgentWidgetContextMentionChipRenderContext = {
+  ref: AgentWidgetContextMentionRef;
+  /** Resolve-on-select lifecycle for spinner→ready→error UI. */
+  status: "resolving" | "ready" | "error";
+  /** Remove the chip; aborts any in-flight resolve. */
+  remove: () => void;
+};
+
+export type AgentWidgetContextMentionConfig = {
+  /** @default false */
+  enabled?: boolean;
+  /**
+   * Show the visible composer affordance button (the discoverable entry point).
+   * Strongly recommended; the bare `@` trigger alone is hard to discover for
+   * non-technical users. @default true
+   */
+  showButton?: boolean;
+  /** Icon for the affordance button. @default "at-sign" */
+  buttonIconName?: string;
+  /** Tooltip / aria-label for the affordance button. @default "Add context" */
+  buttonTooltipText?: string;
+  /** Trigger character. @default "@" */
+  trigger?: string;
+  /** Max mentions per message. @default 8 */
+  maxMentions?: number;
+  /** Max items shown per source group before "keep typing to narrow". @default 6 */
+  maxItemsPerGroup?: number;
+  /**
+   * Debounce for ASYNC source search only (ms). Synchronous sources and the
+   * menu's first paint are never debounced. @default 150
+   */
+  searchDebounceMs?: number;
+  /** Registered mention sources (search + resolve). */
+  sources: AgentWidgetContextMentionSource[];
+  /** Chip icon fallback when a source/item omits one. @default "at-sign" */
+  chipIconName?: string;
+  /** Fired when a pick is rejected because it duplicates an existing chip or hits `maxMentions`. */
+  onMentionRejected?: (
+    item: AgentWidgetContextMentionItem,
+    reason: "duplicate" | "limit"
+  ) => void;
+  /**
+   * A `resolve()` that throws/aborts: the mention is dropped and the message
+   * still sends. Surface a non-blocking notice here if desired.
+   */
+  onMentionResolveError?: (
+    item: AgentWidgetContextMentionItem,
+    error: unknown
+  ) => void;
+  /**
+   * MID-LEVEL render override for the autocomplete menu. The widget still owns
+   * trigger detection, search, debounce/abort, keyboard nav, and positioning;
+   * you only supply the menu markup and drive selection through `ctx`. Omit to
+   * use the built-in grouped menu. @default built-in
+   */
+  renderMentionMenu?: (
+    ctx: AgentWidgetContextMentionMenuRenderContext
+  ) => HTMLElement;
+  /**
+   * MID-LEVEL render override for a single context chip. Return your own pill
+   * (must include an accessible remove control wired to `ctx.remove`); reflect
+   * `ctx.status` for resolve-on-select. Omit to use the built-in compact pill.
+   * @default built-in
+   */
+  renderMentionChip?: (
+    ctx: AgentWidgetContextMentionChipRenderContext
+  ) => HTMLElement;
+};
+
 export type AgentWidgetRequestPayloadMessage = {
   role: AgentWidgetMessageRole;
   content: MessageContent;
@@ -4473,6 +4669,18 @@ export type AgentWidgetConfig = {
   }) => string;
   plugins?: AgentWidgetPlugin[];
   contextProviders?: AgentWidgetContextProvider[];
+  /**
+   * Context mentions: let users explicitly pull external context into a turn by
+   * typing `@` or clicking a visible composer button, both opening one shared
+   * searchable menu of host-provided sources. Selecting a mention adds a
+   * removable pill chip; resolved content reaches the model via `llmAppend`
+   * (default) or the opt-in structured `context` channel.
+   *
+   * Disabled by default. When enabled, the mention runtime is lazy-loaded from a
+   * sibling chunk on first use, so sites that leave it off pay no bundle cost.
+   * See `docs/context-mentions-plan.md`.
+   */
+  contextMentions?: AgentWidgetContextMentionConfig;
   requestMiddleware?: AgentWidgetRequestMiddleware;
   actionParsers?: AgentWidgetActionParser[];
   actionHandlers?: AgentWidgetActionHandler[];
@@ -5024,6 +5232,18 @@ export type AgentWidgetMessage = {
    * The `content` field contains the text-only representation for display.
    */
   contentParts?: ContentPart[];
+  /**
+   * Context mentions attached to this (user) message, for transcript fidelity +
+   * chip rendering in the sent bubble. Refs only — the resolved payloads are
+   * merged into `llmContent`/`contentParts` (model-visible) at send time.
+   */
+  contextMentions?: AgentWidgetContextMentionRef[];
+  /**
+   * Resolved opt-in structured mention context for this (user) message, merged
+   * into the request `context` under `mentions.<sourceId>.<itemId>` by the
+   * client. Internal: set at send time from each source's `resolve().context`.
+   */
+  mentionContext?: Record<string, unknown>;
   streaming?: boolean;
   variant?: AgentWidgetMessageVariant;
   sequence?: number;

@@ -27,7 +27,7 @@ import {
   generateUserMessageId,
   generateAssistantMessageId
 } from "./utils/message-id";
-import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "./utils/content";
+import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT, createTextPart } from "./utils/content";
 import {
   buildArtifactRefRawContent,
   resolveArtifactDisplayMode
@@ -37,8 +37,10 @@ import type {
   VoiceStatus,
   VoiceConfig,
   ReadAloudState,
-  SpeechEngine
+  SpeechEngine,
+  AgentWidgetContextMentionRef
 } from "./types";
+import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import {
   createVoiceProvider,
   isVoiceSupported,
@@ -1129,17 +1131,84 @@ export class AgentWidgetSession {
     });
   }
 
+  /**
+   * Resolve the gathered mentions and merge them into the user message's
+   * model-visible content. Default path is `llmAppend` → `llmContent` (or a text
+   * `contentPart` when parts are present, since `contentParts` wins the priority
+   * chain); the opt-in structured `context` lands on `mentionContext` for the
+   * client to namespace into the request `context`. Failures were already
+   * dropped by `finalize()`.
+   */
+  private async applyMentionBundle(
+    userMessage: AgentWidgetMessage,
+    typedText: string,
+    finalize: () => Promise<MentionSubmitBundle>
+  ): Promise<void> {
+    let bundle: MentionSubmitBundle;
+    try {
+      bundle = await finalize();
+    } catch {
+      return; // resolution failed entirely; send the typed text as-is
+    }
+
+    const block = bundle.llmEntries
+      .map((e) => `[${e.label}]\n${e.text}`)
+      .join("\n\n");
+    const llmText = [block, typedText].filter(Boolean).join("\n\n");
+
+    const hasAttachments =
+      Array.isArray(userMessage.contentParts) &&
+      userMessage.contentParts.length > 0;
+    const hasMentionParts = bundle.contentParts.length > 0;
+
+    if (hasAttachments) {
+      // The typed text already rides as a content part; add the block + mention
+      // parts ahead of the existing attachment parts (mentions first).
+      const parts: ContentPart[] = [];
+      if (block) parts.push(createTextPart(block));
+      parts.push(...bundle.contentParts);
+      parts.push(...userMessage.contentParts!);
+      userMessage.contentParts = parts;
+    } else if (hasMentionParts) {
+      const parts: ContentPart[] = [];
+      if (llmText) parts.push(createTextPart(llmText));
+      parts.push(...bundle.contentParts);
+      userMessage.contentParts = parts;
+    } else if (block) {
+      userMessage.llmContent = llmText;
+    }
+
+    if (Object.keys(bundle.context).length > 0) {
+      userMessage.mentionContext = bundle.context;
+    }
+  }
+
   public async sendMessage(
     rawInput: string,
     options?: {
       viaVoice?: boolean;
       /** Multi-modal content parts (e.g., images) to include with the message */
       contentParts?: ContentPart[];
+      /**
+       * Context mentions gathered from the composer. `refs` echo immediately as
+       * chips; `finalize()` resolves any pending/submit sources just before
+       * dispatch (after the instant echo) and the bundle is merged into this
+       * message's model-visible content.
+       */
+      mentions?: {
+        refs: AgentWidgetContextMentionRef[];
+        finalize: () => Promise<MentionSubmitBundle>;
+      };
     }
   ) {
     const input = rawInput.trim();
-    // Allow sending if there's text OR attachments
-    if (!input && (!options?.contentParts || options.contentParts.length === 0)) return;
+    // Allow sending if there's text OR attachments OR mentions
+    if (
+      !input &&
+      (!options?.contentParts || options.contentParts.length === 0) &&
+      (!options?.mentions || options.mentions.refs.length === 0)
+    )
+      return;
 
     this.stopSpeaking();
     this.abortController?.abort();
@@ -1170,11 +1239,23 @@ export class AgentWidgetSession {
       // Include contentParts if provided (for multi-modal messages)
       ...(options?.contentParts && options.contentParts.length > 0 && {
         contentParts: options.contentParts
+      }),
+      // Echo mention chips immediately (refs only; payloads merged below).
+      ...(options?.mentions && options.mentions.refs.length > 0 && {
+        contextMentions: options.mentions.refs
       })
     };
 
     this.appendMessage(userMessage);
     this.setStreaming(true);
+
+    // Resolve + merge mentions AFTER the instant echo but BEFORE dispatch, so
+    // the model sees the context while the user's bubble already rendered. The
+    // user message is held by reference in `this.messages`, so mutating it here
+    // reflects in the snapshot taken below.
+    if (options?.mentions) {
+      await this.applyMentionBundle(userMessage, input, options.mentions.finalize);
+    }
 
     const controller = new AbortController();
     this.abortController = controller;

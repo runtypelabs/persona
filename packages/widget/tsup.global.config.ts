@@ -42,5 +42,14 @@ export default defineConfig({
     // `index-global.ts` registers a loader that imports the standalone
     // `markdown-parsers.js` chunk from a sibling URL instead.
     options.external.push("./markdown-parsers-entry");
+
+    // Keep the context-mentions runtime (controller/manager/menu) out of the CDN
+    // payload. esbuild leaves the loader's default `import("./context-mentions-entry")`
+    // in place as a dead relative import; it is never invoked here because
+    // `index-global.ts` registers a loader that imports the standalone
+    // `context-mentions.js` chunk from a sibling URL instead. The core
+    // orchestrator only references the runtime via that dynamic import, so the
+    // heavy modules never enter this bundle (verified by the bundle test).
+    options.external.push("./context-mentions-entry");
   },
 });

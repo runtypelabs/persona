@@ -654,6 +654,7 @@ export default defineConfig({
         'bakery-services': path.resolve(__dirname, 'bakery-services.html'),
         // Approval demo
         'attachments-demo': path.resolve(__dirname, 'attachments-demo.html'),
+        'context-mentions-demo': path.resolve(__dirname, 'context-mentions-demo.html'),
         'approval-demo': path.resolve(__dirname, 'approval-demo.html'),
         // Focus input demo
         'focus-input-demo': path.resolve(__dirname, 'focus-input-demo.html'),

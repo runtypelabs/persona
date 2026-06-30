@@ -110,6 +110,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "context-mentions-demo",
+    href: "/context-mentions-demo.html",
+    title: "Context Mentions",
+    blurb: "Attach files or page context per turn with @-mentions and a context button.",
+    tier: "patterns",
+    tags: ["interaction", "context"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "feedback-integration-demo",
     href: "/feedback-integration-demo.html",
     title: "Feedback Events",

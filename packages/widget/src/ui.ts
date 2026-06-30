@@ -33,6 +33,10 @@ import {
   PersonaArtifactActionContext
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
+import {
+  createContextMentionOrchestrator,
+  type ContextMentionOrchestrator,
+} from "./utils/context-mention-orchestrator";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
@@ -981,6 +985,9 @@ export const createAgentExperience = (
 
   // Initialized after composer plugins rebind footer DOM (see `bindComposerRefsFromFooter`)
   let attachmentManager: AttachmentManager | null = null;
+  // Context mentions orchestrator (core, tiny); lazy-loads the heavy runtime on
+  // first use. Null when `contextMentions` is disabled / has no sources.
+  let mentionOrchestrator: ContextMentionOrchestrator | null = null;
 
   /** Wired after `handleMicButtonClick` is defined; used by `renderComposer` `onVoiceToggle`. */
   let composerVoiceBridge: (() => void) | null = null;
@@ -1301,6 +1308,60 @@ export const createAgentExperience = (
     const dropCfg = config.attachments.dropOverlay;
     const overlay = buildDropOverlay(dropCfg);
     container.appendChild(overlay);
+  }
+
+  // Context mentions: render the affordance button + chip row eagerly (so the
+  // feature is discoverable) and lazy-load the heavy runtime on first use. The
+  // orchestrator returns null when disabled or sourceless.
+  const mentionPrefetch = () => mentionOrchestrator?.prefetch();
+  if (config.contextMentions?.enabled && textarea) {
+    // Polite live region for result-count + add/remove announcements.
+    const mentionLiveRegion = createElement("div", "");
+    mentionLiveRegion.setAttribute("aria-live", "polite");
+    mentionLiveRegion.setAttribute("role", "status");
+    Object.assign(mentionLiveRegion.style, {
+      position: "absolute",
+      width: "1px",
+      height: "1px",
+      overflow: "hidden",
+      clipPath: "inset(50%)",
+      whiteSpace: "nowrap",
+      border: "0",
+      padding: "0",
+      margin: "-1px",
+    } as Partial<CSSStyleDeclaration>);
+    container.appendChild(mentionLiveRegion);
+
+    mentionOrchestrator = createContextMentionOrchestrator({
+      config,
+      textarea,
+      anchor: composerForm ?? textarea,
+      getMessages: () => session.getMessages(),
+      announce: (msg) => {
+        mentionLiveRegion.textContent = "";
+        mentionLiveRegion.textContent = msg;
+      },
+    });
+
+    if (mentionOrchestrator) {
+      // Chip row sits directly above the textarea.
+      const ta = textarea;
+      ta.parentElement?.insertBefore(mentionOrchestrator.contextRow, ta);
+      // Affordance button joins the composer action controls, left of the
+      // attachment/mic/send buttons.
+      const btn = mentionOrchestrator.affordanceButton;
+      if (btn) {
+        const anchorEl =
+          attachmentButtonWrapper ??
+          micButtonWrapper ??
+          sendButton?.parentElement ??
+          null;
+        if (anchorEl?.parentElement) anchorEl.parentElement.insertBefore(btn, anchorEl);
+        else composerForm?.appendChild(btn);
+      }
+      // Warm the chunk on first focus so the first `@` is instant.
+      ta.addEventListener("focus", mentionPrefetch);
+    }
   }
 
   // Slot system: allow custom content injection into specific regions
@@ -6192,8 +6253,13 @@ export const createAgentExperience = (
     const value = textarea.value.trim();
     const hasAttachments = attachmentManager?.hasAttachments() ?? false;
 
-    // Must have text or attachments to send
-    if (!value && !hasAttachments) return;
+    // Gather mentions synchronously (captures composer text before clearing);
+    // `finalize()` resolves them inside `sendMessage`, after the instant echo.
+    const mentions = mentionOrchestrator?.collectForSubmit() ?? null;
+    const hasMentions = !!mentions && mentions.refs.length > 0;
+
+    // Must have text, attachments, or mentions to send
+    if (!value && !hasAttachments && !hasMentions) return;
 
     maybeExpandComposerBar();
 
@@ -6213,12 +6279,18 @@ export const createAgentExperience = (
     textarea.style.height = "auto"; // Reset height after clearing
     resetHistoryNavigation();
 
-    // Send message with optional content parts
-    session.sendMessage(value, { contentParts });
+    // Send message with optional content parts + mentions
+    session.sendMessage(value, {
+      contentParts,
+      mentions: hasMentions ? mentions! : undefined,
+    });
 
-    // Clear attachments after sending
+    // Clear attachments + mention chips after sending
     if (hasAttachments) {
       attachmentManager!.clearAttachments();
+    }
+    if (hasMentions) {
+      mentionOrchestrator?.clear();
     }
   };
 
@@ -6258,7 +6330,9 @@ export const createAgentExperience = (
     textarea.setSelectionRange(end, end);
   };
 
-  const handleComposerInput = () => {
+  const handleComposerInput = (event: Event) => {
+    // Drive the mention menu (open/update/close) + lazy-load on first trigger.
+    mentionOrchestrator?.handleInput((event as InputEvent).inputType ?? undefined);
     // A real edit leaves history-navigation mode.
     if (suppressHistoryReset) return;
     resetHistoryNavigation();
@@ -6266,6 +6340,11 @@ export const createAgentExperience = (
 
   const handleComposerKeydown = (event: KeyboardEvent) => {
     if (!textarea) return;
+
+    // Mention menu takes precedence when open (↑/↓ nav, Enter/Tab select, Esc
+    // close) and handles Backspace-removes-last-chip on an empty composer. One
+    // handler, no competing capture-phase listener.
+    if (mentionOrchestrator?.handleKeydown(event)) return;
 
     // Up/Down: walk through previously sent user messages.
     if (
@@ -7399,7 +7478,9 @@ export const createAgentExperience = (
     textarea?.removeEventListener("keydown", handleComposerKeydown);
     textarea?.removeEventListener("input", handleComposerInput);
     textarea?.removeEventListener("paste", handleInputPaste);
+    textarea?.removeEventListener("focus", mentionPrefetch);
     escStopDoc.removeEventListener("keydown", handleEscStop, true);
+    mentionOrchestrator?.destroy();
   });
 
   destroyCallbacks.push(() => {

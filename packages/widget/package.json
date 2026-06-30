@@ -69,7 +69,7 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations && pnpm run check:dist-vite8",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:context-mentions && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations && pnpm run check:dist-vite8",
     "check:dist-vite8": "node scripts/check-dist-no-in-for-init.mjs",
     "build:markdown-parsers": "tsup --config tsup.markdown-parsers.config.ts",
     "build:plugin-kit": "tsup src/plugin-kit.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
@@ -84,6 +84,7 @@
     "build:styles": "node scripts/build-styles.mjs",
     "build:client": "tsup src/index.ts --format esm,cjs --minify --sourcemap --splitting false --dts --loader \".css=text\" && tsup --config tsup.global.config.ts && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/index-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/index'+ext);}\"",
     "build:webmcp-polyfill": "tsup --config tsup.webmcp-polyfill.config.ts",
+    "build:context-mentions": "tsup --config tsup.context-mentions.config.ts",
     "build:runtype-tts": "tsup --config tsup.runtype-tts.config.ts",
     "build:installer": "tsup src/install.ts --format iife --global-name SiteAgentInstaller --out-dir dist --minify --sourcemap --no-splitting",
     "build:launcher": "tsup src/launcher-global.ts --format iife --global-name AgentWidgetLauncher --minify --sourcemap --splitting false --out-dir dist && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/launcher-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/launcher'+ext);}\"",

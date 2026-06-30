@@ -205,6 +205,35 @@ Register custom components and render them inline via directives. Stream-aware p
 ### Message Injection, Context & Page Tools
 Programmatically insert messages (`injectMessage`, `injectAssistantMessage`, `injectUserMessage`, `injectSystemMessage`) with dual-content support: display one thing to the user while sending different content to the LLM. Inject page/editor context with `contextProviders` and `requestMiddleware`; use `webmcp: { enabled: true }` to expose page actions through `document.modelContext`. For richer page context, import the optional `@runtypelabs/persona/smart-dom-reader` provider.
 
+### Context Mentions
+Let users pull external context into a single turn by typing `@` or clicking a visible composer button — both open one searchable menu of host-provided sources. Selecting a mention strips the typed query and adds a removable pill chip; the resolved content reaches the model via `llmAppend` (lead with this — it always works, no backend changes) or an opt-in structured `context.mentions` channel. Disabled by default; when enabled the runtime is lazy-loaded so unused installs pay no bundle cost.
+
+```ts
+import initAgentWidget, { createStaticMentionSource } from "@runtypelabs/persona";
+import { createSmartDomMentionSource } from "@runtypelabs/persona/smart-dom-reader";
+
+initAgentWidget({
+  config: {
+    contextMentions: {
+      enabled: true,
+      sources: [
+        createStaticMentionSource({
+          id: "files",
+          label: "Files",
+          items: [{ id: "app", label: "App.tsx", iconName: "file-code" }],
+          // Lead with `llmAppend` so the model sees the context with no backend changes.
+          resolve: (item) => ({ llmAppend: `Contents of ${item.label}:\n${readFile(item.id)}` }),
+        }),
+        // Supported, page-aware source: resolves the chosen element's live text at submit.
+        createSmartDomMentionSource(),
+      ],
+    },
+  },
+});
+```
+
+See the [Context Mentions demo](https://persona-chat.dev/context-mentions-demo.html) and `docs/context-mentions-plan.md`.
+
 ## Extending & contributing
 
 Built a plugin, theme, backend adapter, or product with Persona? See the

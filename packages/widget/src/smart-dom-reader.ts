@@ -40,7 +40,12 @@ import {
   type SmartDomAdapterOptions
 } from "./utils/smart-dom-adapter";
 import { formatEnrichedContext, type EnrichedPageElement } from "./utils/dom-context";
-import type { AgentWidgetContextProvider } from "./types";
+import { defaultMentionFilter } from "./utils/mention-matcher";
+import type {
+  AgentWidgetContextProvider,
+  AgentWidgetContextMentionItem,
+  AgentWidgetContextMentionSource,
+} from "./types";
 
 export { smartDomResultToEnriched };
 export type { SmartDomAdapterOptions } from "./utils/smart-dom-adapter";
@@ -130,5 +135,96 @@ export function createSmartDomReaderContextProvider(
     const elements = collectSmartDomContext(opts);
     if (elements.length === 0) return {};
     return { [contextKey]: formatEnrichedContext(elements) };
+  };
+}
+
+/** Options for {@link createSmartDomMentionSource}. */
+export interface SmartDomMentionSourceOptions extends SmartDomContextOptions {
+  /** Source id. Default: "page". */
+  id?: string;
+  /** Group header shown in the menu. Default: "Page". */
+  label?: string;
+}
+
+const iconForInteractivity = (kind: EnrichedPageElement["interactivity"]): string => {
+  switch (kind) {
+    case "clickable":
+      return "mouse-pointer-click";
+    case "input":
+      return "text-cursor-input";
+    case "navigable":
+      return "link";
+    default:
+      return "text";
+  }
+};
+
+const elementToMentionItem = (
+  el: EnrichedPageElement
+): AgentWidgetContextMentionItem => {
+  const ariaLabel = el.attributes["aria-label"];
+  const raw = (ariaLabel || el.text || el.tagName).trim();
+  const label = raw.length > 48 ? `${raw.slice(0, 47)}…` : raw || el.tagName;
+  const descParts = [el.role ?? el.tagName, el.interactivity].filter(Boolean);
+  return {
+    id: el.selector, // stable key + the selector resolve() reads at submit
+    label,
+    description: descParts.join(" · "),
+    iconName: iconForInteractivity(el.interactivity),
+    group: undefined,
+  };
+};
+
+/**
+ * First-class **supported** mention source backed by smart-dom-reader: surfaces
+ * visible page elements (Shadow-DOM-piercing) as mentionable items, resolving a
+ * fresh snapshot of the chosen element's text at SUBMIT (`resolveOn: "submit"`),
+ * since the page is time-sensitive. The element list is snapshotted when the
+ * menu opens (empty query) and filtered client-side with `defaultMentionFilter`
+ * as the user types.
+ *
+ * @example
+ * ```ts
+ * import { createSmartDomMentionSource } from "@runtypelabs/persona/smart-dom-reader";
+ *
+ * initAgentWidget({
+ *   contextMentions: { enabled: true, sources: [createSmartDomMentionSource()] },
+ * });
+ * ```
+ */
+export function createSmartDomMentionSource(
+  opts: SmartDomMentionSourceOptions = {}
+): AgentWidgetContextMentionSource {
+  const id = opts.id ?? "page";
+  const label = opts.label ?? "Page";
+  let snapshot: AgentWidgetContextMentionItem[] | null = null;
+
+  return {
+    id,
+    label,
+    resolveOn: "submit",
+    search: (query) => {
+      // Refresh the snapshot whenever the menu (re)opens with an empty query;
+      // reuse it for subsequent keystrokes so we don't re-scan on every key.
+      if (query === "" || !snapshot) {
+        snapshot = collectSmartDomContext(opts).map(elementToMentionItem);
+      }
+      return defaultMentionFilter(snapshot, query);
+    },
+    resolve: (item) => {
+      const doc =
+        opts.document ?? (typeof document !== "undefined" ? document : undefined);
+      let text = "";
+      try {
+        const el = doc?.querySelector(item.id);
+        text = el?.textContent?.trim() ?? "";
+      } catch {
+        /* invalid selector at resolve time — fall through to label only */
+      }
+      return {
+        llmAppend: `Page element "${item.label}" (${item.id}):\n${text || "(no text)"}`,
+        context: { selector: item.id },
+      };
+    },
   };
 }

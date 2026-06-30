@@ -1,4 +1,4 @@
-import { createElement } from "../utils/dom";
+import { createElement, createNode } from "../utils/dom";
 import {
   AgentWidgetMessage,
   AgentWidgetMessageLayoutConfig,
@@ -11,9 +11,11 @@ import {
   AudioContentPart,
   VideoContentPart,
   FileContentPart,
+  AgentWidgetContextMentionRef,
   StopReasonKind
 } from "../types";
 import { createIconButton } from "../utils/buttons";
+import { renderLucideIcon } from "../utils/icons";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "../utils/content";
 import {
   applyStreamBuffer,
@@ -184,6 +186,37 @@ const getMessageFileParts = (message: AgentWidgetMessage): FileContentPart[] => 
       typeof part.data === "string" &&
       part.data.trim().length > 0
   );
+};
+
+/**
+ * Read-only context-mention pills for a sent user bubble (from
+ * `message.contextMentions`). Same compact pill look as the composer chips, but
+ * no spinner / remove control. Returns null when the message carries no mentions.
+ */
+const createMessageMentionChips = (
+  mentions: AgentWidgetContextMentionRef[] | undefined
+): HTMLElement | null => {
+  if (!mentions || mentions.length === 0) return null;
+  const row = createNode("div", {
+    className: "persona-mention-context-row persona-message-mentions",
+    attrs: { "data-message-mentions": "" },
+  });
+  row.style.display = "flex";
+  for (const ref of mentions) {
+    const chip = createNode("div", {
+      className: "persona-mention-chip persona-mention-chip-readonly",
+      attrs: { "data-status": "ready" },
+    });
+    const iconHost = createElement("span", "persona-mention-chip-icon");
+    const icon = renderLucideIcon(ref.iconName ?? "at-sign", 13, "currentColor", 2);
+    if (icon) iconHost.appendChild(icon);
+    chip.appendChild(iconHost);
+    chip.appendChild(
+      createNode("span", { className: "persona-mention-chip-label", text: ref.label })
+    );
+    row.appendChild(chip);
+  }
+  return row;
 };
 
 const createMessageImagePreviews = (
@@ -929,6 +962,12 @@ export const createStandardBubble = (
     if (filePreviews) {
       bubble.appendChild(filePreviews);
     }
+  }
+
+  // Context mention pills (read-only) for the sent user bubble.
+  const mentionChips = createMessageMentionChips(message.contextMentions);
+  if (mentionChips) {
+    bubble.appendChild(mentionChips);
   }
 
   bubble.appendChild(contentDiv);
