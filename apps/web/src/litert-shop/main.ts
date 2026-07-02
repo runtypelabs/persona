@@ -385,6 +385,16 @@ function mountWidget(): void {
       storageAdapter: createLocalStorageAdapter("persona-state-litert-shop"),
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
       colorScheme: "light",
+      // Square the panel's outer edges (no radius, border, or shadow) so the
+      // docked copilot sits flush against the toolbar and viewport edge like a
+      // built-in pane — the Switchback storefront's treatment. Everything else
+      // stays on the default theme.
+      theme: {
+        components: {
+          panel: { borderRadius: "0", border: "none", shadow: "none" },
+          header: { borderRadius: "0" },
+        },
+      },
       suggestionChipsConfig: {
         fontFamily: "sans-serif",
       },
