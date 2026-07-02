@@ -3249,7 +3249,7 @@ packages:
     resolution: {integrity: sha512-m6F1R3z8jjlf2imQHS2Qez5sjKWQzbuuhuJ/FKYFRZvPE3PuHcSMVZzfsLhGVOkfd20obL5SWEBew5ShlquNxg==}
 
   jspaint@https://codeload.github.com/runtypelabs/jspaint/tar.gz/61814a33efbd2021859caf37381f1005dfc25666:
-    resolution: {tarball: https://codeload.github.com/runtypelabs/jspaint/tar.gz/61814a33efbd2021859caf37381f1005dfc25666}
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/runtypelabs/jspaint/tar.gz/61814a33efbd2021859caf37381f1005dfc25666}
     version: 1.1.0
     hasBin: true
 
