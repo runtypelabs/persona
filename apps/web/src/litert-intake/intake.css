@@ -1,0 +1,400 @@
+/* On-device Intake — a calm, trustworthy claim-form shell. White cards, one
+   accent color, generous spacing. The docked Persona panel sits to the right;
+   the shared eval HUD (styles from ../litert-slides/litert-slides.css) stays as
+   its default dark chip in the corner. */
+
+:root {
+  --intake-accent: #2563eb;
+  --intake-accent-strong: #1d4ed8;
+  --intake-accent-soft: #eff6ff;
+  --intake-ink: #0f172a;
+  --intake-muted: #64748b;
+  --intake-line: #e2e8f0;
+  --intake-bg: #f1f5f9;
+  --intake-card: #ffffff;
+  --intake-ok: #16a34a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.intake-body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--intake-bg);
+  color: var(--intake-ink);
+  font-family:
+    system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+
+.intake-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--intake-card);
+  border-bottom: 1px solid var(--intake-line);
+}
+
+.intake-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.intake-logo {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.intake-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--intake-accent-strong);
+  background: var(--intake-accent-soft);
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+
+.intake-tagline {
+  margin: 0;
+  font-size: 13px;
+  color: var(--intake-muted);
+}
+
+.intake-model-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.intake-model-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--intake-muted);
+}
+
+.intake-model-label select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--intake-ink);
+  background: var(--intake-card);
+  border: 1px solid var(--intake-line);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.intake-load-button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 14px;
+  color: #fff;
+  background: var(--intake-accent);
+  border: 1px solid var(--intake-accent-strong);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.intake-load-button:hover:not(:disabled) {
+  background: var(--intake-accent-strong);
+}
+.intake-load-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.intake-status {
+  font-size: 12px;
+  color: var(--intake-muted);
+  max-width: 420px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.intake-warning {
+  margin: 12px 20px 0;
+  padding: 10px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+
+.intake-main {
+  padding: 24px;
+}
+
+.intake-editor {
+  min-height: calc(100vh - 120px);
+}
+
+.intake-canvas {
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--intake-card);
+  border: 1px solid var(--intake-line);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  padding: 28px 28px 24px;
+}
+
+.intake-headline {
+  border-bottom: 1px solid var(--intake-line);
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+}
+.intake-headline h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.intake-headline p {
+  margin: 0 0 14px;
+  color: var(--intake-muted);
+  font-size: 14px;
+}
+
+.intake-sample-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--intake-accent-strong);
+  background: var(--intake-accent-soft);
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.intake-sample-btn:hover {
+  background: #dbeafe;
+}
+
+/* ── Sections + fields ───────────────────────────────────────────────────── */
+
+.intake-section {
+  margin-bottom: 24px;
+}
+.intake-section-title {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--intake-muted);
+}
+
+.intake-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 18px;
+}
+
+.intake-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Textarea + the two-button booleans read better full width. */
+.intake-field-textarea {
+  grid-column: 1 / -1;
+}
+
+.intake-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.intake-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+.intake-req {
+  color: var(--intake-accent);
+  margin-left: 2px;
+}
+
+.intake-ai-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--intake-accent-strong);
+  background: var(--intake-accent-soft);
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 1px 7px;
+  line-height: 1.5;
+}
+
+.intake-control {
+  font: inherit;
+  font-size: 14px;
+  color: var(--intake-ink);
+  background: #fff;
+  border: 1px solid var(--intake-line);
+  border-radius: 9px;
+  padding: 9px 11px;
+  width: 100%;
+}
+.intake-control:focus {
+  outline: none;
+  border-color: var(--intake-accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+textarea.intake-control {
+  resize: vertical;
+  min-height: 72px;
+}
+
+/* Segmented Yes/No for boolean fields. */
+.intake-bool {
+  display: inline-flex;
+  border: 1px solid var(--intake-line);
+  border-radius: 9px;
+  overflow: hidden;
+  width: fit-content;
+}
+.intake-bool-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  background: #fff;
+  border: none;
+  padding: 8px 18px;
+  cursor: pointer;
+}
+.intake-bool-btn + .intake-bool-btn {
+  border-left: 1px solid var(--intake-line);
+}
+.intake-bool-btn:hover:not(.is-on) {
+  background: #f8fafc;
+}
+.intake-bool-btn.is-on {
+  color: #fff;
+  background: var(--intake-accent);
+}
+
+/* Highlight a field the model just filled: a brief accent wash. Retriggered by
+   the renderer removing + re-adding this class on each tool write. */
+@keyframes intake-fill-flash {
+  0% {
+    background: rgba(37, 99, 235, 0.18);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.intake-just-filled {
+  animation: intake-fill-flash 1.1s ease-out;
+  border-radius: 10px;
+}
+
+/* ── Footer: progress + submit ───────────────────────────────────────────── */
+
+.intake-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--intake-line);
+}
+.intake-progress {
+  font-size: 13px;
+  color: var(--intake-muted);
+}
+.intake-submit {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--intake-accent);
+  border: 1px solid var(--intake-accent-strong);
+  border-radius: 10px;
+  padding: 10px 22px;
+  cursor: pointer;
+}
+.intake-submit:hover:not(:disabled) {
+  background: var(--intake-accent-strong);
+}
+.intake-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Success panel ───────────────────────────────────────────────────────── */
+
+.intake-success {
+  text-align: center;
+  padding: 36px 24px 32px;
+}
+.intake-success-check {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  color: #fff;
+  background: var(--intake-ok);
+  border-radius: 999px;
+}
+.intake-success h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+.intake-success p {
+  margin: 0 0 6px;
+  color: var(--intake-muted);
+}
+.intake-claimid {
+  margin-top: 12px !important;
+  font-size: 15px;
+  color: var(--intake-ink) !important;
+}
+.intake-claimid strong {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.intake-restart {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 18px;
+  color: var(--intake-accent-strong);
+  background: var(--intake-accent-soft);
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .intake-tagline {
+    display: none;
+  }
+  .intake-grid {
+    grid-template-columns: 1fr;
+  }
+}
