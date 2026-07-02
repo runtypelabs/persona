@@ -45,7 +45,12 @@ declare global {
   }
 }
 
-function mountWidget(bridge: PaintBridge): void {
+// Set once the jspaint bridge initializes (see the bottom of this file). The
+// widget mounts BEFORE the bridge is ready, so everything that touches it must
+// tolerate null until then.
+let bridge: PaintBridge | null = null;
+
+function mountWidget(): void {
   window.personaPaintWidget = initAgentWidget({
     target: dockTarget as HTMLElement,
     useShadowDom: false,
@@ -107,10 +112,11 @@ function mountWidget(bridge: PaintBridge): void {
       },
       // Fresh canvas state rides along with every message so "make it bigger"
       // or "what color is selected" need no tool round-trip. The flow prompt
-      // interpolates {{paint_context}}.
+      // interpolates {{paint_context}}, so the key is ALWAYS present — before
+      // the bridge is up it carries an empty state rather than going missing.
       contextProviders: [
         () => ({
-          paint_context: JSON.stringify(bridge.getState()),
+          paint_context: JSON.stringify(bridge ? bridge.getState() : {}),
         }),
       ],
       // The provider's output lands in `payload.context`, but the proxy only
@@ -144,8 +150,19 @@ function mountWidget(bridge: PaintBridge): void {
   });
 }
 
-// No top-level await: Vite's default build target predates it.
-void mountJsPaint(host).then((bridge) => {
-  setupPaintTools(bridge);
-  mountWidget(bridge);
-});
+// Mount the Persona panel IMMEDIATELY — not gated on the embedded app.
+// jspaint's iframe + bridge can take several seconds on a cold server (and the
+// bridge helper times out after 15s); gating the widget on it meant a blank
+// dock, or — on a timeout — an unhandled rejection and NO widget at all. The
+// paint tools register as soon as the bridge is up; the widget snapshots
+// WebMCP tools at dispatch time, so late registration is fine.
+// (No top-level await: Vite's default build target predates it.)
+mountWidget();
+void mountJsPaint(host)
+  .then((b) => {
+    bridge = b;
+    setupPaintTools(b);
+  })
+  .catch((err) => {
+    console.error("[Paint] jspaint bridge failed to initialize:", err);
+  });
