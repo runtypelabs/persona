@@ -96,7 +96,7 @@ Map the user's words to facet values (use ONLY the exact enum values from the to
 - category: boots, jackets, tents, backpacks, sleeping-bags, accessories. Vague words: "warm" or "cold weather" → jackets or sleeping-bags; "shelter" → tents; "carry" or "pack" → backpacks.
 - "under $100" → priceMax 100; "over $50" → priceMin 50; "$50 to $100" → priceMin 50 and priceMax 100.
 - "waterproof" → waterproof true; "in stock" or "available" → inStockOnly true; "highly rated" or "best" → minRating 4; "cheapest" → sort price-asc; "most expensive" → sort price-desc.
-The result returns matchCount — how many products match. If matchCount is 0, relax ONE facet (usually price or color) in a second set_filters call, and tell the user what you relaxed.
+The result returns matchCount — how many products match. If matchCount is 0, say so and ASK the user whether to raise the price limit or drop a filter — never change filters the user didn't ask for, and never claim you changed something without calling a tool.
 Do NOT call the same tool with the same arguments twice.
 After filtering, reply in plain text with ONE short sentence that mentions the matchCount. Use get_top_results only when the user asks what or which products match.`;
 
