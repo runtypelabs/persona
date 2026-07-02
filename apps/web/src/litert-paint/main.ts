@@ -155,7 +155,7 @@ async function loadSelectedModel(): Promise<void> {
   // generation so the first real prompt is fast — that warm-up can take a few
   // minutes on first run. Set the expectation up front.
   setStatus(
-    `Loading ${MODELS[modelId].label}… first load downloads ${MODELS[modelId].approxSize}, then warms up the GPU (first run can take a few minutes).`,
+    `Loading ${MODELS[modelId].label}… the first load downloads ${MODELS[modelId].approxSize} (cached for next time), then warms up the GPU — the first run can take a few minutes.`,
   );
   try {
     await engine.loadModel(modelId);

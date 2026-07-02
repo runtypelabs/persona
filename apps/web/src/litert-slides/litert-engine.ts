@@ -178,7 +178,7 @@ const TEMPERATURE = 0.3;
 export type MetricEvent =
   | { type: "load_start"; modelId: ModelId }
   | { type: "load_progress"; received: number; total: number }
-  | { type: "load_ready"; modelId: ModelId; loadMs: number }
+  | { type: "load_ready"; modelId: ModelId; loadMs: number; fromCache: boolean }
   | { type: "load_error"; message: string }
   | { type: "warmup_start"; modelId: ModelId }
   | { type: "warmup_done"; modelId: ModelId; ms: number }
@@ -190,6 +190,37 @@ export type MetricEvent =
   | { type: "error"; message: string };
 
 export type MetricSink = (event: MetricEvent) => void;
+
+// ── Model weight cache ───────────────────────────────────────────────────────
+// The browser HTTP cache can NEVER reuse a weights download from HuggingFace:
+// the `resolve/…` URL 302s with `cache-control: no-store` to a SIGNED CDN URL
+// whose signature differs on every request, so each page load would re-pull the
+// full ~1.4–2.9 GB. We cache the weights ourselves in Cache Storage, keyed by
+// the stable canonical URL. Origin-scoped, so litert-slides and litert-paint
+// share one stored copy per model.
+const MODEL_CACHE_NAME = "litert-model-weights";
+
+async function fetchModelWeights(
+  url: string,
+): Promise<{ res: Response; fromCache: boolean }> {
+  let cache: Cache | null = null;
+  try {
+    cache = await caches.open(MODEL_CACHE_NAME);
+  } catch {
+    // Cache Storage unavailable (some private-browsing modes) — plain fetch.
+  }
+  const hit = await cache?.match(url);
+  if (hit?.body) return { res: hit, fromCache: true };
+  const res = await fetch(url);
+  if (!res.ok || !res.body) {
+    throw new Error(`Model download failed: ${res.status} ${res.statusText}`);
+  }
+  // Persist a clone for the next load while the engine consumes the original.
+  // put() only commits complete bodies, so an aborted download stores nothing;
+  // a quota rejection is best-effort — we just re-download next time.
+  if (cache) void cache.put(url, res.clone()).catch(() => {});
+  return { res, fromCache: false };
+}
 
 // ── Persona SSE wire ────────────────────────────────────────────────────────
 
@@ -447,14 +478,12 @@ export function createLiteRtPersonaEngine(options: {
         )) as unknown as LiteRtModule;
 
         // Stream the weights into the runtime with live progress instead of
-        // buffering the whole file: EngineSettings.model accepts a ReadableStream.
-        const res = await fetch(info.url);
-        if (!res.ok || !res.body) {
-          throw new Error(`Model download failed: ${res.status} ${res.statusText}`);
-        }
+        // buffering the whole file: EngineSettings.model accepts a
+        // ReadableStream. Cache Storage first, network on a miss.
+        const { res, fromCache } = await fetchModelWeights(info.url);
         const total = Number(res.headers.get("content-length")) || 0;
         let received = 0;
-        const progressStream = res.body.pipeThrough(
+        const progressStream = res.body!.pipeThrough(
           new TransformStream<Uint8Array, Uint8Array>({
             transform(chunk, controller) {
               received += chunk.byteLength;
@@ -482,6 +511,7 @@ export function createLiteRtPersonaEngine(options: {
           type: "load_ready",
           modelId,
           loadMs: Math.round(performance.now() - startedAt),
+          fromCache,
         });
         if (warmUpOnLoad) await warmUp(modelId);
       } catch (err) {

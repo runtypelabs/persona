@@ -21,6 +21,7 @@ interface Stats {
   loadTotal: number;
   loading: boolean;
   loadError: string | null;
+  fromCache: boolean;
   warming: boolean;
   warmupMs: number | null;
   // Per last turn
@@ -48,6 +49,7 @@ export function createEvalHud(mount: HTMLElement): EvalHud {
     loadTotal: 0,
     loading: false,
     loadError: null,
+    fromCache: false,
     warming: false,
     warmupMs: null,
     lastTtft: null,
@@ -107,8 +109,9 @@ export function createEvalHud(mount: HTMLElement): EvalHud {
         <span class="lr-hud-mono">warming up the GPU…</span>`;
     } else if (stats.modelId) {
       const warm = stats.warmupMs != null ? ` · warmup ${fmtMs(stats.warmupMs)}` : "";
+      const src = stats.fromCache ? " · weights from cache" : "";
       modelEl.innerHTML = `<span class="lr-hud-ok">● ${escapeHtml(MODELS[stats.modelId].label)}</span>
-        <span class="lr-hud-mono">ready in ${stats.loadMs != null ? fmtMs(stats.loadMs) : "—"}${warm}</span>`;
+        <span class="lr-hud-mono">ready in ${stats.loadMs != null ? fmtMs(stats.loadMs) : "—"}${src}${warm}</span>`;
     } else {
       modelEl.innerHTML = `<span class="lr-hud-idle">No model loaded</span>`;
     }
@@ -151,6 +154,7 @@ export function createEvalHud(mount: HTMLElement): EvalHud {
         stats.loading = false;
         stats.loadMs = event.loadMs;
         stats.modelId = event.modelId;
+        stats.fromCache = event.fromCache;
         break;
       case "load_error":
         stats.loading = false;
