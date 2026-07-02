@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>On-device Intake: a claim form that fills itself with Gemma 4</title>
+  </head>
+  <body class="intake-body">
+    <header class="intake-toolbar">
+      <div class="intake-brand">
+        <span class="intake-logo">On-device Intake</span>
+        <span class="intake-badge">Gemma 4 · on-device</span>
+      </div>
+      <p class="intake-tagline">
+        Runs entirely in your browser — your claim details never leave this page.
+      </p>
+      <div class="intake-model-controls">
+        <!-- On-device model controls: pick the Gemma 4 size, download + spin it
+             up over WebGPU. Nothing leaves the browser. -->
+        <label class="intake-model-label">
+          Model
+          <select id="lr-model-select" aria-label="On-device model"></select>
+        </label>
+        <button id="lr-load-button" type="button" class="intake-load-button">Load model</button>
+        <span id="lr-status" class="intake-status" role="status"></span>
+      </div>
+    </header>
+
+    <div id="lr-webgpu-warning" class="intake-warning" hidden>
+      This demo needs <strong>WebGPU</strong>, which this browser doesn't expose.
+      Try the latest Chrome or Edge on a machine with a supported GPU.
+    </div>
+
+    <main class="intake-main">
+      <!-- The docked Persona panel wraps this target and docks to its right,
+           shrinking the form column: same pattern as litert-paint. -->
+      <div id="intake-dock-target" class="intake-editor">
+        <div class="intake-canvas">
+          <div class="intake-headline">
+            <h1>First Notice of Loss</h1>
+            <p>
+              Tell the assistant what happened in plain words — it extracts the
+              details and fills this form for you, on-device.
+            </p>
+            <button id="intake-sample-btn" type="button" class="intake-sample-btn">
+              Paste a sample story
+            </button>
+          </div>
+          <div id="intake-form-root"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Eval HUD: model-load progress, TTFT, tokens/s, tool-call stats. -->
+    <div id="lr-hud"></div>
+
+    <script type="module" src="/src/litert-intake/main.ts"></script>
+  </body>
+</html>
