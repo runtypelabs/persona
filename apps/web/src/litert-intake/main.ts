@@ -63,10 +63,13 @@ renderIntakeForm(formRoot, form);
 // synchronously, so the tools can register immediately after the polyfill init.
 setupIntakeTools(form);
 
+// Include the weekday: a small model resolving "last Tuesday" needs the anchor
+// ("2026-07-02 (Thursday)"), not just the ISO date — observed off-by-one without it.
 const localToday = (): string => {
   const d = new Date();
   const p = (n: number): string => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  const weekday = d.toLocaleDateString("en-US", { weekday: "long" });
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} (${weekday})`;
 };
 
 // ---- On-device engine + eval HUD -------------------------------------------
@@ -82,7 +85,9 @@ const SYSTEM_PROMPT = `You are an intake assistant for an auto-insurance First N
 
 Fill the form ONLY by calling set_fields with the exact field ids listed in the form state below. Extract ONLY values the user actually stated — NEVER invent, guess, or assume a value. Copy names, phone numbers, emails, policy numbers, and license plates verbatim. If a field wasn't mentioned, leave it out entirely.
 
-Normalize before writing: resolve dates to YYYY-MM-DD using the "today" value in the form state (so "last Tuesday" becomes an absolute date); write times as 24-hour HH:MM.
+Before calling set_fields, go through EVERY field id in the form state ONE BY ONE and check whether the user's message states a value for it — people pack many details into one message (a phone number, a plate, the other driver, whether anyone was hurt). Capture ALL of them; a "no" or "nobody" is a value too (false). When the user tells the story of the incident, also write a 1-2 sentence version of it into the description field. Include ONLY fields with NEW information — do not re-send values that are already in the form state.
+
+Normalize before writing: resolve dates to YYYY-MM-DD using the "today" value in the form state (so "last Tuesday" becomes an absolute date); write times as 24-hour HH:MM; write phone numbers as digits and dashes, like 602-555-0147.
 
 Batch EVERYTHING you extracted into ONE set_fields call — never one call per field. After the tool returns, reply with ONE short sentence saying what you filled, then ask for the most important still-missing required fields in a SINGLE question (list at most three).
 
@@ -123,7 +128,13 @@ if (modelSelect) {
     option.title = info.blurb;
     modelSelect.appendChild(option);
   }
-  modelSelect.value = "e2b";
+  // E4B is the default HERE (unlike the other litert demos): extraction quality
+  // is the demo. Live-tested — E2B misses ~half the facts in a long narrative
+  // and will NOT emit sentence-length strings in tool args (the `description`
+  // field failed 5/5 on E2B), while E4B filled 9/10 required fields in one pass
+  // and resolved "last Tuesday" correctly. E2B stays in the picker for
+  // comparison; the conversational repair loop still converges on it.
+  modelSelect.value = "e4b";
 }
 
 const setStatus = (text: string): void => {
