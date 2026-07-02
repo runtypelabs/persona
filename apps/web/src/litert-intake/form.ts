@@ -70,7 +70,8 @@ export const FIELD_CATALOG: readonly FieldDef[] = [
     type: "string",
     required: true,
     placeholder: "(555) 123-4567",
-    toolDescription: "The claimant's phone number, copied verbatim.",
+    toolDescription:
+      "The claimant's phone number, written as digits and dashes (e.g. 602-555-0147).",
   },
   {
     id: "email",
@@ -124,7 +125,8 @@ export const FIELD_CATALOG: readonly FieldDef[] = [
     type: "textarea",
     required: true,
     placeholder: "Describe the incident in a sentence or two…",
-    toolDescription: "A short, factual description of how the incident happened.",
+    toolDescription:
+      "A 1-2 sentence summary of how the incident happened, in the user's own words. Whenever the user tells the story of the incident, ALWAYS write a short version of it here.",
   },
   // Vehicles
   {
