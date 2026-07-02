@@ -162,22 +162,13 @@ const MAX_NUM_TOKENS = 8192;
 const MAX_TOOL_ROUNDS = 6;
 
 // ── Tool scope ────────────────────────────────────────────────────────────────
-// The full 17-tool slide surface is ~3–4k tokens of declarations the small
+// A full page tool surface is thousands of tokens of declarations the small
 // on-device model re-reads every turn, which slows it down and gives it more
-// rope to mis-call. A curated "core" island keeps the headline flows (orient →
-// create a slide → restyle → rename) while trimming the prompt for snappier
+// rope to mis-call. A curated "core" island (per demo, via the `coreToolNames`
+// option) keeps the headline flows while trimming the prompt for snappier
 // turns. The page can flip this at runtime — defaults to "core" for a
 // responsive first impression; switch to "all" to show the full surface.
 export type ToolScope = "core" | "all";
-
-export const CORE_TOOL_NAMES: readonly string[] = [
-  "get_deck_overview",
-  "get_selection",
-  "add_slide",
-  "set_deck_title",
-  "list_themes",
-  "apply_theme",
-];
 // Low temperature keeps tool-argument JSON tight and the loop deterministic —
 // the right default when the goal is evaluating tool-calling, not prose flair.
 const TEMPERATURE = 0.3;
@@ -187,7 +178,7 @@ const TEMPERATURE = 0.3;
 export type MetricEvent =
   | { type: "load_start"; modelId: ModelId }
   | { type: "load_progress"; received: number; total: number }
-  | { type: "load_ready"; modelId: ModelId; loadMs: number }
+  | { type: "load_ready"; modelId: ModelId; loadMs: number; fromCache: boolean }
   | { type: "load_error"; message: string }
   | { type: "warmup_start"; modelId: ModelId }
   | { type: "warmup_done"; modelId: ModelId; ms: number }
@@ -199,6 +190,37 @@ export type MetricEvent =
   | { type: "error"; message: string };
 
 export type MetricSink = (event: MetricEvent) => void;
+
+// ── Model weight cache ───────────────────────────────────────────────────────
+// The browser HTTP cache can NEVER reuse a weights download from HuggingFace:
+// the `resolve/…` URL 302s with `cache-control: no-store` to a SIGNED CDN URL
+// whose signature differs on every request, so each page load would re-pull the
+// full ~1.4–2.9 GB. We cache the weights ourselves in Cache Storage, keyed by
+// the stable canonical URL. Origin-scoped, so litert-slides and litert-paint
+// share one stored copy per model.
+const MODEL_CACHE_NAME = "litert-model-weights";
+
+async function fetchModelWeights(
+  url: string,
+): Promise<{ res: Response; fromCache: boolean }> {
+  let cache: Cache | null = null;
+  try {
+    cache = await caches.open(MODEL_CACHE_NAME);
+  } catch {
+    // Cache Storage unavailable (some private-browsing modes) — plain fetch.
+  }
+  const hit = await cache?.match(url);
+  if (hit?.body) return { res: hit, fromCache: true };
+  const res = await fetch(url);
+  if (!res.ok || !res.body) {
+    throw new Error(`Model download failed: ${res.status} ${res.statusText}`);
+  }
+  // Persist a clone for the next load while the engine consumes the original.
+  // put() only commits complete bodies, so an aborted download stores nothing;
+  // a quota rejection is best-effort — we just re-download next time.
+  if (cache) void cache.put(url, res.clone()).catch(() => {});
+  return { res, fromCache: false };
+}
 
 // ── Persona SSE wire ────────────────────────────────────────────────────────
 
@@ -347,34 +369,15 @@ function buildUserPrompt(messages: Array<{ role: string; content: unknown }>): s
   return `Conversation so far:\n${transcript}\n\nCurrent request:\n${last.text}`;
 }
 
-const SYSTEM_PROMPT = `You are Deck Copilot, an assistant embedded in a live slide-deck editor.
-You change the deck ONLY by calling the page's tools — never claim to have edited
-anything without calling a tool. Orient yourself with get_deck_overview / get_slide
-before editing so you use real slide and element ids. When the user refers to "this"
-or "these", call get_selection. To restyle the deck, first call list_themes to get the
-valid theme ids, then call apply_theme with one of those exact ids — never guess a
-theme id. You can request several tools at once when steps are
-independent. Each tool result stays in this conversation — do NOT call the same
-tool with the same arguments twice. Once you have what you need, reply to the user
-in plain text with NO further tool calls. After your tool calls return, confirm what
-changed in one or two short sentences. Be concise and friendly.`;
-
-/** Build the system turn content (instructions + frozen page context). */
-function buildSystemContent(ctx: Record<string, unknown>): string {
-  let content = SYSTEM_PROMPT;
-  // The page rides fresh editor state along on dispatch (current slide, mode,
-  // live selection) via a Persona contextProvider. Fold it into the system turn
-  // so "align these" needs no guessing.
-  const slidesContext = ctx.slides_context;
-  if (typeof slidesContext === "string" && slidesContext) {
-    content += `\n\nCurrent editor state (JSON):\n${slidesContext}`;
-  }
-  return content;
-}
-
 const systemMessage = (content: string): LiteRtMessage => ({ role: "system", content });
 
-/** WebMCP result → the object we hand back to the model as a tool_response. */
+/**
+ * WebMCP result → the object we hand back to the model as a tool_response.
+ * Non-text content blocks (image snapshots, audio) are summarized, never
+ * inlined: JSON.stringify-ing a base64 image block would dump hundreds of KB
+ * into an 8k-token context and kill the run. This engine's tool loop is
+ * text-only; tools that produce media should say so in words.
+ */
 function toToolResponse(raw: unknown): Record<string, unknown> {
   const result = raw as WebMcpToolResult | string | undefined;
   if (typeof result === "string") return { result };
@@ -383,7 +386,13 @@ function toToolResponse(raw: unknown): Record<string, unknown> {
   }
   const text =
     result?.content
-      ?.map((c) => (c?.type === "text" ? (c.text ?? "") : JSON.stringify(c)))
+      ?.map((c) => {
+        if (c?.type === "text") return c.text ?? "";
+        if (c?.type === "image" || c?.type === "audio") {
+          return `[${c.type} content omitted — the on-device model in this demo reads text only]`;
+        }
+        return JSON.stringify(c);
+      })
       .join("\n") ?? JSON.stringify(result ?? null);
   return result?.isError ? { error: text } : { result: text };
 }
@@ -417,11 +426,19 @@ interface TurnInput {
 export function createLiteRtPersonaEngine(options: {
   /** The fake dispatch URL the widget posts to (e.g. "/litert/dispatch"). */
   apiPath: string;
+  /**
+   * Build the run's single system turn: the demo's instructions plus whatever
+   * page context the widget rode along (contextProviders land in `ctx`).
+   * Per Gemma 4's prompt-formatting guidance, ALL system instructions must be
+   * consolidated into one system turn (the runtime appends the tool
+   * declarations to that same turn), so return everything in one string.
+   */
+  buildSystemContent: (ctx: Record<string, unknown>) => string;
   onMetric?: MetricSink;
   /** Initial tool scope (default "core" — a snappier on-device first run). */
   toolScope?: ToolScope;
-  /** Allowlist of tool names exposed in "core" scope (default CORE_TOOL_NAMES). */
-  coreToolNames?: readonly string[];
+  /** Allowlist of tool names exposed in "core" scope. */
+  coreToolNames: readonly string[];
   /**
    * Pre-pay the one-time first-turn init (GPU weight conversion + shader compile
    * + data-processor build, ~minutes on Apple Metal) by running a tiny throwaway
@@ -431,9 +448,9 @@ export function createLiteRtPersonaEngine(options: {
    */
   warmUpOnLoad?: boolean;
 }): LiteRtPersonaEngine {
-  const { apiPath } = options;
+  const { apiPath, buildSystemContent } = options;
   const metric: MetricSink = options.onMetric ?? (() => {});
-  const coreToolNames = new Set(options.coreToolNames ?? CORE_TOOL_NAMES);
+  const coreToolNames = new Set(options.coreToolNames);
   const warmUpOnLoad = options.warmUpOnLoad ?? true;
   let toolScope: ToolScope = options.toolScope ?? "core";
 
@@ -461,14 +478,12 @@ export function createLiteRtPersonaEngine(options: {
         )) as unknown as LiteRtModule;
 
         // Stream the weights into the runtime with live progress instead of
-        // buffering the whole file: EngineSettings.model accepts a ReadableStream.
-        const res = await fetch(info.url);
-        if (!res.ok || !res.body) {
-          throw new Error(`Model download failed: ${res.status} ${res.statusText}`);
-        }
+        // buffering the whole file: EngineSettings.model accepts a
+        // ReadableStream. Cache Storage first, network on a miss.
+        const { res, fromCache } = await fetchModelWeights(info.url);
         const total = Number(res.headers.get("content-length")) || 0;
         let received = 0;
-        const progressStream = res.body.pipeThrough(
+        const progressStream = res.body!.pipeThrough(
           new TransformStream<Uint8Array, Uint8Array>({
             transform(chunk, controller) {
               received += chunk.byteLength;
@@ -496,6 +511,7 @@ export function createLiteRtPersonaEngine(options: {
           type: "load_ready",
           modelId,
           loadMs: Math.round(performance.now() - startedAt),
+          fromCache,
         });
         if (warmUpOnLoad) await warmUp(modelId);
       } catch (err) {

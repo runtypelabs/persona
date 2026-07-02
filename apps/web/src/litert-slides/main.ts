@@ -92,13 +92,47 @@ setupSlidesTools(store);
 const hudMount = document.querySelector<HTMLElement>("#lr-hud");
 const hud = hudMount ? createEvalHud(hudMount) : { onMetric: () => {} };
 
+const SYSTEM_PROMPT = `You are Deck Copilot, an assistant embedded in a live slide-deck editor.
+You change the deck ONLY by calling the page's tools — never claim to have edited
+anything without calling a tool. Orient yourself with get_deck_overview / get_slide
+before editing so you use real slide and element ids. When the user refers to "this"
+or "these", call get_selection. To restyle the deck, first call list_themes to get the
+valid theme ids, then call apply_theme with one of those exact ids — never guess a
+theme id. You can request several tools at once when steps are
+independent. Each tool result stays in this conversation — do NOT call the same
+tool with the same arguments twice. Once you have what you need, reply to the user
+in plain text with NO further tool calls. After your tool calls return, confirm what
+changed in one or two short sentences. Be concise and friendly.`;
+
+// The subset of the 17 slide tools the "core" scope hands the model: the
+// headline flows (orient → create a slide → restyle → rename) without the
+// ~3–4k tokens of full-surface declarations.
+const CORE_TOOL_NAMES: readonly string[] = [
+  "get_deck_overview",
+  "get_selection",
+  "add_slide",
+  "set_deck_title",
+  "list_themes",
+  "apply_theme",
+];
+
 const engine = createLiteRtPersonaEngine({
   apiPath: API_PATH,
   onMetric: hud.onMetric,
+  // Single consolidated system turn: instructions + the fresh editor state the
+  // widget rode along (see contextProviders below), so "align these" needs no
+  // guessing.
+  buildSystemContent: (ctx) => {
+    const slidesContext = ctx.slides_context;
+    return typeof slidesContext === "string" && slidesContext
+      ? `${SYSTEM_PROMPT}\n\nCurrent editor state (JSON):\n${slidesContext}`
+      : SYSTEM_PROMPT;
+  },
   // Curated tool island for a responsive on-device run; flip to "all" via
   // `engine.setToolScope("all")` (exposed on window below) to eval the full
   // 17-tool surface.
   toolScope: "core",
+  coreToolNames: CORE_TOOL_NAMES,
 });
 window.personaLiteRtEngine = engine;
 
@@ -136,7 +170,7 @@ async function loadSelectedModel(): Promise<void> {
   // generation so the first real prompt is fast — that warm-up can take a few
   // minutes on first run. Set the expectation up front.
   setStatus(
-    `Loading ${MODELS[modelId].label}… first load downloads ${MODELS[modelId].approxSize}, then warms up the GPU (first run can take a few minutes).`,
+    `Loading ${MODELS[modelId].label}… the first load downloads ${MODELS[modelId].approxSize} (cached for next time), then warms up the GPU — the first run can take a few minutes.`,
   );
   try {
     await engine.loadModel(modelId);

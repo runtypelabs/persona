@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>On-device Paint: Gemma 4 + WebMCP</title>
+  </head>
+  <body class="paint-body">
+    <header class="paint-toolbar">
+      <div class="paint-brand">
+        <span class="paint-logo">Paint Pal</span>
+        <span class="paint-badge">Gemma 4 · on-device</span>
+      </div>
+      <p class="paint-tagline">
+        Gemma 4 runs in your browser and paints in real MS Paint — no server, no API key.
+      </p>
+      <div class="lp-model-controls">
+        <!-- On-device model controls: pick the Gemma 4 size, download + spin it
+             up over WebGPU. Nothing leaves the browser. -->
+        <label class="lp-model-label">
+          Model
+          <select id="lr-model-select" aria-label="On-device model"></select>
+        </label>
+        <button id="lr-load-button" type="button" class="lp-load-button">Load model</button>
+        <span id="lr-status" class="lp-status" role="status"></span>
+      </div>
+    </header>
+
+    <div id="lr-webgpu-warning" class="lp-warning" hidden>
+      This demo needs <strong>WebGPU</strong>, which this browser doesn't expose.
+      Try the latest Chrome or Edge on a machine with a supported GPU.
+    </div>
+
+    <main class="paint-main">
+      <!-- The docked Persona panel wraps this target and docks beside it,
+           shrinking the paint app: same pattern as webmcp-paint. -->
+      <div id="paint-dock-target" class="paint-editor">
+        <div id="jspaint-host" class="paint-host"></div>
+      </div>
+    </main>
+
+    <!-- Eval HUD: model-load progress, TTFT, tokens/s, tool-call stats. -->
+    <div id="lr-hud"></div>
+
+    <script type="module" src="/src/litert-paint/main.ts"></script>
+  </body>
+</html>

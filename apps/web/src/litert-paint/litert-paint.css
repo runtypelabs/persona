@@ -1,0 +1,119 @@
+/* On-device chrome for the Paint Pal shell: the model picker joins the navy
+   title bar as Win98 controls, and the shared eval HUD (styles from
+   ../litert-slides/litert-slides.css) is squared off to match the desktop. */
+
+.lp-model-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.lp-model-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.lp-model-label select {
+  font-family: inherit;
+  font-size: 11px;
+  background: #fff;
+  color: #000;
+  border: 2px inset #dfdfdf;
+  border-radius: 0;
+  padding: 2px 4px;
+}
+
+.lp-load-button {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  background: #c0c0c0;
+  color: #000;
+  border: 2px outset #dfdfdf;
+  border-radius: 0;
+  cursor: pointer;
+}
+.lp-load-button:active:not(:disabled) {
+  border-style: inset;
+}
+.lp-load-button:disabled {
+  color: #808080;
+  cursor: default;
+}
+
+.lp-status {
+  font-size: 11px;
+  color: #cfe2ff;
+  max-width: 380px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lp-warning {
+  padding: 8px 12px;
+  margin: 3px 3px 0;
+  background: #ffffe1; /* the classic tooltip yellow */
+  color: #000;
+  font-size: 12px;
+  border: 1px solid #000;
+}
+
+/* Eval HUD, Win98 edition: square corners, silver body, beveled edge. */
+.paint-body .lr-hud {
+  border-radius: 0;
+  background: #c0c0c0;
+  color: #000;
+  border: 2px outset #dfdfdf;
+  box-shadow: none;
+}
+.paint-body .lr-hud-head {
+  background: linear-gradient(90deg, #000080, #1084d0);
+}
+.paint-body .lr-hud-title {
+  color: #fff;
+}
+.paint-body .lr-hud-toggle {
+  color: #fff;
+}
+.paint-body .lr-hud-model,
+.paint-body .lr-hud-k,
+.paint-body .lr-hud-mono,
+.paint-body .lr-hud-idle,
+.paint-body .lr-hud-hint {
+  color: #3f3f3f;
+}
+.paint-body .lr-hud-v {
+  color: #000;
+}
+.paint-body .lr-hud-ok {
+  color: #008000;
+}
+.paint-body .lr-hud-err {
+  color: #b91c1c;
+}
+.paint-body .lr-hud-bar {
+  background: #fff;
+  border: 1px inset #dfdfdf;
+  border-radius: 0;
+}
+.paint-body .lr-hud-bar-fill {
+  background: #000080;
+}
+.paint-body .lr-hud-chip {
+  background: #ffffe1;
+  color: #000;
+  border: 1px solid #808080;
+  border-radius: 0;
+}
+
+@media (max-width: 900px) {
+  .paint-tagline {
+    display: none;
+  }
+}
