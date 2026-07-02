@@ -481,9 +481,39 @@ function commandPaletteEntry(): Plugin {
   };
 }
 
+// The on-device LiteRT-LM demo (litert-slides.html) runs Gemma 4 in a WASM
+// runtime that needs SharedArrayBuffer — i.e. the page must be cross-origin
+// isolated (COOP: same-origin + COEP). Without it the WASM falls back to a
+// single thread and the first prefill takes minutes. Scope the headers to JUST
+// that document so the other demos' cross-origin iframe embeds keep working.
+// COEP `credentialless` lets the cross-origin model (HuggingFace) + runtime
+// (jsDelivr) loads succeed without needing CORP headers on them.
+// NOTE: production (persona-chat.dev / Vercel) sends the same two headers for
+// this route via apps/web/vercel.json — keep the two in sync.
+function crossOriginIsolateLiteRt(): Plugin {
+  const apply = (req: { url?: string }, res: { setHeader: (k: string, v: string) => void }, next: () => void): void => {
+    const path = (req.url ?? "").split("?")[0];
+    if (path === "/litert-slides.html" || path === "/litert-slides") {
+      res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+      res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+    }
+    next();
+  };
+  return {
+    name: "cross-origin-isolate-litert",
+    configureServer(server) {
+      server.middlewares.use(apply);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(apply);
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
   plugins: [
+    crossOriginIsolateLiteRt(),
     serveWidgetDist(),
     serveJsPaint(),
     llmsTxt(),
@@ -543,6 +573,8 @@ export default defineConfig({
         'webmcp-calendar': path.resolve(__dirname, 'webmcp-calendar.html'),
         // WebMCP: slide-deck editor (dynamic tool sets, selection context)
         'webmcp-slides': path.resolve(__dirname, 'webmcp-slides.html'),
+        // WebMCP: same slide editor, driven by Gemma 4 on-device (LiteRT-LM/WebGPU)
+        'litert-slides': path.resolve(__dirname, 'litert-slides.html'),
         // WebMCP: Paint Pal (drives an embedded jspaint; image snapshot loop)
         'webmcp-paint': path.resolve(__dirname, 'webmcp-paint.html'),
         // Bakery demo pages

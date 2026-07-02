@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>On-device Slides: Gemma 4 + WebMCP</title>
+  </head>
+  <body class="wm-body">
+    <header class="wm-toolbar">
+      <div class="wm-toolbar-brand">
+        <span class="wm-logo">Deckmate</span>
+        <span class="wm-badge lr-badge">Gemma 4 · on-device</span>
+      </div>
+      <input id="deck-title" class="wm-deck-title" type="text" aria-label="Deck title" />
+      <div class="wm-toolbar-actions">
+        <!-- On-device model controls: pick the Gemma 4 size, download + spin it
+             up over WebGPU. Nothing leaves the browser. Everything else —
+             themes, undo (⌘Z), alignment — goes through the Copilot or the
+             keyboard; that's the demo. -->
+        <label class="wm-theme-label lr-model-label">
+          Model
+          <select id="lr-model-select" aria-label="On-device model"></select>
+        </label>
+        <button id="lr-load-button" type="button" class="lr-load-button">Load model</button>
+        <span id="lr-status" class="lr-status" role="status"></span>
+        <button id="reset-button" type="button" title="Reset to the sample deck">Reset deck</button>
+        <button id="present-button" type="button" class="wm-present-button">▶ Present</button>
+      </div>
+    </header>
+
+    <div id="lr-webgpu-warning" class="lr-warning" hidden>
+      This demo needs <strong>WebGPU</strong>, which this browser doesn't expose.
+      Try the latest Chrome or Edge on a machine with a supported GPU.
+    </div>
+
+    <main class="wm-main">
+      <!-- The docked Persona panel wraps this target and docks beside it,
+           shrinking the editor: same pattern as webmcp-slides. -->
+      <div id="editor-dock-target" class="wm-editor">
+        <aside id="slides-sorter" aria-label="Slides"></aside>
+        <section id="slides-canvas" aria-label="Slide canvas"></section>
+      </div>
+    </main>
+
+    <footer class="wm-footer">
+      <p>
+        The assistant is <strong>Gemma 4 running in your browser</strong> via
+        LiteRT-LM over WebGPU — no server, no API key. It drives this deck through
+        the page's WebMCP tools. Watch the <strong>on-device eval</strong> panel to
+        judge tool-calling latency and throughput.
+      </p>
+    </footer>
+
+    <!-- Eval HUD: model-load progress, TTFT, tokens/s, tool-call stats. -->
+    <div id="lr-hud"></div>
+
+    <script type="module" src="/src/litert-slides/main.ts"></script>
+  </body>
+</html>
