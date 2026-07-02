@@ -505,6 +505,10 @@ const LITERT_ISOLATED_PATHS = new Set([
   "/litert-slides",
   "/litert-paint.html",
   "/litert-paint",
+  "/litert-shop.html",
+  "/litert-shop",
+  "/litert-intake.html",
+  "/litert-intake",
 ]);
 function crossOriginIsolateLiteRt(): Plugin {
   const apply = (req: { url?: string }, res: { setHeader: (k: string, v: string) => void }, next: () => void): void => {
@@ -595,6 +599,10 @@ export default defineConfig({
         'webmcp-paint': path.resolve(__dirname, 'webmcp-paint.html'),
         // WebMCP: same Paint Pal, driven by Gemma 4 on-device (LiteRT-LM/WebGPU)
         'litert-paint': path.resolve(__dirname, 'litert-paint.html'),
+        // WebMCP: faceted storefront filters, driven by Gemma 4 on-device
+        'litert-shop': path.resolve(__dirname, 'litert-shop.html'),
+        // WebMCP: voice/paste intake form copilot, driven by Gemma 4 on-device
+        'litert-intake': path.resolve(__dirname, 'litert-intake.html'),
         // Bakery demo pages
         'bakery': path.resolve(__dirname, 'bakery.html'),
         'bakery-story': path.resolve(__dirname, 'bakery-story.html'),
