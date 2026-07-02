@@ -36,6 +36,8 @@ initializeWebMCPPolyfill();
 // `${API_PATH}/resume`) from the in-browser model. Kept off `/api/...` so the
 // Vite dev proxy never tries to forward it.
 const API_PATH = "/litert/slides/dispatch";
+const MODEL_NOT_READY_CHAT_ERROR =
+  "The on-device model is not ready yet. Pick a model in the toolbar, press Load model, and wait for the ready status before asking the Copilot to edit the deck.";
 
 const store = new DeckStore(createSeedDeck);
 
@@ -214,6 +216,20 @@ if (dockTarget) {
       ...DEFAULT_WIDGET_CONFIG,
       // The engine answers this path from the in-browser model (no network).
       apiUrl: API_PATH,
+      // The fetch patch in ./litert-engine handles the fake dispatch/resume
+      // routes. This early dispatch guard is demo UX: the widget only paints an
+      // assistant fallback bubble when dispatch rejects before an SSE stream
+      // starts, so fail fast here when the user chats before loading Gemma.
+      customFetch: async (url, init) => {
+        if (!engine.isLoaded()) {
+          throw new Error(MODEL_NOT_READY_CHAT_ERROR);
+        }
+        return fetch(url, init);
+      },
+      errorMessage: (error) =>
+        error.message === MODEL_NOT_READY_CHAT_ERROR
+          ? MODEL_NOT_READY_CHAT_ERROR
+          : `Sorry — the on-device Copilot hit an error.\n\n_Details: ${error.message}_`,
       storageAdapter: createLocalStorageAdapter("persona-state-litert-slides"),
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
       colorScheme: "light",
