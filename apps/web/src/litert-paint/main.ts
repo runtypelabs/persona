@@ -56,6 +56,8 @@ initializeWebMCPPolyfill();
 // `${API_PATH}/resume`) from the in-browser model. Kept off `/api/...` so the
 // Vite dev proxy never tries to forward it.
 const API_PATH = "/litert/paint/dispatch";
+const MODEL_NOT_READY_CHAT_ERROR =
+  "The on-device model is not ready yet. Pick a model in the toolbar, press Load model, and wait for the ready status before asking Paint Pal to draw.";
 
 const host = document.querySelector<HTMLElement>("#jspaint-host");
 const dockTarget = document.querySelector<HTMLElement>("#paint-dock-target");
@@ -75,9 +77,13 @@ const hud = hudMount ? createEvalHud(hudMount) : { onMetric: () => {} };
 // scribbles from a small model.
 const SYSTEM_PROMPT = `You are Paint Pal, an assistant that draws on a live MS Paint canvas.
 You draw ONLY by calling the page's tools — never claim to have drawn anything without calling a tool.
-Coordinates are canvas pixels: (0,0) is the TOP-LEFT corner, x grows right, y grows DOWN. The canvas size is in the canvas state below — keep every point inside it.
-Plan first: decide the few strokes that make the picture, then make one draw_stroke call per stroke.
-Keep drawings simple and bold — about 3 to 8 strokes total. Prefer shape tools: line, rectangle, and ellipse take EXACTLY 2 points (the endpoints / opposite corners). Only use pencil or brush, with 5–30 points, for freehand curves.
+Coordinates are canvas pixels: (0,0) is the TOP-LEFT corner, x grows right, y grows DOWN. The canvas size is in the canvas state below — keep every point inside it, and make the drawing BIG (use at least half the canvas).
+Plan first: decide the few strokes that make the picture, then make one draw_stroke call per stroke. Keep drawings simple and bold — about 3 to 8 strokes total.
+Pick the right tool for each stroke:
+- line draws ONE straight segment: exactly 2 points, and they must be DIFFERENT points.
+- rectangle / ellipse: exactly 2 points, the opposite corners of the shape's bounding box.
+- pencil / brush draw freehand: use them for ANY curved or closed outline (a heart, star, cloud, wave) with AT LEAST 12 points tracing the outline; to close the shape, end at the same point you started. NEVER draw a curve with the line tool.
+Example freehand stroke — a circle centered at (200,200), radius 50: points (250,200) (243,225) (225,243) (200,250) (175,243) (157,225) (150,200) (157,175) (175,157) (200,150) (225,157) (243,175) (250,200). Curves need that many points to look round.
 draw_stroke accepts optional "tool" and "color" in the same call — set them there instead of making separate select_tool / set_colors calls.
 To color a closed shape, call flood_fill at a point inside it after outlining it.
 Do NOT call the same tool with the same arguments twice — each result stays in this conversation. When the drawing is done, reply in plain text with NO further tool calls: one or two short sentences about what you drew. Be concise and friendly.`;
@@ -183,6 +189,21 @@ function mountWidget(bridge: PaintBridge): void {
       ...DEFAULT_WIDGET_CONFIG,
       // The engine answers this path from the in-browser model (no network).
       apiUrl: API_PATH,
+      // The fetch patch in ../litert-slides/litert-engine handles the fake
+      // dispatch/resume routes. This early dispatch guard is demo UX: the
+      // widget only paints an assistant fallback bubble when dispatch rejects
+      // before an SSE stream starts, so fail fast here when the user chats
+      // before loading Gemma. (Same pattern as litert-slides.)
+      customFetch: async (url, init) => {
+        if (!engine.isLoaded()) {
+          throw new Error(MODEL_NOT_READY_CHAT_ERROR);
+        }
+        return fetch(url, init);
+      },
+      errorMessage: (error) =>
+        error.message === MODEL_NOT_READY_CHAT_ERROR
+          ? MODEL_NOT_READY_CHAT_ERROR
+          : `Sorry — the on-device Paint Pal hit an error.\n\n_Details: ${error.message}_`,
       storageAdapter: createLocalStorageAdapter("persona-state-litert-paint"),
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
       colorScheme: "light",
