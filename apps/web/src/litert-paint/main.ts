@@ -181,7 +181,12 @@ if (!webgpuSupported) {
 
 // ---- Persona widget --------------------------------------------------------
 
-function mountWidget(bridge: PaintBridge): void {
+// Set once the jspaint bridge initializes (see the bottom of this file). The
+// widget mounts BEFORE the bridge is ready, so everything that touches it must
+// tolerate null until then.
+let bridge: PaintBridge | null = null;
+
+function mountWidget(): void {
   window.personaPaintWidget = initAgentWidget({
     target: dockTarget as HTMLElement,
     useShadowDom: false,
@@ -257,10 +262,9 @@ function mountWidget(bridge: PaintBridge): void {
       // Fresh canvas state rides along with every message; the engine folds
       // `paint_context` into the system turn (it reads `context` directly, so
       // no request middleware is needed — unlike the proxy-backed page).
+      // Null-safe: the widget can be up before the jspaint bridge is.
       contextProviders: [
-        () => ({
-          paint_context: JSON.stringify(bridge.getState()),
-        }),
+        () => (bridge ? { paint_context: JSON.stringify(bridge.getState()) } : {}),
       ],
       approval: {
         ...DEFAULT_WIDGET_CONFIG.approval,
@@ -281,11 +285,24 @@ function mountWidget(bridge: PaintBridge): void {
   });
 }
 
-// No top-level await: Vite's default build target predates it.
-void mountJsPaint(host).then((bridge) => {
-  setupPaintTools(bridge);
-  mountWidget(bridge);
-});
+// Mount the Persona panel IMMEDIATELY, like litert-slides — not gated on the
+// embedded app. jspaint's iframe + bridge can take several seconds on a cold
+// dev server (and the bridge helper times out after 15s), and gating the
+// widget on it meant a blank dock — or, on a timeout, an unhandled rejection
+// and NO widget at all. The paint tools register as soon as the bridge is up;
+// the widget snapshots WebMCP tools at dispatch time, so late registration is
+// fine (and the model-not-ready guard fronts the first turn anyway).
+// (No top-level await: Vite's default build target predates it.)
+mountWidget();
+void mountJsPaint(host)
+  .then((b) => {
+    bridge = b;
+    setupPaintTools(b);
+  })
+  .catch((err) => {
+    console.error("[LiteRT Paint] jspaint bridge failed to initialize:", err);
+    setStatus("jspaint failed to load — reload the page to try again.");
+  });
 
 declare global {
   interface Window {
