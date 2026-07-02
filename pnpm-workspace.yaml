@@ -2,3 +2,7 @@ packages:
   - packages/*
   - apps/*
   - examples/*
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
