@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>On-device Shop: Gemma 4 + WebMCP</title>
+  </head>
+  <body class="shop-body">
+    <header class="shop-toolbar">
+      <div class="shop-brand">
+        <span class="shop-logo">Trail Supply Co.</span>
+        <span class="shop-badge">Gemma 4 · on-device</span>
+      </div>
+      <div class="lr-model-controls">
+        <!-- On-device model controls: pick the Gemma 4 size, download + spin it
+             up over WebGPU. Nothing leaves the browser; the copilot filters the
+             grid through the page's WebMCP tools. -->
+        <label class="lr-model-label">
+          Model
+          <select id="lr-model-select" aria-label="On-device model"></select>
+        </label>
+        <button id="lr-load-button" type="button" class="lr-load-button">Load model</button>
+        <span id="lr-status" class="lr-status" role="status"></span>
+      </div>
+    </header>
+
+    <div id="lr-webgpu-warning" class="shop-warning" hidden>
+      This demo needs <strong>WebGPU</strong>, which this browser doesn't expose.
+      Try the latest Chrome or Edge on a machine with a supported GPU.
+    </div>
+
+    <main class="shop-main">
+      <!-- The docked Persona panel wraps this target and docks beside it,
+           shrinking the storefront: same pattern as litert-paint. -->
+      <div id="shop-dock-target" class="shop-content">
+        <div id="shop-chips" class="shop-chips" aria-label="Active filters"></div>
+        <div id="shop-grid" class="shop-grid" aria-label="Products"></div>
+      </div>
+    </main>
+
+    <!-- Eval HUD: model-load progress, TTFT, tokens/s, tool-call stats. -->
+    <div id="lr-hud"></div>
+
+    <script type="module" src="/src/litert-shop/main.ts"></script>
+  </body>
+</html>

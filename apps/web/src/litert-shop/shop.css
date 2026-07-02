@@ -1,0 +1,380 @@
+/* Trail Supply Co. — a clean, modern light storefront. The header carries only
+   the brand, an on-device badge, and the model picker (no decorative chrome).
+   Below sits an active-filter chip row and a responsive product grid; both
+   re-render from the store on every change. */
+
+:root {
+  --shop-bg: #f6f7f5;
+  --shop-surface: #ffffff;
+  --shop-ink: #1f2a24;
+  --shop-muted: #6b756e;
+  --shop-line: #e2e6e1;
+  --shop-accent: #2f6d4f; /* trail green */
+  --shop-accent-soft: #e7f1eb;
+  --shop-agent: #7c4dff; /* copilot-set facets */
+  --shop-agent-soft: #efe9ff;
+  --shop-star: #e0a53a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.shop-body {
+  margin: 0;
+  background: var(--shop-bg);
+  color: var(--shop-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  min-height: 100vh;
+}
+
+/* ── Toolbar ────────────────────────────────────────────────────────────── */
+
+.shop-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--shop-surface);
+  border-bottom: 1px solid var(--shop-line);
+}
+
+.shop-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.shop-logo {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--shop-ink);
+  white-space: nowrap;
+}
+
+.shop-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--shop-accent);
+  background: var(--shop-accent-soft);
+  border: 1px solid #cfe3d7;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.lr-model-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.lr-model-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--shop-muted);
+}
+
+.lr-model-label select {
+  font-family: inherit;
+  font-size: 12px;
+  background: var(--shop-surface);
+  color: var(--shop-ink);
+  border: 1px solid var(--shop-line);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+
+.lr-load-button {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  background: var(--shop-accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.lr-load-button:hover:not(:disabled) {
+  background: #275c43;
+}
+.lr-load-button:disabled {
+  background: #a9b6ae;
+  cursor: default;
+}
+
+.lr-status {
+  font-size: 12px;
+  color: var(--shop-muted);
+  max-width: 340px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shop-warning {
+  padding: 10px 16px;
+  margin: 12px 20px 0;
+  background: #fff7e6;
+  color: #7a5a12;
+  font-size: 13px;
+  border: 1px solid #f0dcae;
+  border-radius: 10px;
+}
+
+/* ── Layout / dock ──────────────────────────────────────────────────────── */
+
+.shop-main {
+  padding: 0;
+}
+
+.shop-content {
+  padding: 18px 20px 48px;
+}
+
+/* ── Chip row ───────────────────────────────────────────────────────────── */
+
+.shop-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  min-height: 32px;
+}
+
+.shop-chips-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--shop-muted);
+  margin-right: 2px;
+}
+
+.shop-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--shop-ink);
+  background: var(--shop-surface);
+  border: 1px solid var(--shop-line);
+  border-radius: 999px;
+  padding: 4px 6px 4px 10px;
+}
+
+/* Facets the copilot set get a distinct accent. */
+.shop-chip.is-agent {
+  color: #4a2f9e;
+  background: var(--shop-agent-soft);
+  border-color: #d6c9ff;
+}
+
+.shop-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--shop-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.shop-chip-x:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--shop-ink);
+}
+.shop-chip.is-agent .shop-chip-x:hover {
+  background: rgba(124, 77, 255, 0.12);
+  color: #4a2f9e;
+}
+
+.shop-chips-clear {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--shop-accent);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.shop-chips-clear:hover {
+  text-decoration: underline;
+}
+
+.shop-chips-empty {
+  font-size: 13px;
+  color: var(--shop-muted);
+}
+
+.shop-count {
+  font-size: 13px;
+  color: var(--shop-muted);
+  margin-left: auto;
+}
+
+/* ── Product grid ───────────────────────────────────────────────────────── */
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 16px;
+}
+
+.shop-card {
+  background: var(--shop-surface);
+  border: 1px solid var(--shop-line);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
+  animation: shop-card-in 0.24s ease both;
+}
+.shop-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(31, 42, 36, 0.1);
+}
+
+@keyframes shop-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.shop-card-visual {
+  position: relative;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 46px;
+}
+
+.shop-card-swatches {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 4px;
+}
+.shop-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.shop-card-wp {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1155aa;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+
+.shop-card-body {
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.shop-card-brand {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--shop-muted);
+}
+
+.shop-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--shop-ink);
+}
+
+.shop-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.shop-card-price {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--shop-ink);
+}
+
+.shop-card-rating {
+  font-size: 12px;
+  color: var(--shop-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.shop-stars {
+  color: var(--shop-star);
+  letter-spacing: 1px;
+}
+
+.shop-card-stock {
+  font-size: 11px;
+  font-weight: 600;
+}
+.shop-card-stock.in {
+  color: var(--shop-accent);
+}
+.shop-card-stock.out {
+  color: #b3402f;
+}
+.shop-card.is-out {
+  opacity: 0.7;
+}
+
+.shop-empty {
+  grid-column: 1 / -1;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--shop-muted);
+  font-size: 15px;
+}
+
+/* Give the docked Persona panel breathing room on narrow viewports. */
+@media (max-width: 640px) {
+  .shop-toolbar {
+    flex-wrap: wrap;
+  }
+  .lr-status {
+    max-width: 100%;
+  }
+}
