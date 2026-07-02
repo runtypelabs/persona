@@ -211,7 +211,10 @@ interface SSESender {
 }
 
 /** Build a streaming SSE Response and run `handler` against a writer. */
-function sseResponse(handler: (send: SSESender) => Promise<void>): Response {
+function sseResponse(
+  executionId: string,
+  handler: (send: SSESender) => Promise<void>,
+): Response {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let seq = 0;
@@ -231,7 +234,7 @@ function sseResponse(handler: (send: SSESender) => Promise<void>): Response {
         // A throw is a terminal failure → execution_error (the bridge maps it
         // to a non-recoverable agent_error). Unified `error` is the non-terminal
         // frame, so it's the wrong one for an uncaught throw.
-        send.send("execution_error", { kind: "agent", error: { message } });
+        send.send("execution_error", { executionId, kind: "agent", error: { message } });
       } finally {
         controller.close();
       }
@@ -674,7 +677,7 @@ export function createLiteRtPersonaEngine(options: {
     const sig = (tc: LiteRtToolCall): string =>
       `${tc.function.name}:${JSON.stringify(tc.function.arguments ?? {})}`;
     const freshCalls = toolCalls.filter((tc) => !input.seenCalls.includes(sig(tc)));
-    const pauseForTools = freshCalls.length > 0 && input.iteration < MAX_TOOL_ROUNDS;
+    const pauseForTools = freshCalls.length > 0 && input.iteration <= MAX_TOOL_ROUNDS;
 
     if (pauseForTools) {
       metric({ type: "tool_calls", names: freshCalls.map((c) => c.function.name) });
@@ -763,7 +766,16 @@ export function createLiteRtPersonaEngine(options: {
     const ctx = { ...(body.inputs ?? {}), ...(body.context ?? {}) };
     const systemContent = buildSystemContent(ctx);
     const userPrompt = buildUserPrompt(body.messages ?? []);
-    return sseResponse(async (send) => {
+    return sseResponse(executionId, async (send) => {
+      // A new dispatch supersedes any still-paused runs in this tab (the widget
+      // serializes turns), so drop their warm conversations — otherwise an
+      // abandoned pause (denied approval, user moved on) pins GPU/KV memory
+      // until reload. Correctness is unaffected: a paused run resumed later
+      // rebuilds from the durable store.
+      for (const [staleId, conv] of liveConversations) {
+        liveConversations.delete(staleId);
+        void conv.delete().catch(() => {});
+      }
       send.send("execution_start", {
         executionId,
         kind: "agent",
@@ -793,7 +805,7 @@ export function createLiteRtPersonaEngine(options: {
 
   function handleResume(body: ResumeBody): Response {
     const executionId = body.executionId ?? "";
-    return sseResponse(async (send) => {
+    return sseResponse(executionId, async (send) => {
       const record = await store.get(executionId);
       if (!record) {
         send.send("error", {

@@ -17,14 +17,18 @@ import {
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 
 import { DeckStore, createSeedDeck } from "../webmcp-slides/store";
-import { THEMES } from "../webmcp-slides/themes";
 import { createCanvas } from "../webmcp-slides/canvas";
 import { createSorter } from "../webmcp-slides/sorter";
 import { createPresenter } from "../webmcp-slides/presenter";
 import { APPROVAL_REQUIRED_TOOL_NAMES, setupSlidesTools } from "../webmcp-slides/tools";
 
 import { createEvalHud } from "./eval-hud";
-import { MODELS, type ModelId, createLiteRtPersonaEngine } from "./litert-engine";
+import {
+  MODELS,
+  type LiteRtPersonaEngine,
+  type ModelId,
+  createLiteRtPersonaEngine,
+} from "./litert-engine";
 
 initializeWebMCPPolyfill();
 
@@ -35,14 +39,14 @@ const API_PATH = "/litert/slides/dispatch";
 
 const store = new DeckStore(createSeedDeck);
 
-// ---- editor chrome (same wiring as webmcp-slides) -------------------------
+// ---- editor chrome ----------------------------------------------------------
+// Deliberately sparser than webmcp-slides: no theme select, no undo/redo
+// buttons. Restyling and edits go through the Copilot (or ⌘Z / ⇧⌘Z) — the
+// header only carries what the on-device demo actually needs.
 
 const canvasHost = document.querySelector<HTMLElement>("#slides-canvas");
 const sorterHost = document.querySelector<HTMLElement>("#slides-sorter");
 const titleInput = document.querySelector<HTMLInputElement>("#deck-title");
-const themeSelect = document.querySelector<HTMLSelectElement>("#theme-select");
-const undoButton = document.querySelector<HTMLButtonElement>("#undo-button");
-const redoButton = document.querySelector<HTMLButtonElement>("#redo-button");
 const presentButton = document.querySelector<HTMLButtonElement>("#present-button");
 const resetButton = document.querySelector<HTMLButtonElement>("#reset-button");
 
@@ -54,20 +58,6 @@ createCanvas(store, canvasHost);
 createSorter(store, sorterHost);
 createPresenter(store);
 
-if (themeSelect) {
-  for (const theme of THEMES) {
-    const option = document.createElement("option");
-    option.value = theme.id;
-    option.textContent = theme.name;
-    themeSelect.appendChild(option);
-  }
-  themeSelect.addEventListener("change", () => {
-    store.commit((deck) => {
-      deck.themeId = themeSelect.value;
-    });
-  });
-}
-
 titleInput?.addEventListener("change", () => {
   const title = titleInput.value.trim();
   if (!title) return;
@@ -76,8 +66,6 @@ titleInput?.addEventListener("change", () => {
   });
 });
 
-undoButton?.addEventListener("click", () => store.undo());
-redoButton?.addEventListener("click", () => store.redo());
 presentButton?.addEventListener("click", () => {
   store.setCurrentSlide(0);
   store.setMode("present");
@@ -88,11 +76,6 @@ const syncChrome = (): void => {
   if (titleInput && document.activeElement !== titleInput) {
     titleInput.value = store.deck.title;
   }
-  if (themeSelect && document.activeElement !== themeSelect) {
-    themeSelect.value = store.deck.themeId;
-  }
-  if (undoButton) undoButton.disabled = !store.canUndo;
-  if (redoButton) redoButton.disabled = !store.canRedo;
   document.title = `${store.deck.title}: On-device Slides`;
 };
 store.subscribe(syncChrome);
@@ -110,27 +93,19 @@ const hud = hudMount ? createEvalHud(hudMount) : { onMetric: () => {} };
 const engine = createLiteRtPersonaEngine({
   apiPath: API_PATH,
   onMetric: hud.onMetric,
-  // Default to the curated tool island for a responsive on-device first run;
-  // the toolbar's Tools selector flips it to the full surface on demand.
+  // Curated tool island for a responsive on-device run; flip to "all" via
+  // `engine.setToolScope("all")` (exposed on window below) to eval the full
+  // 17-tool surface.
   toolScope: "core",
 });
+window.personaLiteRtEngine = engine;
 
 // ---- Model picker (E2B default, swap to E4B) ------------------------------
 
 const modelSelect = document.querySelector<HTMLSelectElement>("#lr-model-select");
-const toolsSelect = document.querySelector<HTMLSelectElement>("#lr-tools-select");
 const loadButton = document.querySelector<HTMLButtonElement>("#lr-load-button");
 const statusEl = document.querySelector<HTMLElement>("#lr-status");
 const webgpuWarning = document.querySelector<HTMLElement>("#lr-webgpu-warning");
-
-// Tool surface: "core" keeps the small model snappy; "all" shows the full set.
-// Takes effect on the next dispatch (an in-flight paused run keeps its own).
-if (toolsSelect) {
-  toolsSelect.value = engine.getToolScope();
-  toolsSelect.addEventListener("change", () => {
-    engine.setToolScope(toolsSelect.value === "all" ? "all" : "core");
-  });
-}
 
 const webgpuSupported = typeof navigator !== "undefined" && "gpu" in navigator;
 
@@ -325,5 +300,6 @@ if (dockTarget) {
 declare global {
   interface Window {
     personaLiteRtSlidesWidget?: unknown;
+    personaLiteRtEngine?: LiteRtPersonaEngine;
   }
 }

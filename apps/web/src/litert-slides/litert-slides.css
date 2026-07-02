@@ -36,13 +36,6 @@
   text-overflow: ellipsis;
 }
 
-.lr-divider {
-  width: 1px;
-  height: 22px;
-  background: #e7e5e0;
-  margin: 0 4px;
-}
-
 .lr-warning {
   padding: 10px 16px;
   background: #fef3c7;

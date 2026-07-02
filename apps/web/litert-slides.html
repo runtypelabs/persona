@@ -17,30 +17,15 @@
       <input id="deck-title" class="wm-deck-title" type="text" aria-label="Deck title" />
       <div class="wm-toolbar-actions">
         <!-- On-device model controls: pick the Gemma 4 size, download + spin it
-             up over WebGPU. Nothing leaves the browser. -->
+             up over WebGPU. Nothing leaves the browser. Everything else —
+             themes, undo (⌘Z), alignment — goes through the Copilot or the
+             keyboard; that's the demo. -->
         <label class="wm-theme-label lr-model-label">
           Model
           <select id="lr-model-select" aria-label="On-device model"></select>
         </label>
-        <label
-          class="wm-theme-label lr-model-label"
-          title="Core trims the page's tools to a focused set so the on-device model stays responsive; All exposes every slide tool."
-        >
-          Tools
-          <select id="lr-tools-select" aria-label="Tool surface for the on-device model">
-            <option value="core">Core (faster)</option>
-            <option value="all">All tools</option>
-          </select>
-        </label>
         <button id="lr-load-button" type="button" class="lr-load-button">Load model</button>
         <span id="lr-status" class="lr-status" role="status"></span>
-        <span class="lr-divider" aria-hidden="true"></span>
-        <label class="wm-theme-label">
-          Theme
-          <select id="theme-select" aria-label="Deck theme"></select>
-        </label>
-        <button id="undo-button" type="button" title="Undo (⌘Z)">↺ Undo</button>
-        <button id="redo-button" type="button" title="Redo (⇧⌘Z)">↻ Redo</button>
         <button id="reset-button" type="button" title="Reset to the sample deck">Reset deck</button>
         <button id="present-button" type="button" class="wm-present-button">▶ Present</button>
       </div>
