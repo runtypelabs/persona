@@ -139,10 +139,17 @@ export function setupShopTools(store: ShopStore): void {
       },
       execute: (args) => {
         store.merge(toUpdate(args), "agent");
-        return toolResult(
-          { matchCount: store.matchCount, appliedFilters: appliedFilters(store.state) },
-          `${store.matchCount} product${store.matchCount === 1 ? "" : "s"} match.`,
-        );
+        const n = store.matchCount;
+        // On zero matches, steer the model's REPLY from inside the tool result
+        // (the freshest tokens win with a small model). Asking beats auto-fixing
+        // here twice over: E2B reliably narrates a second tool call instead of
+        // making it (observed live — "I relaxed the price filter", no call), and
+        // silently overriding a budget the user just stated is bad UX anyway.
+        const summary =
+          n === 0
+            ? "0 products match. You changed nothing else. Tell the user no products match these filters, and ASK whether they'd like to raise the price limit or drop one of the filters. Do NOT claim you relaxed or changed anything."
+            : `${n} product${n === 1 ? "" : "s"} match.`;
+        return toolResult({ matchCount: n, appliedFilters: appliedFilters(store.state) }, summary);
       },
     },
     {
