@@ -1347,16 +1347,16 @@ export const createAgentExperience = (
       // Chip row sits directly above the textarea.
       const ta = textarea;
       ta.parentElement?.insertBefore(mentionOrchestrator.contextRow, ta);
-      // Affordance button joins the composer action controls, left of the
-      // attachment/mic/send buttons.
+      // The "add context" affordance is a secondary control that augments the
+      // outgoing message, so it always joins the LEFT action cluster (beside
+      // the attachment button) — never the right cluster with mic + send.
+      // Placed leftmost so it reads as "add to my message" and stays clear of
+      // the primary send action, matching the secondary-left / primary-right
+      // convention used across chat UIs. Both composer builders (full + pill)
+      // always ship `leftActions`; the form fallback is purely defensive.
       const btn = mentionOrchestrator.affordanceButton;
       if (btn) {
-        const anchorEl =
-          attachmentButtonWrapper ??
-          micButtonWrapper ??
-          sendButton?.parentElement ??
-          null;
-        if (anchorEl?.parentElement) anchorEl.parentElement.insertBefore(btn, anchorEl);
+        if (leftActions) leftActions.insertBefore(btn, leftActions.firstChild);
         else composerForm?.appendChild(btn);
       }
       // Warm the chunk on first focus so the first `@` is instant.
@@ -8522,19 +8522,11 @@ export const createAgentExperience = (
           attachmentButton.style.minHeight = attachIconSize;
           attachmentButton.style.fontSize = "18px";
           attachmentButton.style.lineHeight = "1";
-          attachmentButton.style.backgroundColor = "transparent";
-          attachmentButton.style.color = "var(--persona-primary, #111827)";
-          attachmentButton.style.border = "none";
-          attachmentButton.style.borderRadius = "6px";
-          attachmentButton.style.transition = "background-color 0.15s ease";
-
-          // Add hover effect via mouseenter/mouseleave
-          attachmentButton.addEventListener("mouseenter", () => {
-            attachmentButton!.style.backgroundColor = "var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.05))";
-          });
-          attachmentButton.addEventListener("mouseleave", () => {
-            attachmentButton!.style.backgroundColor = "transparent";
-          });
+          // Appearance (bg / fg / border / radius / hover) is themed from the
+          // shared `.persona-attachment-button` CSS rule via the
+          // `--persona-button-ghost-*` tokens — matching the static
+          // createAttachmentControls path. Only sizing stays inline here so
+          // this runtime-created button restyles identically to the built-in one.
 
           const attachIconSvg = renderLucideIcon(attachIconName, attachIconSizeNum, "currentColor", 1.5);
           if (attachIconSvg) {

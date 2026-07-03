@@ -166,6 +166,8 @@ export interface ComponentTokenSet {
   margin?: TokenReference<'spacing'>;
   shadow?: TokenReference<'shadow'>;
   opacity?: number;
+  /** Hover background — used by transparent variants like `button.ghost`. */
+  hoverBackground?: TokenReference<'color'>;
 }
 
 export interface ButtonTokens extends ComponentTokenSet {

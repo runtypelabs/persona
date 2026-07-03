@@ -281,7 +281,24 @@ Semantic tokens provide intent-based naming that references palette values.
 |---------|-----------|
 | `primary` | `background`, `foreground`, `borderRadius`, `padding` |
 | `secondary` | `background`, `foreground`, `borderRadius`, `padding` |
-| `ghost` | `background`, `foreground`, `borderRadius`, `padding` |
+| `ghost` | `background`, `foreground`, `borderRadius`, `padding`, `hoverBackground` |
+
+The **`ghost`** variant styles the composer's transparent icon buttons — the
+attachment (`📎`) and mention/"add context" (`@`) affordances. It maps to these
+convenience CSS variables (consumed by `.persona-attachment-button` /
+`.persona-mention-button`):
+
+| Variable | Token | Default |
+|----------|-------|---------|
+| `--persona-button-ghost-bg` | `ghost.background` | `transparent` |
+| `--persona-button-ghost-fg` | `ghost.foreground` | `semantic.colors.text` |
+| `--persona-button-ghost-radius` | `ghost.borderRadius` | `palette.radius.md` |
+| `--persona-button-ghost-hover-bg` | `ghost.hoverBackground` | `rgba(0, 0, 0, 0.05)` |
+
+Restyle both buttons at once via `theme.components.button.ghost.*` (no need to
+touch `--persona-primary`). Icon and tooltip text remain per-feature config
+(`contextMentions.buttonIconName/buttonTooltipText`,
+`attachments.buttonIconName/buttonTooltipText`).
 
 ### Input (`components.input.*`)
 

@@ -341,25 +341,16 @@ export const createAttachmentControls = (config?: AgentWidgetConfig): Attachment
       "aria-label": attachmentsConfig.buttonTooltipText ?? "Attach file",
     },
     style: {
+      // Appearance is themed from the CSS rule for `.persona-attachment-button`
+      // via the `--persona-button-ghost-*` tokens (components.button.ghost).
+      // Only config-driven sizing is inline.
       width: attachIconSize,
       height: attachIconSize,
       minWidth: attachIconSize,
       minHeight: attachIconSize,
       fontSize: "18px",
       lineHeight: "1",
-      backgroundColor: "transparent",
-      color: "var(--persona-primary, #111827)",
-      border: "none",
-      borderRadius: "6px",
-      transition: "background-color 0.15s ease",
     },
-  });
-
-  button.addEventListener("mouseenter", () => {
-    button.style.backgroundColor = "var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.05))";
-  });
-  button.addEventListener("mouseleave", () => {
-    button.style.backgroundColor = "transparent";
   });
 
   const attachIconSvg = renderLucideIcon(attachIconName, attachIconSizeNum, "currentColor", 1.5);

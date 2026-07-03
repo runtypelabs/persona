@@ -40,27 +40,17 @@ export function createMentionButton(opts: {
       "aria-haspopup": "listbox",
     },
     style: {
+      // Appearance (bg / fg / border / radius / hover) is themed from the CSS
+      // rule for `.persona-mention-button` via the `--persona-button-ghost-*`
+      // tokens (components.button.ghost). Only config-driven sizing is inline.
       width: size,
       height: size,
       minWidth: size,
       minHeight: size,
       fontSize: "18px",
       lineHeight: "1",
-      backgroundColor: "transparent",
-      color: "var(--persona-primary, #111827)",
-      border: "none",
-      borderRadius: "6px",
-      transition: "background-color 0.15s ease",
     },
   }) as HTMLButtonElement;
-
-  button.addEventListener("mouseenter", () => {
-    button.style.backgroundColor =
-      "var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.05))";
-  });
-  button.addEventListener("mouseleave", () => {
-    button.style.backgroundColor = "transparent";
-  });
 
   const icon = renderLucideIcon(iconName, iconSize, "currentColor", 1.5);
   if (icon) button.appendChild(icon);

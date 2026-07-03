@@ -169,6 +169,31 @@ describe('theme utils', () => {
     expect(customVars['--persona-header-action-icon-fg']).toBe('#9ca3af');
   });
 
+  it('maps button.ghost tokens to the composer ghost icon-button CSS variables', () => {
+    const cssVars = themeToCssVariables(createTheme());
+
+    // The composer's transparent icon buttons (.persona-mention-button /
+    // .persona-attachment-button) read these instead of hardcoded inline styles.
+    expect(cssVars['--persona-button-ghost-bg']).toBe('transparent');
+    expect(cssVars['--persona-button-ghost-fg']).toBe('#111827'); // semantic.text → gray.900
+    expect(cssVars['--persona-button-ghost-radius']).toBe('0.375rem'); // radius.md
+    expect(cssVars['--persona-button-ghost-hover-bg']).toBe('rgba(0, 0, 0, 0.05)');
+
+    const custom = createTheme({
+      components: {
+        button: {
+          ghost: {
+            foreground: 'palette.colors.accent.500',
+            hoverBackground: 'palette.colors.gray.100',
+          },
+        },
+      },
+    } as any);
+    const customVars = themeToCssVariables(custom);
+    expect(customVars['--persona-button-ghost-fg']).toBe('#06b6d4'); // accent.500
+    expect(customVars['--persona-button-ghost-hover-bg']).toBe('#f3f4f6'); // gray.100
+  });
+
   it('defaults artifact pane fill from semantic container and resolves toolbar background token refs', () => {
     const theme = createTheme();
     const cssVars = themeToCssVariables(theme);

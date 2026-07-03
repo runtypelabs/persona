@@ -263,6 +263,9 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       foreground: 'semantic.colors.text',
       borderRadius: 'palette.radius.md',
       padding: 'semantic.spacing.sm',
+      // Subtle neutral tint on hover — the composer's transparent icon buttons
+      // (attachment, mention) read this via `--persona-button-ghost-hover-bg`.
+      hoverBackground: 'rgba(0, 0, 0, 0.05)',
     },
   },
   input: {
@@ -739,6 +742,21 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-button-primary-borderRadius'] ??
     cssVars['--persona-palette-radius-full'] ??
     '9999px';
+  // Ghost variant: transparent, neutral-foreground icon buttons (the composer's
+  // attachment + mention affordances). Wired to `components.button.ghost.*`.
+  cssVars['--persona-button-ghost-bg'] =
+    cssVars['--persona-components-button-ghost-background'] ??
+    'transparent';
+  cssVars['--persona-button-ghost-fg'] =
+    cssVars['--persona-components-button-ghost-foreground'] ??
+    cssVars['--persona-text'];
+  cssVars['--persona-button-ghost-radius'] =
+    cssVars['--persona-components-button-ghost-borderRadius'] ??
+    cssVars['--persona-radius-md'] ??
+    '0.375rem';
+  cssVars['--persona-button-ghost-hover-bg'] =
+    cssVars['--persona-components-button-ghost-hoverBackground'] ??
+    'rgba(0, 0, 0, 0.05)';
   cssVars['--persona-panel-radius'] =
     cssVars['--persona-components-panel-borderRadius'] ??
     cssVars['--persona-radius-xl'] ??
