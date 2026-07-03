@@ -1,8 +1,9 @@
 import { createPopover, type PopoverHandle } from "../plugin-kit";
 import {
-  parseMentionTrigger,
+  parseAnyTrigger,
   stripMentionQuery,
   type MentionTriggerMatch,
+  type MentionTriggerPosition,
 } from "./mention-trigger";
 import {
   createMentionMenu,
@@ -11,6 +12,7 @@ import {
 } from "../components/context-mention-menu";
 import type {
   AgentWidgetConfig,
+  AgentWidgetContextMentionComposerCapability,
   AgentWidgetContextMentionConfig,
   AgentWidgetContextMentionItem,
   AgentWidgetContextMentionSource,
@@ -24,15 +26,36 @@ export interface ContextMentionControllerOptions {
   anchor: HTMLElement;
   getMessages: () => AgentWidgetMessage[];
   getConfig: () => AgentWidgetConfig;
-  /** Commit a selection (delegates to the manager); returns false on duplicate/limit. */
+  /**
+   * Commit a MENTION or SERVER-command selection (delegates to the manager);
+   * returns false on duplicate/limit. `args` is the text after a command name
+   * (empty for ordinary mentions). Prompt/action commands never reach here —
+   * the controller dispatches them directly.
+   */
   onSelect: (
     source: AgentWidgetContextMentionSource,
-    item: AgentWidgetContextMentionItem
+    item: AgentWidgetContextMentionItem,
+    args: string
   ) => boolean;
+  /**
+   * Composer capability for `command:"prompt"` (insert text / submit) and
+   * `command:"action"` handlers. Absent on paths without a wired composer;
+   * command dispatch degrades to a no-op then.
+   */
+  composer?: AgentWidgetContextMentionComposerCapability;
   announce: (message: string) => void;
   popoverContainer?: HTMLElement | ShadowRoot;
   emit?: (event: string, detail: unknown) => void;
 }
+
+/** A trigger channel normalized from the config (primary `@` + extras). */
+type NormalizedChannel = {
+  trigger: string;
+  position: MentionTriggerPosition;
+  allowSpaces: boolean;
+  sources: AgentWidgetContextMentionSource[];
+  searchPlaceholder?: string;
+};
 
 const isThenable = (v: unknown): v is Promise<unknown> =>
   !!v && (typeof v === "object" || typeof v === "function") &&
@@ -48,7 +71,10 @@ let listboxSeq = 0;
  */
 export class ContextMentionController {
   private readonly opts: ContextMentionControllerOptions;
-  private readonly trigger: string;
+  /** Primary `@` channel + any extra `triggers` channels; one drives the menu. */
+  private readonly channels: NormalizedChannel[];
+  /** The channel whose trigger is currently open. */
+  private activeChannel: NormalizedChannel;
   private readonly maxPerGroup: number;
   private readonly debounceMs: number;
   private readonly menu: MentionMenuParts;
@@ -78,9 +104,29 @@ export class ContextMentionController {
 
   constructor(opts: ContextMentionControllerOptions) {
     this.opts = opts;
-    this.trigger = opts.mentionConfig.trigger ?? "@";
-    this.maxPerGroup = opts.mentionConfig.maxItemsPerGroup ?? 6;
-    this.debounceMs = opts.mentionConfig.searchDebounceMs ?? 150;
+    const cfg = opts.mentionConfig;
+    // Normalize the legacy single-trigger config into channel 0, then append
+    // any extra `triggers` channels. The engine drives them all from one menu.
+    const primary: NormalizedChannel = {
+      trigger: cfg.trigger ?? "@",
+      position: cfg.triggerPosition ?? "anywhere",
+      allowSpaces: false,
+      sources: cfg.sources ?? [],
+      searchPlaceholder: cfg.searchPlaceholder,
+    };
+    const extra: NormalizedChannel[] = (cfg.triggers ?? []).map((ch) => ({
+      trigger: ch.trigger,
+      position: ch.triggerPosition ?? "anywhere",
+      allowSpaces: ch.allowSpaces ?? false,
+      sources: ch.sources ?? [],
+      searchPlaceholder: ch.searchPlaceholder,
+    }));
+    // Drop empty channels (e.g. the default `@` channel when only `/` has sources).
+    const nonEmpty = [primary, ...extra].filter((c) => c.sources.length > 0);
+    this.channels = nonEmpty.length > 0 ? nonEmpty : [primary];
+    this.activeChannel = this.channels[0];
+    this.maxPerGroup = cfg.maxItemsPerGroup ?? 6;
+    this.debounceMs = cfg.searchDebounceMs ?? 150;
     this.listboxId = `persona-mention-listbox-${++listboxSeq}`;
 
     this.menu = opts.mentionConfig.renderMentionMenu
@@ -148,12 +194,19 @@ export class ContextMentionController {
    * search field; the picker opens in browse-and-click mode with keyboard nav
    * driven from the textarea, and the host owns any filtering UI.
    */
-  openFromButton(): void {
+  openFromButton(trigger?: string): void {
+    const channel =
+      (trigger && this.channels.find((c) => c.trigger === trigger)) ||
+      this.channels[0];
     this.pickerMode = true;
     this.triggerMatch = null;
-    if (!this.isOpenState) this.open("");
-    else this.setQuery("");
-    if (this.menu.showSearch) this.menu.showSearch("");
+    if (!this.isOpenState) {
+      this.open("", channel);
+    } else {
+      this.switchChannel(channel);
+      this.setQuery("");
+    }
+    if (this.menu.showSearch) this.menu.showSearch("", channel.searchPlaceholder);
     else this.opts.textarea.focus();
   }
 
@@ -161,18 +214,32 @@ export class ContextMentionController {
   onInput(): void {
     const ta = this.opts.textarea;
     const caret = ta.selectionStart ?? 0;
-    const match = parseMentionTrigger(ta.value, caret, this.trigger);
-    if (!match) {
+    const hit = parseAnyTrigger(ta.value, caret, this.channels);
+    if (!hit) {
       if (this.isOpenState) this.close();
       return;
     }
-    this.triggerMatch = match;
-    if (!this.isOpenState) this.open(match.query);
-    else this.setQuery(match.query);
+    this.triggerMatch = hit.match;
+    if (!this.isOpenState) {
+      this.open(hit.match.query, hit.channel);
+    } else {
+      this.switchChannel(hit.channel);
+      this.setQuery(hit.match.query);
+    }
   }
 
-  private open(query: string): void {
+  /** Switch the active channel while open, resetting stale groups from the old one. */
+  private switchChannel(channel: NormalizedChannel): void {
+    if (channel === this.activeChannel) return;
+    this.activeChannel = channel;
+    this.groups = [];
+    this.activeIndex = 0;
+  }
+
+  private open(query: string, channel: NormalizedChannel): void {
     this.isOpenState = true;
+    this.activeChannel = channel;
+    this.groups = [];
     this.activeIndex = 0;
     this.lastAnnouncedCount = -1;
     if (!this.popover) {
@@ -195,7 +262,7 @@ export class ContextMentionController {
     }
     this.popover.open();
     this.opts.textarea.setAttribute("aria-expanded", "true");
-    this.opts.emit?.("opened", { trigger: this.trigger });
+    this.opts.emit?.("opened", { trigger: channel.trigger });
     this.setQuery(query);
   }
 
@@ -223,7 +290,7 @@ export class ContextMentionController {
 
     // Immediate pass: sync sources (and first-time sources) render with zero
     // debounce; sources already known to be async show a loading shimmer.
-    for (const source of this.opts.mentionConfig.sources) {
+    for (const source of this.activeChannel.sources) {
       if (this.knownAsync.has(source.id)) {
         this.setGroupStatus(source.id, "loading");
       } else {
@@ -236,7 +303,7 @@ export class ContextMentionController {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       if (token !== this.searchToken) return;
-      for (const source of this.opts.mentionConfig.sources) {
+      for (const source of this.activeChannel.sources) {
         if (this.knownAsync.has(source.id)) this.invokeSource(source, token);
       }
     }, this.debounceMs);
@@ -284,8 +351,8 @@ export class ContextMentionController {
     let group = this.groups.find((g) => g.source.id === source.id);
     if (!group) {
       group = { source, items: [], status: "loading", truncated: false };
-      // Preserve source declaration order.
-      const order = this.opts.mentionConfig.sources;
+      // Preserve source declaration order within the active channel.
+      const order = this.activeChannel.sources;
       this.groups.push(group);
       this.groups.sort(
         (a, b) =>
@@ -297,7 +364,7 @@ export class ContextMentionController {
   }
 
   private setGroupStatus(sourceId: string, status: MentionMenuGroup["status"]): void {
-    const source = this.opts.mentionConfig.sources.find((s) => s.id === sourceId);
+    const source = this.activeChannel.sources.find((s) => s.id === sourceId);
     if (!source) return;
     this.getOrCreateGroup(source).status = status;
   }
@@ -306,7 +373,7 @@ export class ContextMentionController {
     sourceId: string,
     items: AgentWidgetContextMentionItem[]
   ): void {
-    const source = this.opts.mentionConfig.sources.find((s) => s.id === sourceId);
+    const source = this.activeChannel.sources.find((s) => s.id === sourceId);
     if (!source) return;
     const group = this.getOrCreateGroup(source);
     group.truncated = items.length > this.maxPerGroup;
@@ -407,21 +474,137 @@ export class ContextMentionController {
     this.commit(entry.source, entry.item);
   }
 
+  /**
+   * Args = the query text after the command name (first token). `"deploy staging"`
+   * → `"staging"`; `"deploy"` → `""`. The commands source matches on the first
+   * token, so the item stays selectable while the user types args.
+   */
+  private deriveArgs(query: string): string {
+    const trimmed = query.replace(/^\s+/, "");
+    const sp = trimmed.search(/\s/);
+    return sp === -1 ? "" : trimmed.slice(sp + 1).trim();
+  }
+
   private commit(
     source: AgentWidgetContextMentionSource,
     item: AgentWidgetContextMentionItem
   ): void {
-    const ok = this.opts.onSelect(source, item);
+    const kind = item.command;
+
+    // (a) client-action: run and short-circuit. No chip, no send.
+    if (kind === "action") {
+      const args = this.deriveArgs(this.query);
+      this.stripQuery();
+      this.close();
+      this.runAction(item, args);
+      this.opts.emit?.("command", {
+        sourceId: source.id,
+        itemId: item.id,
+        kind: "action",
+        args,
+      });
+      this.opts.textarea.focus();
+      return;
+    }
+
+    // (b) prompt-macro: write resolved text into the composer, optional submit.
+    if (kind === "prompt") {
+      const args = this.deriveArgs(this.query);
+      const target = this.captureStripTarget();
+      this.close();
+      void this.runPromptMacro(source, item, args, target);
+      this.opts.emit?.("command", {
+        sourceId: source.id,
+        itemId: item.id,
+        kind: "prompt",
+        args,
+      });
+      return;
+    }
+
+    // Mentions + server commands: go through the manager (chip + submit
+    // resolve). `args` is captured now so a server command's resolve can read it.
+    const args = kind === "server" ? this.deriveArgs(this.query) : "";
+    const ok = this.opts.onSelect(source, item, args);
     if (ok) {
       this.stripQuery();
-      this.opts.emit?.("selected", {
+      this.opts.emit?.(kind === "server" ? "command" : "selected", {
         sourceId: source.id,
         itemId: item.id,
         label: item.label,
+        ...(kind === "server" ? { kind: "server", args } : {}),
       });
     }
     this.close();
     this.opts.textarea.focus();
+  }
+
+  /** Run a `command:"action"` handler, guarding against a missing composer/throws. */
+  private runAction(item: AgentWidgetContextMentionItem, args: string): void {
+    const composer = this.opts.composer;
+    if (!item.action || !composer) return;
+    try {
+      void Promise.resolve(
+        item.action({
+          args,
+          config: this.opts.getConfig(),
+          messages: this.opts.getMessages(),
+          composer,
+        })
+      ).catch((error) => {
+        if (typeof console !== "undefined") {
+          console.warn("[Persona] context-mention command action failed", error);
+        }
+      });
+    } catch (error) {
+      if (typeof console !== "undefined") {
+        console.warn("[Persona] context-mention command action failed", error);
+      }
+    }
+  }
+
+  /** Capture the pre-token / post-caret composer slices for insert-at-caret. */
+  private captureStripTarget(): { before: string; after: string } | null {
+    if (!this.triggerMatch) return null;
+    const ta = this.opts.textarea;
+    const caret = ta.selectionStart ?? ta.value.length;
+    return {
+      before: ta.value.slice(0, this.triggerMatch.triggerIndex),
+      after: ta.value.slice(caret),
+    };
+  }
+
+  /** Resolve a `command:"prompt"` macro and write its text into the composer. */
+  private async runPromptMacro(
+    source: AgentWidgetContextMentionSource,
+    item: AgentWidgetContextMentionItem,
+    args: string,
+    target: { before: string; after: string } | null
+  ): Promise<void> {
+    const composer = this.opts.composer;
+    if (!composer) return;
+    let payload;
+    try {
+      payload = await source.resolve(item, {
+        messages: this.opts.getMessages(),
+        config: this.opts.getConfig(),
+        composerText: composer.getValue(),
+        args,
+        signal: new AbortController().signal,
+      });
+    } catch (error) {
+      if (typeof console !== "undefined") {
+        console.warn("[Persona] context-mention prompt resolve failed", error);
+      }
+      return;
+    }
+    const text = payload.insertText ?? payload.llmAppend ?? "";
+    if (item.insertMode === "insert-at-caret" && target) {
+      composer.setValue(target.before + text + target.after);
+    } else {
+      composer.setValue(text);
+    }
+    if (item.submitOnSelect) composer.submit();
   }
 
   private stripQuery(): void {

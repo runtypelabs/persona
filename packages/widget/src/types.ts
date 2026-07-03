@@ -119,6 +119,61 @@ export type AgentWidgetContextMentionItem = {
   group?: string;
   /** Optional recency/popularity hint the default matcher boosts on. */
   recencyScore?: number;
+  /**
+   * SKILLS / SLASH-COMMANDS. When set, this item is a COMMAND (a verb) rather
+   * than a context mention (a noun), so selecting it dispatches a behavior
+   * instead of adding a context chip. Absent for ordinary mentions.
+   *
+   *  - `"prompt"`: a prompt macro. `resolve()` returns `insertText` (or
+   *    `llmAppend`) which is written into the composer (see `insertMode`);
+   *    `submitOnSelect` optionally sends it immediately. No chip.
+   *  - `"action"`: a client action. `action()` runs in the browser; no resolve,
+   *    no chip, no message sent (e.g. `/clear`, `/theme dark`).
+   *  - `"server"`: a server-invoked skill. Routed like a `resolveOn:"submit"`
+   *    mention whose `resolve().context` reaches the backend via request
+   *    `context.mentions.<sourceId>.<itemId>` (a flow/agent reads it).
+   */
+  command?: "prompt" | "action" | "server";
+  /**
+   * `command:"action"` handler. Receives the parsed `args` (text after the
+   * command name), plus a small `composer` capability + `config`/`messages`.
+   * Short-circuits the mention flow (no chip, no send). Ignored otherwise.
+   */
+  action?: (ctx: AgentWidgetContextMentionCommandContext) => void | Promise<void>;
+  /**
+   * `command:"prompt"` insertion mode. `"replace"` (default) swaps the whole
+   * composer value for the resolved text; `"insert-at-caret"` replaces only the
+   * `/token` span, keeping surrounding prose. Ignored otherwise.
+   */
+  insertMode?: "replace" | "insert-at-caret";
+  /**
+   * When true, a `command:"prompt"` submits the composer immediately after
+   * inserting its text (a one-shot macro). Ignored for other kinds.
+   */
+  submitOnSelect?: boolean;
+};
+
+/**
+ * Capability object handed to a `command:"action"` handler. The widget exposes
+ * only composer-local operations; broader actions (clear the transcript, change
+ * theme) are wired by the host via closures over its own controller.
+ */
+export type AgentWidgetContextMentionComposerCapability = {
+  /** Current composer text. */
+  getValue: () => string;
+  /** Replace composer text (fires `input`, moves caret to end, refocuses). */
+  setValue: (value: string) => void;
+  /** Submit the composer (same path as pressing send). */
+  submit: () => void;
+};
+
+/** Context passed to a `command:"action"` handler. */
+export type AgentWidgetContextMentionCommandContext = {
+  /** Text typed after the command name (e.g. `staging` for `/deploy staging`). */
+  args: string;
+  config: AgentWidgetConfig;
+  messages: AgentWidgetMessage[];
+  composer: AgentWidgetContextMentionComposerCapability;
 };
 
 /** Reference stored on a sent message for transcript fidelity + chip rendering. */
@@ -140,6 +195,12 @@ export type AgentWidgetContextMentionPayload = {
    * so the model actually sees the context with no backend changes.
    */
   llmAppend?: string;
+  /**
+   * `command:"prompt"` macros only. Text written into the COMPOSER on select
+   * (see `AgentWidgetContextMentionItem.insertMode`) — distinct from the hidden
+   * `llmAppend` context channel. Falls back to `llmAppend` when omitted.
+   */
+  insertText?: string;
   /** Extra content parts (e.g. file text / image) via the multi-modal path. */
   contentParts?: ContentPart[];
   /**
@@ -162,6 +223,11 @@ export type AgentWidgetContextMentionResolveContext =
   AgentWidgetContextMentionSearchContext & {
     /** Plain-text composer value at resolve time. */
     composerText: string;
+    /**
+     * For `command` items: the text typed after the command name (e.g.
+     * `"123"` for `/lookup 123`). Empty string for ordinary mentions.
+     */
+    args: string;
   };
 
 export type AgentWidgetContextMentionSource = {
@@ -253,6 +319,47 @@ export type AgentWidgetContextMentionChipRenderContext = {
   remove: () => void;
 };
 
+/**
+ * Where a trigger char is allowed to open the menu:
+ *  - `"anywhere"` (default): after any whitespace or start (the `@` rule).
+ *  - `"line-start"`: only when the char before the trigger is a newline or the
+ *    start of input — the natural rule for `/` slash-commands.
+ *  - `"input-start"`: only at index 0 of the composer.
+ */
+export type AgentWidgetMentionTriggerPosition =
+  | "anywhere"
+  | "line-start"
+  | "input-start";
+
+/**
+ * A SECOND (or Nth) trigger channel sharing the same menu engine — e.g. `/` for
+ * slash-commands alongside `@` for context. The legacy `trigger`/`sources`
+ * fields form the implicit first channel; `triggers[]` adds more. At any caret
+ * at most one channel is active, so all channels drive one menu/controller.
+ */
+export type AgentWidgetMentionTriggerChannel = {
+  /** Trigger character (e.g. "/"). */
+  trigger: string;
+  /** Sources for this channel (searched only when this trigger is active). */
+  sources: AgentWidgetContextMentionSource[];
+  /** Where the trigger may open. @default "anywhere" */
+  triggerPosition?: AgentWidgetMentionTriggerPosition;
+  /**
+   * Let the query span spaces so a command can take ARGS (`/deploy staging`).
+   * A newline still ends it. Pair with `triggerPosition: "line-start"` for
+   * slash-commands. @default false
+   */
+  allowSpaces?: boolean;
+  /** Show a composer affordance button for this channel. @default false */
+  showButton?: boolean;
+  /** Icon for this channel's affordance button. */
+  buttonIconName?: string;
+  /** Tooltip / aria-label for this channel's affordance button. */
+  buttonTooltipText?: string;
+  /** Placeholder for this channel's picker search field. */
+  searchPlaceholder?: string;
+};
+
 export type AgentWidgetContextMentionConfig = {
   /** @default false */
   enabled?: boolean;
@@ -275,6 +382,16 @@ export type AgentWidgetContextMentionConfig = {
   searchPlaceholder?: string;
   /** Trigger character. @default "@" */
   trigger?: string;
+  /**
+   * Where the primary `trigger` may open the menu. @default "anywhere"
+   */
+  triggerPosition?: AgentWidgetMentionTriggerPosition;
+  /**
+   * ADDITIONAL trigger channels sharing this engine — e.g. a `/` slash-command
+   * channel next to `@` context. Each channel has its own trigger char,
+   * sources, and position rule. See `AgentWidgetMentionTriggerChannel`.
+   */
+  triggers?: AgentWidgetMentionTriggerChannel[];
   /** Max mentions per message. @default 8 */
   maxMentions?: number;
   /** Max items shown per source group before "keep typing to narrow". @default 6 */

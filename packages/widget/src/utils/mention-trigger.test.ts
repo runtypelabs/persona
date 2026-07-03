@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   parseMentionTrigger,
+  parseAnyTrigger,
   isMenuOpeningInput,
   stripMentionQuery,
 } from "./mention-trigger";
@@ -52,6 +53,58 @@ describe("parseMentionTrigger", () => {
   it("handles multi-byte characters in the query", () => {
     const m = parseMentionTrigger("@café", 5);
     expect(m).toEqual({ triggerIndex: 0, query: "café" });
+  });
+
+  describe("position gating (for / slash-commands)", () => {
+    it("line-start: activates at input start and after a newline", () => {
+      expect(parseMentionTrigger("/dep", 4, "/", "line-start")).toEqual({
+        triggerIndex: 0,
+        query: "dep",
+      });
+      expect(parseMentionTrigger("hi\n/dep", 7, "/", "line-start")).toEqual({
+        triggerIndex: 3,
+        query: "dep",
+      });
+    });
+
+    it("line-start: does NOT activate mid-line (after a space)", () => {
+      expect(parseMentionTrigger("hi /dep", 7, "/", "line-start")).toBeNull();
+    });
+
+    it("input-start: only at index 0", () => {
+      expect(parseMentionTrigger("/x", 2, "/", "input-start")).toEqual({
+        triggerIndex: 0,
+        query: "x",
+      });
+      expect(parseMentionTrigger("hi\n/x", 5, "/", "input-start")).toBeNull();
+    });
+  });
+});
+
+describe("parseAnyTrigger", () => {
+  const channels = [
+    { trigger: "@", position: "anywhere" as const },
+    { trigger: "/", position: "line-start" as const },
+  ];
+
+  it("picks the @ channel for a mid-sentence mention", () => {
+    const hit = parseAnyTrigger("hey @fo", 7, channels);
+    expect(hit?.channelIndex).toBe(0);
+    expect(hit?.match).toEqual({ triggerIndex: 4, query: "fo" });
+  });
+
+  it("picks the / channel only at line-start", () => {
+    const hit = parseAnyTrigger("/dep", 4, channels);
+    expect(hit?.channelIndex).toBe(1);
+    expect(hit?.match).toEqual({ triggerIndex: 0, query: "dep" });
+  });
+
+  it("does not match / mid-line even though @ is anywhere", () => {
+    expect(parseAnyTrigger("hi /dep", 7, channels)).toBeNull();
+  });
+
+  it("returns null when no channel is active", () => {
+    expect(parseAnyTrigger("plain text", 10, channels)).toBeNull();
   });
 });
 

@@ -11,20 +11,27 @@
  */
 
 import { createNode } from "./dom";
-import { parseMentionTrigger, isMenuOpeningInput } from "./mention-trigger";
+import { parseAnyTrigger, isMenuOpeningInput, type MentionTriggerPosition } from "./mention-trigger";
 import { createMentionButton } from "../components/context-mention-button";
 import { loadContextMentions } from "../context-mentions-loader";
 import type { ContextMentionEngine } from "../context-mentions-entry";
 import type { MentionSubmitBundle } from "./context-mention-manager";
 import type {
   AgentWidgetConfig,
+  AgentWidgetContextMentionComposerCapability,
+  AgentWidgetContextMentionConfig,
   AgentWidgetContextMentionRef,
+  AgentWidgetContextMentionSource,
   AgentWidgetMessage,
 } from "../types";
 
 export interface ContextMentionOrchestrator {
-  /** Affordance button wrapper to place in the composer (null when `showButton:false`). */
-  affordanceButton: HTMLElement | null;
+  /**
+   * Affordance button wrappers to place in the composer — one per channel that
+   * opts into `showButton` (empty when all channels hide their button). The `@`
+   * channel defaults to shown; extra `/`-style channels default to hidden.
+   */
+  affordanceButtons: HTMLElement[];
   /** Chip row to place above the textarea. */
   contextRow: HTMLElement;
   /** Call on composer `input`; pass the event's `inputType` for paste gating. */
@@ -42,18 +49,66 @@ export interface ContextMentionOrchestrator {
   destroy: () => void;
 }
 
+/** A trigger channel normalized for the core orchestrator (pre-check + button). */
+type OrchestratorChannel = {
+  trigger: string;
+  position: MentionTriggerPosition;
+  allowSpaces: boolean;
+  sources: AgentWidgetContextMentionSource[];
+  showButton: boolean;
+  buttonIconName?: string;
+  buttonTooltipText?: string;
+};
+
+/** Primary `@` channel (from legacy fields) + extra `triggers` channels. */
+function normalizeChannels(
+  cfg: AgentWidgetContextMentionConfig
+): OrchestratorChannel[] {
+  const primary: OrchestratorChannel = {
+    trigger: cfg.trigger ?? "@",
+    position: cfg.triggerPosition ?? "anywhere",
+    allowSpaces: false,
+    sources: Array.isArray(cfg.sources) ? cfg.sources : [],
+    showButton: cfg.showButton !== false,
+    buttonIconName: cfg.buttonIconName,
+    buttonTooltipText: cfg.buttonTooltipText,
+  };
+  const extra: OrchestratorChannel[] = (cfg.triggers ?? []).map((ch) => ({
+    trigger: ch.trigger,
+    position: ch.triggerPosition ?? "anywhere",
+    allowSpaces: ch.allowSpaces ?? false,
+    sources: Array.isArray(ch.sources) ? ch.sources : [],
+    // Extra channels (e.g. `/`) default to NO button — typed-trigger only —
+    // to keep the composer's action cluster uncluttered.
+    showButton: ch.showButton === true,
+    buttonIconName: ch.buttonIconName,
+    buttonTooltipText: ch.buttonTooltipText,
+  }));
+  return [primary, ...extra];
+}
+
 export function createContextMentionOrchestrator(opts: {
   config: AgentWidgetConfig;
   textarea: HTMLTextAreaElement;
   /** Popover anchor — the composer form/pill. */
   anchor: HTMLElement;
   getMessages: () => AgentWidgetMessage[];
+  /** Composer capability for slash-command dispatch (prompt insert / action / submit). */
+  composer?: AgentWidgetContextMentionComposerCapability;
   announce: (message: string) => void;
   popoverContainer?: HTMLElement | ShadowRoot;
 }): ContextMentionOrchestrator | null {
   const mentionConfig = opts.config.contextMentions;
   if (!mentionConfig?.enabled) return null;
-  if (!Array.isArray(mentionConfig.sources) || mentionConfig.sources.length === 0) {
+
+  // Normalize the primary `@` channel + any extra `triggers` channels, then drop
+  // channels with no sources. A config may ship ONLY extra channels (a `/`-only
+  // widget), leaving the default `@` channel empty — that channel must not paint
+  // a button or match its trigger.
+  const channels: OrchestratorChannel[] = normalizeChannels(mentionConfig).filter(
+    (c) => c.sources.length > 0
+  );
+  if (channels.length === 0) {
     if (typeof console !== "undefined") {
       console.warn(
         "[Persona] contextMentions.enabled is true but no sources were provided; mentions are disabled."
@@ -61,8 +116,6 @@ export function createContextMentionOrchestrator(opts: {
     }
     return null;
   }
-
-  const triggerChar = mentionConfig.trigger ?? "@";
 
   // Analytics: `persona:mention:*` DOM events on window (opened / searched /
   // selected / rejected / resolve-error). Best-effort, guarded for SSR.
@@ -97,6 +150,7 @@ export function createContextMentionOrchestrator(opts: {
           contextRow,
           getMessages: opts.getMessages,
           getConfig: () => opts.config,
+          composer: opts.composer,
           announce: opts.announce,
           popoverContainer: opts.popoverContainer,
           emit,
@@ -112,19 +166,27 @@ export function createContextMentionOrchestrator(opts: {
     return mountPromise;
   };
 
-  let buttonParts: ReturnType<typeof createMentionButton> | null = null;
-  if (mentionConfig.showButton !== false) {
-    buttonParts = createMentionButton({
-      config: mentionConfig,
+  // One affordance button per channel that opts into `showButton`. Each opens
+  // ITS channel's picker (no char inserted) via the channel's trigger.
+  const buttonPartsList: ReturnType<typeof createMentionButton>[] = [];
+  for (const channel of channels) {
+    if (!channel.showButton) continue;
+    const parts = createMentionButton({
+      config: {
+        ...mentionConfig,
+        buttonIconName: channel.buttonIconName,
+        buttonTooltipText: channel.buttonTooltipText,
+      },
       buttonSize: opts.config.sendButton?.size,
       onOpen: () => {
-        void ensureEngine().then((e) => e?.openMenu());
+        void ensureEngine().then((e) => e?.openMenu(channel.trigger));
       },
     });
+    buttonPartsList.push(parts);
   }
 
   return {
-    affordanceButton: buttonParts?.wrapper ?? null,
+    affordanceButtons: buttonPartsList.map((p) => p.wrapper),
     contextRow,
 
     handleInput: (inputType) => {
@@ -134,7 +196,7 @@ export function createContextMentionOrchestrator(opts: {
       }
       if (!isMenuOpeningInput(inputType)) return;
       const caret = opts.textarea.selectionStart ?? 0;
-      if (parseMentionTrigger(opts.textarea.value, caret, triggerChar)) {
+      if (parseAnyTrigger(opts.textarea.value, caret, channels)) {
         void ensureEngine().then((e) => e?.handleInput());
       }
     },
@@ -163,7 +225,7 @@ export function createContextMentionOrchestrator(opts: {
     },
     destroy: () => {
       engine?.destroy();
-      buttonParts?.wrapper.remove();
+      for (const parts of buttonPartsList) parts.wrapper.remove();
       contextRow.remove();
     },
   };

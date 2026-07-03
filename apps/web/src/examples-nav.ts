@@ -119,6 +119,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "slash-commands-demo",
+    href: "/slash-commands-demo.html",
+    title: "Slash Commands",
+    blurb: "Give the composer skills: / prompt macros, client actions, and server commands.",
+    tier: "patterns",
+    tags: ["interaction", "context"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "feedback-integration-demo",
     href: "/feedback-integration-demo.html",
     title: "Feedback Events",

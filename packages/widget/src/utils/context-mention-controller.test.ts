@@ -2,8 +2,10 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ContextMentionController } from "./context-mention-controller";
+import { createSlashCommandsSource } from "./mention-matcher";
 import type {
   AgentWidgetConfig,
+  AgentWidgetContextMentionComposerCapability,
   AgentWidgetContextMentionConfig,
   AgentWidgetContextMentionItem,
   AgentWidgetContextMentionSource,
@@ -12,9 +14,23 @@ import type {
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const item = (id: string, label = id): AgentWidgetContextMentionItem => ({ id, label });
 
+/** A composer capability spy that tracks the last-set value. */
+function makeComposer() {
+  let value = "";
+  return {
+    getValue: () => value,
+    setValue: vi.fn((v: string) => {
+      value = v;
+    }),
+    submit: vi.fn(),
+    current: () => value,
+  };
+}
+
 function setup(
   sources: AgentWidgetContextMentionSource[],
-  cfg: Partial<AgentWidgetContextMentionConfig> = {}
+  cfg: Partial<AgentWidgetContextMentionConfig> = {},
+  composer?: AgentWidgetContextMentionComposerCapability
 ) {
   const form = document.createElement("form");
   const textarea = document.createElement("textarea");
@@ -29,6 +45,7 @@ function setup(
     getMessages: () => [],
     getConfig: () => ({}) as AgentWidgetConfig,
     onSelect,
+    composer,
     announce: vi.fn(),
   });
   return { controller, textarea, onSelect, form };
@@ -205,5 +222,158 @@ describe("ContextMentionController", () => {
     await tick();
     // The first in-flight search was aborted by the second keystroke.
     expect(calls[0].aborted()).toBe(true);
+  });
+});
+
+describe("ContextMentionController — slash-commands", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /** A `/` channel driven by createSlashCommandsSource, at line-start. */
+  function slashSetup(
+    commands: Parameters<typeof createSlashCommandsSource>[0]["commands"],
+    composer = makeComposer()
+  ) {
+    const s = setup(
+      [],
+      {
+        triggers: [
+          {
+            trigger: "/",
+            triggerPosition: "line-start",
+            allowSpaces: true,
+            sources: [
+              createSlashCommandsSource({ id: "cmd", label: "Commands", commands }),
+            ],
+          },
+        ],
+      },
+      composer
+    );
+    return { ...s, composer };
+  }
+
+  const pressEnter = (controller: ContextMentionController) =>
+    controller.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));
+
+  it("opens the / channel only at line-start", () => {
+    const { controller, textarea } = slashSetup([
+      { name: "summarize", kind: "prompt", prompt: "Please summarize." },
+    ]);
+    // Mid-line `/` must NOT open.
+    textarea.value = "hi /sum";
+    textarea.setSelectionRange(7, 7);
+    controller.onInput();
+    expect(controller.isOpen()).toBe(false);
+    // Line-start `/` opens and lists the command.
+    textarea.value = "/sum";
+    textarea.setSelectionRange(4, 4);
+    controller.onInput();
+    expect(controller.isOpen()).toBe(true);
+    const options = document.querySelectorAll(".persona-mention-option");
+    expect(options).toHaveLength(1);
+    expect(options[0].textContent).toContain("summarize");
+  });
+
+  it("prompt macro: writes resolved text into the composer and submits", async () => {
+    const { controller, textarea, composer, onSelect } = slashSetup([
+      {
+        name: "summarize",
+        kind: "prompt",
+        prompt: "Please summarize the conversation.",
+        submitOnSelect: true,
+      },
+    ]);
+    textarea.value = "/summarize";
+    textarea.setSelectionRange(10, 10);
+    controller.onInput();
+    pressEnter(controller);
+    await tick(); // runPromptMacro awaits resolve()
+
+    expect(composer.setValue).toHaveBeenCalledWith("Please summarize the conversation.");
+    expect(composer.submit).toHaveBeenCalledTimes(1);
+    // No chip path for prompt macros.
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("client action: runs with parsed args, adds no chip, clears the token", () => {
+    const action = vi.fn();
+    const { controller, textarea, onSelect } = slashSetup([
+      { name: "deploy", kind: "action", action },
+    ]);
+    textarea.value = "/deploy staging";
+    textarea.setSelectionRange(15, 15);
+    controller.onInput();
+    pressEnter(controller);
+
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(action).toHaveBeenCalledWith(
+      expect.objectContaining({ args: "staging" })
+    );
+    // Action short-circuits: no manager chip, token stripped from the composer.
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("");
+  });
+
+  it("server command: routed through the manager with captured args", () => {
+    const { controller, textarea, onSelect } = slashSetup([
+      { name: "lookup", kind: "server", data: (args) => ({ query: args }) },
+    ]);
+    textarea.value = "/lookup order 42";
+    textarea.setSelectionRange(16, 16);
+    controller.onInput();
+    pressEnter(controller);
+
+    // Server commands DO go through onSelect (manager chip + submit resolve),
+    // with the args after the command name captured now.
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    const call = onSelect.mock.calls[0] as unknown[];
+    expect(call[2]).toBe("order 42");
+  });
+
+  it("keeps @ mentions working alongside the / channel", () => {
+    const composer = makeComposer();
+    const { controller, textarea } = setup(
+      [
+        {
+          id: "files",
+          label: "Files",
+          search: () => [item("App.tsx")],
+          resolve: async () => ({ llmAppend: "x" }),
+        },
+      ],
+      {
+        triggers: [
+          {
+            trigger: "/",
+            triggerPosition: "line-start",
+            sources: [
+              createSlashCommandsSource({
+                id: "cmd",
+                label: "Commands",
+                commands: [{ name: "clear", kind: "action", action: vi.fn() }],
+              }),
+            ],
+          },
+        ],
+      },
+      composer
+    );
+    // `@` opens the mentions (files) channel.
+    textarea.value = "@App";
+    textarea.setSelectionRange(4, 4);
+    controller.onInput();
+    expect(
+      document.querySelector(".persona-mention-option")?.textContent
+    ).toContain("App.tsx");
+    controller.close();
+    // `/` at line-start opens the commands channel instead.
+    textarea.value = "/clear";
+    textarea.setSelectionRange(6, 6);
+    controller.onInput();
+    expect(
+      document.querySelector(".persona-mention-option")?.textContent
+    ).toContain("clear");
   });
 });

@@ -11,6 +11,7 @@
  */
 
 import type {
+  AgentWidgetContextMentionCommandContext,
   AgentWidgetContextMentionItem,
   AgentWidgetContextMentionSource,
 } from "../types";
@@ -94,5 +95,100 @@ export function createStaticMentionSource(opts: {
     resolveOn: opts.resolveOn,
     search: (query) => defaultMentionFilter(opts.items, query),
     resolve: opts.resolve,
+  };
+}
+
+/**
+ * A single slash-command definition for {@link createSlashCommandsSource}. Maps
+ * to a menu item plus its dispatch behavior (see `AgentWidgetContextMentionItem.command`):
+ *  - `"prompt"` (default): `prompt` text is written into the composer (a macro).
+ *  - `"action"`: `action()` runs in the browser (no message sent).
+ *  - `"server"`: `data` is sent to the backend via request `context.mentions`.
+ */
+export type SlashCommandDefinition = {
+  /** Command name shown after the trigger (e.g. "summarize" → `/summarize`). */
+  name: string;
+  /** Menu subtitle. */
+  description?: string;
+  /** Lucide icon name for the menu row / chip. */
+  iconName?: string;
+  /** Dispatch kind. @default "prompt" */
+  kind?: "prompt" | "action" | "server";
+  /** `kind:"prompt"` — composer text (static, or built from the typed args). */
+  prompt?: string | ((args: string) => string);
+  /** `kind:"prompt"` — insertion mode. @default "replace" */
+  insertMode?: "replace" | "insert-at-caret";
+  /** `kind:"prompt"` — submit the composer immediately after inserting. */
+  submitOnSelect?: boolean;
+  /** `kind:"action"` — the browser handler (receives parsed `args`). */
+  action?: (ctx: AgentWidgetContextMentionCommandContext) => void | Promise<void>;
+  /** `kind:"server"` — structured payload sent via `context.mentions.<sourceId>.<name>`. */
+  data?:
+    | Record<string, unknown>
+    | ((args: string) => Record<string, unknown>);
+};
+
+/**
+ * Build a `/`-slash-command SOURCE for `contextMentions.triggers`. Unlike a
+ * mention source, its items are COMMANDS (verbs): selecting one runs a prompt
+ * macro, a client action, or a server skill (see {@link SlashCommandDefinition}).
+ *
+ * Matching is on the command NAME only (the first token of the query), so
+ * `/deploy staging` still matches the `deploy` command while `staging` becomes
+ * the command's `args`. Pair it with a `"/"` channel, typically at line-start:
+ *
+ * ```ts
+ * contextMentions: {
+ *   enabled: true,
+ *   sources: [ ...mentionSources ],           // @ context
+ *   triggers: [{
+ *     trigger: "/",
+ *     triggerPosition: "line-start",
+ *     sources: [createSlashCommandsSource({ id: "cmd", label: "Commands", commands })],
+ *   }],
+ * }
+ * ```
+ */
+export function createSlashCommandsSource(opts: {
+  id: string;
+  label: string;
+  commands: SlashCommandDefinition[];
+}): AgentWidgetContextMentionSource {
+  const items: AgentWidgetContextMentionItem[] = opts.commands.map((c) => ({
+    id: c.name,
+    label: c.name,
+    description: c.description,
+    iconName: c.iconName,
+    command: c.kind ?? "prompt",
+    insertMode: c.insertMode,
+    submitOnSelect: c.submitOnSelect,
+    action: c.action,
+  }));
+  const byName = new Map(opts.commands.map((c) => [c.name, c]));
+
+  return {
+    id: opts.id,
+    label: opts.label,
+    // Server commands defer resolve to submit (args captured at select). Prompt
+    // commands call resolve synchronously from the controller; action commands
+    // never resolve. So "submit" is the correct source-level default here.
+    resolveOn: "submit",
+    search: (query) => {
+      const name = query.replace(/^\s+/, "").split(/\s/)[0] ?? "";
+      return defaultMentionFilter(items, name);
+    },
+    resolve: (item, ctx) => {
+      const def = byName.get(item.id);
+      if (!def) return {};
+      if (def.kind === "server") {
+        const data =
+          typeof def.data === "function" ? def.data(ctx.args) : def.data;
+        return { context: data ?? {} };
+      }
+      // prompt (and the default): the composer-insert text.
+      const text =
+        typeof def.prompt === "function" ? def.prompt(ctx.args) : def.prompt ?? "";
+      return { insertText: text };
+    },
   };
 }

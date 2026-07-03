@@ -49,7 +49,7 @@ function setup() {
   })!;
   // Place the orchestrator DOM like ui.ts does.
   textarea.parentElement!.insertBefore(orchestrator.contextRow, textarea);
-  if (orchestrator.affordanceButton) form.appendChild(orchestrator.affordanceButton);
+  for (const btn of orchestrator.affordanceButtons) form.appendChild(btn);
   return { orchestrator, textarea, form };
 }
 
@@ -67,7 +67,7 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
 
   it("exposes an affordance button and an (initially hidden) chip row", () => {
     const { orchestrator } = setup();
-    expect(orchestrator.affordanceButton).not.toBeNull();
+    expect(orchestrator.affordanceButtons).toHaveLength(1);
     expect(orchestrator.contextRow.getAttribute("data-persona-mention-context-row")).toBe("");
   });
 
@@ -128,7 +128,7 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
 
   it("the affordance button opens the same menu", async () => {
     const { orchestrator } = setup();
-    (orchestrator.affordanceButton!.querySelector("button") as HTMLButtonElement).click();
+    (orchestrator.affordanceButtons[0].querySelector("button") as HTMLButtonElement).click();
     await flush();
     expect(orchestrator.isMenuOpen()).toBe(true);
   });

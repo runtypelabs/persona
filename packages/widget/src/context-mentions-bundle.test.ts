@@ -19,6 +19,9 @@ const dist = (f: string) => resolve(__dirname, "..", "dist", f);
 const RUNTIME_MARKERS = [
   "persona-mention-menu", // menu component class — chunk-only
   "persona-mention-group-header", // menu component class — chunk-only
+  // Slash-command dispatch lives in the controller (chunk-only); this literal
+  // is unique to the command path and must not leak into the core bundle.
+  "context-mention prompt resolve failed",
 ];
 
 describe("context-mentions bundle split", () => {
@@ -33,8 +36,10 @@ describe("context-mentions bundle split", () => {
     expect(core).toContain("context-mentions.js");
   });
 
-  it.runIf(built)("ships the mention runtime in the sibling chunk", () => {
+  it.runIf(built)("ships the mention + slash-command runtime in the sibling chunk", () => {
     const chunk = readFileSync(dist("context-mentions.js"), "utf8");
     expect(chunk).toContain("persona-mention-menu");
+    // Slash-command dispatch ships in the chunk, not the core.
+    expect(chunk).toContain("context-mention prompt resolve failed");
   });
 });

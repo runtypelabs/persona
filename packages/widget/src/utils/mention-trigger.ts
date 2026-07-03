@@ -14,24 +14,61 @@ export type MentionTriggerMatch = {
   query: string;
 };
 
+/**
+ * Where a trigger may open. `"anywhere"` is the `@` rule (after any whitespace/
+ * start); `"line-start"` and `"input-start"` are the natural rules for `/`
+ * slash-commands. Kept as a local string union so the parser stays free of the
+ * public config types.
+ */
+export type MentionTriggerPosition = "anywhere" | "line-start" | "input-start";
+
+/** One trigger channel for `parseAnyTrigger` — a char plus its position rule. */
+export type MentionTriggerSpec = {
+  trigger: string;
+  position?: MentionTriggerPosition;
+  /**
+   * Allow the query to span spaces/tabs (a newline still ends it). Needed for
+   * slash-command ARGS (`/deploy staging` → query `"deploy staging"`); leave
+   * false for single-token `@` mentions (a space ends the mention).
+   */
+  allowSpaces?: boolean;
+};
+
 const WHITESPACE = /\s/;
+
+/** Does `triggerIndex` satisfy the channel's position rule? */
+function positionAllowed(
+  value: string,
+  triggerIndex: number,
+  position: MentionTriggerPosition
+): boolean {
+  if (position === "input-start") return triggerIndex === 0;
+  const before = triggerIndex > 0 ? value[triggerIndex - 1] : "";
+  if (position === "line-start") return before === "" || before === "\n";
+  // "anywhere": preceded by whitespace or start (also excludes `user@example.com`).
+  return before === "" || WHITESPACE.test(before);
+}
 
 /**
  * Detect an active mention trigger ending at `caret`.
  *
  * Active when, scanning back from the caret, a trigger char is reached with no
- * intervening whitespace AND the char before the trigger is whitespace or the
- * start of input. Returns `null` otherwise — notably for `user@example.com`
- * (trigger glued to a word char) and once a space follows the trigger.
+ * intervening whitespace AND the trigger satisfies `position`. Returns `null`
+ * otherwise — notably for `user@example.com` (trigger glued to a word char) and
+ * once a space follows the trigger.
  *
- * @param value   Full textarea value.
- * @param caret   Caret offset (selectionStart). Out-of-range → `null`.
- * @param trigger Single trigger character. @default "@"
+ * @param value       Full textarea value.
+ * @param caret       Caret offset (selectionStart). Out-of-range → `null`.
+ * @param trigger     Single trigger character. @default "@"
+ * @param position    Where the trigger may open. @default "anywhere"
+ * @param allowSpaces Let the query span spaces/tabs (for command args). @default false
  */
 export function parseMentionTrigger(
   value: string,
   caret: number,
-  trigger = "@"
+  trigger = "@",
+  position: MentionTriggerPosition = "anywhere",
+  allowSpaces = false
 ): MentionTriggerMatch | null {
   if (!trigger) return null;
   if (caret <= 0 || caret > value.length) return null;
@@ -40,16 +77,43 @@ export function parseMentionTrigger(
   while (i >= 0) {
     const ch = value[i];
     if (ch === trigger) {
-      const before = i > 0 ? value[i - 1] : "";
-      if (before === "" || WHITESPACE.test(before)) {
+      if (positionAllowed(value, i, position)) {
         return { triggerIndex: i, query: value.slice(i + 1, caret) };
       }
-      // Trigger is glued to a preceding word char (e.g. an email) — not a mention.
+      // Trigger present but disallowed here (glued word char / not line-start).
       return null;
     }
-    // Whitespace before reaching a trigger means the caret isn't inside a query.
-    if (WHITESPACE.test(ch)) return null;
+    // A newline always ends the query. Spaces/tabs end it too, unless the
+    // channel allows multi-word queries (slash-command args).
+    if (ch === "\n") return null;
+    if (!allowSpaces && WHITESPACE.test(ch)) return null;
     i--;
+  }
+  return null;
+}
+
+/**
+ * Resolve which of several trigger channels is active at `caret`. Channels are
+ * tested in order; the FIRST with an active match wins (put `@` first, `/`
+ * next). At any caret at most one channel can match — the scan stops at the
+ * nearest trigger/whitespace — so ordering only matters if two channels share a
+ * trigger char (don't do that). Returns the winning channel index + its match.
+ */
+export function parseAnyTrigger<T extends MentionTriggerSpec>(
+  value: string,
+  caret: number,
+  channels: readonly T[]
+): { channelIndex: number; channel: T; match: MentionTriggerMatch } | null {
+  for (let c = 0; c < channels.length; c++) {
+    const channel = channels[c];
+    const match = parseMentionTrigger(
+      value,
+      caret,
+      channel.trigger,
+      channel.position ?? "anywhere",
+      channel.allowSpaces ?? false
+    );
+    if (match) return { channelIndex: c, channel, match };
   }
   return null;
 }

@@ -13,6 +13,7 @@ import { ContextMentionController } from "./utils/context-mention-controller";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import type {
   AgentWidgetConfig,
+  AgentWidgetContextMentionComposerCapability,
   AgentWidgetContextMentionConfig,
   AgentWidgetContextMentionRef,
   AgentWidgetMessage,
@@ -27,6 +28,8 @@ export interface ContextMentionMountContext {
   contextRow: HTMLElement;
   getMessages: () => AgentWidgetMessage[];
   getConfig: () => AgentWidgetConfig;
+  /** Composer capability for slash-command dispatch (prompt insert / action / submit). */
+  composer?: AgentWidgetContextMentionComposerCapability;
   announce: (message: string) => void;
   popoverContainer?: HTMLElement | ShadowRoot;
   onChange?: () => void;
@@ -35,8 +38,11 @@ export interface ContextMentionMountContext {
 }
 
 export interface ContextMentionEngine {
-  /** Open the menu from the affordance button (inserts the trigger char). */
-  openMenu(): void;
+  /**
+   * Open the menu from an affordance button as a picker (no char inserted).
+   * Pass the channel's `trigger` to open a specific channel (e.g. `"/"`).
+   */
+  openMenu(trigger?: string): void;
   isMenuOpen(): boolean;
   /** Re-parse the textarea on input and open/update/close the menu. */
   handleInput(): void;
@@ -71,14 +77,15 @@ export function mountContextMentions(
     anchor: ctx.anchor,
     getMessages: ctx.getMessages,
     getConfig: ctx.getConfig,
-    onSelect: (source, item) => manager.add(source, item),
+    onSelect: (source, item, args) => manager.add(source, item, args),
+    composer: ctx.composer,
     announce: ctx.announce,
     popoverContainer: ctx.popoverContainer,
     emit: ctx.emit,
   });
 
   return {
-    openMenu: () => controller.openFromButton(),
+    openMenu: (trigger) => controller.openFromButton(trigger),
     isMenuOpen: () => controller.isOpen(),
     handleInput: () => controller.onInput(),
     handleKeydown: (event) => controller.handleKeydown(event),

@@ -38,7 +38,13 @@ export type {
   AgentWidgetContextMentionSearchContext,
   AgentWidgetContextMentionResolveContext,
   AgentWidgetContextMentionMenuRenderContext,
+  AgentWidgetContextMentionItemRenderContext,
   AgentWidgetContextMentionChipRenderContext,
+  // Skills / slash-commands (config.contextMentions.triggers)
+  AgentWidgetMentionTriggerChannel,
+  AgentWidgetMentionTriggerPosition,
+  AgentWidgetContextMentionCommandContext,
+  AgentWidgetContextMentionComposerCapability,
   AgentWidgetCustomFetch,
   AgentWidgetSSEEventParser,
   AgentWidgetSSEEventResult,
@@ -240,7 +246,9 @@ export {
 export {
   defaultMentionFilter,
   createStaticMentionSource,
+  createSlashCommandsSource,
 } from "./utils/mention-matcher";
+export type { SlashCommandDefinition } from "./utils/mention-matcher";
 export {
   collectEnrichedPageContext,
   formatEnrichedContext,

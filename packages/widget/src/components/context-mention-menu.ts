@@ -34,7 +34,7 @@ export interface MentionMenuParts {
    * query. Present only on the built-in menu; the host-render path owns its own
    * filtering UI, so it leaves this undefined.
    */
-  showSearch?: (initial: string) => void;
+  showSearch?: (initial: string, placeholder?: string) => void;
   /** Hide + clear the picker search field. Built-in menu only. */
   hideSearch?: () => void;
 }
@@ -246,8 +246,11 @@ export function createMentionMenu(opts: {
     setActiveIndex(vm.activeIndex);
   };
 
-  const showSearch = (initial: string) => {
+  const showSearch = (initial: string, placeholder?: string) => {
     searchInput.value = initial;
+    // Per-channel placeholder (e.g. "Search commands…" for `/`); falls back to
+    // the config default set at construction time.
+    if (placeholder) searchInput.placeholder = placeholder;
     searchWrap.style.display = "";
     searchInput.focus();
     // The field just flipped from `display:none`, and the menu often opens

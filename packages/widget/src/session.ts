@@ -27,7 +27,7 @@ import {
   generateUserMessageId,
   generateAssistantMessageId
 } from "./utils/message-id";
-import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT, createTextPart } from "./utils/content";
+import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT, createTextPart, hasImages } from "./utils/content";
 import {
   buildArtifactRefRawContent,
   resolveArtifactDisplayMode
@@ -1229,10 +1229,18 @@ export class AgentWidgetSession {
     // the proxy path auto-generates a different id than `assistantMessageId`.
     this.activeAssistantMessageId = null;
 
+    // Fallback display text ONLY when the sole content is image attachments.
+    // A mention/command-only submit (empty text + a chip) must NOT read as
+    // "[Image]"; it renders its chips with empty text instead.
+    const imageOnlyFallback =
+      options?.contentParts && hasImages(options.contentParts)
+        ? IMAGE_ONLY_MESSAGE_FALLBACK_TEXT
+        : "";
+
     const userMessage: AgentWidgetMessage = {
       id: userMessageId,
       role: "user",
-      content: input || IMAGE_ONLY_MESSAGE_FALLBACK_TEXT, // Display text (fallback if only images)
+      content: input || imageOnlyFallback, // Display text (fallback if only images)
       createdAt: new Date().toISOString(),
       sequence: this.nextSequence(),
       viaVoice: options?.viaVoice || false,
@@ -1250,11 +1258,16 @@ export class AgentWidgetSession {
     this.setStreaming(true);
 
     // Resolve + merge mentions AFTER the instant echo but BEFORE dispatch, so
-    // the model sees the context while the user's bubble already rendered. The
-    // user message is held by reference in `this.messages`, so mutating it here
-    // reflects in the snapshot taken below.
+    // the model sees the context while the user's bubble already rendered.
+    // `appendMessage` stores a sequence-normalized COPY (see `ensureSequence`),
+    // so mutate THAT live reference — not the orphaned `userMessage` literal —
+    // or the merged `llmContent`/`contentParts`/`mentionContext` never reach the
+    // dispatch snapshot below. Re-emit so any merged parts also reach the UI.
     if (options?.mentions) {
-      await this.applyMentionBundle(userMessage, input, options.mentions.finalize);
+      const stored =
+        this.messages.find((m) => m.id === userMessageId) ?? userMessage;
+      await this.applyMentionBundle(stored, input, options.mentions.finalize);
+      this.callbacks.onMessagesChanged([...this.messages]);
     }
 
     const controller = new AbortController();

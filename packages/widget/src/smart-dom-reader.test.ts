@@ -137,6 +137,7 @@ describe("smart-dom-reader entry (jsdom)", () => {
       messages: [],
       config: {} as never,
       composerText: "",
+      args: "",
       signal: new AbortController().signal,
     });
     expect(payload.llmAppend).toContain("Continue to checkout");
@@ -170,6 +171,7 @@ describe("smart-dom-reader entry (jsdom)", () => {
       messages: [],
       config: {} as never,
       composerText: "",
+      args: "",
       signal: new AbortController().signal,
     });
     expect(payload.llmAppend).toContain("Continue to checkout");

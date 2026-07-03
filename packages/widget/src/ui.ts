@@ -1332,11 +1332,34 @@ export const createAgentExperience = (
     } as Partial<CSSStyleDeclaration>);
     container.appendChild(mentionLiveRegion);
 
+    // Composer capability handed to slash-command dispatch (prompt macros write
+    // text / submit; client actions read/replace the value). Broader actions
+    // (clear transcript, theme) are host-wired via closures over the controller.
+    const mentionComposer = {
+      getValue: () => textarea.value,
+      setValue: (value: string) => {
+        textarea.value = value;
+        textarea.setSelectionRange(value.length, value.length);
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        textarea.focus();
+      },
+      submit: () => {
+        if (composerForm && typeof composerForm.requestSubmit === "function") {
+          composerForm.requestSubmit();
+        } else {
+          composerForm?.dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true })
+          );
+        }
+      },
+    };
+
     mentionOrchestrator = createContextMentionOrchestrator({
       config,
       textarea,
       anchor: composerForm ?? textarea,
       getMessages: () => session.getMessages(),
+      composer: mentionComposer,
       announce: (msg) => {
         mentionLiveRegion.textContent = "";
         mentionLiveRegion.textContent = msg;
@@ -1347,15 +1370,16 @@ export const createAgentExperience = (
       // Chip row sits directly above the textarea.
       const ta = textarea;
       ta.parentElement?.insertBefore(mentionOrchestrator.contextRow, ta);
-      // The "add context" affordance is a secondary control that augments the
-      // outgoing message, so it always joins the LEFT action cluster (beside
-      // the attachment button) — never the right cluster with mic + send.
-      // Placed leftmost so it reads as "add to my message" and stays clear of
-      // the primary send action, matching the secondary-left / primary-right
-      // convention used across chat UIs. Both composer builders (full + pill)
-      // always ship `leftActions`; the form fallback is purely defensive.
-      const btn = mentionOrchestrator.affordanceButton;
-      if (btn) {
+      // Each channel's "add context" affordance is a secondary control that
+      // augments the outgoing message, so it joins the LEFT action cluster
+      // (beside the attachment button) — never the right cluster with mic +
+      // send. Buttons are inserted leftmost in channel order so they read as
+      // "add to my message" and stay clear of the primary send action. Both
+      // composer builders (full + pill) always ship `leftActions`; the form
+      // fallback is purely defensive.
+      const buttons = mentionOrchestrator.affordanceButtons;
+      for (let i = buttons.length - 1; i >= 0; i--) {
+        const btn = buttons[i];
         if (leftActions) leftActions.insertBefore(btn, leftActions.firstChild);
         else composerForm?.appendChild(btn);
       }
