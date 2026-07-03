@@ -221,11 +221,34 @@ export type AgentWidgetContextMentionMenuRenderContext = {
   close: () => void;
 };
 
+/** Context passed to the optional `renderMentionItem` per-row override. */
+export type AgentWidgetContextMentionItemRenderContext = {
+  /** The item to render. */
+  item: AgentWidgetContextMentionItem;
+  /** The source this item came from (its group). */
+  source: AgentWidgetContextMentionSource;
+  /** Current trigger query, for highlighting matches. */
+  query: string;
+  /** True when this row is the keyboard-highlighted one at render time. */
+  active: boolean;
+  /** Position in the flat keyboard-traversal order. */
+  index: number;
+};
+
 /** Context passed to the optional `renderMentionChip` override. */
 export type AgentWidgetContextMentionChipRenderContext = {
   ref: AgentWidgetContextMentionRef;
   /** Resolve-on-select lifecycle for spinner→ready→error UI. */
   status: "resolving" | "ready" | "error";
+  /**
+   * The resolved payload, once available (select-resolved sources only). Use it
+   * to preview already-fetched content on hover. Undefined while `status` is
+   * `"resolving"`, on `"error"`, and for `resolveOn:"submit"` sources (which
+   * resolve at send time, not while the chip sits in the composer — for those,
+   * `ref.itemId` carries the source key you can re-read on demand, e.g. a CSS
+   * selector for the smart-dom source).
+   */
+  payload?: AgentWidgetContextMentionPayload;
   /** Remove the chip; aborts any in-flight resolve. */
   remove: () => void;
 };
@@ -279,6 +302,18 @@ export type AgentWidgetContextMentionConfig = {
    */
   renderMentionMenu?: (
     ctx: AgentWidgetContextMentionMenuRenderContext
+  ) => HTMLElement;
+  /**
+   * NARROW render override for a single result row's INNER content, keeping the
+   * built-in menu chrome (group headers, loading/empty/error, keyboard nav, the
+   * "keep typing" hint). The widget keeps the `role="option"` wrapper and its
+   * click/hover wiring; you return only the row's contents. For full menu
+   * control use `renderMentionMenu` instead. Highlight is CSS-driven via the
+   * wrapper's `[data-active]` attribute, so this is called once per render, not
+   * on every arrow key. Ignored when `renderMentionMenu` is set. @default built-in
+   */
+  renderMentionItem?: (
+    ctx: AgentWidgetContextMentionItemRenderContext
   ) => HTMLElement;
   /**
    * MID-LEVEL render override for a single context chip. Return your own pill

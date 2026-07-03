@@ -7,13 +7,85 @@ import {
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetConfig,
   type AgentWidgetContextMentionItem,
+  type AgentWidgetController,
 } from "@runtypelabs/persona";
-import { createSmartDomMentionSource } from "@runtypelabs/persona/smart-dom-reader";
+import { createSmartDomMentionsExperience } from "./mentions/smart-dom-mentions-experience";
 import { setupMountMode, runWidgetMount } from "./mount-mode";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import type { Mode } from "./examples-nav";
 
-renderDemoScaffold({ slug: "context-mentions-demo" });
+// --- Variants ----------------------------------------------------------------
+// One factory, four previewable configs — from the original built-in behavior
+// (no smart DOM) up to the fully custom experience. Switching re-mounts the
+// widget with the selected variant's config.
+type VariantId = "default" | "badges" | "hover" | "preview" | "full";
+type VariantFlags = {
+  includePageSource: boolean;
+  customRows: boolean;
+  customChips: boolean;
+  chipHover?: "default" | "popover";
+};
+const VARIANTS: Array<{
+  id: VariantId;
+  label: string;
+  description: string;
+  flags: VariantFlags;
+}> = [
+  {
+    id: "default",
+    label: "Default",
+    description: "Built-in menu + chip, Files only (no smart DOM)",
+    flags: { includePageSource: false, customRows: false, customChips: false },
+  },
+  {
+    id: "badges",
+    label: "Badges",
+    description: "Custom menu rows: source badge + match highlight (smart DOM on)",
+    flags: { includePageSource: true, customRows: true, customChips: false },
+  },
+  {
+    id: "hover",
+    label: "Hover",
+    description:
+      "Custom chips: hover a Page chip to highlight its live element (smart DOM on)",
+    flags: { includePageSource: true, customRows: false, customChips: true },
+  },
+  {
+    id: "preview",
+    label: "Preview",
+    description:
+      "Custom chips: hover for a content popover; click a Page chip to scroll to its element",
+    flags: {
+      includePageSource: true,
+      customRows: true,
+      customChips: true,
+      chipHover: "popover",
+    },
+  },
+  {
+    id: "full",
+    label: "Full",
+    description: "Badges + hover + smart DOM — the shareable factory",
+    flags: { includePageSource: true, customRows: true, customChips: true },
+  },
+];
+let selectedVariant: VariantId = "full";
+const variantFlags = (id: VariantId): VariantFlags =>
+  VARIANTS.find((v) => v.id === id)?.flags ?? VARIANTS[0].flags;
+
+renderDemoScaffold({
+  slug: "context-mentions-demo",
+  variants: {
+    label: "Rendering",
+    initial: selectedVariant,
+    options: VARIANTS.map(({ id, label, description }) => ({
+      id,
+      label,
+      description,
+    })),
+    onSelect: (id) => selectVariant(id as VariantId),
+  },
+});
 
 const logEl = document.getElementById("log");
 function log(msg: string) {
@@ -23,6 +95,10 @@ function log(msg: string) {
   line.textContent = `[${ts}] ${msg}`;
   logEl.appendChild(line);
   logEl.scrollTop = logEl.scrollHeight;
+}
+function logVariant(id: VariantId) {
+  const v = VARIANTS.find((x) => x.id === id);
+  if (v) log(`Variant → ${v.label}: ${v.description}`);
 }
 
 // --- Source 1: static files, resolved on select (eager, cached) -------------
@@ -50,22 +126,15 @@ const filesSource = createStaticMentionSource({
   },
 });
 
-// --- Source 2: the supported smart-dom source, resolved at SUBMIT ------------
-// `createSmartDomMentionSource` surfaces visible page elements (Shadow-DOM
-// piercing) as mentionable items and reads the chosen element's live text at
-// send time (`resolveOn: "submit"`), since the page is time-sensitive. Scoped
-// to the demo's controls panel so the menu stays focused on this page's content.
+// The smart-dom page source + custom row/chip renderers are packaged in the
+// shareable `createSmartDomMentionsExperience` factory (see ./mentions/…). It is
+// scoped to the demo's controls panel so the menu stays focused on this page.
 const pageRoot =
   document.querySelector<HTMLElement>(".stage-controls") ?? undefined;
-const pageSource = createSmartDomMentionSource({
-  id: "page",
-  label: "Page",
-  mode: "full",
-  ...(pageRoot ? { root: pageRoot } : {}),
-});
 
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const isLauncher = mode === "launcher";
+  const flags = variantFlags(selectedVariant);
   return {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: "https://noop.test/chat",
@@ -91,9 +160,19 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       inputPlaceholder: "Ask about a file or page section… (try @)",
     },
     suggestionChips: ["Summarize @App.tsx", "What's in the pricing section?"],
+    // The factory returns a full `contextMentions` config for the selected
+    // variant; we spread it and add this page's own callbacks — showing how a
+    // shared experience composes with local config.
     contextMentions: {
-      enabled: true,
-      sources: [filesSource, pageSource],
+      ...createSmartDomMentionsExperience({
+        root: pageRoot,
+        extraSources: [filesSource],
+        log,
+        includePageSource: flags.includePageSource,
+        customRows: flags.customRows,
+        customChips: flags.customChips,
+        chipHover: flags.chipHover,
+      }),
       onMentionRejected: (item, reason) =>
         log(`Rejected ${item.label} (${reason})`),
       onMentionResolveError: (item, error) =>
@@ -103,12 +182,42 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
   };
 };
 
+// --- Mount + live variant switching -----------------------------------------
+let activeController: AgentWidgetController | null = null;
+let activeMode: Mode = "inline";
+let activeStage: HTMLElement | null = null;
+
+function remount(): void {
+  if (!activeStage) return;
+  activeController?.destroy();
+  const { controller } = runWidgetMount(
+    activeMode,
+    activeStage,
+    buildConfig(activeMode),
+  );
+  activeController = controller;
+}
+
+function selectVariant(id: VariantId): void {
+  if (id === selectedVariant) return;
+  selectedVariant = id;
+  logVariant(id);
+  remount();
+}
+
 setupMountMode({
   slug: "context-mentions-demo",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
+    activeMode = mode;
+    activeStage = stage;
     log(`Mounted (${mode})`);
-    const { teardown } = runWidgetMount(mode, stage, buildConfig(mode));
-    return teardown;
+    logVariant(selectedVariant);
+    const { controller } = runWidgetMount(mode, stage, buildConfig(mode));
+    activeController = controller;
+    return () => {
+      activeController?.destroy();
+      activeController = null;
+    };
   },
 });

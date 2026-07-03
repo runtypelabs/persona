@@ -56,6 +56,19 @@
       </div>
 
       <div class="notes-section">
+        <h3 class="notes-section-title">Rendering variants</h3>
+        <p>Use the <strong>Rendering</strong> toggle above the preview to compare the same feature at four levels of customization:</p>
+        <ul>
+          <li><strong>Default</strong> — the built-in menu and chip, Files source only (no smart DOM). The baseline every install gets for free.</li>
+          <li><strong>Badges</strong> — a custom <code>renderMentionItem</code>: source badges and highlighted query matches, plus the smart-DOM Page source.</li>
+          <li><strong>Hover</strong> — a custom <code>renderMentionChip</code>: hover a Page chip to outline its live element on the page; Files chips preview their resolved content.</li>
+          <li><strong>Preview</strong> — hover any chip for a small popover previewing its resolved content (Files read from <code>ctx.payload</code>, the Page source re-reads the live element); <strong>click a Page chip to scroll to and flash its element</strong> on the page.</li>
+          <li><strong>Full</strong> — badges + hover together, i.e. the shareable <code>createSmartDomMentionsExperience</code> factory as-is.</li>
+        </ul>
+        <p>All four are produced by one factory (<code>src/mentions/smart-dom-mentions-experience.ts</code>) via feature flags — showing the config is a portable, shareable unit.</p>
+      </div>
+
+      <div class="notes-section">
         <h3 class="notes-section-title">Config snippet</h3>
         <div class="code-block">
           <span class="keyword">import</span> { createStaticMentionSource } <span class="keyword">from</span> <span class="string">"@runtypelabs/persona"</span>;

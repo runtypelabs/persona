@@ -6,6 +6,7 @@ import type {
   AgentWidgetConfig,
   AgentWidgetContextMentionConfig,
   AgentWidgetContextMentionItem,
+  AgentWidgetContextMentionPayload,
   AgentWidgetContextMentionSource,
 } from "../types";
 
@@ -128,6 +129,53 @@ describe("ContextMentionManager", () => {
     );
     const bundle = await manager.collectForSubmit().finalize();
     expect(bundle.llmEntries).toEqual([]); // dropped
+  });
+
+  it("forwards the resolved payload to renderMentionChip once ready", async () => {
+    const seen: (AgentWidgetContextMentionPayload | undefined)[] = [];
+    const renderMentionChip = vi.fn((ctx) => {
+      seen.push(ctx.payload);
+      const el = document.createElement("span");
+      el.className = "custom-chip";
+      el.dataset.status = ctx.status;
+      return el;
+    });
+    const resolve = vi.fn(async () => ({ llmAppend: "FILE BODY" }));
+    const { manager, source } = makeManager({ renderMentionChip }, resolve);
+    manager.add(source, item("App.tsx"));
+    // First render is the resolving state, before resolve() settles: no payload.
+    expect(seen[0]).toBeUndefined();
+    await tick();
+    // After resolve, the renderer is re-invoked with status "ready" + the payload.
+    expect(seen.at(-1)).toEqual({ llmAppend: "FILE BODY" });
+    expect(renderMentionChip).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "ready",
+        payload: { llmAppend: "FILE BODY" },
+      })
+    );
+  });
+
+  it("does not expose a payload to renderMentionChip for resolveOn:'submit' sources", async () => {
+    const seen: (AgentWidgetContextMentionPayload | undefined)[] = [];
+    const renderMentionChip = vi.fn((ctx) => {
+      seen.push(ctx.payload);
+      const el = document.createElement("span");
+      el.dataset.status = ctx.status;
+      return el;
+    });
+    const { manager } = makeManager({ renderMentionChip });
+    const source: AgentWidgetContextMentionSource = {
+      id: "page",
+      label: "Page",
+      search: () => [],
+      resolve: async () => ({ llmAppend: "LIVE" }),
+      resolveOn: "submit",
+    };
+    manager.add(source, item("hero"));
+    await tick();
+    // Submit sources flip straight to "ready" with no payload until send time.
+    expect(seen.every((p) => p === undefined)).toBe(true);
   });
 
   it("namespaces opt-in context by source + item", async () => {

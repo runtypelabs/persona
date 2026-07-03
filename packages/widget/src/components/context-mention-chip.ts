@@ -2,6 +2,7 @@ import { createElement, createNode } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import type {
   AgentWidgetContextMentionConfig,
+  AgentWidgetContextMentionPayload,
   AgentWidgetContextMentionRef,
 } from "../types";
 
@@ -9,7 +10,11 @@ export type MentionChipStatus = "resolving" | "ready" | "error";
 
 export interface MentionChipParts {
   el: HTMLElement;
-  setStatus: (status: MentionChipStatus) => void;
+  /** Update lifecycle state; `payload` is forwarded to `renderMentionChip` once resolved. */
+  setStatus: (
+    status: MentionChipStatus,
+    payload?: AgentWidgetContextMentionPayload
+  ) => void;
 }
 
 /**
@@ -25,16 +30,22 @@ export function createMentionChip(opts: {
   const { ref, config, onRemove } = opts;
 
   if (config.renderMentionChip) {
-    // Mid-level override: the host owns the markup. Status is reflected by
-    // re-invoking the renderer on change.
+    // Mid-level override: the host owns the markup. Status (and the resolved
+    // payload, once available) is reflected by re-invoking the renderer.
     let status: MentionChipStatus = "resolving";
-    let el = config.renderMentionChip({ ref, status, remove: onRemove });
-    const setStatus = (next: MentionChipStatus) => {
-      if (next === status) return;
+    let payload: AgentWidgetContextMentionPayload | undefined;
+    let el = config.renderMentionChip({ ref, status, payload, remove: onRemove });
+    const setStatus = (
+      next: MentionChipStatus,
+      nextPayload?: AgentWidgetContextMentionPayload
+    ) => {
+      if (next === status && nextPayload === payload) return;
       status = next;
+      payload = nextPayload;
       const replacement = config.renderMentionChip!({
         ref,
         status,
+        payload,
         remove: onRemove,
       });
       el.replaceWith(replacement);

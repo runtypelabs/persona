@@ -125,28 +125,42 @@ export function createMentionMenu(opts: {
             attrs: { role: "option", id: optionId(index), "aria-selected": "false" },
           });
 
-          const iconName = item.iconName ?? config.chipIconName ?? "at-sign";
-          const iconHost = createElement("span", "persona-mention-option-icon");
-          const icon = renderLucideIcon(iconName, 15, "currentColor", 2);
-          if (icon) iconHost.appendChild(icon);
-          row.appendChild(iconHost);
-
-          const textCol = createElement("span", "persona-mention-option-text");
-          textCol.appendChild(
-            createNode("span", {
-              className: "persona-mention-option-label",
-              text: item.label,
-            })
-          );
-          if (item.description) {
-            textCol.appendChild(
-              createNode("span", {
-                className: "persona-mention-option-desc",
-                text: item.description,
+          if (config.renderMentionItem) {
+            // Narrow override: host owns the inner visuals; we keep the
+            // `role="option"` wrapper, a11y attrs, and click/hover wiring below.
+            row.appendChild(
+              config.renderMentionItem({
+                item,
+                source: group.source,
+                query: vm.query,
+                active: index === vm.activeIndex,
+                index,
               })
             );
+          } else {
+            const iconName = item.iconName ?? config.chipIconName ?? "at-sign";
+            const iconHost = createElement("span", "persona-mention-option-icon");
+            const icon = renderLucideIcon(iconName, 15, "currentColor", 2);
+            if (icon) iconHost.appendChild(icon);
+            row.appendChild(iconHost);
+
+            const textCol = createElement("span", "persona-mention-option-text");
+            textCol.appendChild(
+              createNode("span", {
+                className: "persona-mention-option-label",
+                text: item.label,
+              })
+            );
+            if (item.description) {
+              textCol.appendChild(
+                createNode("span", {
+                  className: "persona-mention-option-desc",
+                  text: item.description,
+                })
+              );
+            }
+            row.appendChild(textCol);
           }
-          row.appendChild(textCol);
 
           const capturedIndex = index;
           row.addEventListener("mousedown", (e) => {

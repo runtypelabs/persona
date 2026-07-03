@@ -49,6 +49,7 @@ import type {
 
 export { smartDomResultToEnriched };
 export type { SmartDomAdapterOptions } from "./utils/smart-dom-adapter";
+export type { EnrichedPageElement } from "./utils/dom-context";
 
 /** Options for {@link collectSmartDomContext} and {@link createSmartDomReaderContextProvider}. */
 export interface SmartDomContextOptions extends SmartDomAdapterOptions {
@@ -144,6 +145,17 @@ export interface SmartDomMentionSourceOptions extends SmartDomContextOptions {
   id?: string;
   /** Group header shown in the menu. Default: "Page". */
   label?: string;
+  /**
+   * Reshape each surfaced element into a mention item. Receives the raw
+   * {@link EnrichedPageElement} and the default-mapped item, so you can tweak
+   * one field (`{ ...defaultItem, iconName: "star" }`) or build from scratch.
+   * The returned item's `id` MUST stay a selector `resolve()` can read at submit
+   * (default: `el.selector`) unless you also override resolution. @default built-in mapping
+   */
+  mapItem?: (
+    el: EnrichedPageElement,
+    defaultItem: AgentWidgetContextMentionItem
+  ) => AgentWidgetContextMentionItem;
 }
 
 const iconForInteractivity = (kind: EnrichedPageElement["interactivity"]): string => {
@@ -207,7 +219,10 @@ export function createSmartDomMentionSource(
       // Refresh the snapshot whenever the menu (re)opens with an empty query;
       // reuse it for subsequent keystrokes so we don't re-scan on every key.
       if (query === "" || !snapshot) {
-        snapshot = collectSmartDomContext(opts).map(elementToMentionItem);
+        snapshot = collectSmartDomContext(opts).map((el) => {
+          const defaultItem = elementToMentionItem(el);
+          return opts.mapItem ? opts.mapItem(el, defaultItem) : defaultItem;
+        });
       }
       return defaultMentionFilter(snapshot, query);
     },

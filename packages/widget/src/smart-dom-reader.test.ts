@@ -143,6 +143,38 @@ describe("smart-dom-reader entry (jsdom)", () => {
     expect(payload.context).toMatchObject({ selector: go!.id });
   });
 
+  it("applies mapItem to reshape surfaced items without breaking resolve", async () => {
+    document.body.innerHTML = `<main><button id="go">Continue to checkout</button></main>`;
+    const source = createSmartDomMentionSource({
+      label: "Page",
+      ...JSDOM_OPTS,
+      mapItem: (el, defaultItem) => ({
+        ...defaultItem,
+        iconName: "star",
+        description: `custom:${el.tagName}`,
+      }),
+    });
+
+    const items = await source.search("", {
+      messages: [],
+      config: {} as never,
+      signal: new AbortController().signal,
+    });
+    const go = items.find((i) => i.label.includes("Continue"));
+    expect(go).toBeTruthy();
+    expect(go!.iconName).toBe("star");
+    expect(go!.description).toMatch(/^custom:/i);
+
+    // id stays the selector, so submit-time resolve still reads the live element.
+    const payload = await source.resolve(go!, {
+      messages: [],
+      config: {} as never,
+      composerText: "",
+      signal: new AbortController().signal,
+    });
+    expect(payload.llmAppend).toContain("Continue to checkout");
+  });
+
   it("provider returns formatted context under the configured key", async () => {
     document.body.innerHTML = `<main><button id="go">Continue</button></main>`;
     const provider = createSmartDomReaderContextProvider({
