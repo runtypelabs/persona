@@ -266,6 +266,13 @@ export type AgentWidgetContextMentionConfig = {
   buttonIconName?: string;
   /** Tooltip / aria-label for the affordance button. @default "Add context" */
   buttonTooltipText?: string;
+  /**
+   * Placeholder for the picker's search field, shown when the menu is opened
+   * from the affordance button (a Cursor/Copilot-style picker that inserts no
+   * trigger character). The typed-trigger path keeps its query in the textarea
+   * and never shows this field. @default "Search context…"
+   */
+  searchPlaceholder?: string;
   /** Trigger character. @default "@" */
   trigger?: string;
   /** Max mentions per message. @default 8 */

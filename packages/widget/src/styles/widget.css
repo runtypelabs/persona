@@ -4888,17 +4888,60 @@
   background: var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.06));
 }
 
-/* Menu (floating, anchored above the composer) */
+/* Menu (floating, anchored above the composer). Outer box wraps an optional
+ * picker search field (pinned) + a scrolling result list. */
 .persona-mention-menu {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   max-height: var(--persona-mention-menu-max-height, 280px);
-  overflow-y: auto;
-  padding: 4px;
+  overflow: hidden;
   background: var(--persona-mention-menu-bg, var(--persona-surface, #ffffff));
   border: 1px solid var(--persona-mention-menu-border, var(--persona-border, #e5e7eb));
   border-radius: var(--persona-mention-menu-radius, 10px);
   box-shadow: var(--persona-mention-menu-shadow, 0 8px 28px rgba(0, 0, 0, 0.12));
   font-family: var(--persona-font-family, inherit);
+}
+
+/* Scrolling result list (role="listbox"). min-height:0 lets it scroll inside
+ * the flex column while the search field stays pinned above. */
+.persona-mention-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+/* Picker search field (button-open mode only; hidden inline until shown). */
+.persona-mention-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--persona-mention-menu-border, var(--persona-border, #e5e7eb));
+}
+
+.persona-mention-search-icon {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--persona-mention-group-fg, var(--persona-muted, #6b7280));
+}
+
+.persona-mention-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--persona-text, #111827);
+}
+
+.persona-mention-search-input::placeholder {
+  color: var(--persona-mention-group-fg, var(--persona-muted, #6b7280));
 }
 
 .persona-mention-group + .persona-mention-group {

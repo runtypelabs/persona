@@ -112,4 +112,44 @@ describe("createMentionMenu", () => {
     rows[1].dispatchEvent(new MouseEvent("mouseenter"));
     expect(onHoverIndex).toHaveBeenCalledWith(1);
   });
+
+  it("hides the picker search field until showSearch, then wires input/keydown", () => {
+    const onSearchInput = vi.fn();
+    const onSearchKeydown = vi.fn();
+    const menu = createMentionMenu({
+      config: makeConfig({ searchPlaceholder: "Find a file…" }),
+      listboxId: "lb",
+      onSelectIndex: vi.fn(),
+      onHoverIndex: vi.fn(),
+      onSearchInput,
+      onSearchKeydown,
+    });
+    document.body.appendChild(menu.el);
+
+    const wrap = menu.el.querySelector<HTMLElement>(".persona-mention-search")!;
+    const input = menu.el.querySelector<HTMLInputElement>(".persona-mention-search-input")!;
+    // Hidden by default; placeholder is configurable.
+    expect(wrap.style.display).toBe("none");
+    expect(input.placeholder).toBe("Find a file…");
+    // Options render into the inner listbox, not the root, so the search field
+    // survives a re-render.
+    menu.render(vm());
+    expect(wrap.isConnected).toBe(true);
+    expect(menu.el.querySelectorAll(".persona-mention-option")).toHaveLength(2);
+
+    menu.showSearch?.("");
+    expect(wrap.style.display).not.toBe("none");
+    expect(document.activeElement).toBe(input);
+
+    input.value = "app";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(onSearchInput).toHaveBeenCalledWith("app");
+
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    expect(onSearchKeydown).toHaveBeenCalled();
+
+    menu.hideSearch?.();
+    expect(wrap.style.display).toBe("none");
+    expect(input.value).toBe("");
+  });
 });

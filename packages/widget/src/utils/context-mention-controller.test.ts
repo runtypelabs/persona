@@ -122,6 +122,64 @@ describe("ContextMentionController", () => {
     expect(document.querySelector(".persona-mention-hint")).not.toBeNull();
   });
 
+  it("opens from the button as a picker: no trigger char, search field focused, all items listed", () => {
+    const { controller, textarea } = setup([
+      syncSource("files", [item("App.tsx"), item("index.ts")]),
+    ]);
+    controller.openFromButton();
+
+    expect(controller.isOpen()).toBe(true);
+    // Crucially: nothing is inserted into the composer.
+    expect(textarea.value).toBe("");
+
+    const input = document.querySelector<HTMLInputElement>(
+      ".persona-mention-search-input"
+    )!;
+    const wrap = document.querySelector<HTMLElement>(".persona-mention-search")!;
+    expect(wrap.style.display).not.toBe("none");
+    expect(document.activeElement).toBe(input);
+    // Empty query → browse all.
+    expect(document.querySelectorAll(".persona-mention-option")).toHaveLength(2);
+  });
+
+  it("filters from the picker search field and selects without touching the textarea", () => {
+    const { controller, textarea, onSelect } = setup([
+      syncSource("files", [item("App.tsx"), item("index.ts")]),
+    ]);
+    controller.openFromButton();
+
+    const input = document.querySelector<HTMLInputElement>(
+      ".persona-mention-search-input"
+    )!;
+    input.value = "app";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const options = document.querySelectorAll(".persona-mention-option");
+    expect(options).toHaveLength(1);
+    expect(options[0].textContent).toContain("App.tsx");
+
+    // Enter from the search field selects the active row.
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    // The picker never wrote to the composer, so there is nothing to strip.
+    expect(textarea.value).toBe("");
+    expect(controller.isOpen()).toBe(false);
+  });
+
+  it("dismissing the picker with Escape leaves the composer untouched (no stray trigger)", () => {
+    const { controller, textarea } = setup([syncSource("files", [item("App.tsx")])]);
+    controller.openFromButton();
+    expect(controller.isOpen()).toBe(true);
+
+    const input = document.querySelector<HTMLInputElement>(
+      ".persona-mention-search-input"
+    )!;
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(controller.isOpen()).toBe(false);
+    expect(textarea.value).toBe("");
+    // Picker torn down: focus returns to the composer so the user keeps typing.
+    expect(document.activeElement).toBe(textarea);
+  });
+
   it("debounces async sources and aborts the prior search on the next keystroke", async () => {
     const calls: { query: string; aborted: () => boolean }[] = [];
     const asyncSource: AgentWidgetContextMentionSource = {

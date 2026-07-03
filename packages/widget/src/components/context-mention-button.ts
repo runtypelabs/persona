@@ -58,6 +58,10 @@ export function createMentionButton(opts: {
 
   button.addEventListener("click", (e) => {
     e.preventDefault();
+    // Stop the click from bubbling to the composer form's "click anywhere →
+    // focus textarea" handler, which would otherwise steal focus from the
+    // picker's search field the moment it opens.
+    e.stopPropagation();
     onOpen();
   });
 

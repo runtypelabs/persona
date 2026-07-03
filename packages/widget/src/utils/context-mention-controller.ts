@@ -59,6 +59,10 @@ export class ContextMentionController {
   private query = "";
   private triggerMatch: MentionTriggerMatch | null = null;
   private activeIndex = 0;
+  // True while the menu was opened from the affordance button as a picker: no
+  // trigger char is in the textarea, so the in-menu search field owns the query
+  // and there is nothing to strip on close.
+  private pickerMode = false;
 
   private groups: MentionMenuGroup[] = [];
   private flat: {
@@ -86,6 +90,12 @@ export class ContextMentionController {
           listboxId: this.listboxId,
           onSelectIndex: (i) => this.selectIndex(i),
           onHoverIndex: (i) => this.setActiveIndex(i),
+          // Picker mode: the in-menu search field is the query source and drives
+          // keyboard nav, since focus lives in it (not the textarea).
+          onSearchInput: (value) => this.setQuery(value),
+          onSearchKeydown: (event) => {
+            this.handleKeydown(event);
+          },
         });
 
     opts.textarea.setAttribute("aria-haspopup", "listbox");
@@ -127,18 +137,24 @@ export class ContextMentionController {
     return this.isOpenState;
   }
 
-  /** Open from the affordance button: insert the trigger at the caret, then parse. */
+  /**
+   * Open from the affordance button as a picker (Cursor/Copilot style): open the
+   * menu WITHOUT inserting a trigger char into the textarea, and reveal + focus
+   * an in-menu search field that owns the query. Because no char is inserted,
+   * `triggerMatch` stays null, so `stripQuery()` is a no-op and dismissing the
+   * menu leaves the composer text untouched — no stray `@` left behind.
+   *
+   * When the menu is host-rendered (`renderMentionMenu`), there is no built-in
+   * search field; the picker opens in browse-and-click mode with keyboard nav
+   * driven from the textarea, and the host owns any filtering UI.
+   */
   openFromButton(): void {
-    const ta = this.opts.textarea;
-    const caret = ta.selectionStart ?? ta.value.length;
-    const before = caret > 0 ? ta.value[caret - 1] : "";
-    const needsSpace = before !== "" && !/\s/.test(before);
-    const insert = (needsSpace ? " " : "") + this.trigger;
-    ta.value = ta.value.slice(0, caret) + insert + ta.value.slice(caret);
-    const newCaret = caret + insert.length;
-    ta.focus();
-    ta.setSelectionRange(newCaret, newCaret);
-    this.onInput();
+    this.pickerMode = true;
+    this.triggerMatch = null;
+    if (!this.isOpenState) this.open("");
+    else this.setQuery("");
+    if (this.menu.showSearch) this.menu.showSearch("");
+    else this.opts.textarea.focus();
   }
 
   /** Re-parse the textarea on every input and open/update/close the menu. */
@@ -170,6 +186,10 @@ export class ContextMentionController {
         onDismiss: () => {
           this.isOpenState = false;
           this.opts.textarea.setAttribute("aria-expanded", "false");
+          if (this.pickerMode) {
+            this.pickerMode = false;
+            this.menu.hideSearch?.();
+          }
         },
       });
     }
@@ -186,6 +206,13 @@ export class ContextMentionController {
     this.searchAbort?.abort();
     this.popover?.close();
     this.opts.textarea.setAttribute("aria-expanded", "false");
+    if (this.pickerMode) {
+      // Picker teardown: hide the search field and hand focus back to the
+      // composer so the user can keep typing their message.
+      this.pickerMode = false;
+      this.menu.hideSearch?.();
+      this.opts.textarea.focus();
+    }
   }
 
   private setQuery(query: string): void {
