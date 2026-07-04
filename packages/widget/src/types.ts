@@ -151,6 +151,16 @@ export type AgentWidgetContextMentionItem = {
    * inserting its text (a one-shot macro). Ignored for other kinds.
    */
   submitOnSelect?: boolean;
+  /**
+   * COMMANDS only. Ghost hint for a free-text argument (e.g. "order id" →
+   * `/lookup ‹order id›` in the menu). Its presence switches the command to
+   * INLINE COMPLETION (Slack-style): selecting it fills `/name ` into the
+   * composer for inline arg entry instead of dispatching on select, and the
+   * command is executed at SUBMIT with the typed args. `command:"server"` items
+   * always use inline completion (their chip had no way to add an argument);
+   * for `"prompt"`/`"action"` items this is opt-in. Ignored for non-commands.
+   */
+  commandArgsPlaceholder?: string;
 };
 
 /**
@@ -266,6 +276,13 @@ export type AgentWidgetContextMentionSource = {
    * @default "select"
    */
   resolveOn?: "select" | "submit";
+  /**
+   * COMMAND sources only. Resolve a `/name` (the first token of a command line)
+   * to its menu item, for submit-time inline-command dispatch and the menu's
+   * "typing args now" suppression. `createSlashCommandsSource` sets this; plain
+   * `@`-mention sources leave it undefined.
+   */
+  matchCommand?: (name: string) => AgentWidgetContextMentionItem | undefined;
 };
 
 /** Context passed to the optional `renderMentionMenu` override. */

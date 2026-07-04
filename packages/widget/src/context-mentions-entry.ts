@@ -9,7 +9,10 @@
  */
 
 import { ContextMentionManager } from "./utils/context-mention-manager";
-import { ContextMentionController } from "./utils/context-mention-controller";
+import {
+  ContextMentionController,
+  type InlineCommandResult,
+} from "./utils/context-mention-controller";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import type {
   AgentWidgetConfig,
@@ -49,6 +52,12 @@ export interface ContextMentionEngine {
   handleKeydown(event: KeyboardEvent): boolean;
   hasMentions(): boolean;
   removeLastChip(): boolean;
+  /**
+   * Dispatch a leading inline slash command in the composer `text` at submit
+   * (Slack-style). Returns null when `text` isn't an inline command. See
+   * {@link InlineCommandResult}.
+   */
+  dispatchInlineCommand(text: string): Promise<InlineCommandResult | null>;
   collectForSubmit():
     | { refs: AgentWidgetContextMentionRef[]; finalize: () => Promise<MentionSubmitBundle> }
     | null;
@@ -89,6 +98,7 @@ export function mountContextMentions(
     handleKeydown: (event) => controller.handleKeydown(event),
     hasMentions: () => manager.hasMentions(),
     removeLastChip: () => manager.removeLast(),
+    dispatchInlineCommand: (text) => controller.dispatchInlineCommand(text),
     collectForSubmit: () =>
       manager.hasMentions() ? manager.collectForSubmit() : null,
     clear: () => manager.clear(),
@@ -100,3 +110,4 @@ export function mountContextMentions(
 }
 
 export type { MentionSubmitBundle };
+export type { InlineCommandResult };

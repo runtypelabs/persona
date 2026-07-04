@@ -98,12 +98,26 @@ export const MENTION_MENU_CSS = `
   flex-direction: column;
   min-width: 0;
 }
+.persona-mention-option-labelline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
 .persona-mention-option-label {
   font-size: 13px;
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.persona-mention-option-arghint {
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--persona-muted, #6b7280);
+  opacity: 0.85;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .persona-mention-option-desc {
   font-size: 11px;

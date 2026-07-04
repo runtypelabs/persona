@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { createContextMentionOrchestrator } from "./context-mention-orchestrator";
-import { createStaticMentionSource } from "./mention-matcher";
+import { createStaticMentionSource, createSlashCommandsSource } from "./mention-matcher";
 import { loadContextMentions } from "../context-mentions-loader";
 import type { AgentWidgetConfig } from "../types";
 
@@ -131,6 +131,58 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
     (orchestrator.affordanceButtons[0].querySelector("button") as HTMLButtonElement).click();
     await flush();
     expect(orchestrator.isMenuOpen()).toBe(true);
+  });
+
+  it("takeInlineCommand: ignores plain text, dispatches a leading server command", async () => {
+    document.body.innerHTML = "";
+    const form = document.createElement("form");
+    const textarea = document.createElement("textarea");
+    form.appendChild(textarea);
+    document.body.appendChild(form);
+    const config = {
+      contextMentions: {
+        enabled: true,
+        sources: [],
+        triggers: [
+          {
+            trigger: "/",
+            triggerPosition: "line-start",
+            sources: [
+              createSlashCommandsSource({
+                id: "cmd",
+                label: "Commands",
+                commands: [
+                  {
+                    name: "lookup",
+                    kind: "server",
+                    argsPlaceholder: "order id",
+                    data: (args) => ({ orderId: args }),
+                  },
+                ],
+              }),
+            ],
+          },
+        ],
+      },
+    } as AgentWidgetConfig;
+    const orchestrator = createContextMentionOrchestrator({
+      config,
+      textarea,
+      anchor: form,
+      getMessages: () => [],
+      announce: vi.fn(),
+    })!;
+
+    // Plain text never loads the runtime or matches.
+    expect(await orchestrator.takeInlineCommand("just a message")).toBeNull();
+
+    // A leading `/lookup 1042` lazy-loads the runtime and resolves its context.
+    const result = await orchestrator.takeInlineCommand("/lookup 1042");
+    expect(result?.kind).toBe("server");
+    if (result?.kind !== "server") throw new Error("expected a server command");
+    expect(result.mentions.refs).toEqual([]);
+    const bundle = await result.mentions.finalize();
+    expect(bundle.context).toEqual({ cmd: { lookup: { orderId: "1042" } } });
   });
 
   it("emits persona:mention:* analytics events", async () => {

@@ -452,20 +452,83 @@ describe("ContextMentionController — slash-commands", () => {
     expect(textarea.value).toBe("");
   });
 
-  it("server command: routed through the manager with captured args", () => {
+  it("server command: selecting inline-completes `/name ` with no chip", () => {
     const { controller, textarea, onSelect } = slashSetup([
       { name: "lookup", kind: "server", data: (args) => ({ query: args }) },
     ]);
-    textarea.value = "/lookup order 42";
-    textarea.setSelectionRange(16, 16);
+    textarea.value = "/lookup";
+    textarea.setSelectionRange(7, 7);
     controller.onInput();
+    expect(controller.isOpen()).toBe(true);
     pressEnter(controller);
 
-    // Server commands DO go through onSelect (manager chip + submit resolve),
-    // with the args after the command name captured now.
-    expect(onSelect).toHaveBeenCalledTimes(1);
-    const call = onSelect.mock.calls[0] as unknown[];
-    expect(call[2]).toBe("order 42");
+    // No chip path (Slack-style inline completion): the composer holds editable
+    // `/lookup ` text for the argument, the menu closes, and the manager (chip)
+    // is never touched.
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("/lookup ");
+    expect(controller.isOpen()).toBe(false);
+  });
+
+  it("server command: typing past the name closes the menu (arg entry)", () => {
+    const { controller, textarea } = slashSetup([
+      { name: "lookup", kind: "server", data: (args) => ({ query: args }) },
+    ]);
+    // Name only → menu open (still choosing the command).
+    textarea.value = "/lookup";
+    textarea.setSelectionRange(7, 7);
+    controller.onInput();
+    expect(controller.isOpen()).toBe(true);
+    // A space (into the argument) → menu closes; there's nothing left to pick.
+    textarea.value = "/lookup 1042";
+    textarea.setSelectionRange(12, 12);
+    controller.onInput();
+    expect(controller.isOpen()).toBe(false);
+  });
+
+  it("server command: dispatchInlineCommand resolves context from typed args", async () => {
+    const { controller } = slashSetup([
+      { name: "lookup", kind: "server", data: (args) => ({ query: args }) },
+    ]);
+    const result = await controller.dispatchInlineCommand("/lookup order 42");
+    expect(result?.kind).toBe("server");
+    if (result?.kind !== "server") throw new Error("expected server");
+    expect(result.mentions.refs).toEqual([]);
+    const bundle = await result.mentions.finalize();
+    // Namespaced `{ [sourceId]: { [commandName]: context } }`.
+    expect(bundle.context).toEqual({ cmd: { lookup: { query: "order 42" } } });
+  });
+
+  it("arg-bearing prompt command dispatches at submit with the typed args", async () => {
+    const { controller } = slashSetup([
+      {
+        name: "greet",
+        kind: "prompt",
+        prompt: (args) => `Write a greeting for ${args}.`,
+        argsPlaceholder: "name",
+      },
+    ]);
+    const result = await controller.dispatchInlineCommand("/greet Ada");
+    expect(result).toEqual({ kind: "prompt", sendText: "Write a greeting for Ada." });
+  });
+
+  it("arg-bearing action command runs its handler at submit (nothing sent)", async () => {
+    const action = vi.fn();
+    const { controller } = slashSetup([
+      { name: "deploy", kind: "action", action, argsPlaceholder: "environment" },
+    ]);
+    const result = await controller.dispatchInlineCommand("/deploy staging");
+    expect(result).toEqual({ kind: "action" });
+    expect(action).toHaveBeenCalledWith(expect.objectContaining({ args: "staging" }));
+  });
+
+  it("dispatchInlineCommand ignores plain text and non-inline commands", async () => {
+    const { controller } = slashSetup([
+      // A zero-arg action (no placeholder) is select-time only, not inline.
+      { name: "clear", kind: "action", action: vi.fn() },
+    ]);
+    expect(await controller.dispatchInlineCommand("hello world")).toBeNull();
+    expect(await controller.dispatchInlineCommand("/clear now")).toBeNull();
   });
 
   it("keeps @ mentions working alongside the / channel", () => {

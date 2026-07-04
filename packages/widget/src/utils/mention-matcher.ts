@@ -137,6 +137,14 @@ export type SlashCommandDefinition = {
   insertMode?: "replace" | "insert-at-caret";
   /** `kind:"prompt"` — submit the composer immediately after inserting. */
   submitOnSelect?: boolean;
+  /**
+   * Free-text argument hint (e.g. "order id"). Shown as ghost text in the menu
+   * row (`lookup ‹order id›`) and switches the command to INLINE COMPLETION:
+   * selecting it fills `/name ` into the composer so you type the arg inline,
+   * and the command runs at SUBMIT with the typed args (Slack-style). Optional
+   * for `"prompt"`/`"action"`; `"server"` commands always complete inline.
+   */
+  argsPlaceholder?: string;
   /** `kind:"action"` — the browser handler (receives parsed `args`). */
   action?: (ctx: AgentWidgetContextMentionCommandContext) => void | Promise<void>;
   /** `kind:"server"` — structured payload sent via `context.mentions.<sourceId>.<name>`. */
@@ -180,12 +188,17 @@ export function createSlashCommandsSource(opts: {
     insertMode: c.insertMode,
     submitOnSelect: c.submitOnSelect,
     action: c.action,
+    commandArgsPlaceholder: c.argsPlaceholder,
   }));
   const byName = new Map(opts.commands.map((c) => [c.name, c]));
+  const itemByName = new Map(items.map((it) => [it.id, it]));
 
   return {
     id: opts.id,
     label: opts.label,
+    // Exact-name lookup for submit-time inline-command dispatch (the query's
+    // first token) — not a fuzzy search.
+    matchCommand: (name) => itemByName.get(name),
     // Server commands defer resolve to submit (args captured at select). Prompt
     // commands call resolve synchronously from the controller; action commands
     // never resolve. So "submit" is the correct source-level default here.

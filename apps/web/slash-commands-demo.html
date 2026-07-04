@@ -54,10 +54,10 @@
         <ul>
           <li><strong>Prompt macros</strong> — <code>kind: "prompt"</code> writes text into the composer (<code>submitOnSelect</code> sends it immediately). No message-in-a-chip; the command becomes the message.</li>
           <li><strong>Client actions</strong> — <code>kind: "action"</code> runs a browser function (<code>/clear</code>, <code>/help</code>, <code>/echo</code>). Nothing is sent; the host wires broader actions via the controller.</li>
-          <li><strong>Args</strong> — text after the command name is captured as <code>args</code> (<code>/deploy staging</code> → <code>args: "staging"</code>), available to both actions and prompt templates.</li>
+          <li><strong>Args</strong> — a command that declares <code>argsPlaceholder</code> uses <em>inline completion</em> (Slack-style): selecting it fills <code>/deploy&nbsp;</code> into the composer and you type the argument inline (the menu shows a <code>‹environment›</code> hint and closes once you're typing). The command runs at <em>submit</em> with <code>args: "staging"</code>.</li>
           <li><strong>@ + /</strong> — a mention channel and a command channel on one engine; at any caret only one is active.</li>
           <li><strong>Custom render</strong> — command rows styled with <code>renderMentionItem</code> (a <code>kbd</code> badge).</li>
-          <li><strong>Server skill</strong> — <code>kind: "server"</code> sends structured <code>data</code> to the backend via request <code>context.mentions</code>; the echo backend prints what it received.</li>
+          <li><strong>Server skill</strong> — <code>kind: "server"</code> inline-completes like Args (no chip), then at submit sends structured <code>data(args)</code> to the backend via request <code>context.mentions</code>; the echo backend prints what it received.</li>
         </ul>
         <p>All variants are produced by one shareable factory (<code>src/commands/slash-commands-experience.ts</code>) spread into <code>contextMentions</code> — the config is a portable unit, since the plugin registry is render-only.</p>
       </div>
@@ -90,6 +90,19 @@
             },
           };
         </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Multiple arguments</h3>
+        <p>There are no named argument slots. <code>args</code> is a single free-text string: everything typed after the command name, trimmed. Split it however you like inside <code>data</code> / <code>action</code> / <code>prompt(args)</code>, so several space-separated values work today with no extra API:</p>
+        <div class="code-block">
+          { <span class="prop">name</span>: <span class="string">"deploy"</span>, <span class="prop">kind</span>: <span class="string">"action"</span>, <span class="prop">argsPlaceholder</span>: <span class="string">"env region"</span>,
+            <span class="prop">action</span>: ({ args }) => {
+              <span class="keyword">const</span> [env, region] = args.split(/\s+/); <span class="comment">// "staging us-east-1"</span>
+              <span class="comment">/* ... */</span>
+            } }
+        </div>
+        <p>Two caveats: for a <code>line-start</code> command the arguments come from the first line only (a newline ends the command line), and <code>argsPlaceholder</code> is a single display hint, not per-slot UI. Structured, validated argument slots (Discord's <code>/ban user: reason:</code> style) are not built in.</p>
       </div>
     </section>
   </main>

@@ -17,7 +17,10 @@ import { parseAnyTrigger, isMenuOpeningInput } from "./mention-trigger";
 import { normalizeMentionChannels, type NormalizedMentionChannel } from "./mention-channels";
 import { createMentionButton } from "../components/context-mention-button";
 import { loadContextMentions } from "../context-mentions-loader";
-import type { ContextMentionEngine } from "../context-mentions-entry";
+import type {
+  ContextMentionEngine,
+  InlineCommandResult,
+} from "../context-mentions-entry";
 import type { MentionSubmitBundle } from "./context-mention-manager";
 import type {
   AgentWidgetConfig,
@@ -44,6 +47,12 @@ export interface ContextMentionOrchestrator {
   collectForSubmit: () =>
     | { refs: AgentWidgetContextMentionRef[]; finalize: () => Promise<MentionSubmitBundle> }
     | null;
+  /**
+   * Dispatch a leading inline slash command in the composer `text` at submit
+   * (Slack-style). Loads the runtime if a command-channel trigger leads the text
+   * and it isn't loaded yet; returns null when there's no inline command.
+   */
+  takeInlineCommand: (text: string) => Promise<InlineCommandResult | null>;
   clear: () => void;
   /** Warm the chunk (e.g. on composer focus) so the first `@` is instant. */
   prefetch: () => void;
@@ -79,6 +88,17 @@ export function createContextMentionOrchestrator(opts: {
     }
     return null;
   }
+
+  // Command channels expose `matchCommand` on their sources. A cheap eager check
+  // so a plain-text send never loads the runtime just to look for a command.
+  const commandChannels = channels.filter((c) =>
+    c.sources.some((s) => typeof s.matchCommand === "function")
+  );
+  const looksLikeCommand = (text: string): boolean =>
+    commandChannels.some((c) => {
+      const line = c.position === "anywhere" ? text : text.split("\n")[0];
+      return !!c.trigger && line.startsWith(c.trigger);
+    });
 
   // Analytics: `persona:mention:*` DOM events on window (opened / searched /
   // selected / rejected / resolve-error). Best-effort, guarded for SSR.
@@ -182,6 +202,11 @@ export function createContextMentionOrchestrator(opts: {
     isMenuOpen: () => engine?.isMenuOpen() ?? false,
     hasMentions: () => engine?.hasMentions() ?? false,
     collectForSubmit: () => engine?.collectForSubmit() ?? null,
+    takeInlineCommand: async (text) => {
+      if (!looksLikeCommand(text)) return null;
+      const e = engine ?? (await ensureEngine());
+      return e?.dispatchInlineCommand(text) ?? null;
+    },
     clear: () => engine?.clear(),
     prefetch: () => {
       void loadContextMentions().catch(() => {});

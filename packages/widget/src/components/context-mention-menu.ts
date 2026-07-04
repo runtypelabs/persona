@@ -179,9 +179,21 @@ export function createMentionMenu(opts: {
       row.appendChild(iconHost);
 
       const textCol = createElement("span", "persona-mention-option-text");
-      textCol.appendChild(
+      const labelLine = createElement("span", "persona-mention-option-labelline");
+      labelLine.appendChild(
         createNode("span", { className: "persona-mention-option-label", text: item.label })
       );
+      // Slash commands that take an argument show a ghost hint (`lookup ‹order
+      // id›`) so it's clear you type a value after selecting, inline.
+      if (item.commandArgsPlaceholder) {
+        labelLine.appendChild(
+          createNode("span", {
+            className: "persona-mention-option-arghint",
+            text: `‹${item.commandArgsPlaceholder}›`,
+          })
+        );
+      }
+      textCol.appendChild(labelLine);
       if (item.description) {
         textCol.appendChild(
           createNode("span", { className: "persona-mention-option-desc", text: item.description })

@@ -6259,6 +6259,95 @@ export const createAgentExperience = (
     setOpenState(true, "auto");
   };
 
+  // Combine `@`-chip mentions with an inline server-command's context bundle so
+  // both reach the message in one `mentions` payload. Either side may be null.
+  type SubmitMentions = NonNullable<
+    ReturnType<NonNullable<typeof mentionOrchestrator>["collectForSubmit"]>
+  >;
+  const mergeSubmitMentions = (
+    a: SubmitMentions | null,
+    b: SubmitMentions | null
+  ): SubmitMentions | null => {
+    if (!a) return b;
+    if (!b) return a;
+    return {
+      refs: [...a.refs, ...b.refs],
+      finalize: async () => {
+        const [ra, rb] = await Promise.all([a.finalize(), b.finalize()]);
+        return {
+          llmEntries: [...ra.llmEntries, ...rb.llmEntries],
+          contentParts: [...ra.contentParts, ...rb.contentParts],
+          context: { ...ra.context, ...rb.context },
+        };
+      },
+    };
+  };
+
+  const doSubmit = async () => {
+    const value = textarea.value.trim();
+    const hasAttachments = attachmentManager?.hasAttachments() ?? false;
+
+    // Inline slash command (Slack-style): every `command:"server"` plus any
+    // arg-bearing prompt/action. Resolve FIRST — a prompt command changes the
+    // text to send, and an action sends nothing at all.
+    const inline = value
+      ? await (mentionOrchestrator?.takeInlineCommand(value) ?? Promise.resolve(null))
+      : null;
+
+    if (inline?.kind === "action") {
+      // Ran in the browser; nothing to send. Clear the composer + any chips.
+      textarea.value = "";
+      textarea.style.height = "auto";
+      resetHistoryNavigation();
+      mentionOrchestrator?.clear();
+      return;
+    }
+
+    // Gather `@`-chip mentions synchronously (detaches chips + captures composer
+    // text before clearing); `finalize()` resolves them inside `sendMessage`.
+    const chipMentions = mentionOrchestrator?.collectForSubmit() ?? null;
+    const serverMentions = inline?.kind === "server" ? inline.mentions : null;
+    const mentions = mergeSubmitMentions(chipMentions, serverMentions);
+    // A prompt command replaces the outgoing text with its resolved macro.
+    const sendText = inline?.kind === "prompt" ? inline.sendText : value;
+
+    const hasChips = !!chipMentions && chipMentions.refs.length > 0;
+    // Must have text, attachments, chips, or an inline server command's context.
+    if (!sendText && !hasAttachments && !hasChips && !serverMentions) return;
+
+    maybeExpandComposerBar();
+
+    // Build content parts if there are attachments
+    let contentParts: ContentPart[] | undefined;
+    if (hasAttachments) {
+      contentParts = [];
+      // Add image parts first
+      contentParts.push(...attachmentManager!.getContentParts());
+      // Add text part if there's text
+      if (sendText) {
+        contentParts.push(createTextPart(sendText));
+      }
+    }
+
+    textarea.value = "";
+    textarea.style.height = "auto"; // Reset height after clearing
+    resetHistoryNavigation();
+
+    // Send message with optional content parts + mentions
+    session.sendMessage(sendText, {
+      contentParts,
+      mentions: mentions ?? undefined,
+    });
+
+    // Clear attachments + mention chips after sending
+    if (hasAttachments) {
+      attachmentManager!.clearAttachments();
+    }
+    if (chipMentions) {
+      mentionOrchestrator?.clear();
+    }
+  };
+
   const handleSubmit = (event: Event) => {
     event.preventDefault();
 
@@ -6274,48 +6363,7 @@ export const createAgentExperience = (
       return;
     }
 
-    const value = textarea.value.trim();
-    const hasAttachments = attachmentManager?.hasAttachments() ?? false;
-
-    // Gather mentions synchronously (captures composer text before clearing);
-    // `finalize()` resolves them inside `sendMessage`, after the instant echo.
-    const mentions = mentionOrchestrator?.collectForSubmit() ?? null;
-    const hasMentions = !!mentions && mentions.refs.length > 0;
-
-    // Must have text, attachments, or mentions to send
-    if (!value && !hasAttachments && !hasMentions) return;
-
-    maybeExpandComposerBar();
-
-    // Build content parts if there are attachments
-    let contentParts: ContentPart[] | undefined;
-    if (hasAttachments) {
-      contentParts = [];
-      // Add image parts first
-      contentParts.push(...attachmentManager!.getContentParts());
-      // Add text part if there's text
-      if (value) {
-        contentParts.push(createTextPart(value));
-      }
-    }
-
-    textarea.value = "";
-    textarea.style.height = "auto"; // Reset height after clearing
-    resetHistoryNavigation();
-
-    // Send message with optional content parts + mentions
-    session.sendMessage(value, {
-      contentParts,
-      mentions: hasMentions ? mentions! : undefined,
-    });
-
-    // Clear attachments + mention chips after sending
-    if (hasAttachments) {
-      attachmentManager!.clearAttachments();
-    }
-    if (hasMentions) {
-      mentionOrchestrator?.clear();
-    }
+    void doSubmit();
   };
 
   // --- Composer message-history navigation (Up/Down arrows) ---

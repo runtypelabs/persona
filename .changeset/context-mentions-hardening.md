@@ -2,8 +2,17 @@
 "@runtypelabs/persona": minor
 ---
 
-Context mentions: hardening and true-lazy loading.
+Context mentions: hardening, slash-command inline completion, and true-lazy loading.
 
+- **Slash commands — inline completion (Slack-style).** Arg-bearing commands now
+  fill `/name ` into the composer on select so you type the argument inline,
+  instead of freezing into an argless chip that had no way to add a parameter.
+  New `SlashCommandDefinition.argsPlaceholder` declares the argument (shown as a
+  `‹hint›` in the menu row) and opts `prompt`/`action` commands into the model;
+  every `kind: "server"` command uses it automatically. The command runs at
+  submit — `action` in the browser, `prompt` as the sent text, `server` as
+  attached `context.mentions`. Zero-arg commands still run on select; `@`
+  mentions are unchanged.
 - **Bundle:** the menu/chip runtime is now lazy for ESM/CJS consumers too, not
   just the CDN — a new external `./context-mentions` subpath keeps it out of
   `dist/index.{js,cjs}` (previously inlined by the `--splitting false` build, ~8.6

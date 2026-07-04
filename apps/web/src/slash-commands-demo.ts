@@ -152,6 +152,7 @@ const actionCommands: SlashCommandDefinition[] = [
     description: "Echo the text typed after the command",
     iconName: "megaphone",
     kind: "action",
+    argsPlaceholder: "text",
     action: ({ args }) => {
       activeController?.injectAssistantMessage({ content: args || "_(nothing to echo)_" });
       log(`Action: /echo → args "${args}"`);
@@ -165,6 +166,7 @@ const argsCommands: SlashCommandDefinition[] = [
     description: "Deploy to an environment — try: /deploy staging",
     iconName: "rocket",
     kind: "action",
+    argsPlaceholder: "environment",
     action: ({ args }) => {
       const env = args.trim();
       activeController?.injectAssistantMessage({
@@ -180,6 +182,7 @@ const argsCommands: SlashCommandDefinition[] = [
     description: "Prompt macro built from args — try: /greet Ada",
     iconName: "hand",
     kind: "prompt",
+    argsPlaceholder: "name",
     prompt: (args) => `Write a short, friendly greeting for ${args || "a new user"}.`,
     submitOnSelect: true,
   },
@@ -191,6 +194,7 @@ const serverCommands: SlashCommandDefinition[] = [
     description: "Look up an order — try: /lookup 1042",
     iconName: "search",
     kind: "server",
+    argsPlaceholder: "order id",
     data: (args) => ({ intent: "lookup-order", orderId: args }),
   },
 ];
