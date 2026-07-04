@@ -6356,7 +6356,11 @@ export const createAgentExperience = (
 
   const handleComposerInput = (event: Event) => {
     // Drive the mention menu (open/update/close) + lazy-load on first trigger.
-    mentionOrchestrator?.handleInput((event as InputEvent).inputType ?? undefined);
+    // Skip while an IME composition is active: the intermediate value isn't the
+    // user's committed text, so it must not open or filter the menu.
+    if (!(event as InputEvent).isComposing) {
+      mentionOrchestrator?.handleInput((event as InputEvent).inputType ?? undefined);
+    }
     // A real edit leaves history-navigation mode.
     if (suppressHistoryReset) return;
     resetHistoryNavigation();
@@ -6367,8 +6371,9 @@ export const createAgentExperience = (
 
     // Mention menu takes precedence when open (↑/↓ nav, Enter/Tab select, Esc
     // close) and handles Backspace-removes-last-chip on an empty composer. One
-    // handler, no competing capture-phase listener.
-    if (mentionOrchestrator?.handleKeydown(event)) return;
+    // handler, no competing capture-phase listener. Skip during IME composition
+    // so Enter-to-confirm-composition isn't swallowed as a menu selection.
+    if (!event.isComposing && mentionOrchestrator?.handleKeydown(event)) return;
 
     // Up/Down: walk through previously sent user messages.
     if (

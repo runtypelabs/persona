@@ -20,13 +20,13 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "162 kB",
+    "limit": "157 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "162 kB",
+    "limit": "158 kB",
     "gzip": true
   },
   {
@@ -80,7 +80,7 @@
   {
     "name": "Lazy · context-mentions + slash-commands chunk (context-mentions.js)",
     "path": "dist/context-mentions.js",
-    "limit": "15 kB",
+    "limit": "17 kB",
     "gzip": true
   }
 ]

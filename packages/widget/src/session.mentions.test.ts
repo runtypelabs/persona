@@ -52,8 +52,8 @@ describe("AgentWidgetSession — mention/command submit", () => {
     // A server skill: `/lookup 1042` resolved to structured context, namespaced
     // `{ [sourceId]: { [itemId]: context } }` exactly as the manager builds it.
     const context = { commands: { lookup: { intent: "lookup-order", orderId: "1042" } } };
+    const refs = [{ sourceId: "commands", itemId: "lookup", label: "lookup" }];
     const bundle: MentionSubmitBundle = {
-      refs: [{ sourceId: "commands", itemId: "lookup", label: "lookup" }],
       llmEntries: [],
       contentParts: [],
       context,
@@ -61,7 +61,7 @@ describe("AgentWidgetSession — mention/command submit", () => {
 
     await session.sendMessage("", {
       mentions: {
-        refs: bundle.refs,
+        refs,
         finalize: async () => bundle,
       },
     });
@@ -72,7 +72,7 @@ describe("AgentWidgetSession — mention/command submit", () => {
     expect(msg!.content).toBe("");
     expect(msg!.content).not.toBe("[Image]");
     // The command chip echoes immediately as a ref.
-    expect(msg!.contextMentions).toEqual(bundle.refs);
+    expect(msg!.contextMentions).toEqual(refs);
     // Structured server-command data is merged onto the message…
     expect(msg!.mentionContext).toEqual(context);
     // …and rides to the backend under request `context.mentions`.
@@ -87,7 +87,6 @@ describe("AgentWidgetSession — mention/command submit", () => {
       mentions: {
         refs: [{ sourceId: "files", itemId: "app", label: "App.tsx" }],
         finalize: async (): Promise<MentionSubmitBundle> => ({
-          refs: [{ sourceId: "files", itemId: "app", label: "App.tsx" }],
           llmEntries: [{ label: "App.tsx", text: "FILE BODY" }],
           contentParts: [],
           context: {},

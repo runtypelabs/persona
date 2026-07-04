@@ -37,7 +37,11 @@ function scoreItem(label: string, query: string): number {
   const q = query.toLowerCase();
   if (l.startsWith(q)) return TIER_PREFIX;
   // Word boundaries: whitespace, hyphen, underscore, slash, dot, camelCase.
-  const words = label.split(/[\s\-_/.]+|(?<=[a-z])(?=[A-Z])/);
+  // Split camelCase by inserting a space at lower→upper transitions first
+  // (a lookbehind-free rewrite — lookbehind is a parse error on Safari < 16.4,
+  // and this module ships in the core bundle, so a regex literal there would
+  // break the whole widget on those browsers even with mentions disabled).
+  const words = label.replace(/([a-z])([A-Z])/g, "$1 $2").split(/[\s\-_/.]+/);
   if (words.some((w) => w.toLowerCase().startsWith(q))) return TIER_WORD_BOUNDARY;
   if (isSubsequence(q, l)) return TIER_SUBSEQUENCE;
   return TIER_NONE;
@@ -75,6 +79,19 @@ export function defaultMentionFilter(
     return compareWithinTier(a.item, b.item);
   });
   return scored.map((s) => s.item);
+}
+
+/**
+ * Split a command-channel query into its command NAME (first token) and ARGS
+ * (everything after, trimmed). `"deploy staging"` → `{ name: "deploy", args:
+ * "staging" }`; `"deploy"` → `{ name: "deploy", args: "" }`. Shared by the
+ * slash-command source (matches on `name`) and the controller (captures `args`).
+ */
+export function splitCommandQuery(query: string): { name: string; args: string } {
+  const trimmed = query.replace(/^\s+/, "");
+  const sp = trimmed.search(/\s/);
+  if (sp === -1) return { name: trimmed, args: "" };
+  return { name: trimmed.slice(0, sp), args: trimmed.slice(sp + 1).trim() };
 }
 
 /**
@@ -173,10 +190,7 @@ export function createSlashCommandsSource(opts: {
     // commands call resolve synchronously from the controller; action commands
     // never resolve. So "submit" is the correct source-level default here.
     resolveOn: "submit",
-    search: (query) => {
-      const name = query.replace(/^\s+/, "").split(/\s/)[0] ?? "";
-      return defaultMentionFilter(items, name);
-    },
+    search: (query) => defaultMentionFilter(items, splitCommandQuery(query).name),
     resolve: (item, ctx) => {
       const def = byName.get(item.id);
       if (!def) return {};

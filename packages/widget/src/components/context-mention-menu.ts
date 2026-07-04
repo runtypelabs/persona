@@ -19,15 +19,15 @@ export interface MentionMenuGroup {
 export interface MentionMenuViewModel {
   query: string;
   groups: MentionMenuGroup[];
-  /** Flat keyboard-traversal order across all groups (only selectable rows). */
-  flat: { source: AgentWidgetContextMentionSource; item: AgentWidgetContextMentionItem }[];
   activeIndex: number;
 }
 
 export interface MentionMenuParts {
   el: HTMLElement;
   render: (vm: MentionMenuViewModel) => void;
-  setActiveIndex: (index: number) => void;
+  /** Move the highlight. `scroll` is false for pointer hover (don't yank the
+   *  list under a stationary cursor); true for keyboard navigation. */
+  setActiveIndex: (index: number, scroll?: boolean) => void;
   destroy: () => void;
   /**
    * Reveal + focus the picker search field (button-open mode) with an initial
@@ -56,6 +56,8 @@ export function createMentionMenu(opts: {
   listboxId: string;
   onSelectIndex: (index: number) => void;
   onHoverIndex: (index: number) => void;
+  /** Retry a failed source (its group error row shows a Retry button). */
+  onRetry?: (sourceId: string) => void;
   /** Picker search field input → new query. */
   onSearchInput?: (value: string) => void;
   /** Picker search field keydown → controller nav (arrows / enter / escape). */
@@ -108,20 +110,29 @@ export function createMentionMenu(opts: {
   el.append(searchWrap, listEl);
 
   let optionEls: HTMLElement[] = [];
+  // Per-option repaint closures: set for `renderMentionItem` rows (so the host's
+  // `ctx.active` follows the highlight); null for built-in rows (CSS handles it).
+  let optionRepaint: Array<((active: boolean) => void) | null> = [];
+  let currentActive = -1;
 
   const optionId = (i: number) => `${listboxId}-opt-${i}`;
 
-  const setActiveIndex = (index: number) => {
-    optionEls.forEach((opt, i) => {
-      if (i === index) {
-        opt.setAttribute("data-active", "true");
-        opt.scrollIntoView?.({ block: "nearest" });
-      } else {
-        opt.removeAttribute("data-active");
-      }
-    });
+  const applyActive = (i: number, active: boolean) => {
+    const opt = optionEls[i];
+    if (!opt) return;
+    if (active) opt.setAttribute("data-active", "true");
+    else opt.removeAttribute("data-active");
+    opt.setAttribute("aria-selected", active ? "true" : "false");
+    optionRepaint[i]?.(active);
+  };
+
+  const setActiveIndex = (index: number, scroll = true) => {
+    if (currentActive >= 0 && currentActive !== index) applyActive(currentActive, false);
+    currentActive = index;
     const active = optionEls[index];
     if (active) {
+      applyActive(index, true);
+      if (scroll) active.scrollIntoView?.({ block: "nearest" });
       listEl.setAttribute("aria-activedescendant", active.id);
       searchInput.setAttribute("aria-activedescendant", active.id);
     } else {
@@ -130,105 +141,127 @@ export function createMentionMenu(opts: {
     }
   };
 
+  const groupSection = (label: string): HTMLElement => {
+    const section = createElement("div", "persona-mention-group");
+    section.appendChild(
+      createNode("div", { className: "persona-mention-group-header", text: label })
+    );
+    return section;
+  };
+
+  const buildOption = (
+    item: AgentWidgetContextMentionItem,
+    source: AgentWidgetContextMentionSource,
+    query: string,
+    index: number
+  ): HTMLElement => {
+    const row = createNode("div", {
+      className: "persona-mention-option",
+      attrs: { role: "option", id: optionId(index), "aria-selected": "false" },
+    });
+
+    if (config.renderMentionItem) {
+      // Narrow override: host owns the inner visuals; we keep the
+      // `role="option"` wrapper, a11y attrs, and click/hover wiring. Repaint on
+      // highlight changes so the host's `active` flag never goes stale.
+      const paint = (active: boolean) => {
+        row.replaceChildren(
+          config.renderMentionItem!({ item, source, query, active, index })
+        );
+      };
+      paint(false); // initial inactive paint; setActiveIndex repaints the active row
+      optionRepaint.push(paint);
+    } else {
+      const iconName = item.iconName ?? config.chipIconName ?? "at-sign";
+      const iconHost = createElement("span", "persona-mention-option-icon");
+      const icon = renderLucideIcon(iconName, 15, "currentColor", 2);
+      if (icon) iconHost.appendChild(icon);
+      row.appendChild(iconHost);
+
+      const textCol = createElement("span", "persona-mention-option-text");
+      textCol.appendChild(
+        createNode("span", { className: "persona-mention-option-label", text: item.label })
+      );
+      if (item.description) {
+        textCol.appendChild(
+          createNode("span", { className: "persona-mention-option-desc", text: item.description })
+        );
+      }
+      row.appendChild(textCol);
+      optionRepaint.push(null);
+    }
+
+    row.addEventListener("mousedown", (e) => {
+      if ((e as MouseEvent).button !== 0) return; // ignore right/middle click
+      // mousedown (not click) so the textarea doesn't blur-then-close first.
+      e.preventDefault();
+      opts.onSelectIndex(index);
+    });
+    // Hover highlights but must NOT scroll — that would yank rows under a
+    // stationary cursor while the keyboard is driving the list.
+    row.addEventListener("mouseenter", () => opts.onHoverIndex(index));
+
+    optionEls.push(row);
+    return row;
+  };
+
+  const errorRow = (source: AgentWidgetContextMentionSource): HTMLElement => {
+    const row = createNode("div", {
+      className: "persona-mention-status persona-mention-error",
+    });
+    row.appendChild(
+      createNode("span", {
+        className: "persona-mention-error-text",
+        text: `Couldn't load ${source.label}`,
+      })
+    );
+    if (opts.onRetry) {
+      const retry = createNode("button", {
+        className: "persona-mention-retry",
+        attrs: { type: "button" },
+        text: "Retry",
+      });
+      retry.addEventListener("mousedown", (e) => e.preventDefault());
+      retry.addEventListener("click", (e) => {
+        e.preventDefault();
+        opts.onRetry!(source.id);
+      });
+      row.appendChild(retry);
+    }
+    return row;
+  };
+
   const render = (vm: MentionMenuViewModel) => {
     listEl.replaceChildren();
     optionEls = [];
+    optionRepaint = [];
+    currentActive = -1;
     let flatCursor = 0;
-
-    if (vm.groups.length === 0) {
-      listEl.appendChild(
-        createNode("div", { className: "persona-mention-empty", text: "No matches" })
-      );
-      listEl.removeAttribute("aria-activedescendant");
-      searchInput.removeAttribute("aria-activedescendant");
-      return;
-    }
+    let readyCount = 0;
+    let loadingCount = 0;
+    let errorCount = 0;
 
     for (const group of vm.groups) {
-      const section = createElement("div", "persona-mention-group");
-      section.appendChild(
-        createNode("div", {
-          className: "persona-mention-group-header",
-          text: group.source.label,
-        })
-      );
-
       if (group.status === "loading") {
+        loadingCount++;
+        const section = groupSection(group.source.label);
         section.appendChild(
           createNode("div", {
             className: "persona-mention-status persona-mention-loading",
             text: "Loading…",
           })
         );
+        listEl.appendChild(section);
       } else if (group.status === "error") {
-        section.appendChild(
-          createNode("div", {
-            className: "persona-mention-status persona-mention-error",
-            text: `Couldn't load ${group.source.label}`,
-          })
-        );
-      } else if (group.status === "empty" || group.items.length === 0) {
-        section.appendChild(
-          createNode("div", {
-            className: "persona-mention-status persona-mention-empty",
-            text: "No matches",
-          })
-        );
-      } else {
+        errorCount++;
+        const section = groupSection(group.source.label);
+        section.appendChild(errorRow(group.source));
+        listEl.appendChild(section);
+      } else if (group.status === "ready" && group.items.length > 0) {
+        const section = groupSection(group.source.label);
         for (const item of group.items) {
-          const index = flatCursor++;
-          const row = createNode("div", {
-            className: "persona-mention-option",
-            attrs: { role: "option", id: optionId(index), "aria-selected": "false" },
-          });
-
-          if (config.renderMentionItem) {
-            // Narrow override: host owns the inner visuals; we keep the
-            // `role="option"` wrapper, a11y attrs, and click/hover wiring below.
-            row.appendChild(
-              config.renderMentionItem({
-                item,
-                source: group.source,
-                query: vm.query,
-                active: index === vm.activeIndex,
-                index,
-              })
-            );
-          } else {
-            const iconName = item.iconName ?? config.chipIconName ?? "at-sign";
-            const iconHost = createElement("span", "persona-mention-option-icon");
-            const icon = renderLucideIcon(iconName, 15, "currentColor", 2);
-            if (icon) iconHost.appendChild(icon);
-            row.appendChild(iconHost);
-
-            const textCol = createElement("span", "persona-mention-option-text");
-            textCol.appendChild(
-              createNode("span", {
-                className: "persona-mention-option-label",
-                text: item.label,
-              })
-            );
-            if (item.description) {
-              textCol.appendChild(
-                createNode("span", {
-                  className: "persona-mention-option-desc",
-                  text: item.description,
-                })
-              );
-            }
-            row.appendChild(textCol);
-          }
-
-          const capturedIndex = index;
-          row.addEventListener("mousedown", (e) => {
-            // mousedown (not click) so the textarea doesn't blur-then-close first.
-            e.preventDefault();
-            opts.onSelectIndex(capturedIndex);
-          });
-          row.addEventListener("mouseenter", () => opts.onHoverIndex(capturedIndex));
-
-          optionEls.push(row);
-          section.appendChild(row);
+          section.appendChild(buildOption(item, group.source, vm.query, flatCursor++));
+          readyCount++;
         }
         if (group.truncated) {
           section.appendChild(
@@ -238,12 +271,25 @@ export function createMentionMenu(opts: {
             })
           );
         }
+        listEl.appendChild(section);
       }
-
-      listEl.appendChild(section);
+      // Empty groups render nothing; a single empty state is shown below.
     }
 
-    setActiveIndex(vm.activeIndex);
+    // One compact empty state only when nothing is loading, erroring, or ready —
+    // never a per-group "No matches" dump.
+    if (readyCount === 0 && loadingCount === 0 && errorCount === 0) {
+      listEl.appendChild(
+        createNode("div", { className: "persona-mention-empty", text: "No matches" })
+      );
+    }
+
+    if (optionEls.length > 0) {
+      setActiveIndex(Math.min(Math.max(0, vm.activeIndex), optionEls.length - 1));
+    } else {
+      listEl.removeAttribute("aria-activedescendant");
+      searchInput.removeAttribute("aria-activedescendant");
+    }
   };
 
   const showSearch = (initial: string, placeholder?: string) => {

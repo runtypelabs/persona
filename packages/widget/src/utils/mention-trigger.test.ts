@@ -89,13 +89,13 @@ describe("parseAnyTrigger", () => {
 
   it("picks the @ channel for a mid-sentence mention", () => {
     const hit = parseAnyTrigger("hey @fo", 7, channels);
-    expect(hit?.channelIndex).toBe(0);
+    expect(hit?.channel.trigger).toBe("@");
     expect(hit?.match).toEqual({ triggerIndex: 4, query: "fo" });
   });
 
   it("picks the / channel only at line-start", () => {
     const hit = parseAnyTrigger("/dep", 4, channels);
-    expect(hit?.channelIndex).toBe(1);
+    expect(hit?.channel.trigger).toBe("/");
     expect(hit?.match).toEqual({ triggerIndex: 0, query: "dep" });
   });
 

@@ -138,11 +138,13 @@ const actionCommands: SlashCommandDefinition[] = [
     iconName: "help-circle",
     kind: "action",
     action: () => {
-      activeController?.injectAssistantMessage({
-        content:
-          "**Commands**\n- `/clear` — clear the chat\n- `/help` — this list\n- `/echo <text>` — echo text back",
-      });
-      log("Action: /help → injected a help message");
+      // Build the list from the commands actually registered for the current
+      // variant, so /help never advertises a command that isn't wired up.
+      const list = commandsForVariant(selectedVariant)
+        .map((c) => `- \`/${c.name}\` — ${c.description ?? ""}`)
+        .join("\n");
+      activeController?.injectAssistantMessage({ content: `**Commands**\n${list}` });
+      log("Action: /help → injected the registered command list");
     },
   },
   {
@@ -201,9 +203,12 @@ function renderCommandRow(
   row.style.cssText = "display:flex;align-items:center;gap:10px;width:100%";
   const kbd = document.createElement("kbd");
   kbd.textContent = `/${ctx.item.label}`;
+  // Theme-aware: a fixed dark chip disappears on dark themes, so read the
+  // widget's container/text/border tokens.
   kbd.style.cssText =
     "flex:0 0 auto;font:600 12px/1.4 ui-monospace,SFMono-Regular,monospace;" +
-    "background:#111827;color:#fff;border-radius:6px;padding:2px 7px";
+    "background:var(--persona-container,#111827);color:var(--persona-text,#fff);" +
+    "border:1px solid var(--persona-border,transparent);border-radius:6px;padding:2px 7px";
   const text = document.createElement("div");
   text.style.cssText = "min-width:0";
   const desc = document.createElement("div");
@@ -214,12 +219,10 @@ function renderCommandRow(
   return row;
 }
 
-// --- Per-variant contextMentions config -------------------------------------
-function buildContextMentions(variant: VariantId): AgentWidgetContextMentionConfig {
-  const onError = (item: { label: string }, err: unknown) =>
-    log(`Resolve failed for ${item.label}: ${String(err)}`);
-
-  const commandsFor: Record<VariantId, SlashCommandDefinition[]> = {
+// The commands registered for each variant. Shared by the config builder and
+// the /help action so the two never drift.
+function commandsForVariant(variant: VariantId): SlashCommandDefinition[] {
+  const byVariant: Record<VariantId, SlashCommandDefinition[]> = {
     prompt: promptCommands,
     actions: actionCommands,
     args: argsCommands,
@@ -227,13 +230,20 @@ function buildContextMentions(variant: VariantId): AgentWidgetContextMentionConf
     custom: [...promptCommands, ...actionCommands],
     server: serverCommands,
   };
+  return byVariant[variant];
+}
+
+// --- Per-variant contextMentions config -------------------------------------
+function buildContextMentions(variant: VariantId): AgentWidgetContextMentionConfig {
+  const onError = (item: { label: string }, err: unknown) =>
+    log(`Resolve failed for ${item.label}: ${String(err)}`);
 
   return {
     enabled: true,
     // Only the "@ + /" variant registers an @ context source.
     sources: variant === "dual" ? [filesSource] : [],
     ...createSlashCommandsExperience({
-      commands: commandsFor[variant],
+      commands: commandsForVariant(variant),
       label: "Commands",
     }),
     ...(variant === "custom" ? { renderMentionItem: renderCommandRow } : {}),

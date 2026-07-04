@@ -38,6 +38,7 @@ function setup(
   document.body.appendChild(form);
 
   const onSelect = vi.fn(() => true);
+  const announce = vi.fn();
   const controller = new ContextMentionController({
     mentionConfig: { enabled: true, sources, ...cfg },
     textarea,
@@ -46,9 +47,24 @@ function setup(
     getConfig: () => ({}) as AgentWidgetConfig,
     onSelect,
     composer,
-    announce: vi.fn(),
+    announce,
   });
-  return { controller, textarea, onSelect, form };
+  return { controller, textarea, onSelect, form, announce };
+}
+
+/** An async source whose `search` promise resolves only when `release` is called. */
+function makeDeferredSource(id: string): {
+  source: AgentWidgetContextMentionSource;
+  release: (items: AgentWidgetContextMentionItem[]) => void;
+} {
+  let release!: (items: AgentWidgetContextMentionItem[]) => void;
+  const source: AgentWidgetContextMentionSource = {
+    id,
+    label: id,
+    search: () => new Promise((r) => (release = r)),
+    resolve: async () => ({ llmAppend: "x" }),
+  };
+  return { source, release: (items) => release(items) };
 }
 
 const syncSource = (
@@ -157,6 +173,126 @@ describe("ContextMentionController", () => {
     expect(document.activeElement).toBe(input);
     // Empty query → browse all.
     expect(document.querySelectorAll(".persona-mention-option")).toHaveLength(2);
+  });
+
+  it("openFromButton adopts a live typed trigger so selection strips the @query", () => {
+    const { controller, textarea, onSelect } = setup([
+      syncSource("files", [item("App.tsx")]),
+    ]);
+    // User typed "@ap" then clicked the affordance button.
+    textarea.value = "hey @ap";
+    textarea.setSelectionRange(7, 7);
+    controller.openFromButton();
+
+    // Adopted as a typed trigger (not picker mode): no search field, and the
+    // menu is already filtered by "ap".
+    expect(controller.isOpen()).toBe(true);
+    const wrap = document.querySelector<HTMLElement>(".persona-mention-search")!;
+    expect(wrap.style.display).toBe("none");
+    expect(document.querySelectorAll(".persona-mention-option")).toHaveLength(1);
+
+    controller.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    // The "@ap" span is stripped — not left stranded in the composer.
+    expect(textarea.value).toBe("hey ");
+  });
+
+  it("mirrors aria-activedescendant onto the textarea and toggles aria-selected", () => {
+    const { controller, textarea } = setup([
+      syncSource("files", [item("App.tsx"), item("api.ts")]),
+    ]);
+    textarea.value = "@a";
+    textarea.setSelectionRange(2, 2);
+    controller.onInput();
+
+    const options = document.querySelectorAll<HTMLElement>(".persona-mention-option");
+    expect(options).toHaveLength(2);
+    // First option active: aria-selected on it, aria-activedescendant on textarea.
+    expect(options[0].getAttribute("aria-selected")).toBe("true");
+    expect(options[1].getAttribute("aria-selected")).toBe("false");
+    expect(textarea.getAttribute("aria-activedescendant")).toBe(options[0].id);
+
+    controller.handleKeydown(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    expect(options[1].getAttribute("aria-selected")).toBe("true");
+    expect(options[0].getAttribute("aria-selected")).toBe("false");
+    expect(textarea.getAttribute("aria-activedescendant")).toBe(options[1].id);
+
+    controller.close();
+    expect(textarea.hasAttribute("aria-activedescendant")).toBe(false);
+  });
+
+  it("shows a Retry on a failed source and re-runs it on click", () => {
+    let calls = 0;
+    const flaky: AgentWidgetContextMentionSource = {
+      id: "flaky",
+      label: "Flaky",
+      search: () => {
+        calls++;
+        if (calls === 1) throw new Error("boom");
+        return [item("ok")];
+      },
+      resolve: async () => ({ llmAppend: "x" }),
+    };
+    const { controller, textarea } = setup([flaky]);
+    textarea.value = "@o";
+    textarea.setSelectionRange(2, 2);
+    controller.onInput();
+
+    // First search threw → error group with a Retry button, no options.
+    const retry = document.querySelector<HTMLButtonElement>(".persona-mention-retry");
+    expect(retry).not.toBeNull();
+    expect(document.querySelectorAll(".persona-mention-option")).toHaveLength(0);
+
+    retry!.click();
+    // Second search succeeded → the option renders.
+    expect(calls).toBe(2);
+    expect(document.querySelectorAll(".persona-mention-option")).toHaveLength(1);
+  });
+
+  it("keeps the highlight on the same item when async results reorder the list", async () => {
+    const { source: cmds, release } = makeDeferredSource("cmds");
+    // cmds declared FIRST so its results sort ahead of files when they arrive.
+    const { controller, textarea } = setup(
+      [cmds, syncSource("files", [item("App.tsx"), item("azely")])],
+      { searchDebounceMs: 10_000 } // keep the debounce from re-invoking mid-test
+    );
+    textarea.value = "@a";
+    textarea.setSelectionRange(2, 2);
+    controller.onInput();
+
+    // Sync files rendered [App.tsx, azely]; move the highlight to azely.
+    controller.handleKeydown(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    expect(
+      document.querySelector(".persona-mention-option[data-active]")?.textContent
+    ).toContain("azely");
+
+    // Async commands arrive and sort above files, pushing azely down a slot.
+    release([item("alpha")]);
+    await tick();
+
+    // The highlight followed azely rather than staying on a stale index.
+    expect(
+      document.querySelector(".persona-mention-option[data-active]")?.textContent
+    ).toContain("azely");
+  });
+
+  it("close() drops in-flight async results (no late render or announce)", async () => {
+    const { source: remote, release } = makeDeferredSource("remote");
+    const { controller, textarea, announce } = setup([remote]);
+    textarea.value = "@x";
+    textarea.setSelectionRange(2, 2);
+    controller.onInput();
+    expect(controller.isOpen()).toBe(true);
+    announce.mockClear();
+
+    controller.close();
+    release([item("late")]);
+    await tick();
+
+    // The stale search result must not render into or announce for a closed menu.
+    expect(controller.isOpen()).toBe(false);
+    expect(document.querySelectorAll(".persona-mention-option")).toHaveLength(0);
+    expect(announce).not.toHaveBeenCalled();
   });
 
   it("filters from the picker search field and selects without touching the textarea", () => {

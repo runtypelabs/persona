@@ -55,6 +55,29 @@ describe("ContextMentionManager", () => {
     expect(bundle.llmEntries).toEqual([{ label: "App.tsx", text: "FILE BODY" }]);
   });
 
+  it("reuses the in-flight resolve at submit (no duplicate fetch, survives clear)", async () => {
+    // Resolve stays pending until we release it — mirrors a submit that fires
+    // before the select-time resolve has settled.
+    let release!: (v: AgentWidgetContextMentionPayload) => void;
+    const resolve = vi.fn(
+      () => new Promise<AgentWidgetContextMentionPayload>((r) => (release = r))
+    );
+    const { manager, contextRow, source } = makeManager({}, resolve);
+    manager.add(source, item("App.tsx"));
+    expect(resolve).toHaveBeenCalledTimes(1);
+
+    // Submit path: collect (detaches ownership) then the UI's post-send clear().
+    const { finalize } = manager.collectForSubmit();
+    expect(contextRow.querySelectorAll("[data-persona-mention-chip]")).toHaveLength(0);
+    manager.clear(); // must NOT abort the collected in-flight resolve
+
+    // The select-time resolve settles after collect+clear; finalize reuses it.
+    release({ llmAppend: "FILE BODY" });
+    const bundle = await finalize();
+    expect(resolve).toHaveBeenCalledTimes(1); // never re-fetched
+    expect(bundle.llmEntries).toEqual([{ label: "App.tsx", text: "FILE BODY" }]);
+  });
+
   it("rejects duplicates", () => {
     const onMentionRejected = vi.fn();
     const { manager, source } = makeManager({ onMentionRejected });
@@ -89,12 +112,15 @@ describe("ContextMentionManager", () => {
   });
 
   it("removeLast pops the most recent chip", () => {
-    const { manager, source } = makeManager();
+    const { manager, contextRow, source } = makeManager();
     manager.add(source, item("a"));
     manager.add(source, item("b"));
-    expect(manager.count()).toBe(2);
+    expect(contextRow.querySelectorAll(".persona-mention-chip")).toHaveLength(2);
     expect(manager.removeLast()).toBe(true);
-    expect(manager.getRefs().map((r) => r.itemId)).toEqual(["a"]);
+    const labels = Array.from(
+      contextRow.querySelectorAll(".persona-mention-chip-label")
+    ).map((el) => el.textContent);
+    expect(labels).toEqual(["a"]);
   });
 
   it("defers resolve to submit for resolveOn:'submit' sources", async () => {

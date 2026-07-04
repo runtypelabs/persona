@@ -32,7 +32,6 @@ export interface ContextMentionMountContext {
   composer?: AgentWidgetContextMentionComposerCapability;
   announce: (message: string) => void;
   popoverContainer?: HTMLElement | ShadowRoot;
-  onChange?: () => void;
   /** Emit a `persona:mention:<event>` analytics DOM event. */
   emit?: (event: string, detail: unknown) => void;
 }
@@ -67,7 +66,6 @@ export function mountContextMentions(
     getConfig: ctx.getConfig,
     getComposerText: () => ctx.textarea.value,
     announce: ctx.announce,
-    onChange: ctx.onChange,
     emit: ctx.emit,
   });
 

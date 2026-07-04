@@ -62,6 +62,11 @@
       "import": "./dist/animations/wipe.js",
       "require": "./dist/animations/wipe.cjs"
     },
+    "./context-mentions": {
+      "types": "./dist/context-mentions.d.ts",
+      "import": "./dist/context-mentions.js",
+      "require": "./dist/context-mentions.cjs"
+    },
     "./widget.css": "./dist/widget.css"
   },
   "files": [
@@ -82,7 +87,7 @@
     "build:theme-ref": "tsup src/theme-reference.ts --format esm,cjs --minify --dts",
     "build:codegen": "tsup src/codegen.ts --format esm,cjs --minify --dts",
     "build:styles": "node scripts/build-styles.mjs",
-    "build:client": "tsup src/index.ts --format esm,cjs --minify --sourcemap --splitting false --dts --loader \".css=text\" && tsup --config tsup.global.config.ts && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/index-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/index'+ext);}\"",
+    "build:client": "tsup src/index.ts --format esm,cjs --minify --sourcemap --splitting false --dts --loader \".css=text\" --external @runtypelabs/persona/context-mentions && tsup --config tsup.global.config.ts && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/index-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/index'+ext);}\"",
     "build:webmcp-polyfill": "tsup --config tsup.webmcp-polyfill.config.ts",
     "build:context-mentions": "tsup --config tsup.context-mentions.config.ts",
     "build:runtype-tts": "tsup --config tsup.runtype-tts.config.ts",

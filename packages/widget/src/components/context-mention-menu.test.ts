@@ -27,7 +27,6 @@ function vm(activeIndex = 0): MentionMenuViewModel {
   return {
     query: "ap",
     groups: [{ source, items, status: "ready", truncated: false }],
-    flat: items.map((item) => ({ source, item })),
     activeIndex,
   };
 }
@@ -56,6 +55,31 @@ describe("createMentionMenu", () => {
     expect(menu.el.querySelector(".persona-mention-option-desc")?.textContent).toBe(
       "entry"
     );
+  });
+
+  it("renders one empty state when all groups are empty (no per-group dump)", () => {
+    const menu = createMentionMenu({
+      config: makeConfig(),
+      listboxId: "lb",
+      onSelectIndex: vi.fn(),
+      onHoverIndex: vi.fn(),
+    });
+    menu.render({
+      query: "zzz",
+      groups: [
+        { source, items: [], status: "empty", truncated: false },
+        {
+          source: { ...source, id: "s2", label: "S2" },
+          items: [],
+          status: "empty",
+          truncated: false,
+        },
+      ],
+      activeIndex: 0,
+    });
+    // Exactly one "No matches", and no empty group headers.
+    expect(menu.el.querySelectorAll(".persona-mention-empty")).toHaveLength(1);
+    expect(menu.el.querySelectorAll(".persona-mention-group")).toHaveLength(0);
   });
 
   it("uses renderMentionItem for inner content while keeping the option wrapper + wiring", () => {

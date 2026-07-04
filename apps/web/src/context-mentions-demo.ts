@@ -159,7 +159,9 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       welcomeSubtitle: "Type @ or click the @ button to attach context.",
       inputPlaceholder: "Ask about a file or page section… (try @)",
     },
-    suggestionChips: ["Summarize @App.tsx", "What's in the pricing section?"],
+    // Suggestion chips send their text verbatim (they don't attach a mention),
+    // so these are plain prompts — use @ or the button to attach real context.
+    suggestionChips: ["Summarize the App.tsx file", "What's in the pricing section?"],
     // The factory returns a full `contextMentions` config for the selected
     // variant; we spread it and add this page's own callbacks — showing how a
     // shared experience composes with local config.

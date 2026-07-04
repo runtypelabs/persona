@@ -82,7 +82,7 @@
                     <span class="prop">commands</span>: [
                       { <span class="prop">name</span>: <span class="string">"summarize"</span>, <span class="prop">kind</span>: <span class="string">"prompt"</span>, <span class="prop">prompt</span>: <span class="string">"Summarize."</span>, <span class="prop">submitOnSelect</span>: <span class="keyword">true</span> },
                       { <span class="prop">name</span>: <span class="string">"clear"</span>, <span class="prop">kind</span>: <span class="string">"action"</span>, <span class="prop">action</span>: () => controller.clearChat() },
-                      { <span class="prop">name</span>: <span class="string">"lookup"</span>, <span class="prop">kind</span>: <span class="string">"server"</span>, <span class="prop">data</span>: (args) => ({ <span class="prop">orderId</span>: args }) },
+                      { <span class="prop">name</span>: <span class="string">"lookup"</span>, <span class="prop">kind</span>: <span class="string">"server"</span>, <span class="prop">data</span>: (args) => ({ <span class="prop">intent</span>: <span class="string">"lookup-order"</span>, <span class="prop">orderId</span>: args }) },
                     ],
                   }),
                 ],

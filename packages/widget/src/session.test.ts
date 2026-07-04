@@ -404,9 +404,12 @@ describe('AgentWidgetSession - cancel()', () => {
 
     // Kick off the dispatch but don't await: we want it in-flight when we cancel.
     const dispatchPromise = session.sendMessage('Hello');
-    // Let the session set up the AbortController and call fetch.
-    await Promise.resolve();
-    await Promise.resolve();
+    // Drain microtasks until the session has set up the AbortController and
+    // called fetch (payload building is async, so the exact tick count is not a
+    // contract — wait for the observable effect instead).
+    for (let i = 0; i < 20 && capturedSignal === null; i++) {
+      await Promise.resolve();
+    }
 
     expect(streaming).toBe(true);
     expect(session.isStreaming()).toBe(true);

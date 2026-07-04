@@ -4888,137 +4888,12 @@
   background: var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.06));
 }
 
-/* Menu (floating, anchored above the composer). Outer box wraps an optional
- * picker search field (pinned) + a scrolling result list. */
-.persona-mention-menu {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  max-height: var(--persona-mention-menu-max-height, 280px);
-  overflow: hidden;
-  background: var(--persona-mention-menu-bg, var(--persona-surface, #ffffff));
-  border: 1px solid var(--persona-mention-menu-border, var(--persona-border, #e5e7eb));
-  border-radius: var(--persona-mention-menu-radius, 10px);
-  box-shadow: var(--persona-mention-menu-shadow, 0 8px 28px rgba(0, 0, 0, 0.12));
-  font-family: var(--persona-font-family, inherit);
-}
-
-/* Scrolling result list (role="listbox"). min-height:0 lets it scroll inside
- * the flex column while the search field stays pinned above. */
-.persona-mention-list {
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px;
-}
-
-/* Picker search field (button-open mode only; hidden inline until shown). */
-.persona-mention-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--persona-mention-menu-border, var(--persona-border, #e5e7eb));
-}
-
-.persona-mention-search-icon {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  color: var(--persona-mention-group-fg, var(--persona-muted, #6b7280));
-}
-
-.persona-mention-search-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--persona-text, #111827);
-}
-
-.persona-mention-search-input::placeholder {
-  color: var(--persona-mention-group-fg, var(--persona-muted, #6b7280));
-}
-
-.persona-mention-group + .persona-mention-group {
-  margin-top: 2px;
-  border-top: 1px solid var(--persona-mention-menu-border, var(--persona-border, #f1f1f1));
-  padding-top: 2px;
-}
-
-.persona-mention-group-header {
-  padding: 6px 8px 4px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--persona-mention-group-fg, var(--persona-muted, #6b7280));
-}
-
-.persona-mention-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--persona-text, #111827);
-}
-
-.persona-mention-option[data-active="true"] {
-  background: var(--persona-mention-option-active-bg, var(--persona-container, #f1f5f9));
-}
-
-.persona-mention-option-icon {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  opacity: 0.7;
-}
-
-.persona-mention-option-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.persona-mention-option-label {
-  font-size: 13px;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.persona-mention-option-desc {
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--persona-muted, #6b7280);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.persona-mention-status,
-.persona-mention-empty,
-.persona-mention-hint {
-  padding: 7px 8px;
-  font-size: 12px;
-  color: var(--persona-muted, #6b7280);
-}
-
-.persona-mention-error {
-  color: var(--persona-mention-error, #dc2626);
-}
-
-.persona-mention-hint {
-  font-style: italic;
-  opacity: 0.8;
-}
+/* The mention MENU CSS (.persona-mention-menu / -list / -search / -group /
+ * -option / -status / -error / -retry and its coarse-pointer row sizing) lives
+ * in the lazy context-mentions chunk (src/styles/context-mention-menu-css.ts)
+ * and is injected on first menu open — so it also styles the body-mounted menu
+ * inside a useShadowDom widget. Only the eagerly-rendered chip / context-row
+ * pieces stay here. */
 
 .persona-mention-chip-readonly {
   padding-right: 8px;
@@ -5030,8 +4905,29 @@
   margin-bottom: 0;
 }
 
+/* Touch targets: on coarse pointers (phones/tablets) grow the chip + its remove
+ * control to the ~44px minimum. Desktop keeps the compact sizing above. (The
+ * menu row / retry coarse sizing ships with the menu CSS in the lazy chunk.) */
+@media (pointer: coarse) {
+  .persona-mention-chip {
+    height: auto;
+    min-height: 40px;
+  }
+  .persona-mention-chip-remove {
+    width: 36px;
+    height: 36px;
+    margin-right: -6px; /* keep the visual gap tight while the hit area grows */
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  /* No spin: show a static neutral ring instead of a rotating arc. */
   .persona-mention-chip-spinner {
-    animation-duration: 1.6s;
+    animation: none;
+    border-top-color: var(
+      --persona-mention-chip-border,
+      var(--persona-border, #d1d5db)
+    );
+    opacity: 0.6;
   }
 }

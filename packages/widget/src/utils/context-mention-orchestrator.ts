@@ -5,13 +5,16 @@
  * the feature is discoverable before any heavy code loads), then lazy-loads and
  * mounts the mention runtime on first `@`/click via `context-mentions-loader`.
  * Everything heavy (controller, manager, menu, chip) lives in the lazy chunk and
- * is reached only through the dynamic import — never statically — so sites that
- * leave `contextMentions` off pay no bundle cost. See
- * `docs/context-mentions-plan.md` (Bundle strategy).
+ * is reached only through the dynamic import — never statically. Sites that
+ * leave `contextMentions` off still pay a small eager cost (this orchestrator +
+ * the affordance button + the exported source helpers, ~3 kB gz — the same on
+ * ESM and the CDN); the ~15 kB runtime stays out of the core bundle until first
+ * use. See `docs/context-mentions-plan.md` (Bundle strategy).
  */
 
 import { createNode } from "./dom";
-import { parseAnyTrigger, isMenuOpeningInput, type MentionTriggerPosition } from "./mention-trigger";
+import { parseAnyTrigger, isMenuOpeningInput } from "./mention-trigger";
+import { normalizeMentionChannels, type NormalizedMentionChannel } from "./mention-channels";
 import { createMentionButton } from "../components/context-mention-button";
 import { loadContextMentions } from "../context-mentions-loader";
 import type { ContextMentionEngine } from "../context-mentions-entry";
@@ -19,9 +22,7 @@ import type { MentionSubmitBundle } from "./context-mention-manager";
 import type {
   AgentWidgetConfig,
   AgentWidgetContextMentionComposerCapability,
-  AgentWidgetContextMentionConfig,
   AgentWidgetContextMentionRef,
-  AgentWidgetContextMentionSource,
   AgentWidgetMessage,
 } from "../types";
 
@@ -49,44 +50,6 @@ export interface ContextMentionOrchestrator {
   destroy: () => void;
 }
 
-/** A trigger channel normalized for the core orchestrator (pre-check + button). */
-type OrchestratorChannel = {
-  trigger: string;
-  position: MentionTriggerPosition;
-  allowSpaces: boolean;
-  sources: AgentWidgetContextMentionSource[];
-  showButton: boolean;
-  buttonIconName?: string;
-  buttonTooltipText?: string;
-};
-
-/** Primary `@` channel (from legacy fields) + extra `triggers` channels. */
-function normalizeChannels(
-  cfg: AgentWidgetContextMentionConfig
-): OrchestratorChannel[] {
-  const primary: OrchestratorChannel = {
-    trigger: cfg.trigger ?? "@",
-    position: cfg.triggerPosition ?? "anywhere",
-    allowSpaces: false,
-    sources: Array.isArray(cfg.sources) ? cfg.sources : [],
-    showButton: cfg.showButton !== false,
-    buttonIconName: cfg.buttonIconName,
-    buttonTooltipText: cfg.buttonTooltipText,
-  };
-  const extra: OrchestratorChannel[] = (cfg.triggers ?? []).map((ch) => ({
-    trigger: ch.trigger,
-    position: ch.triggerPosition ?? "anywhere",
-    allowSpaces: ch.allowSpaces ?? false,
-    sources: Array.isArray(ch.sources) ? ch.sources : [],
-    // Extra channels (e.g. `/`) default to NO button — typed-trigger only —
-    // to keep the composer's action cluster uncluttered.
-    showButton: ch.showButton === true,
-    buttonIconName: ch.buttonIconName,
-    buttonTooltipText: ch.buttonTooltipText,
-  }));
-  return [primary, ...extra];
-}
-
 export function createContextMentionOrchestrator(opts: {
   config: AgentWidgetConfig;
   textarea: HTMLTextAreaElement;
@@ -105,9 +68,9 @@ export function createContextMentionOrchestrator(opts: {
   // channels with no sources. A config may ship ONLY extra channels (a `/`-only
   // widget), leaving the default `@` channel empty — that channel must not paint
   // a button or match its trigger.
-  const channels: OrchestratorChannel[] = normalizeChannels(mentionConfig).filter(
-    (c) => c.sources.length > 0
-  );
+  const channels: NormalizedMentionChannel[] = normalizeMentionChannels(
+    mentionConfig
+  ).filter((c) => c.sources.length > 0);
   if (channels.length === 0) {
     if (typeof console !== "undefined") {
       console.warn(

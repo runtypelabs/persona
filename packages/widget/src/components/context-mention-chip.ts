@@ -58,12 +58,21 @@ export function createMentionChip(opts: {
 
   const chip = createNode("div", {
     className: "persona-mention-chip",
-    attrs: { "data-persona-mention-chip": "", "data-status": "resolving" },
+    attrs: {
+      "data-persona-mention-chip": "",
+      "data-status": "resolving",
+      // Full label on hover, since the pill truncates long labels with ellipsis.
+      title: ref.label,
+    },
   });
 
   const iconHost = createElement("span", "persona-mention-chip-icon");
-  const icon = renderLucideIcon(iconName, 13, "currentColor", 2);
-  if (icon) iconHost.appendChild(icon);
+  const setIcon = (name: string) => {
+    iconHost.replaceChildren();
+    const svg = renderLucideIcon(name, 13, "currentColor", 2);
+    if (svg) iconHost.appendChild(svg);
+  };
+  setIcon(iconName);
 
   // The spinner shown while the mention resolves; swapped for the icon on ready.
   const spinner = createElement("span", "persona-mention-chip-spinner");
@@ -98,9 +107,19 @@ export function createMentionChip(opts: {
     if (status === "resolving") {
       if (spinner.parentNode !== chip) chip.insertBefore(spinner, label);
       if (iconHost.parentNode === chip) iconHost.remove();
+      chip.setAttribute("title", ref.label);
     } else {
       if (spinner.parentNode === chip) spinner.remove();
       if (iconHost.parentNode !== chip) chip.insertBefore(iconHost, label);
+      if (status === "error") {
+        // Error is not color-only: swap to an alert icon and explain in the
+        // hover title (and the aria-label reflects it via the title too).
+        setIcon("triangle-alert");
+        chip.setAttribute("title", `Couldn't add ${ref.label} to context`);
+      } else {
+        setIcon(iconName);
+        chip.setAttribute("title", ref.label);
+      }
     }
   };
 

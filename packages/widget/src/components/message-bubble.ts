@@ -205,7 +205,7 @@ const createMessageMentionChips = (
   for (const ref of mentions) {
     const chip = createNode("div", {
       className: "persona-mention-chip persona-mention-chip-readonly",
-      attrs: { "data-status": "ready" },
+      attrs: { "data-status": "ready", title: ref.label },
     });
     const iconHost = createElement("span", "persona-mention-chip-icon");
     const icon = renderLucideIcon(ref.iconName ?? "at-sign", 13, "currentColor", 2);

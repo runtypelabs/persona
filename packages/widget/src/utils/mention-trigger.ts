@@ -97,15 +97,14 @@ export function parseMentionTrigger(
  * tested in order; the FIRST with an active match wins (put `@` first, `/`
  * next). At any caret at most one channel can match — the scan stops at the
  * nearest trigger/whitespace — so ordering only matters if two channels share a
- * trigger char (don't do that). Returns the winning channel index + its match.
+ * trigger char (don't do that). Returns the winning channel + its match.
  */
 export function parseAnyTrigger<T extends MentionTriggerSpec>(
   value: string,
   caret: number,
   channels: readonly T[]
-): { channelIndex: number; channel: T; match: MentionTriggerMatch } | null {
-  for (let c = 0; c < channels.length; c++) {
-    const channel = channels[c];
+): { channel: T; match: MentionTriggerMatch } | null {
+  for (const channel of channels) {
     const match = parseMentionTrigger(
       value,
       caret,
@@ -113,7 +112,7 @@ export function parseAnyTrigger<T extends MentionTriggerSpec>(
       channel.position ?? "anywhere",
       channel.allowSpaces ?? false
     );
-    if (match) return { channelIndex: c, channel, match };
+    if (match) return { channel, match };
   }
   return null;
 }

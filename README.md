@@ -206,7 +206,7 @@ Register custom components and render them inline via directives. Stream-aware p
 Programmatically insert messages (`injectMessage`, `injectAssistantMessage`, `injectUserMessage`, `injectSystemMessage`) with dual-content support: display one thing to the user while sending different content to the LLM. Inject page/editor context with `contextProviders` and `requestMiddleware`; use `webmcp: { enabled: true }` to expose page actions through `document.modelContext`. For richer page context, import the optional `@runtypelabs/persona/smart-dom-reader` provider.
 
 ### Context Mentions
-Let users pull external context into a single turn by typing `@` or clicking a visible composer button — both open one searchable menu of host-provided sources. Selecting a mention strips the typed query and adds a removable pill chip; the resolved content reaches the model via `llmAppend` (lead with this — it always works, no backend changes) or an opt-in structured `context.mentions` channel. Disabled by default; when enabled the runtime is lazy-loaded so unused installs pay no bundle cost.
+Let users pull external context into a single turn by typing `@` or clicking a visible composer button — both open one searchable menu of host-provided sources. Selecting a mention strips the typed query and adds a removable pill chip; the resolved content reaches the model via `llmAppend` (lead with this — it always works, no backend changes) or an opt-in structured `context.mentions` channel. Disabled by default; when enabled, the heavy menu/chip runtime (~15 kB gzipped) is lazy-loaded on first use, so an install that leaves it off ships only a small affordance, not the whole feature.
 
 ```ts
 import initAgentWidget, { createStaticMentionSource } from "@runtypelabs/persona";

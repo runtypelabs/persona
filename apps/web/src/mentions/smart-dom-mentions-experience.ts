@@ -114,6 +114,10 @@ export function createSmartDomMentionsExperience(
   };
 
   // Scroll to a live element and flash a brief outline (click-to-navigate).
+  // A single active flash is tracked so a rapid re-click cancels the pending
+  // restore first — otherwise the second click would capture the flash outline
+  // as its "previous" value and leave the outline stuck on.
+  let activeFlash: { restore: () => void; timer: number } | null = null;
   const flashPageElement = (selector: string): void => {
     let found: HTMLElement | null = null;
     try {
@@ -125,16 +129,26 @@ export function createSmartDomMentionsExperience(
       log(`Navigate: no live element for ${selector}`);
       return;
     }
+    if (activeFlash) {
+      window.clearTimeout(activeFlash.timer);
+      activeFlash.restore();
+      activeFlash = null;
+    }
     const target = found;
     target.scrollIntoView({ block: "center", behavior: "smooth" });
     const prevOutline = target.style.outline;
     const prevOffset = target.style.outlineOffset;
-    target.style.outline = `2px solid ${accent}`;
-    target.style.outlineOffset = "2px";
-    window.setTimeout(() => {
+    const restore = () => {
       target.style.outline = prevOutline;
       target.style.outlineOffset = prevOffset;
+    };
+    target.style.outline = `2px solid ${accent}`;
+    target.style.outlineOffset = "2px";
+    const timer = window.setTimeout(() => {
+      restore();
+      activeFlash = null;
     }, 1200);
+    activeFlash = { restore, timer };
     log(`Navigate → ${selector}`);
   };
 
@@ -153,11 +167,14 @@ export function createSmartDomMentionsExperience(
     if (existing) return existing;
     const el = document.createElement("div");
     el.setAttribute("data-persona-mention-preview", "");
+    // Theme-aware: reads off the widget's surface/text/border tokens so the
+    // preview adapts to light and dark themes (falls back to a dark tooltip).
     el.style.cssText =
       "position:fixed;z-index:2147483000;display:none;max-width:300px;max-height:180px;" +
       "overflow:auto;padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.45;" +
-      "white-space:pre-wrap;background:#111827;color:#f9fafb;pointer-events:none;" +
-      "box-shadow:0 10px 30px rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.08);";
+      "white-space:pre-wrap;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.28);" +
+      "background:var(--persona-surface,#111827);color:var(--persona-text,#f9fafb);" +
+      "border:1px solid var(--persona-border,rgba(255,255,255,.08));";
     document.body.appendChild(el);
     return el;
   };
@@ -254,9 +271,11 @@ export function createSmartDomMentionsExperience(
 
       const badge = document.createElement("span");
       badge.textContent = ctx.source.label.toLowerCase();
+      // Theme-aware chip: a neutral container fill + accent text reads on both
+      // light and dark (a fixed 12%-indigo fill washes out on dark themes).
       badge.style.cssText =
         "flex:none;font-size:10px;letter-spacing:.04em;padding:1px 7px;border-radius:999px;" +
-        `background:rgba(99,102,241,.12);color:${accent};`;
+        `background:var(--persona-container,rgba(99,102,241,.12));color:var(--persona-accent,${accent});`;
 
       row.append(iconHost, text, badge);
       return row;

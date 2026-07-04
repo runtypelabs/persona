@@ -11,7 +11,8 @@
     "lib": ["ES2020", "DOM"],
     "baseUrl": ".",
     "paths": {
-      "@runtypelabs/persona": ["src"]
+      "@runtypelabs/persona": ["src"],
+      "@runtypelabs/persona/context-mentions": ["src/context-mentions.ts"]
     },
     "declaration": true,
     "outDir": "dist"

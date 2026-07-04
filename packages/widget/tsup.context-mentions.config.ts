@@ -18,7 +18,11 @@ import { defineConfig } from "tsup";
  */
 export default defineConfig({
   entry: { "context-mentions": "src/context-mentions.ts" },
-  format: ["esm"],
+  // ESM for the IIFE sibling-URL loader and bundler consumers; CJS because
+  // esbuild lowers the loader's `import()` to `require()` inside `dist/index.cjs`,
+  // which then resolves this chunk via the package's `require` export condition.
+  format: ["esm", "cjs"],
+  dts: true,
   minify: true,
   splitting: false,
   outDir: "dist",
