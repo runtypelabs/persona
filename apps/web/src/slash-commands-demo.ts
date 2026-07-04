@@ -7,7 +7,6 @@ import {
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetConfig,
   type AgentWidgetContextMentionConfig,
-  type AgentWidgetContextMentionItemRenderContext,
   type AgentWidgetController,
   type AgentWidgetRequestPayload,
   type SlashCommandDefinition,
@@ -18,9 +17,12 @@ import { createDemoEchoFetch } from "./demo-echo-fetch";
 import type { Mode } from "./examples-nav";
 
 // --- Variants ----------------------------------------------------------------
-// One `/` engine, six previewable configs — each highlights a different skill
-// flavor. Switching re-mounts the widget with the selected variant's config.
-type VariantId = "prompt" | "actions" | "args" | "dual" | "custom" | "server";
+// One `/` engine, three previewable configs — one per dispatch KIND. Args and
+// @-coexistence aren't separate kinds: each variant already carries an arg
+// example, and the Client actions variant also registers an `@` context source
+// so you can see commands and mentions living on one engine. Switching re-mounts
+// the widget with the selected variant's config.
+type VariantId = "prompt" | "actions" | "server";
 const VARIANTS: Array<{ id: VariantId; label: string; description: string }> = [
   {
     id: "prompt",
@@ -30,22 +32,7 @@ const VARIANTS: Array<{ id: VariantId; label: string; description: string }> = [
   {
     id: "actions",
     label: "Client actions",
-    description: "/clear, /help, /echo — run in the browser, no message sent",
-  },
-  {
-    id: "args",
-    label: "Args",
-    description: "/deploy staging — text after the command name arrives as args",
-  },
-  {
-    id: "dual",
-    label: "@ + /",
-    description: "Context mentions (@) and slash-commands (/) side by side",
-  },
-  {
-    id: "custom",
-    label: "Custom render",
-    description: "Command rows styled via renderMentionItem (kbd badge)",
+    description: "/clear, /help, /echo run in the browser — plus @ context mentions",
   },
   {
     id: "server",
@@ -53,7 +40,7 @@ const VARIANTS: Array<{ id: VariantId; label: string; description: string }> = [
     description: "/lookup 1042 — structured data sent to the backend via context.mentions",
   },
 ];
-let selectedVariant: VariantId = "dual";
+let selectedVariant: VariantId = "prompt";
 
 renderDemoScaffold({
   slug: "slash-commands-demo",
@@ -119,6 +106,15 @@ const promptCommands: SlashCommandDefinition[] = [
     prompt: "Please rephrase your previous message in a more formal tone.",
     submitOnSelect: true,
   },
+  {
+    name: "greet",
+    description: "Prompt built from an argument — try: /greet Ada",
+    iconName: "hand",
+    kind: "prompt",
+    argsPlaceholder: "name",
+    prompt: (args) => `Write a short, friendly greeting for ${args || "a new user"}.`,
+    submitOnSelect: true,
+  },
 ];
 
 const actionCommands: SlashCommandDefinition[] = [
@@ -160,34 +156,6 @@ const actionCommands: SlashCommandDefinition[] = [
   },
 ];
 
-const argsCommands: SlashCommandDefinition[] = [
-  {
-    name: "deploy",
-    description: "Deploy to an environment — try: /deploy staging",
-    iconName: "rocket",
-    kind: "action",
-    argsPlaceholder: "environment",
-    action: ({ args }) => {
-      const env = args.trim();
-      activeController?.injectAssistantMessage({
-        content: env
-          ? `🚀 Deploying to **${env}**… (demo action: the text after the command name arrived as \`args\`)`
-          : "Usage: `/deploy <environment>`, e.g. `/deploy staging`.",
-      });
-      log(`Action: /deploy → env "${env || "(none)"}"`);
-    },
-  },
-  {
-    name: "greet",
-    description: "Prompt macro built from args — try: /greet Ada",
-    iconName: "hand",
-    kind: "prompt",
-    argsPlaceholder: "name",
-    prompt: (args) => `Write a short, friendly greeting for ${args || "a new user"}.`,
-    submitOnSelect: true,
-  },
-];
-
 const serverCommands: SlashCommandDefinition[] = [
   {
     name: "lookup",
@@ -199,39 +167,12 @@ const serverCommands: SlashCommandDefinition[] = [
   },
 ];
 
-// --- Custom command-row renderer (Custom render variant) --------------------
-function renderCommandRow(
-  ctx: AgentWidgetContextMentionItemRenderContext
-): HTMLElement {
-  const row = document.createElement("div");
-  row.style.cssText = "display:flex;align-items:center;gap:10px;width:100%";
-  const kbd = document.createElement("kbd");
-  kbd.textContent = `/${ctx.item.label}`;
-  // Theme-aware: a fixed dark chip disappears on dark themes, so read the
-  // widget's container/text/border tokens.
-  kbd.style.cssText =
-    "flex:0 0 auto;font:600 12px/1.4 ui-monospace,SFMono-Regular,monospace;" +
-    "background:var(--persona-container,#111827);color:var(--persona-text,#fff);" +
-    "border:1px solid var(--persona-border,transparent);border-radius:6px;padding:2px 7px";
-  const text = document.createElement("div");
-  text.style.cssText = "min-width:0";
-  const desc = document.createElement("div");
-  desc.textContent = ctx.item.description ?? ctx.item.label;
-  desc.style.cssText = "font-size:14px;color:var(--persona-text,#111827)";
-  text.appendChild(desc);
-  row.append(kbd, text);
-  return row;
-}
-
 // The commands registered for each variant. Shared by the config builder and
 // the /help action so the two never drift.
 function commandsForVariant(variant: VariantId): SlashCommandDefinition[] {
   const byVariant: Record<VariantId, SlashCommandDefinition[]> = {
     prompt: promptCommands,
     actions: actionCommands,
-    args: argsCommands,
-    dual: [...promptCommands.slice(0, 1), ...actionCommands.slice(0, 2)],
-    custom: [...promptCommands, ...actionCommands],
     server: serverCommands,
   };
   return byVariant[variant];
@@ -244,13 +185,14 @@ function buildContextMentions(variant: VariantId): AgentWidgetContextMentionConf
 
   return {
     enabled: true,
-    // Only the "@ + /" variant registers an @ context source.
-    sources: variant === "dual" ? [filesSource] : [],
+    // Commands and @ mentions share one engine. Only the Client actions variant
+    // also registers an @ context source, so the other variants show a pure
+    // slash-command composer for contrast.
+    sources: variant === "actions" ? [filesSource] : [],
     ...createSlashCommandsExperience({
       commands: commandsForVariant(variant),
       label: "Commands",
     }),
-    ...(variant === "custom" ? { renderMentionItem: renderCommandRow } : {}),
     onMentionResolveError: onError,
   };
 }

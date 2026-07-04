@@ -24,8 +24,8 @@
           <ul>
             <li>Type <code>/</code> at the <strong>start of a line</strong> (mid-line <code>/</code> is ignored)</li>
             <li>Filter by typing the name; ↑/↓ to navigate, Enter to run</li>
-            <li>Pass args after the name, e.g. <code>/deploy staging</code> or <code>/lookup 1042</code></li>
-            <li>In the <strong>@ + /</strong> variant, <code>@</code> still opens context mentions</li>
+            <li>Pass args after the name, e.g. <code>/greet Ada</code> or <code>/lookup 1042</code></li>
+            <li>In the <strong>Client actions</strong> variant, <code>@</code> still opens context mentions</li>
           </ul>
         </div>
 
@@ -50,15 +50,13 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">Command flavors</h3>
-        <p>Use the <strong>Skill flavor</strong> toggle above the preview to compare the three dispatch kinds plus rendering + coexistence variants:</p>
+        <p>Use the <strong>Skill flavor</strong> toggle above the preview to compare the three dispatch kinds. There are only three — a command is always a prompt, an action, or a server skill. Everything else (taking an argument, coexisting with <code>@</code>) is a modifier any kind can carry, so each variant already shows an arg example:</p>
         <ul>
-          <li><strong>Prompt macros</strong> — <code>kind: "prompt"</code> writes text into the composer (<code>submitOnSelect</code> sends it immediately). No message-in-a-chip; the command becomes the message.</li>
-          <li><strong>Client actions</strong> — <code>kind: "action"</code> runs a browser function (<code>/clear</code>, <code>/help</code>, <code>/echo</code>). Nothing is sent; the host wires broader actions via the controller.</li>
-          <li><strong>Args</strong> — a command that declares <code>argsPlaceholder</code> uses <em>inline completion</em> (Slack-style): selecting it fills <code>/deploy&nbsp;</code> into the composer and you type the argument inline (the menu shows a <code>‹environment›</code> hint and closes once you're typing). The command runs at <em>submit</em> with <code>args: "staging"</code>.</li>
-          <li><strong>@ + /</strong> — a mention channel and a command channel on one engine; at any caret only one is active.</li>
-          <li><strong>Custom render</strong> — command rows styled with <code>renderMentionItem</code> (a <code>kbd</code> badge).</li>
-          <li><strong>Server skill</strong> — <code>kind: "server"</code> inline-completes like Args (no chip), then at submit sends structured <code>data(args)</code> to the backend via request <code>context.mentions</code>; the echo backend prints what it received.</li>
+          <li><strong>Prompt macros</strong> — <code>kind: "prompt"</code> writes text into the composer (<code>submitOnSelect</code> sends it immediately). No message-in-a-chip; the command becomes the message. <code>/greet</code> takes an argument.</li>
+          <li><strong>Client actions</strong> — <code>kind: "action"</code> runs a browser function (<code>/clear</code>, <code>/help</code>, <code>/echo</code>). Nothing is sent; the host wires broader actions via the controller. This variant also registers an <code>@</code> context source, so commands and mentions share one engine (only one is active at any caret); the others stay pure slash commands.</li>
+          <li><strong>Server skill</strong> — <code>kind: "server"</code> sends structured <code>data(args)</code> to the backend via request <code>context.mentions</code>; the echo backend prints what it received.</li>
         </ul>
+        <p>Arg-bearing commands (<code>/greet</code>, <code>/echo</code>, <code>/lookup</code>) use <em>inline completion</em> (Slack-style): selecting fills <code>/greet&nbsp;</code> into the composer with a <code>‹name›</code> hint, you type the argument inline, and the command runs at <em>submit</em>. Server commands always work this way.</p>
         <p>All variants are produced by one shareable factory (<code>src/commands/slash-commands-experience.ts</code>) spread into <code>contextMentions</code> — the config is a portable unit, since the plugin registry is render-only.</p>
       </div>
 
