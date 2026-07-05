@@ -24,7 +24,12 @@ export function createMentionButton(opts: {
   const size = opts.buttonSize ?? "40px";
   const sizeNum = parseFloat(size) || 40;
   const iconSize = Math.round(sizeNum * 0.6);
-  const iconName = config.buttonIconName ?? "at-sign";
+  // Default to a "+" signifier, not an "@" glyph: no major consumer chat app
+  // (ChatGPT, Claude, Gemini, Perplexity) puts a literal "@" button in the
+  // composer — "@" is a typed power-user accelerator, while "+"/"add context"
+  // is the recognized consumer affordance. Override via `buttonIconName`
+  // (e.g. "at-sign") on a power-user surface.
+  const iconName = config.buttonIconName ?? "plus";
   const tooltipText = config.buttonTooltipText ?? "Add context";
 
   const wrapper = createElement("div", "persona-send-button-wrapper");
@@ -54,7 +59,7 @@ export function createMentionButton(opts: {
 
   const icon = renderLucideIcon(iconName, iconSize, "currentColor", 1.5);
   if (icon) button.appendChild(icon);
-  else button.textContent = "@";
+  else button.textContent = "+";
 
   button.addEventListener("click", (e) => {
     e.preventDefault();

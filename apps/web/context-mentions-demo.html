@@ -88,6 +88,22 @@
           };
         </div>
       </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">The affordance button (and when to show it)</h3>
+        <p>Typing <code>@</code> is a power-user convention that's hard to reach on mobile and invisible to keyboard and screen-reader users, so the widget also paints a visible button as an accessible entry to the same menu. The <code>@</code> channel shows it by default; extra channels like <code>/</code> are typed-only (<code>showButton: false</code>). The icon defaults to a <code>+</code> "add context" glyph, not a literal <code>@</code>.</p>
+        <ul>
+          <li><strong>Show it</strong> for consumer, mobile, or accessibility-sensitive surfaces.</li>
+          <li><strong>Hide it</strong> (<code>showButton: false</code>) for desktop power users who know to type <code>@</code>.</li>
+          <li><strong>Retheme it</strong> with <code>buttonIconName: "at-sign"</code> and <code>buttonTooltipText</code>.</li>
+        </ul>
+        <p>Want it only on small screens? <code>showButton</code> is a plain boolean, so use CSS against the widget's own size (not the viewport): the composer is a size-query container named <code>persona-composer</code>, and <code>.persona-mention-button</code> is a supported hook. Keep in mind this drops the accessible entry point at wide sizes.</p>
+        <div class="code-block">
+          <span class="keyword">@container</span> persona-composer (min-width: 480px) {
+            .persona-mention-button { <span class="prop">display</span>: none; }
+          }
+        </div>
+      </div>
     </section>
   </main>
 

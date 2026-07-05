@@ -4810,6 +4810,20 @@
  * Tokens default off the existing palette vars so themed widgets pick them up.
  * =========================================================================== */
 
+/* Composer size-query container. Both the full and pill composers carry
+ * `data-persona-composer-form`; establishing a container here lets a host
+ * stylesheet make composer controls responsive to the PANEL width rather than
+ * the viewport — correct across floating / docked / fullscreen, where the
+ * composer is frequently narrower than the screen. Safe: the form is block-level
+ * and already sized by its parent, so inline-size containment doesn't change its
+ * width, and the ask sheet + mention menu mount OUTSIDE the form, so layout
+ * containment can't capture them. Query with `@container persona-composer (...)`;
+ * `.persona-mention-button` is a supported, stable hook. */
+[data-persona-composer-form] {
+  container-type: inline-size;
+  container-name: persona-composer;
+}
+
 .persona-mention-context-row {
   display: none; /* toggled to flex by the manager when chips exist */
   flex-wrap: wrap;

@@ -28,6 +28,13 @@ Context mentions: hardening, slash-command inline completion, and true-lazy load
 - **Accessibility / UX:** `aria-activedescendant` mirrored onto the composer and
   `aria-selected` toggled per option; Home/End navigation; a single empty state;
   a Retry on failed source groups; ≥44px touch targets and a 16px picker input
-  (no iOS zoom); chips expose full labels via `title` and show an error icon.
+  (no iOS zoom); chips expose full labels via `title` and show an error icon. The
+  composer affordance button now defaults to a `+` "add context" icon (the
+  consumer-recognized signifier) instead of an `@` glyph; override with
+  `buttonIconName: "at-sign"` on a power-user surface. The composer form is now a
+  size-query container named `persona-composer`, so hosts can make the
+  `.persona-mention-button` hook responsive to panel width
+  (`@container persona-composer (…) { .persona-mention-button { display: none } }`)
+  instead of the viewport.
 - Also fixes a lookbehind regex that shipped in the core bundle and broke the
   whole widget on Safari < 16.4.

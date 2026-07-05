@@ -386,7 +386,12 @@ export type AgentWidgetContextMentionConfig = {
    * non-technical users. @default true
    */
   showButton?: boolean;
-  /** Icon for the affordance button. @default "at-sign" */
+  /**
+   * Icon for the affordance button (any registered Lucide name). Defaults to a
+   * "+" signifier — the consumer-recognized "add context" affordance — rather
+   * than an "@" glyph, which reads as power-user. Use `"at-sign"` on a
+   * developer/power-user surface. @default "plus"
+   */
   buttonIconName?: string;
   /** Tooltip / aria-label for the affordance button. @default "Add context" */
   buttonTooltipText?: string;

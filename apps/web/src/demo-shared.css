@@ -1183,7 +1183,11 @@ body.demo-code-active [data-persona-root] { display: none; }
   color: var(--muted);
   margin: 0;
 }
-.notes-section > p + p { margin-top: 0.6rem; }
+.notes-section > p + p,
+.notes-section > p + ul,
+.notes-section > p + ol,
+.notes-section > ul + p,
+.notes-section > ol + p { margin-top: 0.6rem; }
 .notes-section ul,
 .notes-section ol {
   font-size: 0.875rem;
