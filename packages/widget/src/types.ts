@@ -853,6 +853,22 @@ export type AgentWidgetArtifactsFeature = {
   /** Split / drawer dimensions and launcher widen behavior */
   layout?: AgentWidgetArtifactsLayoutConfig;
   /**
+   * Controls inline preview of previewable file artifacts (HTML/SVG written by
+   * a Claude Managed agent). When a markdown artifact carries `file` metadata,
+   * the pane can render an isolated `<iframe srcdoc>` sandbox instead of a code
+   * block.
+   */
+  filePreview?: {
+    /** Enable rendered preview for html/svg files. Defaults to enabled. Set false to force source view. */
+    enabled?: boolean;
+    /**
+     * `sandbox` attribute for the preview iframe. Defaults to `"allow-scripts"`.
+     * Never include `allow-same-origin` unless you fully trust the file source:
+     * the opaque origin is what isolates the preview. Embedder-trusted config.
+     */
+    iframeSandbox?: string;
+  };
+  /**
    * Called when an artifact card action is triggered (open, download).
    * Return `true` to prevent the default behavior.
    */
@@ -4812,6 +4828,22 @@ export type InjectComponentDirectiveOptions = {
   sequence?: number;
 };
 
+/**
+ * Optional file metadata attached to a markdown artifact that represents a
+ * concrete file written by a Claude Managed agent (e.g. `/mnt/session/outputs/cat.html`).
+ * Additive: the artifact content stays a fenced code block on the wire for
+ * backward compatibility; new widgets use this to recover the raw source and
+ * offer a preview. Mirrors the `file` field on the core `artifact_start` event.
+ */
+export type PersonaArtifactFileMeta = {
+  /** Full path of the written file (also used as the artifact title). */
+  path: string;
+  /** MIME type of the file (used for download and preview decisions). */
+  mimeType: string;
+  /** Fence language the content was encoded with (html/xml/md/text). */
+  language?: string;
+};
+
 export type PersonaArtifactRecord = {
   id: string;
   artifactType: PersonaArtifactKind;
@@ -4820,11 +4852,20 @@ export type PersonaArtifactRecord = {
   markdown?: string;
   component?: string;
   props?: Record<string, unknown>;
+  /** Present when this markdown artifact is a previewable file (see PersonaArtifactFileMeta). */
+  file?: PersonaArtifactFileMeta;
 };
 
 /** Programmatic artifact upsert (controller / window API) */
 export type PersonaArtifactManualUpsert =
-  | { id?: string; artifactType: "markdown"; title?: string; content: string }
+  | {
+      id?: string;
+      artifactType: "markdown";
+      title?: string;
+      content: string;
+      /** Optional file metadata for previewable file artifacts. */
+      file?: PersonaArtifactFileMeta;
+    }
   | {
       id?: string;
       artifactType: "component";
@@ -4861,6 +4902,8 @@ export type AgentWidgetEvent =
       artifactType: PersonaArtifactKind;
       title?: string;
       component?: string;
+      /** Present when this markdown artifact is a previewable file. */
+      file?: PersonaArtifactFileMeta;
     }
   | { type: "artifact_delta"; id: string; artDelta: string }
   | {

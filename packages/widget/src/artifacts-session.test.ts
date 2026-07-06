@@ -77,4 +77,49 @@ describe("AgentWidgetSession artifacts", () => {
     expect(session.getArtifacts()).toHaveLength(1);
     expect(session.getArtifacts()[0].markdown).toBe("C");
   });
+
+  it("stores file metadata via applyArtifactStreamEvent and keeps accumulating deltas", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    const file = { path: "outputs/cat.html", mimeType: "text/html", language: "html" };
+    session.injectTestEvent({
+      type: "artifact_start",
+      id: "f1",
+      artifactType: "markdown",
+      title: "outputs/cat.html",
+      file
+    });
+    session.injectTestEvent({ type: "artifact_delta", id: "f1", artDelta: "```html\n" });
+    session.injectTestEvent({ type: "artifact_delta", id: "f1", artDelta: "<h1>hi</h1>\n```" });
+    const rec = session.getArtifactById("f1");
+    expect(rec?.file).toEqual(file);
+    expect(rec?.markdown).toBe("```html\n<h1>hi</h1>\n```");
+  });
+
+  it("stores file metadata via upsertArtifact", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    const file = { path: "notes.md", mimeType: "text/markdown" };
+    session.upsertArtifact({
+      artifactType: "markdown",
+      title: "notes.md",
+      content: "```md\n# Hi\n\n```",
+      file
+    });
+    expect(session.getArtifactById(session.getArtifacts()[0].id)?.file).toEqual(file);
+  });
 });

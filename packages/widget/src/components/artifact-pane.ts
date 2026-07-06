@@ -1,5 +1,11 @@
 import { createElement } from "../utils/dom";
 import type { AgentWidgetConfig, AgentWidgetMessage, PersonaArtifactRecord } from "../types";
+import {
+  extractFileSource,
+  fileKindOf,
+  fileTypeLabel,
+  basenameOf,
+} from "../utils/artifact-file";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors";
 import { resolveSanitizer } from "../utils/sanitize";
 import { componentRegistry, type ComponentContext } from "./registry";
@@ -261,7 +267,8 @@ export function createArtifactPane(
   });
 
   const syncViewToggleState = () => {
-    if (!documentChrome) return;
+    // Toggle exists for documentChrome always, and for previewable file artifacts
+    // (mounted dynamically in render). Setting aria-pressed is harmless when hidden.
     viewBtn.setAttribute("aria-pressed", viewMode === "rendered" ? "true" : "false");
     codeBtn.setAttribute("aria-pressed", viewMode === "source" ? "true" : "false");
   };
@@ -323,6 +330,31 @@ export function createArtifactPane(
   let selectedId: string | null = null;
   let mobileOpen = false;
 
+  // File-preview iframe reuse: re-appending a detached iframe reloads its srcdoc,
+  // so keep the node and skip rebuilding when the artifact + source are unchanged.
+  let filePreviewIframe: HTMLIFrameElement | null = null;
+  let filePreviewKey: string | null = null;
+  let fileToggleMounted = false;
+  const resetFilePreview = () => {
+    filePreviewIframe = null;
+    filePreviewKey = null;
+  };
+  // For the default (non-document) toolbar, mount the rendered/source toggle only
+  // while a previewable file artifact is selected. The document toolbar already
+  // carries the toggle permanently.
+  const updateFileToggleVisibility = (previewable: boolean) => {
+    if (documentChrome) return;
+    if (previewable && !fileToggleMounted) {
+      leftTools.append(viewBtn, codeBtn);
+      toolbar.insertBefore(leftTools, titleEl);
+      fileToggleMounted = true;
+      syncViewToggleState();
+    } else if (!previewable && fileToggleMounted) {
+      leftTools.remove();
+      fileToggleMounted = false;
+    }
+  };
+
   const render = () => {
     const hideTabs = documentChrome && records.length <= 1;
     list.classList.toggle("persona-hidden", hideTabs);
@@ -342,20 +374,104 @@ export function createArtifactPane(
       list.appendChild(tab);
     }
 
-    content.replaceChildren();
     const sel =
       (selectedId && records.find((x) => x.id === selectedId)) ||
       records[records.length - 1];
-    if (!sel) return;
+    if (!sel) {
+      content.replaceChildren();
+      resetFilePreview();
+      updateFileToggleVisibility(false);
+      return;
+    }
+
+    const selFile = sel.artifactType === "markdown" ? sel.file : undefined;
+
+    // Expose the rendered/source toggle for previewable file artifacts even
+    // outside the document toolbar preset.
+    updateFileToggleVisibility(Boolean(selFile));
 
     if (documentChrome) {
-      const kind = sel.artifactType === "markdown" ? "MD" : sel.component ?? "Component";
+      const kind = selFile
+        ? fileTypeLabel(selFile)
+        : sel.artifactType === "markdown"
+          ? "MD"
+          : sel.component ?? "Component";
       const rawTitle = (sel.title || "Document").trim();
-      const baseTitle = rawTitle.replace(/\s*·\s*MD\s*$/i, "").trim() || "Document";
+      const baseTitle = selFile
+        ? basenameOf(selFile.path)
+        : rawTitle.replace(/\s*·\s*MD\s*$/i, "").trim() || "Document";
       centerTitle.textContent = `${baseTitle} · ${kind}`;
     } else {
-      titleEl.textContent = toolbarTitle;
+      titleEl.textContent = selFile ? basenameOf(selFile.path) : toolbarTitle;
     }
+
+    // Previewable file artifact branch (markdown artifact carrying `file` meta).
+    if (selFile) {
+      const source = extractFileSource(sel.markdown ?? "");
+      const kind = fileKindOf(selFile);
+      const previewEnabled =
+        config.features?.artifacts?.filePreview?.enabled !== false;
+      const isStreaming = sel.status !== "complete";
+      const wantIframe =
+        !isStreaming &&
+        viewMode === "rendered" &&
+        previewEnabled &&
+        (kind === "html" || kind === "svg");
+
+      if (wantIframe) {
+        const key = sel.id + " " + source;
+        // Reuse the existing iframe when nothing changed so idle re-renders don't
+        // reload it (re-appending a detached iframe reloads its srcdoc).
+        if (
+          filePreviewIframe &&
+          filePreviewKey === key &&
+          filePreviewIframe.parentElement === content
+        ) {
+          return;
+        }
+        content.replaceChildren();
+        const sandbox =
+          config.features?.artifacts?.filePreview?.iframeSandbox ?? "allow-scripts";
+        const iframe = createElement("iframe", "persona-artifact-iframe");
+        iframe.setAttribute("sandbox", sandbox);
+        iframe.setAttribute("data-artifact-id", sel.id);
+        // Assign srcdoc as a property (never innerHTML / marked / DOMPurify): the
+        // sandbox (no allow-same-origin → opaque origin) is the isolation boundary.
+        iframe.srcdoc = source;
+        filePreviewIframe = iframe;
+        filePreviewKey = key;
+        content.appendChild(iframe);
+        return;
+      }
+
+      // Not rendering an iframe: drop the cached one and rebuild.
+      resetFilePreview();
+      content.replaceChildren();
+
+      // Complete markdown file → existing markdown pipeline (sanitized).
+      if (!isStreaming && kind === "markdown" && viewMode === "rendered") {
+        const wrap = createElement(
+          "div",
+          "persona-text-sm persona-leading-relaxed persona-markdown-bubble"
+        );
+        wrap.innerHTML = toHtml(source);
+        content.appendChild(wrap);
+        return;
+      }
+
+      // Streaming, source view, or non-previewable kind → raw source in a <pre>.
+      const pre = createElement(
+        "pre",
+        "persona-font-mono persona-text-xs persona-whitespace-pre-wrap persona-break-words persona-text-persona-primary"
+      );
+      pre.textContent = source;
+      content.appendChild(pre);
+      return;
+    }
+
+    // Non-file artifact: clear any cached iframe and rebuild.
+    resetFilePreview();
+    content.replaceChildren();
 
     if (sel.artifactType === "markdown") {
       if (documentChrome && viewMode === "source") {

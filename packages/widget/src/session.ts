@@ -2613,7 +2613,8 @@ export class AgentWidgetSession {
         artifactType: "markdown",
         title: manual.title,
         status: "complete",
-        markdown: manual.content
+        markdown: manual.content,
+        ...(manual.file ? { file: manual.file } : {})
       };
       this.artifacts.set(id, rec);
       this.selectedArtifactId = id;
@@ -2657,7 +2658,8 @@ export class AgentWidgetSession {
             artifactType: "markdown",
             title: ev.title,
             status: "streaming",
-            markdown: ""
+            markdown: "",
+            ...(ev.file ? { file: ev.file } : {})
           });
         } else {
           this.artifacts.set(ev.id, {

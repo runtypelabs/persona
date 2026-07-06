@@ -4357,3 +4357,74 @@ describe('AgentWidgetClient - Wire event vocabulary (default in 4.0)', () => {
     }
   });
 });
+
+describe('AgentWidgetClient - Artifact file metadata', () => {
+  const artifactFrames = (fileField: string | null): string[] => [
+    `data: {"type":"artifact_start","id":"a1","artifactType":"markdown","title":"outputs/cat.html"${
+      fileField === null ? '' : ',"file":' + fileField
+    }}\n\n`,
+    `data: {"type":"artifact_delta","id":"a1","delta":${JSON.stringify('```html\n<h1>hi</h1>\n```')}}\n\n`,
+    `data: {"type":"artifact_complete","id":"a1"}\n\n`,
+  ];
+
+  it('propagates valid file metadata to the artifact_start event and card props', async () => {
+    global.fetch = createRawStreamFetch(
+      artifactFrames('{"path":"outputs/cat.html","mimeType":"text/html","language":"html"}')
+    );
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const startEv = events.find((e) => e.type === 'artifact_start');
+    expect(startEv).toBeDefined();
+    if (startEv?.type === 'artifact_start') {
+      expect(startEv.file).toEqual({
+        path: 'outputs/cat.html',
+        mimeType: 'text/html',
+        language: 'html',
+      });
+    }
+
+    // The completed card message carries the file metadata in its rawContent props.
+    const cardMsgs = events.filter(
+      (e): e is Extract<AgentWidgetEvent, { type: 'message' }> =>
+        e.type === 'message' && e.message.id === 'artifact-ref-a1'
+    );
+    const lastCard = cardMsgs[cardMsgs.length - 1];
+    expect(lastCard).toBeDefined();
+    const props = JSON.parse(lastCard.message.rawContent ?? '{}').props;
+    expect(props.status).toBe('complete');
+    expect(props.file).toEqual({
+      path: 'outputs/cat.html',
+      mimeType: 'text/html',
+      language: 'html',
+    });
+    expect(props.markdown).toBe('```html\n<h1>hi</h1>\n```');
+  });
+
+  it('drops malformed file metadata without error', async () => {
+    global.fetch = createRawStreamFetch(artifactFrames('{"path":123}'));
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    expect(events.some((e) => e.type === 'error')).toBe(false);
+    const startEv = events.find((e) => e.type === 'artifact_start');
+    expect(startEv).toBeDefined();
+    if (startEv?.type === 'artifact_start') {
+      expect(startEv.file).toBeUndefined();
+    }
+    const cardMsgs = events.filter(
+      (e): e is Extract<AgentWidgetEvent, { type: 'message' }> =>
+        e.type === 'message' && e.message.id === 'artifact-ref-a1'
+    );
+    const props = JSON.parse(cardMsgs[cardMsgs.length - 1].message.rawContent ?? '{}').props;
+    expect(props.file).toBeUndefined();
+  });
+});

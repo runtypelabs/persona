@@ -28,7 +28,8 @@ import {
   VoiceStatus,
   ReadAloudState,
   PersonaArtifactRecord,
-  PersonaArtifactManualUpsert
+  PersonaArtifactManualUpsert,
+  PersonaArtifactFileMeta
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
@@ -36,6 +37,7 @@ import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./util
 import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
 import { createElement, createElementInDocument } from "./utils/dom";
+import { downloadInfoFor } from "./utils/artifact-file";
 import { morphMessages } from "./utils/morph";
 import { normalizeCopiedSelectionText } from "./utils/copy-selection";
 import {
@@ -1693,6 +1695,7 @@ export const createAgentExperience = (
     const artifact = session.getArtifactById(artifactId);
     let markdown = artifact?.markdown;
     let title = artifact?.title || 'artifact';
+    let file: PersonaArtifactFileMeta | undefined = artifact?.file;
     if (!markdown) {
       // After page refresh, session state is gone: read from the persisted card message
       const cardEl = dlBtn.closest('[data-open-artifact]');
@@ -1706,16 +1709,22 @@ export const createAgentExperience = (
             const parsed = JSON.parse(msg.rawContent);
             markdown = parsed?.props?.markdown;
             title = parsed?.props?.title || title;
+            if (parsed?.props?.file && typeof parsed.props.file === 'object') {
+              file = parsed.props.file as PersonaArtifactFileMeta;
+            }
           } catch { /* ignore */ }
         }
       }
     }
     if (!markdown) return;
-    const blob = new Blob([markdown], { type: 'text/markdown' });
+    // File artifacts download the raw unfenced source under their real name/MIME;
+    // non-file markdown artifacts keep the legacy `<title>.md` / text/markdown path.
+    const { filename, mime, content } = downloadInfoFor({ title, markdown, file });
+    const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${title}.md`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   });

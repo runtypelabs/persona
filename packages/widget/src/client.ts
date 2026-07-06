@@ -21,6 +21,7 @@ import {
   ClientFeedbackRequest,
   ClientFeedbackType,
   PersonaArtifactKind,
+  PersonaArtifactFileMeta,
   ContentPart,
   WebMcpConfirmHandler
 } from "./types";
@@ -1706,7 +1707,10 @@ export class AgentWidgetClient {
     // Track artifact IDs that already have a reference card (from auto-creation or transcript_insert)
     const artifactIdsWithCards = new Set<string>();
     // Accumulate artifact markdown content for embedding in card props on complete
-    const artifactContent = new Map<string, { markdown: string; title?: string }>();
+    const artifactContent = new Map<
+      string,
+      { markdown: string; title?: string; file?: PersonaArtifactFileMeta }
+    >();
     const isArtifactEmitToolName = (name: string | undefined): boolean => {
       if (!name) return false;
       const normalized = name.replace(/_+/g, "_").replace(/^_|_$/g, "");
@@ -3105,14 +3109,33 @@ export class AgentWidgetClient {
             const at = payload.artifactType as PersonaArtifactKind;
             const artId = String(payload.id);
             const artTitle = typeof payload.title === "string" ? payload.title : undefined;
+            // Additive `file` metadata: validate shape (object with string path +
+            // string mimeType; optional string language). Drop silently if malformed
+            // so old/new backends and unexpected payloads never break the stream.
+            const rawFile = payload.file;
+            let artFile: PersonaArtifactFileMeta | undefined;
+            if (
+              rawFile &&
+              typeof rawFile === "object" &&
+              !Array.isArray(rawFile) &&
+              typeof rawFile.path === "string" &&
+              typeof rawFile.mimeType === "string"
+            ) {
+              artFile = {
+                path: rawFile.path,
+                mimeType: rawFile.mimeType,
+                ...(typeof rawFile.language === "string" ? { language: rawFile.language } : {}),
+              };
+            }
             onEvent({
               type: "artifact_start",
               id: artId,
               artifactType: at,
               title: artTitle,
-              component: typeof payload.component === "string" ? payload.component : undefined
+              component: typeof payload.component === "string" ? payload.component : undefined,
+              ...(artFile ? { file: artFile } : {})
             });
-            artifactContent.set(artId, { markdown: "", title: artTitle });
+            artifactContent.set(artId, { markdown: "", title: artTitle, file: artFile });
             // Insert inline artifact reference card (skip if already present from transcript_insert)
             if (!artifactIdsWithCards.has(artId)) {
               artifactIdsWithCards.add(artId);
@@ -3125,7 +3148,13 @@ export class AgentWidgetClient {
                 sequence: nextSequence(),
                 rawContent: JSON.stringify({
                   component: "PersonaArtifactCard",
-                  props: { artifactId: artId, title: artTitle, artifactType: at, status: "streaming" },
+                  props: {
+                    artifactId: artId,
+                    title: artTitle,
+                    artifactType: at,
+                    status: "streaming",
+                    ...(artFile ? { file: artFile } : {}),
+                  },
                 }),
               };
               artifactCardMessages.set(artId, cardMsg);
@@ -3167,6 +3196,10 @@ export class AgentWidgetClient {
                   const acc = artifactContent.get(artCompleteId);
                   if (acc?.markdown) {
                     parsed.props.markdown = acc.markdown;
+                  }
+                  // Persist file metadata too so the download path unfences correctly after refresh.
+                  if (acc?.file) {
+                    parsed.props.file = acc.file;
                   }
                 }
                 refMsg.rawContent = JSON.stringify(parsed);

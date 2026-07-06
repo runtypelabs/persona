@@ -1,4 +1,6 @@
 import type { ComponentContext, ComponentRenderer } from "./registry";
+import type { PersonaArtifactFileMeta } from "../types";
+import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
 
 /**
  * Default artifact card renderer.
@@ -8,17 +10,26 @@ function renderDefaultArtifactCard(
   props: Record<string, unknown>,
   _context: ComponentContext
 ): HTMLElement {
-  const title =
+  const file =
+    props.file && typeof props.file === "object" && !Array.isArray(props.file)
+      ? (props.file as PersonaArtifactFileMeta)
+      : undefined;
+  const rawTitle =
     typeof props.title === "string" && props.title
       ? props.title
       : "Untitled artifact";
+  // File artifacts show the basename (title stays the full path on the wire).
+  const title = file ? basenameOf(file.path) : rawTitle;
   const artifactId =
     typeof props.artifactId === "string" ? props.artifactId : "";
   const status = props.status === "streaming" ? "streaming" : "complete";
   const artifactType =
     typeof props.artifactType === "string" ? props.artifactType : "markdown";
-  const subtitle =
-    artifactType === "component" ? "Component" : "Document";
+  const subtitle = file
+    ? fileTypeLabel(file)
+    : artifactType === "component"
+      ? "Component"
+      : "Document";
 
   const root = document.createElement("div");
   root.className =

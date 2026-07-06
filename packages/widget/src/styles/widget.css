@@ -3024,6 +3024,15 @@
 }
 
 /* paneBorderRadius: works on any paneAppearance; overflow clips content to rounded shape */
+/* Previewable file artifact: sandboxed iframe fills the content area. */
+[data-persona-root] .persona-artifact-iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #ffffff;
+}
+
 [data-persona-root] .persona-artifact-pane {
   border-radius: var(--persona-artifact-pane-radius, 0);
   overflow: hidden;

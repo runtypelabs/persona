@@ -125,6 +125,38 @@ document.getElementById("btn-md")?.addEventListener("click", () => {
   });
 });
 
+// Demo of a previewable HTML file artifact (as a Claude Managed agent would emit
+// one): the content is a fenced code block on the wire, and `file` metadata lets
+// Persona unfence + preview it in a sandboxed iframe. Exercise the rendered/source
+// toggle and Download from here.
+const CAT_HTML = `<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>Cat</title></head>
+  <body style="font-family: system-ui, sans-serif; text-align: center; padding: 2rem;">
+    <h1>Hello from an HTML file artifact</h1>
+    <p>This file streamed as a fenced code block, then rendered in a sandboxed iframe.</p>
+    <button onclick="this.textContent = 'Meow!'">Click me</button>
+  </body>
+</html>
+`;
+
+// Encode the way core does: escape any literal triple-backtick (backtick + ZWSP +
+// backtick backtick), then wrap in a fence.
+const ZWSP = "\u200b";
+const encodeFileArtifact = (source: string, lang: string): string => {
+  const escaped = source.split("```").join("`" + ZWSP + "``");
+  return "```" + lang + "\n" + escaped + "\n```";
+};
+
+document.getElementById("btn-html-file")?.addEventListener("click", () => {
+  handle?.upsertArtifact({
+    artifactType: "markdown",
+    title: "outputs/cat.html",
+    content: encodeFileArtifact(CAT_HTML, "html"),
+    file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" },
+  });
+});
+
 document.getElementById("btn-comp")?.addEventListener("click", () => {
   handle?.upsertArtifact({
     artifactType: "component",
