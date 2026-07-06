@@ -157,6 +157,52 @@ document.getElementById("btn-html-file")?.addEventListener("click", () => {
   });
 });
 
+// Same wire shape, but the HTML file is a self-contained React app: React +
+// ReactDOM UMD and Babel standalone from a CDN, JSX in an inline script. This is
+// what agents typically write for single-file React outputs. The sandbox is
+// `allow-scripts` so the CDN scripts load and run; note that `srcdoc` inherits
+// the host page's CSP, so a strict host CSP can block the CDN loads.
+const REACT_HTML = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>React Counter</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; text-align: center; padding: 2rem; }
+      button { font-size: 1.25rem; padding: 0.5rem 1.25rem; border-radius: 0.5rem; border: 1px solid #ccc; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel">
+      function Counter() {
+        const [count, setCount] = React.useState(0);
+        return (
+          <div>
+            <h1>React file artifact</h1>
+            <p>This React app streamed as a fenced code block, then ran in a sandboxed iframe.</p>
+            <button onClick={() => setCount((c) => c + 1)}>Count: {count}</button>
+          </div>
+        );
+      }
+      ReactDOM.createRoot(document.getElementById("root")).render(<Counter />);
+    </script>
+  </body>
+</html>
+`;
+
+document.getElementById("btn-react-file")?.addEventListener("click", () => {
+  handle?.upsertArtifact({
+    artifactType: "markdown",
+    title: "outputs/counter-react.html",
+    content: encodeFileArtifact(REACT_HTML, "html"),
+    file: { path: "outputs/counter-react.html", mimeType: "text/html", language: "html" },
+  });
+});
+
 document.getElementById("btn-comp")?.addEventListener("click", () => {
   handle?.upsertArtifact({
     artifactType: "component",
