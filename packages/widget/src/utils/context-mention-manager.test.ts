@@ -24,13 +24,16 @@ function makeManager(
     sources: [],
     ...overrides,
   };
+  const announce = vi.fn();
+  const announceError = vi.fn();
   const manager = new ContextMentionManager({
     mentionConfig,
     contextRow,
     getMessages: () => [],
     getConfig: () => ({}) as AgentWidgetConfig,
     getComposerText: () => "hello",
-    announce: vi.fn(),
+    announce,
+    announceError,
   });
   const source: AgentWidgetContextMentionSource = {
     id: "files",
@@ -38,7 +41,7 @@ function makeManager(
     search: () => [],
     resolve: sourceResolve ?? (async () => ({ llmAppend: "CONTENT" })),
   };
-  return { manager, contextRow, mentionConfig, source };
+  return { manager, contextRow, mentionConfig, source, announce, announceError };
 }
 
 describe("ContextMentionManager", () => {
@@ -155,6 +158,18 @@ describe("ContextMentionManager", () => {
     );
     const bundle = await manager.collectForSubmit().finalize();
     expect(bundle.llmEntries).toEqual([]); // dropped
+  });
+
+  it("announces a select-resolve failure through the assertive region", async () => {
+    const resolve = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const { manager, announceError } = makeManager({}, resolve);
+    manager.add(makeSource(resolve), item("bad", "Bad File"));
+    await tick();
+    expect(announceError).toHaveBeenCalledWith(
+      "Couldn't attach Bad File to context"
+    );
   });
 
   it("forwards the resolved payload to renderMentionChip once ready", async () => {

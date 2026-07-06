@@ -41,7 +41,14 @@ export interface ContextMentionMountContext {
   getMessages: () => AgentWidgetMessage[];
   getConfig: () => AgentWidgetConfig;
   announce: (message: string) => void;
+  /** Assertive announcer for resolve failures (falls back to `announce`). */
+  announceError?: (message: string) => void;
   popoverContainer?: HTMLElement | ShadowRoot;
+  /**
+   * Reflect the affordance-button picker's open state onto the button
+   * (`aria-expanded`/`aria-controls`). See the controller option of the same name.
+   */
+  onPickerOpenChange?: (open: boolean, trigger: string, listboxId: string) => void;
   /** Emit a `persona:mention:<event>` analytics DOM event. */
   emit?: (event: string, detail: unknown) => void;
 }
@@ -103,6 +110,7 @@ export function mountContextMentions(
     getConfig: ctx.getConfig,
     getComposerText: () => composerInput.getValue(),
     announce: ctx.announce,
+    announceError: ctx.announceError,
     emit: ctx.emit,
   });
 
@@ -124,6 +132,7 @@ export function mountContextMentions(
       admitMention: (source, item) => manager.admit(source, item),
       announce: ctx.announce,
       popoverContainer: ctx.popoverContainer,
+      onPickerOpenChange: ctx.onPickerOpenChange,
       emit: ctx.emit,
     });
 

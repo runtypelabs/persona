@@ -179,6 +179,44 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
     expect(orchestrator.isMenuOpen()).toBe(true);
   });
 
+  it("reflects the picker open state on the affordance button (aria-expanded + aria-controls)", async () => {
+    const { orchestrator } = setup();
+    const button = orchestrator.affordanceButtons[0].querySelector(
+      "button"
+    ) as HTMLButtonElement;
+    // Collapsed before any interaction.
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(button.hasAttribute("aria-controls")).toBe(false);
+
+    button.click();
+    await flush();
+    expect(orchestrator.isMenuOpen()).toBe(true);
+    const listbox = document.querySelector<HTMLElement>('[role="listbox"]')!;
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(button.getAttribute("aria-controls")).toBe(listbox.id);
+
+    // Escape closes the picker → button collapses and drops the dangling control.
+    orchestrator.handleKeydown(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(button.hasAttribute("aria-controls")).toBe(false);
+  });
+
+  it("does not put aria-expanded on the composer surface (role=textbox keeps aria-haspopup instead)", async () => {
+    const { orchestrator, textarea } = setup();
+    textarea.value = "@";
+    textarea.setSelectionRange(1, 1);
+    orchestrator.handleInput("insertText");
+    await flush();
+    expect(orchestrator.isMenuOpen()).toBe(true);
+    // aria-expanded is unsupported on role=textbox; the popup is advertised via
+    // aria-haspopup + aria-controls + the result-count live region instead.
+    expect(textarea.hasAttribute("aria-expanded")).toBe(false);
+    expect(textarea.getAttribute("aria-haspopup")).toBe("listbox");
+    expect(textarea.getAttribute("aria-controls")).toBe(
+      document.querySelector<HTMLElement>('[role="listbox"]')!.id
+    );
+  });
+
   it("takeInlineCommand: ignores plain text, dispatches a leading server command", async () => {
     document.body.innerHTML = "";
     const form = document.createElement("form");

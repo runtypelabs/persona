@@ -18,10 +18,15 @@ const appRef: AgentWidgetContextMentionRef = {
 let idSeq = 0;
 const generateId = () => `mid-${++idSeq}`;
 
-/** Stand-in for the core orchestrator's pill factory (now a required option). */
+/** Stand-in for the core orchestrator's pill factory (now a required option).
+ *  Mirrors createMentionTokenElement's accessible attributes so the
+ *  setMentionStatus stash/restore behaves as it does on real default tokens. */
 function defaultRenderToken(ref: AgentWidgetContextMentionRef): HTMLElement {
   const el = document.createElement("span");
   el.className = MENTION_TOKEN_CLASS;
+  el.setAttribute("title", ref.label);
+  el.setAttribute("role", "img");
+  el.setAttribute("aria-label", `${ref.label} mention`);
   const label = document.createElement("span");
   label.className = "persona-mention-token-label";
   label.textContent = `@${ref.label}`;
@@ -388,14 +393,47 @@ describe("createContentEditableComposerInput", () => {
     expect(input.getSelection()).toEqual({ start: 13, end: 13 });
   });
 
-  it("setMentionStatus surfaces an accessible title on error and restores it", () => {
+  it("setMentionStatus surfaces an accessible title + aria-label on error and restores them", () => {
     const { input } = make();
     input.setDocument!({ blocks: [{ kind: "mention", id: "m1", ref: appRef }] });
     const span = tokenSpans(input.element)[0];
     input.setMentionStatus!("m1", "error");
     expect(span.getAttribute("title")).toBe("App.tsx: failed to attach context");
+    // The red styling is visual-only; the failure must reach AT via aria-label.
+    expect(span.getAttribute("aria-label")).toContain("failed to attach");
     input.setMentionStatus!("m1", "resolved");
     expect(span.getAttribute("title")).toBe("App.tsx");
+    // Non-error restores the normal "{label} mention" name.
+    expect(span.getAttribute("aria-label")).toBe("App.tsx mention");
+  });
+
+  it("setMentionStatus never rewrites attributes on host-rendered custom tokens outside an error", () => {
+    const { input } = make({
+      renderToken: (ref: AgentWidgetContextMentionRef) => {
+        const el = document.createElement("span");
+        el.className = MENTION_TOKEN_CLASS;
+        el.setAttribute("aria-label", `custom ${ref.label}`);
+        // Deliberately no title and no .persona-mention-token-label child.
+        return el;
+      }
+    });
+    input.setDocument!({ blocks: [{ kind: "mention", id: "m1", ref: appRef }] });
+    const span = tokenSpans(input.element)[0];
+    // resolveOn:"select" success path fires "resolved" without a prior error:
+    // the host's accessible name must be left untouched.
+    input.setMentionStatus!("m1", "resolved");
+    expect(span.getAttribute("aria-label")).toBe("custom App.tsx");
+    expect(span.hasAttribute("title")).toBe(false);
+    // Error overrides with the ref label (not scraped builder markup)...
+    input.setMentionStatus!("m1", "error");
+    expect(span.getAttribute("aria-label")).toBe(
+      "App.tsx, failed to attach context"
+    );
+    expect(span.getAttribute("title")).toBe("App.tsx: failed to attach context");
+    // ...and recovery restores exactly the pre-error state, absent title included.
+    input.setMentionStatus!("m1", "resolved");
+    expect(span.getAttribute("aria-label")).toBe("custom App.tsx");
+    expect(span.hasAttribute("title")).toBe(false);
   });
 
   it("setMentionStatus toggles the error class and is a no-op for unknown ids", () => {

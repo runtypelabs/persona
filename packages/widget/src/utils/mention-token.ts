@@ -40,7 +40,16 @@ export function createMentionTokenElement(
       "persona-mention-token",
       opts.readonly && "persona-mention-token-readonly"
     ),
-    attrs: { "data-mention-source": ref.sourceId, title: ref.label },
+    // role="img" + aria-label makes the icon + `@label` announce as one atomic
+    // unit ("App.tsx mention") instead of the icon and text being read
+    // separately; the resolve-status hook may later swap this label (see
+    // composer-contenteditable `setMentionStatus`).
+    attrs: {
+      "data-mention-source": ref.sourceId,
+      title: ref.label,
+      role: "img",
+      "aria-label": `${ref.label} mention`,
+    },
   });
   // Per-item / per-type accent recolors the whole pill (bg tint + icon + text).
   if (ref.color) {

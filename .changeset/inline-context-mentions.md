@@ -23,3 +23,10 @@ trigger shifts the menu left to stay within the composer, and it follows the
 composer as it auto-grows on line-wrap (a `ResizeObserver` re-measures the anchor
 and repositions while the menu is open); chip mode keeps the composer-anchored
 menu.
+
+This release also hardens context-mention accessibility: mention tokens announce
+as one unit and speak resolve failures, the menu listbox exposes proper group,
+presentation, and setsize/posinset semantics, the affordance button and picker
+search field reflect their open state, and resolve failures are announced through
+a dedicated assertive live region that is hosted in the light DOM under
+`useShadowDom`.

@@ -77,6 +77,8 @@ export function createContextMentionOrchestrator(opts: {
   anchor: HTMLElement;
   getMessages: () => AgentWidgetMessage[];
   announce: (message: string) => void;
+  /** Assertive announcer for resolve failures (falls back to `announce`). */
+  announceError?: (message: string) => void;
   popoverContainer?: HTMLElement | ShadowRoot;
 }): ContextMentionOrchestrator | null {
   const mentionConfig = opts.config.contextMentions;
@@ -159,7 +161,9 @@ export function createContextMentionOrchestrator(opts: {
           getMessages: opts.getMessages,
           getConfig: () => opts.config,
           announce: opts.announce,
+          announceError: opts.announceError,
           popoverContainer: opts.popoverContainer,
+          onPickerOpenChange,
           emit,
         });
         return engine;
@@ -224,6 +228,9 @@ export function createContextMentionOrchestrator(opts: {
   // One affordance button per channel that opts into `showButton`. Each opens
   // ITS channel's picker (no char inserted) via the channel's trigger.
   const buttonPartsList: ReturnType<typeof createMentionButton>[] = [];
+  // Address a button by its channel trigger so `onPickerOpenChange` can flip the
+  // right button's aria-expanded/aria-controls when the picker opens/closes.
+  const buttonByTrigger = new Map<string, HTMLButtonElement>();
   for (const channel of channels) {
     if (!channel.showButton) continue;
     const parts = createMentionButton({
@@ -238,7 +245,23 @@ export function createContextMentionOrchestrator(opts: {
       },
     });
     buttonPartsList.push(parts);
+    buttonByTrigger.set(channel.trigger, parts.button);
   }
+
+  // Reflect the picker's open state on the affordance button that opened it: set
+  // aria-controls to the menu it now owns while open, and drop it on close (a
+  // dangling aria-controls to a torn-down listbox is invalid).
+  const onPickerOpenChange = (
+    open: boolean,
+    trigger: string,
+    listboxId: string
+  ): void => {
+    const button = buttonByTrigger.get(trigger);
+    if (!button) return;
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) button.setAttribute("aria-controls", listboxId);
+    else button.removeAttribute("aria-controls");
+  };
 
   return {
     affordanceButtons: buttonPartsList.map((p) => p.wrapper),

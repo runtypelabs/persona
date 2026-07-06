@@ -85,7 +85,9 @@ export function createMentionMenu(opts: {
       type: "text",
       role: "combobox",
       "aria-autocomplete": "list",
-      "aria-expanded": "true",
+      // Hidden until showSearch(); toggled with the field's visibility so the
+      // combobox never advertises an expanded popup while it's display:none.
+      "aria-expanded": "false",
       "aria-controls": listboxId,
       "aria-label": config.searchPlaceholder ?? "Search context",
       placeholder: config.searchPlaceholder ?? "Search context…",
@@ -116,6 +118,7 @@ export function createMentionMenu(opts: {
   let currentActive = -1;
 
   const optionId = (i: number) => `${listboxId}-opt-${i}`;
+  const groupHeaderId = (i: number) => `${listboxId}-grp-${i}`;
 
   const applyActive = (i: number, active: boolean) => {
     const opt = optionEls[i];
@@ -141,10 +144,21 @@ export function createMentionMenu(opts: {
     }
   };
 
-  const groupSection = (label: string): HTMLElement => {
-    const section = createElement("div", "persona-mention-group");
+  // Each group is a `role="group"` region inside the listbox, named by its header
+  // (aria-labelledby → the minted header id) so a screen reader announces the
+  // source label ("Files") when entering the group's options.
+  const groupSection = (label: string, headerIndex: number): HTMLElement => {
+    const headerId = groupHeaderId(headerIndex);
+    const section = createNode("div", {
+      className: "persona-mention-group",
+      attrs: { role: "group", "aria-labelledby": headerId },
+    });
     section.appendChild(
-      createNode("div", { className: "persona-mention-group-header", text: label })
+      createNode("div", {
+        className: "persona-mention-group-header",
+        attrs: { id: headerId },
+        text: label,
+      })
     );
     return section;
   };
@@ -153,11 +167,21 @@ export function createMentionMenu(opts: {
     item: AgentWidgetContextMentionItem,
     source: AgentWidgetContextMentionSource,
     query: string,
-    index: number
+    index: number,
+    total: number
   ): HTMLElement => {
     const row = createNode("div", {
       className: "persona-mention-option",
-      attrs: { role: "option", id: optionId(index), "aria-selected": "false" },
+      // aria-posinset/setsize give the FLAT position across all groups (1-based)
+      // so a screen reader announces "3 of 7" even though options are visually
+      // split into per-source groups.
+      attrs: {
+        role: "option",
+        id: optionId(index),
+        "aria-selected": "false",
+        "aria-setsize": String(total),
+        "aria-posinset": String(index + 1),
+      },
     });
 
     if (config.renderMentionItem) {
@@ -252,33 +276,46 @@ export function createMentionMenu(opts: {
     let readyCount = 0;
     let loadingCount = 0;
     let errorCount = 0;
+    let groupSeq = 0;
+    // Flat total across all ready groups — the `aria-setsize` for every option.
+    const totalOptions = vm.groups.reduce(
+      (n, g) => (g.status === "ready" ? n + g.items.length : n),
+      0
+    );
 
     for (const group of vm.groups) {
       if (group.status === "loading") {
         loadingCount++;
-        const section = groupSection(group.source.label);
+        const section = groupSection(group.source.label, groupSeq++);
         section.appendChild(
           createNode("div", {
             className: "persona-mention-status persona-mention-loading",
+            // Presentational: the loading state is spoken via the live region, so
+            // it must not surface as a bogus listbox child to a screen reader.
+            attrs: { role: "presentation" },
             text: "Loading…",
           })
         );
         listEl.appendChild(section);
       } else if (group.status === "error") {
         errorCount++;
-        const section = groupSection(group.source.label);
+        const section = groupSection(group.source.label, groupSeq++);
         section.appendChild(errorRow(group.source));
         listEl.appendChild(section);
       } else if (group.status === "ready" && group.items.length > 0) {
-        const section = groupSection(group.source.label);
+        const section = groupSection(group.source.label, groupSeq++);
         for (const item of group.items) {
-          section.appendChild(buildOption(item, group.source, vm.query, flatCursor++));
+          section.appendChild(
+            buildOption(item, group.source, vm.query, flatCursor++, totalOptions)
+          );
           readyCount++;
         }
         if (group.truncated) {
           section.appendChild(
             createNode("div", {
               className: "persona-mention-hint",
+              // Presentational: a nudge, not a listbox child.
+              attrs: { role: "presentation" },
               text: "Keep typing to narrow…",
             })
           );
@@ -292,7 +329,12 @@ export function createMentionMenu(opts: {
     // never a per-group "No matches" dump.
     if (readyCount === 0 && loadingCount === 0 && errorCount === 0) {
       listEl.appendChild(
-        createNode("div", { className: "persona-mention-empty", text: "No matches" })
+        createNode("div", {
+          className: "persona-mention-empty",
+          // Presentational: "No matches" is announced via the live region.
+          attrs: { role: "presentation" },
+          text: "No matches",
+        })
       );
     }
 
@@ -310,6 +352,7 @@ export function createMentionMenu(opts: {
     // the config default set at construction time.
     if (placeholder) searchInput.placeholder = placeholder;
     searchWrap.style.display = "";
+    searchInput.setAttribute("aria-expanded", "true");
     searchInput.focus();
     // The field just flipped from `display:none`, and the menu often opens
     // inside a lazy-load microtask right after the button click — a single
@@ -325,6 +368,7 @@ export function createMentionMenu(opts: {
   const hideSearch = () => {
     searchWrap.style.display = "none";
     searchInput.value = "";
+    searchInput.setAttribute("aria-expanded", "false");
     searchInput.removeAttribute("aria-activedescendant");
   };
 

@@ -68,6 +68,11 @@ export interface ContextMentionManagerOptions {
   getComposerText: () => string;
   /** Polite live-region announcer. */
   announce: (message: string) => void;
+  /**
+   * Assertive live-region announcer for failures (resolve errors). Falls back to
+   * the polite `announce` when the host wires only one region.
+   */
+  announceError?: (message: string) => void;
   /** Emit a `persona:mention:<event>` analytics DOM event. */
   emit?: (event: string, detail: unknown) => void;
 }
@@ -248,6 +253,11 @@ export class ContextMentionManager {
       // Inline tokens carry no chip: surface the failure on the token element so a
       // dropped context is visible (finalize() silently skips failed payloads).
       pending.reportStatus?.("error");
+      // Speak the failure through the ASSERTIVE region — the visual error state
+      // (chip/token color) is otherwise silent for screen-reader users.
+      (this.opts.announceError ?? this.opts.announce)(
+        `Couldn't attach ${pending.ref.label} to context`
+      );
       this.opts.mentionConfig.onMentionResolveError?.(pending.item, error);
       this.opts.emit?.("resolve-error", {
         sourceId: pending.source.id,

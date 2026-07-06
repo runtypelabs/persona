@@ -39,6 +39,7 @@ import {
   createContextMentionOrchestrator,
   type ContextMentionOrchestrator,
 } from "./utils/context-mention-orchestrator";
+import { createLiveRegion, type LiveRegion } from "./utils/live-region";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
@@ -990,6 +991,10 @@ export const createAgentExperience = (
   // Context mentions orchestrator (core, tiny); lazy-loads the heavy runtime on
   // first use. Null when `contextMentions` is disabled / has no sources.
   let mentionOrchestrator: ContextMentionOrchestrator | null = null;
+  // Mention live regions (polite: add/remove/result-count; assertive: resolve
+  // failures). Torn down with the orchestrator. Hosted in the light DOM under
+  // useShadowDom (see createLiveRegion).
+  const mentionLiveRegions: LiveRegion[] = [];
 
   /** Wired after `handleMicButtonClick` is defined; used by `renderComposer` `onVoiceToggle`. */
   let composerVoiceBridge: (() => void) | null = null;
@@ -1317,22 +1322,13 @@ export const createAgentExperience = (
   // orchestrator returns null when disabled or sourceless.
   const mentionPrefetch = () => mentionOrchestrator?.prefetch();
   if (config.contextMentions?.enabled && textarea) {
-    // Polite live region for result-count + add/remove announcements.
-    const mentionLiveRegion = createElement("div", "");
-    mentionLiveRegion.setAttribute("aria-live", "polite");
-    mentionLiveRegion.setAttribute("role", "status");
-    Object.assign(mentionLiveRegion.style, {
-      position: "absolute",
-      width: "1px",
-      height: "1px",
-      overflow: "hidden",
-      clipPath: "inset(50%)",
-      whiteSpace: "nowrap",
-      border: "0",
-      padding: "0",
-      margin: "-1px",
-    } as Partial<CSSStyleDeclaration>);
-    container.appendChild(mentionLiveRegion);
+    // Polite live region for result-count + add/remove announcements; assertive
+    // region for resolve failures. Hosted via the shared helper so they land in
+    // the light DOM (with inline sr-only styles) when the widget renders inside a
+    // Shadow DOM, where a nested live region is inconsistently surfaced by AT.
+    const mentionLiveRegion = createLiveRegion("polite", container);
+    const mentionErrorRegion = createLiveRegion("assertive", container);
+    mentionLiveRegions.push(mentionLiveRegion, mentionErrorRegion);
 
     // Slash-command dispatch (prompt macros write text / submit; client actions
     // read/replace the value) and submission are owned by the composer input
@@ -1344,10 +1340,8 @@ export const createAgentExperience = (
       textarea,
       anchor: composerForm ?? textarea,
       getMessages: () => session.getMessages(),
-      announce: (msg) => {
-        mentionLiveRegion.textContent = "";
-        mentionLiveRegion.textContent = msg;
-      },
+      announce: (msg) => mentionLiveRegion.announce(msg),
+      announceError: (msg) => mentionErrorRegion.announce(msg),
     });
 
     if (mentionOrchestrator) {
@@ -7607,6 +7601,8 @@ export const createAgentExperience = (
     detachComposerListeners(textarea);
     escStopDoc.removeEventListener("keydown", handleEscStop, true);
     mentionOrchestrator?.destroy();
+    for (const region of mentionLiveRegions) region.destroy();
+    mentionLiveRegions.length = 0;
   });
 
   destroyCallbacks.push(() => {

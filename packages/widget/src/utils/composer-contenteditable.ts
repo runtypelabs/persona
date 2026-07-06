@@ -50,6 +50,10 @@ import type { AgentWidgetContextMentionRef } from "../types";
 export const MENTION_TOKEN_CLASS = "persona-mention-token";
 const MENTION_TOKEN_ERROR_CLASS = "persona-mention-token-error";
 const MENTION_ID_ATTR = "data-mention-id";
+// Pre-error aria-label/title stash, so error recovery can restore host-rendered
+// tokens (renderMentionToken) exactly as they were (see setMentionStatus).
+const ERROR_PREV_LABEL_ATTR = "data-mention-prev-label";
+const ERROR_PREV_TITLE_ATTR = "data-mention-prev-title";
 const NEWLINE = "\n";
 
 export interface ContentEditableComposerInputOptions {
@@ -522,8 +526,15 @@ export function createContentEditableComposerInput(
   };
 
   /** Toggle the inline error affordance on the token element for `id` (no-op for
-   *  unknown ids); any non-error status clears it. On error, also surface a
-   *  title/tooltip for assistive tech (the red styling is visual-only). */
+   *  unknown ids); any non-error status clears it. On error, also surface the
+   *  failure to assistive tech via both the `title` tooltip AND the token's
+   *  `aria-label` (the red styling alone is visual-only, so a screen-reader user
+   *  would otherwise never learn the context failed to attach). The token's own
+   *  name/tooltip are stashed before the error override and restored verbatim on
+   *  recovery — tokens can come from the host's `renderMentionToken` hook, which
+   *  carries none of the default builder's markup to re-derive them from, so
+   *  non-error statuses must never rewrite attributes on a token that was never
+   *  in the error state. */
   const setMentionStatus = (
     id: ComposerMentionId,
     status: "pending" | "resolved" | "error"
@@ -532,16 +543,31 @@ export function createContentEditableComposerInput(
       if (isMentionSpan(child) && child.getAttribute(MENTION_ID_ATTR) === id) {
         const isError = status === "error";
         child.classList.toggle(MENTION_TOKEN_ERROR_CLASS, isError);
-        const label =
-          child
-            .querySelector(".persona-mention-token-label")
-            ?.textContent?.replace(/^@/, "") ??
-          child.getAttribute("title") ??
-          "";
-        child.setAttribute(
-          "title",
-          isError ? `${label}: failed to attach context` : label
-        );
+        if (isError) {
+          if (!child.hasAttribute(ERROR_PREV_LABEL_ATTR)) {
+            child.setAttribute(
+              ERROR_PREV_LABEL_ATTR,
+              child.getAttribute("aria-label") ?? ""
+            );
+            child.setAttribute(
+              ERROR_PREV_TITLE_ATTR,
+              child.getAttribute("title") ?? ""
+            );
+          }
+          const label = refs.get(id)?.label ?? "";
+          child.setAttribute("title", `${label}: failed to attach context`);
+          child.setAttribute("aria-label", `${label}, failed to attach context`);
+        } else if (child.hasAttribute(ERROR_PREV_LABEL_ATTR)) {
+          // A stashed empty string means the attribute was absent pre-error.
+          const prevLabel = child.getAttribute(ERROR_PREV_LABEL_ATTR);
+          const prevTitle = child.getAttribute(ERROR_PREV_TITLE_ATTR);
+          if (prevLabel) child.setAttribute("aria-label", prevLabel);
+          else child.removeAttribute("aria-label");
+          if (prevTitle) child.setAttribute("title", prevTitle);
+          else child.removeAttribute("title");
+          child.removeAttribute(ERROR_PREV_LABEL_ATTR);
+          child.removeAttribute(ERROR_PREV_TITLE_ATTR);
+        }
         return;
       }
     }

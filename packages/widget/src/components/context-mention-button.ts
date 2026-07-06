@@ -40,9 +40,11 @@ export function createMentionButton(opts: {
       type: "button",
       "data-persona-composer-mention-button": "",
       "aria-label": tooltipText,
-      // The composer textarea carries the live aria-expanded/aria-controls
-      // state (set by the controller); the button only advertises the popup.
       "aria-haspopup": "listbox",
+      // Reflects the picker's open state: the orchestrator flips aria-expanded
+      // and adds aria-controls (the menu's listbox id) via `onPickerOpenChange`
+      // when this button opens/closes the picker. Starts collapsed.
+      "aria-expanded": "false",
     },
     style: {
       // Appearance (bg / fg / border / radius / hover) is themed from the CSS

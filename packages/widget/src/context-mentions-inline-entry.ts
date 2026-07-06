@@ -108,9 +108,16 @@ function mirrorTextareaLook(
     );
   }
   const placeholder = textarea.getAttribute("placeholder");
-  if (placeholder) el.setAttribute("data-placeholder", placeholder);
-  // The textarea's accessible name is its placeholder (it carries no explicit
-  // aria-label), so give the contenteditable the same name when none was set.
+  if (placeholder) {
+    el.setAttribute("data-placeholder", placeholder);
+    // Carry the placeholder in aria-placeholder (its correct role) rather than
+    // overloading the accessible name with it.
+    el.setAttribute("aria-placeholder", placeholder);
+  }
+  // Stable accessible name: prefer an explicit host/config aria-label on the
+  // textarea (ui.ts stamps config input copy there); fall back to the placeholder
+  // text for parity with chip mode (the plain textarea's name is its placeholder)
+  // so inline mode never regresses to an unnamed field.
   const label = textarea.getAttribute("aria-label") ?? placeholder;
   if (label) el.setAttribute("aria-label", label);
 }
@@ -152,9 +159,13 @@ function shimTextareaApi(
     set: (v: string) => {
       if (v) {
         el.setAttribute("data-placeholder", v);
+        el.setAttribute("aria-placeholder", v);
+        // Keep the accessible-name fallback in sync (parity with
+        // mirrorTextareaLook, where the name falls back to the placeholder).
         el.setAttribute("aria-label", v);
       } else {
         el.removeAttribute("data-placeholder");
+        el.removeAttribute("aria-placeholder");
       }
     },
   });

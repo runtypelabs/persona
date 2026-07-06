@@ -91,6 +91,14 @@ export interface ContextMentionControllerOptions {
   ) => boolean;
   announce: (message: string) => void;
   popoverContainer?: HTMLElement | ShadowRoot;
+  /**
+   * Fired when the affordance-button PICKER opens/closes, so the orchestrator can
+   * reflect `aria-expanded`/`aria-controls` on the matching channel button.
+   * `trigger` identifies the channel; `listboxId` is the menu the button controls.
+   * Only the button-opened picker path fires this — the typed-trigger menu is
+   * driven from the composer and never touches a button's state.
+   */
+  onPickerOpenChange?: (open: boolean, trigger: string, listboxId: string) => void;
   emit?: (event: string, detail: unknown) => void;
 }
 
@@ -134,6 +142,10 @@ export class ContextMentionController {
   // trigger char is in the textarea, so the in-menu search field owns the query
   // and there is nothing to strip on close.
   private pickerMode = false;
+  // The trigger of the channel whose button opened the current picker, so the
+  // close path can address the same button's aria-expanded even though `close()`
+  // has no channel in hand.
+  private pickerTrigger: string | null = null;
 
   private groups: MentionMenuGroup[] = [];
   private flat: {
@@ -191,7 +203,12 @@ export class ContextMentionController {
     const el = opts.composerInput.element;
     el.setAttribute("aria-haspopup", "listbox");
     el.setAttribute("aria-controls", this.listboxId);
-    el.setAttribute("aria-expanded", "false");
+    // NB: no aria-expanded here. The editable surface keeps role="textbox" +
+    // aria-multiline (so it retains multiline editing semantics), and
+    // aria-expanded is not a supported state on role="textbox" — promoting it to
+    // role="combobox" to legitimize aria-expanded would DROP those multiline
+    // semantics. The open/updating menu is conveyed instead via aria-haspopup +
+    // aria-activedescendant + the result-count live region.
   }
 
   /** The composer input surface — all text/selection ops route through this. */
@@ -269,6 +286,7 @@ export class ContextMentionController {
     }
 
     this.pickerMode = true;
+    this.pickerTrigger = channel.trigger;
     this.triggerMatch = null;
     if (!this.isOpenState) {
       this.open("", channel);
@@ -278,6 +296,7 @@ export class ContextMentionController {
     }
     if (this.menu.showSearch) this.menu.showSearch("", channel.searchPlaceholder);
     else this.input.focus();
+    this.opts.onPickerOpenChange?.(true, channel.trigger, this.listboxId);
   }
 
   /** Re-parse the composer on every input and open/update/close the menu. */
@@ -369,7 +388,6 @@ export class ContextMentionController {
     // head by default; the shadow root under `useShadowDom`). Idempotent per
     // root — this chunk carries the menu styles instead of the eager widget.css.
     injectStyles(this.menu.el, "persona-mention-menu", MENTION_MENU_CSS);
-    this.input.element.setAttribute("aria-expanded", "true");
     this.observeComposerResize();
     this.opts.emit?.("opened", { trigger: channel.trigger });
     this.setQuery(query);
@@ -451,13 +469,18 @@ export class ContextMentionController {
     // announce, or emit into a closed menu.
     this.searchToken++;
     this.popover?.close();
-    this.input.element.setAttribute("aria-expanded", "false");
     this.input.element.removeAttribute("aria-activedescendant");
     if (this.pickerMode) {
       // Picker teardown: hide the search field and (unless dismissed by an
       // outside click) hand focus back to the composer so the user keeps typing.
       this.pickerMode = false;
       this.menu.hideSearch?.();
+      this.opts.onPickerOpenChange?.(
+        false,
+        this.pickerTrigger ?? this.activeChannel.trigger,
+        this.listboxId
+      );
+      this.pickerTrigger = null;
       if (refocus) this.input.focus();
     }
   }
@@ -1127,7 +1150,6 @@ export class ContextMentionController {
     const el = this.input.element;
     el.removeAttribute("aria-haspopup");
     el.removeAttribute("aria-controls");
-    el.removeAttribute("aria-expanded");
     el.removeAttribute("aria-activedescendant");
   }
 }
