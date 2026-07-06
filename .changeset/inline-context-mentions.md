@@ -31,6 +31,12 @@ composer as it auto-grows on line-wrap (a `ResizeObserver` re-measures the ancho
 and repositions while the menu is open); chip mode keeps the composer-anchored
 menu.
 
+Each resolved mention's body is now wrapped in a configurable per-mention block
+via `contextMentions.llmFormat`: a fenced code block carrying the label (the new
+default), Anthropic's indexed `<document>` shape, or a custom function that owns
+the block, replacing the old bracketed `[label]` header, which had no end
+delimiter.
+
 This release also hardens context-mention accessibility: mention tokens announce
 as one unit and speak resolve failures, the menu listbox exposes proper group,
 presentation, and setsize/posinset semantics, the affordance button and picker

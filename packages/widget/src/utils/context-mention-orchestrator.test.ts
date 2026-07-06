@@ -152,7 +152,7 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
     const collected = orchestrator.collectForSubmit();
     expect(collected?.refs.map((r) => r.itemId)).toEqual(["app"]);
     const bundle = await collected!.finalize();
-    expect(bundle.llmEntries[0]).toMatchObject({ label: "App.tsx", text: "body of App.tsx" });
+    expect(bundle.blocks[0]).toBe("```App.tsx\nbody of App.tsx\n```");
   });
 
   it("Backspace on an empty composer removes the last chip", async () => {
@@ -375,10 +375,7 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
     const collected = orchestrator.collectForSubmit();
     expect(collected?.refs.map((r) => r.itemId)).toEqual(["app"]);
     const bundle = await collected!.finalize();
-    expect(bundle.llmEntries[0]).toMatchObject({
-      label: "App.tsx",
-      text: "body of App.tsx",
-    });
+    expect(bundle.blocks[0]).toBe("```App.tsx\nbody of App.tsx\n```");
   });
 
   it("inline display: swaps the textarea for a contenteditable and inserts a token on select", async () => {
@@ -439,10 +436,7 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
     const collected = orchestrator.collectForSubmit();
     expect(collected?.refs.map((r) => r.itemId)).toEqual(["app"]);
     const bundle = await collected!.finalize();
-    expect(bundle.llmEntries[0]).toMatchObject({
-      label: "App.tsx",
-      text: "body of App.tsx",
-    });
+    expect(bundle.blocks[0]).toBe("```App.tsx\nbody of App.tsx\n```");
   });
 
   it("emits persona:mention:* analytics events", async () => {

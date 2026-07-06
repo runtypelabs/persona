@@ -6254,7 +6254,7 @@ export const createAgentExperience = (
       finalize: async () => {
         const [ra, rb] = await Promise.all([a.finalize(), b.finalize()]);
         return {
-          llmEntries: [...ra.llmEntries, ...rb.llmEntries],
+          blocks: [...ra.blocks, ...rb.blocks],
           contentParts: [...ra.contentParts, ...rb.contentParts],
           context: { ...ra.context, ...rb.context },
         };

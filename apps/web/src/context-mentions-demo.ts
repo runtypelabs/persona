@@ -141,9 +141,11 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     customFetch: createDemoEchoFetch({
       reply: (userText) =>
         "Here's what reached the model (mentions are merged into the LLM content):\n\n" +
-        "```\n" +
+        // Four backticks: the payload itself contains ``` fenced mention blocks
+        // (contextMentions.llmFormat), so the display wrapper must out-fence them.
+        "````\n" +
         userText +
-        "\n```",
+        "\n````",
     }),
     storageAdapter: createLocalStorageAdapter(
       `persona-state-context-mentions-demo-${mode}`,

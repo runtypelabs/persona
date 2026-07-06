@@ -54,7 +54,7 @@ describe("AgentWidgetSession — mention/command submit", () => {
     const context = { commands: { lookup: { intent: "lookup-order", orderId: "1042" } } };
     const refs = [{ sourceId: "commands", itemId: "lookup", label: "lookup" }];
     const bundle: MentionSubmitBundle = {
-      llmEntries: [],
+      blocks: [],
       contentParts: [],
       context,
     };
@@ -87,7 +87,7 @@ describe("AgentWidgetSession — mention/command submit", () => {
       mentions: {
         refs: [{ sourceId: "files", itemId: "app", label: "App.tsx" }],
         finalize: async (): Promise<MentionSubmitBundle> => ({
-          llmEntries: [{ label: "App.tsx", text: "FILE BODY" }],
+          blocks: ["```App.tsx\nFILE BODY\n```"],
           contentParts: [],
           context: {},
         }),
@@ -104,6 +104,8 @@ describe("AgentWidgetSession — mention/command submit", () => {
     expect(typeof sent).toBe("string");
     expect(sent as string).toContain("FILE BODY");
     expect(sent as string).toContain("summarize this");
+    // Mention blocks lead; the typed prose lands last (joined by a blank line).
+    expect(sent as string).toBe("```App.tsx\nFILE BODY\n```\n\nsummarize this");
   });
 
   it("still renders the [Image] fallback for an image-only submit", async () => {

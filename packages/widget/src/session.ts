@@ -1152,9 +1152,10 @@ export class AgentWidgetSession {
       return; // resolution failed entirely; send the typed text as-is
     }
 
-    const block = bundle.llmEntries
-      .map((e) => `[${e.label}]\n${e.text}`)
-      .join("\n\n");
+    // Blocks arrive pre-formatted from the mention layer (fenced/document/custom
+    // per `contextMentions.llmFormat`); the session just joins them and appends
+    // the typed prose last.
+    const block = bundle.blocks.join("\n\n");
     const llmText = [block, typedText].filter(Boolean).join("\n\n");
 
     const hasAttachments =

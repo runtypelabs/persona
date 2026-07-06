@@ -80,7 +80,7 @@
   {
     "name": "Lazy · context-mentions + slash-commands chunk (context-mentions.js)",
     "path": "dist/context-mentions.js",
-    "limit": "18 kB",
+    "limit": "18.5 kB",
     "gzip": true
   },
   {

@@ -55,7 +55,25 @@ describe("ContextMentionManager", () => {
 
     const bundle = await manager.collectForSubmit().finalize();
     expect(resolve).toHaveBeenCalledTimes(1); // re-used the cached payload
-    expect(bundle.llmEntries).toEqual([{ label: "App.tsx", text: "FILE BODY" }]);
+    expect(bundle.blocks).toEqual(["```App.tsx\nFILE BODY\n```"]);
+  });
+
+  it("formats multiple mentions in order via llmFormat, numbering document blocks 1-based", async () => {
+    const { manager } = makeManager({ llmFormat: "document" });
+    const source: AgentWidgetContextMentionSource = {
+      id: "files",
+      label: "Files",
+      search: () => [],
+      resolve: async (i) => ({ llmAppend: `body of ${i.label}` }),
+    };
+    manager.add(source, item("a", "A.ts"));
+    manager.add(source, item("b", "B.ts"));
+    await tick();
+    const bundle = await manager.collectForSubmit().finalize();
+    expect(bundle.blocks).toEqual([
+      '<document index="1">\n<source>A.ts</source>\n<document_content>\nbody of A.ts\n</document_content>\n</document>',
+      '<document index="2">\n<source>B.ts</source>\n<document_content>\nbody of B.ts\n</document_content>\n</document>',
+    ]);
   });
 
   it("reuses the in-flight resolve at submit (no duplicate fetch, survives clear)", async () => {
@@ -78,7 +96,7 @@ describe("ContextMentionManager", () => {
     release({ llmAppend: "FILE BODY" });
     const bundle = await finalize();
     expect(resolve).toHaveBeenCalledTimes(1); // never re-fetched
-    expect(bundle.llmEntries).toEqual([{ label: "App.tsx", text: "FILE BODY" }]);
+    expect(bundle.blocks).toEqual(["```App.tsx\nFILE BODY\n```"]);
   });
 
   it("rejects duplicates", () => {
@@ -141,7 +159,7 @@ describe("ContextMentionManager", () => {
     expect(resolve).not.toHaveBeenCalled(); // deferred
     const bundle = await manager.collectForSubmit().finalize();
     expect(resolve).toHaveBeenCalledTimes(1); // resolved at submit
-    expect(bundle.llmEntries).toEqual([{ label: "hero", text: "LIVE PAGE" }]);
+    expect(bundle.blocks).toEqual(["```hero\nLIVE PAGE\n```"]);
   });
 
   it("drops a failed select-resolve and fires onMentionResolveError; still sends", async () => {
@@ -157,7 +175,7 @@ describe("ContextMentionManager", () => {
       expect.any(Error)
     );
     const bundle = await manager.collectForSubmit().finalize();
-    expect(bundle.llmEntries).toEqual([]); // dropped
+    expect(bundle.blocks).toEqual([]); // dropped
   });
 
   it("announces a select-resolve failure through the assertive region", async () => {
@@ -282,7 +300,7 @@ describe("ContextMentionManager", () => {
     const { refs, finalize } = manager.collectForSubmit();
     expect(refs).toHaveLength(2); // both tokens render in the bubble
     const bundle = await finalize();
-    expect(bundle.llmEntries).toEqual([{ label: "a", text: "CONTENT" }]); // deduped
+    expect(bundle.blocks).toEqual(["```a\nCONTENT\n```"]); // deduped
   });
 
   it("track reports resolve status onto the inline token (resolved / error)", async () => {

@@ -9,6 +9,7 @@ import type {
   ContentPart,
 } from "../types";
 import { createMentionChip, type MentionChipParts } from "../components/context-mention-chip";
+import { formatMentionBlock } from "./mention-llm-format";
 
 interface PendingMention {
   key: string;
@@ -51,8 +52,12 @@ export function refFromItem(
 
 /** The resolved bundle gathered at submit, merged into the user message. */
 export interface MentionSubmitBundle {
-  /** Per-mention LLM text, mentions-first; the caller formats the block + prose. */
-  llmEntries: { label: string; text: string }[];
+  /**
+   * Ready-to-join, per-mention LLM blocks (mentions-first). The mention layer
+   * has already applied `contextMentions.llmFormat` (fenced/document/custom), so
+   * the session just joins these with a blank line and appends the typed prose.
+   */
+  blocks: string[];
   contentParts: ContentPart[];
   /** Namespaced `{ [sourceId]: { [itemId]: context } }` for the opt-in path. */
   context: Record<string, Record<string, unknown>>;
@@ -338,7 +343,7 @@ export class ContextMentionManager {
         })
       );
 
-      const llmEntries: { label: string; text: string }[] = [];
+      const blocks: string[] = [];
       const contentParts: ContentPart[] = [];
       const context: Record<string, Record<string, unknown>> = {};
       // Assemble in original selection order (mentions-first block), deduping the
@@ -357,7 +362,16 @@ export class ContextMentionManager {
         if (contributed.has(dedupeKey)) continue;
         contributed.add(dedupeKey);
         if (payload.llmAppend && payload.llmAppend.trim()) {
-          llmEntries.push({ label: m.ref.label, text: payload.llmAppend });
+          // Format each block here (the mention layer owns `mentionConfig`); the
+          // block index is its position among contributed blocks so `"document"`
+          // numbering and the function form stay 0-based and gap-free.
+          blocks.push(
+            formatMentionBlock(
+              { label: m.ref.label, text: payload.llmAppend, ref: m.ref, item: m.item },
+              blocks.length,
+              this.opts.mentionConfig.llmFormat
+            )
+          );
         }
         if (payload.contentParts?.length) {
           contentParts.push(...payload.contentParts);
@@ -367,7 +381,7 @@ export class ContextMentionManager {
         }
       }
 
-      return { llmEntries, contentParts, context };
+      return { blocks, contentParts, context };
     };
 
     return { refs, finalize };

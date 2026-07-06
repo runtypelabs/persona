@@ -84,7 +84,21 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">What reaches the model</h3>
-        <p>Inline mode is <em>context attachment</em>, not entity substitution. The one model-visible difference from chip mode is the <em>prose</em>: chip mode strips the <code>@query</code> on select, while inline mode keeps the readable <code>@label</code> in the sentence (matching Cursor/ChatGPT/Claude attachments, so <em>where</em> the file is referenced is preserved). The <strong>resolved content that reaches the model is the same in both modes</strong>: each mention's resolved body is merged into the LLM content via <code>applyMentionBundle</code>'s <code>[label]\n&lt;body&gt;</code> concatenation, exactly as chip mode. The echo backend below prints what actually reached the model.</p>
+        <p>Tokens change how the message <em>looks</em>, not what the model receives. The one difference from chip mode: chip mode removes what you typed (<code>@App</code>) from the sentence, while inline mode keeps <code>@App.tsx</code> in place, so the model sees where in your sentence the file was mentioned. Cursor, ChatGPT, and Claude attachments work the same way.</p>
+        <p><strong>The resolved content is identical in both modes.</strong> Each mention's body is wrapped in a fenced code block carrying its label, blocks are joined, and your typed prose follows last. The echo backend below prints exactly what reached the model.</p>
+        <p>The wrapper is configurable via <code>contextMentions.llmFormat</code>:</p>
+        <div class="code-block">
+          <span class="keyword">const</span> config = {
+            <span class="prop">contextMentions</span>: {
+              <span class="comment">// "fenced" (default): ```label … ``` with automatic fence escalation</span>
+              <span class="comment">// "document": Anthropic's &lt;document&gt;&lt;source&gt; long-context shape</span>
+              <span class="prop">llmFormat</span>: <span class="string">"document"</span>,
+
+              <span class="comment">// or take full control per mention:</span>
+              <span class="comment">// llmFormat: (entry, index) =&gt; `&lt;file path="${entry.label}"&gt;\n${entry.text}\n&lt;/file&gt;`,</span>
+            },
+          };
+        </div>
       </div>
     </section>
   </main>

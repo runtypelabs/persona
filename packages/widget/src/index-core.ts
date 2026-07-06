@@ -41,6 +41,8 @@ export type {
   AgentWidgetContextMentionItemRenderContext,
   AgentWidgetContextMentionChipRenderContext,
   AgentWidgetContextMentionTokenRenderContext,
+  // Per-mention LLM block formatter entry (config.contextMentions.llmFormat)
+  AgentWidgetMentionLlmEntry,
   // Skills / slash-commands (config.contextMentions.triggers)
   AgentWidgetMentionTriggerChannel,
   AgentWidgetMentionTriggerPosition,

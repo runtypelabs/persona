@@ -251,6 +251,21 @@ export type AgentWidgetContextMentionPayload = {
   context?: Record<string, unknown>;
 };
 
+/**
+ * One resolved mention, handed to `contextMentions.llmFormat` to build the
+ * model-visible block. `text` is the source's `llmAppend`; `ref`/`item` carry
+ * the selection identity/metadata for a custom formatter (e.g. a source-specific
+ * wrapper or a path from `item`).
+ */
+export type AgentWidgetMentionLlmEntry = {
+  /** The mention's display label (from `ref.label`). */
+  label: string;
+  /** The resolved model-visible body (the source's `llmAppend`). */
+  text: string;
+  ref: AgentWidgetContextMentionRef;
+  item: AgentWidgetContextMentionItem;
+};
+
 export type AgentWidgetContextMentionSearchContext = {
   messages: AgentWidgetMessage[];
   config: AgentWidgetConfig;
@@ -456,6 +471,43 @@ export type AgentWidgetContextMentionConfig = {
   sources: AgentWidgetContextMentionSource[];
   /** Chip icon fallback when a source/item omits one. @default "at-sign" */
   chipIconName?: string;
+  /**
+   * How each resolved mention's `llmAppend` text is wrapped into a delimited
+   * block before it is prepended to the model-visible message content. Blocks
+   * are joined with a blank line and the typed prose follows last.
+   *
+   * - `"fenced"` (default): a fenced code block with the label in the info
+   *   string, e.g. selecting `App.tsx` emits:
+   *   ```text
+   *   ```App.tsx
+   *   <file body>
+   *   ```
+   *   ```
+   *   The fence auto-escalates (four+ backticks) when the body itself contains a
+   *   fence, so a body can never terminate its own wrapper.
+   * - `"document"`: Anthropic's long-context document shape, e.g.:
+   *   ```text
+   *   <document index="1">
+   *   <source>App.tsx</source>
+   *   <document_content>
+   *   <file body>
+   *   </document_content>
+   *   </document>
+   *   ```
+   *   Prefer this for prose/document-shaped sources per Anthropic's long-context
+   *   guidance (indexed `<document>` blocks improve grounding and citation). A
+   *   body containing the literal `</document_content>` closing tag falls back to
+   *   the fenced block for that entry to avoid a broken XML boundary.
+   * - function form: fully owns the block for one mention — its return string is
+   *   used verbatim (no extra wrapping), joined with the other blocks. `index` is
+   *   the 0-based position among the message's mention blocks.
+   *
+   * @default "fenced"
+   */
+  llmFormat?:
+    | "fenced"
+    | "document"
+    | ((entry: AgentWidgetMentionLlmEntry, index: number) => string);
   /**
    * How `@` selections appear in the composer and sent user bubble.
    *

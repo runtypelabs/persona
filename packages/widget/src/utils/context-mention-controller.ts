@@ -1022,7 +1022,7 @@ export class ContextMentionController {
       const context: Record<string, Record<string, unknown>> = {};
       if (payload.context) context[source.id] = { [item.id]: payload.context };
       return {
-        llmEntries: [],
+        blocks: [],
         contentParts: payload.contentParts ?? [],
         context,
       };
