@@ -265,36 +265,24 @@ describe("ContextMentionManager", () => {
     expect(manager.admit(source, item("b"))).toBe(true);
   });
 
-  it("admit rejects a duplicate of an already-tracked mention (chip parity, no double payload)", async () => {
-    // Inline entries are keyed by ComposerMentionId, so duplicate detection must
-    // match on the ref (source + item) — a repeated pick of the same item would
-    // otherwise double-emit its payload at finalize().
+  it("admits duplicate inline mentions and dedupes the resolved payload at submit (Slack/Cursor/Claude)", async () => {
+    // Inline mode lets the same item appear as several prose tokens; admit only
+    // gates the limit, and finalize dedupes the resolved payload by (source, item)
+    // so the LLM sees the content once while every token still renders in the sent
+    // bubble (refs lists both). No rejection fires for a duplicate here.
     const onMentionRejected = vi.fn();
     const { manager, source } = makeManager({ onMentionRejected });
+    expect(manager.admit(source, item("a"))).toBe(true);
     manager.track("pmention-1", source, item("a"));
-    expect(manager.admit(source, item("a"))).toBe(false);
-    expect(onMentionRejected).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "a" }),
-      "duplicate"
-    );
-    // A different item from the same source is still admitted.
-    expect(manager.admit(source, item("b"))).toBe(true);
+    expect(manager.admit(source, item("a"))).toBe(true); // duplicate allowed
+    manager.track("pmention-2", source, item("a"));
+    expect(onMentionRejected).not.toHaveBeenCalled();
 
-    // The single tracked mention emits exactly one payload.
     await tick();
-    const bundle = await manager.collectForSubmit().finalize();
-    expect(bundle.llmEntries).toHaveLength(1);
-  });
-
-  it("admit also rejects a duplicate of a chip added via add()", () => {
-    const onMentionRejected = vi.fn();
-    const { manager, source } = makeManager({ onMentionRejected });
-    manager.add(source, item("a"));
-    expect(manager.admit(source, item("a"))).toBe(false);
-    expect(onMentionRejected).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "a" }),
-      "duplicate"
-    );
+    const { refs, finalize } = manager.collectForSubmit();
+    expect(refs).toHaveLength(2); // both tokens render in the bubble
+    const bundle = await finalize();
+    expect(bundle.llmEntries).toEqual([{ label: "a", text: "CONTENT" }]); // deduped
   });
 
   it("track reports resolve status onto the inline token (resolved / error)", async () => {

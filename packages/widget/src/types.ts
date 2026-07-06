@@ -474,9 +474,11 @@ export type AgentWidgetContextMentionConfig = {
    */
   display?: "chip" | "inline";
   /**
-   * Fired when a pick is rejected: it duplicates an existing chip (`"duplicate"`),
-   * hits `maxMentions` (`"limit"`), or (inline display) the composer text changed
-   * between parse and commit so the token could not be inserted (`"stale"`).
+   * Fired when a pick is rejected: it duplicates an existing chip in chip display
+   * (`"duplicate"` — inline display allows the same item as multiple tokens, so it
+   * never rejects for this reason), hits `maxMentions` (`"limit"`), or (inline
+   * display) the composer text changed between parse and commit so the token could
+   * not be inserted (`"stale"`).
    */
   onMentionRejected?: (
     item: AgentWidgetContextMentionItem,

@@ -144,22 +144,20 @@ export class ContextMentionManager {
   }
 
   /**
-   * INLINE pre-insert gate: enforce the SAME duplicate/limit policy as `add()`
-   * (firing `onMentionRejected` + the `rejected` event) before the controller
-   * inserts an atomic token, so a rejected pick never leaves a stray token.
-   * Duplicates match on the ref (source + item) rather than the pending key —
-   * inline entries are keyed by `ComposerMentionId` — because a repeated pick of
-   * the same item would double-emit its payload at `finalize()` (chip parity).
-   * Returns true when the mention may be inserted.
+   * INLINE pre-insert gate, run BEFORE the controller inserts an atomic token so a
+   * rejected pick never leaves a stray token. Only the mention LIMIT is gated here:
+   * inline mode lets the same item appear as several prose tokens (Slack, Cursor,
+   * and Claude all let you @-mention a thing twice in one sentence), unlike chip
+   * mode's `add()`, whose chip row is an attachment list where a duplicate chip is
+   * meaningless. Each token still counts toward `maxMentions`, and `finalize()`
+   * dedupes the resolved payload by (source, item) so a repeated mention's context
+   * reaches the LLM once even though every token renders. Returns true when the
+   * mention may be inserted.
    */
   admit(
     source: AgentWidgetContextMentionSource,
     item: AgentWidgetContextMentionItem
   ): boolean {
-    const dup = this.mentions.some(
-      (m) => m.ref.sourceId === source.id && m.ref.itemId === item.id
-    );
-    if (dup) return this.reject(source, item, "duplicate");
     if (this.atLimit()) return this.reject(source, item, "limit");
     return true;
   }
@@ -343,11 +341,21 @@ export class ContextMentionManager {
       const llmEntries: { label: string; text: string }[] = [];
       const contentParts: ContentPart[] = [];
       const context: Record<string, Record<string, unknown>> = {};
-      // Assemble in original selection order (mentions-first block).
+      // Assemble in original selection order (mentions-first block), deduping the
+      // resolved payload by (source, item): inline mode allows the same item to
+      // appear as multiple prose tokens (Slack/Cursor/Claude), but its content
+      // must reach the LLM once. `refs` (returned above) still lists every token
+      // so the sent bubble renders them all — only the bundle is deduped. The
+      // dedupe claim is taken AFTER the null-payload skip, so if one duplicate's
+      // resolve failed but another succeeded, the successful one still wins.
+      const contributed = new Set<string>();
       for (let i = 0; i < snapshot.length; i++) {
         const m = snapshot[i];
         const payload = payloads[i];
         if (!payload) continue;
+        const dedupeKey = mentionKey(m.source.id, m.item.id);
+        if (contributed.has(dedupeKey)) continue;
+        contributed.add(dedupeKey);
         if (payload.llmAppend && payload.llmAppend.trim()) {
           llmEntries.push({ label: m.ref.label, text: payload.llmAppend });
         }

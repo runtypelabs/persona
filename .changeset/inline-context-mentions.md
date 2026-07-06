@@ -9,6 +9,13 @@ row. The resolved-context channel (`llmContent`/`contentParts`) is unchanged,
 since inline tokens are a display concern. Opt in per widget; the default stays
 `"chip"`.
 
+In inline mode the same item can be mentioned more than once in a message
+(Slack/Cursor/Claude behavior): each pick inserts its own token instead of being
+rejected as a duplicate, and the submit bundle dedupes the resolved payload by
+(source, item) so the model receives the context once while every token still
+renders. Chip mode still rejects a duplicate chip, since its context row is an
+attachment list.
+
 The contenteditable engine ships as a separate lazy chunk
 (`context-mentions-inline.js`, ~3 kB gz) loaded on composer mount only when
 `display: "inline"`, so chip-only and feature-off embeds are unaffected. Sent
