@@ -10,6 +10,7 @@
  * inlined by the no-splitting build, defeating the whole point.)
  */
 
+import { createChunkLoader } from "./utils/chunk-loader";
 import type {
   ContextMentionMountContext,
   ContextMentionEngine,
@@ -19,35 +20,13 @@ export type ContextMentionsModule = {
   mountContextMentions: (ctx: ContextMentionMountContext) => ContextMentionEngine;
 };
 
-let loader: (() => Promise<ContextMentionsModule>) | null = null;
-let moduleCache: ContextMentionsModule | null = null;
-let loadPromise: Promise<ContextMentionsModule> | null = null;
+// IIFE/CDN: sibling-URL chunk via the registered loader.
+// ESM/CJS fallback: the package's own `./context-mentions` subpath (external, so
+// the runtime chunk is code-split out of dist/index.{js,cjs} rather than
+// inlined). Memoization + rejection-retry semantics live in `createChunkLoader`.
+const { setLoader, load } = createChunkLoader<ContextMentionsModule>({
+  fallbackImport: () => import("@runtypelabs/persona/context-mentions"),
+});
 
-export const setContextMentionsLoader = (
-  l: () => Promise<ContextMentionsModule>
-): void => {
-  loader = l;
-};
-
-export const loadContextMentions = (): Promise<ContextMentionsModule> => {
-  if (moduleCache) return Promise.resolve(moduleCache);
-  if (loadPromise) return loadPromise;
-  // IIFE/CDN: sibling-URL chunk via the registered loader.
-  // ESM/CJS: the package's own `./context-mentions` subpath (external, so the
-  // runtime chunk is code-split out of dist/index.{js,cjs} rather than inlined).
-  const importChunk =
-    loader ?? (() => import("@runtypelabs/persona/context-mentions"));
-  loadPromise = importChunk()
-    .then((mod) => {
-      moduleCache = mod;
-      return mod;
-    })
-    .catch((err) => {
-      // Clear the cached promise so a later call retries after a transient
-      // failure — otherwise one dropped fetch disables mentions for the whole
-      // session. The current caller still sees the rejection.
-      loadPromise = null;
-      throw err;
-    });
-  return loadPromise;
-};
+export const setContextMentionsLoader = setLoader;
+export const loadContextMentions = load;

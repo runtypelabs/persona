@@ -892,29 +892,36 @@ export const createStandardBubble = (
       )
     : (message.content ?? "");
 
-  const transformedContent = transform({
-    text: bufferedContent,
-    message,
-    streaming: Boolean(message.streaming),
-    raw: message.rawContent
-  });
-
-  let animatedContent = transformedContent;
-  if (streamAnimationActive && streamPlugin?.wrap === "char") {
-    animatedContent = wrapStreamAnimation(transformedContent, "char", message.id, {
-      skipTags: streamPlugin.skipTags,
+  // The markdown transform + stream-animation wrapping only feed the two text
+  // branches below; the inline-mention branch renders from `contentSegments` and
+  // discards this output. Compute it lazily so segmented user bubbles (rebuilt
+  // every render pass during streaming) don't pay for transform work they throw
+  // away. `bufferedContent` stays eager — the streaming skeleton logic reads it.
+  const computeAnimatedContent = (): string => {
+    const transformedContent = transform({
+      text: bufferedContent,
+      message,
+      streaming: Boolean(message.streaming),
+      raw: message.rawContent
     });
-  } else if (streamAnimationActive && streamPlugin?.wrap === "word") {
-    animatedContent = wrapStreamAnimation(transformedContent, "word", message.id, {
-      skipTags: streamPlugin.skipTags,
-    });
-  }
+    if (streamAnimationActive && streamPlugin?.wrap === "char") {
+      return wrapStreamAnimation(transformedContent, "char", message.id, {
+        skipTags: streamPlugin.skipTags,
+      });
+    }
+    if (streamAnimationActive && streamPlugin?.wrap === "word") {
+      return wrapStreamAnimation(transformedContent, "word", message.id, {
+        skipTags: streamPlugin.skipTags,
+      });
+    }
+    return transformedContent;
+  };
 
   let textContentDiv: HTMLElement | null = null;
 
   if (shouldHideTextUntilPreviewFails) {
     textContentDiv = document.createElement("div");
-    textContentDiv.innerHTML = animatedContent;
+    textContentDiv.innerHTML = computeAnimatedContent();
     textContentDiv.style.display = "none";
     contentDiv.appendChild(textContentDiv);
   } else if (message.contentSegments?.length) {
@@ -928,7 +935,7 @@ export const createStandardBubble = (
       )
     );
   } else {
-    contentDiv.innerHTML = animatedContent;
+    contentDiv.innerHTML = computeAnimatedContent();
   }
 
   if (

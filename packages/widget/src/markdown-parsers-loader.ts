@@ -1,3 +1,4 @@
+import { createChunkLoader } from "./utils/chunk-loader";
 import type { Marked } from "marked";
 import type DOMPurify from "dompurify";
 
@@ -6,19 +7,22 @@ export type MarkdownParsersModule = {
   DOMPurify: typeof DOMPurify;
 };
 
-let loader: (() => Promise<MarkdownParsersModule>) | null = null;
-let moduleCache: MarkdownParsersModule | null = null;
-let loadPromise: Promise<MarkdownParsersModule> | null = null;
+// Memoization + rejection-retry semantics live in `createChunkLoader`. The
+// ESM/CJS fallback imports `./markdown-parsers-entry` directly; the IIFE/CDN
+// build registers a loader that fetches the `markdown-parsers.js` chunk.
+const { setLoader, load, provide, getSync } =
+  createChunkLoader<MarkdownParsersModule>({
+    fallbackImport: () => import("./markdown-parsers-entry"),
+  });
 
 // Surfaces that want to self-heal when the lazy `markdown-parsers.js` chunk
 // lands. See `onMarkdownParsersReady` below for why this is centralized.
 const readySubscribers = new Set<() => void>();
 
-// Flip `moduleCache` and fan out to everyone waiting to re-render, exactly once
-// per subscriber. Called from BOTH the eager (`provideMarkdownParsers`) and lazy
+// Fan out to everyone waiting to re-render, exactly once per subscriber.
+// Called from BOTH the eager (`provideMarkdownParsers`) and lazy
 // (`loadMarkdownParsers`) paths so a subscriber can't miss the transition.
-const markParsersReady = (mod: MarkdownParsersModule): MarkdownParsersModule => {
-  moduleCache = mod;
+const notifyParsersReady = (): void => {
   // Snapshot + clear first: fire-once semantics, and a callback that re-subscribes
   // (it won't — `onMarkdownParsersReady` no-ops once ready) can't loop.
   const subs = [...readySubscribers];
@@ -31,11 +35,25 @@ const markParsersReady = (mod: MarkdownParsersModule): MarkdownParsersModule => 
       /* subscriber threw: swallow so the remaining re-renders still run */
     }
   }
-  return mod;
 };
 
-export const setMarkdownParsersLoader = (l: () => Promise<MarkdownParsersModule>) => {
-  loader = l;
+export const setMarkdownParsersLoader = setLoader;
+
+// On a failed chunk load (404, ad blocker, offline), `createChunkLoader`
+// resets its cached promise so a later call retries. Pending subscribers are
+// KEPT — a surface that rendered escaped during the failed attempt must still
+// heal when a retry (kicked by a new subscriber or an explicit
+// loadMarkdownParsers() call) succeeds; dropping them left that surface
+// escaped forever after a transient failure. They're only retained while the
+// parsers stay unloaded — success releases them (fire-once in
+// `notifyParsersReady`), and callers can unsubscribe.
+export const loadMarkdownParsers = (): Promise<MarkdownParsersModule> => {
+  const cached = getSync();
+  if (cached) return Promise.resolve(cached);
+  return load().then((mod) => {
+    notifyParsersReady();
+    return mod;
+  });
 };
 
 /**
@@ -58,12 +76,13 @@ export const setMarkdownParsersLoader = (l: () => Promise<MarkdownParsersModule>
  * Fires at most once per subscription.
  */
 export const onMarkdownParsersReady = (cb: () => void): (() => void) => {
-  if (moduleCache) return () => {};
+  if (getSync()) return () => {};
   readySubscribers.add(cb);
   // Ensure the chunk is actually being fetched; harmless if already in flight.
   // Swallow rejection here — on failure the subscriber stays registered (see
-  // `onLoadFailure`) and the surface keeps its escaped fallback until a retry
-  // succeeds; this catch only avoids an unhandled rejection.
+  // the note on `loadMarkdownParsers`) and the surface keeps its escaped
+  // fallback until a retry succeeds; this catch only avoids an unhandled
+  // rejection.
   void loadMarkdownParsers().catch(() => {});
   return () => {
     readySubscribers.delete(cb);
@@ -79,36 +98,8 @@ export const onMarkdownParsersReady = (cb: () => void): (() => void) => {
  * it lazy-loads the `markdown-parsers.js` chunk instead.
  */
 export const provideMarkdownParsers = (mod: MarkdownParsersModule): void => {
-  markParsersReady(mod);
+  provide(mod);
+  notifyParsersReady();
 };
 
-// On a failed chunk load (404, ad blocker, offline), don't cache the rejected
-// promise: reset it so a later subscribe/load call can retry. Pending
-// subscribers are KEPT — a surface that rendered escaped during the failed
-// attempt must still heal when a retry (kicked by a new subscriber or an
-// explicit loadMarkdownParsers() call) succeeds; dropping them here left that
-// surface escaped forever after a transient failure. They're only retained
-// while the parsers stay unloaded — success releases them (fire-once in
-// `markParsersReady`), and callers can unsubscribe. On a permanently failing
-// setup they persist for the page's life, which is the price of healing.
-// Re-throw so awaiters of loadMarkdownParsers() still observe the rejection.
-const onLoadFailure = (err: unknown): never => {
-  loadPromise = null;
-  throw err;
-};
-
-export const loadMarkdownParsers = (): Promise<MarkdownParsersModule> => {
-  if (moduleCache) return Promise.resolve(moduleCache);
-  if (loadPromise) return loadPromise;
-  if (!loader) {
-    // Fallback for regular ESM/CJS consumers (they import directly)
-    loadPromise = import("./markdown-parsers-entry").then(markParsersReady, onLoadFailure);
-    return loadPromise;
-  }
-  loadPromise = loader().then(markParsersReady, onLoadFailure);
-  return loadPromise;
-};
-
-export const getMarkdownParsersSync = (): MarkdownParsersModule | null => {
-  return moduleCache;
-};
+export const getMarkdownParsersSync = getSync;

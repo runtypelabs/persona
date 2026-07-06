@@ -13,6 +13,7 @@
  * distinct from the chip menu chunk which loads on the first `@`/click.
  */
 
+import { createChunkLoader } from "./utils/chunk-loader";
 import type {
   InlineComposerMountContext,
   InlineComposerHandle,
@@ -22,38 +23,14 @@ export type ContextMentionsInlineModule = {
   mountInlineComposer: (ctx: InlineComposerMountContext) => InlineComposerHandle;
 };
 
-let loader: (() => Promise<ContextMentionsInlineModule>) | null = null;
-let moduleCache: ContextMentionsInlineModule | null = null;
-let loadPromise: Promise<ContextMentionsInlineModule> | null = null;
+// Memoization + rejection-retry semantics live in `createChunkLoader`.
+// `resetOnSetLoader` mirrors this loader's original behavior: registering a new
+// loader source invalidates whatever the previous loader produced (so a
+// mid-session swap for test injection takes effect deterministically).
+const { setLoader, load } = createChunkLoader<ContextMentionsInlineModule>({
+  fallbackImport: () => import("@runtypelabs/persona/context-mentions-inline"),
+  resetOnSetLoader: true,
+});
 
-export const setContextMentionsInlineLoader = (
-  l: () => Promise<ContextMentionsInlineModule>
-): void => {
-  loader = l;
-  // A new loader source invalidates whatever the previous loader produced.
-  // Production registers its loader once, before any load, so this only matters
-  // when a loader is swapped mid-session (test injection).
-  moduleCache = null;
-  loadPromise = null;
-};
-
-export const loadContextMentionsInline =
-  (): Promise<ContextMentionsInlineModule> => {
-    if (moduleCache) return Promise.resolve(moduleCache);
-    if (loadPromise) return loadPromise;
-    const importChunk =
-      loader ?? (() => import("@runtypelabs/persona/context-mentions-inline"));
-    loadPromise = importChunk()
-      .then((mod) => {
-        moduleCache = mod;
-        return mod;
-      })
-      .catch((err) => {
-        // Clear the cached promise so a later call retries after a transient
-        // failure — otherwise one dropped fetch disables inline mode for the
-        // whole session. The current caller still sees the rejection.
-        loadPromise = null;
-        throw err;
-      });
-    return loadPromise;
-  };
+export const setContextMentionsInlineLoader = setLoader;
+export const loadContextMentionsInline = load;
