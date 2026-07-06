@@ -118,6 +118,11 @@ export class ContextMentionController {
   private readonly listboxId: string;
 
   private popover: PopoverHandle | null = null;
+  // Watches the composer box while the menu is open: an auto-grow line-wrap moves
+  // the `@` glyph (x changes) and shifts the composer's edges (the upward menu's
+  // top changes), so on each resize we re-measure the trigger anchor and
+  // reposition. Connected on open, disconnected on close/destroy (never leaks).
+  private resizeObserver: ResizeObserver | null = null;
   private isOpenState = false;
   private query = "";
   private triggerMatch: MentionTriggerMatch | null = null;
@@ -365,8 +370,34 @@ export class ContextMentionController {
     // root — this chunk carries the menu styles instead of the eager widget.css.
     injectStyles(this.menu.el, "persona-mention-menu", MENTION_MENU_CSS);
     this.input.element.setAttribute("aria-expanded", "true");
+    this.observeComposerResize();
     this.opts.emit?.("opened", { trigger: channel.trigger });
     this.setQuery(query);
+  }
+
+  /**
+   * While the menu is open, follow the composer as it auto-grows on line-wrap.
+   * A wrap moves the `@` glyph to a new line (x shifts) and changes the
+   * composer's box (the upward menu's top shifts), so on each resize we re-measure
+   * the trigger anchor and reposition. ResizeObserver fires on wrap boundaries,
+   * not per character, so this keeps the once-per-session measurement discipline.
+   * Repositioning the fixed-position menu never touches the composer's box, so
+   * there is no observer feedback loop. Degrades silently where ResizeObserver is
+   * unavailable (e.g. jsdom), so behavior falls back to scroll/window-resize only.
+   */
+  private observeComposerResize(): void {
+    if (typeof ResizeObserver === "undefined" || this.resizeObserver) return;
+    this.resizeObserver = new ResizeObserver(() => {
+      if (!this.isOpenState) return;
+      this.updateTriggerAnchor();
+      this.popover?.reposition();
+    });
+    this.resizeObserver.observe(this.opts.anchor);
+  }
+
+  private disconnectComposerResize(): void {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
   }
 
   /**
@@ -413,6 +444,7 @@ export class ContextMentionController {
   close(refocus = true): void {
     if (!this.isOpenState) return;
     this.isOpenState = false;
+    this.disconnectComposerResize();
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.searchAbort?.abort();
     // Invalidate any in-flight async search so late results can't render,
@@ -1087,6 +1119,7 @@ export class ContextMentionController {
   }
 
   destroy(): void {
+    this.disconnectComposerResize();
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.searchAbort?.abort();
     this.popover?.destroy();

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ContextMentionController } from "./context-mention-controller";
 import { createTextareaComposerInput } from "./composer-input";
 import { createContentEditableComposerInput } from "./composer-contenteditable";
@@ -853,5 +853,173 @@ describe("ContextMentionController — trigger-anchored menu positioning", () =>
     input.setValueWithCaret("hey @a", 6);
     controller.onInput(); // trigger moved to index 4 → measure #2
     expect(measure).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("ContextMentionController — follows composer auto-grow (ResizeObserver)", () => {
+  // jsdom has no ResizeObserver, so install a controllable stub whose callback we
+  // fire by hand. Each instance records the observed target and observe/disconnect
+  // calls, and `trigger()` invokes the box-changed callback (a wrap/auto-grow).
+  class ResizeObserverStub {
+    static instances: ResizeObserverStub[] = [];
+    observe = vi.fn();
+    disconnect = vi.fn();
+    private readonly cb: () => void;
+    constructor(cb: () => void) {
+      this.cb = cb;
+      ResizeObserverStub.instances.push(this);
+    }
+    trigger(): void {
+      this.cb();
+    }
+  }
+
+  let savedRO: typeof ResizeObserver | undefined;
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    ResizeObserverStub.instances = [];
+    savedRO = globalThis.ResizeObserver;
+    globalThis.ResizeObserver =
+      ResizeObserverStub as unknown as typeof ResizeObserver;
+  });
+
+  afterEach(() => {
+    if (savedRO) globalThis.ResizeObserver = savedRO;
+    else delete (globalThis as { ResizeObserver?: unknown }).ResizeObserver;
+  });
+
+  const domRect = (r: Partial<DOMRect>): DOMRect =>
+    ({
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+      ...r,
+    }) as DOMRect;
+
+  // Composer occupies x:[100, 460] (width 360) in viewport coords.
+  const ANCHOR_RECT = domRect({
+    left: 100,
+    right: 460,
+    width: 360,
+    top: 200,
+    bottom: 240,
+  });
+
+  function renderToken(ref: AgentWidgetContextMentionRef): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "persona-mention-token";
+    el.textContent = `@${ref.label}`;
+    return el;
+  }
+
+  function inlinePosSetup(triggerRect: DOMRect | null) {
+    const form = document.createElement("form");
+    document.body.appendChild(form);
+    form.getBoundingClientRect = () => ANCHOR_RECT;
+    let idSeq = 0;
+    const input = createContentEditableComposerInput({
+      generateId: () => `mid-${++idSeq}`,
+      renderToken,
+    });
+    form.appendChild(input.element);
+    const measure = vi.fn(() => triggerRect);
+    input.getLogicalRangeRect = measure;
+    const controller = new ContextMentionController({
+      mentionConfig: {
+        enabled: true,
+        display: "inline",
+        sources: [syncSource("files", [item("App.tsx")])],
+      },
+      composerInput: input,
+      anchor: form,
+      getMessages: () => [],
+      getConfig: () => ({}) as AgentWidgetConfig,
+      onSelect: vi.fn(() => true),
+      onInsertMention: vi.fn(),
+      admitMention: () => true,
+      announce: vi.fn(),
+    });
+    return { controller, input, form, measure };
+  }
+
+  /** Open on a typed trigger and give the menu a measurable width for reposition. */
+  function openMenu(
+    controller: ContextMentionController,
+    input: ReturnType<typeof createContentEditableComposerInput>,
+    menuWidth = 200
+  ): HTMLElement {
+    input.setValueWithCaret("@a", 2);
+    controller.onInput();
+    const menu = document.querySelector(".persona-mention-menu") as HTMLElement;
+    menu.getBoundingClientRect = () => domRect({ width: menuWidth, height: 100 });
+    window.dispatchEvent(new Event("resize")); // force a reposition with the width
+    return menu;
+  }
+
+  it("observes the composer on open and disconnects on close", () => {
+    const { controller, input, form } = inlinePosSetup(domRect({ left: 140, width: 8 }));
+    openMenu(controller, input);
+    expect(ResizeObserverStub.instances).toHaveLength(1);
+    const obs = ResizeObserverStub.instances[0];
+    expect(obs.observe).toHaveBeenCalledWith(form);
+
+    controller.close();
+    expect(obs.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("disconnects the observer on destroy", () => {
+    const { controller, input } = inlinePosSetup(domRect({ left: 140, width: 8 }));
+    openMenu(controller, input);
+    const obs = ResizeObserverStub.instances[0];
+
+    controller.destroy();
+    expect(obs.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-measures the trigger anchor and repositions when the composer resizes", () => {
+    // @ glyph starts at x=140 → 40px from the composer's left edge (100) → left 140.
+    const { controller, input, measure } = inlinePosSetup(domRect({ left: 140, width: 8 }));
+    const menu = openMenu(controller, input);
+    expect(menu.style.left).toBe("140px");
+    expect(measure).toHaveBeenCalledTimes(1); // measured once on open
+
+    // A wrap moved the glyph to x=240 (offset 140). Fire the observer: it must
+    // re-measure and reposition so the menu tracks the glyph's new x.
+    const remeasure = vi.fn(() => domRect({ left: 240, width: 8 }));
+    input.getLogicalRangeRect = remeasure;
+    ResizeObserverStub.instances[0].trigger();
+
+    expect(menu.style.left).toBe("240px"); // 100 + 140, reposition ran
+    expect(remeasure).toHaveBeenCalledTimes(1); // re-measured on resize
+  });
+
+  it("does not re-measure the anchor on plain query typing (once-per-session)", () => {
+    const { controller, input, measure } = inlinePosSetup(domRect({ left: 140, width: 8 }));
+    openMenu(controller, input);
+    input.setValueWithCaret("@ab", 3);
+    controller.onInput(); // same trigger index → no re-measure
+    input.setValueWithCaret("@abc", 4);
+    controller.onInput();
+    expect(measure).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates no observer and does not crash when ResizeObserver is undefined", () => {
+    delete (globalThis as { ResizeObserver?: unknown }).ResizeObserver;
+    const { controller, input } = inlinePosSetup(domRect({ left: 140, width: 8 }));
+    let menu!: HTMLElement;
+    expect(() => {
+      menu = openMenu(controller, input);
+    }).not.toThrow();
+    expect(ResizeObserverStub.instances).toHaveLength(0);
+    // Positioning still works via the scroll/window-resize path (degrades cleanly).
+    expect(menu.style.left).toBe("140px");
+    expect(() => controller.close()).not.toThrow();
   });
 });

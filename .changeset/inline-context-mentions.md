@@ -19,5 +19,7 @@ text; live token recall is a known follow-up.
 
 In inline mode the mention menu now anchors horizontally to the `@` trigger glyph
 (Slack-style), measured once per trigger session and clamped so a near-right
-trigger shifts the menu left to stay within the composer; chip mode keeps the
-composer-anchored menu.
+trigger shifts the menu left to stay within the composer, and it follows the
+composer as it auto-grows on line-wrap (a `ResizeObserver` re-measures the anchor
+and repositions while the menu is open); chip mode keeps the composer-anchored
+menu.
