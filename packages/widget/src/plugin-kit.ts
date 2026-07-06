@@ -128,6 +128,13 @@ export interface PopoverOptions {
    */
   horizontalOffset?: () => number | null;
   /**
+   * Vertical anchoring override for `top-*` placements. Returns the desired
+   * anchor point's top offset in px measured from the anchor's TOP edge (e.g.
+   * the trigger line's top within the composer), or `null` to use the anchor's
+   * top edge as usual.
+   */
+  verticalOffset?: () => number | null;
+  /**
    * Inline `z-index` for `content`. Default `2147483000` so it overlays the rest
    * of the widget. Pass `null` to leave z-index to your own CSS.
    */
@@ -186,6 +193,7 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     offset = 6,
     matchAnchorWidth = false,
     horizontalOffset,
+    verticalOffset,
     zIndex = 2147483000,
     onOpen,
     onDismiss,
@@ -207,9 +215,11 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     // Single content measurement per reposition (after width constraints apply).
     const contentRect = content.getBoundingClientRect();
 
+    const offY = verticalOffset?.() ?? null;
+    const anchorTop = offY != null ? rect.top + offY : rect.top;
     const top =
       placement === "top-start" || placement === "top-end"
-        ? rect.top - offset - contentRect.height
+        ? anchorTop - offset - contentRect.height
         : rect.bottom + offset;
 
     const isEnd = placement === "bottom-end" || placement === "top-end";

@@ -159,12 +159,12 @@ export class ContextMentionController {
   private readonly knownAsync = new Set<string>();
   private lastAnnouncedCount = -1;
 
-  // Trigger-anchored menu positioning (inline mode). `triggerAnchorOffset` is the
-  // horizontal distance from the composer's left edge to the `@` trigger glyph,
-  // measured ONCE per trigger session (see `updateTriggerAnchor`). It is a delta
-  // from the anchor, so it survives scroll/pan; the popover adds it to the live
-  // anchor rect each reposition instead of re-measuring per keystroke.
-  private triggerAnchorOffset: number | null = null;
+  // Trigger-anchored menu positioning (inline mode). `triggerAnchorOffset` holds
+  // the trigger glyph's x/y deltas from the composer's left/top edges, measured
+  // ONCE per trigger session (see `updateTriggerAnchor`). Deltas survive scroll/pan;
+  // the popover adds them to the live anchor rect each reposition instead of
+  // re-measuring per keystroke. `x` is null in RTL (horizontal falls back).
+  private triggerAnchorOffset: { x: number | null; y: number } | null = null;
   private measuredTriggerIndex: number | null = null;
 
   constructor(opts: ContextMentionControllerOptions) {
@@ -358,9 +358,14 @@ export class ContextMentionController {
         matchAnchorWidth: !anchored,
         offset: 6,
         container: this.opts.popoverContainer,
-        // Trigger-anchored horizontal offset (px from the composer's left edge),
-        // or null → composer-anchored fallback. Omitted entirely when not anchored.
-        horizontalOffset: anchored ? () => this.triggerAnchorOffset : undefined,
+        // Trigger-anchored offsets (px from the composer's left/top edges), or
+        // null → composer-anchored fallback on that axis. Omitted when not anchored.
+        horizontalOffset: anchored
+          ? () => this.triggerAnchorOffset?.x ?? null
+          : undefined,
+        verticalOffset: anchored
+          ? () => this.triggerAnchorOffset?.y ?? null
+          : undefined,
         // Outside-click / anchor-removed: run the SAME teardown as an explicit
         // close so the debounce timer, in-flight search, and search token are
         // cleaned up too. `popover.close()` inside is a no-op here (the popover
@@ -428,13 +433,14 @@ export class ContextMentionController {
   }
 
   /**
-   * Measure the `@` trigger glyph and cache its horizontal offset from the
-   * composer's left edge (a delta, so it survives scroll — the popover adds it to
-   * the live anchor rect each reposition). Called once per trigger session and
-   * again only when the trigger index changes (new session) — never per keystroke,
-   * so plain query typing does no layout work. Caches `null` (composer-anchored
-   * fallback) when the composer can't anchor, there is no live trigger, the
-   * direction is RTL, or the rect is unmeasurable. The `@` is one glyph at
+   * Measure the `@` trigger glyph and cache its x/y offsets from the composer's
+   * left/top edges (deltas, so they survive scroll — the popover adds them to the
+   * live anchor rect each reposition). Called once per trigger session and again
+   * only when the trigger index changes (new session) — never per keystroke, so
+   * plain query typing does no layout work. Caches `null` (composer-anchored
+   * fallback on both axes) when the composer can't anchor, there is no live
+   * trigger, or the rect is unmeasurable. In RTL, horizontal falls back (`x`:
+   * null) but vertical line anchoring still applies. The `@` is one glyph at
    * `triggerIndex`; a non-collapsed range around it measures reliably (a collapsed
    * boundary range measures empty).
    */
@@ -444,19 +450,19 @@ export class ContextMentionController {
     this.measuredTriggerIndex = match?.triggerIndex ?? null;
     this.triggerAnchorOffset = null;
     if (!match || !measure) return;
-    // RTL: horizontal trigger anchoring is left-to-right math; fall back to the
-    // composer-anchored behavior rather than mispositioning. One early return.
-    const el = this.input.element;
-    if (
-      typeof getComputedStyle === "function" &&
-      getComputedStyle(el).direction === "rtl"
-    ) {
-      return;
-    }
     const rect = measure(match.triggerIndex, match.triggerIndex + 1);
     if (!rect) return;
-    this.triggerAnchorOffset =
-      rect.left - this.opts.anchor.getBoundingClientRect().left;
+    const anchorRect = this.opts.anchor.getBoundingClientRect();
+    const y = rect.top - anchorRect.top;
+    const el = this.input.element;
+    const rtl =
+      typeof getComputedStyle === "function" &&
+      getComputedStyle(el).direction === "rtl";
+    // RTL: horizontal trigger anchoring is left-to-right math; fall back on x only.
+    this.triggerAnchorOffset = {
+      x: rtl ? null : rect.left - anchorRect.left,
+      y,
+    };
   }
 
   close(refocus = true): void {

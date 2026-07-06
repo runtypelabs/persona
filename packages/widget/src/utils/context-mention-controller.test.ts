@@ -724,6 +724,9 @@ describe("ContextMentionController — trigger-anchored menu positioning", () =>
     top: 200,
     bottom: 240,
   });
+  /** Trigger on line 1 — same top as the composer box. */
+  const TRIGGER_LINE1 = (left: number) =>
+    domRect({ left, top: ANCHOR_RECT.top, width: 8, height: 20 });
 
   function renderToken(ref: AgentWidgetContextMentionRef): HTMLElement {
     const el = document.createElement("span");
@@ -798,15 +801,69 @@ describe("ContextMentionController — trigger-anchored menu positioning", () =>
 
   it("anchors the menu's left edge to the trigger glyph when a rect is available", () => {
     // Trigger glyph at viewport x=140 → 40px from the composer's left edge (100).
-    const { controller, input } = posSetup(domRect({ left: 140, width: 8 }));
+    const { controller, input } = posSetup(TRIGGER_LINE1(140));
     const menu = openAndMeasureMenu(controller, input, "@a", 2);
     expect(menu.style.left).toBe("140px"); // 100 + 40
+  });
+
+  it("anchors the menu above the trigger line when the glyph is below line 1", () => {
+    // Composer top=200, bottom=260 (3 lines). Trigger on line 3: top=240 → y=40.
+    // Menu height=100, offset=6 → top = 200 + 40 - 6 - 100 = 134.
+    const formRect = domRect({
+      left: 100,
+      right: 460,
+      width: 360,
+      top: 200,
+      bottom: 260,
+    });
+    const form = document.createElement("form");
+    document.body.appendChild(form);
+    form.getBoundingClientRect = () => formRect;
+    let idSeq = 0;
+    const input = createContentEditableComposerInput({
+      generateId: () => `mid-${++idSeq}`,
+      renderToken: (ref) => {
+        const el = document.createElement("span");
+        el.textContent = `@${ref.label}`;
+        return el;
+      },
+    });
+    form.appendChild(input.element);
+    input.getLogicalRangeRect = vi.fn(() => domRect({ left: 140, top: 240, width: 8, height: 20 }));
+    const controller = new ContextMentionController({
+      mentionConfig: {
+        enabled: true,
+        display: "inline",
+        sources: [syncSource("files", [item("App.tsx")])],
+      },
+      composerInput: input,
+      anchor: form,
+      getMessages: () => [],
+      getConfig: () => ({}) as AgentWidgetConfig,
+      onSelect: vi.fn(() => true),
+      onInsertMention: vi.fn(),
+      admitMention: () => true,
+      announce: vi.fn(),
+    });
+    input.setValueWithCaret("@a", 2);
+    controller.onInput();
+    const menu = document.querySelector(".persona-mention-menu") as HTMLElement;
+    menu.getBoundingClientRect = () => domRect({ width: 200, height: 100 });
+    window.dispatchEvent(new Event("resize"));
+    expect(menu.style.top).toBe("134px");
+  });
+
+  it("uses composer top when the trigger is on line 1 (zero vertical offset)", () => {
+    const { controller, input } = posSetup(TRIGGER_LINE1(140));
+    const menu = openAndMeasureMenu(controller, input, "@a", 2);
+    // top = 200 + 0 - 6 - 100 = 94
+    expect(menu.style.top).toBe("94px");
   });
 
   it("clamps a near-right trigger left so the menu fits (Slack-style)", () => {
     // Trigger near the right edge (x=440 → offset 340). A 200px menu placed at 440
     // would overflow past 460, so it shifts left to right-align at 460 → left 260.
-    const { controller, input } = posSetup(domRect({ left: 440, width: 8 }));
+    const { controller, input } = posSetup(TRIGGER_LINE1(440));
     const menu = openAndMeasureMenu(controller, input, "@a", 2, 200);
     expect(menu.style.left).toBe("260px"); // 460 - 200
   });
@@ -818,16 +875,27 @@ describe("ContextMentionController — trigger-anchored menu positioning", () =>
   });
 
   it("falls back to composer anchoring in RTL", () => {
-    // A rect IS available, but RTL takes the one early-return fallback path.
-    const { controller, input } = posSetup(domRect({ left: 440, width: 8 }), {
+    // A rect IS available, but RTL takes the horizontal fallback path; vertical
+    // line anchoring still applies (trigger on line 1 → same top as composer).
+    const { controller, input } = posSetup(TRIGGER_LINE1(440), {
       rtl: true,
     });
     const menu = openAndMeasureMenu(controller, input, "@a", 2);
     expect(menu.style.left).toBe("100px");
+    expect(menu.style.top).toBe("94px");
+  });
+
+  it("line-anchors vertically in RTL when the trigger is below line 1", () => {
+    const { controller, input } = posSetup(domRect({ left: 440, top: 240, width: 8, height: 20 }), {
+      rtl: true,
+    });
+    const menu = openAndMeasureMenu(controller, input, "@a", 2);
+    expect(menu.style.left).toBe("100px"); // horizontal fallback
+    expect(menu.style.top).toBe("134px"); // vertical line anchor
   });
 
   it("falls back to composer anchoring when the composer has no capability", () => {
-    const { controller, input, measure } = posSetup(domRect({ left: 140 }), {
+    const { controller, input, measure } = posSetup(TRIGGER_LINE1(140), {
       textarea: true,
     });
     const menu = openAndMeasureMenu(controller, input, "@a", 2);
@@ -836,7 +904,7 @@ describe("ContextMentionController — trigger-anchored menu positioning", () =>
   });
 
   it("measures once per session — no re-measure while typing the query", () => {
-    const { controller, input, measure } = posSetup(domRect({ left: 140 }));
+    const { controller, input, measure } = posSetup(TRIGGER_LINE1(140));
     input.setValueWithCaret("@a", 2);
     controller.onInput(); // opens, measures once
     input.setValueWithCaret("@ab", 3);
@@ -847,7 +915,7 @@ describe("ContextMentionController — trigger-anchored menu positioning", () =>
   });
 
   it("re-measures when the trigger index changes (new session)", () => {
-    const { controller, input, measure } = posSetup(domRect({ left: 140 }));
+    const { controller, input, measure } = posSetup(TRIGGER_LINE1(140));
     input.setValueWithCaret("@a", 2);
     controller.onInput(); // trigger at index 0, measure #1
     input.setValueWithCaret("hey @a", 6);
@@ -949,6 +1017,8 @@ describe("ContextMentionController — follows composer auto-grow (ResizeObserve
     return { controller, input, form, measure };
   }
 
+  const TRIGGER_LINE1_RESIZE = domRect({ left: 140, top: ANCHOR_RECT.top, width: 8, height: 20 });
+
   /** Open on a typed trigger and give the menu a measurable width for reposition. */
   function openMenu(
     controller: ContextMentionController,
@@ -964,7 +1034,7 @@ describe("ContextMentionController — follows composer auto-grow (ResizeObserve
   }
 
   it("observes the composer on open and disconnects on close", () => {
-    const { controller, input, form } = inlinePosSetup(domRect({ left: 140, width: 8 }));
+    const { controller, input, form } = inlinePosSetup(TRIGGER_LINE1_RESIZE);
     openMenu(controller, input);
     expect(ResizeObserverStub.instances).toHaveLength(1);
     const obs = ResizeObserverStub.instances[0];
@@ -975,7 +1045,7 @@ describe("ContextMentionController — follows composer auto-grow (ResizeObserve
   });
 
   it("disconnects the observer on destroy", () => {
-    const { controller, input } = inlinePosSetup(domRect({ left: 140, width: 8 }));
+    const { controller, input } = inlinePosSetup(TRIGGER_LINE1_RESIZE);
     openMenu(controller, input);
     const obs = ResizeObserverStub.instances[0];
 
@@ -985,14 +1055,14 @@ describe("ContextMentionController — follows composer auto-grow (ResizeObserve
 
   it("re-measures the trigger anchor and repositions when the composer resizes", () => {
     // @ glyph starts at x=140 → 40px from the composer's left edge (100) → left 140.
-    const { controller, input, measure } = inlinePosSetup(domRect({ left: 140, width: 8 }));
+    const { controller, input, measure } = inlinePosSetup(TRIGGER_LINE1_RESIZE);
     const menu = openMenu(controller, input);
     expect(menu.style.left).toBe("140px");
     expect(measure).toHaveBeenCalledTimes(1); // measured once on open
 
     // A wrap moved the glyph to x=240 (offset 140). Fire the observer: it must
     // re-measure and reposition so the menu tracks the glyph's new x.
-    const remeasure = vi.fn(() => domRect({ left: 240, width: 8 }));
+    const remeasure = vi.fn(() => domRect({ left: 240, top: ANCHOR_RECT.top, width: 8, height: 20 }));
     input.getLogicalRangeRect = remeasure;
     ResizeObserverStub.instances[0].trigger();
 
@@ -1000,8 +1070,21 @@ describe("ContextMentionController — follows composer auto-grow (ResizeObserve
     expect(remeasure).toHaveBeenCalledTimes(1); // re-measured on resize
   });
 
+  it("repositions vertically when a wrap moves the trigger to a new line", () => {
+    const { controller, input } = inlinePosSetup(TRIGGER_LINE1_RESIZE);
+    const menu = openMenu(controller, input);
+    expect(menu.style.top).toBe("94px"); // line 1
+
+    input.getLogicalRangeRect = vi.fn(() =>
+      domRect({ left: 140, top: 240, width: 8, height: 20 })
+    );
+    ResizeObserverStub.instances[0].trigger();
+
+    expect(menu.style.top).toBe("134px"); // line 3
+  });
+
   it("does not re-measure the anchor on plain query typing (once-per-session)", () => {
-    const { controller, input, measure } = inlinePosSetup(domRect({ left: 140, width: 8 }));
+    const { controller, input, measure } = inlinePosSetup(TRIGGER_LINE1_RESIZE);
     openMenu(controller, input);
     input.setValueWithCaret("@ab", 3);
     controller.onInput(); // same trigger index → no re-measure
@@ -1012,7 +1095,7 @@ describe("ContextMentionController — follows composer auto-grow (ResizeObserve
 
   it("creates no observer and does not crash when ResizeObserver is undefined", () => {
     delete (globalThis as { ResizeObserver?: unknown }).ResizeObserver;
-    const { controller, input } = inlinePosSetup(domRect({ left: 140, width: 8 }));
+    const { controller, input } = inlinePosSetup(TRIGGER_LINE1_RESIZE);
     let menu!: HTMLElement;
     expect(() => {
       menu = openMenu(controller, input);
