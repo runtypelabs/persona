@@ -2,45 +2,10 @@
 "@runtypelabs/persona": minor
 ---
 
-Add inline context mentions (`contextMentions.display: "inline"`). Selecting an
-`@` mention can now insert a Slack/Linear/Cursor-style atomic token that stays in
-the sentence, backed by a contenteditable composer, instead of the default chip
-row. The resolved-context channel (`llmContent`/`contentParts`) is unchanged,
-since inline tokens are a display concern. Opt in per widget; the default stays
-`"chip"`.
+Add inline context mentions (`contextMentions.display: "inline"`). Selecting an `@` mention inserts a Slack/Linear/Cursor-style atomic token that stays in the sentence, backed by a contenteditable composer, instead of the default chip row. The resolved-context channel is identical in both modes; inline is a display concern. Opt in per widget; the default stays `"chip"`.
 
-In inline mode the same item can be mentioned more than once in a message
-(Slack/Cursor/Claude behavior): each pick inserts its own token instead of being
-rejected as a duplicate, and the submit bundle dedupes the resolved payload by
-(source, item) so the model receives the context once while every token still
-renders. Chip mode still rejects a duplicate chip, since its context row is an
-attachment list.
-
-The contenteditable engine ships as a separate lazy chunk
-(`context-mentions-inline.js`, ~3 kB gz) loaded on composer mount only when
-`display: "inline"`, so chip-only and feature-off embeds are unaffected. Sent
-inline messages carry ordered `contentSegments`, so the sent bubble re-renders
-each `@token` in place instead of showing the mention twice (raw prose plus a
-chip row). Composer-history recall of an inline message currently restores plain
-text; live token recall is a known follow-up.
-
-In inline mode the mention menu now anchors horizontally to the `@` trigger glyph
-(Slack-style), measured once per trigger session and clamped so a near-right
-trigger shifts the menu left to stay within the composer, anchors vertically to
-the trigger line (not just the composer top) when the `@` sits below line 1, and
-follows the composer as it auto-grows on line-wrap (a `ResizeObserver` re-measures
-the anchor and repositions while the menu is open); chip mode keeps the
-composer-anchored menu.
-
-Each resolved mention's body is now wrapped in a configurable per-mention block
-via `contextMentions.llmFormat`: a fenced code block carrying the label (the new
-default), Anthropic's indexed `<document>` shape, or a custom function that owns
-the block, replacing the old bracketed `[label]` header, which had no end
-delimiter.
-
-This release also hardens context-mention accessibility: mention tokens announce
-as one unit and speak resolve failures, the menu listbox exposes proper group,
-presentation, and setsize/posinset semantics, the affordance button and picker
-search field reflect their open state, and resolve failures are announced through
-a dedicated assertive live region that is hosted in the light DOM under
-`useShadowDom`.
+- The contenteditable engine ships as a separate lazy chunk (`context-mentions-inline.js`, ~3 kB gz) loaded on composer mount only when `display: "inline"`, so chip-only and feature-off embeds are unaffected.
+- The same item can be mentioned more than once in a message: each pick inserts its own token, and the submit bundle dedupes the resolved payload by (source, item) so the model receives the context once. Chip mode still rejects duplicates, since its context row is an attachment list.
+- Sent messages carry ordered `contentSegments`, so the sent bubble re-renders each `@token` in place rather than showing prose plus a chip row. Composer-history recall of an inline message restores plain text; live token recall is a known follow-up.
+- The mention menu anchors to the `@` trigger glyph (Slack-style) rather than the composer: horizontally clamped so a near-right trigger shifts the menu left to stay within the composer, vertically anchored to the trigger's line, and re-positioned as the composer auto-grows on line wrap. Chip mode keeps the composer-anchored menu.
+- Tokens render via `renderMentionToken` (in both the composer and the sent bubble); `renderMentionChip` is ignored for `@` mentions in this mode. Tokens announce as one unit to screen readers and speak resolve failures through a dedicated assertive live region (hosted in the light DOM under `useShadowDom`).
