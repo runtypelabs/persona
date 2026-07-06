@@ -12,8 +12,11 @@ import {
   VideoContentPart,
   FileContentPart,
   AgentWidgetContextMentionRef,
+  AgentWidgetContentSegment,
+  AgentWidgetContextMentionTokenRenderContext,
   StopReasonKind
 } from "../types";
+import { createMentionTokenElement } from "../utils/mention-token";
 import { createIconButton } from "../utils/buttons";
 import { renderLucideIcon } from "../utils/icons";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "../utils/content";
@@ -217,6 +220,42 @@ const createMessageMentionChips = (
     row.appendChild(chip);
   }
   return row;
+};
+
+/**
+ * Render a sent user bubble's prose with atomic mention tokens in place (inline
+ * display mode, from `message.contentSegments`). Text runs become text nodes;
+ * mention segments become read-only pill tokens (shared with the composer, so a
+ * host `renderMentionToken` + per-item `color` apply here too). Display/transcript
+ * concern only — the model saw the resolved bodies via `llmContent`. Returns a
+ * document fragment for `replaceChildren`.
+ */
+export const createMessageInlineMentions = (
+  segments: AgentWidgetContentSegment[],
+  render?: (
+    ctx: AgentWidgetContextMentionTokenRenderContext
+  ) => HTMLElement
+): DocumentFragment => {
+  const frag = document.createDocumentFragment();
+  for (const seg of segments) {
+    if (seg.kind === "text") {
+      frag.appendChild(document.createTextNode(seg.text));
+      continue;
+    }
+    frag.appendChild(
+      createMentionTokenElement(
+        {
+          sourceId: seg.sourceId,
+          itemId: seg.itemId,
+          label: seg.label,
+          iconName: seg.iconName,
+          color: seg.color,
+        },
+        { readonly: true, render }
+      )
+    );
+  }
+  return frag;
 };
 
 const createMessageImagePreviews = (
@@ -878,6 +917,16 @@ export const createStandardBubble = (
     textContentDiv.innerHTML = animatedContent;
     textContentDiv.style.display = "none";
     contentDiv.appendChild(textContentDiv);
+  } else if (message.contentSegments?.length) {
+    // Inline-mention user bubble: render prose with atomic `@` tokens in place
+    // instead of the opaque display string. The resolved context reached the
+    // model via `llmContent`; these tokens are display-only.
+    contentDiv.replaceChildren(
+      createMessageInlineMentions(
+        message.contentSegments,
+        options?.widgetConfig?.contextMentions?.renderMentionToken
+      )
+    );
   } else {
     contentDiv.innerHTML = animatedContent;
   }
@@ -964,8 +1013,11 @@ export const createStandardBubble = (
     }
   }
 
-  // Context mention pills (read-only) for the sent user bubble.
-  const mentionChips = createMessageMentionChips(message.contextMentions);
+  // Context mention pills (read-only) for the sent user bubble. Skipped in inline
+  // mode — the tokens render within the prose (above) instead of a separate row.
+  const mentionChips = message.contentSegments?.length
+    ? null
+    : createMessageMentionChips(message.contextMentions);
   if (mentionChips) {
     bubble.appendChild(mentionChips);
   }

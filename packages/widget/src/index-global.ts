@@ -150,6 +150,7 @@ setRuntypeTtsLoader(() => {
 // ---------------------------------------------------------------------------
 
 import { setContextMentionsLoader } from "./context-mentions-loader";
+import { setContextMentionsInlineLoader } from "./context-mentions-inline-loader";
 
 setContextMentionsLoader(() => {
   const chunkUrl = widgetScriptSrc?.replace(
@@ -162,6 +163,26 @@ setContextMentionsLoader(() => {
         "Could not derive the context-mentions.js URL from the widget script URL " +
           `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
           "rename index.global.js should host context-mentions.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// Sibling loader for the inline-mention contenteditable chunk, loaded on composer
+// mount when `contextMentions.display === "inline"`. Same sibling-URL scheme.
+setContextMentionsInlineLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "context-mentions-inline.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the context-mentions-inline.js URL from the widget " +
+          `script URL (${widgetScriptSrc ?? "unavailable"}). Self-hosted ` +
+          "deployments that rename index.global.js should host " +
+          "context-mentions-inline.js alongside it.",
       ),
     );
   }

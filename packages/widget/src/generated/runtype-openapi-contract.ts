@@ -712,6 +712,9 @@ export type RuntypeClientInitRequest = {
 };
 
 export type RuntypeClientInitResponse = {
+  app?: {
+  id: string;
+};
   config: {
   placeholder?: string;
   theme?: unknown;

@@ -27,6 +27,13 @@ const RUNTIME_MARKERS = [
 
 const SUBPATH = "@runtypelabs/persona/context-mentions";
 
+// Inline (contenteditable) runtime markers — unique to the inline chunk. The
+// composer contenteditable class is set only by the inline adapter/entry (in
+// widget.css it's a stylesheet rule, not a JS-bundle string), so its presence in
+// a JS bundle means the contenteditable engine leaked in.
+const INLINE_RUNTIME_MARKERS = ["persona-composer-contenteditable"];
+const INLINE_SUBPATH = "@runtypelabs/persona/context-mentions-inline";
+
 describe("context-mentions bundle split", () => {
   const iifeBuilt =
     existsSync(dist("index.global.js")) && existsSync(dist("context-mentions.js"));
@@ -68,6 +75,70 @@ describe("context-mentions bundle split", () => {
     // A CJS twin exists for require()-based consumers.
     expect(existsSync(dist("context-mentions.cjs"))).toBe(true);
   });
+
+  // --- inline (contenteditable) chunk guards --------------------------------
+
+  const inlineBuilt = existsSync(dist("context-mentions-inline.js"));
+
+  it.runIf(iifeBuilt)(
+    "keeps the inline contenteditable engine OUT of the core IIFE bundle",
+    () => {
+      const core = readFileSync(dist("index.global.js"), "utf8");
+      for (const marker of INLINE_RUNTIME_MARKERS) {
+        expect(
+          core.includes(marker),
+          `IIFE bundle unexpectedly contains inline marker "${marker}"`
+        ).toBe(false);
+      }
+      // The inline loader stub must remain so the chunk can load on mount.
+      expect(core).toContain("context-mentions-inline.js");
+    }
+  );
+
+  it.runIf(esmBuilt)(
+    "keeps the inline contenteditable engine OUT of the ESM/CJS bundles",
+    () => {
+      for (const file of ["index.js", "index.cjs"]) {
+        const core = readFileSync(dist(file), "utf8");
+        for (const marker of INLINE_RUNTIME_MARKERS) {
+          expect(
+            core.includes(marker),
+            `${file} unexpectedly contains inline marker "${marker}"`
+          ).toBe(false);
+        }
+        // Reached via the external subpath, not inlined.
+        expect(
+          core.includes(INLINE_SUBPATH),
+          `${file} must import the external inline subpath`
+        ).toBe(true);
+      }
+    }
+  );
+
+  it.runIf(inlineBuilt)(
+    "ships the contenteditable engine in the inline chunk (with a CJS twin)",
+    () => {
+      const chunk = readFileSync(dist("context-mentions-inline.js"), "utf8");
+      expect(chunk).toContain("persona-composer-contenteditable");
+      expect(existsSync(dist("context-mentions-inline.cjs"))).toBe(true);
+    }
+  );
+
+  it.runIf(iifeBuilt)(
+    "keeps the contenteditable engine OUT of the chip chunk (capability-only reach)",
+    () => {
+      // The chip controller reaches token insertion ONLY via the capability's
+      // `insertMentionAtTrigger`, so the chip chunk must never pull the document
+      // model / contenteditable adapter. This guard is what keeps that true.
+      const chip = readFileSync(dist("context-mentions.js"), "utf8");
+      for (const marker of INLINE_RUNTIME_MARKERS) {
+        expect(
+          chip.includes(marker),
+          `chip chunk unexpectedly contains inline marker "${marker}"`
+        ).toBe(false);
+      }
+    }
+  );
 
   it.runIf(existsSync(dist("widget.css")))(
     "keeps menu CSS out of the eager stylesheet but keeps chip CSS",

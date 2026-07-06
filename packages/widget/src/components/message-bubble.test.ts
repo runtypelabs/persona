@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import {
   createStandardBubble,
+  createMessageInlineMentions,
   isSafeImageSrc,
   isSafeMediaSrc,
   resolveStopReasonNoticeText,
@@ -15,6 +16,71 @@ const makeMessage = (overrides: Partial<AgentWidgetMessage> = {}): AgentWidgetMe
   content: "",
   createdAt: new Date().toISOString(),
   ...overrides,
+});
+
+describe("createMessageInlineMentions", () => {
+  it("walks segments into prose text nodes + read-only token spans", () => {
+    const frag = createMessageInlineMentions([
+      { kind: "text", text: "Check " },
+      { kind: "mention", sourceId: "files", itemId: "app", label: "App.tsx" },
+      { kind: "text", text: " for errors" },
+    ]);
+    const host = document.createElement("div");
+    host.appendChild(frag);
+    expect(host.textContent).toBe("Check @App.tsx for errors");
+    const tokens = host.querySelectorAll(".persona-mention-token");
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0].classList.contains("persona-mention-token-readonly")).toBe(true);
+    // Per-type theming hook: the source id is exposed for CSS/data targeting.
+    expect(tokens[0].getAttribute("data-mention-source")).toBe("files");
+    expect(tokens[0].querySelector(".persona-mention-token-label")?.textContent).toBe(
+      "@App.tsx"
+    );
+  });
+
+  it("applies a per-item color as the token accent and honors renderMentionToken", () => {
+    // Custom render hook fully replaces the token DOM.
+    const custom = createMessageInlineMentions(
+      [{ kind: "mention", sourceId: "files", itemId: "app", label: "App.tsx" }],
+      ({ ref }) => {
+        const el = document.createElement("b");
+        el.className = "my-token";
+        el.textContent = ref.label;
+        return el;
+      }
+    );
+    const host = document.createElement("div");
+    host.appendChild(custom);
+    expect(host.querySelector(".my-token")?.textContent).toBe("App.tsx");
+
+    // Per-item color sets the accent custom property inline.
+    const colored = createMessageInlineMentions([
+      { kind: "mention", sourceId: "files", itemId: "app", label: "App.tsx", color: "#e11d48" },
+    ]);
+    const host2 = document.createElement("div");
+    host2.appendChild(colored);
+    const token = host2.querySelector<HTMLElement>(".persona-mention-token")!;
+    expect(token.style.getPropertyValue("--persona-mention-token-accent")).toBe("#e11d48");
+  });
+
+  it("renders a segmented user bubble with inline tokens and no chip row", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        role: "user",
+        content: "Check @App.tsx for errors",
+        contextMentions: [{ sourceId: "files", itemId: "app", label: "App.tsx" }],
+        contentSegments: [
+          { kind: "text", text: "Check " },
+          { kind: "mention", sourceId: "files", itemId: "app", label: "App.tsx" },
+          { kind: "text", text: " for errors" },
+        ],
+      }),
+      ({ text }) => text
+    );
+    expect(bubble.querySelectorAll(".persona-mention-token")).toHaveLength(1);
+    // Inline mode replaces the separate chip row.
+    expect(bubble.querySelector("[data-message-mentions]")).toBeNull();
+  });
 });
 
 describe("isSafeImageSrc", () => {

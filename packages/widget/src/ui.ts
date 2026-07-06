@@ -30,7 +30,9 @@ import {
   PersonaArtifactRecord,
   PersonaArtifactManualUpsert,
   PersonaArtifactFileMeta,
-  PersonaArtifactActionContext
+  PersonaArtifactActionContext,
+  AgentWidgetContentSegment,
+  AgentWidgetContextMentionRef
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import {
@@ -1332,34 +1334,16 @@ export const createAgentExperience = (
     } as Partial<CSSStyleDeclaration>);
     container.appendChild(mentionLiveRegion);
 
-    // Composer capability handed to slash-command dispatch (prompt macros write
-    // text / submit; client actions read/replace the value). Broader actions
-    // (clear transcript, theme) are host-wired via closures over the controller.
-    const mentionComposer = {
-      getValue: () => textarea.value,
-      setValue: (value: string) => {
-        textarea.value = value;
-        textarea.setSelectionRange(value.length, value.length);
-        textarea.dispatchEvent(new Event("input", { bubbles: true }));
-        textarea.focus();
-      },
-      submit: () => {
-        if (composerForm && typeof composerForm.requestSubmit === "function") {
-          composerForm.requestSubmit();
-        } else {
-          composerForm?.dispatchEvent(
-            new Event("submit", { bubbles: true, cancelable: true })
-          );
-        }
-      },
-    };
-
+    // Slash-command dispatch (prompt macros write text / submit; client actions
+    // read/replace the value) and submission are owned by the composer input
+    // surface itself — the mention runtime builds a textarea (chip) or
+    // contenteditable (inline) adapter from this textarea. Broader host actions
+    // (clear transcript, theme) are still wired via closures over the controller.
     mentionOrchestrator = createContextMentionOrchestrator({
       config,
       textarea,
       anchor: composerForm ?? textarea,
       getMessages: () => session.getMessages(),
-      composer: mentionComposer,
       announce: (msg) => {
         mentionLiveRegion.textContent = "";
         mentionLiveRegion.textContent = msg;
@@ -1383,8 +1367,9 @@ export const createAgentExperience = (
         if (leftActions) leftActions.insertBefore(btn, leftActions.firstChild);
         else composerForm?.appendChild(btn);
       }
-      // Warm the chunk on first focus so the first `@` is instant.
-      ta.addEventListener("focus", mentionPrefetch);
+      // The focus-prefetch listener (warm the chunk on first focus so the first
+      // `@` is instant) is registered through the shared `composerListeners`
+      // registry below, so it survives the inline contenteditable swap too.
     }
   }
 
@@ -6283,7 +6268,30 @@ export const createAgentExperience = (
     };
   };
 
-  const doSubmit = async () => {
+  // Inline-mode composer element: after the contenteditable swap, `textarea`
+  // additionally exposes `getInlineMessageFields()` (built in the inline chunk,
+  // which owns the document model — the core never imports it). Structural shape
+  // only, so no runtime import crosses the bundle boundary.
+  type InlineComposerFieldsHost = {
+    getInlineMessageFields?: () => {
+      content: string;
+      contextMentions: AgentWidgetContextMentionRef[];
+      contentSegments: AgentWidgetContentSegment[];
+    };
+  };
+  // Read the ordered display segments from the live inline composer, but only
+  // when at least one mention is present: a plain-text inline message must keep
+  // the normal markdown-rendered bubble (segments bypass that path), so we return
+  // undefined for pure prose and let the bubble render `content` as usual.
+  const readInlineContentSegments = (): AgentWidgetContentSegment[] | undefined => {
+    const host = textarea as unknown as InlineComposerFieldsHost;
+    const fields = host.getInlineMessageFields?.();
+    if (!fields) return undefined;
+    const hasMention = fields.contentSegments.some((s) => s.kind === "mention");
+    return hasMention ? fields.contentSegments : undefined;
+  };
+
+  const doSubmit = async (submitOptions?: { viaVoice?: boolean }) => {
     const value = textarea.value.trim();
     const hasAttachments = attachmentManager?.hasAttachments() ?? false;
 
@@ -6329,6 +6337,12 @@ export const createAgentExperience = (
       }
     }
 
+    // Capture the inline display segments BEFORE clearing the composer (clearing
+    // rebuilds the document as empty text). Only set when a `prompt` macro didn't
+    // replace the outgoing text — a macro's segments no longer match `sendText`.
+    const contentSegments =
+      inline?.kind === "prompt" ? undefined : readInlineContentSegments();
+
     textarea.value = "";
     textarea.style.height = "auto"; // Reset height after clearing
     resetHistoryNavigation();
@@ -6337,6 +6351,8 @@ export const createAgentExperience = (
     session.sendMessage(sendText, {
       contentParts,
       mentions: mentions ?? undefined,
+      contentSegments,
+      viaVoice: submitOptions?.viaVoice,
     });
 
     // Clear attachments + mention chips after sending
@@ -6565,9 +6581,11 @@ export const createAgentExperience = (
           const finalValue = textarea.value.trim();
           if (finalValue && speechRecognition && isRecording) {
             stopVoiceRecognition();
-            textarea.value = "";
-            textarea.style.height = "auto"; // Reset height after clearing
-            session.sendMessage(finalValue, { viaVoice: true });
+            // Route through the normal submit path so mentions are collected +
+            // cleared like a manual send (the transcript already lives in the
+            // composer). Sending directly would leave stale tracked mention
+            // context to attach to the next unrelated message.
+            void doSubmit({ viaVoice: true });
           }
         }, pauseDuration);
       }
@@ -6585,9 +6603,9 @@ export const createAgentExperience = (
       if (isRecording) {
         const finalValue = textarea.value.trim();
         if (finalValue && finalValue !== initialText.trim()) {
-          textarea.value = "";
-          textarea.style.height = "auto"; // Reset height after clearing
-          session.sendMessage(finalValue, { viaVoice: true });
+          // Route through the normal submit path (mentions collect + clear), same
+          // as the pause-timer branch above.
+          void doSubmit({ viaVoice: true });
         }
         stopVoiceRecognition();
       }
@@ -7469,9 +7487,43 @@ export const createAgentExperience = (
   if (composerForm) {
     composerForm.addEventListener("submit", handleSubmit);
   }
-  textarea?.addEventListener("keydown", handleComposerKeydown);
-  textarea?.addEventListener("input", handleComposerInput);
-  textarea?.addEventListener("paste", handleInputPaste);
+
+  // Single registry of composer listeners. The initial attach and the inline
+  // contenteditable swap-reattach both consume this array, so a listener added
+  // here is mechanically included in both — no hand-maintained enumeration to
+  // drift. Add new composer listeners here, not as ad-hoc addEventListener calls.
+  type ComposerListener = [event: string, handler: (event: Event) => void];
+  const composerListeners: ComposerListener[] = [
+    ["keydown", handleComposerKeydown as unknown as (event: Event) => void],
+    ["input", handleComposerInput as (event: Event) => void],
+    ["paste", handleInputPaste as unknown as (event: Event) => void],
+    // Warm the mention chunk on first focus so the first `@` is instant.
+    ["focus", mentionPrefetch as (event: Event) => void],
+  ];
+  const attachComposerListeners = (el: HTMLElement | null): void => {
+    if (!el) return;
+    for (const [event, handler] of composerListeners) {
+      el.addEventListener(event, handler);
+    }
+  };
+  const detachComposerListeners = (el: HTMLElement | null): void => {
+    if (!el) return;
+    for (const [event, handler] of composerListeners) {
+      el.removeEventListener(event, handler);
+    }
+  };
+
+  attachComposerListeners(textarea);
+
+  // Inline mention mode swaps the textarea for a contenteditable surface (loaded
+  // lazily). When that happens, move the composer listeners onto the new element
+  // and repoint `textarea` (the swapped element shims the textarea API the rest of
+  // the composer code relies on). Fires immediately if the swap already occurred.
+  mentionOrchestrator?.onComposerSwap((next, prev) => {
+    detachComposerListeners(prev);
+    textarea = next as unknown as HTMLTextAreaElement;
+    attachComposerListeners(next);
+  });
 
   const escStopDoc = mount.ownerDocument ?? document;
   escStopDoc.addEventListener("keydown", handleEscStop, true);
@@ -7552,10 +7604,7 @@ export const createAgentExperience = (
     if (composerForm) {
       composerForm.removeEventListener("submit", handleSubmit);
     }
-    textarea?.removeEventListener("keydown", handleComposerKeydown);
-    textarea?.removeEventListener("input", handleComposerInput);
-    textarea?.removeEventListener("paste", handleInputPaste);
-    textarea?.removeEventListener("focus", mentionPrefetch);
+    detachComposerListeners(textarea);
     escStopDoc.removeEventListener("keydown", handleEscStop, true);
     mentionOrchestrator?.destroy();
   });

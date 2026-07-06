@@ -15,10 +15,11 @@ import {
   type MentionMenuGroup,
   type MentionMenuParts,
 } from "../components/context-mention-menu";
-import type { MentionSubmitBundle } from "./context-mention-manager";
+import { refFromItem, type MentionSubmitBundle } from "./context-mention-manager";
+import type { ComposerInputCapability } from "./composer-input";
+import type { ComposerMentionId } from "./composer-document";
 import type {
   AgentWidgetConfig,
-  AgentWidgetContextMentionComposerCapability,
   AgentWidgetContextMentionConfig,
   AgentWidgetContextMentionItem,
   AgentWidgetContextMentionRef,
@@ -45,7 +46,13 @@ export type InlineCommandResult =
 
 export interface ContextMentionControllerOptions {
   mentionConfig: AgentWidgetContextMentionConfig;
-  textarea: HTMLTextAreaElement;
+  /**
+   * The composer input surface (chip: textarea adapter; inline: contenteditable
+   * adapter). The controller drives all text/selection/document ops through this
+   * one capability — it also serves as the `command:"prompt"`/`"action"` composer
+   * (the superset includes `getValue`/`setValue`/`submit`).
+   */
+  composerInput: ComposerInputCapability;
   /** Popover anchor — the composer form/pill; the menu opens upward, full-width. */
   anchor: HTMLElement;
   getMessages: () => AgentWidgetMessage[];
@@ -62,11 +69,26 @@ export interface ContextMentionControllerOptions {
     args: string
   ) => boolean;
   /**
-   * Composer capability for `command:"prompt"` (insert text / submit) and
-   * `command:"action"` handlers. Absent on paths without a wired composer;
-   * command dispatch degrades to a no-op then.
+   * INLINE display only. Track a mention whose atomic token was just inserted
+   * into the composer, keyed by the composer-generated `ComposerMentionId`.
+   * Chip mode leaves this undefined and commits through `onSelect` (chip row).
    */
-  composer?: AgentWidgetContextMentionComposerCapability;
+  onInsertMention?: (
+    id: ComposerMentionId,
+    source: AgentWidgetContextMentionSource,
+    item: AgentWidgetContextMentionItem,
+    args: string
+  ) => void;
+  /**
+   * INLINE display only. Admission gate run BEFORE a token is inserted: returns
+   * false (and fires the manager's rejection hooks) when the pick hits the mention
+   * limit, so a rejected pick never leaves a stray token. Owns the same
+   * limit/rejection policy as chip mode's `onSelect` path.
+   */
+  admitMention?: (
+    source: AgentWidgetContextMentionSource,
+    item: AgentWidgetContextMentionItem
+  ) => boolean;
   announce: (message: string) => void;
   popoverContainer?: HTMLElement | ShadowRoot;
   emit?: (event: string, detail: unknown) => void;
@@ -153,9 +175,15 @@ export class ContextMentionController {
           },
         });
 
-    opts.textarea.setAttribute("aria-haspopup", "listbox");
-    opts.textarea.setAttribute("aria-controls", this.listboxId);
-    opts.textarea.setAttribute("aria-expanded", "false");
+    const el = opts.composerInput.element;
+    el.setAttribute("aria-haspopup", "listbox");
+    el.setAttribute("aria-controls", this.listboxId);
+    el.setAttribute("aria-expanded", "false");
+  }
+
+  /** The composer input surface — all text/selection ops route through this. */
+  private get input(): ComposerInputCapability {
+    return this.opts.composerInput;
   }
 
   // The host-render path wraps `renderMentionMenu` output in a positioned shell;
@@ -212,9 +240,8 @@ export class ContextMentionController {
     // user typed `@que` then clicked the button), adopt it as a normal typed
     // trigger so selection strips the query — rather than opening a picker that
     // would leave the `@que` text stranded in the composer.
-    const ta = this.opts.textarea;
-    const caret = ta.selectionStart ?? 0;
-    const typed = parseAnyTrigger(ta.value, caret, [channel]);
+    const caret = this.input.getSelection().start;
+    const typed = parseAnyTrigger(this.input.getLogicalText(), caret, [channel]);
     if (typed) {
       this.pickerMode = false;
       this.triggerMatch = typed.match;
@@ -224,7 +251,7 @@ export class ContextMentionController {
         this.switchChannel(channel);
         this.setQuery(typed.match.query);
       }
-      ta.focus();
+      this.input.focus();
       return;
     }
 
@@ -237,14 +264,13 @@ export class ContextMentionController {
       this.setQuery("");
     }
     if (this.menu.showSearch) this.menu.showSearch("", channel.searchPlaceholder);
-    else ta.focus();
+    else this.input.focus();
   }
 
-  /** Re-parse the textarea on every input and open/update/close the menu. */
+  /** Re-parse the composer on every input and open/update/close the menu. */
   onInput(): void {
-    const ta = this.opts.textarea;
-    const caret = ta.selectionStart ?? 0;
-    const hit = parseAnyTrigger(ta.value, caret, this.channels);
+    const caret = this.input.getSelection().start;
+    const hit = parseAnyTrigger(this.input.getLogicalText(), caret, this.channels);
     if (!hit) {
       if (this.isOpenState) this.close();
       return;
@@ -301,7 +327,7 @@ export class ContextMentionController {
     // head by default; the shadow root under `useShadowDom`). Idempotent per
     // root — this chunk carries the menu styles instead of the eager widget.css.
     injectStyles(this.menu.el, "persona-mention-menu", MENTION_MENU_CSS);
-    this.opts.textarea.setAttribute("aria-expanded", "true");
+    this.input.element.setAttribute("aria-expanded", "true");
     this.opts.emit?.("opened", { trigger: channel.trigger });
     this.setQuery(query);
   }
@@ -315,14 +341,14 @@ export class ContextMentionController {
     // announce, or emit into a closed menu.
     this.searchToken++;
     this.popover?.close();
-    this.opts.textarea.setAttribute("aria-expanded", "false");
-    this.opts.textarea.removeAttribute("aria-activedescendant");
+    this.input.element.setAttribute("aria-expanded", "false");
+    this.input.element.removeAttribute("aria-activedescendant");
     if (this.pickerMode) {
       // Picker teardown: hide the search field and (unless dismissed by an
       // outside click) hand focus back to the composer so the user keeps typing.
       this.pickerMode = false;
       this.menu.hideSearch?.();
-      if (refocus) this.opts.textarea.focus();
+      if (refocus) this.input.focus();
     }
   }
 
@@ -505,12 +531,12 @@ export class ContextMentionController {
       this.activeIndex >= 0 &&
       this.activeIndex < this.flat.length;
     if (live) {
-      this.opts.textarea.setAttribute(
+      this.input.element.setAttribute(
         "aria-activedescendant",
         `${this.listboxId}-opt-${this.activeIndex}`
       );
     } else {
-      this.opts.textarea.removeAttribute("aria-activedescendant");
+      this.input.element.removeAttribute("aria-activedescendant");
     }
   }
 
@@ -636,7 +662,7 @@ export class ContextMentionController {
         kind: "action",
         args,
       });
-      this.opts.textarea.focus();
+      this.input.focus();
       return;
     }
 
@@ -655,8 +681,15 @@ export class ContextMentionController {
       return;
     }
 
-    // Ordinary `@` mentions: go through the manager (chip + resolve). Server
-    // commands never reach here — they inline-complete above.
+    // Ordinary `@` mentions. Inline display: insert an atomic token in the prose
+    // and track its resolve by composer id. Chip display: go through the manager
+    // (chip row + resolve). Server commands never reach here — they inline-complete
+    // above.
+    if (this.isInlineDisplay()) {
+      this.commitInlineMention(source, item);
+      return;
+    }
+
     const ok = this.opts.onSelect(source, item, "");
     if (ok) {
       this.stripQuery();
@@ -667,7 +700,62 @@ export class ContextMentionController {
       });
     }
     this.close();
-    this.opts.textarea.focus();
+    this.input.focus();
+  }
+
+  /** True when `@` mentions render as inline tokens (contenteditable composer). */
+  private isInlineDisplay(): boolean {
+    return (
+      this.opts.mentionConfig.display === "inline" &&
+      !!this.opts.onInsertMention &&
+      !!this.input.insertMentionAtTrigger
+    );
+  }
+
+  /**
+   * Inline-display commit: insert an atomic mention token (replacing the typed
+   * `@query` range, or at the caret for the picker path) and track its resolve
+   * keyed by the returned composer id. The limit is gated BEFORE insertion so a
+   * rejected pick never leaves a stray token.
+   */
+  private commitInlineMention(
+    source: AgentWidgetContextMentionSource,
+    item: AgentWidgetContextMentionItem
+  ): void {
+    // Limit gate BEFORE insertion (fires the manager's rejection hooks) so a
+    // rejected pick never leaves a stray token.
+    if (this.opts.admitMention && !this.opts.admitMention(source, item)) {
+      this.close();
+      this.input.focus();
+      return;
+    }
+    const ref = refFromItem(source, item);
+    const id = this.triggerMatch
+      ? this.input.insertMentionAtTrigger!(ref, this.triggerMatch)
+      : (this.input.insertMentionAtSelection?.(ref) ?? null);
+    if (id) {
+      this.opts.onInsertMention!(id, source, item, "");
+      this.opts.emit?.("selected", {
+        sourceId: source.id,
+        itemId: item.id,
+        label: item.label,
+      });
+    } else {
+      // Insertion refused: the adapter's staleness guard saw the composer text
+      // change between parse and commit (an IME/edit race). Fire the same
+      // rejection path chip-mode failures use so hosts/tests can react rather than
+      // the typed `@query` being silently stranded.
+      this.opts.mentionConfig.onMentionRejected?.(item, "stale");
+      this.opts.emit?.("rejected", {
+        sourceId: source.id,
+        itemId: item.id,
+        reason: "stale",
+      });
+    }
+    // The `@query` range became the token (typed path); nothing left to strip.
+    this.triggerMatch = null;
+    this.close();
+    this.input.focus();
   }
 
   /**
@@ -681,19 +769,27 @@ export class ContextMentionController {
     source: AgentWidgetContextMentionSource,
     item: AgentWidgetContextMentionItem
   ): void {
-    const ta = this.opts.textarea;
     const insert = `${this.activeChannel.trigger}${item.label} `;
-    const caret = ta.selectionStart ?? ta.value.length;
+    const caret = this.input.getSelection().start;
     // Typed path: replace the `<trigger><query>` span. Picker path (button open,
     // no trigger char present): insert at the caret. Line-start commands only
     // dispatch when they lead a line, so a mid-line picker insert degrades to
-    // literal text — acceptable for the rarely-used slash button.
+    // literal text — acceptable for the rarely-used slash button. Both endpoints
+    // are LOGICAL offsets, so the edit must run in logical space (see below).
     const start = this.triggerMatch ? this.triggerMatch.triggerIndex : caret;
-    const before = ta.value.slice(0, start);
-    const after = ta.value.slice(caret);
-    ta.value = before + insert + after;
-    const pos = before.length + insert.length;
-    ta.setSelectionRange(pos, pos);
+    if (this.input.replaceLogicalRange) {
+      // Inline: splice at the document level so tokens elsewhere in the line
+      // survive (a display-string slice would misalign against `@Label` and
+      // re-rendering as one text block would destroy every token).
+      this.input.replaceLogicalRange(start, caret, insert);
+    } else {
+      // Textarea: DISPLAY === LOGICAL, so the string slice is exact.
+      const value = this.input.getValue();
+      this.input.setValueWithCaret(
+        value.slice(0, start) + insert + value.slice(caret),
+        start + insert.length
+      );
+    }
     this.triggerMatch = null;
     this.close();
     this.opts.emit?.("command", {
@@ -703,8 +799,8 @@ export class ContextMentionController {
       phase: "armed",
     });
     // Re-parse: the trailing space + `isInlineArgTail` keeps the menu closed.
-    ta.dispatchEvent(new Event("input", { bubbles: true }));
-    ta.focus();
+    this.input.dispatchInput();
+    this.input.focus();
   }
 
   /**
@@ -811,17 +907,16 @@ export class ContextMentionController {
     };
   }
 
-  /** Run a `command:"action"` handler, guarding against a missing composer/throws. */
+  /** Run a `command:"action"` handler, guarding against throws. */
   private runAction(item: AgentWidgetContextMentionItem, args: string): void {
-    const composer = this.opts.composer;
-    if (!item.action || !composer) return;
+    if (!item.action) return;
     try {
       void Promise.resolve(
         item.action({
           args,
           config: this.opts.getConfig(),
           messages: this.opts.getMessages(),
-          composer,
+          composer: this.input,
         })
       ).catch((error) => {
         if (typeof console !== "undefined") {
@@ -835,14 +930,21 @@ export class ContextMentionController {
     }
   }
 
-  /** Capture the pre-token / post-caret composer slices for insert-at-caret. */
-  private captureStripTarget(): { before: string; after: string } | null {
+  /**
+   * Snapshot the trigger span for an insert-at-caret prompt macro: the LOGICAL
+   * range `[triggerIndex, caret)` to rewrite, plus the display `value` at select
+   * time for the textarea fallback (where DISPLAY === LOGICAL).
+   */
+  private captureStripTarget(): {
+    value: string;
+    start: number;
+    end: number;
+  } | null {
     if (!this.triggerMatch) return null;
-    const ta = this.opts.textarea;
-    const caret = ta.selectionStart ?? ta.value.length;
     return {
-      before: ta.value.slice(0, this.triggerMatch.triggerIndex),
-      after: ta.value.slice(caret),
+      value: this.input.getValue(),
+      start: this.triggerMatch.triggerIndex,
+      end: this.input.getSelection().start,
     };
   }
 
@@ -851,10 +953,9 @@ export class ContextMentionController {
     source: AgentWidgetContextMentionSource,
     item: AgentWidgetContextMentionItem,
     args: string,
-    target: { before: string; after: string } | null
+    target: { value: string; start: number; end: number } | null
   ): Promise<void> {
-    const composer = this.opts.composer;
-    if (!composer) return;
+    const composer = this.input;
     let payload;
     try {
       payload = await source.resolve(item, {
@@ -872,7 +973,17 @@ export class ContextMentionController {
     }
     const text = payload.insertText ?? payload.llmAppend ?? "";
     if (item.insertMode === "insert-at-caret" && target) {
-      composer.setValue(target.before + text + target.after);
+      if (composer.replaceLogicalRange) {
+        // Inline: splice the `/command` span in logical space, preserving tokens
+        // elsewhere in the prose. `setValue` would flatten the whole document.
+        composer.replaceLogicalRange(target.start, target.end, text);
+        composer.dispatchInput();
+      } else {
+        // Textarea: DISPLAY === LOGICAL, so splice the display snapshot.
+        composer.setValue(
+          target.value.slice(0, target.start) + text + target.value.slice(target.end)
+        );
+      }
     } else {
       composer.setValue(text);
     }
@@ -881,13 +992,19 @@ export class ContextMentionController {
 
   private stripQuery(): void {
     if (!this.triggerMatch) return;
-    const ta = this.opts.textarea;
-    const caret = ta.selectionStart ?? ta.value.length;
-    const out = stripMentionQuery(ta.value, this.triggerMatch, caret);
-    ta.value = out.value;
-    ta.setSelectionRange(out.caret, out.caret);
+    const caret = this.input.getSelection().start;
+    if (this.input.replaceLogicalRange) {
+      // Inline: remove the `@query` span in logical space, preserving every token
+      // outside `[triggerIndex, caret)`. A display-string strip would misalign and
+      // a full re-render would destroy the tokens.
+      this.input.replaceLogicalRange(this.triggerMatch.triggerIndex, caret, "");
+    } else {
+      // Textarea: DISPLAY === LOGICAL, so the string strip is exact.
+      const out = stripMentionQuery(this.input.getValue(), this.triggerMatch, caret);
+      this.input.setValueWithCaret(out.value, out.caret);
+    }
     // Auto-resize listener reacts to input; our re-parse yields null → stays closed.
-    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    this.input.dispatchInput();
     this.triggerMatch = null;
   }
 
@@ -896,9 +1013,10 @@ export class ContextMentionController {
     this.searchAbort?.abort();
     this.popover?.destroy();
     this.menu.destroy();
-    this.opts.textarea.removeAttribute("aria-haspopup");
-    this.opts.textarea.removeAttribute("aria-controls");
-    this.opts.textarea.removeAttribute("aria-expanded");
-    this.opts.textarea.removeAttribute("aria-activedescendant");
+    const el = this.input.element;
+    el.removeAttribute("aria-haspopup");
+    el.removeAttribute("aria-controls");
+    el.removeAttribute("aria-expanded");
+    el.removeAttribute("aria-activedescendant");
   }
 }

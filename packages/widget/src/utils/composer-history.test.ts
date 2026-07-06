@@ -2,16 +2,17 @@ import { describe, it, expect } from "vitest";
 import {
   navigateComposerHistory,
   INITIAL_HISTORY_STATE,
-  type ComposerHistoryState
+  type ComposerHistoryState,
+  type ComposerHistoryInput
 } from "./composer-history";
 
 const history = ["first", "second", "third"]; // oldest -> newest
 
 const up = (
   state: ComposerHistoryState,
-  overrides: Partial<Parameters<typeof navigateComposerHistory>[0]> = {}
+  overrides: Partial<ComposerHistoryInput<string>> = {}
 ) =>
-  navigateComposerHistory({
+  navigateComposerHistory<string>({
     direction: "up",
     history,
     currentValue: "",
@@ -22,9 +23,9 @@ const up = (
 
 const down = (
   state: ComposerHistoryState,
-  overrides: Partial<Parameters<typeof navigateComposerHistory>[0]> = {}
+  overrides: Partial<ComposerHistoryInput<string>> = {}
 ) =>
-  navigateComposerHistory({
+  navigateComposerHistory<string>({
     direction: "down",
     history,
     currentValue: "",
@@ -93,7 +94,7 @@ describe("navigateComposerHistory", () => {
     const result = down(state);
     expect(result.handled).toBe(true);
     expect(result.value).toBe("saved draft");
-    expect(result.state).toEqual(INITIAL_HISTORY_STATE);
+    expect(result.state.index).toBe(-1); // not navigating
   });
 
   it("Down does nothing when not navigating history", () => {
@@ -123,6 +124,33 @@ describe("navigateComposerHistory", () => {
 
     const d1 = down(state); // back past newest -> restore draft
     expect(d1.value).toBe(draft);
-    expect(d1.state).toEqual(INITIAL_HISTORY_STATE);
+    expect(d1.state.index).toBe(-1);
+  });
+
+  it("is generic over the entry type (documents, not just strings)", () => {
+    // Inline mode recalls ComposerDocument-shaped entries; the machine only
+    // indexes and swaps, so any entry type round-trips.
+    type Doc = { blocks: string[] };
+    const docs: Doc[] = [{ blocks: ["a"] }, { blocks: ["b"] }];
+    const draft: Doc = { blocks: ["draft"] };
+    const u = navigateComposerHistory<Doc>({
+      direction: "up",
+      history: docs,
+      currentValue: draft,
+      atStart: true,
+      state: { index: -1, draft }
+    });
+    expect(u.value).toEqual({ blocks: ["b"] }); // newest
+    expect(u.state).toEqual({ index: 1, draft });
+
+    const d = navigateComposerHistory<Doc>({
+      direction: "down",
+      history: docs,
+      currentValue: draft,
+      atStart: true,
+      state: u.state
+    });
+    expect(d.value).toEqual(draft); // restored draft
+    expect(d.state.index).toBe(-1);
   });
 });

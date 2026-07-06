@@ -38,6 +38,7 @@ import type {
   VoiceConfig,
   ReadAloudState,
   SpeechEngine,
+  AgentWidgetContentSegment,
   AgentWidgetContextMentionRef
 } from "./types";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
@@ -1199,6 +1200,13 @@ export class AgentWidgetSession {
         refs: AgentWidgetContextMentionRef[];
         finalize: () => Promise<MentionSubmitBundle>;
       };
+      /**
+       * Ordered prose + mention segments for inline-mode display (`display:
+       * "inline"`). Stored on the user message so its bubble re-renders `@tokens`
+       * in place (and suppresses the chip row). Display/transcript only — the
+       * model still sees resolved bodies via the `mentions` bundle above.
+       */
+      contentSegments?: AgentWidgetContentSegment[];
     }
   ) {
     const input = rawInput.trim();
@@ -1251,6 +1259,10 @@ export class AgentWidgetSession {
       // Echo mention chips immediately (refs only; payloads merged below).
       ...(options?.mentions && options.mentions.refs.length > 0 && {
         contextMentions: options.mentions.refs
+      }),
+      // Inline mode: ordered display segments for in-prose `@token` rendering.
+      ...(options?.contentSegments && options.contentSegments.length > 0 && {
+        contentSegments: options.contentSegments
       })
     };
 

@@ -40,6 +40,7 @@ export type {
   AgentWidgetContextMentionMenuRenderContext,
   AgentWidgetContextMentionItemRenderContext,
   AgentWidgetContextMentionChipRenderContext,
+  AgentWidgetContextMentionTokenRenderContext,
   // Skills / slash-commands (config.contextMentions.triggers)
   AgentWidgetMentionTriggerChannel,
   AgentWidgetMentionTriggerPosition,

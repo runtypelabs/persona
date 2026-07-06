@@ -12,7 +12,10 @@
     "baseUrl": ".",
     "paths": {
       "@runtypelabs/persona": ["src"],
-      "@runtypelabs/persona/context-mentions": ["src/context-mentions.ts"]
+      "@runtypelabs/persona/context-mentions": ["src/context-mentions.ts"],
+      "@runtypelabs/persona/context-mentions-inline": [
+        "src/context-mentions-inline.ts"
+      ]
     },
     "declaration": true,
     "outDir": "dist"

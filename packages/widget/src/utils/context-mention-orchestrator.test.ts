@@ -4,7 +4,46 @@ import { describe, it, expect, vi } from "vitest";
 import { createContextMentionOrchestrator } from "./context-mention-orchestrator";
 import { createStaticMentionSource, createSlashCommandsSource } from "./mention-matcher";
 import { loadContextMentions } from "../context-mentions-loader";
+import {
+  loadContextMentionsInline,
+  setContextMentionsInlineLoader,
+} from "../context-mentions-inline-loader";
 import type { AgentWidgetConfig } from "../types";
+
+const pump = async (n = 8) => {
+  for (let i = 0; i < n; i++) await new Promise((r) => setTimeout(r, 0));
+};
+
+/** Build an inline-display orchestrator over a fresh textarea. */
+function inlineSetup() {
+  document.body.innerHTML = "";
+  const form = document.createElement("form");
+  const textarea = document.createElement("textarea");
+  form.appendChild(textarea);
+  document.body.appendChild(form);
+  const config = {
+    contextMentions: {
+      enabled: true,
+      display: "inline",
+      sources: [
+        createStaticMentionSource({
+          id: "files",
+          label: "Files",
+          items: [{ id: "app", label: "App.tsx" }],
+          resolve: (i: { label: string }) => ({ llmAppend: `body of ${i.label}` }),
+        }),
+      ],
+    },
+  } as AgentWidgetConfig;
+  const orchestrator = createContextMentionOrchestrator({
+    config,
+    textarea,
+    anchor: form,
+    getMessages: () => [],
+    announce: vi.fn(),
+  })!;
+  return { orchestrator, textarea, form };
+}
 
 // Flush the dynamic-import → mount → handleInput promise chain. Awaiting the
 // module load first makes this deterministic regardless of which test pays the
@@ -12,6 +51,13 @@ import type { AgentWidgetConfig } from "../types";
 const flush = async () => {
   await loadContextMentions().catch(() => {});
   for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0));
+};
+
+/** Also flush the inline chunk (composer swap happens on its load). */
+const flushInline = async () => {
+  await loadContextMentionsInline().catch(() => {});
+  await loadContextMentions().catch(() => {});
+  for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0));
 };
 
 function makeConfig(): AgentWidgetConfig {
@@ -183,6 +229,182 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
     expect(result.mentions.refs).toEqual([]);
     const bundle = await result.mentions.finalize();
     expect(bundle.context).toEqual({ cmd: { lookup: { orderId: "1042" } } });
+  });
+
+  it("degraded inline (chunk load fails): Backspace still removes the last chip", async () => {
+    // Force the inline chunk to fail so the widget degrades to chip behavior while
+    // config still says `display: "inline"`. Gating on the config (not the runtime
+    // swap) lost this affordance exactly in the degraded state.
+    setContextMentionsInlineLoader(() =>
+      Promise.reject(new Error("no inline chunk"))
+    );
+    const { orchestrator, textarea } = inlineSetup();
+
+    await flushInline().catch(() => {});
+    expect(textarea.isConnected).toBe(true); // swap never happened → still textarea
+
+    // Select a mention → the degraded path uses the chip row.
+    textarea.value = "@app";
+    textarea.setSelectionRange(4, 4);
+    orchestrator.handleInput("insertText");
+    await flush();
+    orchestrator.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(orchestrator.hasMentions()).toBe(true);
+
+    // Empty composer + Backspace removes the last chip (runtime chip mode).
+    textarea.value = "";
+    textarea.setSelectionRange(0, 0);
+    const bs = new KeyboardEvent("keydown", { key: "Backspace" });
+    expect(orchestrator.handleKeydown(bs)).toBe(true);
+    expect(orchestrator.hasMentions()).toBe(false);
+  });
+
+  it("rebinds the menu engine to the live composer when the menu opened before the swap", async () => {
+    // Gate the inline chunk so the menu engine mounts (bound to the textarea)
+    // BEFORE the swap — the race that left the menu dead for the session.
+    let releaseInline!: () => void;
+    const gate = new Promise<void>((r) => (releaseInline = r));
+    const realInline = await import("../context-mentions-inline");
+    setContextMentionsInlineLoader(() => gate.then(() => realInline));
+
+    const { orchestrator, textarea, form } = inlineSetup();
+
+    // Open the menu on the still-live textarea (inline swap gated).
+    textarea.value = "@app";
+    textarea.setSelectionRange(4, 4);
+    orchestrator.handleInput("insertText");
+    await flush();
+    expect(orchestrator.isMenuOpen()).toBe(true);
+    expect(textarea.isConnected).toBe(true); // not swapped yet
+
+    // Release the inline chunk → swap + engine re-mount onto the contenteditable.
+    releaseInline();
+    await pump();
+    const editable = form.querySelector<HTMLElement>(
+      '[contenteditable="true"][data-persona-composer-input]'
+    );
+    expect(editable).not.toBeNull();
+    expect(textarea.isConnected).toBe(false);
+
+    // A post-swap `@` drives a WORKING menu on the contenteditable and selecting
+    // inserts a token there (proving the engine tracks the live element, not the
+    // detached textarea).
+    const el = editable as unknown as HTMLTextAreaElement;
+    el.value = "@app";
+    orchestrator.handleInput("insertText");
+    await flush();
+    expect(orchestrator.isMenuOpen()).toBe(true);
+    orchestrator.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(editable!.querySelectorAll(".persona-mention-token")).toHaveLength(1);
+    expect(orchestrator.hasMentions()).toBe(true);
+  });
+
+  it("a mention committed pre-swap (chip path) survives the engine rebind and still finalizes", async () => {
+    // Gate the inline chunk: the user opens the menu and COMMITS a mention while
+    // the textarea is still live (chip path, resolve in flight), then the chunk
+    // lands. The rebind must not discard the manager — the committed chip and its
+    // resolve must survive into the submit payload.
+    let releaseInline!: () => void;
+    const gate = new Promise<void>((r) => (releaseInline = r));
+    const realInline = await import("../context-mentions-inline");
+    setContextMentionsInlineLoader(() => gate.then(() => realInline));
+
+    const { orchestrator, textarea, form } = inlineSetup();
+
+    textarea.value = "@app";
+    textarea.setSelectionRange(4, 4);
+    orchestrator.handleInput("insertText");
+    await flush();
+    orchestrator.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(orchestrator.hasMentions()).toBe(true);
+    expect(
+      orchestrator.contextRow.querySelectorAll("[data-persona-mention-chip]")
+    ).toHaveLength(1); // committed as a chip pre-swap
+
+    // Inline chunk lands → swap + engine rebind.
+    releaseInline();
+    await pump();
+    expect(
+      form.querySelector('[contenteditable="true"][data-persona-composer-input]')
+    ).not.toBeNull();
+    expect(textarea.isConnected).toBe(false);
+
+    // The pre-swap mention was NOT discarded: chip intact, still collectable.
+    expect(orchestrator.hasMentions()).toBe(true);
+    expect(
+      orchestrator.contextRow.querySelectorAll("[data-persona-mention-chip]")
+    ).toHaveLength(1);
+    const collected = orchestrator.collectForSubmit();
+    expect(collected?.refs.map((r) => r.itemId)).toEqual(["app"]);
+    const bundle = await collected!.finalize();
+    expect(bundle.llmEntries[0]).toMatchObject({
+      label: "App.tsx",
+      text: "body of App.tsx",
+    });
+  });
+
+  it("inline display: swaps the textarea for a contenteditable and inserts a token on select", async () => {
+    document.body.innerHTML = "";
+    const form = document.createElement("form");
+    const textarea = document.createElement("textarea");
+    form.appendChild(textarea);
+    document.body.appendChild(form);
+    const config = {
+      contextMentions: {
+        enabled: true,
+        display: "inline",
+        sources: [
+          createStaticMentionSource({
+            id: "files",
+            label: "Files",
+            items: [{ id: "app", label: "App.tsx" }],
+            resolve: (item) => ({ llmAppend: `body of ${item.label}` }),
+          }),
+        ],
+      },
+    } as AgentWidgetConfig;
+
+    const swaps: Array<{ next: HTMLElement; prev: HTMLElement }> = [];
+    const orchestrator = createContextMentionOrchestrator({
+      config,
+      textarea,
+      anchor: form,
+      getMessages: () => [],
+      announce: vi.fn(),
+    })!;
+    orchestrator.onComposerSwap((next, prev) => swaps.push({ next, prev }));
+
+    // The inline chunk loads on mount and swaps the textarea for a contenteditable.
+    await flushInline();
+    const editable = form.querySelector<HTMLElement>(
+      '[contenteditable="true"][data-persona-composer-input]'
+    );
+    expect(editable).not.toBeNull();
+    expect(textarea.isConnected).toBe(false); // replaced
+    expect(swaps).toHaveLength(1);
+    expect(swaps[0].next).toBe(editable);
+
+    // Type "@app" into the swapped surface (via the textarea-compat shim) and open.
+    const el = editable as unknown as HTMLTextAreaElement;
+    el.value = "@app";
+    orchestrator.handleInput("insertText");
+    await flush();
+    expect(orchestrator.isMenuOpen()).toBe(true);
+
+    // Enter selects → an atomic token lands in the prose (no chip row), and the
+    // mention is tracked for submit.
+    orchestrator.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(editable!.querySelectorAll(".persona-mention-token")).toHaveLength(1);
+    expect(orchestrator.contextRow.children).toHaveLength(0); // no chip row
+    expect(orchestrator.hasMentions()).toBe(true);
+
+    const collected = orchestrator.collectForSubmit();
+    expect(collected?.refs.map((r) => r.itemId)).toEqual(["app"]);
+    const bundle = await collected!.finalize();
+    expect(bundle.llmEntries[0]).toMatchObject({
+      label: "App.tsx",
+      text: "body of App.tsx",
+    });
   });
 
   it("emits persona:mention:* analytics events", async () => {

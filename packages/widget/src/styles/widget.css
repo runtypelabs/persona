@@ -4914,6 +4914,76 @@
   cursor: default;
 }
 
+/* Inline mention token (display: "inline"). Atomic styled chip that sits INSIDE
+ * the sentence — in the contenteditable composer and in the read-only sent
+ * bubble. Kept in the core stylesheet (tiny) so tokens are styled the instant a
+ * segmented bubble renders, without waiting on the inline chunk's CSS. */
+.persona-mention-token {
+  /* Per-token accent — set inline from `ref.color`, per source via
+   * `.persona-mention-token[data-mention-source="…"]`, or globally by overriding
+   * this var. Recolors the whole pill (tint bg + icon + label). */
+  --persona-mention-token-accent: var(--persona-accent, #4338ca);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--persona-mention-token-gap, 4px);
+  padding: var(--persona-mention-token-padding, 1px 6px);
+  border-radius: var(--persona-mention-token-radius, 6px);
+  /* Fallback flat tint first (older browsers), then a per-accent translucent
+   * tint via color-mix so each type reads as its own color (Slack/Cursor). */
+  background: var(--persona-mention-token-bg, #eef2ff);
+  background: var(
+    --persona-mention-token-bg,
+    color-mix(in srgb, var(--persona-mention-token-accent) 14%, transparent)
+  );
+  color: var(--persona-mention-token-fg, var(--persona-mention-token-accent));
+  font-size: var(--persona-mention-token-font-size, 0.95em);
+  font-weight: var(--persona-mention-token-font-weight, 550);
+  line-height: 1.5;
+  white-space: nowrap;
+  vertical-align: baseline;
+  user-select: none;
+}
+
+.persona-mention-token-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.persona-mention-token-label {
+  white-space: nowrap;
+}
+
+/* Read-only token in a sent bubble: no editable affordances (the composer's
+ * atomic caret/select behavior doesn't apply), so it reads as inert prose. */
+.persona-mention-token-readonly {
+  cursor: default;
+  user-select: text;
+}
+
+/* Resolve failure on an inline token: recolor the pill to the danger accent and
+ * add a subtle inset border ring, reusing the same accent custom-property the
+ * token already themes on (so bg tint + icon + label all shift together). */
+.persona-mention-token-error {
+  --persona-mention-token-accent: var(--persona-mention-error, #dc2626);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--persona-mention-token-accent) 45%, transparent);
+}
+
+/* The contenteditable composer surface: behaves like the textarea it replaced. */
+.persona-composer-contenteditable {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: none;
+  max-height: var(--persona-composer-max-height, 200px);
+  overflow-y: auto;
+}
+
+.persona-composer-contenteditable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--persona-placeholder, var(--persona-muted, #9ca3af));
+  pointer-events: none;
+}
+
 .persona-message-mentions {
   margin-top: 6px;
   margin-bottom: 0;

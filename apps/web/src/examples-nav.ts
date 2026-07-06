@@ -119,6 +119,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "context-mentions-inline-demo",
+    href: "/context-mentions-inline-demo.html",
+    title: "Inline Context Mentions",
+    blurb: "The same @-mentions rendered as atomic, colorable tokens inside a contenteditable composer.",
+    tier: "patterns",
+    tags: ["interaction", "context"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "slash-commands-demo",
     href: "/slash-commands-demo.html",
     title: "Slash Commands",

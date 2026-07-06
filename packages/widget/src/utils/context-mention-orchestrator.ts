@@ -17,6 +17,9 @@ import { parseAnyTrigger, isMenuOpeningInput } from "./mention-trigger";
 import { normalizeMentionChannels, type NormalizedMentionChannel } from "./mention-channels";
 import { createMentionButton } from "../components/context-mention-button";
 import { loadContextMentions } from "../context-mentions-loader";
+import { loadContextMentionsInline } from "../context-mentions-inline-loader";
+import { createMentionTokenElement } from "./mention-token";
+import type { ComposerInputCapability } from "./composer-input";
 import type {
   ContextMentionEngine,
   InlineCommandResult,
@@ -24,7 +27,6 @@ import type {
 import type { MentionSubmitBundle } from "./context-mention-manager";
 import type {
   AgentWidgetConfig,
-  AgentWidgetContextMentionComposerCapability,
   AgentWidgetContextMentionRef,
   AgentWidgetMessage,
 } from "../types";
@@ -56,6 +58,15 @@ export interface ContextMentionOrchestrator {
   clear: () => void;
   /** Warm the chunk (e.g. on composer focus) so the first `@` is instant. */
   prefetch: () => void;
+  /**
+   * Register a callback fired when the composer element is swapped for the inline
+   * contenteditable surface (`display: "inline"`), so the host can move its
+   * composer listeners onto the new element. Fires immediately if the swap has
+   * already happened; never fires in chip mode.
+   */
+  onComposerSwap: (
+    cb: (next: HTMLElement, prev: HTMLElement) => void
+  ) => void;
   destroy: () => void;
 }
 
@@ -65,8 +76,6 @@ export function createContextMentionOrchestrator(opts: {
   /** Popover anchor — the composer form/pill. */
   anchor: HTMLElement;
   getMessages: () => AgentWidgetMessage[];
-  /** Composer capability for slash-command dispatch (prompt insert / action / submit). */
-  composer?: AgentWidgetContextMentionComposerCapability;
   announce: (message: string) => void;
   popoverContainer?: HTMLElement | ShadowRoot;
 }): ContextMentionOrchestrator | null {
@@ -121,6 +130,19 @@ export function createContextMentionOrchestrator(opts: {
   let engine: ContextMentionEngine | null = null;
   let mountPromise: Promise<ContextMentionEngine | null> | null = null;
 
+  // Inline display (`display: "inline"`): the composer is upgraded from the live
+  // textarea to a contenteditable surface on mount (via the lazy inline chunk).
+  // `composerEl` tracks whichever element is current so the eager pre-engine
+  // handlers read the right one; `inlineInput` is the contenteditable capability
+  // handed to the controller when the menu engine mounts.
+  let composerEl: HTMLElement = opts.textarea;
+  let inlineInput: ComposerInputCapability | null = null;
+  let inlineDestroy: (() => void) | null = null;
+  let swapListener:
+    | ((next: HTMLElement, prev: HTMLElement) => void)
+    | null = null;
+  let swapped: { next: HTMLElement; prev: HTMLElement } | null = null;
+
   const ensureEngine = (): Promise<ContextMentionEngine | null> => {
     if (engine) return Promise.resolve(engine);
     if (mountPromise) return mountPromise;
@@ -129,11 +151,13 @@ export function createContextMentionOrchestrator(opts: {
         engine = mod.mountContextMentions({
           mentionConfig,
           textarea: opts.textarea,
+          // Inline mode hands the pre-built contenteditable capability; chip mode
+          // leaves this undefined and the entry builds a textarea adapter.
+          composerInput: inlineInput ?? undefined,
           anchor: opts.anchor,
           contextRow,
           getMessages: opts.getMessages,
           getConfig: () => opts.config,
-          composer: opts.composer,
           announce: opts.announce,
           popoverContainer: opts.popoverContainer,
           emit,
@@ -148,6 +172,54 @@ export function createContextMentionOrchestrator(opts: {
       });
     return mountPromise;
   };
+
+  // Load the inline chunk and swap the textarea for the contenteditable surface.
+  // The textarea stays live during the fetch; anything typed before the swap is
+  // plain text (tokens require the menu chunk), so migration is lossless. A failed
+  // fetch simply leaves the textarea in place — inline degrades to chip behavior.
+  const setupInlineComposer = (): void => {
+    loadContextMentionsInline()
+      .then((mod) => {
+        const handle = mod.mountInlineComposer({
+          textarea: opts.textarea,
+          // Built in core (owns the icon renderer + any host token override), so
+          // the inline chunk never bundles the icon set.
+          renderToken: (ref) =>
+            createMentionTokenElement(ref, {
+              render: mentionConfig.renderMentionToken,
+            }),
+          onMentionRemoved: (id) => engine?.untrackMention(id),
+        });
+        inlineInput = handle.input;
+        inlineDestroy = handle.destroy;
+        const prev = composerEl;
+        prev.replaceWith(handle.element);
+        composerEl = handle.element;
+        swapped = { next: handle.element, prev };
+        swapListener?.(handle.element, prev);
+        // If the menu engine already mounted (user opened the menu before the
+        // inline chunk resolved), it is bound to a textarea adapter around the
+        // now-detached textarea — a dead menu for the session. Rebind it to the
+        // live contenteditable: only the menu layer re-mounts, so a mention the
+        // user COMMITTED pre-swap (chip + in-flight resolve) survives and still
+        // finalizes at submit — it stays a valid chip, since inline tokens can't
+        // be retro-inserted into text already typed. Rebind closes any open menu,
+        // which is acceptable; a dead menu (or a discarded mention) is not. When
+        // the mount is still in flight it may capture the pre-swap textarea
+        // adapter, so rebind once it lands (no-op if it picked up `inlineInput`).
+        if (engine) {
+          engine.rebindComposer(handle.input);
+        } else if (mountPromise) {
+          void mountPromise.then((e) => e?.rebindComposer(handle.input));
+        }
+      })
+      .catch((err) => {
+        if (typeof console !== "undefined") {
+          console.warn("[Persona] Failed to load inline mention composer", err);
+        }
+      });
+  };
+  if (mentionConfig.display === "inline") setupInlineComposer();
 
   // One affordance button per channel that opts into `showButton`. Each opens
   // ITS channel's picker (no char inserted) via the channel's trigger.
@@ -178,16 +250,29 @@ export function createContextMentionOrchestrator(opts: {
         return;
       }
       if (!isMenuOpeningInput(inputType)) return;
-      const caret = opts.textarea.selectionStart ?? 0;
-      if (parseAnyTrigger(opts.textarea.value, caret, channels)) {
+      // `composerEl` is the textarea (chip) or the swapped contenteditable
+      // (inline); both expose `.value`/`.selectionStart` (the inline element via
+      // textarea-compatible shims), so the eager trigger check is uniform.
+      const el = composerEl as HTMLTextAreaElement;
+      const caret = el.selectionStart ?? 0;
+      if (parseAnyTrigger(el.value, caret, channels)) {
         void ensureEngine().then((e) => e?.handleInput());
       }
     },
 
     handleKeydown: (event) => {
       if (engine?.isMenuOpen()) return engine.handleKeydown(event);
-      if (event.key === "Backspace" && engine?.hasMentions()) {
-        const ta = opts.textarea;
+      // Backspace-removes-last-chip is a chip-mode affordance; inline tokens are
+      // deleted in the contenteditable itself (which untracks via the adapter).
+      // Gate on the RUNTIME mode (`swapped` = the contenteditable actually mounted),
+      // not the config: when the inline chunk fails to load the widget degrades to
+      // chips while config still says "inline", and this affordance must survive.
+      if (
+        event.key === "Backspace" &&
+        engine?.hasMentions() &&
+        !swapped
+      ) {
+        const ta = composerEl as HTMLTextAreaElement;
         const atStart = ta.selectionStart === 0 && ta.selectionEnd === 0;
         if (ta.value.length === 0 || atStart) {
           if (engine.removeLastChip()) {
@@ -211,8 +296,14 @@ export function createContextMentionOrchestrator(opts: {
     prefetch: () => {
       void loadContextMentions().catch(() => {});
     },
+    onComposerSwap: (cb) => {
+      swapListener = cb;
+      // If the swap already happened before the host registered, replay it now.
+      if (swapped) cb(swapped.next, swapped.prev);
+    },
     destroy: () => {
       engine?.destroy();
+      inlineDestroy?.();
       for (const parts of buttonPartsList) parts.wrapper.remove();
       contextRow.remove();
     },

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { AgentWidgetSession, AgentWidgetSessionStatus } from './session';
-import { AgentWidgetMessage } from './types';
+import { AgentWidgetMessage, AgentWidgetContentSegment } from './types';
 
 describe('AgentWidgetSession - Message Injection', () => {
   let session: AgentWidgetSession;
@@ -366,6 +366,51 @@ describe('AgentWidgetSession - Message Injection', () => {
       const parsed = JSON.parse(messages[0].rawContent as string);
       expect(parsed.props.title).toBe('v2');
     });
+  });
+});
+
+describe('AgentWidgetSession - inline contentSegments', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  const makeHangingSession = () => {
+    // A never-settling fetch keeps the turn in-flight so the appended user
+    // message can be inspected without a dispatch-error bubble replacing it.
+    global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}));
+    return new AgentWidgetSession(
+      { apiUrl: 'http://example.invalid/chat' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+  };
+
+  it('stores ordered contentSegments on the sent user message', () => {
+    const session = makeHangingSession();
+    const segments: AgentWidgetContentSegment[] = [
+      { kind: 'text', text: 'Check ' },
+      { kind: 'mention', sourceId: 'files', itemId: 'app', label: 'App.tsx' },
+      { kind: 'text', text: ' please' },
+    ];
+    void session.sendMessage('Check @App.tsx please', {
+      contentSegments: segments,
+    });
+    const userMsg = session.getMessages().find((m) => m.role === 'user');
+    // Segments must land on the stored (sequence-normalized) copy, not just the
+    // orphaned input literal — this is the fix for the dead inline-token branch.
+    expect(userMsg?.contentSegments).toEqual(segments);
+  });
+
+  it('omits contentSegments for a plain message', () => {
+    const session = makeHangingSession();
+    void session.sendMessage('plain message');
+    const userMsg = session.getMessages().find((m) => m.role === 'user');
+    expect(userMsg?.contentSegments).toBeUndefined();
   });
 });
 

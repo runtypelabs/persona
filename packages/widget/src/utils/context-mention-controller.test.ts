@@ -2,54 +2,45 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ContextMentionController } from "./context-mention-controller";
+import { createTextareaComposerInput } from "./composer-input";
+import { createContentEditableComposerInput } from "./composer-contenteditable";
 import { createSlashCommandsSource } from "./mention-matcher";
 import type {
   AgentWidgetConfig,
-  AgentWidgetContextMentionComposerCapability,
   AgentWidgetContextMentionConfig,
   AgentWidgetContextMentionItem,
+  AgentWidgetContextMentionRef,
   AgentWidgetContextMentionSource,
 } from "../types";
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const item = (id: string, label = id): AgentWidgetContextMentionItem => ({ id, label });
 
-/** A composer capability spy that tracks the last-set value. */
-function makeComposer() {
-  let value = "";
-  return {
-    getValue: () => value,
-    setValue: vi.fn((v: string) => {
-      value = v;
-    }),
-    submit: vi.fn(),
-    current: () => value,
-  };
-}
-
 function setup(
   sources: AgentWidgetContextMentionSource[],
-  cfg: Partial<AgentWidgetContextMentionConfig> = {},
-  composer?: AgentWidgetContextMentionComposerCapability
+  cfg: Partial<AgentWidgetContextMentionConfig> = {}
 ) {
   const form = document.createElement("form");
   const textarea = document.createElement("textarea");
   form.appendChild(textarea);
   document.body.appendChild(form);
+  // The textarea adapter derives submit from `textarea.form.requestSubmit`;
+  // spy on it so prompt-macro `submitOnSelect` is observable.
+  const submit = vi.fn();
+  form.requestSubmit = submit;
 
   const onSelect = vi.fn(() => true);
   const announce = vi.fn();
   const controller = new ContextMentionController({
     mentionConfig: { enabled: true, sources, ...cfg },
-    textarea,
+    composerInput: createTextareaComposerInput(textarea),
     anchor: form,
     getMessages: () => [],
     getConfig: () => ({}) as AgentWidgetConfig,
     onSelect,
-    composer,
     announce,
   });
-  return { controller, textarea, onSelect, form, announce };
+  return { controller, textarea, onSelect, form, announce, submit };
 }
 
 /** An async source whose `search` promise resolves only when `release` is called. */
@@ -368,26 +359,20 @@ describe("ContextMentionController — slash-commands", () => {
 
   /** A `/` channel driven by createSlashCommandsSource, at line-start. */
   function slashSetup(
-    commands: Parameters<typeof createSlashCommandsSource>[0]["commands"],
-    composer = makeComposer()
+    commands: Parameters<typeof createSlashCommandsSource>[0]["commands"]
   ) {
-    const s = setup(
-      [],
-      {
-        triggers: [
-          {
-            trigger: "/",
-            triggerPosition: "line-start",
-            allowSpaces: true,
-            sources: [
-              createSlashCommandsSource({ id: "cmd", label: "Commands", commands }),
-            ],
-          },
-        ],
-      },
-      composer
-    );
-    return { ...s, composer };
+    return setup([], {
+      triggers: [
+        {
+          trigger: "/",
+          triggerPosition: "line-start",
+          allowSpaces: true,
+          sources: [
+            createSlashCommandsSource({ id: "cmd", label: "Commands", commands }),
+          ],
+        },
+      ],
+    });
   }
 
   const pressEnter = (controller: ContextMentionController) =>
@@ -413,7 +398,7 @@ describe("ContextMentionController — slash-commands", () => {
   });
 
   it("prompt macro: writes resolved text into the composer and submits", async () => {
-    const { controller, textarea, composer, onSelect } = slashSetup([
+    const { controller, textarea, submit, onSelect } = slashSetup([
       {
         name: "summarize",
         kind: "prompt",
@@ -427,8 +412,9 @@ describe("ContextMentionController — slash-commands", () => {
     pressEnter(controller);
     await tick(); // runPromptMacro awaits resolve()
 
-    expect(composer.setValue).toHaveBeenCalledWith("Please summarize the conversation.");
-    expect(composer.submit).toHaveBeenCalledTimes(1);
+    // The resolved text is written straight into the composer surface.
+    expect(textarea.value).toBe("Please summarize the conversation.");
+    expect(submit).toHaveBeenCalledTimes(1);
     // No chip path for prompt macros.
     expect(onSelect).not.toHaveBeenCalled();
   });
@@ -532,7 +518,6 @@ describe("ContextMentionController — slash-commands", () => {
   });
 
   it("keeps @ mentions working alongside the / channel", () => {
-    const composer = makeComposer();
     const { controller, textarea } = setup(
       [
         {
@@ -556,8 +541,7 @@ describe("ContextMentionController — slash-commands", () => {
             ],
           },
         ],
-      },
-      composer
+      }
     );
     // `@` opens the mentions (files) channel.
     textarea.value = "@App";
@@ -574,5 +558,141 @@ describe("ContextMentionController — slash-commands", () => {
     expect(
       document.querySelector(".persona-mention-option")?.textContent
     ).toContain("clear");
+  });
+});
+
+describe("ContextMentionController — inline coordinate space", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const appRef: AgentWidgetContextMentionRef = {
+    sourceId: "files",
+    itemId: "App.tsx",
+    label: "App.tsx",
+  };
+
+  function renderToken(ref: AgentWidgetContextMentionRef): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "persona-mention-token";
+    const label = document.createElement("span");
+    label.className = "persona-mention-token-label";
+    label.textContent = `@${ref.label}`;
+    el.appendChild(label);
+    return el;
+  }
+
+  function inlineSetup(
+    sources: AgentWidgetContextMentionSource[],
+    cfg: Partial<AgentWidgetContextMentionConfig> = {}
+  ) {
+    const form = document.createElement("form");
+    document.body.appendChild(form);
+    let idSeq = 0;
+    const input = createContentEditableComposerInput({
+      generateId: () => `mid-${++idSeq}`,
+      renderToken,
+    });
+    form.appendChild(input.element);
+    const onInsertMention = vi.fn();
+    const onMentionRejected = vi.fn();
+    const controller = new ContextMentionController({
+      mentionConfig: {
+        enabled: true,
+        display: "inline",
+        sources,
+        onMentionRejected,
+        ...cfg,
+      },
+      composerInput: input,
+      anchor: form,
+      getMessages: () => [],
+      getConfig: () => ({}) as AgentWidgetConfig,
+      onSelect: vi.fn(() => true),
+      onInsertMention,
+      admitMention: () => true,
+      announce: vi.fn(),
+    });
+    return { controller, input, onInsertMention, onMentionRejected };
+  }
+
+  const slashCfg = (
+    commands: Parameters<typeof createSlashCommandsSource>[0]["commands"]
+  ): Partial<AgentWidgetContextMentionConfig> => ({
+    triggers: [
+      {
+        trigger: "/",
+        triggerPosition: "line-start",
+        allowSpaces: true,
+        sources: [createSlashCommandsSource({ id: "cmd", label: "Commands", commands })],
+      },
+    ],
+  });
+
+  const tokenCount = (input: { element: HTMLElement }) =>
+    input.element.querySelectorAll(".persona-mention-token").length;
+
+  it("slash-command completion preserves an earlier mention token (logical splice)", () => {
+    const { controller, input } = inlineSetup(
+      [],
+      slashCfg([{ name: "lookup", kind: "server", data: (a: string) => ({ q: a }) }])
+    );
+    // A token on line 1, "/look" being typed on line 2. In DISPLAY text the token
+    // is "@App.tsx" (8 chars); in LOGICAL text it is one `￼` — the pre-fix code
+    // sliced DISPLAY text with LOGICAL indices and destroyed the token.
+    input.setDocument!({
+      blocks: [
+        { kind: "mention", id: "t1", ref: appRef },
+        { kind: "text", value: "\n/look" },
+      ],
+    });
+    controller.onInput();
+    expect(controller.isOpen()).toBe(true);
+    controller.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));
+
+    expect(tokenCount(input)).toBe(1); // token survived
+    expect(input.getValue()).toBe("@App.tsx\n/lookup ");
+    expect(controller.isOpen()).toBe(false);
+  });
+
+  it("action-command strip preserves an earlier mention token (logical splice)", () => {
+    const action = vi.fn();
+    const { controller, input } = inlineSetup(
+      [],
+      slashCfg([{ name: "deploy", kind: "action", action }])
+    );
+    input.setDocument!({
+      blocks: [
+        { kind: "mention", id: "t1", ref: appRef },
+        { kind: "text", value: "\n/deploy" },
+      ],
+    });
+    controller.onInput();
+    expect(controller.isOpen()).toBe(true);
+    controller.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));
+
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(tokenCount(input)).toBe(1); // token survived the /deploy strip
+    expect(input.getValue()).toBe("@App.tsx\n");
+  });
+
+  it("fires the rejection path when an inline insert is stale (no silent no-op)", () => {
+    const { controller, input, onInsertMention, onMentionRejected } = inlineSetup([
+      syncSource("files", [item("App.tsx")]),
+    ]);
+    input.setValueWithCaret("@App", 4);
+    controller.onInput();
+    expect(controller.isOpen()).toBe(true);
+    // Staleness: the composer text changes between parse and commit, so the
+    // adapter's guard refuses the insert (returns null).
+    (input.element.firstChild as Text).data = "@Xyz";
+    controller.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));
+
+    expect(onInsertMention).not.toHaveBeenCalled();
+    expect(tokenCount(input)).toBe(0);
+    expect(onMentionRejected).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "App.tsx" }),
+      "stale"
+    );
   });
 });

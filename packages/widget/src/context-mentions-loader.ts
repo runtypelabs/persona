@@ -37,9 +37,17 @@ export const loadContextMentions = (): Promise<ContextMentionsModule> => {
   // runtime chunk is code-split out of dist/index.{js,cjs} rather than inlined).
   const importChunk =
     loader ?? (() => import("@runtypelabs/persona/context-mentions"));
-  loadPromise = importChunk().then((mod) => {
-    moduleCache = mod;
-    return mod;
-  });
+  loadPromise = importChunk()
+    .then((mod) => {
+      moduleCache = mod;
+      return mod;
+    })
+    .catch((err) => {
+      // Clear the cached promise so a later call retries after a transient
+      // failure — otherwise one dropped fetch disables mentions for the whole
+      // session. The current caller still sees the rejection.
+      loadPromise = null;
+      throw err;
+    });
   return loadPromise;
 };

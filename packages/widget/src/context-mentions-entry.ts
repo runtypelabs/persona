@@ -13,10 +13,13 @@ import {
   ContextMentionController,
   type InlineCommandResult,
 } from "./utils/context-mention-controller";
+import {
+  createTextareaComposerInput,
+  type ComposerInputCapability,
+} from "./utils/composer-input";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import type {
   AgentWidgetConfig,
-  AgentWidgetContextMentionComposerCapability,
   AgentWidgetContextMentionConfig,
   AgentWidgetContextMentionRef,
   AgentWidgetMessage,
@@ -25,14 +28,18 @@ import type {
 export interface ContextMentionMountContext {
   mentionConfig: AgentWidgetContextMentionConfig;
   textarea: HTMLTextAreaElement;
+  /**
+   * Pre-built composer input surface. Provided by the inline chunk in
+   * `display: "inline"` mode (a contenteditable adapter that replaced the
+   * textarea); omitted in chip mode, where a textarea adapter is built here.
+   */
+  composerInput?: ComposerInputCapability;
   /** Popover anchor — the composer form/pill (menu opens upward, full width). */
   anchor: HTMLElement;
   /** Chip row created by the core orchestrator. */
   contextRow: HTMLElement;
   getMessages: () => AgentWidgetMessage[];
   getConfig: () => AgentWidgetConfig;
-  /** Composer capability for slash-command dispatch (prompt insert / action / submit). */
-  composer?: AgentWidgetContextMentionComposerCapability;
   announce: (message: string) => void;
   popoverContainer?: HTMLElement | ShadowRoot;
   /** Emit a `persona:mention:<event>` analytics DOM event. */
@@ -61,6 +68,20 @@ export interface ContextMentionEngine {
   collectForSubmit():
     | { refs: AgentWidgetContextMentionRef[]; finalize: () => Promise<MentionSubmitBundle> }
     | null;
+  /**
+   * INLINE display only. Stop tracking a mention whose token the user deleted from
+   * the composer (aborts its in-flight resolve). Wired to the contenteditable
+   * adapter's removal detection by the orchestrator.
+   */
+  untrackMention(id: string): void;
+  /**
+   * Rebind the engine to a new composer input surface (the inline swap landing
+   * while the engine is already live). Only the menu layer (controller) re-mounts
+   * on the new element — the manager, with any committed chips and their
+   * in-flight resolves, survives, so a mention picked pre-swap still finalizes
+   * into the submit payload. Any open menu closes. No-op when already bound.
+   */
+  rebindComposer(input: ComposerInputCapability): void;
   clear(): void;
   destroy(): void;
 }
@@ -68,28 +89,45 @@ export interface ContextMentionEngine {
 export function mountContextMentions(
   ctx: ContextMentionMountContext
 ): ContextMentionEngine {
+  // Inline mode supplies a pre-built contenteditable capability; chip mode builds
+  // a textarea-backed one here. Mutable: `rebindComposer` swaps it when the inline
+  // composer replaces the textarea while the engine is already live — closures
+  // below read it at call time so they always drive the current surface.
+  let composerInput =
+    ctx.composerInput ?? createTextareaComposerInput(ctx.textarea);
+
   const manager = new ContextMentionManager({
     mentionConfig: ctx.mentionConfig,
     contextRow: ctx.contextRow,
     getMessages: ctx.getMessages,
     getConfig: ctx.getConfig,
-    getComposerText: () => ctx.textarea.value,
+    getComposerText: () => composerInput.getValue(),
     announce: ctx.announce,
     emit: ctx.emit,
   });
 
-  const controller = new ContextMentionController({
-    mentionConfig: ctx.mentionConfig,
-    textarea: ctx.textarea,
-    anchor: ctx.anchor,
-    getMessages: ctx.getMessages,
-    getConfig: ctx.getConfig,
-    onSelect: (source, item, args) => manager.add(source, item, args),
-    composer: ctx.composer,
-    announce: ctx.announce,
-    popoverContainer: ctx.popoverContainer,
-    emit: ctx.emit,
-  });
+  const buildController = (): ContextMentionController =>
+    new ContextMentionController({
+      mentionConfig: ctx.mentionConfig,
+      composerInput,
+      anchor: ctx.anchor,
+      getMessages: ctx.getMessages,
+      getConfig: ctx.getConfig,
+      onSelect: (source, item, args) => manager.add(source, item, args),
+      // Inline commit: the controller inserts the token, then tracks its resolve
+      // keyed by the composer id. `reportStatus` reflects the resolve outcome onto
+      // the live token element (error styling — inline tokens carry no chip).
+      onInsertMention: (id, source, item, args) =>
+        manager.track(id, source, item, args, (status) =>
+          composerInput.setMentionStatus?.(id, status)
+        ),
+      admitMention: (source, item) => manager.admit(source, item),
+      announce: ctx.announce,
+      popoverContainer: ctx.popoverContainer,
+      emit: ctx.emit,
+    });
+
+  let controller = buildController();
 
   return {
     openMenu: (trigger) => controller.openFromButton(trigger),
@@ -101,6 +139,17 @@ export function mountContextMentions(
     dispatchInlineCommand: (text) => controller.dispatchInlineCommand(text),
     collectForSubmit: () =>
       manager.hasMentions() ? manager.collectForSubmit() : null,
+    untrackMention: (id) => manager.remove(id),
+    rebindComposer: (input) => {
+      if (input === composerInput) return;
+      // Re-mount ONLY the menu layer on the new surface. The manager — committed
+      // chips and their in-flight resolves — must survive: a mention picked
+      // pre-swap stays a valid chip post-swap (tokens can't be retro-inserted
+      // into text the user already typed) and still finalizes at submit.
+      controller.destroy();
+      composerInput = input;
+      controller = buildController();
+    },
     clear: () => manager.clear(),
     destroy: () => {
       controller.destroy();

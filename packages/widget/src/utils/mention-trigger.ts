@@ -36,6 +36,15 @@ export type MentionTriggerSpec = {
 
 const WHITESPACE = /\s/;
 
+/**
+ * OBJECT REPLACEMENT CHAR (U+FFFC) — one inline mention token in the composer's
+ * *logical* text (see `toLogicalText` in composer-document.ts). Defined HERE, in
+ * the dependency-free trigger module, and re-exported from composer-document.ts so
+ * the constant has a single source without dragging the document-model runtime
+ * into the chip chunk (which imports this module but not composer-document).
+ */
+export const MENTION_PLACEHOLDER = "￼";
+
 /** Does `triggerIndex` satisfy the channel's position rule? */
 function positionAllowed(
   value: string,
@@ -86,6 +95,11 @@ export function parseMentionTrigger(
     // A newline always ends the query. Spaces/tabs end it too, unless the
     // channel allows multi-word queries (slash-command args).
     if (ch === "\n") return null;
+    // The mention-token placeholder always terminates the backscan so a query
+    // never spans an existing token (`@a<token>b` must not report a query through
+    // the token). Never appears in a plain textarea value, so chip mode is
+    // unaffected.
+    if (ch === MENTION_PLACEHOLDER) return null;
     if (!allowSpaces && WHITESPACE.test(ch)) return null;
     i--;
   }

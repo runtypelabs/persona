@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi } from "vitest";
-import { ContextMentionManager } from "./context-mention-manager";
+import { ContextMentionManager, refFromItem } from "./context-mention-manager";
 import type {
   AgentWidgetConfig,
   AgentWidgetContextMentionConfig,
@@ -211,6 +211,98 @@ describe("ContextMentionManager", () => {
     await tick();
     const bundle = await manager.collectForSubmit().finalize();
     expect(bundle.context).toEqual({ files: { "App.tsx": { path: "/x" } } });
+  });
+
+  // ---- inline mode (track / admit / refFromItem) ---------------------------
+
+  it("refFromItem builds the stored ref from source + item", () => {
+    const source = makeSource(async () => ({}), "files");
+    expect(
+      refFromItem(source, {
+        id: "app",
+        label: "App.tsx",
+        iconName: "file",
+        color: "#f00",
+      })
+    ).toEqual({
+      sourceId: "files",
+      itemId: "app",
+      label: "App.tsx",
+      iconName: "file",
+      color: "#f00",
+    });
+  });
+
+  it("admit enforces the limit and fires the rejection hook (inline pre-insert gate)", () => {
+    const onMentionRejected = vi.fn();
+    const { manager, source } = makeManager({ maxMentions: 1, onMentionRejected });
+    manager.track("pmention-1", source, item("a"));
+    expect(manager.admit(source, item("b"))).toBe(false);
+    expect(onMentionRejected).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "b" }),
+      "limit"
+    );
+  });
+
+  it("admit allows a mention under the limit", () => {
+    const { manager, source } = makeManager({ maxMentions: 2 });
+    manager.track("pmention-1", source, item("a"));
+    expect(manager.admit(source, item("b"))).toBe(true);
+  });
+
+  it("admit rejects a duplicate of an already-tracked mention (chip parity, no double payload)", async () => {
+    // Inline entries are keyed by ComposerMentionId, so duplicate detection must
+    // match on the ref (source + item) — a repeated pick of the same item would
+    // otherwise double-emit its payload at finalize().
+    const onMentionRejected = vi.fn();
+    const { manager, source } = makeManager({ onMentionRejected });
+    manager.track("pmention-1", source, item("a"));
+    expect(manager.admit(source, item("a"))).toBe(false);
+    expect(onMentionRejected).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a" }),
+      "duplicate"
+    );
+    // A different item from the same source is still admitted.
+    expect(manager.admit(source, item("b"))).toBe(true);
+
+    // The single tracked mention emits exactly one payload.
+    await tick();
+    const bundle = await manager.collectForSubmit().finalize();
+    expect(bundle.llmEntries).toHaveLength(1);
+  });
+
+  it("admit also rejects a duplicate of a chip added via add()", () => {
+    const onMentionRejected = vi.fn();
+    const { manager, source } = makeManager({ onMentionRejected });
+    manager.add(source, item("a"));
+    expect(manager.admit(source, item("a"))).toBe(false);
+    expect(onMentionRejected).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a" }),
+      "duplicate"
+    );
+  });
+
+  it("track reports resolve status onto the inline token (resolved / error)", async () => {
+    // Success: reports "resolved" once the select-time resolve settles.
+    const ok = makeManager({}, async () => ({ llmAppend: "CONTENT" }));
+    const okReports: string[] = [];
+    ok.manager.track("pmention-1", ok.source, item("good"), "", (s) =>
+      okReports.push(s)
+    );
+    await tick();
+    expect(okReports).toContain("resolved");
+
+    // Failure: reports "error" so the token surfaces the dropped context.
+    const badResolve = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const bad = makeManager({}, badResolve);
+    const badReports: string[] = [];
+    bad.manager.track("pmention-2", bad.source, item("bad"), "", (s) =>
+      badReports.push(s)
+    );
+    await tick();
+    expect(badReports).toContain("error");
   });
 });
 

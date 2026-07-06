@@ -115,6 +115,15 @@ export type AgentWidgetContextMentionItem = {
   description?: string;
   /** Lucide icon name. */
   iconName?: string;
+  /**
+   * Accent color for this item's inline token (`display: "inline"`), any CSS
+   * color. Sets `--persona-mention-token-accent` on the token, tinting its pill
+   * background + icon/label — the per-item/per-type color knob (Slack/Linear
+   * style). Prefer setting the same color across a source's items for a "color
+   * per type" look, or theme by `[data-mention-source]` in CSS instead. Ignored
+   * in chip mode.
+   */
+  color?: string;
   /** Group header override; defaults to the source's `label`. */
   group?: string;
   /** Optional recency/popularity hint the default matcher boosts on. */
@@ -192,7 +201,27 @@ export type AgentWidgetContextMentionRef = {
   itemId: string;
   label: string;
   iconName?: string;
+  /** Accent color for the inline token (see `AgentWidgetContextMentionItem.color`). */
+  color?: string;
 };
+
+/**
+ * One ordered segment of a sent message's prose, for inline mention rendering
+ * (`contextMentions.display: "inline"`). Text runs and atomic mention tokens
+ * interleave in document order so the sent bubble re-renders `@tokens` in place
+ * and composer history can round-trip them. Display/transcript concern only —
+ * the model still sees resolved bodies via `llmContent`/`contentParts`.
+ */
+export type AgentWidgetContentSegment =
+  | { kind: "text"; text: string }
+  | {
+      kind: "mention";
+      sourceId: string;
+      itemId: string;
+      label: string;
+      iconName?: string;
+      color?: string;
+    };
 
 /**
  * The payload a source returns from `resolve()` for one selected item.
@@ -427,10 +456,31 @@ export type AgentWidgetContextMentionConfig = {
   sources: AgentWidgetContextMentionSource[];
   /** Chip icon fallback when a source/item omits one. @default "at-sign" */
   chipIconName?: string;
-  /** Fired when a pick is rejected because it duplicates an existing chip or hits `maxMentions`. */
+  /**
+   * How `@` selections appear in the composer and sent user bubble.
+   *
+   * - `"chip"` (default): strip `@query` on select; show a compact pill in the
+   *   composer context row; `content` is prose-only.
+   * - `"inline"`: insert an atomic styled token in the sentence (Slack/Linear/
+   *   Cursor style), backed by a contenteditable composer. Slash-command channels
+   *   (`triggers[]` with `/`) stay inline-text regardless — they already use the
+   *   `/name args` model, not chips. `renderMentionChip` is ignored for `@`
+   *   mentions in this mode.
+   *
+   * The resolved-context channel (`llmContent`/`contentParts`) is unchanged
+   * across both modes — inline tokens are a display concern.
+   *
+   * @default "chip"
+   */
+  display?: "chip" | "inline";
+  /**
+   * Fired when a pick is rejected: it duplicates an existing chip (`"duplicate"`),
+   * hits `maxMentions` (`"limit"`), or (inline display) the composer text changed
+   * between parse and commit so the token could not be inserted (`"stale"`).
+   */
   onMentionRejected?: (
     item: AgentWidgetContextMentionItem,
-    reason: "duplicate" | "limit"
+    reason: "duplicate" | "limit" | "stale"
   ) => void;
   /**
    * A `resolve()` that throws/aborts: the mention is dropped and the message
@@ -470,6 +520,26 @@ export type AgentWidgetContextMentionConfig = {
   renderMentionChip?: (
     ctx: AgentWidgetContextMentionChipRenderContext
   ) => HTMLElement;
+  /**
+   * INLINE display only (`display: "inline"`). Render override for a single inline
+   * mention TOKEN — the atomic styled node that sits in the sentence, in both the
+   * contenteditable composer and the read-only sent bubble. Return your own
+   * element (e.g. a fully custom colored pill); the composer marks it
+   * `contenteditable="false"` and stamps `data-mention-id` so it stays atomic.
+   * Omit to use the built-in pill (icon + `@label`, tinted by
+   * `--persona-mention-token-accent` / `ref.color`, themeable per source via the
+   * `[data-mention-source]` attribute). Ignored in chip mode.
+   * @default built-in
+   */
+  renderMentionToken?: (
+    ctx: AgentWidgetContextMentionTokenRenderContext
+  ) => HTMLElement;
+};
+
+/** Render context for `renderMentionToken`. `readonly` is true in the sent bubble. */
+export type AgentWidgetContextMentionTokenRenderContext = {
+  ref: AgentWidgetContextMentionRef;
+  readonly: boolean;
 };
 
 export type AgentWidgetRequestPayloadMessage = {
@@ -5419,6 +5489,13 @@ export type AgentWidgetMessage = {
    * merged into `llmContent`/`contentParts` (model-visible) at send time.
    */
   contextMentions?: AgentWidgetContextMentionRef[];
+  /**
+   * Ordered prose + mention blocks for inline-mode rendering and composer history
+   * recall (`contextMentions.display: "inline"`). Present only on inline-mode user
+   * messages; when omitted the sent bubble falls back to the chip row derived from
+   * `contextMentions`. Display/transcript concern only — not the model channel.
+   */
+  contentSegments?: AgentWidgetContentSegment[];
   /**
    * Resolved opt-in structured mention context for this (user) message, merged
    * into the request `context` under `mentions.<sourceId>.<itemId>` by the

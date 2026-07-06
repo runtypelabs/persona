@@ -10,6 +10,12 @@ export default defineConfig({
       '@runtypelabs/persona/context-mentions': fileURLToPath(
         new URL('./src/context-mentions.ts', import.meta.url)
       ),
+      // Same for the inline-mention chunk subpath. (Vite string aliases only
+      // match exact or `alias + "/"`, so this and the base alias above never
+      // collide despite the shared prefix.)
+      '@runtypelabs/persona/context-mentions-inline': fileURLToPath(
+        new URL('./src/context-mentions-inline.ts', import.meta.url)
+      ),
     },
   },
   test: {

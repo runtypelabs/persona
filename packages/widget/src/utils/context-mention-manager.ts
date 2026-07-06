@@ -21,9 +21,32 @@ interface PendingMention {
   /** The in-flight select-time resolve (absent for `resolveOn:"submit"`). Awaited
    *  at submit so `finalize()` reuses it instead of firing a duplicate fetch. */
   resolvePromise?: Promise<void>;
-  chip: MentionChipParts;
+  /** Chip DOM — chip mode only. Inline mode tracks by `ComposerMentionId` key with
+   *  no chip (the token lives in the composer prose). */
+  chip?: MentionChipParts;
+  /** INLINE mode only. Reflect this mention's resolve status onto its live token
+   *  element (the composer capability's `setMentionStatus`, closed over its id).
+   *  Chip mode leaves this undefined — the chip carries the status instead. */
+  reportStatus?: (status: "pending" | "resolved" | "error") => void;
   /** Command args captured at add time (empty for ordinary mentions). */
   args: string;
+}
+
+/**
+ * The stored ref for a selected item — identical shape at every call site
+ * (`add`, `track`, and the controller's inline commit), so it lives here once.
+ */
+export function refFromItem(
+  source: AgentWidgetContextMentionSource,
+  item: AgentWidgetContextMentionItem
+): AgentWidgetContextMentionRef {
+  return {
+    sourceId: source.id,
+    itemId: item.id,
+    label: item.label,
+    iconName: item.iconName,
+    color: item.color,
+  };
 }
 
 /** The resolved bundle gathered at submit, merged into the user message. */
@@ -86,54 +109,109 @@ export class ContextMentionManager {
   ): boolean {
     const key = mentionKey(source.id, item.id);
     if (this.mentions.some((m) => m.key === key)) {
-      this.opts.mentionConfig.onMentionRejected?.(item, "duplicate");
-      this.opts.emit?.("rejected", { sourceId: source.id, itemId: item.id, reason: "duplicate" });
-      return false;
+      return this.reject(source, item, "duplicate");
     }
-    if (this.mentions.length >= this.maxMentions) {
-      this.opts.mentionConfig.onMentionRejected?.(item, "limit");
-      this.opts.emit?.("rejected", { sourceId: source.id, itemId: item.id, reason: "limit" });
-      return false;
-    }
+    if (this.atLimit()) return this.reject(source, item, "limit");
 
-    const ref: AgentWidgetContextMentionRef = {
-      sourceId: source.id,
-      itemId: item.id,
-      label: item.label,
-      iconName: item.iconName,
-    };
-
+    const ref = refFromItem(source, item);
     const pending: PendingMention = {
       key,
       source,
       item,
       ref,
       status: "resolving",
-      chip: undefined as unknown as MentionChipParts,
       args,
     };
-
     pending.chip = createMentionChip({
       ref,
       config: this.opts.mentionConfig,
       onRemove: () => this.remove(key),
     });
     this.opts.contextRow.appendChild(pending.chip.el);
-    this.mentions.push(pending);
     this.updateRowVisibility();
+    this.startPending(pending);
+    return true;
+  }
 
-    if (source.resolveOn === "submit") {
-      // Defer to submit: nothing to wait for now.
+  /** True when the mention limit is already reached (inline pre-insert gate). */
+  atLimit(): boolean {
+    return this.mentions.length >= this.maxMentions;
+  }
+
+  /**
+   * INLINE pre-insert gate: enforce the SAME duplicate/limit policy as `add()`
+   * (firing `onMentionRejected` + the `rejected` event) before the controller
+   * inserts an atomic token, so a rejected pick never leaves a stray token.
+   * Duplicates match on the ref (source + item) rather than the pending key —
+   * inline entries are keyed by `ComposerMentionId` — because a repeated pick of
+   * the same item would double-emit its payload at `finalize()` (chip parity).
+   * Returns true when the mention may be inserted.
+   */
+  admit(
+    source: AgentWidgetContextMentionSource,
+    item: AgentWidgetContextMentionItem
+  ): boolean {
+    const dup = this.mentions.some(
+      (m) => m.ref.sourceId === source.id && m.ref.itemId === item.id
+    );
+    if (dup) return this.reject(source, item, "duplicate");
+    if (this.atLimit()) return this.reject(source, item, "limit");
+    return true;
+  }
+
+  /**
+   * INLINE mode: track a mention whose atomic token was already inserted into the
+   * composer by the contenteditable adapter, keyed by its `ComposerMentionId`. No
+   * chip; duplicate/limit were gated by `admit()` before insertion. `reportStatus`
+   * reflects resolve state onto the live token element. Starts resolve-on-select
+   * just like `add()`.
+   */
+  track(
+    id: string,
+    source: AgentWidgetContextMentionSource,
+    item: AgentWidgetContextMentionItem,
+    args = "",
+    reportStatus?: (status: "pending" | "resolved" | "error") => void
+  ): void {
+    const pending: PendingMention = {
+      key: id,
+      source,
+      item,
+      ref: refFromItem(source, item),
+      status: "resolving",
+      args,
+      reportStatus,
+    };
+    this.startPending(pending);
+  }
+
+  /** Fire the rejection hooks for a blocked mention and return false (add's sentinel). */
+  private reject(
+    source: AgentWidgetContextMentionSource,
+    item: AgentWidgetContextMentionItem,
+    reason: "duplicate" | "limit"
+  ): false {
+    this.opts.mentionConfig.onMentionRejected?.(item, reason);
+    this.opts.emit?.("rejected", { sourceId: source.id, itemId: item.id, reason });
+    return false;
+  }
+
+  /**
+   * Push a fully-built pending mention and kick off its resolve (shared by
+   * `add()` and `track()`): `resolveOn:"submit"` flips straight to ready; anything
+   * else starts the select-time resolve, keeping the promise so `finalize()`
+   * awaits this exact resolve rather than firing a second one.
+   */
+  private startPending(pending: PendingMention): void {
+    this.mentions.push(pending);
+    if (pending.source.resolveOn === "submit") {
       pending.status = "ready";
-      pending.chip.setStatus("ready");
+      pending.chip?.setStatus("ready");
+      pending.reportStatus?.("resolved");
     } else {
-      // Keep the promise so `finalize()` can await this exact resolve rather
-      // than starting a second one.
       pending.resolvePromise = this.resolvePending(pending);
     }
-
-    this.opts.announce(`Added ${item.label} to context`);
-    return true;
+    this.opts.announce(`Added ${pending.ref.label} to context`);
   }
 
   private buildResolveContext(
@@ -161,11 +239,15 @@ export class ContextMentionManager {
       if (abort.signal.aborted) return;
       pending.payload = payload;
       pending.status = "ready";
-      pending.chip.setStatus("ready", payload);
+      pending.chip?.setStatus("ready", payload);
+      pending.reportStatus?.("resolved");
     } catch (error) {
       if (abort.signal.aborted) return;
       pending.status = "error";
-      pending.chip.setStatus("error");
+      pending.chip?.setStatus("error");
+      // Inline tokens carry no chip: surface the failure on the token element so a
+      // dropped context is visible (finalize() silently skips failed payloads).
+      pending.reportStatus?.("error");
       this.opts.mentionConfig.onMentionResolveError?.(pending.item, error);
       this.opts.emit?.("resolve-error", {
         sourceId: pending.source.id,
@@ -179,7 +261,7 @@ export class ContextMentionManager {
     if (index === -1) return;
     const [pending] = this.mentions.splice(index, 1);
     pending.abort?.abort();
-    pending.chip.el.remove();
+    pending.chip?.el.remove();
     this.updateRowVisibility();
     this.opts.announce(`Removed ${pending.ref.label} from context`);
   }
@@ -195,7 +277,7 @@ export class ContextMentionManager {
   clear(): void {
     for (const m of this.mentions) {
       m.abort?.abort();
-      m.chip.el.remove();
+      m.chip?.el.remove();
     }
     this.mentions.length = 0;
     this.updateRowVisibility();
@@ -219,7 +301,7 @@ export class ContextMentionManager {
     const composerText = this.opts.getComposerText();
 
     // Detach: empty the composer chip row without aborting resolves.
-    for (const m of snapshot) m.chip.el.remove();
+    for (const m of snapshot) m.chip?.el.remove();
     this.mentions.length = 0;
     this.updateRowVisibility();
 

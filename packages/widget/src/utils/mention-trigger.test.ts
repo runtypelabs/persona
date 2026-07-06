@@ -4,6 +4,7 @@ import {
   parseAnyTrigger,
   isMenuOpeningInput,
   stripMentionQuery,
+  MENTION_PLACEHOLDER,
 } from "./mention-trigger";
 
 describe("parseMentionTrigger", () => {
@@ -53,6 +54,22 @@ describe("parseMentionTrigger", () => {
   it("handles multi-byte characters in the query", () => {
     const m = parseMentionTrigger("@café", 5);
     expect(m).toEqual({ triggerIndex: 0, query: "café" });
+  });
+
+  it("exports MENTION_PLACEHOLDER as the U+FFFC object-replacement char", () => {
+    expect(MENTION_PLACEHOLDER).toBe("￼");
+  });
+
+  it("treats U+FFFC (inline mention token placeholder) as a query terminator", () => {
+    // In inline-mode logical text an existing token is a single `￼` char. A new
+    // `@query` must not scan back THROUGH that token: "@a￼b" with caret after "b"
+    // has no active trigger (the `￼` ends the backscan like whitespace/newline).
+    expect(parseMentionTrigger(`@a${MENTION_PLACEHOLDER}b`, 4)).toBeNull();
+    // A fresh `@` typed AFTER a token still activates (scan stops at `￼`, not the @).
+    expect(parseMentionTrigger("￼ @fo", 5)).toEqual({
+      triggerIndex: 2,
+      query: "fo",
+    });
   });
 
   describe("position gating (for / slash-commands)", () => {

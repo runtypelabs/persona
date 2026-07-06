@@ -655,6 +655,7 @@ export default defineConfig({
         // Approval demo
         'attachments-demo': path.resolve(__dirname, 'attachments-demo.html'),
         'context-mentions-demo': path.resolve(__dirname, 'context-mentions-demo.html'),
+        'context-mentions-inline-demo': path.resolve(__dirname, 'context-mentions-inline-demo.html'),
         'slash-commands-demo': path.resolve(__dirname, 'slash-commands-demo.html'),
         'approval-demo': path.resolve(__dirname, 'approval-demo.html'),
         // Focus input demo
