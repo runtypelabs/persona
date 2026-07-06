@@ -175,6 +175,26 @@ caret.addEventListener("click", () => popover.toggle());
 // on teardown: popover.destroy();
 ```
 
+Positioning options:
+
+- `placement`: `"bottom-start"` (default), `"bottom-end"`, `"top-start"`, or
+  `"top-end"`, relative to the anchor.
+- `offset`: gap in px between the anchor and the content. Default `6`.
+- `matchAnchorWidth`: set the content's `min-width` to the anchor's width.
+- `horizontalOffset`: a `() => number | null` callback for `*-start`
+  placements. Return the desired left offset in px measured from the anchor's
+  left edge, or `null` for plain anchor alignment. When present, the content is
+  content-sized, capped to the anchor's width, and clamped so it never
+  overflows the anchor's edges. This is how the inline mention menu follows the
+  `@` glyph.
+- `verticalOffset`: a `() => number | null` callback for `top-*` placements.
+  Return the anchor point's top offset in px measured from the anchor's top
+  edge, or `null` to use the anchor's top edge. This is how the inline mention
+  menu anchors above the line containing the `@` instead of the whole composer.
+
+Both offset callbacks are re-invoked on every reposition (scroll and resize),
+so return a cached value rather than measuring layout inside them.
+
 `isEditableEventTarget(event)` rounds out the kit. Use it to avoid hijacking
 keys like Enter/Escape while the user types in the composer (it inspects the
 composed path, so it works across the Shadow-DOM boundary).

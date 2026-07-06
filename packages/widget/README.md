@@ -121,6 +121,7 @@ The full reference lives in [`docs/`](./docs/) and the theming guide:
 - [UI Features & Components](./docs/UI-COMPONENTS.md): message actions and feedback, loading/idle indicators, approvals, built-in `ask_user_question` and `suggest_replies` tools, dropdown menus, button utilities, dynamic forms
 - [Script Tag Installation & Framework Integration](./docs/INSTALLATION-FRAMEWORKS.md): automatic installer, deferred launcher lifecycle hooks, manual script tag setup, React, Next.js, Remix, Gatsby, and Astro guides
 - [Configuration Reference](./docs/CONFIGURATION-REFERENCE.md): every config option: core, client token mode, agent mode, UI & theme, launcher/docking, layout, voice, WebMCP, tool calls, features, suggestion chips, state & storage
+- [Context Mentions](./docs/CONTEXT-MENTIONS.md): `@`-mention sources, resolve lifecycle, chip vs inline display, menu positioning, slash commands, and render overrides
 - [Stream Parser Configuration](./docs/STREAM-PARSERS.md): JSON, XML, and plain-text stream parsers and custom parser factories
 - [Message Injection](./docs/MESSAGE-INJECTION.md): full injection and component-directive reference
 - [Dynamic Forms](./docs/DYNAMIC-FORMS.md): field schema, form styles, and recipes
