@@ -696,3 +696,162 @@ describe("ContextMentionController — inline coordinate space", () => {
     );
   });
 });
+
+describe("ContextMentionController — trigger-anchored menu positioning", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const domRect = (r: Partial<DOMRect>): DOMRect =>
+    ({
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+      ...r,
+    }) as DOMRect;
+
+  // Composer occupies x:[100, 460] (width 360) in viewport coords.
+  const ANCHOR_RECT = domRect({
+    left: 100,
+    right: 460,
+    width: 360,
+    top: 200,
+    bottom: 240,
+  });
+
+  function renderToken(ref: AgentWidgetContextMentionRef): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "persona-mention-token";
+    el.textContent = `@${ref.label}`;
+    return el;
+  }
+
+  function posSetup(
+    triggerRect: DOMRect | null,
+    opts: { rtl?: boolean; textarea?: boolean } = {}
+  ) {
+    const form = document.createElement("form");
+    document.body.appendChild(form);
+    form.getBoundingClientRect = () => ANCHOR_RECT;
+
+    let input: ReturnType<typeof createTextareaComposerInput>;
+    if (opts.textarea) {
+      const ta = document.createElement("textarea");
+      form.appendChild(ta);
+      input = createTextareaComposerInput(ta);
+    } else {
+      let idSeq = 0;
+      input = createContentEditableComposerInput({
+        generateId: () => `mid-${++idSeq}`,
+        renderToken,
+      });
+      form.appendChild(input.element);
+      if (opts.rtl) input.element.style.direction = "rtl";
+    }
+
+    const measure = vi.fn(() => triggerRect);
+    // Chip/textarea mode omits the capability entirely (graceful degradation);
+    // inline mode exposes it (stubbed — jsdom Range rects are all-zeros).
+    if (!opts.textarea) input.getLogicalRangeRect = measure;
+
+    const controller = new ContextMentionController({
+      mentionConfig: {
+        enabled: true,
+        display: "inline",
+        sources: [syncSource("files", [item("App.tsx")])],
+      },
+      composerInput: input,
+      anchor: form,
+      getMessages: () => [],
+      getConfig: () => ({}) as AgentWidgetConfig,
+      onSelect: vi.fn(() => true),
+      onInsertMention: vi.fn(),
+      admitMention: () => true,
+      announce: vi.fn(),
+    });
+    return { controller, input, form, measure };
+  }
+
+  /** Open on a typed trigger, then mock the menu's own width and reposition. */
+  function openAndMeasureMenu(
+    controller: ContextMentionController,
+    input: ReturnType<typeof createTextareaComposerInput>,
+    text: string,
+    caret: number,
+    menuWidth = 200
+  ): HTMLElement {
+    input.setValueWithCaret(text, caret);
+    controller.onInput();
+    const menu = document.querySelector(".persona-mention-menu") as HTMLElement;
+    menu.getBoundingClientRect = () => domRect({ width: menuWidth, height: 100 });
+    // Force a reposition now that the menu has a measurable width (the popover
+    // subscribes to window resize).
+    window.dispatchEvent(new Event("resize"));
+    return menu;
+  }
+
+  it("anchors the menu's left edge to the trigger glyph when a rect is available", () => {
+    // Trigger glyph at viewport x=140 → 40px from the composer's left edge (100).
+    const { controller, input } = posSetup(domRect({ left: 140, width: 8 }));
+    const menu = openAndMeasureMenu(controller, input, "@a", 2);
+    expect(menu.style.left).toBe("140px"); // 100 + 40
+  });
+
+  it("clamps a near-right trigger left so the menu fits (Slack-style)", () => {
+    // Trigger near the right edge (x=440 → offset 340). A 200px menu placed at 440
+    // would overflow past 460, so it shifts left to right-align at 460 → left 260.
+    const { controller, input } = posSetup(domRect({ left: 440, width: 8 }));
+    const menu = openAndMeasureMenu(controller, input, "@a", 2, 200);
+    expect(menu.style.left).toBe("260px"); // 460 - 200
+  });
+
+  it("falls back to composer anchoring when the rect is null", () => {
+    const { controller, input } = posSetup(null);
+    const menu = openAndMeasureMenu(controller, input, "@a", 2);
+    expect(menu.style.left).toBe("100px"); // anchor left
+  });
+
+  it("falls back to composer anchoring in RTL", () => {
+    // A rect IS available, but RTL takes the one early-return fallback path.
+    const { controller, input } = posSetup(domRect({ left: 440, width: 8 }), {
+      rtl: true,
+    });
+    const menu = openAndMeasureMenu(controller, input, "@a", 2);
+    expect(menu.style.left).toBe("100px");
+  });
+
+  it("falls back to composer anchoring when the composer has no capability", () => {
+    const { controller, input, measure } = posSetup(domRect({ left: 140 }), {
+      textarea: true,
+    });
+    const menu = openAndMeasureMenu(controller, input, "@a", 2);
+    expect(menu.style.left).toBe("100px");
+    expect(measure).not.toHaveBeenCalled();
+  });
+
+  it("measures once per session — no re-measure while typing the query", () => {
+    const { controller, input, measure } = posSetup(domRect({ left: 140 }));
+    input.setValueWithCaret("@a", 2);
+    controller.onInput(); // opens, measures once
+    input.setValueWithCaret("@ab", 3);
+    controller.onInput(); // same trigger index → no re-measure
+    input.setValueWithCaret("@abc", 4);
+    controller.onInput();
+    expect(measure).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-measures when the trigger index changes (new session)", () => {
+    const { controller, input, measure } = posSetup(domRect({ left: 140 }));
+    input.setValueWithCaret("@a", 2);
+    controller.onInput(); // trigger at index 0, measure #1
+    input.setValueWithCaret("hey @a", 6);
+    controller.onInput(); // trigger moved to index 4 → measure #2
+    expect(measure).toHaveBeenCalledTimes(2);
+  });
+});

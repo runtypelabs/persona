@@ -426,4 +426,54 @@ describe("createContentEditableComposerInput", () => {
     input.element.dispatchEvent(new Event("input", { bubbles: true }));
     expect(onMentionRemoved).not.toHaveBeenCalled();
   });
+
+  describe("getLogicalRangeRect", () => {
+    it("builds a non-collapsed range around the glyph and returns its rect", () => {
+      const { input } = make();
+      input.setValueWithCaret("hi @a", 5); // single text node "hi @a"
+      const textNode = input.element.firstChild!;
+      const setStart = vi.fn();
+      const setEnd = vi.fn();
+      const fakeRect = {
+        left: 40,
+        right: 48,
+        top: 10,
+        bottom: 24,
+        width: 8,
+        height: 14
+      } as DOMRect;
+      const createRange = vi
+        .spyOn(document, "createRange")
+        .mockReturnValue({
+          setStart,
+          setEnd,
+          getBoundingClientRect: () => fakeRect
+        } as unknown as Range);
+
+      // The "@" sits at logical index 3; measure the single glyph [3, 4).
+      const rect = input.getLogicalRangeRect!(3, 4);
+
+      expect(rect).toBe(fakeRect);
+      // Endpoints are the logical→DOM mapping of both ends (non-collapsed), which
+      // for a single text node is (textNode, 3) and (textNode, 4).
+      expect(setStart).toHaveBeenCalledWith(textNode, 3);
+      expect(setEnd).toHaveBeenCalledWith(textNode, 4);
+      createRange.mockRestore();
+    });
+
+    it("returns null for invalid ranges", () => {
+      const { input } = make();
+      input.setValueWithCaret("hi @a", 5);
+      expect(input.getLogicalRangeRect!(3, 3)).toBeNull(); // empty
+      expect(input.getLogicalRangeRect!(4, 2)).toBeNull(); // reversed
+      expect(input.getLogicalRangeRect!(Number.NaN, 4)).toBeNull();
+    });
+
+    it("returns null for a degenerate (zero-size) rect", () => {
+      const { input } = make();
+      input.setValueWithCaret("hi @a", 5);
+      // jsdom's Range.getBoundingClientRect is all-zeros → treated as unmeasurable.
+      expect(input.getLogicalRangeRect!(3, 4)).toBeNull();
+    });
+  });
 });

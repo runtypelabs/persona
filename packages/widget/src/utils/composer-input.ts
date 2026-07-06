@@ -47,6 +47,17 @@ export interface ComposerInputCapability
   dispatchInput: () => void;
   focus: () => void;
 
+  /**
+   * INLINE ONLY (contenteditable). Bounding rect (VIEWPORT coordinates) of the
+   * LOGICAL character range `[start, end)`, or `null` when unmeasurable (invalid
+   * range or a zero-size/degenerate rect). Used to trigger-anchor the mention menu
+   * horizontally to the `@` glyph. Chip (textarea) adapters omit it — no cheap
+   * per-glyph rect without a mirror-div hack, so the menu stays composer-anchored
+   * (graceful degradation). Callers treat a missing method exactly like a `null`
+   * result.
+   */
+  getLogicalRangeRect?: (start: number, end: number) => DOMRect | null;
+
   // ---- inline-only (contenteditable adapter); chip adapters omit these ----
 
   /** Canonical document (inline mode). */

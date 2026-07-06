@@ -142,6 +142,14 @@ export class ContextMentionController {
   private readonly knownAsync = new Set<string>();
   private lastAnnouncedCount = -1;
 
+  // Trigger-anchored menu positioning (inline mode). `triggerAnchorOffset` is the
+  // horizontal distance from the composer's left edge to the `@` trigger glyph,
+  // measured ONCE per trigger session (see `updateTriggerAnchor`). It is a delta
+  // from the anchor, so it survives scroll/pan; the popover adds it to the live
+  // anchor rect each reposition instead of re-measuring per keystroke.
+  private triggerAnchorOffset: number | null = null;
+  private measuredTriggerIndex: number | null = null;
+
   constructor(opts: ContextMentionControllerOptions) {
     this.opts = opts;
     const cfg = opts.mentionConfig;
@@ -288,6 +296,12 @@ export class ContextMentionController {
       this.open(hit.match.query, hit.channel);
     } else {
       this.switchChannel(hit.channel);
+      // Re-anchor only when the trigger MOVED (new session / edit before the `@`).
+      // Plain query typing keeps the same `triggerIndex`, so the menu stays put —
+      // no per-keystroke layout work (Slack behavior).
+      if (this.measuredTriggerIndex !== hit.match.triggerIndex) {
+        this.updateTriggerAnchor();
+      }
       this.setQuery(hit.match.query);
     }
   }
@@ -307,13 +321,22 @@ export class ContextMentionController {
     this.activeIndex = 0;
     this.lastAnnouncedCount = -1;
     if (!this.popover) {
+      // Inline mode with a measurable composer trigger-anchors the menu to the `@`
+      // glyph (Slack-style): the menu is content-sized and shifts horizontally.
+      // Every other mode keeps the composer-anchored, full-width menu unchanged.
+      const anchored = this.canAnchorMenu();
       this.popover = createPopover({
         anchor: this.opts.anchor,
         content: this.menu.el,
         placement: "top-start",
-        matchAnchorWidth: true,
+        // Full-width menu only in composer-anchored mode; the trigger-anchored
+        // menu must be content-sized so it has room to shift within the composer.
+        matchAnchorWidth: !anchored,
         offset: 6,
         container: this.opts.popoverContainer,
+        // Trigger-anchored horizontal offset (px from the composer's left edge),
+        // or null → composer-anchored fallback. Omitted entirely when not anchored.
+        horizontalOffset: anchored ? () => this.triggerAnchorOffset : undefined,
         // Outside-click / anchor-removed: run the SAME teardown as an explicit
         // close so the debounce timer, in-flight search, and search token are
         // cleaned up too. `popover.close()` inside is a no-op here (the popover
@@ -321,7 +344,21 @@ export class ContextMentionController {
         // Don't steal focus back to the composer on an outside click.
         onDismiss: () => this.close(false),
       });
+      // Content-sized menu (popover caps max-width to the composer); a floor keeps
+      // short result lists from collapsing. Set inline so no menu-CSS rule is needed.
+      // Computed in px against the composer: a `min(220px, 100%)` percentage would
+      // resolve against the viewport (the popover is fixed-positioned) and, as
+      // min-width beats max-width, overflow composers narrower than 220px.
+      if (anchored) {
+        const anchorWidth = this.opts.anchor.getBoundingClientRect().width;
+        this.menu.el.style.minWidth = `${Math.min(220, anchorWidth)}px`;
+      }
     }
+    // Measure the trigger glyph ONCE for this session (before the first reposition
+    // in setQuery). Re-measures only on a trigger-index change (new session); the
+    // popover's own scroll/resize reposition reuses the cached anchor-relative
+    // delta, so panning/scrolling stays aligned without re-measuring.
+    this.updateTriggerAnchor();
     this.popover.open();
     // Inject the menu CSS into whatever root the menu now lives in (document
     // head by default; the shadow root under `useShadowDom`). Idempotent per
@@ -330,6 +367,47 @@ export class ContextMentionController {
     this.input.element.setAttribute("aria-expanded", "true");
     this.opts.emit?.("opened", { trigger: channel.trigger });
     this.setQuery(query);
+  }
+
+  /**
+   * True when the menu can trigger-anchor to the `@` glyph: inline display with a
+   * composer that can measure a logical range rect. Chip/textarea mode (no
+   * `getLogicalRangeRect`) keeps the composer-anchored menu — graceful degradation.
+   */
+  private canAnchorMenu(): boolean {
+    return this.isInlineDisplay() && !!this.input.getLogicalRangeRect;
+  }
+
+  /**
+   * Measure the `@` trigger glyph and cache its horizontal offset from the
+   * composer's left edge (a delta, so it survives scroll — the popover adds it to
+   * the live anchor rect each reposition). Called once per trigger session and
+   * again only when the trigger index changes (new session) — never per keystroke,
+   * so plain query typing does no layout work. Caches `null` (composer-anchored
+   * fallback) when the composer can't anchor, there is no live trigger, the
+   * direction is RTL, or the rect is unmeasurable. The `@` is one glyph at
+   * `triggerIndex`; a non-collapsed range around it measures reliably (a collapsed
+   * boundary range measures empty).
+   */
+  private updateTriggerAnchor(): void {
+    const match = this.triggerMatch;
+    const measure = this.input.getLogicalRangeRect;
+    this.measuredTriggerIndex = match?.triggerIndex ?? null;
+    this.triggerAnchorOffset = null;
+    if (!match || !measure) return;
+    // RTL: horizontal trigger anchoring is left-to-right math; fall back to the
+    // composer-anchored behavior rather than mispositioning. One early return.
+    const el = this.input.element;
+    if (
+      typeof getComputedStyle === "function" &&
+      getComputedStyle(el).direction === "rtl"
+    ) {
+      return;
+    }
+    const rect = measure(match.triggerIndex, match.triggerIndex + 1);
+    if (!rect) return;
+    this.triggerAnchorOffset =
+      rect.left - this.opts.anchor.getBoundingClientRect().left;
   }
 
   close(refocus = true): void {

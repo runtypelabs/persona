@@ -16,3 +16,8 @@ inline messages carry ordered `contentSegments`, so the sent bubble re-renders
 each `@token` in place instead of showing the mention twice (raw prose plus a
 chip row). Composer-history recall of an inline message currently restores plain
 text; live token recall is a known follow-up.
+
+In inline mode the mention menu now anchors horizontally to the `@` trigger glyph
+(Slack-style), measured once per trigger session and clamped so a near-right
+trigger shifts the menu left to stay within the composer; chip mode keeps the
+composer-anchored menu.

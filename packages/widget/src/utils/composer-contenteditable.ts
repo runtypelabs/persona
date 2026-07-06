@@ -422,6 +422,35 @@ export function createContentEditableComposerInput(
     setCaret(caret);
   };
 
+  /**
+   * Viewport-coordinate rect of the LOGICAL range `[start, end)`. Builds a
+   * NON-collapsed DOM Range around a real glyph (the whole trick — collapsed
+   * ranges at a node boundary measure empty in most engines) and returns its
+   * bounding rect. Returns `null` for an empty/invalid range or a degenerate
+   * (zero-size) rect so callers fall back to composer anchoring. Cheap: one Range
+   * + one `getBoundingClientRect`, only invoked on measure (not per keystroke).
+   */
+  const getLogicalRangeRect = (
+    start: number,
+    end: number
+  ): DOMRect | null => {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      return null;
+    }
+    try {
+      const s = logicalToDomPosition(root, start);
+      const e = logicalToDomPosition(root, end);
+      const range = document.createRange();
+      range.setStart(s.node, s.offset);
+      range.setEnd(e.node, e.offset);
+      const rect = range.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) return null;
+      return rect;
+    } catch {
+      return null;
+    }
+  };
+
   const setDocument = (doc: ComposerDocument, caret?: number): void => {
     render(doc);
     setCaret(caret ?? logicalLength(doc));
@@ -549,6 +578,7 @@ export function createContentEditableComposerInput(
       }
     },
     setValueWithCaret,
+    getLogicalRangeRect,
     setValue: (value: string) => {
       // The `.value` shim setter: focus FIRST so the subsequent caret placement
       // owns the selection (setCaret is a no-op when unfocused, by design).
