@@ -163,3 +163,98 @@ describe("artifact-pane file preview", () => {
     expect(content.querySelector(".persona-markdown-bubble")).toBeTruthy();
   });
 });
+
+const tabsIn = (pane: ReturnType<typeof createArtifactPane>): HTMLButtonElement[] =>
+  Array.from(
+    pane.element.querySelectorAll(".persona-artifact-tab")
+  ) as HTMLButtonElement[];
+
+describe("artifact-pane tabs", () => {
+  it("labels file tabs by basename and keeps the full path in a tooltip", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    const [tab] = tabsIn(pane);
+    expect(tab.textContent).toBe("cat.html");
+    expect(tab.title).toBe("outputs/cat.html");
+    expect(tab.getAttribute("aria-label")).toBe("outputs/cat.html");
+  });
+
+  it("falls back to the title for non-file artifacts", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({
+      artifacts: [
+        {
+          id: "m1",
+          artifactType: "markdown",
+          title: "Plain",
+          status: "complete",
+          markdown: "## Plain",
+        },
+      ],
+      selectedId: "m1",
+    });
+    const [tab] = tabsIn(pane);
+    expect(tab.textContent).toBe("Plain");
+    expect(tab.title).toBe("Plain");
+  });
+
+  it("renders one tab per artifact and marks the selected one active", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({
+      artifacts: [
+        fileRecord({
+          id: "a1",
+          title: "outputs/one.html",
+          file: { path: "outputs/one.html", mimeType: "text/html", language: "html" },
+        }),
+        fileRecord({
+          id: "a2",
+          title: "outputs/two.html",
+          file: { path: "outputs/two.html", mimeType: "text/html", language: "html" },
+        }),
+      ],
+      selectedId: "a2",
+    });
+    const tabs = tabsIn(pane);
+    expect(tabs.map((t) => t.textContent)).toEqual(["one.html", "two.html"]);
+    expect(tabs[1].classList.contains("persona-bg-persona-container")).toBe(true);
+    expect(tabs[0].classList.contains("persona-bg-persona-container")).toBe(false);
+  });
+
+  it("scrolls the selected tab into view only when the selection changes", () => {
+    const calls: HTMLElement[] = [];
+    const orig = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: HTMLElement) {
+      calls.push(this);
+    } as typeof Element.prototype.scrollIntoView;
+    try {
+      const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+      const a1 = fileRecord({
+        id: "a1",
+        title: "outputs/one.html",
+        file: { path: "outputs/one.html", mimeType: "text/html", language: "html" },
+      });
+      const a2 = fileRecord({
+        id: "a2",
+        title: "outputs/two.html",
+        file: { path: "outputs/two.html", mimeType: "text/html", language: "html" },
+      });
+
+      pane.update({ artifacts: [a1], selectedId: "a1" });
+      expect(calls.length).toBeGreaterThan(0);
+
+      const beforeSelect = calls.length;
+      pane.update({ artifacts: [a1, a2], selectedId: "a2" });
+      expect(calls.length).toBeGreaterThan(beforeSelect);
+      expect(calls[calls.length - 1].textContent).toBe("two.html");
+
+      // Re-render with the same selection must not re-scroll (don't fight a
+      // user who scrolled the strip manually).
+      const beforeIdle = calls.length;
+      pane.update({ artifacts: [a1, a2], selectedId: "a2" });
+      expect(calls.length).toBe(beforeIdle);
+    } finally {
+      Element.prototype.scrollIntoView = orig;
+    }
+  });
+});

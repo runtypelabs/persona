@@ -725,6 +725,10 @@
   flex-shrink: 0;
 }
 
+.persona-shrink-0 {
+  flex-shrink: 0;
+}
+
 .persona-min-w-0 {
   min-width: 0;
 }
@@ -861,6 +865,10 @@
 
 .persona-overflow-y-auto {
   overflow-y: auto;
+}
+
+.persona-overflow-x-auto {
+  overflow-x: auto;
 }
 
 .persona-widget-body {
@@ -2718,6 +2726,12 @@
   background: var(--persona-artifact-tab-bg, transparent);
   border-radius: var(--persona-artifact-tab-radius, 0.5rem);
   color: var(--persona-artifact-tab-color, inherit);
+  /* Keep each tab on one line and cap its width so the strip scrolls
+     horizontally instead of wrapping/overflowing the pane. */
+  white-space: nowrap;
+  max-width: var(--persona-artifact-tab-max-width, 12rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 [data-persona-root] .persona-artifact-tab.persona-bg-persona-container {
@@ -2751,6 +2765,18 @@
   background: var(--persona-artifact-tab-list-bg, transparent);
   border-bottom-color: var(--persona-artifact-tab-list-border-color, var(--persona-border, #e5e7eb));
   padding: var(--persona-artifact-tab-list-padding, 0.5rem);
+  /* Thin, unobtrusive horizontal scrollbar for the tab strip. */
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
+}
+
+[data-persona-root] .persona-artifact-list::-webkit-scrollbar {
+  height: 6px;
+}
+
+[data-persona-root] .persona-artifact-list::-webkit-scrollbar-thumb {
+  background: var(--persona-artifact-tab-list-scrollbar, var(--persona-border, #e5e7eb));
+  border-radius: 9999px;
 }
 
 /* Toolbar border override */

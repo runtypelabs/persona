@@ -329,6 +329,10 @@ export function createArtifactPane(
   let records: PersonaArtifactRecord[] = [];
   let selectedId: string | null = null;
   let mobileOpen = false;
+  // Track the last tab we auto-scrolled to so we only nudge the strip when the
+  // selection actually changes (not on every streaming re-render), which would
+  // otherwise fight a user who has scrolled the strip manually.
+  let lastScrolledTabId: string | null = null;
 
   // File-preview iframe reuse: re-appending a detached iframe reloads its srcdoc,
   // so keep the node and skip rebuilding when the artifact + source are unchanged.
@@ -360,18 +364,37 @@ export function createArtifactPane(
     list.classList.toggle("persona-hidden", hideTabs);
 
     list.replaceChildren();
+    let activeTab: HTMLButtonElement | null = null;
     for (const r of records) {
       const tab = createElement(
         "button",
         "persona-artifact-tab persona-shrink-0 persona-rounded-lg persona-px-2 persona-py-1 persona-text-xs persona-border persona-border-transparent persona-text-persona-primary"
       );
       tab.type = "button";
-      tab.textContent = r.title || r.id.slice(0, 8);
+      // Prefer the file basename over the full path so tabs stay readable
+      // (matches the toolbar title); keep the full path/title in a tooltip.
+      const fileMeta = r.artifactType === "markdown" ? r.file : undefined;
+      const label = fileMeta ? basenameOf(fileMeta.path) : r.title || r.id.slice(0, 8);
+      const tooltip = fileMeta?.path || r.title || label;
+      tab.textContent = label;
+      tab.title = tooltip;
+      tab.setAttribute("aria-label", tooltip);
       if (r.id === selectedId) {
         tab.classList.add("persona-bg-persona-container", "persona-border-persona-border");
+        activeTab = tab;
       }
       tab.addEventListener("click", () => options.onSelect(r.id));
       list.appendChild(tab);
+    }
+
+    // Keep the selected tab visible when the selection changes (e.g. a new
+    // artifact streams in and auto-selects). `inline: "nearest"` is a no-op
+    // when the tab is already visible, so this never yanks the strip needlessly.
+    if (activeTab && selectedId !== lastScrolledTabId) {
+      lastScrolledTabId = selectedId;
+      if (typeof activeTab.scrollIntoView === "function") {
+        activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
     }
 
     const sel =
