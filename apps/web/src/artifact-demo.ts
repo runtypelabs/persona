@@ -21,6 +21,7 @@ import {
   squareInlinePanel,
   type Mode,
 } from "./mount-mode";
+import { createArtifactDemoStream, type ArtifactDemoButton } from "./artifact-demo-sse";
 
 renderDemoScaffold({ slug: "artifact-demo" });
 
@@ -54,9 +55,11 @@ const artifactDemoConfigBase: Partial<AgentWidgetConfig> = {
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
     welcomeTitle: "Artifacts demo",
-    welcomeSubtitle: "Use the artifact buttons in the Configure rail or chat with the proxy.",
+    welcomeSubtitle:
+      "Use the artifact buttons to replay a scripted agent turn. Each button streams the real artifact wire frames, so the reference card appears in the chat.",
     inputPlaceholder: "Message the model…",
   },
+  suggestionChips: [],
 };
 
 const configInspector = createDemoConfigInspector({
@@ -64,9 +67,72 @@ const configInspector = createDemoConfigInspector({
   root: "[data-config-inspector]",
 });
 
+// ── Card loading animation controls ─────────────────────────────────────
+// The rail lets visitors pick the animation for the reference card's
+// "Generating…" status (features.artifacts.loadingAnimation & friends). The
+// values live in the DOM controls, and buildArtifactsFeature() reads them each
+// time a config is built, so both the initial mount, a mode re-mount, and a
+// live handle.update() all see the current selection.
+type ArtifactAnimationMode =
+  | "none"
+  | "pulse"
+  | "shimmer"
+  | "shimmer-color"
+  | "rainbow";
+
+const ANIMATION_DEFAULTS = {
+  mode: "shimmer" as ArtifactAnimationMode,
+  duration: 2000,
+  primary: "#0ea5e9",
+  secondary: "#3b82f6",
+};
+
+const getEl = <T extends HTMLElement>(id: string): T | null =>
+  document.getElementById(id) as T | null;
+
+const readAnimationControls = () => {
+  const activeModeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-anim-mode .mode-btn.active",
+  );
+  const mode = (activeModeBtn?.dataset.mode ??
+    ANIMATION_DEFAULTS.mode) as ArtifactAnimationMode;
+  const durationEl = getEl<HTMLInputElement>("artifact-anim-duration");
+  const duration = durationEl
+    ? parseInt(durationEl.value, 10)
+    : ANIMATION_DEFAULTS.duration;
+  const primary =
+    getEl<HTMLInputElement>("artifact-color-primary")?.value ??
+    ANIMATION_DEFAULTS.primary;
+  const secondary =
+    getEl<HTMLInputElement>("artifact-color-secondary")?.value ??
+    ANIMATION_DEFAULTS.secondary;
+  return { mode, duration, primary, secondary };
+};
+
+// Build the features.artifacts block from the base config plus the current
+// animation control selection. Color options are only sent for shimmer-color.
+const buildArtifactsFeature = () => {
+  const { mode, duration, primary, secondary } = readAnimationControls();
+  return {
+    ...artifactDemoConfigBase.features?.artifacts,
+    loadingAnimation: mode,
+    loadingAnimationDuration: duration,
+    ...(mode === "shimmer-color"
+      ? {
+          loadingAnimationColor: primary,
+          loadingAnimationSecondaryColor: secondary,
+        }
+      : {}),
+  };
+};
+
 const buildConfig = (mode: Mode): AgentWidgetConfig =>
   ({
     ...artifactDemoConfigBase,
+    features: {
+      ...artifactDemoConfigBase.features,
+      artifacts: buildArtifactsFeature(),
+    },
     launcher:
       mode === "launcher"
         ? {
@@ -89,14 +155,18 @@ const buildConfig = (mode: Mode): AgentWidgetConfig =>
 // Reassigned on every mode switch; the artifact toolbar buttons below read it
 // lazily so they always target the current widget.
 let handle: AgentWidgetInitHandle | null = null;
+// Tracks the current mount mode so live animation-control updates rebuild the
+// config with the right launcher/inline chrome.
+let activeMountMode: Mode = "inline";
 
 setupMountMode({
   slug: "artifact-demo",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
+    activeMountMode = mode;
     const config = buildConfig(mode);
     reportDemoConfig(configInspector, { config, mode });
-    // Both modes use initAgentWidget so the handle (upsertArtifact / clearChat /
+    // Both modes use initAgentWidget so the handle (connectStream / clearChat /
     // open) is identical; only the mount target and launcher chrome differ.
     const target =
       mode === "launcher"
@@ -117,110 +187,110 @@ setupMountMode({
   },
 });
 
-document.getElementById("btn-md")?.addEventListener("click", () => {
-  handle?.upsertArtifact({
-    artifactType: "markdown",
-    title: "Sample",
-    content: "## Hello\n\nThis **markdown** artifact was injected from the demo toolbar.",
+// The artifact buttons drive MOCK SSE STREAMING through the widget's real
+// pipeline (see artifact-demo-sse.ts), not the programmatic upsertArtifact() API.
+// Each click replays the wire frames a real agent emits, so the in-chat
+// reference card streams from "Generating\u2026" to done with a Download button, the
+// side pane fills from artifact_delta chunks, and the status dot animates.
+//
+// `connectStream` no-ops if a stream is already running, so we serialize clicks
+// through a promise chain: overlapping clicks queue instead of getting dropped.
+// A per-click counter keeps every stream's execution/artifact ids unique, so
+// repeated clicks create separate cards.
+let clickSeq = 0;
+let streamQueue: Promise<void> = Promise.resolve();
+
+const runArtifactStream = (button: ArtifactDemoButton): void => {
+  streamQueue = streamQueue.then(() => {
+    if (!handle) return;
+    clickSeq += 1;
+    return handle.connectStream(createArtifactDemoStream(button, clickSeq));
   });
-});
-
-// Demo of a previewable HTML file artifact (as a Claude Managed agent would emit
-// one): the content is a fenced code block on the wire, and `file` metadata lets
-// Persona unfence + preview it in a sandboxed iframe. Exercise the rendered/source
-// toggle and Download from here.
-const CAT_HTML = `<!doctype html>
-<html>
-  <head><meta charset="utf-8" /><title>Cat</title></head>
-  <body style="font-family: system-ui, sans-serif; text-align: center; padding: 2rem;">
-    <h1>Hello from an HTML file artifact</h1>
-    <p>This file streamed as a fenced code block, then rendered in a sandboxed iframe.</p>
-    <button onclick="this.textContent = 'Meow!'">Click me</button>
-  </body>
-</html>
-`;
-
-// Encode the way core does: escape any literal triple-backtick (backtick + ZWSP +
-// backtick backtick), then wrap in a fence.
-const ZWSP = "\u200b";
-const encodeFileArtifact = (source: string, lang: string): string => {
-  const escaped = source.split("```").join("`" + ZWSP + "``");
-  return "```" + lang + "\n" + escaped + "\n```";
 };
 
-document.getElementById("btn-html-file")?.addEventListener("click", () => {
-  handle?.upsertArtifact({
-    artifactType: "markdown",
-    title: "outputs/cat.html",
-    content: encodeFileArtifact(CAT_HTML, "html"),
-    file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" },
-  });
-});
+const wireButton = (id: string, button: ArtifactDemoButton): void => {
+  document.getElementById(id)?.addEventListener("click", () => runArtifactStream(button));
+};
 
-// Same wire shape, but the HTML file is a self-contained React app: React +
-// ReactDOM UMD and Babel standalone from a CDN, JSX in an inline script. This is
-// what agents typically write for single-file React outputs. The sandbox is
-// `allow-scripts` so the CDN scripts load and run; note that `srcdoc` inherits
-// the host page's CSP, so a strict host CSP can block the CDN loads.
-const REACT_HTML = `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>React Counter</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style>
-      body { font-family: system-ui, sans-serif; text-align: center; padding: 2rem; }
-      button { font-size: 1.25rem; padding: 0.5rem 1.25rem; border-radius: 0.5rem; border: 1px solid #ccc; cursor: pointer; }
-    </style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="text/babel">
-      function Counter() {
-        const [count, setCount] = React.useState(0);
-        return (
-          <div>
-            <h1>React file artifact</h1>
-            <p>This React app streamed as a fenced code block, then ran in a sandboxed iframe.</p>
-            <button onClick={() => setCount((c) => c + 1)}>Count: {count}</button>
-          </div>
-        );
-      }
-      ReactDOM.createRoot(document.getElementById("root")).render(<Counter />);
-    </script>
-  </body>
-</html>
-`;
-
-document.getElementById("btn-react-file")?.addEventListener("click", () => {
-  handle?.upsertArtifact({
-    artifactType: "markdown",
-    title: "outputs/counter-react.html",
-    content: encodeFileArtifact(REACT_HTML, "html"),
-    file: { path: "outputs/counter-react.html", mimeType: "text/html", language: "html" },
-  });
-});
-
-document.getElementById("btn-comp")?.addEventListener("click", () => {
-  handle?.upsertArtifact({
-    artifactType: "component",
-    title: "Pill",
-    component: "ArtifactDemoPill",
-    props: { label: "Registered component" },
-  });
-});
-
-document.getElementById("btn-unknown")?.addEventListener("click", () => {
-  handle?.upsertArtifact({
-    artifactType: "component",
-    title: "Missing registry entry",
-    component: "TotallyUnknownWidget",
-    props: { foo: "bar" },
-  });
-});
+wireButton("btn-md", "md");
+wireButton("btn-html-file", "html-file");
+wireButton("btn-react-file", "react-file");
+wireButton("btn-comp", "comp");
+wireButton("btn-unknown", "unknown");
 
 document.getElementById("btn-clear")?.addEventListener("click", () => {
+  // clearChat() only wipes the transcript, so also clear the artifact registry
+  // and pane for a full reset.
   handle?.clearChat();
+  handle?.clearArtifacts();
+});
+
+// ── Wire the card loading animation controls ─────────────────────────────
+// Every control applies live via handle.update(): the widget re-applies
+// features + re-renders the transcript in place (no messages lost), so the
+// change lands on the NEXT streamed card and, because cards read their config
+// at render time and re-render on each artifact_delta, on any in-flight card
+// too. No re-mount: the widget is only re-created on a mount-mode switch.
+const colorSection = document.getElementById("artifact-color-section");
+const syncColorSectionVisibility = (mode: ArtifactAnimationMode): void => {
+  if (colorSection) {
+    colorSection.style.display = mode === "shimmer-color" ? "" : "none";
+  }
+};
+
+const applyAnimationConfig = (): void => {
+  const config = buildConfig(activeMountMode);
+  handle?.update(
+    activeMountMode === "launcher" ? config : squareInlinePanel(config),
+  );
+  reportDemoConfig(configInspector, { config, mode: activeMountMode });
+};
+
+const modeGroup = document.getElementById("artifact-anim-mode");
+modeGroup?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
+  if (!btn) return;
+  modeGroup
+    .querySelectorAll(".mode-btn")
+    .forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  syncColorSectionVisibility(btn.dataset.mode as ArtifactAnimationMode);
+  applyAnimationConfig();
+});
+// Default mode is shimmer, so the color options start hidden.
+syncColorSectionVisibility(ANIMATION_DEFAULTS.mode);
+
+const durationSlider = getEl<HTMLInputElement>("artifact-anim-duration");
+const durationLabel = document.getElementById("artifact-anim-duration-label");
+durationSlider?.addEventListener("input", () => {
+  if (durationLabel) durationLabel.textContent = `${durationSlider.value}ms`;
+  applyAnimationConfig();
+});
+
+getEl<HTMLInputElement>("artifact-color-primary")?.addEventListener(
+  "input",
+  applyAnimationConfig,
+);
+getEl<HTMLInputElement>("artifact-color-secondary")?.addEventListener(
+  "input",
+  applyAnimationConfig,
+);
+
+document.getElementById("btn-anim-reset")?.addEventListener("click", () => {
+  modeGroup
+    ?.querySelectorAll(".mode-btn")
+    .forEach((b) =>
+      b.classList.toggle(
+        "active",
+        (b as HTMLButtonElement).dataset.mode === ANIMATION_DEFAULTS.mode,
+      ),
+    );
+  if (durationSlider) durationSlider.value = String(ANIMATION_DEFAULTS.duration);
+  if (durationLabel) durationLabel.textContent = `${ANIMATION_DEFAULTS.duration}ms`;
+  const primaryEl = getEl<HTMLInputElement>("artifact-color-primary");
+  const secondaryEl = getEl<HTMLInputElement>("artifact-color-secondary");
+  if (primaryEl) primaryEl.value = ANIMATION_DEFAULTS.primary;
+  if (secondaryEl) secondaryEl.value = ANIMATION_DEFAULTS.secondary;
+  syncColorSectionVisibility(ANIMATION_DEFAULTS.mode);
+  applyAnimationConfig();
 });

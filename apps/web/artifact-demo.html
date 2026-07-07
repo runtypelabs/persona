@@ -32,6 +32,40 @@
               <button type="button" class="btn" id="btn-clear">Clear</button>
             </div>
           </div>
+
+          <div class="info-section">
+            <h3>Card loading animation</h3>
+            <p>Style the "Generating…" status on the in-chat reference card while an artifact streams. Changes apply live and to the next streamed card.</p>
+            <div class="section">
+              <label>Animation mode</label>
+              <div class="mode-group" id="artifact-anim-mode">
+                <button type="button" class="mode-btn active" data-mode="shimmer">Shimmer</button>
+                <button type="button" class="mode-btn" data-mode="pulse">Pulse</button>
+                <button type="button" class="mode-btn" data-mode="shimmer-color">Shimmer color</button>
+                <button type="button" class="mode-btn" data-mode="rainbow">Rainbow</button>
+                <button type="button" class="mode-btn" data-mode="none">None</button>
+              </div>
+            </div>
+            <div class="section">
+              <label>Animation duration</label>
+              <div class="range-row">
+                <input type="range" id="artifact-anim-duration" min="500" max="5000" step="100" value="2000" />
+                <span id="artifact-anim-duration-label">2000ms</span>
+              </div>
+            </div>
+            <div class="section" id="artifact-color-section">
+              <label>Shimmer color options</label>
+              <div class="color-row">
+                <label>Primary</label>
+                <input type="color" id="artifact-color-primary" value="#0ea5e9" />
+                <label>Secondary</label>
+                <input type="color" id="artifact-color-secondary" value="#3b82f6" />
+              </div>
+            </div>
+            <div class="btn-row">
+              <button type="button" id="btn-anim-reset">Reset to defaults</button>
+            </div>
+          </div>
         </aside>
         <div class="stage-widget">
           <div class="embed" id="artifact-root"></div>
@@ -43,7 +77,12 @@
 
         <div class="notes-section">
           <h3 class="notes-section-title">Artifact types</h3>
-          <p><strong>Markdown</strong>: rendered note. <strong>Known component</strong>: <code>ArtifactDemoPill</code>. <strong>Unknown component</strong>: fallback inspector card. Global: <code>window.personaArtifactDemo</code>.</p>
+          <ul>
+            <li><strong>Markdown</strong>: rendered note</li>
+            <li><strong>Known component</strong>: <code>ArtifactDemoPill</code></li>
+            <li><strong>Unknown component</strong>: fallback inspector card</li>
+            <li><strong>Global</strong>: <code>window.personaArtifactDemo</code></li>
+          </ul>
         </div>
 
         <div class="notes-section">
@@ -57,7 +96,26 @@
               },
             },
           </div>
-          <p>Call <code>controller.upsertArtifact({ artifactType, ... })</code> to render an artifact in the side panel. Components must be registered via <code>componentRegistry.register(name, renderer)</code>.</p>
+          <p>The buttons here replay the exact <code>artifact_start</code> / <code>artifact_delta</code> / <code>artifact_complete</code> wire frames a real Runtype agent emits, streamed through <code>controller.connectStream(...)</code>.</p>
+          <p>That is what makes the in-chat reference card appear and stream from "Generating…" to done with a Download button, while the side pane fills at the same time. A live agent produces the same frames.</p>
+          <p>Components must be registered via <code>componentRegistry.register(name, renderer)</code>.</p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Card loading animation</h3>
+          <p>The reference card's "Generating…" status animates while the artifact streams. Configure it on <code>features.artifacts</code>:</p>
+          <div class="code-block">
+            <span class="prop">features</span>: {
+              <span class="prop">artifacts</span>: {
+                <span class="prop">enabled</span>: <span class="keyword">true</span>,
+                <span class="prop">loadingAnimation</span>: <span class="string">"shimmer"</span>, <span class="comment">// none | pulse | shimmer | shimmer-color | rainbow</span>
+                <span class="prop">loadingAnimationDuration</span>: <span class="keyword">2000</span>, <span class="comment">// ms per cycle</span>
+                <span class="prop">loadingAnimationColor</span>: <span class="string">"#0ea5e9"</span>, <span class="comment">// shimmer-color only</span>
+                <span class="prop">loadingAnimationSecondaryColor</span>: <span class="string">"#3b82f6"</span>, <span class="comment">// shimmer-color only</span>
+              },
+            },
+          </div>
+          <p>The default is <code>shimmer</code>. Character-by-character modes (<code>shimmer</code>, <code>shimmer-color</code>, <code>rainbow</code>) stagger a per-character animation; <code>pulse</code> fades the whole status; <code>none</code> disables it. All modes honor <code>prefers-reduced-motion</code>. The controls in the rail update these values live via <code>handle.update(config)</code>, so the running widget re-renders without losing the transcript.</p>
         </div>
       </section>
     </main>

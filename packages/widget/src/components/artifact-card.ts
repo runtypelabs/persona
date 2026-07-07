@@ -1,6 +1,7 @@
 import type { ComponentContext, ComponentRenderer } from "./registry";
 import type { PersonaArtifactFileMeta } from "../types";
 import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
+import { appendCharSpans } from "../utils/tool-loading-animation";
 
 /**
  * Default artifact card renderer.
@@ -8,7 +9,7 @@ import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
  */
 function renderDefaultArtifactCard(
   props: Record<string, unknown>,
-  _context: ComponentContext
+  context: ComponentContext
 ): HTMLElement {
   const file =
     props.file && typeof props.file === "object" && !Array.isArray(props.file)
@@ -67,16 +68,35 @@ function renderDefaultArtifactCard(
   subtitleEl.style.color = "var(--persona-muted, #9ca3af)";
 
   if (status === "streaming") {
-    // Pulsing dot for streaming status
-    const dot = document.createElement("span");
-    dot.className = "persona-inline-block persona-w-1.5 persona-h-1.5 persona-rounded-full";
-    dot.style.backgroundColor = "var(--persona-primary, #171717)";
-    dot.style.animation = "persona-pulse 1.5s ease-in-out infinite";
-    subtitleEl.appendChild(dot);
+    const artifactsCfg = context?.config?.features?.artifacts;
+    const loadingAnimation = artifactsCfg?.loadingAnimation ?? "shimmer";
+    const duration = artifactsCfg?.loadingAnimationDuration ?? 2000;
+    const text = `Generating ${subtitle.toLowerCase()}...`;
 
     const statusText = document.createElement("span");
-    statusText.textContent = `Generating ${subtitle.toLowerCase()}...`;
     subtitleEl.appendChild(statusText);
+
+    if (loadingAnimation === "none") {
+      statusText.textContent = text;
+    } else if (loadingAnimation === "pulse") {
+      statusText.setAttribute("data-preserve-animation", "true");
+      statusText.classList.add("persona-tool-loading-pulse");
+      statusText.style.setProperty("--persona-tool-anim-duration", `${duration}ms`);
+      statusText.textContent = text;
+    } else {
+      statusText.setAttribute("data-preserve-animation", "true");
+      statusText.classList.add(`persona-tool-loading-${loadingAnimation}`);
+      statusText.style.setProperty("--persona-tool-anim-duration", `${duration}ms`);
+      if (loadingAnimation === "shimmer-color") {
+        if (artifactsCfg?.loadingAnimationColor) {
+          statusText.style.setProperty("--persona-tool-anim-color", artifactsCfg.loadingAnimationColor);
+        }
+        if (artifactsCfg?.loadingAnimationSecondaryColor) {
+          statusText.style.setProperty("--persona-tool-anim-secondary-color", artifactsCfg.loadingAnimationSecondaryColor);
+        }
+      }
+      appendCharSpans(statusText, text, 0);
+    }
   } else {
     subtitleEl.textContent = subtitle;
   }

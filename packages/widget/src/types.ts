@@ -890,6 +890,32 @@ export type AgentWidgetArtifactsFeature = {
     config: AgentWidgetConfig;
     defaultRenderer: () => HTMLElement;
   }) => HTMLElement | null;
+  /**
+   * Animation applied to the artifact card's "Generating …" status text while
+   * the artifact streams. Character-by-character modes (`shimmer`,
+   * `shimmer-color`, `rainbow`) wrap each character in a span with a staggered
+   * `animation-delay`; `pulse` fades the whole status text; `none` disables the
+   * animation. Honors `prefers-reduced-motion`.
+   * @default "shimmer"
+   */
+  loadingAnimation?: AgentWidgetToolCallLoadingAnimation;
+  /**
+   * Duration of one full animation cycle in milliseconds.
+   * Applies to pulse, shimmer, shimmer-color, and rainbow modes.
+   * @default 2000
+   */
+  loadingAnimationDuration?: number;
+  /**
+   * Primary color for shimmer-color animation mode.
+   * Defaults to the current text color.
+   */
+  loadingAnimationColor?: string;
+  /**
+   * Secondary/end color for shimmer-color animation mode.
+   * Creates a gradient sweep between `loadingAnimationColor` and this color.
+   * @default "#3b82f6"
+   */
+  loadingAnimationSecondaryColor?: string;
 };
 
 /**
