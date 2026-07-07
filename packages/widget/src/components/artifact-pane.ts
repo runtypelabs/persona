@@ -1,6 +1,7 @@
 import { createElement } from "../utils/dom";
 import type { AgentWidgetConfig, AgentWidgetMessage, PersonaArtifactRecord } from "../types";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors";
+import { getMarkdownParsersSync, loadMarkdownParsers } from "../markdown-parsers-loader";
 import { resolveSanitizer } from "../utils/sanitize";
 import { componentRegistry, type ComponentContext } from "./registry";
 import { renderLucideIcon } from "../utils/icons";
@@ -47,9 +48,29 @@ export function createArtifactPane(
 
   const md = config.markdown ? createMarkdownProcessorFromConfig(config.markdown) : null;
   const sanitize = resolveSanitizer(config.sanitize);
+  // Degraded path (IIFE/CDN build before the `markdown-parsers.js` chunk
+  // resolves): the markdown processor falls back to escapeHtml, and the default
+  // sanitizer's own fallback is escapeHtml too, so sanitizing that output would
+  // escape a SECOND time and display literal entities (mirrors
+  // `buildPostprocessor` in ui.ts). Chat messages self-heal via the
+  // parser-ready re-render at the end of createAgentExperience, but this pane
+  // only re-renders on update()/user interaction — so an artifact upserted
+  // right after init would stay escaped until a tab switch. When a render takes
+  // the fallback, schedule exactly one re-render for when the chunk lands.
+  let parserRerenderScheduled = false;
   const toHtml = (text: string) => {
+    const parsersReady = getMarkdownParsersSync() !== null;
+    if (md && !parsersReady && !parserRerenderScheduled) {
+      parserRerenderScheduled = true;
+      loadMarkdownParsers()
+        .then(() => render())
+        .catch(() => {
+          /* chunk failed to load (e.g. ad blocker): keep the escaped fallback */
+        });
+    }
     const raw = md ? md(text) : escapeHtml(text);
-    return sanitize ? sanitize(raw) : raw;
+    // escapeHtml output is already inert — only real markdown HTML is sanitized.
+    return md && parsersReady && sanitize ? sanitize(raw) : raw;
   };
 
   const backdrop =
