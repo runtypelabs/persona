@@ -157,6 +157,110 @@ describe("component directive bubble: listener preservation across morphs", () =
     controller.destroy();
   });
 
+  it("renders a bubbleChrome:false component bare (no persona-message-bubble ancestor) under default config", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      parserType: "json",
+      enableComponentStreaming: true,
+      components: {},
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+
+    componentRegistry.register(
+      "BareCard",
+      ((props) => {
+        const el = document.createElement("div");
+        el.setAttribute("data-test-id", "bare-card");
+        el.textContent = String(props.label ?? "");
+        return el;
+      }) satisfies ComponentRenderer,
+      { bubbleChrome: false }
+    );
+
+    directiveMessage(controller, {
+      id: "bare-1",
+      rawContent: JSON.stringify({ component: "BareCard", props: { label: "hello" } }),
+    });
+
+    const card = mount.querySelector<HTMLElement>('[data-test-id="bare-card"]');
+    expect(card).not.toBeNull();
+    // No message-bubble chrome around the bare directive.
+    expect(card!.closest(".persona-message-bubble")).toBeNull();
+    // The bare stack wrapper is present instead.
+    expect(card!.closest('[data-persona-component-directive="true"]')).not.toBeNull();
+
+    controller.destroy();
+  });
+
+  it("wraps a component without bubbleChrome:false in the message bubble under default config", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      parserType: "json",
+      enableComponentStreaming: true,
+      components: {},
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+
+    componentRegistry.register(
+      "ChromeCard",
+      ((props) => {
+        const el = document.createElement("div");
+        el.setAttribute("data-test-id", "chrome-card");
+        el.textContent = String(props.label ?? "");
+        return el;
+      }) satisfies ComponentRenderer
+    );
+
+    directiveMessage(controller, {
+      id: "chrome-1",
+      rawContent: JSON.stringify({ component: "ChromeCard", props: { label: "hello" } }),
+    });
+
+    const card = mount.querySelector<HTMLElement>('[data-test-id="chrome-card"]');
+    expect(card).not.toBeNull();
+    expect(card!.closest(".persona-message-bubble")).not.toBeNull();
+
+    controller.destroy();
+  });
+
+  it("unwraps every component when wrapComponentDirectiveInBubble is false", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      parserType: "json",
+      enableComponentStreaming: true,
+      wrapComponentDirectiveInBubble: false,
+      components: {},
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+
+    // A component with default (chrome) options still renders bare when the
+    // global flag is off.
+    componentRegistry.register(
+      "ChromeCard",
+      ((props) => {
+        const el = document.createElement("div");
+        el.setAttribute("data-test-id", "chrome-card");
+        el.textContent = String(props.label ?? "");
+        return el;
+      }) satisfies ComponentRenderer
+    );
+
+    directiveMessage(controller, {
+      id: "off-1",
+      rawContent: JSON.stringify({ component: "ChromeCard", props: { label: "hello" } }),
+    });
+
+    const card = mount.querySelector<HTMLElement>('[data-test-id="chrome-card"]');
+    expect(card).not.toBeNull();
+    expect(card!.closest(".persona-message-bubble")).toBeNull();
+    expect(card!.closest('[data-persona-component-directive="true"]')).not.toBeNull();
+
+    controller.destroy();
+  });
+
   it("falls back to the standard render path when the directive component is not registered", () => {
     const mount = createMount();
     const controller = createAgentExperience(mount, {

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { PersonaArtifactCard } from "./artifact-card";
+import { componentRegistry, type ComponentRenderer } from "./registry";
 import type { ComponentContext } from "./registry";
 import type { AgentWidgetArtifactsFeature, AgentWidgetConfig } from "../types";
 
@@ -109,6 +110,16 @@ describe("PersonaArtifactCard streaming status", () => {
     ).toBe("3000ms");
   });
 
+  it("sets the root radius to follow the assistant bubble radius chain", () => {
+    const root = render(streamingProps);
+
+    // Standalone card must not hardcode the rounded-xl utility class.
+    expect(root.classList.contains("persona-rounded-xl")).toBe(false);
+    expect(root.style.borderRadius).toBe(
+      "var(--persona-artifact-card-radius, var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem)))"
+    );
+  });
+
   it("renders the complete state with a Download button and no animation", () => {
     const root = render({
       artifactId: "a1",
@@ -128,5 +139,39 @@ describe("PersonaArtifactCard streaming status", () => {
     expect(dl!.textContent).toBe("Download");
     // Subtitle shows the file type label, not a "Generating" status.
     expect(root.textContent).not.toContain("Generating");
+  });
+});
+
+describe("componentRegistry registration options", () => {
+  const noop: ComponentRenderer = () => document.createElement("div");
+
+  afterEach(() => {
+    componentRegistry.unregister("OptTest");
+  });
+
+  it("registers the built-in artifact card with bubbleChrome:false", () => {
+    expect(componentRegistry.getOptions("PersonaArtifactCard")?.bubbleChrome).toBe(false);
+  });
+
+  it("returns the options passed to register", () => {
+    componentRegistry.register("OptTest", noop, { bubbleChrome: false });
+    expect(componentRegistry.getOptions("OptTest")).toEqual({ bubbleChrome: false });
+  });
+
+  it("returns undefined when a component is registered without options", () => {
+    componentRegistry.register("OptTest", noop);
+    expect(componentRegistry.getOptions("OptTest")).toBeUndefined();
+  });
+
+  it("clears prior options when re-registered without options", () => {
+    componentRegistry.register("OptTest", noop, { bubbleChrome: false });
+    componentRegistry.register("OptTest", noop);
+    expect(componentRegistry.getOptions("OptTest")).toBeUndefined();
+  });
+
+  it("drops options on unregister", () => {
+    componentRegistry.register("OptTest", noop, { bubbleChrome: false });
+    componentRegistry.unregister("OptTest");
+    expect(componentRegistry.getOptions("OptTest")).toBeUndefined();
   });
 });

@@ -516,6 +516,14 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-intro-card-shadow
 ```
 
+### Artifact Card Aliases
+
+```css
+--persona-artifact-card-radius
+```
+
+`--persona-artifact-card-radius` overrides the corner radius of the standalone artifact reference card. When unset it falls back to the assistant bubble radius (`--persona-message-assistant-radius`), so cards match message bubbles by default.
+
 ---
 
 ## Launcher (`config.launcher.*`)

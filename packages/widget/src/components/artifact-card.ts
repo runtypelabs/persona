@@ -34,7 +34,11 @@ function renderDefaultArtifactCard(
 
   const root = document.createElement("div");
   root.className =
-    "persona-flex persona-w-full persona-max-w-full persona-items-center persona-gap-3 persona-rounded-xl persona-px-4 persona-py-3";
+    "persona-flex persona-w-full persona-max-w-full persona-items-center persona-gap-3 persona-px-4 persona-py-3";
+  // Match the assistant bubble radius by default; themeable independently
+  // via --persona-artifact-card-radius.
+  root.style.borderRadius =
+    "var(--persona-artifact-card-radius, var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem)))";
   root.style.border = "1px solid var(--persona-border, #e5e7eb)";
   root.style.backgroundColor = "var(--persona-surface, #ffffff)";
   root.style.cursor = "pointer";

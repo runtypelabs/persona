@@ -4012,7 +4012,12 @@ export const createAgentExperience = (
         if (directive) {
           const lastFp = lastComponentDirectiveFingerprint.get(message.id);
           const needsRebuild = lastFp !== fingerprint;
-          const wrapChrome = config.wrapComponentDirectiveInBubble !== false;
+          // Wrap only when the global default allows it AND the component has
+          // not opted out of bubble chrome (e.g. the artifact card carries its
+          // own border, so it renders bare).
+          const wrapChrome =
+            config.wrapComponentDirectiveInBubble !== false &&
+            componentRegistry.getOptions(directive.component)?.bubbleChrome !== false;
           let liveBubble: HTMLElement | null = null;
 
           if (needsRebuild) {

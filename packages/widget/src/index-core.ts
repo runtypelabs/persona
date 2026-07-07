@@ -361,7 +361,11 @@ export type {
 
 // Component system exports
 export { componentRegistry } from "./components/registry";
-export type { ComponentRenderer, ComponentContext } from "./components/registry";
+export type {
+  ComponentRenderer,
+  ComponentContext,
+  ComponentRegistrationOptions
+} from "./components/registry";
 export {
   createComponentStreamParser,
   isComponentDirectiveType
