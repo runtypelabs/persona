@@ -1,7 +1,7 @@
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
-import { loadMarkdownParsers, getMarkdownParsersSync } from "./markdown-parsers-loader";
+import { onMarkdownParsersReady, getMarkdownParsersSync } from "./markdown-parsers-loader";
 import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
 import {
   AgentWidgetConfig,
@@ -8660,18 +8660,17 @@ export const createAgentExperience = (
   // bust the message cache and re-render so they pick up real markdown. Bumping
   // `configVersion` + clearing the cache is required because the message
   // content is unchanged, so the fingerprint cache would otherwise reuse the
-  // stale escaped wrappers. No-op for the ESM build (parsers ready at init).
+  // stale escaped wrappers. `onMarkdownParsersReady` no-ops when the parsers are
+  // already loaded (the ESM build, and the CDN build after the first load), so
+  // the `markdownReadyAtInit` guard is redundant — kept only to skip the
+  // subscription bookkeeping on the common eager path.
   if (!markdownReadyAtInit) {
-    loadMarkdownParsers()
-      .then(() => {
-        if (!session) return;
-        configVersion++;
-        messageCache.clear();
-        renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
-      })
-      .catch(() => {
-        /* chunk failed to load (e.g. ad blocker): keep the escaped fallback */
-      });
+    onMarkdownParsersReady(() => {
+      if (!session) return;
+      configVersion++;
+      messageCache.clear();
+      renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+    });
   }
 
   return controller;

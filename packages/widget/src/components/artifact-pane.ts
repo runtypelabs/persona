@@ -1,6 +1,7 @@
 import { createElement } from "../utils/dom";
 import type { AgentWidgetConfig, AgentWidgetMessage, PersonaArtifactRecord } from "../types";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors";
+import { getMarkdownParsersSync, onMarkdownParsersReady } from "../markdown-parsers-loader";
 import { resolveSanitizer } from "../utils/sanitize";
 import { componentRegistry, type ComponentContext } from "./registry";
 import { renderLucideIcon } from "../utils/icons";
@@ -48,8 +49,15 @@ export function createArtifactPane(
   const md = config.markdown ? createMarkdownProcessorFromConfig(config.markdown) : null;
   const sanitize = resolveSanitizer(config.sanitize);
   const toHtml = (text: string) => {
+    const parsersReady = getMarkdownParsersSync() !== null;
     const raw = md ? md(text) : escapeHtml(text);
-    return sanitize ? sanitize(raw) : raw;
+    // Degraded path (IIFE/CDN build before the `markdown-parsers.js` chunk
+    // resolves): the markdown processor falls back to escapeHtml, and the
+    // default sanitizer's own fallback is escapeHtml too, so sanitizing that
+    // output would escape a SECOND time and display literal entities (mirrors
+    // `buildPostprocessor` in ui.ts). escapeHtml output is already inert, so
+    // only sanitize real parsed markdown.
+    return md && parsersReady && sanitize ? sanitize(raw) : raw;
   };
 
   const backdrop =
@@ -420,6 +428,13 @@ export function createArtifactPane(
       }
     }
   };
+
+  // Self-heal on the IIFE/CDN build: an artifact upserted right after init (before
+  // `markdown-parsers.js` resolves) renders as escaped plain text via `toHtml`'s
+  // fallback, and this pane otherwise only re-renders on update()/interaction.
+  // Chat messages share this exact hook; centralizing it means a surface can't
+  // silently miss the parser-ready re-render. No-op once parsers are loaded.
+  onMarkdownParsersReady(() => render());
 
   return {
     element: shell,
