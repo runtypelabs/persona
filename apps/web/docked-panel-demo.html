@@ -51,11 +51,19 @@
       --nav-active: #ededed;
       --canvas-inset: #f6f6f7;
 
-      /* Otto brand (violet — deliberately our own, not a borrowed accent) */
+      /* Otto brand (violet — deliberately our own, not a borrowed accent).
+         These are LIVE tokens: the Copilot-settings swatches (and Otto's own
+         restyle_copilot tool) swap them at runtime, so every Otto-owned
+         surface below references them instead of hardcoding a hue. */
       --brand: #5e56e7;
       --brand-600: #4f47d6;
       --brand-700: #4038c4;
+      --brand-2: #7c6cf5;         /* gradient mid tone */
+      --brand-bright: #b7adff;    /* gradient highlight */
       --brand-soft: #efeefe;
+      /* Corner-rounding knobs (Copilot settings → Corners) */
+      --otto-radius: 14px;        /* composer, user bubble */
+      --otto-radius-sm: 10px;     /* chips, tool strip */
       --pos: #067a57;              /* positive delta green */
       --pos-soft: #e3f5ec;
       --warn: #b98900;             /* low-stock amber */
@@ -170,12 +178,12 @@
     #assistant-toggle svg { width: 19px; height: 19px; }
     #assistant-toggle:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
     #assistant-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-    /* Selected: a soft violet "well" — a quiet, tasteful on-state (no neon). */
+    /* Selected: a soft accent "well" — a quiet, tasteful on-state (no neon). */
     #assistant-toggle.is-active {
-      background: rgba(124, 108, 245, 0.22);
-      border-color: rgba(124, 108, 245, 0.45);
-      color: #e7e3ff;
-      box-shadow: inset 0 0 0 1px rgba(124, 108, 245, 0.2);
+      background: color-mix(in srgb, var(--brand-2) 22%, transparent);
+      border-color: color-mix(in srgb, var(--brand-2) 45%, transparent);
+      color: color-mix(in srgb, var(--brand-bright) 35%, #fff);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-2) 20%, transparent);
     }
     /* Pre-open nudge: one gentle breathing ring so a first-time viewer notices
        Otto without a loud banner. Stops the moment the panel is opened. */
@@ -183,8 +191,8 @@
       animation: otto-hint 2.6s ease-in-out 1.2s 3 both;
     }
     @keyframes otto-hint {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(124, 108, 245, 0); }
-      50% { box-shadow: 0 0 0 5px rgba(124, 108, 245, 0.16); background: rgba(255, 255, 255, 0.10); }
+      0%, 100% { box-shadow: 0 0 0 0 transparent; }
+      50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--brand-2) 16%, transparent); background: rgba(255, 255, 255, 0.10); }
     }
     @media (prefers-reduced-motion: reduce) {
       #assistant-toggle.assistant-toggle--hint { animation: none; }
@@ -247,11 +255,11 @@
       margin-right: 4px;
       padding: 5px 11px;
       border-radius: 999px;
-      background: rgba(124, 108, 245, 0.16);
-      border: 1px solid rgba(124, 108, 245, 0.32);
+      background: color-mix(in srgb, var(--brand-2) 16%, transparent);
+      border: 1px solid color-mix(in srgb, var(--brand-2) 32%, transparent);
       font-size: 12.5px;
       font-weight: 550;
-      color: #e7e3ff;
+      color: color-mix(in srgb, var(--brand-bright) 35%, #fff);
       white-space: nowrap;
       pointer-events: none;
       opacity: 0;
@@ -424,9 +432,73 @@
     .feed-title { font-size: 13.5px; font-weight: 550; color: var(--ink); }
     .feed-item > span:last-child { font-size: 13px; color: var(--muted); line-height: 1.5; }
 
-    /* Dock settings card */
+    /* Copilot settings card (placement + appearance knobs) */
     .dock-settings-card__inner { padding: 16px 18px 4px; }
-    .dock-settings-card__title { margin: 0 0 14px; font-size: 14px; font-weight: 600; color: var(--ink); }
+    .dock-settings-card__title { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
+    .dock-settings-card__sub { margin: 3px 0 16px; font-size: 12.5px; color: var(--muted); }
+    .settings-group-label {
+      margin: 0 0 10px;
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-subtle);
+    }
+    .settings-divider { height: 1px; background: var(--border); margin: 16px 0 14px; }
+    /* Accent swatches */
+    .swatches { display: flex; align-items: center; gap: 9px; padding-bottom: 5px; }
+    .swatch {
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: var(--sw);
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .swatch:hover { transform: scale(1.1); }
+    .swatch:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    .swatch[aria-checked="true"] {
+      box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--sw);
+      transform: scale(1.05);
+    }
+    /* Corner-radius slider */
+    .knob-range { display: flex; align-items: center; gap: 10px; height: 34px; }
+    .knob-range input[type="range"] {
+      width: 150px;
+      min-width: 0;
+      height: auto;
+      padding: 0;
+      border: none;
+      accent-color: var(--brand);
+    }
+    .knob-readout {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--muted);
+      min-width: 34px;
+    }
+    /* Segmented control (working-animation style) */
+    .segmented { display: inline-flex; gap: 2px; padding: 3px; background: #f0f0f0; border-radius: 9px; }
+    .segmented button {
+      border: none;
+      background: transparent;
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 550;
+      color: var(--muted);
+      padding: 5px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+    .segmented button:hover { color: var(--ink); }
+    .segmented button[aria-checked="true"] {
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
     .dock-settings__row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; }
     .dock-settings__field { display: flex; flex-direction: column; gap: 6px; }
     .dock-settings__field label { font-size: 12.5px; font-weight: 550; color: var(--ink-2); }
@@ -443,7 +515,7 @@
       min-width: 130px;
     }
     .dock-settings__field select:focus,
-    .dock-settings__field input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(94, 86, 231, 0.15); }
+    .dock-settings__field input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 15%, transparent); }
     .dock-settings__field input#dock-width { min-width: 110px; width: 8rem; }
     .dock-settings__check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink-2); cursor: pointer; user-select: none; padding-bottom: 8px; }
     .dock-settings__check input { width: 1rem; height: 1rem; accent-color: var(--brand); margin: 0; }
@@ -480,6 +552,12 @@
     }
     [data-persona-dock-role="content"] { overflow: hidden; border-radius: 0; }
     [data-persona-dock-role="host"] .persona-rounded-button { border-radius: 0 !important; }
+    /* Height chain through the widget's dock wrapper: the content wrapper above
+       is viewport-sized with overflow hidden, so the dock target and canvas
+       must inherit that bound — otherwise the canvas grows to fit and its own
+       overflow:auto never engages (the dashboard couldn't scroll). */
+    #workspace-dock-target { height: 100%; min-height: 0; }
+    .workspace-canvas { height: 100%; }
 
     /* ==========================================================================
        OTTO — Persona widget theming (first-party store-copilot look, our own palette).
@@ -490,14 +568,14 @@
        ========================================================================== */
     [data-persona-root],
     [data-persona-theme-zone] {
-      --persona-primary: #5e56e7 !important;
-      --persona-secondary: #7c6cf5 !important;
-      --persona-accent: #5e56e7 !important;
-      --persona-call-to-action: #5e56e7 !important;
+      --persona-primary: var(--brand) !important;
+      --persona-secondary: var(--brand-2) !important;
+      --persona-accent: var(--brand) !important;
+      --persona-call-to-action: var(--brand) !important;
       --persona-surface: #ffffff !important;
       --persona-container: #ffffff !important;
       --persona-input-background: #ffffff !important;
-      --persona-button-primary-bg: #5e56e7 !important;
+      --persona-button-primary-bg: var(--brand) !important;
       --persona-button-primary-fg: #ffffff !important;
       --persona-text: #303030 !important;
       --persona-text-inverse: #ffffff !important;
@@ -506,7 +584,7 @@
       --persona-border: #e3e3e3 !important;
       --persona-divider: #ececec !important;
       --persona-message-border: #eceef3 !important;
-      --persona-md-link-color: #5e56e7 !important;
+      --persona-md-link-color: var(--brand) !important;
     }
 
     /* Header — flush white bar with an Otto identity, matching a first-party
@@ -518,11 +596,11 @@
       border-bottom: 1px solid #ececec !important;
     }
     .persona-widget-header * { color: var(--ink) !important; }
-    /* Header media tile → Otto's violet mark (the default is an empty square). */
+    /* Header media tile → Otto's accent mark (the default is an empty square). */
     .persona-widget-header > div:first-child {
-      background: linear-gradient(150deg, #7c6cf5 0%, #5e56e7 55%, #4038c4 100%) !important;
+      background: linear-gradient(150deg, var(--brand-2) 0%, var(--brand) 55%, var(--brand-700) 100%) !important;
       border-radius: 11px !important;
-      box-shadow: 0 2px 6px rgba(94, 86, 231, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+      box-shadow: 0 2px 6px color-mix(in srgb, var(--brand) 28%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
     }
     .persona-widget-header > div:first-child svg,
     .persona-widget-header > div:first-child svg * { color: #ffffff !important; stroke: #ffffff !important; }
@@ -554,9 +632,9 @@
       margin: 0 auto 16px;
       border-radius: 13px;
       background:
-        radial-gradient(circle at 32% 28%, #a89bff 0%, #7c6cf5 42%, #5e56e7 72%, #4038c4 100%);
+        radial-gradient(circle at 32% 28%, var(--brand-bright) 0%, var(--brand-2) 42%, var(--brand) 72%, var(--brand-700) 100%);
       box-shadow:
-        0 6px 16px rgba(94, 86, 231, 0.34),
+        0 6px 16px color-mix(in srgb, var(--brand) 34%, transparent),
         inset 0 1px 0 rgba(255, 255, 255, 0.45);
     }
     [data-persona-intro-card] h2 {
@@ -590,7 +668,7 @@
       text-align: left;
       background: #ffffff !important;
       border: 1px solid #e3e3e3 !important;
-      border-radius: 10px !important;
+      border-radius: var(--otto-radius-sm) !important;
       color: var(--ink-2) !important;
       padding: 9px 13px !important;
       font-size: 13px !important;
@@ -599,10 +677,10 @@
       transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
     }
     [data-persona-composer-suggestions] button:hover {
-      background: #faf9ff !important;
-      border-color: #d8d4f7 !important;
+      background: color-mix(in srgb, var(--brand) 3%, #fff) !important;
+      border-color: color-mix(in srgb, var(--brand) 24%, #fff) !important;
       opacity: 1 !important;
-      box-shadow: 0 2px 8px rgba(94, 86, 231, 0.10) !important;
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--brand) 10%, transparent) !important;
     }
     [data-persona-composer-suggestions] button::before {
       content: "\2726"; /* ✦ */
@@ -614,24 +692,26 @@
     [data-persona-composer-suggestions] button::after {
       content: "\2192"; /* → */
       margin-left: auto;
-      color: #b9b4e8;
+      color: color-mix(in srgb, var(--brand) 40%, #fff);
       font-size: 15px;
       line-height: 1;
       flex: none;
     }
 
-    /* Composer — a single rounded field with a soft violet halo above it (the
+    /* Composer — a single rounded field with a soft accent halo above it (the
        glow reads as "the assistant is listening"). */
     [data-persona-composer-form] {
       border: 1px solid #e3e3e3 !important;
-      border-radius: 14px !important;
+      border-radius: var(--otto-radius) !important;
       background: #ffffff !important;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+      /* No border-radius transition: a mid-flight CSS transition outranks even
+         !important declarations, so a stuck one froze the corner knob. */
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
     [data-persona-composer-form]:focus-within {
-      border-color: #c4bdf5 !important;
-      box-shadow: 0 0 0 3px rgba(94, 86, 231, 0.12), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+      border-color: color-mix(in srgb, var(--brand) 32%, #fff) !important;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
     }
     [data-persona-theme-zone="composer"] { position: relative; }
     [data-persona-theme-zone="composer"]::before {
@@ -640,22 +720,22 @@
       left: 0; right: 0; top: -26px;
       height: 26px;
       pointer-events: none;
-      background: linear-gradient(180deg, rgba(124, 108, 245, 0) 0%, rgba(124, 108, 245, 0.07) 100%);
+      background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--brand-2) 7%, transparent) 100%);
     }
-    /* Circular violet submit with the paper-plane it already renders. */
+    /* Circular accent submit with the paper-plane it already renders. */
     [data-persona-composer-submit] {
       border-radius: 50% !important;
-      background: #5e56e7 !important;
+      background: var(--brand) !important;
       color: #ffffff !important;
     }
-    [data-persona-composer-submit]:hover { background: #4f47d6 !important; }
+    [data-persona-composer-submit]:hover { background: var(--brand-600) !important; }
 
     /* Messages — right-aligned gray user pill, plain-text assistant. */
     .persona-message-user-bubble {
       background: #f1f1f1 !important;
       color: #303030 !important;
       border: none !important;
-      border-radius: 14px !important;
+      border-radius: var(--otto-radius) !important;
       box-shadow: none !important;
     }
     .persona-message-user-bubble * { color: #303030 !important; }
@@ -666,14 +746,14 @@
       padding-left: 2px !important;
     }
 
-    /* Tool group — a quiet "steps" strip with a slow violet gradient accent
-       flowing along the top edge (the running step itself gets the widget's
-       built-in shimmer-color animation). */
+    /* Tool group — a quiet "steps" strip with a slow accent gradient flowing
+       along the top edge (the running step itself gets the widget's built-in
+       shimmer-color animation). */
     [data-persona-tool-group] {
       position: relative;
       background: #ffffff !important;
       border: 1px solid #eceef3 !important;
-      border-radius: 10px !important;
+      border-radius: var(--otto-radius-sm) !important;
       overflow: hidden;
     }
     [data-persona-tool-group]::before {
@@ -683,7 +763,7 @@
       right: 0;
       top: 0;
       height: 2px;
-      background: linear-gradient(90deg, #5e56e7, #b7adff, #7c6cf5, #5e56e7);
+      background: linear-gradient(90deg, var(--brand), var(--brand-bright), var(--brand-2), var(--brand));
       background-size: 220% 100%;
       animation: otto-toolgrad 3.4s linear infinite;
       opacity: 0.85;
@@ -911,10 +991,47 @@
                     </div>
                   </section>
 
-                  <!-- Assistant dock settings (demo control; Otto can drive this too) -->
+                  <!-- Copilot settings: placement + appearance knobs. Everything
+                       here is also drivable by Otto itself (set_dock_layout /
+                       restyle_copilot), so the card doubles as the demo's
+                       "look what the page exposes" surface. -->
                   <section class="card dock-settings-card" aria-labelledby="dock-settings-heading">
                     <div class="dock-settings-card__inner">
-                      <h4 class="dock-settings-card__title" id="dock-settings-heading">Assistant dock</h4>
+                      <h4 class="dock-settings-card__title" id="dock-settings-heading">Copilot</h4>
+                      <p class="dock-settings-card__sub">Appearance updates live as you play — or ask Otto to restyle itself. Placement applies on Apply.</p>
+
+                      <p class="settings-group-label">Appearance</p>
+                      <div class="dock-settings__row">
+                        <div class="dock-settings__field">
+                          <label id="accent-label">Accent</label>
+                          <div class="swatches" id="accent-swatches" role="radiogroup" aria-labelledby="accent-label">
+                            <button type="button" class="swatch" role="radio" aria-checked="true" data-accent="violet" style="--sw:#5e56e7" aria-label="Violet" title="Violet"></button>
+                            <button type="button" class="swatch" role="radio" aria-checked="false" data-accent="ocean" style="--sw:#0f7ac4" aria-label="Ocean" title="Ocean"></button>
+                            <button type="button" class="swatch" role="radio" aria-checked="false" data-accent="forest" style="--sw:#177a53" aria-label="Forest" title="Forest"></button>
+                            <button type="button" class="swatch" role="radio" aria-checked="false" data-accent="ember" style="--sw:#c2410c" aria-label="Ember" title="Ember"></button>
+                          </div>
+                        </div>
+                        <div class="dock-settings__field">
+                          <label for="otto-radius">Corners</label>
+                          <div class="knob-range">
+                            <input id="otto-radius" type="range" min="4" max="22" step="1" value="14" autocomplete="off" />
+                            <span class="knob-readout" id="otto-radius-readout">14px</span>
+                          </div>
+                        </div>
+                        <div class="dock-settings__field">
+                          <label id="anim-label">Working animation</label>
+                          <div class="segmented" id="otto-anim" role="radiogroup" aria-labelledby="anim-label">
+                            <button type="button" role="radio" aria-checked="true" data-anim="shimmer-color">Shimmer</button>
+                            <button type="button" role="radio" aria-checked="false" data-anim="rainbow">Rainbow</button>
+                            <button type="button" role="radio" aria-checked="false" data-anim="pulse">Pulse</button>
+                            <button type="button" role="radio" aria-checked="false" data-anim="none">Off</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="settings-divider" role="presentation"></div>
+
+                      <p class="settings-group-label">Placement</p>
                       <div class="dock-settings__row">
                         <div class="dock-settings__field">
                           <label for="dock-side">Side</label>

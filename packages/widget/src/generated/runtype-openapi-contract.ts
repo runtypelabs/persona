@@ -41,6 +41,7 @@ export type RuntypeExecutionStreamEvent = ({
 };
   type: "execution_complete";
 }) | ({
+  blockReason?: string;
   code?: string;
   completedAt?: string;
   error: string | {
@@ -295,6 +296,7 @@ export type RuntypeExecutionStreamEvent = ({
   startedAt?: string;
   subagent?: {
   agentName?: string;
+  parentToolCallId?: string;
   toolName: string;
 };
   timeout?: number;
@@ -389,6 +391,7 @@ export type RuntypeFlowSSEEvent = {
   totalTokensUsed?: number;
   type: "flow_complete";
 } | ({
+  blockReason?: string;
   code?: string;
   error: string | {
   code: string;
@@ -409,6 +412,7 @@ export type RuntypeFlowSSEEvent = {
   type: "flow_error";
   upgradeUrl?: string;
 }) | ({
+  approvalId?: string;
   awaitReason?: string;
   awaitedAt: string;
   crawlId?: string;
@@ -419,6 +423,7 @@ export type RuntypeFlowSSEEvent = {
   parameters?: Record<string, unknown>;
   seq?: number;
   stepId?: string;
+  timeout?: number;
   toolCallId?: string;
   toolId?: string;
   toolName?: string;
@@ -673,7 +678,7 @@ export type RuntypeClientInitResponse = {
   welcomeMessage?: string | null;
 };
   expiresAt: string;
-  flow: {
+  flow?: {
   description?: string | null;
   id: string;
   name?: string | null;
@@ -695,6 +700,10 @@ export type RuntypeClientChatRequest = {
   untrustedContentHint?: boolean;
 }>;
   clientToolsFingerprint?: string;
+  identityProof?: {
+  provider: string;
+  token: string;
+};
   inputs?: Record<string, unknown>;
   messages: Array<{
   content: string | (Array<{

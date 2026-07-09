@@ -4,17 +4,26 @@
 // transcript (via controller.injectComponentDirective) when its WebMCP tools
 // run: an area "sales trend" chart and a ranked "top products" bar chart. The
 // look matches the admin's card system (white surface, hairline border, Inter,
-// a single violet brand hue) so a chart reads as first-party output, not a
+// a single accent hue) so a chart reads as first-party output, not a
 // bolted-on widget. Renderers take plain props and return DOM — no state.
 
 import type { ComponentRenderer } from "@runtypelabs/persona";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const BRAND = "#5e56e7";
-const BRAND_SOFT = "rgba(94, 86, 231, 0.16)";
 const INK = "#1a1a1a";
 const MUTED = "#616161";
 const POS = "#067a57";
+
+/** Read the live accent from the page tokens (the appearance knobs rewrite
+ *  --brand at runtime), so charts rendered after a restyle match the copilot. */
+function brandColor(): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue("--brand").trim();
+  return v || "#5e56e7";
+}
+
+/** Unique gradient id per render: charts rendered under different accents each
+ *  keep their own <defs> (a shared id would repaint old charts' fills). */
+let gradSeq = 0;
 
 type Point = { label: string; value: number };
 
@@ -112,11 +121,13 @@ export const OttoSalesChart: ComponentRenderer = (props) => {
   const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, preserveAspectRatio: "none" });
   (svg as SVGElement).style.cssText = "display:block;overflow:visible";
 
-  // gradient def
+  // gradient def (accent sampled at render time, id unique per chart)
+  const accent = brandColor();
+  const gradId = `otto-area-grad-${++gradSeq}`;
   const defs = svgEl("defs", {});
-  const grad = svgEl("linearGradient", { id: "otto-area-grad", x1: "0", y1: "0", x2: "0", y2: "1" });
-  grad.appendChild(svgEl("stop", { offset: "0%", "stop-color": BRAND, "stop-opacity": "0.22" }));
-  grad.appendChild(svgEl("stop", { offset: "100%", "stop-color": BRAND, "stop-opacity": "0" }));
+  const grad = svgEl("linearGradient", { id: gradId, x1: "0", y1: "0", x2: "0", y2: "1" });
+  grad.appendChild(svgEl("stop", { offset: "0%", "stop-color": accent, "stop-opacity": "0.22" }));
+  grad.appendChild(svgEl("stop", { offset: "100%", "stop-color": accent, "stop-opacity": "0" }));
   defs.appendChild(grad);
   svg.appendChild(defs);
 
@@ -126,12 +137,12 @@ export const OttoSalesChart: ComponentRenderer = (props) => {
 
     const linePts = points.map((p, i) => `${x(i)},${y(p.value)}`).join(" ");
     const areaPts = `0,${H - padY} ${linePts} ${W},${H - padY}`;
-    svg.appendChild(svgEl("polygon", { points: areaPts, fill: "url(#otto-area-grad)" }));
+    svg.appendChild(svgEl("polygon", { points: areaPts, fill: `url(#${gradId})` }));
     svg.appendChild(
       svgEl("polyline", {
         points: linePts,
         fill: "none",
-        stroke: BRAND,
+        stroke: accent,
         "stroke-width": 2.25,
         "stroke-linejoin": "round",
         "stroke-linecap": "round",
@@ -139,7 +150,7 @@ export const OttoSalesChart: ComponentRenderer = (props) => {
     );
     // end dot
     const last = points.length - 1;
-    svg.appendChild(svgEl("circle", { cx: x(last), cy: y(points[last].value), r: 4, fill: "#fff", stroke: BRAND, "stroke-width": 2.25 }));
+    svg.appendChild(svgEl("circle", { cx: x(last), cy: y(points[last].value), r: 4, fill: "#fff", stroke: accent, "stroke-width": 2.25 }));
   }
   card.appendChild(svg);
 
@@ -180,6 +191,7 @@ export const OttoBarChart: ComponentRenderer = (props) => {
   card.appendChild(head);
 
   const max = bars.reduce((m, b) => Math.max(m, b.value), 0) || 1;
+  const accent = brandColor();
   const list = el("div", "display:flex;flex-direction:column;gap:12px");
   bars.forEach((b, i) => {
     const row = el("div", "");
@@ -197,7 +209,7 @@ export const OttoBarChart: ComponentRenderer = (props) => {
     const alpha = 1 - Math.min(i, 3) * 0.14;
     const fill = el(
       "div",
-      `position:absolute;left:0;top:0;bottom:0;width:${pct}%;border-radius:999px;background:${BRAND};opacity:${alpha.toFixed(2)}`,
+      `position:absolute;left:0;top:0;bottom:0;width:${pct}%;border-radius:999px;background:${accent};opacity:${alpha.toFixed(2)}`,
     );
     track.appendChild(fill);
     row.appendChild(track);
