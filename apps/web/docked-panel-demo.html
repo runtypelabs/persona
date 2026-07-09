@@ -666,11 +666,34 @@
       padding-left: 2px !important;
     }
 
-    /* Tool group — a quiet "steps" strip, not a loud debug console. */
+    /* Tool group — a quiet "steps" strip with a slow violet gradient accent
+       flowing along the top edge (the running step itself gets the widget's
+       built-in shimmer-color animation). */
     [data-persona-tool-group] {
+      position: relative;
       background: #ffffff !important;
       border: 1px solid #eceef3 !important;
       border-radius: 10px !important;
+      overflow: hidden;
+    }
+    [data-persona-tool-group]::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #5e56e7, #b7adff, #7c6cf5, #5e56e7);
+      background-size: 220% 100%;
+      animation: otto-toolgrad 3.4s linear infinite;
+      opacity: 0.85;
+      pointer-events: none;
+    }
+    @keyframes otto-toolgrad {
+      to { background-position: 220% 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      [data-persona-tool-group]::before { animation: none; }
     }
 
     /* ============================ RESPONSIVE ============================ */

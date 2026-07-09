@@ -51,6 +51,17 @@ const READ_ONLY_TOOLS = new Set([
   "show_top_products",
 ]);
 
+/** Plain-language [active, done] labels for Otto's grouped tool-call strip. */
+const TOOL_LABELS: Record<string, [string, string]> = {
+  get_store_overview: ["Reading your store", "Read your store"],
+  show_sales_trend: ["Charting sales", "Charted your sales trend"],
+  show_top_products: ["Ranking products", "Ranked your top products"],
+  switch_section: ["Opening a section", "Opened a section"],
+  restock_product: ["Updating inventory", "Updated inventory"],
+  log_activity: ["Logging activity", "Logged activity"],
+  set_dock_layout: ["Repositioning", "Repositioned my panel"],
+};
+
 const dockSideSelect = document.getElementById("dock-side") as HTMLSelectElement | null;
 const dockWidthInput = document.getElementById("dock-width") as HTMLInputElement | null;
 const dockRevealSelect = document.getElementById("dock-reveal") as HTMLSelectElement | null;
@@ -196,6 +207,33 @@ function createController(): AgentWidgetInitHandle {
       webmcp: {
         enabled: true,
         autoApprove: (info: WebMcpConfirmInfo): boolean => READ_ONLY_TOOLS.has(info.toolName),
+      },
+      // Group Otto's steps into one compact strip with plain-language labels,
+      // and give the running step a violet gradient shimmer.
+      features: {
+        ...DEFAULT_WIDGET_CONFIG.features,
+        showReasoning: false,
+        toolCallDisplay: {
+          ...DEFAULT_WIDGET_CONFIG.features?.toolCallDisplay,
+          collapsedMode: "tool-name",
+          grouped: true,
+          expandable: false,
+          loadingAnimation: "shimmer-color",
+        },
+      },
+      toolCall: {
+        loadingAnimationColor: "#5e56e7",
+        loadingAnimationSecondaryColor: "#b7adff",
+        loadingAnimationDuration: 1500,
+        renderCollapsedSummary: ({ toolCall, isActive }) => {
+          const label = toolCall.name ? TOOL_LABELS[toolCall.name] : undefined;
+          return label ? (isActive ? `${label[0]}…` : label[1]) : null;
+        },
+        renderGroupedSummary: ({ toolCalls }) => {
+          const active = toolCalls.some((t) => t.status !== "complete");
+          const n = toolCalls.length;
+          return active ? "Working on your store…" : `Completed ${n} ${n === 1 ? "step" : "steps"}`;
+        },
       },
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     },
