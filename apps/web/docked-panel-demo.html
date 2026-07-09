@@ -712,6 +712,13 @@
       [data-persona-tool-group]::before { animation: none; }
     }
 
+    /* Docked fullscreen extends through launcher.mobileBreakpoint (1120px),
+       beyond the compact dashboard breakpoint below. */
+    [data-persona-dock-mobile-fullscreen="true"] .persona-widget-header button {
+      min-width: 44px !important;
+      min-height: 44px !important;
+    }
+
     /* ============================ RESPONSIVE ============================ */
     @media (max-width: 1120px) {
       .workspace-main { --workspace-nav-w: 0px; }
@@ -831,12 +838,6 @@
       #apply-dock-settings { grid-column: 1 / -1; width: 100%; height: 44px; }
       .dock-settings__status { padding: 10px 14px; overflow-wrap: anywhere; }
 
-      /* The widget uses 32px header actions by default. Give its close/clear
-         controls a phone-sized hit area when the dock covers the viewport. */
-      [data-persona-dock-mobile-fullscreen="true"] .persona-widget-header button {
-        min-width: 44px !important;
-        min-height: 44px !important;
-      }
     }
   </style>
 </head>
