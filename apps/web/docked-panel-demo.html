@@ -21,7 +21,7 @@
       is our own — nothing here reuses another product's marks or palette.
     */
     * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 
     /* -- Page token overrides: replace the shared "editorial" theme with an
        admin-console palette, scoped to this page. Later :root wins over the
@@ -79,9 +79,12 @@
 
     .app-root {
       height: 100%;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       min-height: 0;
+      min-width: 0;
+      overflow: hidden;
     }
 
     /* ============================ TOP BAR ============================ */
@@ -101,6 +104,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
+      min-width: 0;
       text-decoration: none;
       color: inherit;
       user-select: none;
@@ -156,6 +160,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      min-width: 0;
     }
 
     /* Otto launcher (the docked assistant toggle) */
@@ -283,7 +288,7 @@
       display: flex;
       background: var(--background);
     }
-    .workspace-panel { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; }
+    .workspace-panel { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; overflow: hidden; }
 
     .workspace-main {
       --workspace-nav-w: 232px;
@@ -306,6 +311,13 @@
     .workspace-main[data-dock-side="left"] { display: flex; flex-direction: row; align-items: stretch; width: 100%; overflow-x: hidden; }
     .workspace-main[data-dock-side="left"] .workspace-nav { flex: 0 0 var(--workspace-nav-w); }
     .workspace-main[data-dock-side="left"] .workspace-stage { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+
+    #workspace-dock-target {
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+    }
 
     .workspace-nav {
       box-sizing: border-box;
@@ -348,6 +360,7 @@
 
     /* ============================ CANVAS ============================ */
     .workspace-canvas {
+      height: 100%;
       min-width: 0;
       min-height: 0;
       overflow: auto;
@@ -550,6 +563,9 @@
       flex: 1 1 auto; min-height: 0; height: 100%; width: 100%;
       border: none; border-radius: 0; background: #fff; box-shadow: none;
     }
+    /* Let both generated columns shrink below their contents. Without this,
+       a wide dashboard row can push the closed dock shell past the viewport. */
+    [data-persona-host-layout="docked"] > * { min-width: 0; min-height: 0; }
     [data-persona-dock-role="content"] { overflow: hidden; border-radius: 0; }
     [data-persona-dock-role="host"] .persona-rounded-button { border-radius: 0 !important; }
     /* Height chain through the widget's dock wrapper: the content wrapper above
@@ -776,6 +792,13 @@
       [data-persona-tool-group]::before { animation: none; }
     }
 
+    /* Docked fullscreen extends through launcher.mobileBreakpoint (1120px),
+       beyond the compact dashboard breakpoint below. */
+    [data-persona-dock-mobile-fullscreen="true"] .persona-widget-header button {
+      min-width: 44px !important;
+      min-height: 44px !important;
+    }
+
     /* ============================ RESPONSIVE ============================ */
     @media (max-width: 1120px) {
       .workspace-main { --workspace-nav-w: 0px; }
@@ -793,13 +816,108 @@
       .workspace-main[data-dock-side="right"] .workspace-canvas,
       .workspace-main[data-dock-side="left"] .workspace-canvas { padding-left: 20px; padding-right: 20px; }
     }
-    @media (max-width: 720px) {
+    @media (max-width: 860px) {
+      .admin-topbar {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        padding: 0 10px 0 12px;
+      }
+      .brand-wordmark {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .topbar-right { justify-self: end; gap: 2px; }
+      .topbar-search,
+      .assistant-coachmark,
+      .icon-btn--ghost,
+      .store-name,
+      .store-plan { display: none; }
+      #assistant-toggle { width: 44px; height: 44px; }
+      .topbar-store {
+        width: 44px;
+        height: 44px;
+        justify-content: center;
+        margin-left: 0;
+        padding: 0;
+      }
+      .store-avatar { width: 28px; height: 28px; }
+
+      .workspace-main[data-dock-side="right"] .workspace-nav,
+      .workspace-main[data-dock-side="left"] .workspace-nav {
+        flex-direction: row;
+        align-items: center;
+        gap: 2px;
+        padding: 7px 10px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+      }
+      .workspace-nav::-webkit-scrollbar { display: none; }
+      .workspace-nav ul {
+        flex: 0 0 auto;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        width: max-content;
+        gap: 2px !important;
+      }
+      .nav-item { min-height: 36px; padding: 7px 9px; }
+
+      .workspace-main[data-dock-side="right"] .workspace-canvas,
+      .workspace-main[data-dock-side="left"] .workspace-canvas {
+        gap: 12px;
+        padding: 16px 12px calc(28px + env(safe-area-inset-bottom));
+      }
+      .canvas-inner { gap: 12px; }
+      .page-head { gap: 10px; }
+      .page-title { font-size: 19px; }
+      .card__head { padding: 14px 14px 0; }
+
       .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .metric:nth-child(2) { border-right: none; }
       .metric:nth-child(1), .metric:nth-child(2) { border-bottom: 1px solid var(--border); }
-      .topbar-search { display: none; }
-      .store-name { display: none; }
-      .admin-topbar { grid-template-columns: auto 1fr auto; }
+      .metric { padding: 14px; }
+      .metric__value { font-size: 20px; }
+
+      .prod {
+        grid-template-columns: 40px minmax(0, 1fr) auto;
+        grid-template-areas:
+          "thumb details price"
+          "thumb stock stock";
+        column-gap: 12px;
+        row-gap: 5px;
+        padding: 12px 14px;
+      }
+      .prod__thumb { grid-area: thumb; }
+      .prod > div:nth-child(2) { grid-area: details; min-width: 0; }
+      .prod__name { overflow-wrap: anywhere; }
+      .prod__price { grid-area: price; }
+      .prod__stock {
+        grid-area: stock;
+        min-width: 0;
+        justify-content: space-between;
+      }
+      .prod__count { min-width: 0; }
+
+      .feed-item { padding: 12px 14px; }
+      .dock-settings-card__inner { padding: 14px 14px 4px; }
+      .dock-settings__row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .dock-settings__field select,
+      .dock-settings__field input,
+      .dock-settings__field input#dock-width {
+        height: 44px;
+        width: 100%;
+        min-width: 0;
+      }
+      .dock-settings__check { align-self: end; min-height: 44px; padding-bottom: 0; }
+      #apply-dock-settings { grid-column: 1 / -1; width: 100%; height: 44px; }
+      .dock-settings__status { padding: 10px 14px; overflow-wrap: anywhere; }
+
     }
   </style>
 </head>

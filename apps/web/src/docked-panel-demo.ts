@@ -201,6 +201,9 @@ function getDemoLauncher() {
     dock: getDockConfig(),
     autoExpand: false,
     fullHeight: true,
+    // Below the same breakpoint used by the demo chrome, Otto takes over the
+    // viewport instead of squeezing a phone-sized dashboard beside a 420px dock.
+    mobileFullscreen: true,
     mobileBreakpoint: 1120,
     title: "Otto",
     subtitle: "Store copilot",
@@ -604,6 +607,13 @@ if (modelContext) {
         if (el === target) el.setAttribute("aria-current", "page");
         else el.removeAttribute("aria-current");
       });
+      if (window.matchMedia("(max-width: 860px)").matches) {
+        target.scrollIntoView({
+          block: "nearest",
+          inline: "nearest",
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        });
+      }
       updateStatus(`Switched to ${sectionName(target)}.`);
       return { ok: true, active: sectionName(target) };
     },
