@@ -4,55 +4,92 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&display=swap" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <title>Docked Panel Demo</title>
   <style>
+    /*
+      Docked-panel demo — a commerce admin ("Aster") with a WebMCP-driven
+      docked assistant ("Otto"). The chrome intentionally evokes a modern
+      merchant admin (near-black top bar, soft-gray canvas, white cards, Inter),
+      and Otto is themed to read like a first-party store copilot: flush-docked,
+      plain-text answers, a rounded composer with a soft violet halo. The look
+      is our own — nothing here reuses another product's marks or palette.
+    */
     * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      height: 100%;
+    html, body { margin: 0; height: 100%; }
+
+    /* -- Page token overrides: replace the shared "editorial" theme with an
+       admin-console palette, scoped to this page. Later :root wins over the
+       demo-shared :root, so existing var(--*) references pick these up. -- */
+    :root {
+      --font-sans: "Inter", -apple-system, "system-ui", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --font-mono: "SFMono-Regular", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+      --background: #f1f1f1;        /* app canvas */
+      --card: #ffffff;             /* surfaces */
+      --foreground: #1a1a1a;       /* headings / ink */
+      --muted: #616161;            /* secondary text */
+      --border: #e3e3e3;           /* hairlines */
+      --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.05);
+      --radius: 8px;
+      --radius-lg: 12px;
+
+      /* Admin-specific tokens */
+      --ink: #1a1a1a;
+      --ink-2: #303030;
+      --text-subtle: #8a8a8a;
+      --border-strong: #d4d4d4;
+      --topbar: #1a1a1a;
+      --topbar-line: rgba(255, 255, 255, 0.10);
+      --nav-bg: #fbfbfb;
+      --nav-hover: #f1f1f1;
+      --nav-active: #ededed;
+      --canvas-inset: #f6f6f7;
+
+      /* Otto brand (violet — deliberately our own, not a borrowed accent) */
+      --brand: #5e56e7;
+      --brand-600: #4f47d6;
+      --brand-700: #4038c4;
+      --brand-soft: #efeefe;
+      --pos: #067a57;              /* positive delta green */
+      --pos-soft: #e3f5ec;
+      --warn: #b98900;             /* low-stock amber */
     }
+
     body {
       background: var(--background);
-      color: var(--foreground);
+      color: var(--ink-2);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
-    /* Page-scoped tokens (align with demo-shared + admin chrome) */
-    :root {
-      --docked-canvas-bg: #f8fafc;
-      --docked-slate-900: #0f172a;
-      --docked-slate-800: #1e293b;
-      --docked-slate-700: #334155;
-      --docked-slate-600: #475569;
-      --docked-slate-200: #e2e8f0;
-      --docked-slate-100: #f1f5f9;
-      --docked-nav-active: #38bdf8;
-    }
+
     .app-root {
       height: 100%;
       display: flex;
       flex-direction: column;
       min-height: 0;
     }
+
+    /* ============================ TOP BAR ============================ */
     .admin-topbar {
       flex-shrink: 0;
-      display: flex;
+      height: 56px;
+      display: grid;
+      grid-template-columns: 232px minmax(0, 1fr) auto;
       align-items: center;
-      justify-content: space-between;
       gap: 16px;
-      padding: 12px 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      background: var(--docked-slate-900);
-      color: #f8fafc;
-      font-family: var(--font-sans);
+      padding: 0 16px 0 20px;
+      background: var(--topbar);
+      color: #fff;
+      border-bottom: 1px solid var(--topbar-line);
     }
-    .admin-topbar__left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .admin-topbar__brand {
+    .topbar-brand {
       display: flex;
       align-items: center;
       gap: 10px;
@@ -60,1017 +97,856 @@
       color: inherit;
       user-select: none;
     }
-    .admin-topbar__logo {
-      flex-shrink: 0;
+    .brand-mark {
       width: 28px;
       height: 28px;
-      border-radius: var(--radius);
-      background: linear-gradient(145deg, #38bdf8 0%, #0ea5e9 100%);
-      color: var(--docked-slate-900);
+      border-radius: 8px;
+      background: linear-gradient(150deg, #7c6cf5 0%, #5e56e7 55%, #4038c4 100%);
       display: grid;
       place-items: center;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4);
     }
-    .admin-topbar__logo svg {
-      width: 16px;
-      height: 16px;
-    }
-    .brand-mark {
-      width: 36px;
-      height: 36px;
-      border-radius: 12px;
-      background: var(--foreground);
-      color: white;
-      display: grid;
-      place-items: center;
-      font-weight: 700;
-    }
-    .brand-copy h1 {
-      margin: 0;
+    .brand-mark svg { width: 16px; height: 16px; color: #fff; }
+    .brand-wordmark {
       font-size: 17px;
-    }
-    .brand-copy p {
-      margin: 2px 0 0;
-      color: var(--muted);
-      font-size: 13px;
-    }
-    .metrics {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-    .metric {
-      min-width: 110px;
-      padding: 12px 14px;
-      border-radius: 16px;
-      background: var(--card);
-      box-shadow: var(--shadow-sm);
-    }
-    .metric-label {
-      display: block;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-    }
-    .metric-value {
-      display: block;
-      margin-top: 6px;
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--foreground);
-    }
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      align-items: flex-end;
-      padding: 18px 28px;
-    }
-    .control {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .control label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
-    }
-    .control input,
-    .control select,
-    .control button {
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.9);
-      color: var(--foreground);
-      font: inherit;
-      padding: 10px 12px;
-    }
-    .control button {
-      cursor: pointer;
-      font-weight: 600;
-    }
-    .workspace-frame {
-      min-height: 0;
-      padding: 0 28px 28px;
-    }
-    /* Flush admin shell: no floating card chrome */
-    [data-persona-host-layout="docked"] {
-      flex: 1 1 auto;
-      min-height: 0;
-      height: 100%;
-      width: 100%;
-      border: none;
-      border-radius: 0;
-      background: #fff;
-      box-shadow: none;
-    }
-    [data-persona-dock-role="content"] {
-      overflow: hidden;
-      border-radius: 0;
-    }
-    .workspace-main {
-      min-width: 0;
-      min-height: 0;
-    }
-    .admin-topbar__wordmark {
-      font-size: 15px;
-      font-weight: 600;
+      font-weight: 650;
       letter-spacing: -0.02em;
-      color: rgba(255, 255, 255, 0.94);
-      font-family: var(--font-sans);
+      color: #fff;
     }
-    .admin-topbar__right {
+
+    .topbar-search {
+      justify-self: center;
+      width: 100%;
+      max-width: 560px;
+      height: 32px;
       display: flex;
       align-items: center;
       gap: 8px;
+      padding: 0 10px 0 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.10);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.62);
+      font-size: 13px;
+      cursor: text;
+      transition: background 0.15s ease, border-color 0.15s ease;
     }
-    .topbar-context {
+    .topbar-search:hover { background: rgba(255, 255, 255, 0.14); }
+    .topbar-search svg { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.8; }
+    .topbar-search span { flex: 1; }
+    .topbar-search kbd {
+      font-family: var(--font-sans);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .topbar-right {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-left: 6px;
-      padding-left: 14px;
-      border-left: 1px solid rgba(255, 255, 255, 0.12);
+      gap: 6px;
     }
-    .topbar-avatar {
-      position: relative;
-      flex-shrink: 0;
-      width: 36px;
-      height: 36px;
-      border-radius: 11px;
-      background: linear-gradient(145deg, #7dd3fc 0%, #38bdf8 100%);
-      color: #0f172a;
-      display: grid;
-      place-items: center;
-    }
-    .topbar-avatar__glyph {
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: -0.05em;
-      line-height: 1;
-    }
-    /* Faux “logged in / online”: corner pip (sky palette, not commerce green). */
-    .topbar-avatar__status {
-      position: absolute;
-      right: -3px;
-      bottom: -3px;
-      width: 11px;
-      height: 11px;
-      border-radius: 50%;
-      background: #0ea5e9;
-      border: 2px solid #0f172a;
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
-    }
-    .topbar-context__name {
-      font-size: 14px;
-      font-weight: 500;
-      color: #fff;
-      letter-spacing: -0.01em;
-    }
-    .topbar-context__badge {
-      font-size: 11px;
-      font-weight: 500;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.1);
-      color: rgba(248, 250, 252, 0.72);
-    }
+
+    /* Otto launcher (the docked assistant toggle) */
     #assistant-toggle {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 40px;
-      height: 40px;
+      width: 34px;
+      height: 34px;
       padding: 0;
-      /* Same border width as .is-active so toggling doesn’t animate 0 → 1px (reads as a flash). */
       border: 1px solid transparent;
-      border-radius: 14px;
+      border-radius: 9px;
       background: transparent;
-      box-shadow: none;
-      color: rgba(255, 255, 255, 0.88);
+      color: rgba(255, 255, 255, 0.86);
       cursor: pointer;
-      /* Don’t transition box-shadow/border: active state inset shadow would tween and flash. */
-      transition: background 0.15s ease, color 0.15s ease;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
       -webkit-tap-highlight-color: transparent;
-      -webkit-appearance: none;
       appearance: none;
     }
-    #assistant-toggle:focus {
-      outline: none;
+    #assistant-toggle svg { width: 19px; height: 19px; }
+    #assistant-toggle:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+    #assistant-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    /* Selected: a soft violet "well" — a quiet, tasteful on-state (no neon). */
+    #assistant-toggle.is-active {
+      background: rgba(124, 108, 245, 0.22);
+      border-color: rgba(124, 108, 245, 0.45);
+      color: #e7e3ff;
+      box-shadow: inset 0 0 0 1px rgba(124, 108, 245, 0.2);
     }
-    #assistant-toggle:focus-visible {
-      outline: 2px solid #38bdf8;
-      outline-offset: 2px;
+    /* Pre-open nudge: one gentle breathing ring so a first-time viewer notices
+       Otto without a loud banner. Stops the moment the panel is opened. */
+    #assistant-toggle.assistant-toggle--hint {
+      animation: otto-hint 2.6s ease-in-out 1.2s 3 both;
     }
-    #assistant-toggle:active {
-      outline: none;
-    }
-    #assistant-toggle:hover {
-      background: rgba(255, 255, 255, 0.08);
-      color: #fff;
-    }
-    /*
-     * Selected: clearly darker “well” vs bar (#0f172a), soft sky rim + brighter icon = obvious “on”.
-     * Still inset (dark top, lighter floor), not a flat raised chip.
-     */
-    #assistant-toggle.is-active,
-    #assistant-toggle.assistant-toggle--persist-highlight {
-      background: linear-gradient(
-        180deg,
-        #010409 0%,
-        #0a1629 38%,
-        #0f2137 72%,
-        #132a45 100%
-      );
-      border-color: rgba(56, 189, 248, 0.5);
-      color: #e0f2fe;
-      box-shadow:
-        0 0 14px rgba(56, 189, 248, 0.22),
-        inset 0 12px 26px rgba(0, 0, 0, 0.88),
-        inset 0 5px 14px rgba(0, 0, 0, 0.72),
-        inset 0 -12px 22px rgba(125, 211, 252, 0.14),
-        inset 0 -2px 0 rgba(255, 255, 255, 0.22);
-    }
-    #assistant-toggle.is-active:hover,
-    #assistant-toggle.assistant-toggle--persist-highlight:hover {
-      border-color: rgba(56, 189, 248, 0.6);
-      color: #f0f9ff;
-      box-shadow:
-        0 0 16px rgba(56, 189, 248, 0.28),
-        inset 0 12px 26px rgba(0, 0, 0, 0.84),
-        inset 0 5px 14px rgba(0, 0, 0, 0.68),
-        inset 0 -12px 22px rgba(125, 211, 252, 0.17),
-        inset 0 -2px 0 rgba(255, 255, 255, 0.26);
-    }
-    #assistant-toggle.assistant-toggle--persist-highlight {
-      animation:
-        assistant-toggle-arrive 0.7s cubic-bezier(0.22, 1, 0.36, 1) both,
-        assistant-toggle-pulse 2.8s ease-in-out infinite;
-      animation-delay: var(--arrive-delay, 1.0s), var(--pulse-delay, 1.8s);
-    }
-    @keyframes assistant-toggle-arrive {
-      0% {
-        box-shadow:
-          0 0 14px rgba(56, 189, 248, 0.22),
-          inset 0 12px 26px rgba(0, 0, 0, 0.88),
-          inset 0 5px 14px rgba(0, 0, 0, 0.72),
-          inset 0 -12px 22px rgba(125, 211, 252, 0.14),
-          inset 0 -2px 0 rgba(255, 255, 255, 0.22);
-        border-color: rgba(56, 189, 248, 0.5);
-      }
-      22% {
-        box-shadow:
-          0 0 28px rgba(56, 189, 248, 0.6),
-          0 0 48px rgba(125, 211, 252, 0.3),
-          inset 0 12px 26px rgba(0, 0, 0, 0.76),
-          inset 0 5px 14px rgba(0, 0, 0, 0.6),
-          inset 0 -12px 22px rgba(125, 211, 252, 0.24),
-          inset 0 -2px 0 rgba(255, 255, 255, 0.3);
-        border-color: rgba(56, 189, 248, 0.85);
-      }
-      100% {
-        box-shadow:
-          0 0 14px rgba(56, 189, 248, 0.22),
-          inset 0 12px 26px rgba(0, 0, 0, 0.88),
-          inset 0 5px 14px rgba(0, 0, 0, 0.72),
-          inset 0 -12px 22px rgba(125, 211, 252, 0.14),
-          inset 0 -2px 0 rgba(255, 255, 255, 0.22);
-        border-color: rgba(56, 189, 248, 0.5);
-      }
-    }
-    @keyframes assistant-toggle-pulse {
-      0%, 100% {
-        box-shadow:
-          0 0 14px rgba(56, 189, 248, 0.22),
-          inset 0 12px 26px rgba(0, 0, 0, 0.88),
-          inset 0 5px 14px rgba(0, 0, 0, 0.72),
-          inset 0 -12px 22px rgba(125, 211, 252, 0.14),
-          inset 0 -2px 0 rgba(255, 255, 255, 0.22);
-        border-color: rgba(56, 189, 248, 0.5);
-      }
-      50% {
-        box-shadow:
-          0 0 22px rgba(56, 189, 248, 0.38),
-          0 0 36px rgba(125, 211, 252, 0.12),
-          inset 0 12px 26px rgba(0, 0, 0, 0.84),
-          inset 0 5px 14px rgba(0, 0, 0, 0.68),
-          inset 0 -12px 22px rgba(125, 211, 252, 0.19),
-          inset 0 -2px 0 rgba(255, 255, 255, 0.26);
-        border-color: rgba(56, 189, 248, 0.68);
-      }
+    @keyframes otto-hint {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(124, 108, 245, 0); }
+      50% { box-shadow: 0 0 0 5px rgba(124, 108, 245, 0.16); background: rgba(255, 255, 255, 0.10); }
     }
     @media (prefers-reduced-motion: reduce) {
-      #assistant-toggle.assistant-toggle--persist-highlight {
-        animation: none;
-      }
+      #assistant-toggle.assistant-toggle--hint { animation: none; }
     }
-    #assistant-toggle svg {
-      width: 22px;
-      height: 22px;
-    }
+
     .icon-btn--ghost {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 40px;
-      height: 40px;
+      width: 34px;
+      height: 34px;
       border: none;
-      border-radius: 10px;
+      border-radius: 9px;
       background: transparent;
-      color: rgba(255, 255, 255, 0.88);
+      color: rgba(255, 255, 255, 0.86);
       cursor: pointer;
+      transition: background 0.15s ease;
     }
-    .icon-btn--ghost:hover {
-      background: rgba(255, 255, 255, 0.08);
-    }
-    /* Coachmark: label + arrow pointing at the assistant control (demo-only). */
-    .assistant-coachmark {
+    .icon-btn--ghost svg { width: 18px; height: 18px; }
+    .icon-btn--ghost:hover { background: rgba(255, 255, 255, 0.12); }
+
+    .topbar-store {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-right: 10px;
-      padding: 8px 14px 8px 16px;
-      border-radius: 999px;
-      background: linear-gradient(
-        145deg,
-        rgba(14, 165, 233, 0.42) 0%,
-        rgba(56, 189, 248, 0.28) 48%,
-        rgba(125, 211, 252, 0.2) 100%
-      );
-      border: 2px solid rgba(186, 230, 253, 0.85);
-      box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.25),
-        0 4px 18px rgba(56, 189, 248, 0.45),
-        inset 0 1px 0 rgba(255, 255, 255, 0.35);
-      font-size: 13px;
+      margin-left: 6px;
+      padding: 3px 10px 3px 4px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .topbar-store:hover { background: rgba(255, 255, 255, 0.10); }
+    .store-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      background: linear-gradient(150deg, #4f9d7d 0%, #2f7d63 100%);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.02em;
-      color: #f8fafc;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+      letter-spacing: -0.03em;
+    }
+    .store-name { font-size: 13px; font-weight: 500; color: #fff; }
+    .store-plan {
+      font-size: 11px;
+      font-weight: 550;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.14);
+      color: rgba(255, 255, 255, 0.82);
+    }
+
+    /* Coachmark: quiet one-line label that points at Otto, then fades. */
+    .assistant-coachmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-right: 4px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      background: rgba(124, 108, 245, 0.16);
+      border: 1px solid rgba(124, 108, 245, 0.32);
+      font-size: 12.5px;
+      font-weight: 550;
+      color: #e7e3ff;
       white-space: nowrap;
-      flex-shrink: 0;
       pointer-events: none;
-      position: relative;
-      overflow: hidden;
       opacity: 0;
-      transform: translateX(-12px);
+      transform: translateX(6px);
       animation:
-        assistant-coachmark-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) 2s forwards,
-        assistant-coachmark-settle 1.1s cubic-bezier(0.33, 1, 0.68, 1) 3.6s forwards;
+        coachmark-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 1.1s forwards,
+        coachmark-out 0.6s ease 6.5s forwards;
     }
-    .assistant-coachmark::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(
-        90deg,
-        transparent 0%,
-        rgba(255, 255, 255, 0.2) 35%,
-        rgba(186, 230, 253, 0.45) 50%,
-        rgba(255, 255, 255, 0.2) 65%,
-        transparent 100%
-      );
-      transform: translateX(-110%);
-      animation: assistant-coachmark-sweep 1.4s cubic-bezier(0.76, 0, 0.24, 1) 2.7s forwards;
-      pointer-events: none;
-      border-radius: inherit;
-    }
-    @keyframes assistant-coachmark-enter {
-      0% {
-        opacity: 0;
-        transform: translateX(-12px) scale(0.97);
-      }
-      100% {
-        opacity: 1;
-        transform: translateX(0) scale(1);
-      }
-    }
-    @keyframes assistant-coachmark-sweep {
-      0%   { transform: translateX(-110%); }
-      100% { transform: translateX(110%); }
-    }
-    @keyframes assistant-coachmark-settle {
-      0% {
-        box-shadow:
-          0 0 0 1px rgba(0, 0, 0, 0.25),
-          0 4px 18px rgba(56, 189, 248, 0.45),
-          inset 0 1px 0 rgba(255, 255, 255, 0.35);
-        border-color: rgba(186, 230, 253, 0.85);
-        opacity: 1;
-      }
-      100% {
-        box-shadow:
-          0 0 0 1px rgba(0, 0, 0, 0.1),
-          0 2px 6px rgba(56, 189, 248, 0.1),
-          inset 0 1px 0 rgba(255, 255, 255, 0.1);
-        border-color: rgba(186, 230, 253, 0.3);
-        opacity: 0.6;
-      }
-    }
+    .assistant-coachmark svg { width: 15px; height: 15px; }
+    @keyframes coachmark-in { to { opacity: 1; transform: translateX(0); } }
+    @keyframes coachmark-out { to { opacity: 0; transform: translateX(6px); } }
     @media (prefers-reduced-motion: reduce) {
-      .assistant-coachmark {
-        animation: none;
-        opacity: 0.6;
-        transform: none;
-        border-color: rgba(186, 230, 253, 0.3);
-      }
-      .assistant-coachmark::before {
-        animation: none;
-        display: none;
-      }
+      .assistant-coachmark { animation: coachmark-in 0.01s forwards; }
     }
-    .assistant-coachmark__arrow {
-      display: block;
-      flex-shrink: 0;
-      color: #e0f2fe;
-      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
-      animation: assistant-coachmark-nudge 0.5s cubic-bezier(0.22, 1.4, 0.36, 1) 3.2s 2 both;
-    }
-    @keyframes assistant-coachmark-nudge {
-      0%, 100% { transform: translateX(0); }
-      50%      { transform: translateX(6px); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .assistant-coachmark__arrow {
-        animation: none;
-      }
-    }
+
+    /* ============================ BODY / NAV ============================ */
     .workspace-shell {
       flex: 1;
       min-height: 0;
       min-width: 0;
       display: flex;
-      flex-direction: column;
-      background: var(--docked-canvas-bg);
+      background: var(--background);
     }
-    .workspace-panel {
-      flex: 1 1 auto;
-      min-height: 0;
-      min-width: 0;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
+    .workspace-panel { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; }
+
     .workspace-main {
-      --workspace-nav-w: 240px;
+      --workspace-nav-w: 232px;
+      flex: 1 1 auto;
       min-width: 0;
       min-height: 0;
       height: 100%;
     }
-    /*
-      Layout follows data-dock-side (set from the demo script to match dock.side):
-      - right: full-bleed stage + absolute nav on top: push/overlay can move the canvas behind the rail.
-      - left: flex row [nav | stage]: dock opens beside the rail (nothing under the sidebar).
-    */
-    .workspace-main[data-dock-side="right"] {
-      position: relative;
-      display: block;
-      width: 100%;
-      min-width: 0;
-      overflow-x: hidden;
-    }
+    /* Right dock: full-bleed stage with the nav rail layered on top so the dock
+       can slide in beside the canvas. Left dock: a flex row [nav | stage]. */
+    .workspace-main[data-dock-side="right"] { position: relative; display: block; width: 100%; overflow-x: hidden; }
     .workspace-main[data-dock-side="right"] .workspace-stage {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      min-width: 0;
-      min-height: 0;
-      overflow-x: hidden;
-      display: flex;
-      flex-direction: column;
+      position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0;
+      overflow-x: hidden; display: flex; flex-direction: column;
     }
     .workspace-main[data-dock-side="right"] .workspace-nav {
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      z-index: 3;
+      position: absolute; left: 0; top: 0; bottom: 0; z-index: 3;
       width: var(--workspace-nav-w);
+    }
+    .workspace-main[data-dock-side="left"] { display: flex; flex-direction: row; align-items: stretch; width: 100%; overflow-x: hidden; }
+    .workspace-main[data-dock-side="left"] .workspace-nav { flex: 0 0 var(--workspace-nav-w); }
+    .workspace-main[data-dock-side="left"] .workspace-stage { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+
+    .workspace-nav {
       box-sizing: border-box;
-      padding: 20px 14px;
-      background: linear-gradient(180deg, var(--docked-slate-900) 0%, var(--docked-slate-800) 100%);
-      color: #cbd5e1;
-      border-right: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    .workspace-main[data-dock-side="left"] {
-      display: flex;
-      flex-direction: row;
-      align-items: stretch;
-      width: 100%;
-      min-width: 0;
-      overflow-x: hidden;
-    }
-    .workspace-main[data-dock-side="left"] .workspace-nav {
-      flex: 0 0 var(--workspace-nav-w);
-      box-sizing: border-box;
-      padding: 20px 14px;
-      background: linear-gradient(180deg, var(--docked-slate-900) 0%, var(--docked-slate-800) 100%);
-      color: #cbd5e1;
-      border-right: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    .workspace-main[data-dock-side="left"] .workspace-stage {
-      flex: 1 1 auto;
-      min-width: 0;
-      min-height: 0;
+      padding: 12px 12px 14px;
+      background: var(--nav-bg);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
       display: flex;
       flex-direction: column;
     }
-    .workspace-nav h2 {
-      margin: 0 0 16px;
-      font-size: 11px;
-      font-family: var(--font-sans);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: rgba(148, 163, 184, 0.9);
-    }
-    .workspace-nav ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
+    .workspace-nav ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+    .nav-item {
       display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .workspace-nav .nav-item {
-      display: block;
-      padding: 10px 12px;
-      border-radius: var(--radius);
-      font-family: var(--font-sans);
-      font-size: 14px;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      font-size: 13.5px;
       font-weight: 500;
-      color: rgba(226, 232, 240, 0.88);
+      color: var(--ink-2);
       background: transparent;
-      border: 1px solid transparent;
       cursor: default;
-      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+      transition: background 0.12s ease, color 0.12s ease;
     }
-    .workspace-nav .nav-item:hover {
-      background: rgba(255, 255, 255, 0.06);
-      color: #f8fafc;
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; color: #4a4a4a; }
+    .nav-item:hover { background: var(--nav-hover); }
+    .nav-item.is-active { background: var(--nav-active); font-weight: 600; color: var(--ink); }
+    .nav-item.is-active svg { color: var(--ink); }
+    .nav-section {
+      margin: 16px 0 6px;
+      padding: 0 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      color: var(--text-subtle);
     }
-    .workspace-nav .nav-item.is-active {
-      background: rgba(56, 189, 248, 0.12);
-      border-color: rgba(56, 189, 248, 0.35);
-      color: #f0f9ff;
-    }
-    [data-persona-dock-role="host"] .persona-rounded-button {
-      border-radius: 0 !important;
-    }
+    .nav-spacer { flex: 1 1 auto; min-height: 12px; }
+    .nav-item--settings { margin-top: 4px; }
+
+    /* ============================ CANVAS ============================ */
     .workspace-canvas {
       min-width: 0;
       min-height: 0;
       overflow: auto;
-      display: grid;
-      grid-template-rows: auto auto auto 1fr;
-      gap: 20px;
-      padding: 24px;
-      background: var(--docked-canvas-bg);
-    }
-    .workspace-main[data-dock-side="right"] .workspace-canvas {
-      padding-left: calc(var(--workspace-nav-w) + 24px);
-    }
-    .dock-settings__row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      gap: 14px 20px;
-    }
-    .dock-settings__field {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 16px;
+      padding: 24px 28px 40px;
+      background: var(--background);
     }
-    .dock-settings__field label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--docked-slate-600);
-      font-family: var(--font-sans);
+    .workspace-main[data-dock-side="right"] .workspace-canvas { padding-left: calc(var(--workspace-nav-w) + 28px); }
+    /* Center content in a comfortable column so wide screens don't sprawl. */
+    .canvas-inner { width: 100%; max-width: 940px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+    .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 2px; }
+    .page-title { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -0.02em; color: var(--ink); }
+    .page-pill {
+      display: inline-flex; align-items: center; gap: 7px;
+      height: 30px; padding: 0 11px;
+      border-radius: 8px; border: 1px solid var(--border-strong);
+      background: var(--card); color: var(--ink-2);
+      font-size: 13px; font-weight: 500; cursor: default;
+      box-shadow: var(--shadow-sm);
     }
-    .dock-settings__field input,
-    .dock-settings__field select {
-      border: 1px solid rgba(148, 163, 184, 0.45);
+    .page-pill svg { width: 15px; height: 15px; opacity: 0.7; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
       border-radius: var(--radius-lg);
-      background: #fff;
-      color: #0f172a;
-      font: inherit;
-      padding: 9px 12px;
-      min-width: 120px;
+      box-shadow: var(--shadow-sm);
     }
-    .dock-settings__field input#dock-width {
-      min-width: 100px;
-      width: 8rem;
-    }
-    .dock-settings__field-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--docked-slate-600);
-      font-family: var(--font-sans);
-    }
-    .dock-settings__check {
-      display: inline-flex;
+    .card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px 0; }
+    .card__title { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
+    .card__link { font-size: 13px; font-weight: 500; color: var(--brand); text-decoration: none; cursor: default; }
+
+    /* Metrics */
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .metric { padding: 16px 18px; border-right: 1px solid var(--border); }
+    .metric:last-child { border-right: none; }
+    .metric__label { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+    .metric__value { margin-top: 8px; font-size: 22px; font-weight: 650; letter-spacing: -0.02em; color: var(--ink); }
+    .metric__delta { margin-top: 5px; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 550; }
+    .metric__delta svg { width: 13px; height: 13px; }
+    .metric__delta.is-up { color: var(--pos); }
+    .metric__delta.is-flat { color: var(--text-subtle); }
+
+    /* Product / inventory list */
+    .prod-list { padding: 4px 0 6px; }
+    .prod {
+      display: grid;
+      grid-template-columns: 40px 1fr auto auto;
       align-items: center;
-      gap: 8px;
-      margin: 0;
-      margin-top: -30px;
+      gap: 14px;
+      padding: 11px 18px;
+      border-top: 1px solid var(--border);
+    }
+    .prod:first-child { border-top: none; }
+    .prod__thumb { width: 40px; height: 40px; border-radius: 9px; display: grid; place-items: center; font-size: 19px; }
+    .prod__name { font-size: 13.5px; font-weight: 550; color: var(--ink); }
+    .prod__sku { margin-top: 2px; font-size: 12px; color: var(--text-subtle); }
+    .prod__price { font-size: 13.5px; font-weight: 550; color: var(--ink-2); text-align: right; }
+    .prod__stock { display: inline-flex; align-items: center; gap: 7px; min-width: 128px; justify-content: flex-end; }
+    .stock-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px; border-radius: 999px;
+      font-size: 12px; font-weight: 550; white-space: nowrap;
+    }
+    .stock-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; }
+    .stock-badge--in { background: var(--pos-soft); color: var(--pos); }
+    .stock-badge--in::before { background: var(--pos); }
+    .stock-badge--low { background: #fbf1d9; color: var(--warn); }
+    .stock-badge--low::before { background: var(--warn); }
+    .stock-badge--out { background: #fbe4e2; color: #b3261e; }
+    .stock-badge--out::before { background: #b3261e; }
+    .prod__count { font-size: 12.5px; color: var(--muted); min-width: 54px; text-align: right; }
+
+    /* Activity feed */
+    .feed { padding: 4px 0 8px; }
+    .feed-item { display: grid; gap: 3px; padding: 12px 18px; border-top: 1px solid var(--border); }
+    .feed-item:first-child { border-top: none; }
+    .feed-meta { font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em; color: var(--text-subtle); }
+    .feed-title { font-size: 13.5px; font-weight: 550; color: var(--ink); }
+    .feed-item > span:last-child { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+    /* Dock settings card */
+    .dock-settings-card__inner { padding: 16px 18px 4px; }
+    .dock-settings-card__title { margin: 0 0 14px; font-size: 14px; font-weight: 600; color: var(--ink); }
+    .dock-settings__row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; }
+    .dock-settings__field { display: flex; flex-direction: column; gap: 6px; }
+    .dock-settings__field label { font-size: 12.5px; font-weight: 550; color: var(--ink-2); }
+    .dock-settings__field select,
+    .dock-settings__field input {
+      height: 34px;
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      background: var(--card);
+      color: var(--ink);
+      font: inherit;
       font-size: 13px;
-      font-weight: 500;
-      color: var(--docked-slate-700);
-      font-family: var(--font-sans);
-      cursor: pointer;
-      user-select: none;
+      padding: 0 11px;
+      min-width: 130px;
     }
-    .dock-settings__check input {
-      width: 1.05rem;
-      height: 1.05rem;
-      min-width: unset;
-      margin: 0;
-      padding: 0;
-      accent-color: var(--docked-slate-900);
-    }
-    #dock-reveal {
-      min-width: 11rem;
-    }
+    .dock-settings__field select:focus,
+    .dock-settings__field input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(94, 86, 231, 0.15); }
+    .dock-settings__field input#dock-width { min-width: 110px; width: 8rem; }
+    .dock-settings__check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink-2); cursor: pointer; user-select: none; padding-bottom: 8px; }
+    .dock-settings__check input { width: 1rem; height: 1rem; accent-color: var(--brand); margin: 0; }
     #apply-dock-settings {
+      height: 34px;
       border: none;
-      border-radius: var(--radius);
-      background: var(--docked-slate-900);
+      border-radius: 8px;
+      background: var(--ink);
       color: #fff;
       font-family: var(--font-sans);
-      font-weight: 600;
+      font-weight: 550;
       font-size: 13px;
-      padding: 9px 16px;
+      padding: 0 16px;
       cursor: pointer;
       transition: background 0.15s ease;
     }
-    #apply-dock-settings:hover {
-      background: var(--docked-slate-800);
+    #apply-dock-settings:hover { background: #000; }
+    .dock-settings__status {
+      margin: 14px 0 0;
+      padding: 11px 18px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--muted);
+      background: var(--canvas-inset);
+      border-top: 1px solid var(--border);
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     }
-    .dock-settings-card {
-      padding: 0;
-      border-radius: var(--radius-lg);
-      background: var(--card);
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow-sm);
+
+    /* -- Docked host: flush admin shell, no floating card chrome. -- */
+    [data-persona-host-layout="docked"] {
+      flex: 1 1 auto; min-height: 0; height: 100%; width: 100%;
+      border: none; border-radius: 0; background: #fff; box-shadow: none;
+    }
+    [data-persona-dock-role="content"] { overflow: hidden; border-radius: 0; }
+    [data-persona-dock-role="host"] .persona-rounded-button { border-radius: 0 !important; }
+
+    /* ==========================================================================
+       OTTO — Persona widget theming (first-party store-copilot look, our own palette).
+       Persona writes theme tokens inline via style.setProperty, so the consumed
+       --persona-* seams need !important to win. Layout/rounding is done on the
+       real data-persona-* / .persona-* seams (verified against the widget's
+       component markup). useShadowDom stays false so this page CSS reaches in.
+       ========================================================================== */
+    [data-persona-root],
+    [data-persona-theme-zone] {
+      --persona-primary: #5e56e7 !important;
+      --persona-secondary: #7c6cf5 !important;
+      --persona-accent: #5e56e7 !important;
+      --persona-call-to-action: #5e56e7 !important;
+      --persona-surface: #ffffff !important;
+      --persona-container: #ffffff !important;
+      --persona-input-background: #ffffff !important;
+      --persona-button-primary-bg: #5e56e7 !important;
+      --persona-button-primary-fg: #ffffff !important;
+      --persona-text: #303030 !important;
+      --persona-text-inverse: #ffffff !important;
+      --persona-muted: #616161 !important;
+      --persona-text-muted: #616161 !important;
+      --persona-border: #e3e3e3 !important;
+      --persona-divider: #ececec !important;
+      --persona-message-border: #eceef3 !important;
+      --persona-md-link-color: #5e56e7 !important;
+    }
+
+    /* Header — flush white bar with an Otto identity, matching a first-party
+       store copilot (not a dark chat toolbar). */
+    [data-persona-theme-zone="header"],
+    .persona-widget-header {
+      background: #ffffff !important;
+      color: var(--ink) !important;
+      border-bottom: 1px solid #ececec !important;
+    }
+    .persona-widget-header * { color: var(--ink) !important; }
+    /* Header media tile → Otto's violet mark (the default is an empty square). */
+    .persona-widget-header > div:first-child {
+      background: linear-gradient(150deg, #7c6cf5 0%, #5e56e7 55%, #4038c4 100%) !important;
+      border-radius: 11px !important;
+      box-shadow: 0 2px 6px rgba(94, 86, 231, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+    }
+    .persona-widget-header > div:first-child svg,
+    .persona-widget-header > div:first-child svg * { color: #ffffff !important; stroke: #ffffff !important; }
+
+    /* Body + composer surfaces: clean white. */
+    .persona-widget-body,
+    [data-persona-theme-zone="messages"] { background: #ffffff !important; }
+    .persona-widget-footer,
+    [data-persona-theme-zone="composer"] { background: #ffffff !important; border-top-color: #f0f0f0 !important; }
+
+    /* Zero-state hero: center it, drop the card chrome, and prepend Otto's
+       gradient avatar. Persona renders welcomeTitle/welcomeSubtitle here. */
+    [data-persona-intro-card] {
+      background: transparent !important;
+      box-shadow: none !important;
+      border: none !important;
+      display: flex !important;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 0;
+      padding: 20px 22px 8px !important;
+      margin: auto 0;
+    }
+    [data-persona-intro-card]::before {
+      content: "";
+      display: block;
+      width: 46px; height: 46px;
+      margin: 0 auto 16px;
+      border-radius: 13px;
+      background:
+        radial-gradient(circle at 32% 28%, #a89bff 0%, #7c6cf5 42%, #5e56e7 72%, #4038c4 100%);
+      box-shadow:
+        0 6px 16px rgba(94, 86, 231, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    }
+    [data-persona-intro-card] h2 {
+      font-size: 19px !important;
+      font-weight: 650 !important;
+      color: var(--ink) !important;
+      line-height: 1.3 !important;
+      letter-spacing: -0.01em;
+    }
+    [data-persona-intro-card] p {
+      font-size: 13.5px !important;
+      color: var(--muted) !important;
+      line-height: 1.55 !important;
+      max-width: 300px;
+      margin: 8px auto 0 !important;
+    }
+
+    /* Suggestion chips — soft bordered rows with a leading spark. */
+    [data-persona-composer-suggestions] {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 7px !important;
+      margin-bottom: 12px !important;
+    }
+    [data-persona-composer-suggestions] button {
+      display: flex !important;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 9px;
+      width: 100%;
+      text-align: left;
+      background: #ffffff !important;
+      border: 1px solid #e3e3e3 !important;
+      border-radius: 10px !important;
+      color: var(--ink-2) !important;
+      padding: 9px 13px !important;
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02) !important;
+      transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    [data-persona-composer-suggestions] button:hover {
+      background: #faf9ff !important;
+      border-color: #d8d4f7 !important;
+      opacity: 1 !important;
+      box-shadow: 0 2px 8px rgba(94, 86, 231, 0.10) !important;
+    }
+    [data-persona-composer-suggestions] button::before {
+      content: "\2726"; /* ✦ */
+      color: var(--brand);
+      font-size: 12px;
+      line-height: 1;
+      flex: none;
+    }
+    [data-persona-composer-suggestions] button::after {
+      content: "\2192"; /* → */
+      margin-left: auto;
+      color: #b9b4e8;
+      font-size: 15px;
+      line-height: 1;
+      flex: none;
+    }
+
+    /* Composer — a single rounded field with a soft violet halo above it (the
+       glow reads as "the assistant is listening"). */
+    [data-persona-composer-form] {
+      border: 1px solid #e3e3e3 !important;
+      border-radius: 14px !important;
+      background: #ffffff !important;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    [data-persona-composer-form]:focus-within {
+      border-color: #c4bdf5 !important;
+      box-shadow: 0 0 0 3px rgba(94, 86, 231, 0.12), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    }
+    [data-persona-theme-zone="composer"] { position: relative; }
+    [data-persona-theme-zone="composer"]::before {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; top: -26px;
+      height: 26px;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(124, 108, 245, 0) 0%, rgba(124, 108, 245, 0.07) 100%);
+    }
+    /* Circular violet submit with the paper-plane it already renders. */
+    [data-persona-composer-submit] {
+      border-radius: 50% !important;
+      background: #5e56e7 !important;
+      color: #ffffff !important;
+    }
+    [data-persona-composer-submit]:hover { background: #4f47d6 !important; }
+
+    /* Messages — right-aligned gray user pill, plain-text assistant. */
+    .persona-message-user-bubble {
+      background: #f1f1f1 !important;
+      color: #303030 !important;
+      border: none !important;
+      border-radius: 14px !important;
+      box-shadow: none !important;
+    }
+    .persona-message-user-bubble * { color: #303030 !important; }
+    .persona-message-assistant-bubble {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding-left: 2px !important;
+    }
+
+    /* Tool group — a quiet "steps" strip with a slow violet gradient accent
+       flowing along the top edge (the running step itself gets the widget's
+       built-in shimmer-color animation). */
+    [data-persona-tool-group] {
+      position: relative;
+      background: #ffffff !important;
+      border: 1px solid #eceef3 !important;
+      border-radius: 10px !important;
       overflow: hidden;
     }
-    /* Inner padding matches .workspace-banner (22px 24px) so the form aligns with other cards */
-    .dock-settings-card__inner {
-      padding: 22px 24px 20px;
+    [data-persona-tool-group]::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #5e56e7, #b7adff, #7c6cf5, #5e56e7);
+      background-size: 220% 100%;
+      animation: otto-toolgrad 3.4s linear infinite;
+      opacity: 0.85;
+      pointer-events: none;
     }
-    .dock-settings-card__title {
-      margin: 0 0 16px;
-      font-size: 11px;
-      font-family: var(--font-sans);
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--docked-slate-600);
+    @keyframes otto-toolgrad {
+      to { background-position: 220% 0; }
     }
-    .dock-settings__status {
-      margin: 0;
-      padding: 12px 24px 14px;
-      box-sizing: border-box;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      line-height: 1.5;
-      color: var(--docked-slate-600);
-      background: var(--docked-slate-100);
-      border-top: 1px solid var(--border);
+    @media (prefers-reduced-motion: reduce) {
+      [data-persona-tool-group]::before { animation: none; }
     }
-    .workspace-banner {
-      padding: 22px 24px;
-      border-radius: var(--radius-lg);
-      background: var(--card);
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow-sm);
-    }
-    .workspace-banner h3 {
-      margin: 0 0 10px;
-      font-size: 1.25rem;
-      font-family: var(--font-sans);
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      color: var(--foreground);
-    }
-    .workspace-banner > p {
-      margin: 0;
-      color: var(--muted);
-      font-family: var(--font-sans);
-      font-size: 14px;
-      max-width: 72ch;
-      line-height: 1.55;
-    }
-    .workspace-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
-    }
-    .workspace-card {
-      padding: 18px 24px;
-      border-radius: var(--radius-lg);
-      background: var(--card);
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow-sm);
-    }
-    .workspace-card h4 {
-      margin: 0 0 10px;
-      font-family: var(--font-sans);
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--foreground);
-    }
-    .workspace-card p {
-      margin: 0;
-      color: var(--muted);
-      font-family: var(--font-sans);
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    .workspace-feed {
-      min-height: 0;
-      padding: 18px 24px;
-      border-radius: var(--radius-lg);
-      background: var(--card);
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow-sm);
-    }
-    .workspace-feed__heading {
-      margin: 0 0 12px;
-      font-size: 11px;
-      font-family: var(--font-sans);
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--docked-slate-600);
-    }
-    .feed-item {
-      display: grid;
-      gap: 4px;
-      padding: 12px 0 12px 14px;
-      border-bottom: 1px solid var(--border);
-      border-left: 3px solid transparent;
-      margin-left: 0;
-    }
-    .feed-item:last-child {
-      border-bottom: none;
-    }
-    .feed-item:hover {
-      border-left-color: var(--docked-nav-active);
-    }
-    .feed-meta {
-      font-size: 11px;
-      font-family: var(--font-sans);
-      font-weight: 600;
-      color: var(--docked-slate-600);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-    .feed-title {
-      font-family: var(--font-sans);
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--foreground);
-    }
-    .feed-item > span:last-child {
-      font-family: var(--font-sans);
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-    .status-row {
-      padding: 0 28px 18px;
-      color: var(--muted);
-      font-size: 13px;
-    }
+
+    /* ============================ RESPONSIVE ============================ */
     @media (max-width: 1120px) {
-      .workspace-main {
-        --workspace-nav-w: 0px;
-      }
-
+      .workspace-main { --workspace-nav-w: 0px; }
       .workspace-main[data-dock-side="right"],
-      .workspace-main[data-dock-side="left"] {
-        display: flex !important;
-        flex-direction: column !important;
-      }
-
+      .workspace-main[data-dock-side="left"] { display: flex !important; flex-direction: column !important; }
       .workspace-main[data-dock-side="right"] .workspace-nav,
       .workspace-main[data-dock-side="left"] .workspace-nav {
-        position: relative;
-        inset: auto;
-        z-index: auto;
-        width: 100%;
-        flex: 0 0 auto;
-        height: auto;
-        border-right: none;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 12px 16px 14px;
+        position: relative; inset: auto; z-index: auto; width: 100%; flex: 0 0 auto; height: auto;
+        border-right: none; border-bottom: 1px solid var(--border); padding: 10px 14px;
       }
-
-      .workspace-nav h2 {
-        margin: 0 0 10px;
-      }
-
-      .workspace-nav ul {
-        flex-direction: row !important;
-        flex-wrap: wrap;
-        gap: 6px !important;
-      }
-
-      .workspace-nav .nav-item {
-        font-size: 12px;
-        min-height: unset;
-        padding: 8px 12px;
-        white-space: nowrap;
-      }
-
-      .workspace-main[data-dock-side="right"] .workspace-stage,
-      .workspace-main[data-dock-side="left"] .workspace-stage {
-        flex: 1 1 auto;
-        min-height: 0;
-        width: 100%;
-      }
-
-      .workspace-main[data-dock-side="right"] .workspace-canvas {
-        padding-left: 24px;
-      }
+      .workspace-nav .nav-section, .workspace-nav .nav-spacer { display: none; }
+      .workspace-nav ul { flex-direction: row !important; flex-wrap: wrap; gap: 4px !important; }
+      .nav-item { padding: 6px 10px; }
+      .nav-item span { white-space: nowrap; }
+      .workspace-main[data-dock-side="right"] .workspace-canvas,
+      .workspace-main[data-dock-side="left"] .workspace-canvas { padding-left: 20px; padding-right: 20px; }
     }
-    @media (max-width: 860px) {
-      .workspace-grid {
-        grid-template-columns: 1fr;
-      }
-      .topbar-context__name {
-        display: none;
-      }
-      .topbar-context {
-        padding-left: 10px;
-        margin-left: 4px;
-      }
+    @media (max-width: 720px) {
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metric:nth-child(2) { border-right: none; }
+      .metric:nth-child(1), .metric:nth-child(2) { border-bottom: 1px solid var(--border); }
+      .topbar-search { display: none; }
+      .store-name { display: none; }
+      .admin-topbar { grid-template-columns: auto 1fr auto; }
     }
   </style>
 </head>
 <body>
   <div class="app-root">
+    <!-- ============================ TOP BAR ============================ -->
     <header class="admin-topbar">
-      <div class="admin-topbar__left">
-        <span class="admin-topbar__brand">
-          <span class="admin-topbar__logo" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-              <path d="M5 3v4" />
-              <path d="M19 17v4" />
-              <path d="M3 5h4" />
-              <path d="M17 19h4" />
-            </svg>
-          </span>
-          <span class="admin-topbar__wordmark">Persona <em>Docked</em></span>
-        </span>
-      </div>
-      <div class="admin-topbar__right">
-        <div id="assistant-coachmark" class="assistant-coachmark" role="note">
-          <span class="assistant-coachmark__label">Click the sparkles: open Copilot</span>
-          <svg
-            class="assistant-coachmark__arrow"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M5 12h14" />
-            <path d="m12 5 7 7-7 7" />
+      <a class="topbar-brand" href="#" onclick="return false">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4" />
           </svg>
+        </span>
+        <span class="brand-wordmark">Aster</span>
+      </a>
+
+      <div class="topbar-search" role="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+        <span>Search</span>
+        <kbd>⌘K</kbd>
+      </div>
+
+      <div class="topbar-right">
+        <div id="assistant-coachmark" class="assistant-coachmark" role="note">
+          <span class="assistant-coachmark__label">Meet Otto, your store copilot</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
         </div>
         <button
           type="button"
           id="assistant-toggle"
-          class="assistant-toggle--persist-highlight"
+          class="assistant-toggle--hint"
           aria-expanded="false"
           aria-describedby="assistant-coachmark"
-          aria-label="Open assistant"
-          title="Open assistant"
+          aria-label="Open Otto"
+          title="Open Otto"
         >
-          <!-- Lucide-style sparkles -->
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- sparkles -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-            <path d="M5 3v4" />
-            <path d="M19 17v4" />
-            <path d="M3 5h4" />
-            <path d="M17 19h4" />
+            <path d="M5 3v4M19 17v4M3 5h4M17 19h4" />
           </svg>
         </button>
         <button type="button" class="icon-btn--ghost" aria-label="Notifications (decorative)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-            <path d="M18 8A6 6 0 1 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke-linecap="round" />
-          </svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 1 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
         </button>
-        <div class="topbar-context">
-          <div class="topbar-avatar" aria-hidden="true">
-            <span class="topbar-avatar__glyph">AC</span>
-            <span class="topbar-avatar__status" title="Signed in"></span>
-          </div>
-          <span class="topbar-context__name">Acme Corp</span>
-          <span class="topbar-context__badge">staging</span>
+        <div class="topbar-store" title="Kestrel &amp; Co.">
+          <span class="store-avatar" aria-hidden="true">KC</span>
+          <span class="store-name">Kestrel &amp; Co.</span>
+          <span class="store-plan">Pro</span>
         </div>
       </div>
     </header>
 
+    <!-- ============================ BODY ============================ -->
     <div class="workspace-shell">
       <div class="workspace-panel">
         <section class="workspace-main" id="workspace-main" data-dock-side="right">
+          <!-- Left nav (sections drivable by Otto's switch_section tool) -->
           <aside class="workspace-nav">
-            <h2>Workspace</h2>
             <ul>
-              <li><span class="nav-item is-active" aria-current="page">Overview</span></li>
-              <li><span class="nav-item">Automation</span></li>
-              <li><span class="nav-item">Audience</span></li>
-              <li><span class="nav-item">Catalog</span></li>
-              <li><span class="nav-item">Publishing</span></li>
+              <li><span class="nav-item is-active" aria-current="page">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2h-4v-6H9v6H5a2 2 0 0 1-2-2z" /></svg>
+                <span>Home</span></span></li>
+              <li><span class="nav-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><path d="M3 6h18M16 10a4 4 0 0 1-8 0" /></svg>
+                <span>Orders</span></span></li>
+              <li><span class="nav-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15M21 8.5 12 13 3 8.5m9 4.5v9" /><path d="M20 16.5v-9a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 2 7.5v9a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 20 16.5" /></svg>
+                <span>Products</span></span></li>
+              <li><span class="nav-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                <span>Customers</span></span></li>
+              <li><span class="nav-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><line x1="19" x2="5" y1="5" y2="19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></svg>
+                <span>Discounts</span></span></li>
+              <li><span class="nav-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="M7 15l3-3 3 2 4-5" /></svg>
+                <span>Analytics</span></span></li>
+            </ul>
+            <div class="nav-section">Sales channels</div>
+            <ul>
+              <li><span class="nav-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20 15.3 15.3 0 0 1 0-20" /></svg>
+                <span>Online Store</span></span></li>
+              <li><span class="nav-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" /><path d="M12 18h.01" /></svg>
+                <span>Point of Sale</span></span></li>
+            </ul>
+            <div class="nav-spacer"></div>
+            <ul>
+              <li><span class="nav-item nav-item--settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+                <span>Settings</span></span></li>
             </ul>
           </aside>
+
           <div class="workspace-stage">
             <div id="workspace-dock-target">
               <div class="workspace-canvas">
-            <div class="workspace-banner">
-              <h3>Operations overview</h3>
-              <p>
-                Track launches, team activity, and performance in one place. Open Copilot from the header when you need answers or drafting help: it stays docked beside this view instead of covering your work.
-              </p>
-            </div>
-            <section class="dock-settings-card" aria-labelledby="dock-settings-heading">
-              <div class="dock-settings-card__inner">
-                <h4 class="dock-settings-card__title" id="dock-settings-heading">Assistant dock</h4>
-                <div class="dock-settings__row">
-                  <div class="dock-settings__field">
-                    <label for="dock-side">Side</label>
-                    <select id="dock-side" autocomplete="off">
-                      <option value="right" selected>Right</option>
-                      <option value="left">Left</option>
-                    </select>
+                <div class="canvas-inner">
+
+                  <div class="page-head">
+                    <h1 class="page-title">Home</h1>
+                    <span class="page-pill">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+                      Last 30 days
+                    </span>
                   </div>
-                  <div class="dock-settings__field">
-                    <label for="dock-width">Width when open</label>
-                    <input id="dock-width" type="text" value="420px" inputmode="numeric" autocomplete="off" />
-                  </div>
-                  <div class="dock-settings__field">
-                    <label for="dock-reveal">Reveal</label>
-                    <select id="dock-reveal" autocomplete="off" title="How the dock opens: resize column, overlay transform, or push track">
-                      <option value="resize">resize (flex width)</option>
-                      <option value="emerge" selected>emerge (resize + fixed panel)</option>
-                      <option value="overlay">overlay (transform)</option>
-                      <option value="push">push (translate)</option>
-                    </select>
-                  </div>
-                  <div class="dock-settings__field">
-                    <label class="dock-settings__check">
-                      <input id="dock-animate" type="checkbox" checked autocomplete="off" />
-                      <span>Animate</span>
-                    </label>
-                  </div>
-                  <button id="apply-dock-settings" type="button">Apply</button>
+
+                  <!-- Metrics -->
+                  <section class="card" aria-label="Store metrics">
+                    <div class="metrics">
+                      <div class="metric" data-metric="Sessions">
+                        <div class="metric__label">Sessions</div>
+                        <div class="metric__value">2,412</div>
+                        <div class="metric__delta is-up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>12.4%</div>
+                      </div>
+                      <div class="metric" data-metric="Total sales">
+                        <div class="metric__label">Total sales</div>
+                        <div class="metric__value">$18,240</div>
+                        <div class="metric__delta is-up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>8.4%</div>
+                      </div>
+                      <div class="metric" data-metric="Orders">
+                        <div class="metric__label">Orders</div>
+                        <div class="metric__value">143</div>
+                        <div class="metric__delta is-up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>5.1%</div>
+                      </div>
+                      <div class="metric" data-metric="Conversion rate">
+                        <div class="metric__label">Conversion rate</div>
+                        <div class="metric__value">3.8%</div>
+                        <div class="metric__delta is-flat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /></svg>0.2%</div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- Products / inventory -->
+                  <section class="card" id="product-card" aria-label="Products">
+                    <div class="card__head">
+                      <h3 class="card__title">Inventory</h3>
+                      <a class="card__link" href="#" onclick="return false">View all</a>
+                    </div>
+                    <div class="prod-list" id="product-list">
+                      <div class="prod" data-product="Aurora Table Lamp" data-inventory="54" data-status="in">
+                        <span class="prod__thumb" style="background:#fdeede">💡</span>
+                        <div><div class="prod__name">Aurora Table Lamp</div><div class="prod__sku">SKU · AUR-114</div></div>
+                        <div class="prod__price">$128.00</div>
+                        <div class="prod__stock"><span class="stock-badge stock-badge--in">In stock</span><span class="prod__count">54</span></div>
+                      </div>
+                      <div class="prod" data-product="Linen Throw Blanket" data-inventory="7" data-status="low">
+                        <span class="prod__thumb" style="background:#eef1fb">🧺</span>
+                        <div><div class="prod__name">Linen Throw Blanket</div><div class="prod__sku">SKU · LIN-042</div></div>
+                        <div class="prod__price">$64.00</div>
+                        <div class="prod__stock"><span class="stock-badge stock-badge--low">Low stock</span><span class="prod__count">7</span></div>
+                      </div>
+                      <div class="prod" data-product="Ceramic Pour-Over" data-inventory="0" data-status="out">
+                        <span class="prod__thumb" style="background:#eef6f1">☕️</span>
+                        <div><div class="prod__name">Ceramic Pour-Over</div><div class="prod__sku">SKU · CER-088</div></div>
+                        <div class="prod__price">$42.00</div>
+                        <div class="prod__stock"><span class="stock-badge stock-badge--out">Sold out</span><span class="prod__count">0</span></div>
+                      </div>
+                      <div class="prod" data-product="Walnut Desk Shelf" data-inventory="31" data-status="in">
+                        <span class="prod__thumb" style="background:#f4efe7">🗄️</span>
+                        <div><div class="prod__name">Walnut Desk Shelf</div><div class="prod__sku">SKU · WAL-205</div></div>
+                        <div class="prod__price">$96.00</div>
+                        <div class="prod__stock"><span class="stock-badge stock-badge--in">In stock</span><span class="prod__count">31</span></div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- Recent activity -->
+                  <section class="card" aria-label="Recent activity">
+                    <div class="card__head"><h3 class="card__title">Recent activity</h3></div>
+                    <div class="feed" id="activity-feed">
+                      <div class="feed-item">
+                        <span class="feed-meta">Today · 2:14 PM</span>
+                        <span class="feed-title">Order #1043 fulfilled</span>
+                        <span>Two items shipped to Portland, OR via standard delivery.</span>
+                      </div>
+                      <div class="feed-item">
+                        <span class="feed-meta">Today · 11:02 AM</span>
+                        <span class="feed-title">Price updated on Aurora Table Lamp</span>
+                        <span>Raised to $128.00 after the summer-collection refresh.</span>
+                      </div>
+                      <div class="feed-item">
+                        <span class="feed-meta">Yesterday</span>
+                        <span class="feed-title">New 5★ review on Linen Throw Blanket</span>
+                        <span>“Softer than expected and ships fast.” — verified buyer.</span>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- Assistant dock settings (demo control; Otto can drive this too) -->
+                  <section class="card dock-settings-card" aria-labelledby="dock-settings-heading">
+                    <div class="dock-settings-card__inner">
+                      <h4 class="dock-settings-card__title" id="dock-settings-heading">Assistant dock</h4>
+                      <div class="dock-settings__row">
+                        <div class="dock-settings__field">
+                          <label for="dock-side">Side</label>
+                          <select id="dock-side" autocomplete="off">
+                            <option value="right" selected>Right</option>
+                            <option value="left">Left</option>
+                          </select>
+                        </div>
+                        <div class="dock-settings__field">
+                          <label for="dock-width">Width when open</label>
+                          <input id="dock-width" type="text" value="420px" inputmode="numeric" autocomplete="off" />
+                        </div>
+                        <div class="dock-settings__field">
+                          <label for="dock-reveal">Reveal</label>
+                          <select id="dock-reveal" autocomplete="off" title="How the dock opens: resize column, overlay transform, or push track">
+                            <option value="resize">resize (flex width)</option>
+                            <option value="emerge" selected>emerge (resize + fixed panel)</option>
+                            <option value="overlay">overlay (transform)</option>
+                            <option value="push">push (translate)</option>
+                          </select>
+                        </div>
+                        <label class="dock-settings__check">
+                          <input id="dock-animate" type="checkbox" checked autocomplete="off" />
+                          <span>Animate</span>
+                        </label>
+                        <button id="apply-dock-settings" type="button">Apply</button>
+                      </div>
+                    </div>
+                    <p class="dock-settings__status" id="dock-status"></p>
+                  </section>
+
                 </div>
-              </div>
-              <p class="dock-settings__status" id="dock-status"></p>
-            </section>
-            <div class="workspace-grid">
-              <article class="workspace-card">
-                <h4>Launch checklist</h4>
-                <p>Review assets, update pricing, and confirm event tracking before publication.</p>
-              </article>
-              <article class="workspace-card">
-                <h4>Team updates</h4>
-                <p>Two new comments need responses in the shared brand workspace.</p>
-              </article>
-              <article class="workspace-card">
-                <h4>Performance</h4>
-                <p>Conversion is up 8.4% this week after the latest merchandising changes.</p>
-              </article>
-            </div>
-            <div class="workspace-feed">
-              <h4 class="workspace-feed__heading">Recent activity</h4>
-              <div class="feed-item">
-                <span class="feed-meta">Today</span>
-                <span class="feed-title">Campaign brief approved</span>
-                <span>AI assistant suggested a shorter launch checklist for the team review.</span>
-              </div>
-              <div class="feed-item">
-                <span class="feed-meta">Yesterday</span>
-                <span class="feed-title">Homepage hero refreshed</span>
-                <span>Variant B is performing best on desktop traffic and retained its mobile score.</span>
-              </div>
-              <div class="feed-item">
-                <span class="feed-meta">This week</span>
-                <span class="feed-title">Partner onboarding queue</span>
-                <span>Three new partner submissions are awaiting audit and copy review.</span>
-              </div>
-            </div>
               </div>
             </div>
           </div>
