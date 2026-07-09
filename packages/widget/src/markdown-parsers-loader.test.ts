@@ -94,6 +94,31 @@ describe("onMarkdownParsersReady", () => {
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
+  it("drops pending subscribers and allows a retry when the chunk load rejects", async () => {
+    const loader = await freshLoader();
+    let attempt = 0;
+    loader.setMarkdownParsersLoader(() => {
+      attempt += 1;
+      return attempt === 1
+        ? Promise.reject(new Error("chunk 404"))
+        : Promise.resolve(FAKE_PARSERS);
+    });
+
+    const cb = vi.fn();
+    loader.onMarkdownParsersReady(cb);
+    await expect(loader.loadMarkdownParsers()).rejects.toThrow("chunk 404");
+    expect(cb).not.toHaveBeenCalled();
+
+    // A later subscribe re-triggers the load (rejected promise was not cached)
+    // and heals — the leak-free path.
+    const cb2 = vi.fn();
+    loader.onMarkdownParsersReady(cb2);
+    await vi.waitFor(() => expect(cb2).toHaveBeenCalledTimes(1));
+    // The dropped first subscriber stays dropped.
+    expect(cb).not.toHaveBeenCalled();
+    expect(attempt).toBe(2);
+  });
+
   it("one throwing subscriber does not starve the others", async () => {
     const loader = await freshLoader();
     loader.setMarkdownParsersLoader(() => Promise.resolve(FAKE_PARSERS));

@@ -94,6 +94,28 @@ describe("artifact pane parser-ready self-heal (parsers not loaded at first rend
     expect(content.textContent).not.toContain("**bold**");
   });
 
+  it("destroy() unsubscribes so a late chunk resolution can't re-render the torn-down pane", () => {
+    vi.spyOn(parsersLoader, "getMarkdownParsersSync").mockReturnValue(null);
+    let readyCb: (() => void) | undefined;
+    const unsubscribe = vi.fn();
+    vi.spyOn(parsersLoader, "onMarkdownParsersReady").mockImplementation((cb) => {
+      readyCb = cb;
+      return unsubscribe;
+    });
+
+    const { pane, content } = createPane();
+    pane.update({ artifacts: [artifact(MARKDOWN)], selectedId: "a1" });
+
+    pane.destroy();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+
+    // Even if a stale event still fires the captured callback, the escaped
+    // fallback stands — nothing re-renders into the detached pane as markdown.
+    readyCb?.();
+    expect(content.querySelector("h1")).toBeNull();
+    expect(content.textContent).toContain("# Welcome");
+  });
+
   it("renders markdown directly when parsers are already loaded", () => {
     // No getMarkdownParsersSync spy: the eager-provided bundle is live.
     const { pane, content } = createPane();

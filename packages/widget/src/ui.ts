@@ -2789,6 +2789,8 @@ export const createAgentExperience = (
     }
     artifactPaneApi?.element.style.removeProperty("width");
     artifactPaneApi?.element.style.removeProperty("maxWidth");
+    // Release the pane's parser-ready subscription (see artifact-pane.ts).
+    artifactPaneApi?.destroy();
   });
 
   // Event stream cleanup
@@ -8665,12 +8667,15 @@ export const createAgentExperience = (
   // the `markdownReadyAtInit` guard is redundant — kept only to skip the
   // subscription bookkeeping on the common eager path.
   if (!markdownReadyAtInit) {
-    onMarkdownParsersReady(() => {
+    const unsubscribeParsersReady = onMarkdownParsersReady(() => {
       if (!session) return;
       configVersion++;
       messageCache.clear();
       renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
     });
+    // Drop the subscription on teardown so a late chunk resolution can't clear
+    // the cache and render into a detached `messagesWrapper`.
+    destroyCallbacks.push(unsubscribeParsersReady);
   }
 
   return controller;

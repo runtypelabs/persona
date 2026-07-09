@@ -14,6 +14,8 @@ export type ArtifactPaneApi = {
   backdrop: HTMLElement | null;
   update: (state: { artifacts: PersonaArtifactRecord[]; selectedId: string | null }) => void;
   setMobileOpen: (open: boolean) => void;
+  /** Release the parser-ready subscription so a post-teardown event can't render into detached DOM. */
+  destroy: () => void;
 };
 
 function fallbackComponentCard(sel: PersonaArtifactRecord): HTMLElement {
@@ -434,11 +436,14 @@ export function createArtifactPane(
   // fallback, and this pane otherwise only re-renders on update()/interaction.
   // Chat messages share this exact hook; centralizing it means a surface can't
   // silently miss the parser-ready re-render. No-op once parsers are loaded.
-  onMarkdownParsersReady(() => render());
+  // `destroy()` unsubscribes so a late chunk resolution can't render into
+  // detached DOM (or pin the last records) after teardown.
+  const unsubscribeParsersReady = onMarkdownParsersReady(() => render());
 
   return {
     element: shell,
     backdrop,
+    destroy: unsubscribeParsersReady,
     update(state: { artifacts: PersonaArtifactRecord[]; selectedId: string | null }) {
       records = state.artifacts;
       selectedId =

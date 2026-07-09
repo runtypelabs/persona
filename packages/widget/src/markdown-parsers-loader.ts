@@ -61,7 +61,9 @@ export const onMarkdownParsersReady = (cb: () => void): (() => void) => {
   if (moduleCache) return () => {};
   readySubscribers.add(cb);
   // Ensure the chunk is actually being fetched; harmless if already in flight.
-  void loadMarkdownParsers();
+  // Swallow rejection here — `onLoadFailure` already drops the subscriber and
+  // the surface keeps its escaped fallback; this only avoids an unhandled reject.
+  void loadMarkdownParsers().catch(() => {});
   return () => {
     readySubscribers.delete(cb);
   };
@@ -79,15 +81,26 @@ export const provideMarkdownParsers = (mod: MarkdownParsersModule): void => {
   markParsersReady(mod);
 };
 
+// On a failed chunk load (404, ad blocker, offline), don't retain the rejected
+// promise or the waiting subscribers forever: reset so a later subscribe/load
+// can retry, and drop the pending callbacks (their surfaces keep the escaped
+// fallback, which is the documented degraded behavior). Re-throw so awaiters of
+// loadMarkdownParsers() still observe the rejection.
+const onLoadFailure = (err: unknown): never => {
+  loadPromise = null;
+  readySubscribers.clear();
+  throw err;
+};
+
 export const loadMarkdownParsers = (): Promise<MarkdownParsersModule> => {
   if (moduleCache) return Promise.resolve(moduleCache);
   if (loadPromise) return loadPromise;
   if (!loader) {
     // Fallback for regular ESM/CJS consumers (they import directly)
-    loadPromise = import("./markdown-parsers-entry").then(markParsersReady);
+    loadPromise = import("./markdown-parsers-entry").then(markParsersReady, onLoadFailure);
     return loadPromise;
   }
-  loadPromise = loader().then(markParsersReady);
+  loadPromise = loader().then(markParsersReady, onLoadFailure);
   return loadPromise;
 };
 
