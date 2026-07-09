@@ -60,7 +60,101 @@ const TOOL_LABELS: Record<string, [string, string]> = {
   restock_product: ["Updating inventory", "Updated inventory"],
   log_activity: ["Logging activity", "Logged activity"],
   set_dock_layout: ["Repositioning", "Repositioned my panel"],
+  restyle_copilot: ["Restyling", "Gave myself a new look"],
 };
+
+// ---------------------------------------------------------------------------
+// Appearance knobs (Copilot settings card + the restyle_copilot tool).
+//
+// The accent presets rewrite the page's --brand* custom properties, which every
+// Otto-owned surface (widget seams, launcher on-state, inline charts, gradient
+// tool strip) reads live — so one swatch click (or one tool call from Otto)
+// recolors the whole copilot without a re-mount.
+// ---------------------------------------------------------------------------
+
+const ACCENT_PRESETS = {
+  violet: { base: "#5e56e7", hover: "#4f47d6", deep: "#4038c4", mid: "#7c6cf5", bright: "#b7adff", soft: "#efeefe" },
+  ocean: { base: "#0f7ac4", hover: "#0d6cae", deep: "#0b5a94", mid: "#2f96dd", bright: "#9fd2f4", soft: "#e9f4fc" },
+  forest: { base: "#177a53", hover: "#136a48", deep: "#0f5c3e", mid: "#2f9a6f", bright: "#9fdcc0", soft: "#e8f6ef" },
+  ember: { base: "#c2410c", hover: "#ad3a0b", deep: "#993108", mid: "#e05e26", bright: "#f6b795", soft: "#fdeee5" },
+} as const;
+type AccentName = keyof typeof ACCENT_PRESETS;
+type OttoAnimation = "shimmer-color" | "rainbow" | "pulse" | "none";
+
+const appearance: { accent: AccentName; radius: number; animation: OttoAnimation } = {
+  accent: "violet",
+  radius: 14,
+  animation: "shimmer-color",
+};
+
+/** Widget theme derived from the active accent (full object: `update` merges shallowly). */
+function buildOttoTheme() {
+  const p = ACCENT_PRESETS[appearance.accent];
+  return {
+    semantic: {
+      colors: {
+        primary: p.base,
+        accent: p.base,
+        surface: "#ffffff",
+        background: "#ffffff",
+        textMuted: "#616161",
+        interactive: {
+          default: p.base,
+          hover: p.hover,
+          focus: p.hover,
+          active: p.deep,
+        },
+        feedback: {
+          info: p.base,
+        },
+      },
+    },
+    components: {
+      panel: { borderRadius: "0" },
+      header: { borderRadius: "0" },
+    },
+  };
+}
+
+/** Features block derived from the animation knob (grouped steps stay fixed). */
+function buildOttoFeatures() {
+  return {
+    ...DEFAULT_WIDGET_CONFIG.features,
+    showReasoning: false,
+    toolCallDisplay: {
+      ...DEFAULT_WIDGET_CONFIG.features?.toolCallDisplay,
+      collapsedMode: "tool-name" as const,
+      grouped: true,
+      expandable: false,
+      loadingAnimation: appearance.animation,
+    },
+  };
+}
+
+/** Tool-call presentation: friendly labels + accent-matched gradient shimmer. */
+function buildOttoToolCall() {
+  const p = ACCENT_PRESETS[appearance.accent];
+  return {
+    loadingAnimationColor: p.base,
+    loadingAnimationSecondaryColor: p.bright,
+    loadingAnimationDuration: 1500,
+    renderCollapsedSummary: ({
+      toolCall,
+      isActive,
+    }: {
+      toolCall: { name?: string };
+      isActive: boolean;
+    }) => {
+      const label = toolCall.name ? TOOL_LABELS[toolCall.name] : undefined;
+      return label ? (isActive ? `${label[0]}…` : label[1]) : null;
+    },
+    renderGroupedSummary: ({ toolCalls }: { toolCalls: Array<{ status: string }> }) => {
+      const active = toolCalls.some((t) => t.status !== "complete");
+      const n = toolCalls.length;
+      return active ? "Working on your store…" : `Completed ${n} ${n === 1 ? "step" : "steps"}`;
+    },
+  };
+}
 
 const dockSideSelect = document.getElementById("dock-side") as HTMLSelectElement | null;
 const dockWidthInput = document.getElementById("dock-width") as HTMLInputElement | null;
@@ -161,33 +255,11 @@ function createController(): AgentWidgetInitHandle {
       apiUrl,
       storageAdapter: createLocalStorageAdapter("persona-state-docked-panel-demo"),
       launcher: getDemoLauncher(),
-      // Violet brand for Otto. Rounding/surface details are refined on the CSS
-      // seams in docked-panel-demo.html; the panel + header stay flush (radius 0)
-      // so the dock sits cleanly against the admin edge like a first-party panel.
-      theme: {
-        semantic: {
-          colors: {
-            primary: "#5e56e7",
-            accent: "#5e56e7",
-            surface: "#ffffff",
-            background: "#ffffff",
-            textMuted: "#616161",
-            interactive: {
-              default: "#5e56e7",
-              hover: "#4f47d6",
-              focus: "#4f47d6",
-              active: "#4038c4",
-            },
-            feedback: {
-              info: "#5e56e7",
-            },
-          },
-        },
-        components: {
-          panel: { borderRadius: "0" },
-          header: { borderRadius: "0" },
-        },
-      },
+      // Accent-preset theme for Otto (violet by default; the Copilot-settings
+      // swatches and restyle_copilot swap it live). Rounding/surface details are
+      // refined on the CSS seams in docked-panel-demo.html; the panel + header
+      // stay flush (radius 0) so the dock sits cleanly against the admin edge.
+      theme: buildOttoTheme(),
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
         welcomeTitle: "How can I help?",
@@ -197,44 +269,22 @@ function createController(): AgentWidgetInitHandle {
       },
       // Ordered to walk the tool surface: an inline chart (auto-approved),
       // a ranked bar chart, then two mutations that raise Otto's approval
-      // bubble — one restocks a product on the page, one moves Otto's own dock.
+      // bubble — one restocks a product on the page, one restyles + re-docks
+      // Otto itself (two grouped tool calls from one ask).
       suggestionChips: [
         "How are sales trending this month?",
         "Show my top products by revenue",
         "Restock the Ceramic Pour-Over",
-        "Dock yourself on the left at 380px",
+        "Go ocean blue and dock on the left",
       ],
       webmcp: {
         enabled: true,
         autoApprove: (info: WebMcpConfirmInfo): boolean => READ_ONLY_TOOLS.has(info.toolName),
       },
       // Group Otto's steps into one compact strip with plain-language labels,
-      // and give the running step a violet gradient shimmer.
-      features: {
-        ...DEFAULT_WIDGET_CONFIG.features,
-        showReasoning: false,
-        toolCallDisplay: {
-          ...DEFAULT_WIDGET_CONFIG.features?.toolCallDisplay,
-          collapsedMode: "tool-name",
-          grouped: true,
-          expandable: false,
-          loadingAnimation: "shimmer-color",
-        },
-      },
-      toolCall: {
-        loadingAnimationColor: "#5e56e7",
-        loadingAnimationSecondaryColor: "#b7adff",
-        loadingAnimationDuration: 1500,
-        renderCollapsedSummary: ({ toolCall, isActive }) => {
-          const label = toolCall.name ? TOOL_LABELS[toolCall.name] : undefined;
-          return label ? (isActive ? `${label[0]}…` : label[1]) : null;
-        },
-        renderGroupedSummary: ({ toolCalls }) => {
-          const active = toolCalls.some((t) => t.status !== "complete");
-          const n = toolCalls.length;
-          return active ? "Working on your store…" : `Completed ${n} ${n === 1 ? "step" : "steps"}`;
-        },
-      },
+      // and give the running step an accent-matched gradient shimmer.
+      features: buildOttoFeatures(),
+      toolCall: buildOttoToolCall(),
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     },
   });
@@ -280,6 +330,77 @@ assistantToggle.addEventListener("click", () => {
   document.getElementById("assistant-coachmark")?.remove();
   controller.toggle();
 });
+
+// ---------------------------------------------------------------------------
+// Appearance knobs: swatches, corner slider, animation segmented control.
+// Live-apply (no button): the page tokens restyle CSS-driven surfaces instantly
+// and `controller.update` re-themes the widget's own token-driven bits.
+// ---------------------------------------------------------------------------
+
+const swatchButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("#accent-swatches .swatch"),
+);
+const radiusInput = document.getElementById("otto-radius") as HTMLInputElement | null;
+const radiusReadout = document.getElementById("otto-radius-readout");
+const animButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("#otto-anim button"),
+);
+
+function syncAppearanceUi(): void {
+  swatchButtons.forEach((btn) => {
+    btn.setAttribute("aria-checked", btn.dataset.accent === appearance.accent ? "true" : "false");
+  });
+  if (radiusInput) radiusInput.value = String(appearance.radius);
+  if (radiusReadout) radiusReadout.textContent = `${appearance.radius}px`;
+  animButtons.forEach((btn) => {
+    btn.setAttribute("aria-checked", btn.dataset.anim === appearance.animation ? "true" : "false");
+  });
+}
+
+function applyAppearance(statusLabel = "Appearance updated."): void {
+  const p = ACCENT_PRESETS[appearance.accent];
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty("--brand", p.base);
+  rootStyle.setProperty("--brand-600", p.hover);
+  rootStyle.setProperty("--brand-700", p.deep);
+  rootStyle.setProperty("--brand-2", p.mid);
+  rootStyle.setProperty("--brand-bright", p.bright);
+  rootStyle.setProperty("--brand-soft", p.soft);
+  rootStyle.setProperty("--otto-radius", `${appearance.radius}px`);
+  rootStyle.setProperty("--otto-radius-sm", `${Math.max(6, appearance.radius - 4)}px`);
+  controller.update({
+    theme: buildOttoTheme(),
+    features: buildOttoFeatures(),
+    toolCall: buildOttoToolCall(),
+  });
+  syncAppearanceUi();
+  updateStatus(statusLabel);
+}
+
+swatchButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const name = btn.dataset.accent as AccentName | undefined;
+    if (!name || !(name in ACCENT_PRESETS)) return;
+    appearance.accent = name;
+    applyAppearance(`Accent set to ${name}.`);
+  });
+});
+
+radiusInput?.addEventListener("input", () => {
+  appearance.radius = Number(radiusInput.value) || 14;
+  applyAppearance(`Corners set to ${appearance.radius}px.`);
+});
+
+animButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const anim = btn.dataset.anim as OttoAnimation | undefined;
+    if (!anim || !["shimmer-color", "rainbow", "pulse", "none"].includes(anim)) return;
+    appearance.animation = anim;
+    applyAppearance(`Working animation: ${anim}.`);
+  });
+});
+
+syncAppearanceUi();
 
 // ---------------------------------------------------------------------------
 // WebMCP page tools
@@ -358,6 +479,7 @@ if (modelContext) {
         products,
         activity,
         dock: getDockConfig(),
+        appearance: { ...appearance },
       };
     },
   });
@@ -618,6 +740,52 @@ if (modelContext) {
       }
       applyDockSettings();
       return { ok: true, dock: getDockConfig() };
+    },
+  });
+
+  // -- restyle_copilot (mutating: Otto restyles itself) --
+  modelContext.registerTool({
+    name: "restyle_copilot",
+    title: "Restyle Otto",
+    description:
+      "Change Otto's own appearance — the same knobs as the Copilot settings card. All fields optional; omitted ones keep their current value. accent: 'violet' | 'ocean' | 'forest' | 'ember' (ocean is the blue one). radius: corner rounding in px, 4–22. animation: 'shimmer-color' | 'rainbow' | 'pulse' | 'none' (the working-step header animation).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        accent: { type: "string", enum: ["violet", "ocean", "forest", "ember"] },
+        radius: { type: "number", description: "Corner rounding in px (4–22)." },
+        animation: { type: "string", enum: ["shimmer-color", "rainbow", "pulse", "none"] },
+      },
+    },
+    annotations: { readOnlyHint: false },
+    execute(args) {
+      if (args.accent !== undefined) {
+        const accent = String(args.accent);
+        if (!(accent in ACCENT_PRESETS)) {
+          throw new Error(
+            `Unknown accent "${args.accent}". Available: ${Object.keys(ACCENT_PRESETS).join(", ")}.`,
+          );
+        }
+        appearance.accent = accent as AccentName;
+      }
+      if (args.radius !== undefined) {
+        const radius = Number(args.radius);
+        if (!Number.isFinite(radius)) {
+          throw new Error(`Invalid radius "${args.radius}": use a number of pixels (4–22).`);
+        }
+        appearance.radius = Math.min(22, Math.max(4, Math.round(radius)));
+      }
+      if (args.animation !== undefined) {
+        const animation = String(args.animation);
+        if (!["shimmer-color", "rainbow", "pulse", "none"].includes(animation)) {
+          throw new Error(
+            `Invalid animation "${args.animation}": use shimmer-color, rainbow, pulse, or none.`,
+          );
+        }
+        appearance.animation = animation as OttoAnimation;
+      }
+      applyAppearance("Otto restyled itself.");
+      return { ok: true, appearance: { ...appearance } };
     },
   });
 }
