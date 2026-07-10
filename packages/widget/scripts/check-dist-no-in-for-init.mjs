@@ -1,4 +1,4 @@
-// Regression gate: fail the build if any dist/**/*.js contains an `in`
+// Regression gate: fail the build if any dist JS bundle (.js/.cjs/.mjs) contains an `in`
 // expression inside a `for(init;;)` head — including inside ARROW function
 // bodies nested in that head, which is where the minifier actually puts them.
 //
@@ -38,13 +38,16 @@ function collectJsFiles(dir) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) out.push(...collectJsFiles(full));
-    else if (entry.endsWith(".js")) out.push(full);
+    else if (entry.endsWith(".js") || entry.endsWith(".cjs") || entry.endsWith(".mjs"))
+      out.push(full);
   }
   return out;
 }
 
-function findInExprsInForInit(code) {
-  const ast = acorn.parse(code, { ecmaVersion: "latest", sourceType: "module" });
+function findInExprsInForInit(code, file) {
+  // .cjs bundles are scripts (top-level `require`/`module`), not ESM.
+  const sourceType = file.endsWith(".cjs") ? "script" : "module";
+  const ast = acorn.parse(code, { ecmaVersion: "latest", sourceType });
   const hits = [];
   const walk = (node, inForInit) => {
     if (node == null || typeof node !== "object") return;
@@ -57,10 +60,14 @@ function findInExprsInForInit(code) {
       hits.push(node.start);
     }
     if (node.type === "ForStatement") {
+      // Only the init clause carries the no-in restriction. A nested for's
+      // test/update/body reset it even inside an outer for-init's arrow body
+      // (verified empirically against Vite 8.1.4 / Rolldown 1.1.5: `in` in a
+      // nested loop's test clause builds correctly, parenthesized or not).
       walk(node.init, true);
-      walk(node.test, inForInit);
-      walk(node.update, inForInit);
-      walk(node.body, inForInit);
+      walk(node.test, false);
+      walk(node.update, false);
+      walk(node.body, false);
       return;
     }
     if (
@@ -92,7 +99,7 @@ for (const file of collectJsFiles(DIST)) {
   scanned++;
   let hits;
   try {
-    hits = findInExprsInForInit(code);
+    hits = findInExprsInForInit(code, file);
   } catch (err) {
     console.error(`check-dist-no-in-for-init: acorn failed to parse ${file}: ${err.message}`);
     failed = true;
