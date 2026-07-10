@@ -2562,7 +2562,11 @@ export class AgentWidgetClient {
             const message =
               typeof e === "string" && e !== ""
                 ? e
-                : e != null && typeof e === "object" && "message" in e
+                : // Reflect.has, not `in`: the `in` operator inside an arrow body can
+                  // be minified into a `for(init;;)` head, which Oxc mis-parses and
+                  // Rolldown (Vite 8) silently emits as an empty chunk. Same
+                  // [[HasProperty]] semantics. Enforced by scripts/check-dist-no-in-for-init.mjs.
+                  e != null && typeof e === "object" && Reflect.has(e, "message")
                   ? String((e as { message?: unknown }).message ?? "Step failed")
                   : "Step failed";
             onEvent({ type: "error", error: new Error(message) });
@@ -3145,7 +3149,8 @@ export class AgentWidgetClient {
             const e = payload.error;
             if (typeof e === "string" && e !== "") {
               resolvedError = new Error(e);
-            } else if (e != null && typeof e === "object" && "message" in e) {
+            } else if (e != null && typeof e === "object" && Reflect.has(e, "message")) {
+              // Reflect.has, not `in` — see the note on the equivalent guard above.
               resolvedError = new Error(String((e as { message?: unknown }).message ?? e));
             }
           }
