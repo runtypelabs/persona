@@ -69,7 +69,8 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations && pnpm run check:dist-vite8",
+    "check:dist-vite8": "node scripts/check-dist-no-in-for-init.mjs",
     "build:markdown-parsers": "tsup --config tsup.markdown-parsers.config.ts",
     "build:plugin-kit": "tsup src/plugin-kit.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:theme-editor": "tsup src/theme-editor.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
@@ -107,6 +108,7 @@
   },
   "devDependencies": {
     "@size-limit/file": "^12.1.0",
+    "acorn": "^8.15.0",
     "@types/node": "^20.12.7",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
