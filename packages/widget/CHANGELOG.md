@@ -1,5 +1,13 @@
 # @runtypelabs/persona
 
+## 4.6.1
+
+### Patch Changes
+
+- 0a425f2: Fix Vite 8 (Rolldown/Oxc) consumers: the minified dist contained an `in` expression inside a `for(init;;)` head (via an arrow body), a shape Oxc mis-parses ("Expected a semicolon") and Rolldown can silently emit as an empty chunk. The two `"message" in e` error guards are now `Reflect.has(e, "message")` (identical `[[HasProperty]]` semantics), and the build gains a dist-scan gate (`check:dist-vite8`) that fails if the toxic shape ever reappears in `dist/`.
+- f165f4e: Fix the live tool-duration counter flickering between `<0.1s` and `0.1s` while a tool stays active. The `{duration}` span is updated by a 100ms global timer, but idiomorph was re-stamping it with the render-time value on every transcript re-render (when `loadingAnimation` is `"none"`, the tool title isn't preserved across morphs), so the two writers fought around the sub-0.1s boundary. The morph now leaves a still-live `[data-tool-elapsed]` span to the timer and only re-morphs it once the tool completes (or its slot is reused).
+- 9105cae: Regenerate the Runtype OpenAPI contract types from the latest published spec (adds `blockReason`, `approvalId`, and subagent `parentToolCallId` fields to stream event types). Fixes the `check:runtype-types` CI gate.
+
 ## 4.6.0
 
 ### Minor Changes
