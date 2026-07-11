@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "pnpm --filter @runtypelabs/persona build && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:run": "vitest run src"
   },
   "dependencies": {
     "@mcp-b/global": "^3.0.0",

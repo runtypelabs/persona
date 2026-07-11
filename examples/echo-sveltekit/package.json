@@ -8,7 +8,7 @@
     "build": "pnpm --filter @runtypelabs/persona build && vite build",
     "preview": "vite preview",
     "lint": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run"
+    "test": "svelte-kit sync && vitest run"
   },
   "dependencies": {
     "@runtypelabs/persona": "workspace:^"

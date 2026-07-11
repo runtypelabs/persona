@@ -1,5 +1,6 @@
 /**
- * Shared test helper, exported from `@persona-examples/wire/testing`.
+ * Zero-dependency test helper vendored by Persona examples. Lift it alongside
+ * the wire helper when testing a copied adapter.
  *
  * Parses a Persona SSE response and summarizes it so adapter tests can
  * assert the run is well-formed without re-implementing SSE parsing each time.

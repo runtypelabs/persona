@@ -3,6 +3,12 @@
 
 RUNTYPE_API_KEY=rt_test_your_api_key_here
 
+# PROXY_RATE_LIMIT_REQUESTS=60
+# PROXY_EXPENSIVE_RATE_LIMIT_REQUESTS=20
+# PROXY_RATE_LIMIT_WINDOW_SECONDS=60
+# PROXY_MAX_BODY_BYTES=16777216
+# PROXY_BEARER_TOKEN=replace_with_a_long_random_token
+
 # FLOW_ID_FORM_DIRECTIVE=flow_your_form_directive_flow_id_here
 # FLOW_ID_SHOPPING_ASSISTANT=flow_your_shopping_assistant_flow_id_here
 # FLOW_ID_SHOPPING_ASSISTANT_METADATA=flow_your_shopping_metadata_flow_id_here

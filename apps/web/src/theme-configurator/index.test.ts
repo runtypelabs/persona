@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const mockCreateAgentExperience = vi.fn(() => ({
   update: vi.fn(),
@@ -320,6 +320,10 @@ describe('theme configurator shell', () => {
       </div>
       <div id="editor-toast" class="editor-toast hidden"></div>
     `;
+  });
+
+  afterEach(() => {
+    window.dispatchEvent(new Event('beforeunload'));
   });
 
   test('initializes grouped sections and preview shell', async () => {

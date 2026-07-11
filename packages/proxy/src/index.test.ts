@@ -391,3 +391,212 @@ describe("dispatch: server-pinned agent config", () => {
     ).toThrow(/agentConfig and agentId are mutually exclusive/);
   });
 });
+
+describe("request guards and JSON body limits", () => {
+  const realFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    vi.restoreAllMocks();
+  });
+
+  const stubUpstream = () => {
+    const mock = vi.fn(async () =>
+      new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    globalThis.fetch = mock as unknown as typeof fetch;
+    return mock;
+  };
+
+  const post = (
+    app: ReturnType<typeof createChatProxyApp>,
+    path: string,
+    body: string,
+    headers: Record<string, string> = {}
+  ) =>
+    app.request(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body,
+    });
+
+  it("preserves legacy behavior when guard and limit options are omitted", async () => {
+    const upstream = stubUpstream();
+    const app = createChatProxyApp({ apiKey: "test-key" });
+    const response = await post(
+      app,
+      "/api/chat/dispatch",
+      JSON.stringify({ messages: [{ role: "user", content: "hello" }] })
+    );
+    expect(response.status).toBe(200);
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports the correct kind and mounted path for every guarded route", async () => {
+    stubUpstream();
+    const seen: Array<{ kind: string; path: string }> = [];
+    const app = createChatProxyApp({
+      apiKey: "test-key",
+      requestGuard: ({ kind, path }) => {
+        seen.push({ kind, path });
+      },
+    });
+
+    await post(app, "/api/chat/dispatch", JSON.stringify({ messages: [] }));
+    await post(
+      app,
+      "/api/chat/dispatch/resume",
+      JSON.stringify({ executionId: "execution-1", toolOutputs: {} })
+    );
+    await post(
+      app,
+      "/api/feedback",
+      JSON.stringify({ type: "upvote", messageId: "message-1" })
+    );
+
+    expect(seen).toEqual([
+      { kind: "dispatch", path: "/api/chat/dispatch" },
+      { kind: "resume", path: "/api/chat/dispatch/resume" },
+      { kind: "feedback", path: "/api/feedback" },
+    ]);
+  });
+
+  it("lets a guard read its request copy without consuming dispatch", async () => {
+    const upstream = stubUpstream();
+    const body = JSON.stringify({ messages: [{ role: "user", content: "signed" }] });
+    let guardedBody = "";
+    const app = createChatProxyApp({
+      apiKey: "test-key",
+      maxRequestBodyBytes: new TextEncoder().encode(body).byteLength,
+      requestGuard: async ({ request }) => {
+        guardedBody = await request.text();
+      },
+    });
+
+    const response = await post(app, "/api/chat/dispatch", body);
+    expect(response.status).toBe(200);
+    expect(guardedBody).toBe(body);
+    expect(upstream).toHaveBeenCalledOnce();
+    const calls = upstream.mock.calls as unknown as Array<
+      [unknown, { body?: unknown }]
+    >;
+    const forwarded = JSON.parse(String(calls[0]?.[1]?.body)) as {
+      messages?: unknown;
+    };
+    expect(forwarded.messages).toEqual([{ role: "user", content: "signed" }]);
+  });
+
+  it("returns a guard denial before parsing JSON or fetching upstream", async () => {
+    const upstream = stubUpstream();
+    const app = createChatProxyApp({
+      requestGuard: () =>
+        new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }),
+    });
+    const response = await post(app, "/api/chat/dispatch", "not-json");
+    expect(response.status).toBe(401);
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it("preserves a rate-limit response and Retry-After header", async () => {
+    const app = createChatProxyApp({
+      requestGuard: () =>
+        new Response("slow down", {
+          status: 429,
+          headers: { "Retry-After": "30" },
+        }),
+    });
+    const response = await post(app, "/api/chat/dispatch", "{}");
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("30");
+    expect(await response.text()).toBe("slow down");
+  });
+
+  it("rejects an oversized declared Content-Length", async () => {
+    const app = createChatProxyApp({ apiKey: "test-key", maxRequestBodyBytes: 10 });
+    const response = await post(app, "/api/chat/dispatch", "{}", {
+      "Content-Length": "11",
+    });
+    expect(response.status).toBe(413);
+  });
+
+  it("measures actual multibyte UTF-8 bodies when Content-Length is absent", async () => {
+    const body = JSON.stringify({ value: "💬" });
+    const byteLength = new TextEncoder().encode(body).byteLength;
+    const app = createChatProxyApp({
+      apiKey: "test-key",
+      maxRequestBodyBytes: byteLength - 1,
+    });
+    const request = new Request("http://localhost/api/chat/dispatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    const response = await app.request(request);
+    expect(response.status).toBe(413);
+  });
+
+  it("accepts a body exactly at the configured byte limit", async () => {
+    stubUpstream();
+    const body = JSON.stringify({ messages: [] });
+    const app = createChatProxyApp({
+      apiKey: "test-key",
+      maxRequestBodyBytes: new TextEncoder().encode(body).byteLength,
+    });
+    const response = await post(app, "/api/chat/dispatch", body);
+    expect(response.status).toBe(200);
+  });
+
+  it("cancels a chunked request stream as soon as it exceeds the limit", async () => {
+    let cancelled = false;
+    let pullCount = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pullCount += 1;
+        controller.enqueue(new Uint8Array(8));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const request = new Request("http://localhost/api/chat/dispatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: stream,
+      duplex: "half",
+    } as never);
+    const app = createChatProxyApp({ apiKey: "test-key", maxRequestBodyBytes: 10 });
+
+    const response = await app.request(request);
+    expect(response.status).toBe(413);
+    expect(cancelled).toBe(true);
+    expect(pullCount).toBeLessThanOrEqual(3);
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects invalid maxRequestBodyBytes values: %j",
+    (maxRequestBodyBytes) => {
+      expect(() => createChatProxyApp({ maxRequestBodyBytes })).toThrow(
+        /maxRequestBodyBytes must be a positive integer/
+      );
+    }
+  );
+
+  it("turns guard exceptions into a controlled 500 response", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const app = createChatProxyApp({
+      requestGuard: () => {
+        throw new Error("secret guard detail");
+      },
+    });
+    const response = await post(app, "/api/chat/dispatch", "{}");
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "Request guard failed" });
+    expect(consoleError).toHaveBeenCalledOnce();
+  });
+});

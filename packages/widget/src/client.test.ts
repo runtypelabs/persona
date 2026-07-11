@@ -5,6 +5,86 @@ import { createJsonStreamParser } from './utils/formatting';
 import { VERSION } from './version';
 import { createUnifiedEventWrite } from './utils/__fixtures__/unified-translator.oracle';
 
+describe('AgentWidgetClient - dispatch abort signals', () => {
+  const message = {
+    id: 'usr_abort',
+    role: 'user' as const,
+    content: 'stop',
+    createdAt: '2026-07-11T00:00:00.000Z',
+  };
+
+  it.each([
+    ['proxy', { apiUrl: 'https://api.example.com/chat' }],
+    [
+      'agent',
+      {
+        apiUrl: 'https://api.example.com/agents',
+        agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+      },
+    ],
+    [
+      'client token',
+      { apiUrl: 'https://api.runtype.com', clientToken: 'ct_live_demo' },
+    ],
+  ] as const)(
+    'rejects a pre-aborted signal before starting %s dispatch work',
+    async (_mode, config) => {
+      const getHeaders = vi.fn(() => ({ Authorization: 'test' }));
+      const contextProvider = vi.fn(async () => ({ page: 'context' }));
+      const client = new AgentWidgetClient({
+        ...config,
+        getHeaders,
+        contextProviders: [contextProvider],
+      });
+      const fetchSpy = vi.fn();
+      global.fetch = fetchSpy;
+      const events: AgentWidgetEvent[] = [];
+      const abortController = new AbortController();
+      abortController.abort();
+
+      await expect(
+        client.dispatch(
+          { messages: [message], signal: abortController.signal },
+          (event) => events.push(event)
+        )
+      ).rejects.toMatchObject({ name: 'AbortError' });
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(getHeaders).not.toHaveBeenCalled();
+      expect(contextProvider).not.toHaveBeenCalled();
+      expect(events).toEqual([]);
+    }
+  );
+
+  it('still forwards an abort that occurs after dispatch starts', async () => {
+    const abortController = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    let markFetchStarted!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => {
+      markFetchStarted = resolve;
+    });
+    global.fetch = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+      requestSignal = init?.signal ?? undefined;
+      markFetchStarted();
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal?.addEventListener('abort', () => reject(requestSignal?.reason));
+      });
+    });
+    const client = new AgentWidgetClient({ apiUrl: 'https://api.example.com/chat' });
+    const dispatch = client.dispatch(
+      { messages: [message], signal: abortController.signal },
+      () => undefined
+    );
+
+    await fetchStarted;
+    abortController.abort();
+
+    await expect(dispatch).rejects.toMatchObject({ name: 'AbortError' });
+    expect(requestSignal).toBe(abortController.signal);
+    expect(requestSignal?.aborted).toBe(true);
+  });
+});
+
 describe('AgentWidgetClient - Empty Message Filtering', () => {
   let client: AgentWidgetClient;
   let events: AgentWidgetEvent[] = [];

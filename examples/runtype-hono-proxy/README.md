@@ -40,6 +40,16 @@ Or from this directory: `pnpm dev` (after `pnpm install` at the root).
 
 See [`.env.example`](./.env.example) for all supported variables.
 
+## Abuse controls
+
+The demo applies a best-effort, per-instance fixed-window limit before spending Runtype, OpenAI, or Stripe credentials. Defaults are 60 chat/resume/feedback requests and 20 TTS/checkout requests per client address per 60-second window. `PROXY_RATE_LIMIT_REQUESTS`, `PROXY_EXPENSIVE_RATE_LIMIT_REQUESTS`, and `PROXY_RATE_LIMIT_WINDOW_SECONDS` override those positive-integer values. Client-address headers are useful only when a trusted platform or reverse proxy overwrites them; do not expose a plain Node host that trusts caller-supplied forwarding headers. Limiter memory is bounded, but counts are local to each warm process or Worker isolate; this is defense-in-depth for the demo, not a distributed quota.
+
+Chat JSON defaults to a 16 MiB `PROXY_MAX_BODY_BYTES` cap (clamped to 16-64 MiB so the widget's default attachments still fit after base64 encoding). TTS and checkout have fixed 32 KiB and 64 KiB caps.
+
+`PROXY_BEARER_TOKEN` optionally requires `Authorization: Bearer ...` on protected routes. It is intended only for private or server-to-server deployments. Putting the token into public frontend JavaScript defeats authorization and will also break the public browser demos.
+
+For multi-instance production deployments, pass the published package's `requestGuard` option and use your authenticated session plus a shared rate-limit store. The example deliberately does not claim globally consistent enforcement because this repository has no shared limiter infrastructure.
+
 ## Cloudflare Workers
 
 ```bash
@@ -48,7 +58,7 @@ pnpm dev:workers                 # http://localhost:8787
 pnpm deploy:workers              # wrangler deploy
 ```
 
-Set production secrets with `wrangler secret put RUNTYPE_API_KEY` (and optionally `ALLOWED_ORIGINS`).
+Set production secrets with `wrangler secret put RUNTYPE_API_KEY` (and optionally `ALLOWED_ORIGINS` or `PROXY_BEARER_TOKEN`).
 
 ## Deploying to Vercel
 

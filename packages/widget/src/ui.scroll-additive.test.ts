@@ -30,7 +30,7 @@ const getLiveRegion = (mount: HTMLElement) =>
 const installRafMock = () => {
   let nextId = 1;
   const callbacks = new Map<number, RafCallback>();
-  let now = 0;
+  let now = performance.now();
   vi.stubGlobal("requestAnimationFrame", (cb: RafCallback) => {
     const id = nextId++;
     callbacks.set(id, cb);

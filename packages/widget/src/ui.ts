@@ -3017,6 +3017,48 @@ export const createAgentExperience = (
       ? stripStreamingFromMessages(session.getMessages()).filter(msg => !(msg as any).__skipPersist)
       : [];
 
+  let storageMutationTail: Promise<void> | null = null;
+
+  const reportStorageMutationError = (label: string, error: unknown) => {
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.error(label, error);
+    }
+  };
+
+  const runStorageMutation = (
+    mutation: () => void | Promise<void>,
+    errorLabel: string
+  ) => {
+    const run = (): Promise<void> | null => {
+      try {
+        const result = mutation();
+        if (!result || typeof (result as PromiseLike<void>).then !== "function") {
+          return null;
+        }
+        return Promise.resolve(result).catch((error) => {
+          reportStorageMutationError(errorLabel, error);
+        });
+      } catch (error) {
+        reportStorageMutationError(errorLabel, error);
+        return null;
+      }
+    };
+
+    const prior = storageMutationTail;
+    const next = prior
+      ? prior.then(() => run() ?? undefined)
+      : run();
+    if (!next) return;
+
+    const tail = next.finally(() => {
+      if (storageMutationTail === tail) {
+        storageMutationTail = null;
+      }
+    });
+    storageMutationTail = tail;
+  };
+
   function persistState(messagesOverride?: AgentWidgetMessage[]) {
     if (!storageAdapter?.save) return;
 
@@ -3033,22 +3075,10 @@ export const createAgentExperience = (
       artifacts: lastArtifactsState.artifacts,
       selectedArtifactId: lastArtifactsState.selectedId
     };
-    try {
-      const result = storageAdapter.save(payload);
-      if (result instanceof Promise) {
-        result.catch((error) => {
-          if (typeof console !== "undefined") {
-            // eslint-disable-next-line no-console
-            console.error("[AgentWidget] Failed to persist state:", error);
-          }
-        });
-      }
-    } catch (error) {
-      if (typeof console !== "undefined") {
-        // eslint-disable-next-line no-console
-        console.error("[AgentWidget] Failed to persist state:", error);
-      }
-    }
+    runStorageMutation(
+      () => storageAdapter.save!(payload),
+      "[AgentWidget] Failed to persist state:"
+    );
   }
 
   // Track ongoing smooth scroll animation
@@ -5181,67 +5211,180 @@ export const createAgentExperience = (
     }, 100);
   };
 
+  const isDeepEqual = (left: unknown, right: unknown): boolean => {
+    if (Object.is(left, right)) return true;
+    if (left === null || right === null) return false;
+    if (typeof left !== "object" || typeof right !== "object") return false;
+    if (Array.isArray(left) || Array.isArray(right)) {
+      if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+        return false;
+      }
+      return left.every((value, index) => isDeepEqual(value, right[index]));
+    }
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    const leftKeys = Object.keys(leftRecord);
+    const rightKeys = Object.keys(rightRecord);
+    return (
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every(
+        (key) =>
+          Object.prototype.hasOwnProperty.call(rightRecord, key) &&
+          isDeepEqual(leftRecord[key], rightRecord[key])
+      )
+    );
+  };
+
+  const withoutStreamingText = (message: AgentWidgetMessage) => {
+    const { content: _content, rawContent: _rawContent, llmContent: _llmContent, ...rest } = message;
+    return rest;
+  };
+
+  const isPlainStreamingAssistant = (message: AgentWidgetMessage) =>
+    message.role === "assistant" &&
+    message.streaming === true &&
+    !message.variant &&
+    !message.toolCall &&
+    !message.tools &&
+    !message.approval &&
+    !message.reasoning &&
+    !message.contentParts &&
+    !message.stopReason &&
+    !hasComponentDirective(message);
+
+  const isPureStreamingTextProgression = (
+    previous: AgentWidgetMessage[],
+    next: AgentWidgetMessage[],
+    candidate: { index: number; id: string }
+  ) => {
+    if (previous.length !== next.length) return false;
+    const before = previous[candidate.index];
+    const after = next[candidate.index];
+    if (!before || !after || before.id !== candidate.id || after.id !== candidate.id) {
+      return false;
+    }
+    const textChanged =
+      !Object.is(before.content, after.content) ||
+      !Object.is(before.rawContent, after.rawContent) ||
+      !Object.is(before.llmContent, after.llmContent);
+    return (
+      textChanged &&
+      isPlainStreamingAssistant(before) &&
+      isPlainStreamingAssistant(after) &&
+      isDeepEqual(withoutStreamingText(before), withoutStreamingText(after))
+    );
+  };
+
+  let lastAppliedMessages: AgentWidgetMessage[] | null = null;
+  let activeStreamingTextCandidate: { index: number; id: string } | null = null;
+  let pendingStreamingTextMessages: AgentWidgetMessage[] | null = null;
+  let streamingTextRAF: number | null = null;
+
+  const applyMessagesChanged = (messages: AgentWidgetMessage[]) => {
+    lastAppliedMessages = messages;
+    let lastUserMessage: AgentWidgetMessage | undefined;
+    let lastAssistantMessage: AgentWidgetMessage | undefined;
+    activeStreamingTextCandidate = null;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (!lastUserMessage && message.role === "user") lastUserMessage = message;
+      if (!lastAssistantMessage && message.role === "assistant") {
+        lastAssistantMessage = message;
+      }
+      if (!activeStreamingTextCandidate && isPlainStreamingAssistant(message)) {
+        activeStreamingTextCandidate = { index, id: message.id };
+      }
+      if (lastUserMessage && lastAssistantMessage && activeStreamingTextCandidate) break;
+    }
+    renderMessagesWithPlugins(messagesWrapper, messages, postprocess);
+    ensureToolElapsedTimer();
+    renderSuggestions(messages);
+    scheduleAutoScroll(!isStreaming);
+    trackMessages(messages);
+
+    if (messages.length === 0) {
+      resetAnchorState();
+      followFallbackActive = true;
+      currentTurnAnchored = false;
+    }
+    if (!scrollSendSeeded || suppressScrollSend) {
+      scrollSendSeeded = true;
+      lastSentUserMessageId = lastUserMessage?.id ?? null;
+      lastHandledAssistantId = lastAssistantMessage?.id ?? null;
+    } else if (lastUserMessage && lastUserMessage.id !== lastSentUserMessageId) {
+      lastSentUserMessageId = lastUserMessage.id;
+      handleUserMessageSent(lastUserMessage.id);
+    } else if (
+      lastAssistantMessage &&
+      lastAssistantMessage.id !== lastHandledAssistantId
+    ) {
+      handleAssistantTurnStarted();
+    }
+    if (lastAssistantMessage) lastHandledAssistantId = lastAssistantMessage.id;
+
+    const prevLastUserMessageId = voiceState.lastUserMessageId;
+    if (lastUserMessage && lastUserMessage.id !== prevLastUserMessageId) {
+      voiceState.lastUserMessageId = lastUserMessage.id;
+      eventBus.emit("user:message", lastUserMessage);
+    }
+
+    voiceState.lastUserMessageWasVoice = Boolean(lastUserMessage?.viaVoice);
+    persistState(messages);
+    syncComposerBarPeek();
+  };
+
+  const flushPendingStreamingText = () => {
+    if (streamingTextRAF !== null) {
+      cancelAnimationFrame(streamingTextRAF);
+      streamingTextRAF = null;
+    }
+    const pending = pendingStreamingTextMessages;
+    pendingStreamingTextMessages = null;
+    if (pending) applyMessagesChanged(pending);
+  };
+
+  const discardPendingStreamingText = () => {
+    if (streamingTextRAF !== null) cancelAnimationFrame(streamingTextRAF);
+    streamingTextRAF = null;
+    pendingStreamingTextMessages = null;
+  };
+
+  const handleMessagesChanged = (messages: AgentWidgetMessage[]) => {
+    const comparison = pendingStreamingTextMessages ?? lastAppliedMessages;
+    if (
+      isStreaming &&
+      comparison &&
+      activeStreamingTextCandidate &&
+      isPureStreamingTextProgression(
+        comparison,
+        messages,
+        activeStreamingTextCandidate
+      )
+    ) {
+      pendingStreamingTextMessages = messages;
+      if (streamingTextRAF === null) {
+        streamingTextRAF = requestAnimationFrame(() => {
+          streamingTextRAF = null;
+          const pending = pendingStreamingTextMessages;
+          pendingStreamingTextMessages = null;
+          if (pending) applyMessagesChanged(pending);
+        });
+      }
+      return;
+    }
+
+    if (messages.length === 0) {
+      discardPendingStreamingText();
+      applyMessagesChanged(messages);
+      return;
+    }
+    flushPendingStreamingText();
+    applyMessagesChanged(messages);
+  };
+
   session = new AgentWidgetSession(config, {
     onMessagesChanged(messages) {
-      renderMessagesWithPlugins(messagesWrapper, messages, postprocess);
-      // Start elapsed timer if any active tool has a live duration span
-      ensureToolElapsedTimer();
-      // Re-render suggestions: agent chips vs config chips, one shared rule.
-      // Pass messages directly to avoid calling session.getMessages() during construction
-      renderSuggestions(messages);
-      scheduleAutoScroll(!isStreaming);
-      trackMessages(messages);
-
-      const lastUserMessage = [...messages]
-        .reverse()
-        .find((msg) => msg.role === "user");
-      const lastAssistantMessage = [...messages]
-        .reverse()
-        .find((msg) => msg.role === "assistant");
-
-      // Scroll-on-send / anchor-top. Seeded so restored history (constructor
-      // initialMessages and async storage hydration) never reads as a fresh
-      // send; clearing the chat resets any anchor spacer.
-      if (messages.length === 0) {
-        resetAnchorState();
-        // Cleared: nothing anchored, so re-arm the no-anchor follow fallback.
-        followFallbackActive = true;
-        currentTurnAnchored = false;
-      }
-      if (!scrollSendSeeded || suppressScrollSend) {
-        scrollSendSeeded = true;
-        lastSentUserMessageId = lastUserMessage?.id ?? null;
-        // Seed assistant-turn tracking too, so restored history doesn't read
-        // as a fresh assistant turn and trigger the no-anchor fallback.
-        lastHandledAssistantId = lastAssistantMessage?.id ?? null;
-      } else if (lastUserMessage && lastUserMessage.id !== lastSentUserMessageId) {
-        lastSentUserMessageId = lastUserMessage.id;
-        handleUserMessageSent(lastUserMessage.id);
-      } else if (
-        lastAssistantMessage &&
-        lastAssistantMessage.id !== lastHandledAssistantId
-      ) {
-        // A new assistant turn with no fresh user send: the anchor-top
-        // no-anchor fallback (proactive/injected/resubmit/first-load streaming).
-        handleAssistantTurnStarted();
-      }
-      if (lastAssistantMessage) {
-        lastHandledAssistantId = lastAssistantMessage.id;
-      }
-
-      // Emit user:message event when a new user message is detected
-      const prevLastUserMessageId = voiceState.lastUserMessageId;
-      if (lastUserMessage && lastUserMessage.id !== prevLastUserMessageId) {
-        voiceState.lastUserMessageId = lastUserMessage.id;
-        eventBus.emit("user:message", lastUserMessage);
-      }
-
-      voiceState.lastUserMessageWasVoice = Boolean(lastUserMessage?.viaVoice);
-      persistState(messages);
-      // Composer-bar peek: re-render the trailing-100-char preview and
-      // re-evaluate visibility (a new message may make it eligible to show
-      // during streaming, or update the preview text on each token).
-      syncComposerBarPeek();
+      handleMessagesChanged(messages);
     },
     onStatusChanged(status) {
       const currentStatusConfig = config.statusIndicator ?? {};
@@ -5257,6 +5400,13 @@ export const createAgentExperience = (
       applyStatusToElement(statusText, getCurrentStatusText(status), currentStatusConfig, status);
     },
     onStreamingChanged(streaming) {
+      if (!streaming) {
+        if (session?.getMessages().length === 0) {
+          discardPendingStreamingText();
+        } else {
+          flushPendingStreamingText();
+        }
+      }
       isStreaming = streaming;
       setComposerDisabled(streaming);
       // Re-render messages to show/hide typing indicator
@@ -6569,22 +6719,10 @@ export const createAgentExperience = (
       window.dispatchEvent(clearEvent);
 
       if (storageAdapter?.clear) {
-        try {
-          const result = storageAdapter.clear();
-          if (result instanceof Promise) {
-            result.catch((error) => {
-              if (typeof console !== "undefined") {
-                // eslint-disable-next-line no-console
-                console.error("[AgentWidget] Failed to clear storage adapter:", error);
-              }
-            });
-          }
-        } catch (error) {
-          if (typeof console !== "undefined") {
-            // eslint-disable-next-line no-console
-            console.error("[AgentWidget] Failed to clear storage adapter:", error);
-          }
-        }
+        runStorageMutation(
+          () => storageAdapter.clear!(),
+          "[AgentWidget] Failed to clear storage adapter:"
+        );
       }
       persistentMetadata = {};
       actionManager.syncFromMetadata();
@@ -8060,22 +8198,10 @@ export const createAgentExperience = (
       window.dispatchEvent(clearEvent);
 
       if (storageAdapter?.clear) {
-        try {
-          const result = storageAdapter.clear();
-          if (result instanceof Promise) {
-            result.catch((error) => {
-              if (typeof console !== "undefined") {
-                // eslint-disable-next-line no-console
-                console.error("[AgentWidget] Failed to clear storage adapter:", error);
-              }
-            });
-          }
-        } catch (error) {
-          if (typeof console !== "undefined") {
-            // eslint-disable-next-line no-console
-            console.error("[AgentWidget] Failed to clear storage adapter:", error);
-          }
-        }
+        runStorageMutation(
+          () => storageAdapter.clear!(),
+          "[AgentWidget] Failed to clear storage adapter:"
+        );
       }
       persistentMetadata = {};
       actionManager.syncFromMetadata();
@@ -8436,6 +8562,10 @@ export const createAgentExperience = (
       return session.submitNPSFeedback(rating, comment);
     },
     destroy() {
+      // Commit the latest coalesced transcript while the live DOM and storage
+      // pipeline still exist, then let the normal teardown cancel any work
+      // scheduled by that final apply.
+      flushPendingStreamingText();
       if (toolElapsedTimerId != null) {
         clearInterval(toolElapsedTimerId);
         toolElapsedTimerId = null;

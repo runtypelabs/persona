@@ -1,10 +1,8 @@
 /**
  * Persona wire helper. Framework-agnostic, zero runtime dependencies.
  *
- * Published as the `@persona-examples/wire` workspace package and imported by
- * every example, so the only per-example file is the adapter that sits on top of
- * it. To use it outside this repo, copy this file into your app (there's no
- * public npm release yet). It depends on nothing.
+ * Vendored by Persona examples so each adapter remains copy-pasteable. Lift
+ * this file straight into your own app; it depends on nothing.
  *
  * `createPersonaSSEStream` wraps a streaming handler in Persona's SSE event
  * vocabulary: the protocol any backend can speak, and the same wire the Runtype

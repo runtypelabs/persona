@@ -27,8 +27,28 @@ import {
   parseAllowedOrigins,
   resolveCorsOrigin,
 } from "./env.js";
+import {
+  configuredBodyLimit,
+  createDemoProxyGuard,
+  guardDemoRequest,
+  parseLimitedJson,
+} from "./request-guard.js";
 
 export type { ProxyEnv };
+
+function withCorsHeaders(response: Response, corsOrigin: string): Response {
+  const headers = new Headers(response.headers);
+  headers.set("Access-Control-Allow-Origin", corsOrigin);
+  const vary = headers.get("Vary");
+  if (!vary?.split(",").some((value) => value.trim().toLowerCase() === "origin")) {
+    headers.set("Vary", vary ? `${vary}, Origin` : "Origin");
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
 
 /**
  * Canonical Runtype proxy: all demo dispatch routes, checkout, TTS, and form
@@ -39,8 +59,14 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   const allowedOrigins = parseAllowedOrigins(env);
   const upstreamUrl = env.UPSTREAM_URL || undefined;
   const apiKey = env.RUNTYPE_API_KEY;
+  const requestGuard = createDemoProxyGuard(env);
+  const proxyProtection = {
+    requestGuard,
+    maxRequestBodyBytes: configuredBodyLimit(env),
+  } as const;
 
   const app = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch",
     apiKey,
     allowedOrigins,
@@ -48,6 +74,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const directiveApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-directive",
     apiKey,
     allowedOrigins,
@@ -57,6 +84,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const actionApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-action",
     apiKey,
     allowedOrigins,
@@ -66,6 +94,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const metadataApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-metadata",
     apiKey,
     allowedOrigins,
@@ -77,6 +106,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const componentApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-component",
     apiKey,
     allowedOrigins,
@@ -86,6 +116,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const bakeryApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-bakery",
     apiKey,
     allowedOrigins,
@@ -95,6 +126,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const storefrontApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-storefront",
     apiKey,
     allowedOrigins,
@@ -104,6 +136,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const webmcpApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-webmcp",
     apiKey,
     allowedOrigins,
@@ -117,6 +150,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const webmcpCalendarApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-calendar",
     apiKey,
     allowedOrigins,
@@ -126,6 +160,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const webmcpSlidesApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-slides",
     apiKey,
     allowedOrigins,
@@ -135,6 +170,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const webmcpPaintApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-paint",
     apiKey,
     allowedOrigins,
@@ -144,6 +180,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const webmcpDockedApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-docked",
     apiKey,
     allowedOrigins,
@@ -153,6 +190,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const pageContextApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-page-context",
     apiKey,
     allowedOrigins,
@@ -166,6 +204,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const themeAssistantApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-theme",
     apiKey,
     allowedOrigins,
@@ -181,6 +220,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const agentLoopApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-agent-loop",
     apiKey,
     allowedOrigins,
@@ -190,6 +230,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const docsAssistantApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-docs",
     apiKey,
     allowedOrigins,
@@ -199,6 +240,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   });
 
   const chatAssistantApp = createChatProxyApp({
+    ...proxyProtection,
     path: "/api/chat/dispatch-assistant",
     apiKey,
     allowedOrigins,
@@ -228,6 +270,13 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
     const origin = c.req.header("origin");
     const corsOrigin = resolveCorsOrigin(origin, allowedOrigins);
 
+    const denied = guardDemoRequest(env, {
+      request: c.req.raw,
+      kind: "tts",
+      path: "/api/tts",
+    });
+    if (denied) return withCorsHeaders(denied, corsOrigin);
+
     if (!env.OPENAI_API_KEY) {
       return c.json(
         { error: "OPENAI_API_KEY is not configured on the proxy." },
@@ -240,8 +289,10 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
     let voice: string | undefined;
     let rate: number | undefined;
     let model: string | undefined;
+    const parsed = await parseLimitedJson(c.req.raw, 32 * 1024);
+    if (!parsed.success) return withCorsHeaders(parsed.response, corsOrigin);
     try {
-      const body = (await c.req.json()) as {
+      const body = parsed.value as {
         text?: string;
         voice?: string;
         rate?: number;
@@ -252,7 +303,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
       rate = typeof body.rate === "number" ? body.rate : undefined;
       model = typeof body.model === "string" ? body.model : undefined;
     } catch {
-      return c.json({ error: "Invalid JSON body." }, 400, {
+      return c.json({ error: "Invalid TTS payload." }, 400, {
         "Access-Control-Allow-Origin": corsOrigin,
       });
     }
@@ -306,8 +357,17 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
       const origin = c.req.header("origin");
       const corsOrigin = resolveCorsOrigin(origin, allowedOrigins);
 
+      const denied = guardDemoRequest(env, {
+        request: c.req.raw,
+        kind: "checkout",
+        path: c.req.path,
+      });
+      if (denied) return withCorsHeaders(denied, corsOrigin);
+
       try {
-        const body = (await c.req.json()) as { items?: CheckoutItem[] };
+        const parsed = await parseLimitedJson(c.req.raw, 64 * 1024);
+        if (!parsed.success) return withCorsHeaders(parsed.response, corsOrigin);
+        const body = parsed.value as { items?: CheckoutItem[] };
         const { items } = body;
         const base = frontendBaseUrl(env);
 
