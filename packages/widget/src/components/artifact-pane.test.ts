@@ -164,6 +164,69 @@ describe("artifact-pane file preview", () => {
   });
 });
 
+const toggleBtn = (
+  pane: ReturnType<typeof createArtifactPane>,
+  label: string
+): HTMLButtonElement =>
+  pane.element.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement;
+
+describe("artifact-pane view/source toggle", () => {
+  it("renders an inline SVG icon in both toggle buttons (icon-registry guard)", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const rendered = toggleBtn(pane, "Rendered view");
+    const source = toggleBtn(pane, "Source");
+    expect(rendered).toBeTruthy();
+    expect(source).toBeTruthy();
+    // A missing/renamed icon would leave renderLucideIcon returning null and the
+    // button rendering empty, so guard that both carry an inline <svg>.
+    expect(rendered.querySelector("svg")).toBeTruthy();
+    expect(source.querySelector("svg")).toBeTruthy();
+  });
+
+  it("flips aria-pressed between the buttons when Source is clicked", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const rendered = toggleBtn(pane, "Rendered view");
+    const source = toggleBtn(pane, "Source");
+    expect(rendered.getAttribute("aria-pressed")).toBe("true");
+    expect(source.getAttribute("aria-pressed")).toBe("false");
+
+    source.click();
+    expect(rendered.getAttribute("aria-pressed")).toBe("false");
+    expect(source.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("switches a previewable file artifact to source view when Source is clicked", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const content = contentEl(pane);
+    // Rendered view: sandboxed iframe.
+    expect(content.querySelector("iframe")).toBeTruthy();
+
+    toggleBtn(pane, "Source").click();
+    expect(content.querySelector("iframe")).toBeNull();
+    const pre = content.querySelector("pre");
+    expect(pre).toBeTruthy();
+    expect(pre?.textContent).toBe(HTML_RAW);
+  });
+});
+
+describe("artifact-pane default toolbar", () => {
+  it("renders a label-button Close control labelled for the panel", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const close = toggleBtn(pane, "Close artifacts panel");
+    expect(close).toBeTruthy();
+    expect(close.tagName).toBe("BUTTON");
+    expect(close.classList.contains("persona-label-btn")).toBe(true);
+  });
+});
+
 const tabsIn = (pane: ReturnType<typeof createArtifactPane>): HTMLButtonElement[] =>
   Array.from(
     pane.element.querySelectorAll(".persona-artifact-tab")

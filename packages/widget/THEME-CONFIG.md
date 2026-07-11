@@ -519,10 +519,24 @@ Common tokens have short aliases for easier use in custom CSS:
 ### Artifact Card Aliases
 
 ```css
+--persona-artifact-card-bg
+--persona-artifact-card-border
 --persona-artifact-card-radius
+--persona-artifact-card-hover-bg
+--persona-artifact-card-hover-border
 ```
 
-`--persona-artifact-card-radius` overrides the corner radius of the standalone artifact reference card. When unset it falls back to the assistant bubble radius (`--persona-message-assistant-radius`), so cards match message bubbles by default.
+The artifact reference card is the tappable card rendered inline in the chat thread that opens an artifact. Style it via `components.artifact.card`:
+
+| Property | CSS var | Description |
+|----------|---------|-------------|
+| `card.background` | `--persona-artifact-card-bg` | Resting card background |
+| `card.border` | `--persona-artifact-card-border` | Full border shorthand, e.g. `1px solid #e5e7eb` |
+| `card.borderRadius` | `--persona-artifact-card-radius` | Corner radius. When unset it falls back to the assistant bubble radius (`--persona-message-assistant-radius`), so cards match message bubbles by default |
+| `card.hoverBackground` | `--persona-artifact-card-hover-bg` | Background on hover |
+| `card.hoverBorderColor` | `--persona-artifact-card-hover-border` | Border color on hover |
+
+Interactive-state defaults: the hover and active backgrounds for icon buttons, label buttons, artifact tabs, and the artifact card default to a visible gray step (`gray.100` for hover, `gray.200` for active, `gray.300` for the active icon-button border) whenever the theme's `container` color equals its `surface` color, which is the case for the default preset. When a theme sets `container` to a distinct color, those states anchor to `container` instead. Every one of these stays fully overridable via `components.iconButton`, `components.labelButton`, `components.artifact.tab`, and `components.artifact.card`.
 
 ---
 

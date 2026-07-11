@@ -97,4 +97,47 @@ describe("artifact pane auto-open gating by display mode", () => {
     expect(paneEl(mount).classList.contains("persona-hidden")).toBe(false);
     controller.destroy();
   });
+
+  it("does not open the pane when the card's Download button is clicked", () => {
+    // jsdom has no object URLs; the download handler needs both to run fully.
+    const urlWithBlob = URL as unknown as {
+      createObjectURL?: (b: Blob) => string;
+      revokeObjectURL?: (u: string) => void;
+    };
+    const origCreate = urlWithBlob.createObjectURL;
+    const origRevoke = urlWithBlob.revokeObjectURL;
+    urlWithBlob.createObjectURL = () => "blob:persona-test";
+    urlWithBlob.revokeObjectURL = () => {};
+    try {
+      const { mount, controller } = mountWithDisplay("card");
+      upsertSample(controller);
+
+      // Recreate the reference card the way the default renderer shapes it
+      // (data-open-artifact root wrapping a data-download-artifact button),
+      // mounted inside a real message element so clicks bubble through the
+      // messages-wrapper delegation in ui.ts.
+      controller.injectAssistantMessage({ content: "See the artifact below." });
+      const msgEl = mount.querySelector("[data-message-id]");
+      expect(msgEl).not.toBeNull();
+      const card = document.createElement("div");
+      card.setAttribute("data-open-artifact", "gating-test");
+      const dl = document.createElement("button");
+      dl.setAttribute("data-download-artifact", "gating-test");
+      card.appendChild(dl);
+      msgEl!.appendChild(card);
+
+      // Download must not double as an open: the two delegated listeners sit
+      // on the same element, so stopPropagation() alone cannot separate them.
+      dl.click();
+      expect(paneEl(mount).classList.contains("persona-hidden")).toBe(true);
+
+      // Clicking the card itself still opens the pane.
+      card.click();
+      expect(paneEl(mount).classList.contains("persona-hidden")).toBe(false);
+      controller.destroy();
+    } finally {
+      urlWithBlob.createObjectURL = origCreate;
+      urlWithBlob.revokeObjectURL = origRevoke;
+    }
+  });
 });

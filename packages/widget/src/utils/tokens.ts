@@ -1015,6 +1015,38 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
       cssVars['--persona-artifact-toolbar-bg'] = toolbarBg;
     }
   }
+  if (artifact?.card) {
+    const t = artifact.card;
+    if (t.background) cssVars['--persona-artifact-card-bg'] = t.background;
+    if (t.border) cssVars['--persona-artifact-card-border'] = t.border;
+    if (t.borderRadius) cssVars['--persona-artifact-card-radius'] = t.borderRadius;
+    if (t.hoverBackground) cssVars['--persona-artifact-card-hover-bg'] = t.hoverBackground;
+    if (t.hoverBorderColor) cssVars['--persona-artifact-card-hover-border'] = t.hoverBorderColor;
+  }
+
+  // Interactive-state defaults. The default preset resolves container === surface,
+  // which turns every hover/active rule that falls back to --persona-container
+  // into a visual no-op; anchor those states one gray step down in that case.
+  // Component config emitted above must keep winning, so only fill vars not set.
+  const stateSurface = cssVars['--persona-surface'];
+  const stateContainer = cssVars['--persona-container'];
+  const gray100 = cssVars['--persona-palette-colors-gray-100'] ?? '#f3f4f6';
+  const gray200 = cssVars['--persona-palette-colors-gray-200'] ?? '#e5e7eb';
+  const gray300 = cssVars['--persona-palette-colors-gray-300'] ?? '#d1d5db';
+  const flatTheme = !stateContainer || stateContainer === stateSurface;
+  const hoverBgDefault = flatTheme ? gray100 : stateContainer;
+  const activeBgDefault = flatTheme ? gray200 : stateContainer;
+  cssVars['--persona-icon-btn-hover-bg'] = cssVars['--persona-icon-btn-hover-bg'] ?? hoverBgDefault;
+  cssVars['--persona-icon-btn-active-bg'] = cssVars['--persona-icon-btn-active-bg'] ?? activeBgDefault;
+  if (flatTheme) {
+    cssVars['--persona-icon-btn-active-border'] =
+      cssVars['--persona-icon-btn-active-border'] ?? gray300;
+  }
+  cssVars['--persona-label-btn-hover-bg'] = cssVars['--persona-label-btn-hover-bg'] ?? hoverBgDefault;
+  cssVars['--persona-artifact-tab-hover-bg'] =
+    cssVars['--persona-artifact-tab-hover-bg'] ?? hoverBgDefault;
+  cssVars['--persona-artifact-card-hover-bg'] =
+    cssVars['--persona-artifact-card-hover-bg'] ?? hoverBgDefault;
 
   return cssVars;
 }

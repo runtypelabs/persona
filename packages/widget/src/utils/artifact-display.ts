@@ -39,6 +39,13 @@ export type ArtifactRefBlockProps = {
    * reads it.
    */
   component?: string;
+  /**
+   * Props for component-type artifacts. Embedded alongside `component` for the
+   * "inline" display mode so a refreshed session re-invokes the registered
+   * renderer with its real props (the session artifact registry is not
+   * persisted); the card never reads them.
+   */
+  componentProps?: Record<string, unknown>;
   /** Final markdown content, embedded once complete so hydration/download work after refresh. */
   markdown?: string;
 };
@@ -67,6 +74,9 @@ export function buildArtifactRefRawContent(
       ...(props.file ? { file: props.file } : {}),
       ...(displayMode === "inline" && props.component
         ? { component: props.component }
+        : {}),
+      ...(displayMode === "inline" && props.componentProps
+        ? { componentProps: props.componentProps }
         : {}),
       ...(props.markdown !== undefined ? { markdown: props.markdown } : {})
     }

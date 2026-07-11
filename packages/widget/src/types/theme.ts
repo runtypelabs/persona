@@ -403,6 +403,17 @@ export interface ArtifactTabTokens {
   listPadding?: string;
 }
 
+/** Artifact reference card (chat thread) chrome. */
+export interface ArtifactCardTokens {
+  background?: string;
+  /** Full border shorthand (e.g. `1px solid #e5e7eb`). */
+  border?: string;
+  borderRadius?: string;
+  hoverBackground?: string;
+  /** Border color on hover. */
+  hoverBorderColor?: string;
+}
+
 /** Artifact pane chrome. */
 export interface ArtifactPaneTokens {
   /**
@@ -487,6 +498,7 @@ export interface ComponentTokens {
     toolbar?: ArtifactToolbarTokens;
     tab?: ArtifactTabTokens;
     pane?: ArtifactPaneTokens;
+    card?: ArtifactCardTokens;
   };
   /** Collapsible widget chrome (tool/reasoning/approval bubbles). */
   collapsibleWidget?: CollapsibleWidgetTokens;

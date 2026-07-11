@@ -7,7 +7,7 @@ import {
 } from "./artifact-preview";
 import { renderLucideIcon } from "../utils/icons";
 import { createDropdownMenu, type DropdownMenuHandle } from "../utils/dropdown";
-import { createIconButton, createLabelButton } from "../utils/buttons";
+import { createIconButton, createLabelButton, createToggleGroup } from "../utils/buttons";
 
 export type ArtifactPaneApi = {
   element: HTMLElement;
@@ -76,13 +76,10 @@ export function createArtifactPane(
   const titleEl = createElement("span", "persona-text-xs persona-font-medium persona-truncate");
   titleEl.textContent = toolbarTitle;
 
-  const closeBtn = createElement(
-    "button",
-    "persona-rounded-md persona-border persona-border-persona-border persona-px-2 persona-py-1 persona-text-xs persona-bg-persona-surface"
-  );
-  closeBtn.type = "button";
-  closeBtn.textContent = closeButtonLabel;
-  closeBtn.setAttribute("aria-label", closeButtonLabel);
+  const closeBtn = createLabelButton({
+    label: closeButtonLabel,
+    aria: { "aria-label": closeButtonLabel },
+  });
   closeBtn.addEventListener("click", () => {
     dismissLocalUi();
     options.onDismiss?.();
@@ -90,13 +87,28 @@ export function createArtifactPane(
 
   /** Document preset: view vs raw source */
   let viewMode: "rendered" | "source" = "rendered";
-  const leftTools = createElement("div", "persona-flex persona-items-center persona-gap-1 persona-shrink-0 persona-artifact-toggle-group");
-  const viewBtn = documentChrome
-    ? createIconButton({ icon: "eye", label: "Rendered view", className: "persona-artifact-doc-icon-btn persona-artifact-view-btn" })
-    : createIconButton({ icon: "eye", label: "Rendered view" });
-  const codeBtn = documentChrome
-    ? createIconButton({ icon: "code-2", label: "Source", className: "persona-artifact-doc-icon-btn persona-artifact-code-btn" })
-    : createIconButton({ icon: "code-2", label: "Source" });
+  const viewToggle = createToggleGroup({
+    items: [
+      {
+        id: "rendered",
+        icon: "eye",
+        label: "Rendered view",
+        className: documentChrome ? "persona-artifact-doc-icon-btn persona-artifact-view-btn" : undefined,
+      },
+      {
+        id: "source",
+        icon: "code-xml",
+        label: "Source",
+        className: documentChrome ? "persona-artifact-doc-icon-btn persona-artifact-code-btn" : undefined,
+      },
+    ],
+    selectedId: "rendered",
+    className: "persona-artifact-toggle-group persona-shrink-0",
+    onSelect: (id) => {
+      viewMode = id === "source" ? "source" : "rendered";
+      render();
+    },
+  });
   const actionsRight = createElement("div", "persona-flex persona-items-center persona-gap-1 persona-shrink-0");
   const showCopyLabel = layout?.documentToolbarShowCopyLabel === true;
   const showCopyChevron = layout?.documentToolbarShowCopyChevron === true;
@@ -241,23 +253,6 @@ export function createArtifactPane(
     options.onDismiss?.();
   });
 
-  const syncViewToggleState = () => {
-    // Toggle exists for documentChrome always, and for previewable file artifacts
-    // (mounted dynamically in render). Setting aria-pressed is harmless when hidden.
-    viewBtn.setAttribute("aria-pressed", viewMode === "rendered" ? "true" : "false");
-    codeBtn.setAttribute("aria-pressed", viewMode === "source" ? "true" : "false");
-  };
-  viewBtn.addEventListener("click", () => {
-    viewMode = "rendered";
-    syncViewToggleState();
-    render();
-  });
-  codeBtn.addEventListener("click", () => {
-    viewMode = "source";
-    syncViewToggleState();
-    render();
-  });
-
   const centerTitle = createElement(
     "span",
     "persona-min-w-0 persona-flex-1 persona-text-xs persona-font-medium persona-text-persona-primary persona-truncate persona-text-center md:persona-text-left"
@@ -265,14 +260,12 @@ export function createArtifactPane(
 
   if (documentChrome) {
     toolbar.replaceChildren();
-    leftTools.append(viewBtn, codeBtn);
     if (copyWrap) {
       actionsRight.append(copyWrap, refreshBtn, closeIconBtn);
     } else {
       actionsRight.append(copyBtn, refreshBtn, closeIconBtn);
     }
-    toolbar.append(leftTools, centerTitle, actionsRight);
-    syncViewToggleState();
+    toolbar.append(viewToggle.element, centerTitle, actionsRight);
   } else {
     toolbar.appendChild(titleEl);
     toolbar.appendChild(closeBtn);
@@ -323,16 +316,16 @@ export function createArtifactPane(
   };
   // For the default (non-document) toolbar, mount the rendered/source toggle only
   // while a previewable file artifact is selected. The document toolbar already
-  // carries the toggle permanently.
+  // carries the toggle permanently, so it is mounted once at build time. Here we
+  // add/remove the group from the toolbar as the selection gains or loses a
+  // previewable file (the toggle group owns its own buttons and aria-pressed state).
   const updateFileToggleVisibility = (previewable: boolean) => {
     if (documentChrome) return;
     if (previewable && !fileToggleMounted) {
-      leftTools.append(viewBtn, codeBtn);
-      toolbar.insertBefore(leftTools, titleEl);
+      toolbar.insertBefore(viewToggle.element, titleEl);
       fileToggleMounted = true;
-      syncViewToggleState();
     } else if (!previewable && fileToggleMounted) {
-      leftTools.remove();
+      viewToggle.element.remove();
       fileToggleMounted = false;
     }
   };

@@ -1750,6 +1750,10 @@ export const createAgentExperience = (
   // Click delegation for artifact reference cards
   messagesWrapper.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    // Download clicks are handled by the listener above; its stopPropagation()
+    // cannot block a second listener on the same element, so skip them here
+    // explicitly or the card would also open the panel.
+    if (target.closest('[data-download-artifact]')) return;
     const card = target.closest('[data-open-artifact]') as HTMLElement;
     if (!card) return;
     const artifactId = card.getAttribute('data-open-artifact');

@@ -2,6 +2,7 @@ import type { ComponentContext, ComponentRenderer } from "./registry";
 import type { PersonaArtifactFileMeta } from "../types";
 import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
 import { appendCharSpans } from "../utils/tool-loading-animation";
+import { createLabelButton } from "../utils/buttons";
 
 /**
  * Default artifact card renderer.
@@ -34,14 +35,7 @@ function renderDefaultArtifactCard(
 
   const root = document.createElement("div");
   root.className =
-    "persona-flex persona-w-full persona-max-w-full persona-items-center persona-gap-3 persona-px-4 persona-py-3";
-  // Match the assistant bubble radius by default; themeable independently
-  // via --persona-artifact-card-radius.
-  root.style.borderRadius =
-    "var(--persona-artifact-card-radius, var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem)))";
-  root.style.border = "1px solid var(--persona-border, #e5e7eb)";
-  root.style.backgroundColor = "var(--persona-surface, #ffffff)";
-  root.style.cursor = "pointer";
+    "persona-artifact-card persona-flex persona-w-full persona-max-w-full persona-items-center persona-gap-3 persona-px-4 persona-py-3";
   root.tabIndex = 0;
   root.setAttribute("role", "button");
   root.setAttribute("aria-label", `Open ${title} in artifact panel`);
@@ -110,16 +104,11 @@ function renderDefaultArtifactCard(
 
   // Download button (visible when artifact is complete)
   if (status === "complete") {
-    const dl = document.createElement("button");
-    dl.type = "button";
-    dl.textContent = "Download";
+    const dl = createLabelButton({
+      label: "Download",
+      className: "persona-flex-shrink-0",
+    });
     dl.title = `Download ${title}`;
-    dl.className =
-      "persona-flex-shrink-0 persona-rounded-md persona-px-3 persona-py-1.5 persona-text-xs persona-font-medium";
-    dl.style.border = "1px solid var(--persona-border, #e5e7eb)";
-    dl.style.color = "var(--persona-text, #1f2937)";
-    dl.style.backgroundColor = "transparent";
-    dl.style.cursor = "pointer";
     dl.setAttribute("data-download-artifact", artifactId);
     root.append(dl);
   }

@@ -2691,12 +2691,12 @@
 
 [data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover {
   color: var(--persona-artifact-toolbar-icon-hover-color, inherit);
-  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-container, #f3f4f6));
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
 }
 
 [data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-pressed="true"] {
-  background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-container, #f3f4f6));
-  border-color: var(--persona-artifact-doc-toggle-active-border, var(--persona-border, #e5e7eb));
+  background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
+  border-color: var(--persona-artifact-doc-toggle-active-border, var(--persona-icon-btn-active-border, var(--persona-border, #e5e7eb)));
 }
 
 [data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn {
@@ -2714,7 +2714,7 @@
 }
 
 [data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover {
-  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-container, #f3f4f6));
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
 }
 
 [data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-label {
@@ -2782,6 +2782,23 @@
 /* Toolbar border override */
 [data-persona-root] .persona-artifact-toolbar-document {
   border-bottom: var(--persona-artifact-toolbar-border, 1px solid var(--persona-border, #e5e7eb));
+}
+
+/* Artifact reference card (chat thread) */
+[data-persona-root] .persona-artifact-card {
+  background: var(--persona-artifact-card-bg, var(--persona-surface, #ffffff));
+  border: var(--persona-artifact-card-border, 1px solid var(--persona-border, #e5e7eb));
+  border-radius: var(--persona-artifact-card-radius, var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem)));
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+[data-persona-root] .persona-artifact-card:hover {
+  background: var(--persona-artifact-card-hover-bg, #f3f4f6);
+  border-color: var(--persona-artifact-card-hover-border, var(--persona-border, #e5e7eb));
+}
+[data-persona-root] .persona-artifact-card:focus-visible {
+  outline: 2px solid var(--persona-accent, #171717);
+  outline-offset: 2px;
 }
 
 /* ── Composable button utilities ── */
@@ -2953,6 +2970,14 @@
 [data-persona-root] .persona-toggle-group > .persona-icon-btn:last-child {
   border-top-right-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
   border-bottom-right-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
+}
+
+/* Artifact view/source toggle: separated chips, not the segmented default */
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group {
+  gap: var(--persona-artifact-toolbar-toggle-group-gap, 0.25rem);
+}
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn {
+  border-radius: var(--persona-artifact-toolbar-toggle-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
 }
 
 /* Combo button: label + chevron with dropdown */

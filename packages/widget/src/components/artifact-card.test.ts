@@ -110,14 +110,44 @@ describe("PersonaArtifactCard streaming status", () => {
     ).toBe("3000ms");
   });
 
-  it("sets the root radius to follow the assistant bubble radius chain", () => {
+  it("carries the artifact-card class so radius/border/background come from CSS", () => {
     const root = render(streamingProps);
 
     // Standalone card must not hardcode the rounded-xl utility class.
     expect(root.classList.contains("persona-rounded-xl")).toBe(false);
-    expect(root.style.borderRadius).toBe(
-      "var(--persona-artifact-card-radius, var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem)))"
-    );
+    // Radius/border/background now live in widget.css keyed off this class,
+    // following the --persona-artifact-card-radius → assistant-bubble chain.
+    expect(root.classList.contains("persona-artifact-card")).toBe(true);
+  });
+
+  it("keeps border/background off inline styles so they come from CSS", () => {
+    const root = render(streamingProps);
+
+    expect(root.classList.contains("persona-artifact-card")).toBe(true);
+    // Border/bg/radius/cursor moved to widget.css keyed off the card class.
+    expect(root.style.border).toBe("");
+    expect(root.style.background).toBe("");
+    expect(root.style.backgroundColor).toBe("");
+    expect(root.style.borderRadius).toBe("");
+  });
+
+  it("renders the Download button as a label button carrying the artifact id", () => {
+    const root = render({
+      artifactId: "a1",
+      title: "index.html",
+      status: "complete",
+      artifactType: "markdown",
+      file: { path: "index.html", mimeType: "text/html", language: "html" },
+    });
+
+    const dl = root.querySelector(
+      "[data-download-artifact]"
+    ) as HTMLButtonElement | null;
+    expect(dl).not.toBeNull();
+    expect(dl!.tagName).toBe("BUTTON");
+    expect(dl!.classList.contains("persona-label-btn")).toBe(true);
+    expect(dl!.textContent).toBe("Download");
+    expect(dl!.getAttribute("data-download-artifact")).toBe("a1");
   });
 
   it("renders the complete state with a Download button and no animation", () => {
