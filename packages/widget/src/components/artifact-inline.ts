@@ -35,6 +35,11 @@ const inlineBlockUpdaters = new WeakMap<
  * block under `root`. Blocks whose artifact has no registry record (e.g. after
  * a page refresh) are left on their props render — that render already carries
  * the complete content once the client embedded it on `artifact_complete`.
+ *
+ * v1 tradeoff: an empty registry (e.g. `clearArtifacts()` mid-stream) is a
+ * no-op, so a block already showing pushed content stays frozen on it rather
+ * than reverting to its props render. Resetting to props on every clear would
+ * churn the common case and reload live file-preview iframes; accepted as-is.
  */
 export function updateInlineArtifactBlocks(
   root: HTMLElement,
@@ -57,13 +62,18 @@ function recordFromProps(props: Record<string, unknown>): PersonaArtifactRecord 
     typeof props.title === "string" && props.title ? props.title : undefined;
   const status = props.status === "streaming" ? "streaming" : "complete";
   if (props.artifactType === "component") {
+    const embedded = props.componentProps;
+    const componentProps =
+      embedded && typeof embedded === "object" && !Array.isArray(embedded)
+        ? (embedded as Record<string, unknown>)
+        : {};
     return {
       id,
       artifactType: "component",
       title,
       status,
       component: typeof props.component === "string" ? props.component : "",
-      props: {}
+      props: componentProps
     };
   }
   const file =

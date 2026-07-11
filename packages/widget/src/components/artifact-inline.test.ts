@@ -5,6 +5,7 @@ import {
   PersonaArtifactInline,
   updateInlineArtifactBlocks
 } from "./artifact-inline";
+import { componentRegistry } from "./registry";
 import type {
   AgentWidgetConfig,
   AgentWidgetMessage,
@@ -103,6 +104,36 @@ describe("PersonaArtifactInline hydration from props", () => {
       makeContext(makeConfig())
     );
     expect(el.textContent).toContain("Restored");
+  });
+
+  it("re-invokes the registered renderer with embedded component props", () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const name = "TestInlineHydrationChart";
+    componentRegistry.register(name, (props) => {
+      seen.push(props);
+      const node = document.createElement("div");
+      node.className = "test-inline-chart";
+      node.textContent = `series:${JSON.stringify(props.series)}`;
+      return node;
+    });
+    try {
+      const el = PersonaArtifactInline(
+        {
+          artifactId: "a1",
+          title: "Chart",
+          artifactType: "component",
+          status: "complete",
+          component: name,
+          componentProps: { series: [1, 2, 3] }
+        },
+        makeContext(makeConfig())
+      );
+      expect(el.querySelector(".test-inline-chart")).toBeTruthy();
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toEqual({ series: [1, 2, 3] });
+    } finally {
+      componentRegistry.unregister(name);
+    }
   });
 
   it("re-renders a completed file artifact from props as a sandboxed iframe", () => {

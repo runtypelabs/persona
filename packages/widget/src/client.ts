@@ -1711,10 +1711,19 @@ export class AgentWidgetClient {
     const artifactCardMessages = new Map<string, AgentWidgetMessage>();
     // Track artifact IDs that already have a reference card (from auto-creation or transcript_insert)
     const artifactIdsWithCards = new Set<string>();
-    // Accumulate artifact markdown content for embedding in card props on complete
+    // Accumulate artifact markdown content (and component props) for embedding
+    // in block props on complete. `props` accumulates across `artifact_update`
+    // events so an inline component block hydrates with its real props after a
+    // refresh (the session artifact registry, which also tracks them live, is
+    // not persisted).
     const artifactContent = new Map<
       string,
-      { markdown: string; title?: string; file?: PersonaArtifactFileMeta }
+      {
+        markdown: string;
+        title?: string;
+        file?: PersonaArtifactFileMeta;
+        props?: Record<string, unknown>;
+      }
     >();
     const isArtifactEmitToolName = (name: string | undefined): boolean => {
       if (!name) return false;
@@ -3140,7 +3149,18 @@ export class AgentWidgetClient {
               component: typeof payload.component === "string" ? payload.component : undefined,
               ...(artFile ? { file: artFile } : {})
             });
-            artifactContent.set(artId, { markdown: "", title: artTitle, file: artFile });
+            // Seed component props from artifact_start when the payload
+            // carries them; artifact_update events accumulate the rest below.
+            const startProps =
+              payload.props && typeof payload.props === "object" && !Array.isArray(payload.props)
+                ? { ...(payload.props as Record<string, unknown>) }
+                : undefined;
+            artifactContent.set(artId, {
+              markdown: "",
+              title: artTitle,
+              file: artFile,
+              ...(startProps ? { props: startProps } : {})
+            });
             // Insert the in-thread artifact block (skip if already present from
             // transcript_insert). The resolved display mode picks the component:
             // "card"/"panel" inject the reference card; "inline" injects the
@@ -3194,6 +3214,13 @@ export class AgentWidgetClient {
               props,
               component: typeof payload.component === "string" ? payload.component : undefined
             });
+            // Accumulate for hydration: embedded on artifact_complete so an
+            // inline component block re-renders with its real props after a
+            // refresh.
+            const updateAcc = artifactContent.get(String(payload.id));
+            if (updateAcc) {
+              updateAcc.props = { ...(updateAcc.props ?? {}), ...props };
+            }
           } else if (payloadType === "artifact_complete") {
             const artCompleteId = String(payload.id);
             onEvent({ type: "artifact_complete", id: artCompleteId });
@@ -3213,6 +3240,16 @@ export class AgentWidgetClient {
                   // Persist file metadata too so the download path unfences correctly after refresh.
                   if (acc?.file) {
                     parsed.props.file = acc.file;
+                  }
+                  // Embed accumulated component props so an inline component
+                  // block hydrates with its real props after a refresh. Only
+                  // the inline block reads them; the card never does.
+                  if (
+                    parsed.component === "PersonaArtifactInline" &&
+                    acc?.props &&
+                    Object.keys(acc.props).length > 0
+                  ) {
+                    parsed.props.componentProps = acc.props;
                   }
                 }
                 refMsg.rawContent = JSON.stringify(parsed);

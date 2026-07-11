@@ -2639,36 +2639,51 @@ export class AgentWidgetSession {
   }
 
   /**
-   * Injects the in-thread artifact block for a programmatically upserted
-   * artifact, matching the streamed UX: the resolved display mode picks the
-   * component ("card"/"panel" → reference card, "inline" → inline preview).
-   * Updates to an artifact that already has a block are a no-op here — the
-   * existing block re-renders from the registry.
+   * Injects (or refreshes) the in-thread artifact block for a programmatically
+   * upserted artifact, matching the streamed UX: the resolved display mode
+   * picks the component ("card"/"panel" → reference card, "inline" → inline
+   * preview).
    *
    * Unlike the streamed path (which embeds content on `artifact_complete`),
    * the programmatic record is complete up front, so the final markdown /
-   * file meta / component name are embedded immediately and the block
+   * file meta / component name + props are embedded immediately and the block
    * hydrates after a refresh without the original registry state.
+   *
+   * A re-upsert of the same id rebuilds the existing block's persisted
+   * rawContent in place (the registry is not persisted, so hydration reads
+   * these props); without this the block would keep the first version's
+   * content after a refresh.
    */
   private injectArtifactRefBlock(rec: PersonaArtifactRecord): void {
     const refId = `artifact-ref-${rec.id}`;
-    if (this.messages.some((m) => m.id === refId)) return;
     const displayMode = resolveArtifactDisplayMode(
       this.config.features?.artifacts,
       rec.artifactType
     );
+    const rawContent = buildArtifactRefRawContent(displayMode, {
+      artifactId: rec.id,
+      title: rec.title,
+      artifactType: rec.artifactType,
+      status: "complete",
+      ...(rec.file ? { file: rec.file } : {}),
+      ...(rec.component ? { component: rec.component } : {}),
+      ...(rec.props ? { componentProps: rec.props } : {}),
+      ...(rec.markdown !== undefined ? { markdown: rec.markdown } : {})
+    });
+    // Re-upsert: mutate the STORED message (inject stores a copy via
+    // ensureSequence, so a local copy would be lost) and notify so the
+    // transcript re-renders and persistence picks up the new version.
+    const existing = this.messages.find((m) => m.id === refId);
+    if (existing) {
+      existing.rawContent = rawContent;
+      existing.streaming = false;
+      this.callbacks.onMessagesChanged([...this.messages]);
+      return;
+    }
     this.injectAssistantMessage({
       id: refId,
       content: "",
-      rawContent: buildArtifactRefRawContent(displayMode, {
-        artifactId: rec.id,
-        title: rec.title,
-        artifactType: rec.artifactType,
-        status: "complete",
-        ...(rec.file ? { file: rec.file } : {}),
-        ...(rec.component ? { component: rec.component } : {}),
-        ...(rec.markdown !== undefined ? { markdown: rec.markdown } : {})
-      })
+      rawContent
     });
   }
 

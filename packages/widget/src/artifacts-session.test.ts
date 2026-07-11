@@ -157,8 +157,11 @@ describe("AgentWidgetSession artifacts", () => {
     const parsed = JSON.parse(block!.rawContent!);
     expect(parsed.component).toBe("PersonaArtifactInline");
     // Inline blocks render component artifacts through the registry, so the
-    // component name is embedded in the block props.
+    // component name AND its props are embedded in the block props (the
+    // registry is not persisted, so hydration re-invokes the renderer from
+    // these).
     expect(parsed.props.component).toBe("MyChart");
+    expect(parsed.props.componentProps).toEqual({ series: [1, 2] });
     expect(parsed.props.status).toBe("complete");
   });
 
@@ -200,6 +203,37 @@ describe("AgentWidgetSession artifacts", () => {
     expect(blocks).toHaveLength(1);
     expect(session.getArtifacts()).toHaveLength(1);
     expect(session.getArtifactById("a1")?.markdown).toBe("v2");
+  });
+
+  it("upsertArtifact re-upsert rebuilds the existing block's persisted props", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    session.upsertArtifact({
+      id: "a1",
+      artifactType: "markdown",
+      title: "T1",
+      content: "v1"
+    });
+    session.upsertArtifact({
+      id: "a1",
+      artifactType: "markdown",
+      title: "T2",
+      content: "v2"
+    });
+    const blocks = session
+      .getMessages()
+      .filter((m) => m.id === "artifact-ref-a1");
+    expect(blocks).toHaveLength(1);
+    const parsed = JSON.parse(blocks[0].rawContent!);
+    expect(parsed.props.markdown).toBe("v2");
+    expect(parsed.props.title).toBe("T2");
   });
 
   it("stores file metadata via upsertArtifact", () => {
