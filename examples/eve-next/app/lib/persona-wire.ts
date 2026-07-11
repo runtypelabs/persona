@@ -1,9 +1,8 @@
 /**
  * Persona wire helper. Framework-agnostic, zero runtime dependencies.
  *
- * Vendored into this example (zero dependencies), so the only SDK-specific file
- * is the adapter that sits on top of it. Lift this file straight into your own
- * app. It depends on nothing.
+ * Vendored by Persona examples so each adapter remains copy-pasteable. Lift
+ * this file straight into your own app; it depends on nothing.
  *
  * `createPersonaSSEStream` wraps a streaming handler in Persona's SSE event
  * vocabulary: the protocol any backend can speak, and the same wire the Runtype

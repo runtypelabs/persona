@@ -115,6 +115,8 @@ export default createVercelHandler({
 | `apiKey` | `string` | Runtype API key (defaults to `RUNTYPE_API_KEY` environment variable) |
 | `path` | `string` | Proxy endpoint path (defaults to `/api/chat/dispatch`) |
 | `allowedOrigins` | `string[]` | CORS allowed origins |
+| `requestGuard` | `ProxyRequestGuard` | Optional authorization/rate-limit hook run before JSON parsing, feedback handlers, or upstream requests. Return a `Response` to deny. |
+| `maxRequestBodyBytes` | `number` | Optional positive-integer UTF-8 JSON body limit for dispatch, resume, and feedback. Disabled by default. |
 | `flowId` | `string` | Runtype flow ID to use |
 | `flowConfig` | `RuntypeFlowConfig` | Custom flow configuration |
 | `feedbackPath` | `string` | Message-feedback endpoint path. Default: `/api/feedback`. |
@@ -123,9 +125,32 @@ export default createVercelHandler({
 | `agentId` | `string` | Runtype agent ID to use. Mutually exclusive with `flowId`, `flowConfig`, and `agentConfig`. |
 | `agentConfig` | `AgentConfig` | Server-pinned agent configuration. Mutually exclusive with `flowId`, `flowConfig`, and `agentId`. |
 
+Use `requestGuard` to connect the proxy to your authenticated session and shared rate-limit store. Guard responses are returned with their status, body, and headers intact:
+
+```ts
+const app = createChatProxyApp({
+  maxRequestBodyBytes: 16 * 1024 * 1024,
+  requestGuard: async ({ request, kind }) => {
+    const user = await authenticate(request);
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    const limit = await rateLimiter.check(`${user.id}:${kind}`);
+    if (!limit.allowed) {
+      return Response.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+      );
+    }
+  }
+});
+```
+
+The body limit checks both a valid declared `Content-Length` and the actual UTF-8 byte count. Use a limit large enough for base64-encoded attachments.
+
 ### WebMCP and built-in client tools
 
-For flow-dispatch and server-agent requests, the proxy preserves `clientTools[]` from the widget payload and forwards them upstream so Runtype can register browser-local tools for that turn. Tool results are sent by the widget to `${path}/resume`, and the proxy forwards that body to the upstream `/resume` endpoint using the same API key. Client-agent payloads, where the browser sends its own `agent`, are forwarded as-is for compatibility.
+For flow-dispatch and server-agent requests, the proxy preserves `clientTools[]` from the widget payload and forwards them upstream so Runtype can register browser-local tools for that turn. Tool results are sent by the widget to `${path}/resume`, and the proxy forwards that body to the upstream `/resume` endpoint using the same API key.
+
+A non-server-agent route rejects a client-supplied `agent` with HTTP 400. Configure `agentId` or `agentConfig` to pin the agent on the server. If browser-selected agent definitions are intentional, send them to a separate backend that authenticates and authorizes that capability instead of relaying them on the proxy's API key.
 
 Server-agent routes (`agentId` or `agentConfig`) ignore any client-supplied `agent` field. The browser can contribute messages, `clientTools[]`, `metadata`, `context`, and `inputs`; the model, system prompt, tools, and loop config stay pinned on the server.
 
@@ -135,6 +160,8 @@ Server-agent routes (`agentId` or `agentConfig`) ignore any client-supplied `age
 - If `allowedOrigins` is set, exact matches are allowed.
 - `NODE_ENV=development` reflects local dev origins even when they are not in `allowedOrigins`; an unset `NODE_ENV` is treated as production.
 - Vercel preview deployments (`VERCEL_ENV=preview`) and origins matching `previewOriginPattern` are reflected so per-branch preview URLs work without enumerating them.
+
+CORS is a browser policy, not authentication. Omitting `allowedOrigins` is permissive and does not prevent direct HTTP callers from using the proxy.
 
 ### Feedback endpoint
 

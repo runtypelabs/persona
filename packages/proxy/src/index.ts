@@ -90,11 +90,27 @@ export type FeedbackPayload = {
  */
 export type FeedbackHandler = (feedback: FeedbackPayload) => Promise<void> | void;
 
+export type ProxyRequestKind = "dispatch" | "resume" | "feedback";
+
+export type ProxyRequestGuardContext = {
+  request: Request;
+  kind: ProxyRequestKind;
+  path: string;
+};
+
+export type ProxyRequestGuard = (
+  context: ProxyRequestGuardContext
+) => Response | void | Promise<Response | void>;
+
 export type ChatProxyOptions = {
   upstreamUrl?: string;
   apiKey?: string;
   path?: string;
   allowedOrigins?: string[];
+  /** Optional authorization/rate-limit hook run before body parsing or upstream work. */
+  requestGuard?: ProxyRequestGuard;
+  /** Optional UTF-8 JSON body limit. Disabled by default for compatibility. */
+  maxRequestBodyBytes?: number;
   /**
    * Reflect any request origin matching this pattern, in addition to the exact
    * `allowedOrigins` list. Intended for Vercel **preview** deployments, whose
@@ -318,6 +334,16 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       "createChatProxyApp: agentConfig and agentId are mutually exclusive."
     );
   }
+  if (
+    options.maxRequestBodyBytes !== undefined &&
+    (!Number.isFinite(options.maxRequestBodyBytes) ||
+      !Number.isInteger(options.maxRequestBodyBytes) ||
+      options.maxRequestBodyBytes < 1)
+  ) {
+    throw new Error(
+      "createChatProxyApp: maxRequestBodyBytes must be a positive integer."
+    );
+  }
 
   const app = new Hono();
   const path = options.path ?? DEFAULT_PATH;
@@ -329,14 +355,121 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
   );
   app.use("*", withCors(options.allowedOrigins, previewOriginPattern));
 
+  const errorResponse = (error: string, status: number) =>
+    new Response(JSON.stringify({ error }), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  const guardRequest = async (
+    c: Context,
+    kind: ProxyRequestKind,
+    mountedPath: string
+  ): Promise<Response | undefined> => {
+    if (!options.requestGuard) return undefined;
+    try {
+      // Guards receive an independent branch so signature/auth checks may read
+      // the body without consuming the handler's request stream.
+      return (
+        (await options.requestGuard({
+          request: c.req.raw.clone(),
+          kind,
+          path: mountedPath,
+        })) ?? undefined
+      );
+    } catch (error) {
+      console.error("[Proxy] Request guard error:", error);
+      return errorResponse("Request guard failed", 500);
+    }
+  };
+
+  const readTextWithinLimit = async (
+    request: Request,
+    limit: number
+  ): Promise<{ success: true; text: string } | { success: false }> => {
+    if (!request.body) return { success: true, text: "" };
+
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let byteLength = 0;
+    let done = false;
+    try {
+      while (!done) {
+        const result = await reader.read();
+        done = result.done;
+        if (done) break;
+        const value = result.value;
+        if (!value) continue;
+        byteLength += value.byteLength;
+        if (byteLength > limit) {
+          void reader.cancel().catch(() => undefined);
+          return { success: false };
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    const bytes = new Uint8Array(byteLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { success: true, text: new TextDecoder().decode(bytes) };
+  };
+
+  const parseJsonBody = async (
+    c: Context
+  ): Promise<
+    | { success: true; value: unknown }
+    | { success: false; response: Response }
+  > => {
+    const limit = options.maxRequestBodyBytes;
+    if (limit !== undefined) {
+      const declaredLength = c.req.header("content-length")?.trim();
+      if (declaredLength && /^\d+$/.test(declaredLength)) {
+        try {
+          if (BigInt(declaredLength) > BigInt(limit)) {
+            return {
+              success: false,
+              response: errorResponse("Request body too large", 413),
+            };
+          }
+        } catch {
+          // Fall through to measuring the actual body.
+        }
+      }
+    }
+
+    const body =
+      limit === undefined
+        ? { success: true as const, text: await c.req.text() }
+        : await readTextWithinLimit(c.req.raw, limit);
+    if (!body.success) {
+      return {
+        success: false,
+        response: errorResponse("Request body too large", 413),
+      };
+    }
+    try {
+      return { success: true, value: JSON.parse(body.text) as unknown };
+    } catch {
+      return {
+        success: false,
+        response: errorResponse("Invalid JSON body", 400),
+      };
+    }
+  };
+
   // Feedback endpoint for collecting upvote/downvote data
   app.post(feedbackPath, async (c) => {
-    let payload: FeedbackPayload;
-    try {
-      payload = await c.req.json();
-    } catch (error) {
-      return c.json({ error: "Invalid JSON body" }, 400);
-    }
+    const denied = await guardRequest(c, "feedback", feedbackPath);
+    if (denied) return denied;
+    const parsed = await parseJsonBody(c);
+    if (!parsed.success) return parsed.response;
+    const payload = parsed.value as FeedbackPayload;
 
     // Validate payload
     if (!payload.type || !["upvote", "downvote"].includes(payload.type)) {
@@ -386,6 +519,8 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
 
   // Chat dispatch endpoint
   app.post(path, async (c) => {
+    const denied = await guardRequest(c, "dispatch", path);
+    if (denied) return denied;
     const apiKey = options.apiKey ?? getRuntimeEnv()?.RUNTYPE_API_KEY;
     if (!apiKey) {
       return c.json(
@@ -394,15 +529,9 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       );
     }
 
-    let clientPayload: Record<string, unknown>;
-    try {
-      clientPayload = await c.req.json();
-    } catch (error) {
-      return c.json(
-        { error: "Invalid JSON body", details: error },
-        400
-      );
-    }
+    const parsed = await parseJsonBody(c);
+    if (!parsed.success) return parsed.response;
+    const clientPayload = parsed.value as Record<string, unknown>;
 
     const isDevelopment = isDevelopmentRuntime();
 
@@ -559,6 +688,9 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
   // a child of the dispatch path so the widget can derive its URL by
   // appending "/resume" to whatever `apiUrl` it was configured with.
   app.post(`${path}/resume`, async (c) => {
+    const resumePath = `${path}/resume`;
+    const denied = await guardRequest(c, "resume", resumePath);
+    if (denied) return denied;
     const apiKey = options.apiKey ?? getRuntimeEnv()?.RUNTYPE_API_KEY;
     if (!apiKey) {
       return c.json(
@@ -567,15 +699,9 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       );
     }
 
-    let body: Record<string, unknown>;
-    try {
-      body = await c.req.json();
-    } catch (error) {
-      return c.json(
-        { error: "Invalid JSON body", details: error },
-        400
-      );
-    }
+    const parsed = await parseJsonBody(c);
+    if (!parsed.success) return parsed.response;
+    const body = parsed.value as Record<string, unknown>;
 
     const isDevelopment = isDevelopmentRuntime();
     const upstreamResumeUrl = `${upstream.replace(/\/+$/, '')}/resume`;

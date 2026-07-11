@@ -16,6 +16,23 @@ const baseConfig = () => ({
 const inject = (controller: ReturnType<typeof createAgentExperience>) =>
   controller.injectAssistantMessage({ content: "hello world" });
 
+const deferred = () => {
+  let resolve!: () => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
+const flushMicrotasks = async (times = 4) => {
+  for (let index = 0; index < times; index += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await Promise.resolve();
+  }
+};
+
 describe("persistState gates storage adapter", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -147,6 +164,107 @@ describe("persistState gates storage adapter", () => {
     });
 
     expect(controller.getMessages()).toEqual([]);
+    controller.destroy();
+  });
+
+  it("serializes async saves and preserves the newest transcript", async () => {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const firstSave = deferred();
+    const payloads: Array<{ messages?: Array<{ content?: string }> }> = [];
+    const save = vi.fn((state: { messages?: Array<{ content?: string }> }) => {
+      payloads.push(state);
+      return save.mock.calls.length === 1 ? firstSave.promise : Promise.resolve();
+    });
+    const controller = createAgentExperience(mount, {
+      ...baseConfig(),
+      storageAdapter: { save },
+    });
+
+    controller.injectAssistantMessage({ content: "first" });
+    controller.injectAssistantMessage({ content: "second" });
+
+    expect(save).toHaveBeenCalledTimes(1);
+    firstSave.resolve();
+    await flushMicrotasks();
+
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(payloads[1].messages?.map((message) => message.content)).toEqual([
+      "first",
+      "second",
+    ]);
+    controller.destroy();
+  });
+
+  it("orders clear after pending saves so stale state cannot be resurrected", async () => {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const firstSave = deferred();
+    const operations: string[] = [];
+    const save = vi.fn(() => {
+      operations.push("save");
+      return save.mock.calls.length === 1 ? firstSave.promise : Promise.resolve();
+    });
+    const clear = vi.fn(() => {
+      operations.push("clear");
+      return Promise.resolve();
+    });
+    const controller = createAgentExperience(mount, {
+      ...baseConfig(),
+      storageAdapter: { save, clear },
+    });
+
+    inject(controller);
+    controller.clearChat();
+
+    expect(operations).toEqual(["save"]);
+    firstSave.resolve();
+    await flushMicrotasks(20);
+
+    expect(operations).toEqual(["save", "save", "clear"]);
+    expect(clear).toHaveBeenCalledTimes(1);
+    controller.destroy();
+  });
+
+  it("continues queued storage mutations after an async save rejects", async () => {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const firstSave = deferred();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const save = vi.fn(() =>
+      save.mock.calls.length === 1 ? firstSave.promise : Promise.resolve()
+    );
+    const controller = createAgentExperience(mount, {
+      ...baseConfig(),
+      storageAdapter: { save },
+    });
+
+    controller.injectAssistantMessage({ content: "first" });
+    controller.injectAssistantMessage({ content: "second" });
+    firstSave.reject(new Error("storage unavailable"));
+    await flushMicrotasks(8);
+
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[AgentWidget] Failed to persist state:",
+      expect.any(Error)
+    );
+    errorSpy.mockRestore();
+    controller.destroy();
+  });
+
+  it("keeps synchronous adapters synchronous", () => {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const save = vi.fn();
+    const controller = createAgentExperience(mount, {
+      ...baseConfig(),
+      storageAdapter: { save },
+    });
+
+    inject(controller);
+
+    expect(save).toHaveBeenCalledTimes(1);
     controller.destroy();
   });
 });

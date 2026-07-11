@@ -628,4 +628,3 @@ export function clearCheckoutQueryParams(): void {
     console.error("[Order] Failed to clear checkout query params:", error);
   }
 }
-

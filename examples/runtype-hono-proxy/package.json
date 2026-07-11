@@ -8,7 +8,8 @@
     "deploy:workers": "wrangler deploy",
     "start": "node dist/node.js",
     "build": "tsup src/node.ts --format esm,cjs --dts --out-dir dist --clean",
-    "types-check": "tsc --noEmit"
+    "types-check": "tsc --noEmit",
+    "test": "tsx --test src/request-guard.test.ts"
   },
   "dependencies": {
     "@runtypelabs/persona-proxy": "workspace:^",

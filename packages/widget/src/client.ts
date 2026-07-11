@@ -614,6 +614,7 @@ export class AgentWidgetClient {
    * Send a message - handles both proxy and client token modes
    */
   public async dispatch(options: DispatchOptions, onEvent: SSEHandler) {
+    options.signal?.throwIfAborted();
     if (this.isClientTokenMode()) {
       return this.dispatchClientToken(options, onEvent);
     }
@@ -627,11 +628,6 @@ export class AgentWidgetClient {
    * Client token mode dispatch
    */
   private async dispatchClientToken(options: DispatchOptions, onEvent: SSEHandler) {
-    const controller = new AbortController();
-    if (options.signal) {
-      options.signal.addEventListener("abort", () => controller.abort());
-    }
-
     onEvent({ type: "status", status: "connecting" });
 
     try {
@@ -718,7 +714,7 @@ export class AgentWidgetClient {
             'X-Persona-Version': VERSION,
           },
           body: JSON.stringify(chatRequest),
-          signal: controller.signal,
+          signal: options.signal,
         });
 
         // Diff-only cache miss: the server has no stored tool set matching our
@@ -798,11 +794,6 @@ export class AgentWidgetClient {
    * Proxy mode dispatch (original implementation)
    */
   private async dispatchProxy(options: DispatchOptions, onEvent: SSEHandler) {
-    const controller = new AbortController();
-    if (options.signal) {
-      options.signal.addEventListener("abort", () => controller.abort());
-    }
-
     onEvent({ type: "status", status: "connecting" });
 
     const payload = await this.buildPayload(options.messages);
@@ -836,7 +827,7 @@ export class AgentWidgetClient {
             method: "POST",
             headers,
             body: JSON.stringify(payload),
-            signal: controller.signal
+            signal: options.signal
           },
           payload
         );
@@ -850,7 +841,7 @@ export class AgentWidgetClient {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
-        signal: controller.signal
+        signal: options.signal
       });
     }
 
@@ -874,11 +865,6 @@ export class AgentWidgetClient {
    * Agent mode dispatch
    */
   private async dispatchAgent(options: DispatchOptions, onEvent: SSEHandler) {
-    const controller = new AbortController();
-    if (options.signal) {
-      options.signal.addEventListener("abort", () => controller.abort());
-    }
-
     onEvent({ type: "status", status: "connecting" });
 
     const payload = await this.buildAgentPayload(options.messages);
@@ -912,7 +898,7 @@ export class AgentWidgetClient {
             method: "POST",
             headers,
             body: JSON.stringify(payload),
-            signal: controller.signal
+            signal: options.signal
           },
           payload as unknown as AgentWidgetRequestPayload
         );
@@ -926,7 +912,7 @@ export class AgentWidgetClient {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
-        signal: controller.signal
+        signal: options.signal
       });
     }
 

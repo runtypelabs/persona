@@ -20,7 +20,8 @@
   "scripts": {
     "build": "rimraf dist && tsup src/index.ts --format esm,cjs --dts --sourcemap",
     "lint": "eslint . --ext .ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "hono": "^4.12.25"

@@ -38,4 +38,4 @@ jobs:
         run: pnpm typecheck
 
       - name: Run tests
-        run: pnpm --filter @runtypelabs/persona test:run
+        run: pnpm test:run
