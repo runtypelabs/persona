@@ -10,6 +10,7 @@ export type {
   AgentWidgetFeatureFlags,
   AgentWidgetArtifactsFeature,
   AgentWidgetArtifactsLayoutConfig,
+  PersonaArtifactDisplayMode,
   PersonaArtifactKind,
   PersonaArtifactRecord,
   PersonaArtifactManualUpsert,

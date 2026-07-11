@@ -34,6 +34,18 @@
           </div>
 
           <div class="info-section">
+            <h3>Display mode</h3>
+            <p>Choose where artifact bodies render (<code>features.artifacts.display</code>). Applies to the next streamed artifact.</p>
+            <div class="section">
+              <div class="mode-group" id="artifact-display-mode">
+                <button type="button" class="mode-btn active" data-mode="panel">Panel</button>
+                <button type="button" class="mode-btn" data-mode="card">Card</button>
+                <button type="button" class="mode-btn" data-mode="inline">Inline</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-section">
             <h3>Card loading animation</h3>
             <p>Style the "Generating…" status on the in-chat reference card while an artifact streams. Changes apply live and to the next streamed card.</p>
             <div class="section">
@@ -99,6 +111,20 @@
           <p>The buttons here replay the exact <code>artifact_start</code> / <code>artifact_delta</code> / <code>artifact_complete</code> wire frames a real Runtype agent emits, streamed through <code>controller.connectStream(...)</code>.</p>
           <p>That is what makes the in-chat reference card appear and stream from "Generating…" to done with a Download button, while the side pane fills at the same time. A live agent produces the same frames.</p>
           <p>Components must be registered via <code>componentRegistry.register(name, renderer)</code>.</p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Display modes</h3>
+          <p>Where artifact bodies render is controlled by <code>features.artifacts.display</code>:</p>
+          <div class="code-block">
+            <span class="prop">features</span>: {
+              <span class="prop">artifacts</span>: {
+                <span class="prop">enabled</span>: <span class="keyword">true</span>,
+                <span class="prop">display</span>: <span class="string">"panel"</span>, <span class="comment">// panel | card | inline (or { default, byType })</span>
+              },
+            },
+          </div>
+          <p><code>panel</code> (the default) shows the reference card in the transcript and auto-opens the side pane as the artifact streams. <code>card</code> shows only the card; the pane opens when you click it. <code>inline</code> renders the full artifact preview directly in the transcript — rendered markdown, sandboxed file iframes, or registry components — with no pane involved. The switcher in the rail applies the mode live via <code>handle.update(config)</code>; it takes effect on the next streamed artifact.</p>
         </div>
 
         <div class="notes-section">

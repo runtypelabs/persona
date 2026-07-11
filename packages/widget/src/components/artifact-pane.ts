@@ -1,14 +1,10 @@
 import { createElement } from "../utils/dom";
-import type { AgentWidgetConfig, AgentWidgetMessage, PersonaArtifactRecord } from "../types";
+import type { AgentWidgetConfig, PersonaArtifactRecord } from "../types";
+import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
 import {
-  extractFileSource,
-  fileKindOf,
-  fileTypeLabel,
-  basenameOf,
-} from "../utils/artifact-file";
-import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors";
-import { resolveSanitizer } from "../utils/sanitize";
-import { componentRegistry, type ComponentContext } from "./registry";
+  renderArtifactPreviewBody,
+  type ArtifactPreviewBodyHandle,
+} from "./artifact-preview";
 import { renderLucideIcon } from "../utils/icons";
 import { createDropdownMenu, type DropdownMenuHandle } from "../utils/dropdown";
 import { createIconButton, createLabelButton } from "../utils/buttons";
@@ -20,20 +16,6 @@ export type ArtifactPaneApi = {
   update: (state: { artifacts: PersonaArtifactRecord[]; selectedId: string | null }) => void;
   setMobileOpen: (open: boolean) => void;
 };
-
-function fallbackComponentCard(sel: PersonaArtifactRecord): HTMLElement {
-  const card = createElement(
-    "div",
-    "persona-rounded-lg persona-border persona-border-persona-border persona-p-3 persona-text-persona-primary"
-  );
-  const title = createElement("div", "persona-font-semibold persona-text-sm persona-mb-2");
-  title.textContent = sel.component ? `Component: ${sel.component}` : "Component";
-  const pre = createElement("pre", "persona-font-mono persona-text-xs persona-whitespace-pre-wrap persona-overflow-x-auto");
-  pre.textContent = JSON.stringify(sel.props ?? {}, null, 2);
-  card.appendChild(title);
-  card.appendChild(pre);
-  return card;
-}
 
 /**
  * Right-hand artifact sidebar / mobile drawer content.
@@ -52,13 +34,6 @@ export function createArtifactPane(
   const toolbarTitle = layout?.toolbarTitle ?? "Artifacts";
   const closeButtonLabel = layout?.closeButtonLabel ?? "Close";
   const panePadding = layout?.panePadding?.trim();
-
-  const md = config.markdown ? createMarkdownProcessorFromConfig(config.markdown) : null;
-  const sanitize = resolveSanitizer(config.sanitize);
-  const toHtml = (text: string) => {
-    const raw = md ? md(text) : escapeHtml(text);
-    return sanitize ? sanitize(raw) : raw;
-  };
 
   const backdrop =
     typeof document !== "undefined"
@@ -334,14 +309,17 @@ export function createArtifactPane(
   // otherwise fight a user who has scrolled the strip manually.
   let lastScrolledTabId: string | null = null;
 
-  // File-preview iframe reuse: re-appending a detached iframe reloads its srcdoc,
-  // so keep the node and skip rebuilding when the artifact + source are unchanged.
-  let filePreviewIframe: HTMLIFrameElement | null = null;
-  let filePreviewKey: string | null = null;
+  // Shared preview body renderer (artifact-preview.ts). One handle serves the
+  // whole content area; it is updated with whichever record is selected and
+  // internally reuses the file-preview iframe across idle re-renders.
+  let preview: ArtifactPreviewBodyHandle | null = null;
   let fileToggleMounted = false;
-  const resetFilePreview = () => {
-    filePreviewIframe = null;
-    filePreviewKey = null;
+  const resolveViewMode = (rec: PersonaArtifactRecord): "rendered" | "source" => {
+    const isFile = rec.artifactType === "markdown" && Boolean(rec.file);
+    // File artifacts honor the toggle in every toolbar preset; plain markdown
+    // only has a source view in the document toolbar preset.
+    if (isFile) return viewMode;
+    return documentChrome ? viewMode : "rendered";
   };
   // For the default (non-document) toolbar, mount the rendered/source toggle only
   // while a previewable file artifact is selected. The document toolbar already
@@ -402,7 +380,7 @@ export function createArtifactPane(
       records[records.length - 1];
     if (!sel) {
       content.replaceChildren();
-      resetFilePreview();
+      preview = null;
       updateFileToggleVisibility(false);
       return;
     }
@@ -428,114 +406,18 @@ export function createArtifactPane(
       titleEl.textContent = selFile ? basenameOf(selFile.path) : toolbarTitle;
     }
 
-    // Previewable file artifact branch (markdown artifact carrying `file` meta).
-    if (selFile) {
-      const source = extractFileSource(sel.markdown ?? "");
-      const kind = fileKindOf(selFile);
-      const previewEnabled =
-        config.features?.artifacts?.filePreview?.enabled !== false;
-      const isStreaming = sel.status !== "complete";
-      const wantIframe =
-        !isStreaming &&
-        viewMode === "rendered" &&
-        previewEnabled &&
-        (kind === "html" || kind === "svg");
-
-      if (wantIframe) {
-        const key = sel.id + " " + source;
-        // Reuse the existing iframe when nothing changed so idle re-renders don't
-        // reload it (re-appending a detached iframe reloads its srcdoc).
-        if (
-          filePreviewIframe &&
-          filePreviewKey === key &&
-          filePreviewIframe.parentElement === content
-        ) {
-          return;
-        }
-        content.replaceChildren();
-        const sandbox =
-          config.features?.artifacts?.filePreview?.iframeSandbox ?? "allow-scripts";
-        const iframe = createElement("iframe", "persona-artifact-iframe");
-        iframe.setAttribute("sandbox", sandbox);
-        iframe.setAttribute("data-artifact-id", sel.id);
-        // Assign srcdoc as a property (never innerHTML / marked / DOMPurify): the
-        // sandbox (no allow-same-origin → opaque origin) is the isolation boundary.
-        iframe.srcdoc = source;
-        filePreviewIframe = iframe;
-        filePreviewKey = key;
-        content.appendChild(iframe);
-        return;
+    // Delegate the body to the shared preview renderer. Keep the handle's
+    // element attached across updates: re-attaching would reload a live
+    // file-preview iframe.
+    if (!preview) {
+      preview = renderArtifactPreviewBody(sel, { config, resolveViewMode });
+      content.replaceChildren(preview.el);
+    } else {
+      if (preview.el.parentElement !== content) {
+        content.replaceChildren(preview.el);
       }
-
-      // Not rendering an iframe: drop the cached one and rebuild.
-      resetFilePreview();
-      content.replaceChildren();
-
-      // Complete markdown file → existing markdown pipeline (sanitized).
-      if (!isStreaming && kind === "markdown" && viewMode === "rendered") {
-        const wrap = createElement(
-          "div",
-          "persona-text-sm persona-leading-relaxed persona-markdown-bubble"
-        );
-        wrap.innerHTML = toHtml(source);
-        content.appendChild(wrap);
-        return;
-      }
-
-      // Streaming, source view, or non-previewable kind → raw source in a <pre>.
-      const pre = createElement(
-        "pre",
-        "persona-font-mono persona-text-xs persona-whitespace-pre-wrap persona-break-words persona-text-persona-primary"
-      );
-      pre.textContent = source;
-      content.appendChild(pre);
-      return;
+      preview.update(sel);
     }
-
-    // Non-file artifact: clear any cached iframe and rebuild.
-    resetFilePreview();
-    content.replaceChildren();
-
-    if (sel.artifactType === "markdown") {
-      if (documentChrome && viewMode === "source") {
-        const pre = createElement(
-          "pre",
-          "persona-font-mono persona-text-xs persona-whitespace-pre-wrap persona-break-words persona-text-persona-primary"
-        );
-        pre.textContent = sel.markdown ?? "";
-        content.appendChild(pre);
-        return;
-      }
-      const wrap = createElement("div", "persona-text-sm persona-leading-relaxed persona-markdown-bubble");
-      wrap.innerHTML = toHtml(sel.markdown ?? "");
-      content.appendChild(wrap);
-      return;
-    }
-
-    const renderer = sel.component ? componentRegistry.get(sel.component) : undefined;
-    if (renderer) {
-      const stubMessage: AgentWidgetMessage = {
-        id: sel.id,
-        role: "assistant",
-        content: "",
-        createdAt: new Date().toISOString()
-      };
-      const ctx: ComponentContext = {
-        message: stubMessage,
-        config,
-        updateProps: () => {}
-      };
-      try {
-        const el = renderer(sel.props ?? {}, ctx);
-        if (el) {
-          content.appendChild(el);
-          return;
-        }
-      } catch {
-        /* fall through */
-      }
-    }
-    content.appendChild(fallbackComponentCard(sel));
   };
 
   const applyLayoutVisibility = () => {

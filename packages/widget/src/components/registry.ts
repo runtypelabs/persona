@@ -1,5 +1,6 @@
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { PersonaArtifactCard } from "./artifact-card";
+import { PersonaArtifactInline } from "./artifact-inline";
 
 /**
  * Context provided to component renderers
@@ -118,6 +119,8 @@ class ComponentRegistry {
  */
 export const componentRegistry = new ComponentRegistry();
 
-// Register built-in components. The artifact card carries its own border and
-// surface, so it renders bare in the thread to avoid double-boxing.
+// Register built-in components. The artifact card and inline block carry
+// their own border and surface, so they render bare in the thread to avoid
+// double-boxing.
 componentRegistry.register("PersonaArtifactCard", PersonaArtifactCard, { bubbleChrome: false });
+componentRegistry.register("PersonaArtifactInline", PersonaArtifactInline, { bubbleChrome: false });

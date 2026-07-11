@@ -103,6 +103,105 @@ describe("AgentWidgetSession artifacts", () => {
     expect(rec?.markdown).toBe("```html\n<h1>hi</h1>\n```");
   });
 
+  it("upsertArtifact injects a card transcript block by default", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    const rec = session.upsertArtifact({
+      artifactType: "markdown",
+      title: "Doc",
+      content: "# Hi"
+    });
+    const block = session
+      .getMessages()
+      .find((m) => m.id === `artifact-ref-${rec.id}`);
+    expect(block).toBeDefined();
+    expect(block?.role).toBe("assistant");
+    const parsed = JSON.parse(block!.rawContent!);
+    expect(parsed.component).toBe("PersonaArtifactCard");
+    expect(parsed.props).toMatchObject({
+      artifactId: rec.id,
+      title: "Doc",
+      artifactType: "markdown",
+      status: "complete",
+      markdown: "# Hi"
+    });
+  });
+
+  it("upsertArtifact injects an inline block when display resolves to inline", () => {
+    const session = new AgentWidgetSession(
+      { features: { artifacts: { enabled: true, display: "inline" } } },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    const rec = session.upsertArtifact({
+      artifactType: "component",
+      title: "Chart",
+      component: "MyChart",
+      props: { series: [1, 2] }
+    });
+    const block = session
+      .getMessages()
+      .find((m) => m.id === `artifact-ref-${rec.id}`);
+    expect(block).toBeDefined();
+    const parsed = JSON.parse(block!.rawContent!);
+    expect(parsed.component).toBe("PersonaArtifactInline");
+    // Inline blocks render component artifacts through the registry, so the
+    // component name is embedded in the block props.
+    expect(parsed.props.component).toBe("MyChart");
+    expect(parsed.props.status).toBe("complete");
+  });
+
+  it("upsertArtifact with transcript: false injects no transcript block", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    session.upsertArtifact({
+      id: "pane-only",
+      artifactType: "markdown",
+      content: "C",
+      transcript: false
+    });
+    expect(session.getArtifacts()).toHaveLength(1);
+    expect(session.getMessages()).toHaveLength(0);
+  });
+
+  it("upsertArtifact update to an existing artifact does not duplicate the block", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    session.upsertArtifact({ id: "a1", artifactType: "markdown", content: "v1" });
+    session.upsertArtifact({ id: "a1", artifactType: "markdown", content: "v2" });
+    const blocks = session
+      .getMessages()
+      .filter((m) => m.id === "artifact-ref-a1");
+    expect(blocks).toHaveLength(1);
+    expect(session.getArtifacts()).toHaveLength(1);
+    expect(session.getArtifactById("a1")?.markdown).toBe("v2");
+  });
+
   it("stores file metadata via upsertArtifact", () => {
     const session = new AgentWidgetSession(
       {},

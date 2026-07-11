@@ -28,6 +28,10 @@ import {
   generateAssistantMessageId
 } from "./utils/message-id";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "./utils/content";
+import {
+  buildArtifactRefRawContent,
+  resolveArtifactDisplayMode
+} from "./utils/artifact-display";
 import type {
   VoiceProvider,
   VoiceStatus,
@@ -2607,32 +2611,65 @@ export class AgentWidgetSession {
     const id =
       manual.id ||
       `art_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
-    if (manual.artifactType === "markdown") {
-      const rec: PersonaArtifactRecord = {
-        id,
-        artifactType: "markdown",
-        title: manual.title,
-        status: "complete",
-        markdown: manual.content,
-        ...(manual.file ? { file: manual.file } : {})
-      };
-      this.artifacts.set(id, rec);
-      this.selectedArtifactId = id;
-      this.emitArtifactsState();
-      return rec;
-    }
-    const rec: PersonaArtifactRecord = {
-      id,
-      artifactType: "component",
-      title: manual.title,
-      status: "complete",
-      component: manual.component,
-      props: manual.props ?? {}
-    };
+    const rec: PersonaArtifactRecord =
+      manual.artifactType === "markdown"
+        ? {
+            id,
+            artifactType: "markdown",
+            title: manual.title,
+            status: "complete",
+            markdown: manual.content,
+            ...(manual.file ? { file: manual.file } : {})
+          }
+        : {
+            id,
+            artifactType: "component",
+            title: manual.title,
+            status: "complete",
+            component: manual.component,
+            props: manual.props ?? {}
+          };
     this.artifacts.set(id, rec);
     this.selectedArtifactId = id;
     this.emitArtifactsState();
+    if (manual.transcript !== false) {
+      this.injectArtifactRefBlock(rec);
+    }
     return rec;
+  }
+
+  /**
+   * Injects the in-thread artifact block for a programmatically upserted
+   * artifact, matching the streamed UX: the resolved display mode picks the
+   * component ("card"/"panel" → reference card, "inline" → inline preview).
+   * Updates to an artifact that already has a block are a no-op here — the
+   * existing block re-renders from the registry.
+   *
+   * Unlike the streamed path (which embeds content on `artifact_complete`),
+   * the programmatic record is complete up front, so the final markdown /
+   * file meta / component name are embedded immediately and the block
+   * hydrates after a refresh without the original registry state.
+   */
+  private injectArtifactRefBlock(rec: PersonaArtifactRecord): void {
+    const refId = `artifact-ref-${rec.id}`;
+    if (this.messages.some((m) => m.id === refId)) return;
+    const displayMode = resolveArtifactDisplayMode(
+      this.config.features?.artifacts,
+      rec.artifactType
+    );
+    this.injectAssistantMessage({
+      id: refId,
+      content: "",
+      rawContent: buildArtifactRefRawContent(displayMode, {
+        artifactId: rec.id,
+        title: rec.title,
+        artifactType: rec.artifactType,
+        status: "complete",
+        ...(rec.file ? { file: rec.file } : {}),
+        ...(rec.component ? { component: rec.component } : {}),
+        ...(rec.markdown !== undefined ? { markdown: rec.markdown } : {})
+      })
+    });
   }
 
   private clearArtifactState(): void {

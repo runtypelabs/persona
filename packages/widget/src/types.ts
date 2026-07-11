@@ -845,11 +845,27 @@ export type AgentWidgetArtifactsLayoutConfig = {
   }) => void | Promise<void>;
 };
 
+export type PersonaArtifactDisplayMode =
+  | "card"    // reference card in transcript; pane opens on click
+  | "panel"   // reference card in transcript; pane also auto-opens on artifact_start (current default behavior)
+  | "inline"; // artifact preview renders directly in the transcript; no pane involvement
+
 export type AgentWidgetArtifactsFeature = {
   /** When true, Persona shows the artifact pane and handles artifact_* SSE events */
   enabled?: boolean;
   /** If set, artifact events for other types are ignored */
   allowedTypes?: PersonaArtifactKind[];
+  /**
+   * Where artifact bodies render. A single mode applies to all artifacts;
+   * the object form sets a default plus per-type overrides.
+   * Defaults to "panel" (current behavior).
+   */
+  display?:
+    | PersonaArtifactDisplayMode
+    | {
+        default?: PersonaArtifactDisplayMode;
+        byType?: Partial<Record<PersonaArtifactKind, PersonaArtifactDisplayMode>>;
+      };
   /** Split / drawer dimensions and launcher widen behavior */
   layout?: AgentWidgetArtifactsLayoutConfig;
   /**
@@ -881,6 +897,21 @@ export type AgentWidgetArtifactsFeature = {
    * Return an HTMLElement to replace the default card, or `null` to use the default.
    */
   renderCard?: (context: {
+    artifact: {
+      artifactId: string;
+      title: string;
+      artifactType: string;
+      status: string;
+    };
+    config: AgentWidgetConfig;
+    defaultRenderer: () => HTMLElement;
+  }) => HTMLElement | null;
+  /**
+   * Custom renderer for inline artifact blocks (display: "inline"), mirroring
+   * `renderCard`. Return an element to replace the default inline preview,
+   * or null to use the default.
+   */
+  renderInline?: (context: {
     artifact: {
       artifactId: string;
       title: string;
@@ -4891,6 +4922,8 @@ export type PersonaArtifactManualUpsert =
       content: string;
       /** Optional file metadata for previewable file artifacts. */
       file?: PersonaArtifactFileMeta;
+      /** Set false to update the registry/pane without a transcript block (pre-4.x behavior). */
+      transcript?: boolean;
     }
   | {
       id?: string;
@@ -4898,6 +4931,8 @@ export type PersonaArtifactManualUpsert =
       title?: string;
       component: string;
       props?: Record<string, unknown>;
+      /** Set false to update the registry/pane without a transcript block (pre-4.x behavior). */
+      transcript?: boolean;
     };
 
 export type AgentWidgetEvent =

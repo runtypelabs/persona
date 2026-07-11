@@ -56,7 +56,7 @@ const artifactDemoConfigBase: Partial<AgentWidgetConfig> = {
     ...DEFAULT_WIDGET_CONFIG.copy,
     welcomeTitle: "Artifacts demo",
     welcomeSubtitle:
-      "Use the artifact buttons to replay a scripted agent turn. Each button streams the real artifact wire frames, so the reference card appears in the chat.",
+      "Use the artifact buttons to replay a scripted agent turn. Each button streams the real artifact wire frames, rendered per the selected display mode (panel, card, or inline).",
     inputPlaceholder: "Message the model…",
   },
   suggestionChips: [],
@@ -90,6 +90,21 @@ const ANIMATION_DEFAULTS = {
 const getEl = <T extends HTMLElement>(id: string): T | null =>
   document.getElementById(id) as T | null;
 
+// ── Display mode control ────────────────────────────────────────────────
+// Same DOM-is-the-source-of-truth pattern as the animation controls: the
+// active pill in #artifact-display-mode is read on every config build, so the
+// selection survives mount-mode re-mounts and applies via handle.update().
+type ArtifactDisplayMode = "panel" | "card" | "inline";
+
+const DISPLAY_DEFAULT: ArtifactDisplayMode = "panel";
+
+const readDisplayMode = (): ArtifactDisplayMode => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-display-mode .mode-btn.active",
+  );
+  return (activeBtn?.dataset.mode ?? DISPLAY_DEFAULT) as ArtifactDisplayMode;
+};
+
 const readAnimationControls = () => {
   const activeModeBtn = document.querySelector<HTMLButtonElement>(
     "#artifact-anim-mode .mode-btn.active",
@@ -110,11 +125,13 @@ const readAnimationControls = () => {
 };
 
 // Build the features.artifacts block from the base config plus the current
-// animation control selection. Color options are only sent for shimmer-color.
+// display-mode and animation control selections. Color options are only sent
+// for shimmer-color.
 const buildArtifactsFeature = () => {
   const { mode, duration, primary, secondary } = readAnimationControls();
   return {
     ...artifactDemoConfigBase.features?.artifacts,
+    display: readDisplayMode(),
     loadingAnimation: mode,
     loadingAnimationDuration: duration,
     ...(mode === "shimmer-color"
@@ -225,7 +242,7 @@ document.getElementById("btn-clear")?.addEventListener("click", () => {
   handle?.clearArtifacts();
 });
 
-// ── Wire the card loading animation controls ─────────────────────────────
+// ── Wire the rail controls (display mode + loading animation) ─────────────
 // Every control applies live via handle.update(): the widget re-applies
 // features + re-renders the transcript in place (no messages lost), so the
 // change lands on the NEXT streamed card and, because cards read their config
@@ -238,13 +255,24 @@ const syncColorSectionVisibility = (mode: ArtifactAnimationMode): void => {
   }
 };
 
-const applyAnimationConfig = (): void => {
+const applyControlConfig = (): void => {
   const config = buildConfig(activeMountMode);
   handle?.update(
     activeMountMode === "launcher" ? config : squareInlinePanel(config),
   );
   reportDemoConfig(configInspector, { config, mode: activeMountMode });
 };
+
+const displayModeGroup = document.getElementById("artifact-display-mode");
+displayModeGroup?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
+  if (!btn) return;
+  displayModeGroup
+    .querySelectorAll(".mode-btn")
+    .forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyControlConfig();
+});
 
 const modeGroup = document.getElementById("artifact-anim-mode");
 modeGroup?.addEventListener("click", (event) => {
@@ -255,7 +283,7 @@ modeGroup?.addEventListener("click", (event) => {
     .forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
   syncColorSectionVisibility(btn.dataset.mode as ArtifactAnimationMode);
-  applyAnimationConfig();
+  applyControlConfig();
 });
 // Default mode is shimmer, so the color options start hidden.
 syncColorSectionVisibility(ANIMATION_DEFAULTS.mode);
@@ -264,16 +292,16 @@ const durationSlider = getEl<HTMLInputElement>("artifact-anim-duration");
 const durationLabel = document.getElementById("artifact-anim-duration-label");
 durationSlider?.addEventListener("input", () => {
   if (durationLabel) durationLabel.textContent = `${durationSlider.value}ms`;
-  applyAnimationConfig();
+  applyControlConfig();
 });
 
 getEl<HTMLInputElement>("artifact-color-primary")?.addEventListener(
   "input",
-  applyAnimationConfig,
+  applyControlConfig,
 );
 getEl<HTMLInputElement>("artifact-color-secondary")?.addEventListener(
   "input",
-  applyAnimationConfig,
+  applyControlConfig,
 );
 
 document.getElementById("btn-anim-reset")?.addEventListener("click", () => {
@@ -292,5 +320,5 @@ document.getElementById("btn-anim-reset")?.addEventListener("click", () => {
   if (primaryEl) primaryEl.value = ANIMATION_DEFAULTS.primary;
   if (secondaryEl) secondaryEl.value = ANIMATION_DEFAULTS.secondary;
   syncColorSectionVisibility(ANIMATION_DEFAULTS.mode);
-  applyAnimationConfig();
+  applyControlConfig();
 });

@@ -3059,6 +3059,32 @@
   background: #ffffff;
 }
 
+/* Shared artifact preview body wrapper (artifact-preview.ts): generates no box
+   so children (e.g. the iframe's height: 100%) lay out against the host
+   container exactly as if they were its direct children. */
+[data-persona-root] .persona-artifact-preview-body {
+  display: contents;
+}
+
+/* Inline artifact block (artifact-inline.ts, display: "inline"): carries its
+   own border/surface (registered with bubbleChrome: false, like the card). */
+[data-persona-root] .persona-artifact-inline {
+  border: 1px solid var(--persona-border, #e5e7eb);
+  border-radius: var(
+    --persona-artifact-inline-radius,
+    var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem))
+  );
+  background: var(--persona-surface, #ffffff);
+  padding: 0.75rem;
+  overflow: hidden;
+}
+
+/* The sandboxed file-preview iframe is height: 100%, which collapses inside
+   the auto-height inline block; pin a themeable fixed height instead. */
+[data-persona-root] .persona-artifact-inline .persona-artifact-iframe {
+  height: var(--persona-artifact-inline-frame-height, 320px);
+}
+
 [data-persona-root] .persona-artifact-pane {
   border-radius: var(--persona-artifact-pane-radius, 0);
   overflow: hidden;

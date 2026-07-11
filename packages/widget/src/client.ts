@@ -26,6 +26,10 @@ import {
   WebMcpConfirmHandler
 } from "./types";
 import { WebMcpBridge, computeClientToolsFingerprint, isWebMcpToolName } from "./webmcp-bridge";
+import {
+  buildArtifactRefRawContent,
+  resolveArtifactDisplayMode
+} from "./utils/artifact-display";
 import { resolveTarget } from "./utils/target";
 import { builtInClientToolsForDispatch } from "./ask-user-question-tool";
 import {
@@ -1702,7 +1706,8 @@ export class AgentWidgetClient {
 
     // Track tool call IDs for artifact emit tools so we can suppress their UI
     const artifactToolCallIds = new Set<string>();
-    // Track artifact reference card messages so we can update them on artifact_complete
+    // Track artifact block messages (reference card or inline block) so we can
+    // update them on artifact_complete
     const artifactCardMessages = new Map<string, AgentWidgetMessage>();
     // Track artifact IDs that already have a reference card (from auto-creation or transcript_insert)
     const artifactIdsWithCards = new Set<string>();
@@ -3136,9 +3141,19 @@ export class AgentWidgetClient {
               ...(artFile ? { file: artFile } : {})
             });
             artifactContent.set(artId, { markdown: "", title: artTitle, file: artFile });
-            // Insert inline artifact reference card (skip if already present from transcript_insert)
+            // Insert the in-thread artifact block (skip if already present from
+            // transcript_insert). The resolved display mode picks the component:
+            // "card"/"panel" inject the reference card; "inline" injects the
+            // inline preview block. Both share the rawContent JSON-component
+            // shape so transcript persistence and hydration work unchanged.
             if (!artifactIdsWithCards.has(artId)) {
               artifactIdsWithCards.add(artId);
+              const displayMode = resolveArtifactDisplayMode(
+                this.config.features?.artifacts,
+                at
+              );
+              const artComponent =
+                typeof payload.component === "string" ? payload.component : undefined;
               const cardMsg: AgentWidgetMessage = {
                 id: `artifact-ref-${artId}`,
                 role: "assistant",
@@ -3146,15 +3161,13 @@ export class AgentWidgetClient {
                 createdAt: new Date().toISOString(),
                 streaming: true,
                 sequence: nextSequence(),
-                rawContent: JSON.stringify({
-                  component: "PersonaArtifactCard",
-                  props: {
-                    artifactId: artId,
-                    title: artTitle,
-                    artifactType: at,
-                    status: "streaming",
-                    ...(artFile ? { file: artFile } : {}),
-                  },
+                rawContent: buildArtifactRefRawContent(displayMode, {
+                  artifactId: artId,
+                  title: artTitle,
+                  artifactType: at,
+                  status: "streaming",
+                  ...(artFile ? { file: artFile } : {}),
+                  ...(artComponent ? { component: artComponent } : {}),
                 }),
               };
               artifactCardMessages.set(artId, cardMsg);

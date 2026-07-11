@@ -108,12 +108,14 @@ import { EventStreamStore } from "./utils/event-stream-store";
 import { ThroughputTracker } from "./utils/throughput-tracker";
 import { createEventStreamView } from "./components/event-stream-view";
 import { createArtifactPane, type ArtifactPaneApi } from "./components/artifact-pane";
+import { updateInlineArtifactBlocks } from "./components/artifact-inline";
 import {
   artifactsSidebarEnabled,
   applyArtifactLayoutCssVars,
   applyArtifactPaneAppearance,
   shouldExpandLauncherForArtifacts
 } from "./utils/artifact-gate";
+import { resolveArtifactDisplayMode } from "./utils/artifact-display";
 import { readFlexGapPx, resolveArtifactPaneWidthPx } from "./utils/artifact-resize";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
@@ -1677,6 +1679,22 @@ export const createAgentExperience = (
     selectedId: string | null;
   } = { artifacts: [], selectedId: null };
   let artifactsPaneUserHidden = false;
+  // Whether the user explicitly opened the pane (card click, showArtifacts(),
+  // programmatic upsert). Auto-open is otherwise reserved for artifacts whose
+  // resolved display mode is "panel": "card" keeps the card as the only
+  // affordance and "inline" never involves the pane, though every mode still
+  // writes the session artifact registry (download / getArtifacts / hydration).
+  let artifactsPaneUserOpened = false;
+  const artifactPaneCanShow = () =>
+    artifactsPaneUserOpened ||
+    lastArtifactsState.artifacts.some(
+      (a) =>
+        resolveArtifactDisplayMode(config.features?.artifacts, a.artifactType) === "panel"
+    );
+  const artifactPaneVisible = () =>
+    lastArtifactsState.artifacts.length > 0 &&
+    !artifactsPaneUserHidden &&
+    artifactPaneCanShow();
   const sessionRef: { current: AgentWidgetSession | null } = { current: null };
 
   // Click delegation for artifact download buttons
@@ -1742,6 +1760,9 @@ export const createAgentExperience = (
     event.preventDefault();
     event.stopPropagation();
     artifactsPaneUserHidden = false;
+    // Card click is an explicit open: it overrides the "card"/"inline"
+    // auto-open suppression for as long as artifacts exist.
+    artifactsPaneUserOpened = true;
     session.selectArtifact(artifactId);
     syncArtifactPane();
   });
@@ -2188,11 +2209,21 @@ export const createAgentExperience = (
       artifactPaneApi.setMobileOpen(false);
       artifactPaneApi.element.classList.add("persona-hidden");
       artifactPaneApi.backdrop?.classList.add("persona-hidden");
-    } else if (lastArtifactsState.artifacts.length > 0) {
+    } else if (lastArtifactsState.artifacts.length > 0 && artifactPaneCanShow()) {
       // User chose “show” again (e.g. programmatic showArtifacts): clear dismiss chrome
       // and force drawer open so narrow-host / mobile slide-out is not stuck off-screen.
+      // Artifacts whose display mode is "card" or "inline" don't auto-open the
+      // pane (artifactPaneCanShow); it stays hidden until an explicit open or
+      // until a "panel"-mode artifact arrives.
       artifactPaneApi.element.classList.remove("persona-hidden");
       artifactPaneApi.setMobileOpen(true);
+    } else {
+      // The pane's own update() unhides itself whenever records exist
+      // (applyLayoutVisibility), so re-assert the gate here: card/inline-mode
+      // artifacts keep the pane hidden until an explicit open.
+      artifactPaneApi.setMobileOpen(false);
+      artifactPaneApi.element.classList.add("persona-hidden");
+      artifactPaneApi.backdrop?.classList.add("persona-hidden");
     }
     reconcileArtifactResize();
   };
@@ -2310,8 +2341,7 @@ export const createAgentExperience = (
         };
       }
       if (artifactResizeHandle) {
-        const has =
-          lastArtifactsState.artifacts.length > 0 && !artifactsPaneUserHidden;
+        const has = artifactPaneVisible();
         artifactResizeHandle.classList.toggle("persona-hidden", !has);
         positionExtensionArtifactResizeHandle();
       }
@@ -2332,8 +2362,7 @@ export const createAgentExperience = (
       const expanded =
         config.features?.artifacts?.layout?.expandedPanelWidth ??
         "min(720px, calc(100vw - 24px))";
-      const hasVisible =
-        lastArtifactsState.artifacts.length > 0 && !artifactsPaneUserHidden;
+      const hasVisible = artifactPaneVisible();
       if (hasVisible) {
         panel.style.width = expanded;
         panel.style.maxWidth = expanded;
@@ -5327,6 +5356,10 @@ export const createAgentExperience = (
       if (lastUserMessage && lastAssistantMessage && activeStreamingTextCandidate) break;
     }
     renderMessagesWithPlugins(messagesWrapper, messages, postprocess);
+    // Freshly (re)built inline artifact blocks render from their persisted
+    // props; sync them with the live registry so a block created after the
+    // last onArtifactsState emission still shows current content.
+    updateInlineArtifactBlocks(messagesWrapper, lastArtifactsState.artifacts);
     ensureToolElapsedTimer();
     renderSuggestions(messages);
     scheduleAutoScroll(!isStreaming);
@@ -5497,6 +5530,14 @@ export const createAgentExperience = (
     },
     onArtifactsState(state) {
       lastArtifactsState = state;
+      // A cleared registry ends any explicit-open override: the next artifact
+      // decides pane visibility purely from its own display mode.
+      if (state.artifacts.length === 0) {
+        artifactsPaneUserOpened = false;
+      }
+      // Route streaming registry updates (artifact_delta / artifact_complete)
+      // into any inline artifact blocks in the transcript.
+      updateInlineArtifactBlocks(messagesWrapper, state.artifacts);
       syncArtifactPane();
       persistState();
     },
@@ -8415,6 +8456,7 @@ export const createAgentExperience = (
     showArtifacts(): void {
       if (!artifactsSidebarEnabled(config)) return;
       artifactsPaneUserHidden = false;
+      artifactsPaneUserOpened = true;
       syncArtifactPane();
       artifactPaneApi?.setMobileOpen(true);
     },
@@ -8425,8 +8467,20 @@ export const createAgentExperience = (
     },
     upsertArtifact(manual: PersonaArtifactManualUpsert): PersonaArtifactRecord | null {
       if (!artifactsSidebarEnabled(config)) return null;
-      // Programmatic adds should surface the pane even if the user previously hit Close.
-      artifactsPaneUserHidden = false;
+      // Programmatic upserts match the streamed UX: only "panel"-mode
+      // artifacts auto-open the pane (overriding a previous Close), while
+      // "card"/"inline" stay calm — the injected transcript block is the
+      // affordance. Independent of `transcript: false`: pane-only callers
+      // (e.g. the theme editor preview) rely on the panel-default surfacing;
+      // callers that want the pane in a non-panel mode call showArtifacts().
+      const mode = resolveArtifactDisplayMode(
+        config.features?.artifacts,
+        manual.artifactType
+      );
+      if (mode === "panel") {
+        artifactsPaneUserHidden = false;
+        artifactsPaneUserOpened = true;
+      }
       return session.upsertArtifact(manual);
     },
     selectArtifact(id: string): void {
