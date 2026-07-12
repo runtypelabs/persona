@@ -95,10 +95,7 @@ export function createArtifactPane(
   const titleEl = createElement("span", "persona-text-xs persona-font-medium persona-truncate");
   titleEl.textContent = toolbarTitle;
 
-  const closeBtn = createLabelButton({
-    label: closeButtonLabel,
-    aria: { "aria-label": closeButtonLabel },
-  });
+  const closeBtn = createIconButton({ icon: "x", label: closeButtonLabel });
   closeBtn.addEventListener("click", () => {
     dismissLocalUi();
     options.onDismiss?.();

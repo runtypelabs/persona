@@ -220,14 +220,15 @@ describe("artifact-pane view/source toggle", () => {
 });
 
 describe("artifact-pane default toolbar", () => {
-  it("renders a label-button Close control labelled for the panel", () => {
+  it("renders an icon-button Close control labelled for the panel", () => {
     const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
     pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
 
     const close = toggleBtn(pane, "Close artifacts panel");
     expect(close).toBeTruthy();
     expect(close.tagName).toBe("BUTTON");
-    expect(close.classList.contains("persona-label-btn")).toBe(true);
+    expect(close.classList.contains("persona-icon-btn")).toBe(true);
+    expect(close.querySelector("svg")).toBeTruthy();
   });
 });
 

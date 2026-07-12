@@ -9,3 +9,5 @@ This is a visible change for existing `display: "inline"` hosts on upgrade: the 
 The artifact pane copy button now copies the raw file source for file artifacts instead of the fenced code-block markdown, matching the new inline copy button (both share the same copy-payload helper).
 
 The pane's default toolbar preset can now show that copy button too: set `features.artifacts.layout.showCopyButton: true` (off by default; the document preset always shows it).
+
+The pane's default toolbar Close control is now an icon button (x) to match the other toolbar controls.
