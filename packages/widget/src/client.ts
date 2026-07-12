@@ -17,6 +17,7 @@ import {
   ClientSession,
   ClientInitResponse,
   ClientChatRequest,
+  ClientToolDefinition,
   ClientFeedbackRequest,
   ClientFeedbackType,
   PersonaArtifactKind,
@@ -674,71 +675,32 @@ export class AgentWidgetClient {
       };
 
       // Diff-only / send-once WebMCP tool dispatch. `buildPayload()` already
-      // snapshotted the full set; decide whether to ship it again or just its
-      // fingerprint. First turn of a session, or a changed set, sends the full
-      // array; an unchanged set sends only the fingerprint and the server
-      // reuses its stored copy. The cache is committed only after a successful
-      // stream start (below), so a 409/failure leaves it untouched.
-      const fullClientTools = basePayload.clientTools;
-      const hasClientTools = !!(fullClientTools && fullClientTools.length > 0);
-      const clientToolsFingerprint = hasClientTools
-        ? computeClientToolsFingerprint(fullClientTools!)
-        : undefined;
-      const sameSession = this.clientToolsFingerprintSessionId === session.sessionId;
-      const unchanged =
-        hasClientTools && sameSession && this.lastSentClientToolsFingerprint === clientToolsFingerprint;
+      // snapshotted the full set; `sendWithClientToolsDiff` decides whether to
+      // ship it again or just its fingerprint (retrying once on a 409 registry
+      // miss). The cache is committed only after a successful stream start
+      // (below), so a 409/failure leaves it untouched.
+      const { response, commit: commitClientToolsFingerprint } =
+        await this.sendWithClientToolsDiff(session.sessionId, basePayload.clientTools, (toolFields) => {
+          const chatRequest: ClientChatRequest = { ...baseChatRequest, ...toolFields };
 
-      // `forceFull` flips to true after a 409 cache-miss so the single retry
-      // resends the full list. Capture any error body read inside the loop so
-      // the `!response.ok` handler below doesn't re-consume the stream.
-      let forceFull = false;
-      let errorData: { error?: string; hint?: string } | null = null;
-      let response: Response;
-      for (let attempt = 0; ; attempt++) {
-        const sendFull = hasClientTools && (forceFull || !unchanged);
-        const chatRequest: ClientChatRequest = {
-          ...baseChatRequest,
-          ...(sendFull && fullClientTools ? { clientTools: fullClientTools } : {}),
-          ...(clientToolsFingerprint ? { clientToolsFingerprint } : {}),
-        };
+          if (this.debug) {
+            // eslint-disable-next-line no-console
+            console.debug("[AgentWidgetClient] client token dispatch", chatRequest);
+          }
 
-        if (this.debug) {
-          // eslint-disable-next-line no-console
-          console.debug("[AgentWidgetClient] client token dispatch", chatRequest);
-        }
-
-        response = await fetch(this.getClientApiUrl('chat'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Persona-Version': VERSION,
-          },
-          body: JSON.stringify(chatRequest),
-          signal: options.signal,
+          return fetch(this.getClientApiUrl('chat'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Persona-Version': VERSION,
+            },
+            body: JSON.stringify(chatRequest),
+            signal: options.signal,
+          });
         });
 
-        // Diff-only cache miss: the server has no stored tool set matching our
-        // fingerprint. Retry exactly once with the full list. A second miss
-        // falls through to the normal error handling below (no infinite loop).
-        if (response.status === 409 && attempt === 0 && hasClientTools) {
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string; hint?: string }
-            | null;
-          if (body?.error === 'client_tools_resend_required') {
-            forceFull = true;
-            // Invalidate so future turns also resend until a clean success
-            // commits a fresh fingerprint.
-            this.lastSentClientToolsFingerprint = null;
-            continue;
-          }
-          // Some other 409: keep the parsed body for the handler below.
-          errorData = body ?? { error: 'Chat request failed' };
-        }
-        break;
-      }
-
       if (!response.ok) {
-        const data = errorData ?? (await response.json().catch(() => ({ error: 'Chat request failed' })));
+        const data = await response.json().catch(() => ({ error: 'Chat request failed' }));
 
         if (response.status === 401) {
           // Session expired
@@ -769,8 +731,7 @@ export class AgentWidgetClient {
       // Stream is good: the server now holds this tool set under this
       // fingerprint for the session. Commit the cache so unchanged follow-up
       // turns can send fingerprint-only.
-      this.lastSentClientToolsFingerprint = clientToolsFingerprint ?? null;
-      this.clientToolsFingerprintSessionId = session.sessionId;
+      commitClientToolsFingerprint();
 
       onEvent({ type: "status", status: "connected" });
       
@@ -993,8 +954,13 @@ export class AgentWidgetClient {
    *  - **client-token mode**: POST `${apiBase}/v1/client/resume` (the
    *    session-authenticated sibling of `/v1/client/chat`; runtypelabs/core#3889),
    *    with the active `sessionId` in the body and no Bearer key: a browser
-   *    client-token page holds no secret. `clientTools` are already persisted
-   *    server-side from the dispatch turn, so only `toolOutputs` is re-sent.
+   *    client-token page holds no secret. The page's tool registry is
+   *    re-snapshotted and sent alongside `toolOutputs` via the same diff-only
+   *    `clientTools` / `clientToolsFingerprint` protocol as `/v1/client/chat`
+   *    (runtypelabs/core#5361), so tools registered by a mid-run page
+   *    navigation replace the run's dispatch-time set and become callable on
+   *    the next model turn. Old servers strip the unknown fields and keep the
+   *    frozen-at-dispatch behavior.
    *  - **dispatch / proxy mode**: POST `${apiUrl}/resume`: Runtype mounts
    *    resume as a child of `/v1/dispatch`, so the URL is `${apiUrl}/resume`,
    *    and proxies follow the same shape (`/api/chat/dispatch/resume`).
@@ -1006,6 +972,102 @@ export class AgentWidgetClient {
    * @param toolOutputs - Map keyed by per-call `toolCallId` (core#3878),
    *   falling back to tool name for legacy servers → the tool's result value.
    */
+  /**
+   * Diff-only / send-once WebMCP clientTools transport, shared by the
+   * client-token chat (`/v1/client/chat`) and resume (`/v1/client/resume`)
+   * paths — both routes speak the same protocol (runtypelabs/core#5361).
+   *
+   * Decides, against the shared fingerprint cache, whether this request ships
+   * the full `clientTools[]` + fingerprint (first send under this session, or
+   * a changed set) or the fingerprint alone (unchanged set; the server reuses
+   * its stored copy). Runs `doFetch` with the chosen fields and retries
+   * EXACTLY once with the full array on a
+   * `409 { error: 'client_tools_resend_required' }` registry miss — the retry
+   * is 409-*triggered*, never 409-*expected*, so servers predating the
+   * protocol (which strip the unknown fields and never 409) work unchanged.
+   * The 409 body is probed on a `clone()` so the original response body stays
+   * readable by the caller's error handling.
+   *
+   * The cache is NOT committed here: callers invoke the returned `commit()`
+   * only after the server has accepted the request (response OK / stream
+   * started), so a failed request can never record a fingerprint the server
+   * never stored. A resend-required miss invalidates the cached fingerprint
+   * immediately so later turns keep resending in full until a clean success
+   * commits a fresh one.
+   *
+   * `emptyMeansReplace` (resume only): when the live snapshot is empty but the
+   * last committed send under this session was non-empty (the paused tool
+   * navigated to a page with no tool registry), ship an explicit
+   * `clientTools: []` so the server REPLACES the persisted dispatch-time set
+   * with nothing and clears its stored registry. Chat keeps its
+   * omit-when-empty behavior: on `/chat`, absent fields already mean "no tools
+   * this turn", whereas on `/resume` absence means "keep the frozen
+   * dispatch-time set".
+   */
+  private async sendWithClientToolsDiff(
+    sessionId: string,
+    fullClientTools: ClientToolDefinition[] | undefined,
+    doFetch: (
+      toolFields: Pick<ClientChatRequest, 'clientTools' | 'clientToolsFingerprint'>
+    ) => Promise<Response>,
+    opts?: { emptyMeansReplace?: boolean }
+  ): Promise<{ response: Response; commit: () => void }> {
+    const hasClientTools = !!(fullClientTools && fullClientTools.length > 0);
+    const clientToolsFingerprint = hasClientTools
+      ? computeClientToolsFingerprint(fullClientTools!)
+      : undefined;
+    const sameSession = this.clientToolsFingerprintSessionId === sessionId;
+    const unchanged =
+      hasClientTools && sameSession && this.lastSentClientToolsFingerprint === clientToolsFingerprint;
+    // A committed non-null fingerprint under this session means the previous
+    // successful send was non-empty (zero-tool turns commit null), so an empty
+    // snapshot now is a real "registry vanished" transition worth replacing.
+    const sendEmptyReplace =
+      !hasClientTools &&
+      opts?.emptyMeansReplace === true &&
+      sameSession &&
+      this.lastSentClientToolsFingerprint !== null;
+
+    // `forceFull` flips to true after a 409 cache-miss so the single retry
+    // resends the full list.
+    let forceFull = false;
+    let response: Response;
+    for (let attempt = 0; ; attempt++) {
+      const sendFull = hasClientTools && (forceFull || !unchanged);
+      response = await doFetch({
+        ...(sendFull && fullClientTools ? { clientTools: fullClientTools } : {}),
+        ...(sendEmptyReplace ? { clientTools: [] } : {}),
+        ...(clientToolsFingerprint ? { clientToolsFingerprint } : {}),
+      });
+
+      // Diff-only cache miss: the server has no stored tool set matching our
+      // fingerprint. Retry exactly once with the full list. A second miss
+      // falls through to the caller's normal error handling (no infinite loop).
+      if (response.status === 409 && attempt === 0 && hasClientTools) {
+        const body = (await response
+          .clone()
+          .json()
+          .catch(() => null)) as { error?: string } | null;
+        if (body?.error === 'client_tools_resend_required') {
+          forceFull = true;
+          // Invalidate so future turns also resend until a clean success
+          // commits a fresh fingerprint.
+          this.lastSentClientToolsFingerprint = null;
+          continue;
+        }
+      }
+      break;
+    }
+
+    return {
+      response,
+      commit: () => {
+        this.lastSentClientToolsFingerprint = clientToolsFingerprint ?? null;
+        this.clientToolsFingerprintSessionId = sessionId;
+      },
+    };
+  }
+
   public async resumeFlow(
     executionId: string,
     toolOutputs: Record<string, unknown>,
@@ -1044,6 +1106,47 @@ export class AgentWidgetClient {
     // Thread the (refreshed) sessionId through like `/v1/client/chat` does.
     if (resumeSessionId) {
       body.sessionId = resumeSessionId;
+    }
+
+    if (isClientToken && resumeSessionId) {
+      // Mid-run WebMCP tool refresh (runtypelabs/core#5361): the paused tool
+      // may have navigated the page, so the dispatch-time snapshot the server
+      // persisted can be stale. Re-snapshot the registry — the same built-in +
+      // bridge composition as the payload builders, so fingerprints computed
+      // here and on chat turns describe the same tool space — and ship it via
+      // the shared diff-only protocol. `emptyMeansReplace` sends an explicit
+      // `clientTools: []` when the registry vanished after a non-empty send,
+      // so the server replaces the persisted set instead of keeping it frozen.
+      const fullClientTools = [
+        ...builtInClientToolsForDispatch(this.config),
+        ...((await this.webMcpBridge?.snapshotForDispatch()) ?? []),
+      ];
+      const { response, commit } = await this.sendWithClientToolsDiff(
+        resumeSessionId,
+        fullClientTools,
+        (toolFields) => {
+          const resumeRequest = { ...body, ...toolFields };
+          if (this.debug) {
+            // eslint-disable-next-line no-console
+            console.debug("[AgentWidgetClient] client token resume", resumeRequest);
+          }
+          return fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(resumeRequest),
+            signal: options?.signal,
+          });
+        },
+        { emptyMeansReplace: true }
+      );
+      // The server stores the refreshed registry before running the
+      // continuation pipeline, so an OK response means it holds this set under
+      // this fingerprint. Mirror chat's commit-on-success discipline: a failed
+      // resume must not record a fingerprint the server never stored.
+      if (response.ok) {
+        commit();
+      }
+      return response;
     }
 
     return fetch(url, {
