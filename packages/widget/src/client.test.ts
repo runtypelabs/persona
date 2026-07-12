@@ -3925,6 +3925,240 @@ describe('AgentWidgetClient - diff-only clientTools (client-token)', () => {
   });
 });
 
+// ============================================================================
+// Mid-run clientTools refresh on resume (client-token mode, core#5361)
+// ============================================================================
+
+describe('AgentWidgetClient - resumeFlow clientTools refresh (client-token)', () => {
+  const TOOLS = [
+    { name: 'add_to_cart', description: 'Add to cart', origin: 'webmcp' as const },
+  ];
+
+  function sse(): Response {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(c) {
+        c.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+        c.close();
+      },
+    });
+    return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
+  }
+
+  // A client-token client with a live session (so initSession short-circuits)
+  // and a stubbed bridge whose snapshot is read lazily via `tools()`.
+  function makeClient(tools: () => unknown[]) {
+    const client = new AgentWidgetClient({
+      clientToken: 'ct_live_demo',
+      apiUrl: 'https://api.runtype.com',
+    });
+    (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
+      sessionId: 'cs_resume_1',
+      expiresAt: new Date(Date.now() + 600_000),
+    };
+    (client as unknown as { webMcpBridge: { snapshotForDispatch: () => unknown[] } | null }).webMcpBridge = {
+      snapshotForDispatch: () => tools(),
+    };
+    return client;
+  }
+
+  const userMsg = () => ({
+    messages: [{ id: 'u1', role: 'user' as const, content: 'hi', createdAt: new Date().toISOString() }],
+    assistantMessageId: 'a1',
+  });
+
+  let chatBodies: Array<Record<string, unknown>>;
+  let resumeBodies: Array<Record<string, unknown>>;
+  beforeEach(() => {
+    chatBodies = [];
+    resumeBodies = [];
+  });
+
+  // Records chat/resume bodies; `onResume` (keyed by 1-based resume call
+  // index) can override the response for a given resume call.
+  function captureFetch(onResume?: Record<number, () => Response>) {
+    let resumeCall = 0;
+    return vi.fn().mockImplementation(async (url: string, init: { body: string }) => {
+      if (url.includes('/client/chat')) chatBodies.push(JSON.parse(init.body));
+      if (url.includes('/client/resume')) {
+        resumeBodies.push(JSON.parse(init.body));
+        resumeCall += 1;
+        const override = onResume?.[resumeCall];
+        if (override) return override();
+      }
+      return sse();
+    });
+  }
+
+  it('first send of a session ships the full tool list AND a fingerprint on resume', async () => {
+    global.fetch = captureFetch();
+    const client = makeClient(() => TOOLS);
+
+    const response = await client.resumeFlow('exec_1', { call_1: 'ok' });
+
+    expect(response.ok).toBe(true);
+    expect(resumeBodies).toHaveLength(1);
+    expect(resumeBodies[0]!.executionId).toBe('exec_1');
+    expect(resumeBodies[0]!.toolOutputs).toEqual({ call_1: 'ok' });
+    expect(resumeBodies[0]!.clientTools).toEqual(TOOLS);
+    expect(typeof resumeBodies[0]!.clientToolsFingerprint).toBe('string');
+  });
+
+  it('resume after an unchanged chat send is fingerprint-only', async () => {
+    global.fetch = captureFetch();
+    const client = makeClient(() => TOOLS);
+
+    await client.dispatch(userMsg(), () => undefined);
+    await client.resumeFlow('exec_1', { call_1: 'ok' });
+
+    expect(resumeBodies).toHaveLength(1);
+    expect(resumeBodies[0]!.clientTools).toBeUndefined();
+    expect(resumeBodies[0]!.clientToolsFingerprint).toBe(chatBodies[0]!.clientToolsFingerprint);
+  });
+
+  it('a successful resume full-send commits the shared cache: the next chat turn is fingerprint-only', async () => {
+    global.fetch = captureFetch();
+    const client = makeClient(() => TOOLS);
+
+    await client.resumeFlow('exec_1', { call_1: 'ok' });
+    await client.dispatch(userMsg(), () => undefined);
+
+    expect(resumeBodies[0]!.clientTools).toEqual(TOOLS);
+    expect(chatBodies).toHaveLength(1);
+    expect(chatBodies[0]!.clientTools).toBeUndefined();
+    expect(chatBodies[0]!.clientToolsFingerprint).toBe(resumeBodies[0]!.clientToolsFingerprint);
+  });
+
+  it('a changed registry (mid-run navigation) resends the full list on resume', async () => {
+    global.fetch = captureFetch();
+    let live = [...TOOLS];
+    const client = makeClient(() => live);
+
+    await client.dispatch(userMsg(), () => undefined);
+    live = [...TOOLS, { name: 'checkout', description: 'Checkout', origin: 'webmcp' as const }];
+    await client.resumeFlow('exec_1', { call_1: 'ok' });
+
+    expect(resumeBodies[0]!.clientTools).toEqual(live);
+    expect(resumeBodies[0]!.clientToolsFingerprint).not.toBe(chatBodies[0]!.clientToolsFingerprint);
+  });
+
+  it('a 409 client_tools_resend_required on resume retries exactly once with the full list', async () => {
+    global.fetch = captureFetch({
+      1: () =>
+        new Response(JSON.stringify({ error: 'client_tools_resend_required' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+    const client = makeClient(() => TOOLS);
+
+    await client.dispatch(userMsg(), () => undefined); // commits the fingerprint
+    const response = await client.resumeFlow('exec_1', { call_1: 'ok' });
+
+    expect(response.ok).toBe(true);
+    expect(resumeBodies).toHaveLength(2);
+    expect(resumeBodies[0]!.clientTools).toBeUndefined(); // fingerprint-only first
+    expect(resumeBodies[1]!.clientTools).toEqual(TOOLS); // retry carries the full list
+    // ...with the SAME executionId + toolOutputs (no double resume).
+    expect(resumeBodies[1]!.executionId).toBe(resumeBodies[0]!.executionId);
+    expect(resumeBodies[1]!.toolOutputs).toEqual(resumeBodies[0]!.toolOutputs);
+  });
+
+  it('any other 409 is returned once, body still readable (no retry, no consumed stream)', async () => {
+    global.fetch = captureFetch({
+      1: () =>
+        new Response(JSON.stringify({ error: 'execution_conflict' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+    const client = makeClient(() => TOOLS);
+
+    const response = await client.resumeFlow('exec_1', { call_1: 'ok' });
+
+    expect(response.status).toBe(409);
+    expect(resumeBodies).toHaveLength(1);
+    // The 409 probe used a clone, so callers can still parse the error body.
+    await expect(response.json()).resolves.toEqual({ error: 'execution_conflict' });
+  });
+
+  it('a failed resume does not commit the cache: the next chat turn resends full', async () => {
+    global.fetch = captureFetch({
+      1: () => new Response(JSON.stringify({ error: 'boom' }), { status: 500 }),
+    });
+    const client = makeClient(() => TOOLS);
+
+    const response = await client.resumeFlow('exec_1', { call_1: 'ok' });
+    expect(response.status).toBe(500);
+    await client.dispatch(userMsg(), () => undefined);
+
+    expect(chatBodies[0]!.clientTools).toEqual(TOOLS); // full, not fingerprint-only
+  });
+
+  it('registry vanished after a non-empty send: resume ships an explicit clientTools: []', async () => {
+    global.fetch = captureFetch();
+    let live: unknown[] = [...TOOLS];
+    const client = makeClient(() => live);
+
+    await client.dispatch(userMsg(), () => undefined); // non-empty send committed
+    live = []; // navigation landed on a page with no registry
+    await client.resumeFlow('exec_1', { call_1: 'ok' });
+
+    expect(resumeBodies[0]!.clientTools).toEqual([]);
+    expect(resumeBodies[0]!.clientToolsFingerprint).toBeUndefined();
+  });
+
+  it('an interleaved empty-tool chat turn does not lose the pending clear (Greptile P1)', async () => {
+    // Chat with tools (persisted server-side) → chat with an empty registry
+    // (omits both fields, so the paused execution's persisted tools survive)
+    // → resume must STILL send the explicit [] replace.
+    global.fetch = captureFetch();
+    let live: unknown[] = [...TOOLS];
+    const client = makeClient(() => live);
+
+    await client.dispatch(userMsg(), () => undefined); // non-empty send committed
+    live = [];
+    await client.dispatch(userMsg(), () => undefined); // empty chat: omits fields
+    expect(chatBodies[1]!.clientTools).toBeUndefined();
+    await client.resumeFlow('exec_1', { call_1: 'ok' });
+
+    expect(resumeBodies[0]!.clientTools).toEqual([]);
+    expect(resumeBodies[0]!.clientToolsFingerprint).toBeUndefined();
+
+    // The confirmed [] replace clears the flag: a second empty resume omits.
+    await client.resumeFlow('exec_1', { call_2: 'ok' });
+    expect(resumeBodies[1]!.clientTools).toBeUndefined();
+  });
+
+  it('empty registry with no prior send omits both fields', async () => {
+    global.fetch = captureFetch();
+    const client = makeClient(() => []);
+
+    await client.resumeFlow('exec_1', { call_1: 'ok' });
+
+    expect(resumeBodies[0]!.clientTools).toBeUndefined();
+    expect(resumeBodies[0]!.clientToolsFingerprint).toBeUndefined();
+  });
+
+  it('proxy-mode resume never adds clientTools fields (route does not accept them)', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    global.fetch = vi.fn().mockImplementation(async (_url: string, init: { body: string }) => {
+      bodies.push(JSON.parse(init.body));
+      return sse();
+    });
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000/api/chat/dispatch' });
+    (client as unknown as { webMcpBridge: { snapshotForDispatch: () => unknown[] } | null }).webMcpBridge = {
+      snapshotForDispatch: () => TOOLS,
+    };
+
+    await client.resumeFlow('exec_1', { call_1: 'ok' });
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]!.clientTools).toBeUndefined();
+    expect(bodies[0]!.clientToolsFingerprint).toBeUndefined();
+  });
+});
+
 describe('AgentWidgetClient - non-client-token paths always send full clientTools', () => {
   function sse(): Response {
     const encoder = new TextEncoder();
