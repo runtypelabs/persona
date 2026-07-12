@@ -43,6 +43,14 @@ const streamingProps = (): Record<string, unknown> => ({
   status: "streaming"
 });
 
+const completeProps = (): Record<string, unknown> => ({
+  artifactId: "a1",
+  title: "Notes",
+  artifactType: "markdown",
+  status: "complete",
+  markdown: "# Done"
+});
+
 describe("PersonaArtifactInline default render", () => {
   it("renders the shared preview body inside a tagged inline block", () => {
     const el = PersonaArtifactInline(streamingProps(), makeContext(makeConfig()));
@@ -206,5 +214,202 @@ describe("PersonaArtifactInline renderInline override", () => {
         "persona-artifact-inline"
       )
     ).toBe(true);
+  });
+
+  it("wins over inlineChrome / inlineActions config when it returns an element", () => {
+    const renderInline = vi.fn().mockImplementation(() => {
+      const custom = document.createElement("div");
+      custom.className = "my-inline";
+      return custom;
+    });
+    const el = PersonaArtifactInline(
+      completeProps(),
+      makeContext(
+        makeConfig({
+          renderInline,
+          inlineChrome: true,
+          inlineActions: [{ id: "log", label: "Log", onClick: () => {} }]
+        })
+      )
+    );
+    // No default chrome / body leaked through; the custom element is all there is.
+    expect(el.classList.contains("my-inline")).toBe(true);
+    expect(el.querySelector(".persona-artifact-inline-chrome")).toBeNull();
+    expect(el.querySelector("[data-artifact-custom-action]")).toBeNull();
+  });
+});
+
+describe("PersonaArtifactInline file-preview chrome", () => {
+  it("renders the chrome bar with title, type label, zones, and body wrapper on complete", () => {
+    const el = PersonaArtifactInline(completeProps(), makeContext(makeConfig()));
+
+    // Frame + chrome theme zones.
+    expect(el.getAttribute("data-persona-theme-zone")).toBe("artifact-inline");
+    const chrome = el.querySelector(
+      ".persona-artifact-inline-chrome"
+    ) as HTMLElement | null;
+    expect(chrome).not.toBeNull();
+    expect(chrome!.getAttribute("data-persona-theme-zone")).toBe(
+      "artifact-inline-chrome"
+    );
+
+    // Title + type label.
+    const title = el.querySelector(".persona-artifact-inline-title");
+    expect(title?.textContent).toBe("Notes");
+    const type = el.querySelector(".persona-artifact-inline-type");
+    expect(type?.textContent).toBe("Document");
+
+    // Body wrapper wraps the shared preview body.
+    const body = el.querySelector(".persona-artifact-inline-body");
+    expect(body).not.toBeNull();
+    expect(body!.querySelector(".persona-artifact-preview-body")).toBeTruthy();
+  });
+
+  it("shows a streaming status and hides copy + custom actions while streaming", () => {
+    const el = PersonaArtifactInline(
+      streamingProps(),
+      makeContext(
+        makeConfig({
+          loadingAnimation: "none",
+          inlineActions: [{ id: "log", label: "Log", onClick: () => {} }]
+        })
+      )
+    );
+
+    // Streaming status replaces the type label.
+    const status = el.querySelector(".persona-artifact-inline-status");
+    expect(status).not.toBeNull();
+    expect(status!.textContent).toBe("Generating document...");
+    expect(el.querySelector(".persona-artifact-inline-type")).toBeNull();
+
+    // Copy exists but is hidden; no custom actions rendered mid-stream.
+    const copy = el.querySelector("[data-copy-artifact]") as HTMLElement | null;
+    expect(copy).not.toBeNull();
+    expect(copy!.classList.contains("persona-hidden")).toBe(true);
+    expect(el.querySelector("[data-artifact-custom-action]")).toBeNull();
+  });
+
+  it("shows the type label, copy, expand, and custom actions on complete", () => {
+    const el = PersonaArtifactInline(
+      completeProps(),
+      makeContext(
+        makeConfig({
+          inlineActions: [{ id: "log", label: "Log", onClick: () => {} }]
+        })
+      )
+    );
+
+    const copy = el.querySelector("[data-copy-artifact]") as HTMLElement | null;
+    expect(copy).not.toBeNull();
+    expect(copy!.classList.contains("persona-hidden")).toBe(false);
+    expect(copy!.getAttribute("data-copy-artifact")).toBe("a1");
+
+    const expand = el.querySelector(
+      "[data-expand-artifact-inline]"
+    ) as HTMLElement | null;
+    expect(expand).not.toBeNull();
+    expect(expand!.getAttribute("data-expand-artifact-inline")).toBe("a1");
+
+    const custom = el.querySelector(
+      '[data-artifact-custom-action="log"]'
+    ) as HTMLElement | null;
+    expect(custom).not.toBeNull();
+    // Custom actions render before copy / expand.
+    expect(
+      custom!.compareDocumentPosition(copy!) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("flips streaming -> complete in place on the same root element (no remount)", () => {
+    const container = document.createElement("div");
+    const el = PersonaArtifactInline(
+      streamingProps(),
+      makeContext(
+        makeConfig({
+          loadingAnimation: "none",
+          inlineActions: [{ id: "log", label: "Log", onClick: () => {} }]
+        })
+      )
+    );
+    container.appendChild(el);
+    const chromeBefore = el.querySelector(".persona-artifact-inline-chrome");
+    expect(el.querySelector("[data-artifact-custom-action]")).toBeNull();
+
+    updateInlineArtifactBlocks(container, [
+      {
+        id: "a1",
+        artifactType: "markdown",
+        title: "Notes",
+        status: "complete",
+        markdown: "# Done"
+      }
+    ]);
+
+    // Same root + same chrome node: updated in place, not re-rendered.
+    expect(container.firstElementChild).toBe(el);
+    expect(el.querySelector(".persona-artifact-inline-chrome")).toBe(chromeBefore);
+    // Streaming status gave way to the type label and the complete-gated actions.
+    expect(el.querySelector(".persona-artifact-inline-status")).toBeNull();
+    expect(el.querySelector(".persona-artifact-inline-type")?.textContent).toBe(
+      "Document"
+    );
+    const copy = el.querySelector("[data-copy-artifact]") as HTMLElement | null;
+    expect(copy!.classList.contains("persona-hidden")).toBe(false);
+    expect(el.querySelector('[data-artifact-custom-action="log"]')).toBeTruthy();
+  });
+
+  it("omits the chrome bar but keeps the body wrapper when inlineChrome is false", () => {
+    const el = PersonaArtifactInline(
+      completeProps(),
+      makeContext(makeConfig({ inlineChrome: false }))
+    );
+    expect(el.querySelector(".persona-artifact-inline-chrome")).toBeNull();
+    expect(el.querySelector("[data-copy-artifact]")).toBeNull();
+    expect(el.querySelector("[data-expand-artifact-inline]")).toBeNull();
+    // The body wrapper is always present (it carries the frame padding).
+    const body = el.querySelector(".persona-artifact-inline-body");
+    expect(body).not.toBeNull();
+    expect(body!.querySelector(".persona-artifact-preview-body")).toBeTruthy();
+  });
+
+  it("drops only the copy button for inlineChrome { showCopy: false }", () => {
+    const el = PersonaArtifactInline(
+      completeProps(),
+      makeContext(makeConfig({ inlineChrome: { showCopy: false } }))
+    );
+    expect(el.querySelector(".persona-artifact-inline-chrome")).not.toBeNull();
+    expect(el.querySelector("[data-copy-artifact]")).toBeNull();
+    expect(el.querySelector("[data-expand-artifact-inline]")).not.toBeNull();
+  });
+
+  it("drops only the expand button for inlineChrome { showExpand: false }", () => {
+    const el = PersonaArtifactInline(
+      completeProps(),
+      makeContext(makeConfig({ inlineChrome: { showExpand: false } }))
+    );
+    expect(el.querySelector(".persona-artifact-inline-chrome")).not.toBeNull();
+    expect(el.querySelector("[data-copy-artifact]")).not.toBeNull();
+    expect(el.querySelector("[data-expand-artifact-inline]")).toBeNull();
+  });
+
+  it("respects each inline action's visible() gate", () => {
+    const el = PersonaArtifactInline(
+      completeProps(),
+      makeContext(
+        makeConfig({
+          inlineActions: [
+            { id: "shown", label: "Shown", onClick: () => {} },
+            {
+              id: "hidden",
+              label: "Hidden",
+              visible: () => false,
+              onClick: () => {}
+            }
+          ]
+        })
+      )
+    );
+    expect(el.querySelector('[data-artifact-custom-action="shown"]')).toBeTruthy();
+    expect(el.querySelector('[data-artifact-custom-action="hidden"]')).toBeNull();
   });
 });

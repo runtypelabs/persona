@@ -39,6 +39,7 @@ import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
 import { createElement, createElementInDocument } from "./utils/dom";
 import { downloadInfoFor } from "./utils/artifact-file";
+import { artifactCopyText } from "./components/artifact-preview";
 import { morphMessages } from "./utils/morph";
 import { normalizeCopiedSelectionText } from "./utils/copy-selection";
 import {
@@ -1683,11 +1684,14 @@ export const createAgentExperience = (
   // Runtime-only expand state: pane fills the split root and the chat column
   // hides. Reset whenever the pane stops being visible (syncArtifactPane).
   let artifactPaneExpanded = false;
-  // Whether the user explicitly opened the pane (card click, showArtifacts(),
-  // programmatic upsert). Auto-open is otherwise reserved for artifacts whose
-  // resolved display mode is "panel": "card" keeps the card as the only
-  // affordance and "inline" never involves the pane, though every mode still
-  // writes the session artifact registry (download / getArtifacts / hydration).
+  // Whether the user explicitly opened the pane (card click, inline Expand,
+  // showArtifacts(), programmatic upsert). Auto-open is otherwise reserved for
+  // artifacts whose resolved display mode is "panel": "card" keeps the card as
+  // the only affordance and "inline" renders in the transcript. "inline" no
+  // longer *auto*-opens the pane, but its Expand control is a deliberate,
+  // user-driven open (setting artifactsPaneUserOpened, same as a card click);
+  // every mode still writes the session artifact registry (download /
+  // getArtifacts / hydration).
   let artifactsPaneUserOpened = false;
   const artifactPaneCanShow = () =>
     artifactsPaneUserOpened ||
@@ -1715,7 +1719,10 @@ export const createAgentExperience = (
     let file: PersonaArtifactFileMeta | undefined = artifact?.file;
     let artifactType: string = artifact?.artifactType ?? 'markdown';
     if (!markdown) {
-      const cardEl = fromEl.closest('[data-open-artifact]');
+      // Match both reference cards and inline blocks: inline hydration embeds
+      // the markdown / file source in the same message rawContent, so the parse
+      // below resolves content for inline copy / custom actions after a refresh.
+      const cardEl = fromEl.closest('[data-open-artifact], [data-artifact-inline]');
       const msgEl = cardEl?.closest('[data-message-id]');
       const msgId = msgEl?.getAttribute('data-message-id');
       if (msgId) {
@@ -1777,9 +1784,18 @@ export const createAgentExperience = (
     event.stopPropagation();
     const actionId = actionBtn.getAttribute('data-artifact-custom-action');
     if (!actionId) return;
-    const cardEl = actionBtn.closest('[data-open-artifact]');
-    const artifactId = cardEl?.getAttribute('data-open-artifact') ?? null;
-    const action = config.features?.artifacts?.cardActions?.find((a) => a.id === actionId);
+    // The same attribute serves cards and inline chrome; resolve which surface
+    // the button lives in so the action comes from the matching config list and
+    // the artifact id from the matching container attribute.
+    const inlineEl = actionBtn.closest('[data-artifact-inline]');
+    const cardEl = inlineEl ? null : actionBtn.closest('[data-open-artifact]');
+    const artifactId = inlineEl
+      ? inlineEl.getAttribute('data-artifact-inline')
+      : cardEl?.getAttribute('data-open-artifact') ?? null;
+    const actionList = inlineEl
+      ? config.features?.artifacts?.inlineActions
+      : config.features?.artifacts?.cardActions;
+    const action = actionList?.find((a) => a.id === actionId);
     if (!action) return;
     const { markdown, title, file, artifactType } = resolveCardArtifactContent(actionBtn, artifactId ?? '');
     const ctx: PersonaArtifactActionContext = { artifactId, title, artifactType, markdown, file };
@@ -1788,6 +1804,72 @@ export const createAgentExperience = (
     } catch {
       /* ignore */
     }
+  });
+
+  // Click delegation for the inline chrome Copy button. Like the download /
+  // custom-action listeners, it resolves content from the live registry first,
+  // then falls back to the persisted inline props after a refresh, and its
+  // stopPropagation() cannot block a second listener on the same element (there
+  // is none here, but the pattern is kept consistent).
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const copyBtn = target.closest('[data-copy-artifact]') as HTMLElement;
+    if (!copyBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const artifactId = copyBtn.getAttribute('data-copy-artifact');
+    if (!artifactId) return;
+    // Prefer the live record (covers component JSON); fall back to the persisted
+    // markdown / file source parsed from the inline block's message rawContent.
+    const artifact = session.getArtifactById(artifactId);
+    let text = '';
+    if (artifact) {
+      text = artifactCopyText(artifact);
+    } else {
+      const { markdown, file, artifactType } = resolveCardArtifactContent(copyBtn, artifactId);
+      if (artifactType === 'markdown') {
+        text = artifactCopyText({
+          id: artifactId,
+          artifactType: 'markdown',
+          status: 'complete',
+          markdown: markdown ?? '',
+          ...(file ? { file } : {})
+        });
+      }
+    }
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      // Lightweight feedback: swap the copy glyph for a check briefly.
+      const checkIcon = renderLucideIcon('check', 16, 'currentColor', 2);
+      if (checkIcon) {
+        copyBtn.replaceChildren(checkIcon);
+        setTimeout(() => {
+          const copyIcon = renderLucideIcon('copy', 16, 'currentColor', 2);
+          if (copyIcon) copyBtn.replaceChildren(copyIcon);
+        }, 1500);
+      }
+    }).catch(() => { /* ignore */ });
+  });
+
+  // Click delegation for the inline chrome Expand button: open this artifact in
+  // the pane. Fires onArtifactAction({ type: "open" }) first so hosts can
+  // intercept, then mirrors the card-open path exactly.
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const expandBtn = target.closest('[data-expand-artifact-inline]') as HTMLElement;
+    if (!expandBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const artifactId = expandBtn.getAttribute('data-expand-artifact-inline');
+    if (!artifactId) return;
+    const openPrevented = config.features?.artifacts?.onArtifactAction?.({ type: 'open', artifactId });
+    if (openPrevented === true) return;
+    artifactsPaneUserHidden = false;
+    // Expand is an explicit open: it overrides the "inline" auto-open
+    // suppression for as long as artifacts exist (same as a card click).
+    artifactsPaneUserOpened = true;
+    session.selectArtifact(artifactId);
+    syncArtifactPane();
   });
 
   // Click delegation for artifact reference cards
@@ -2286,6 +2368,9 @@ export const createAgentExperience = (
     // toggle while expanded also collapses the pane.
     const expandToggleEnabled = config.features?.artifacts?.layout?.showExpandToggle === true;
     artifactPaneApi.setExpandToggleVisible(expandToggleEnabled);
+    artifactPaneApi.setCopyButtonVisible(
+      config.features?.artifacts?.layout?.showCopyButton === true
+    );
     artifactPaneApi.setCustomActions(config.features?.artifacts?.toolbarActions ?? []);
     if (!expandToggleEnabled) artifactPaneExpanded = false;
     // Run the resizer stash/restore once per expanded-state transition: the

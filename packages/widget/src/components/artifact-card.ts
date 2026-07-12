@@ -1,7 +1,7 @@
 import type { ComponentContext, ComponentRenderer } from "./registry";
 import type { PersonaArtifactFileMeta } from "../types";
 import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
-import { appendCharSpans } from "../utils/tool-loading-animation";
+import { applyArtifactLoadingStatus } from "../utils/artifact-loading-status";
 import { createLabelButton } from "../utils/buttons";
 import { buildArtifactActionButton } from "../utils/artifact-custom-actions";
 import type { PersonaArtifactActionContext } from "../types";
@@ -69,34 +69,11 @@ function renderDefaultArtifactCard(
 
   if (status === "streaming") {
     const artifactsCfg = context?.config?.features?.artifacts;
-    const loadingAnimation = artifactsCfg?.loadingAnimation ?? "shimmer";
-    const duration = artifactsCfg?.loadingAnimationDuration ?? 2000;
     const text = `Generating ${subtitle.toLowerCase()}...`;
 
     const statusText = document.createElement("span");
     subtitleEl.appendChild(statusText);
-
-    if (loadingAnimation === "none") {
-      statusText.textContent = text;
-    } else if (loadingAnimation === "pulse") {
-      statusText.setAttribute("data-preserve-animation", "true");
-      statusText.classList.add("persona-tool-loading-pulse");
-      statusText.style.setProperty("--persona-tool-anim-duration", `${duration}ms`);
-      statusText.textContent = text;
-    } else {
-      statusText.setAttribute("data-preserve-animation", "true");
-      statusText.classList.add(`persona-tool-loading-${loadingAnimation}`);
-      statusText.style.setProperty("--persona-tool-anim-duration", `${duration}ms`);
-      if (loadingAnimation === "shimmer-color") {
-        if (artifactsCfg?.loadingAnimationColor) {
-          statusText.style.setProperty("--persona-tool-anim-color", artifactsCfg.loadingAnimationColor);
-        }
-        if (artifactsCfg?.loadingAnimationSecondaryColor) {
-          statusText.style.setProperty("--persona-tool-anim-secondary-color", artifactsCfg.loadingAnimationSecondaryColor);
-        }
-      }
-      appendCharSpans(statusText, text, 0);
-    }
+    applyArtifactLoadingStatus(statusText, text, artifactsCfg);
   } else {
     subtitleEl.textContent = subtitle;
   }

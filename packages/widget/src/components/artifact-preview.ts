@@ -25,6 +25,28 @@ import {
 
 export type ArtifactPreviewViewMode = "rendered" | "source";
 
+/**
+ * Clipboard payload for an artifact, shared by the pane copy control and the
+ * inline chrome copy button so both derive the same text:
+ * - plain markdown artifacts → the raw markdown
+ * - previewable file artifacts → the raw unfenced file source
+ * - component artifacts → pretty-printed `{ component, props }` JSON
+ */
+export function artifactCopyText(
+  record: PersonaArtifactRecord | undefined
+): string {
+  if (!record) return "";
+  if (record.artifactType === "markdown") {
+    const raw = record.markdown ?? "";
+    return record.file ? extractFileSource(raw) : raw;
+  }
+  return JSON.stringify(
+    { component: record.component, props: record.props },
+    null,
+    2
+  );
+}
+
 export type ArtifactPreviewContext = {
   config: AgentWidgetConfig;
   /**

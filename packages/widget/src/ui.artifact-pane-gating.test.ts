@@ -408,3 +408,138 @@ describe("artifact pane expand toggle (full widget)", () => {
     controller.destroy();
   });
 });
+
+/**
+ * Inline chrome delegation (display: "inline"). The inline block carries
+ * data-artifact-inline; its custom-action buttons resolve from
+ * features.artifacts.inlineActions (not cardActions), and its Expand button
+ * opens the pane through the same open path as a card click, interceptable via
+ * onArtifactAction({ type: "open" }).
+ */
+describe("inline artifact chrome delegation (full widget)", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    try {
+      window.localStorage.clear();
+    } catch {
+      /* jsdom edge cases */
+    }
+  });
+
+  type Artifacts = NonNullable<
+    NonNullable<AgentWidgetConfig["features"]>["artifacts"]
+  >;
+
+  function mountInline(artifacts: Partial<Artifacts>) {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const config: AgentWidgetConfig = {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        artifacts: {
+          enabled: true,
+          allowedTypes: ["markdown", "component"],
+          display: "inline",
+          ...artifacts,
+        },
+      },
+    };
+    const controller = createAgentExperience(mount, config);
+    return { mount, controller };
+  }
+
+  function paneEl(mount: HTMLElement): HTMLElement {
+    const el = mount.querySelector<HTMLElement>(".persona-artifact-pane");
+    expect(el).not.toBeNull();
+    return el!;
+  }
+
+  function upsertSample(controller: ReturnType<typeof createAgentExperience>) {
+    controller.upsertArtifact({
+      id: "inline-test",
+      title: "Inline test",
+      artifactType: "markdown",
+      content: "# Hello",
+    });
+  }
+
+  // Fabricate an inline block the way the default renderer shapes it: a
+  // data-artifact-inline root holding a delegated button, mounted inside a real
+  // message so clicks bubble through the ui.ts delegation.
+  function fabricateInline(
+    mount: HTMLElement,
+    controller: ReturnType<typeof createAgentExperience>,
+    attr: string,
+    value: string
+  ): HTMLButtonElement {
+    controller.injectAssistantMessage({ content: "See the artifact above." });
+    const msgEl = mount.querySelector("[data-message-id]");
+    expect(msgEl).not.toBeNull();
+    const block = document.createElement("div");
+    block.setAttribute("data-artifact-inline", "inline-test");
+    const btn = document.createElement("button");
+    btn.setAttribute(attr, value);
+    block.appendChild(btn);
+    msgEl!.appendChild(block);
+    return btn;
+  }
+
+  it("resolves a custom action from inlineActions (not cardActions) with content", () => {
+    const inlineHandler = vi.fn();
+    const cardHandler = vi.fn();
+    const { mount, controller } = mountInline({
+      inlineActions: [
+        { id: "log", label: "Log", icon: "star", onClick: inlineHandler },
+      ],
+      cardActions: [
+        { id: "log", label: "Log", icon: "star", onClick: cardHandler },
+      ],
+    });
+    upsertSample(controller);
+    const btn = fabricateInline(mount, controller, "data-artifact-custom-action", "log");
+
+    btn.click();
+    // The inline-surface list wins over cardActions for the same id.
+    expect(inlineHandler).toHaveBeenCalledTimes(1);
+    expect(cardHandler).not.toHaveBeenCalled();
+    const ctx = inlineHandler.mock.calls[0][0];
+    expect(ctx.artifactId).toBe("inline-test");
+    expect(ctx.markdown).toBe("# Hello");
+    controller.destroy();
+  });
+
+  it("opens the pane when the Expand button is clicked", () => {
+    const { mount, controller } = mountInline({});
+    upsertSample(controller);
+    // Inline mode keeps the pane closed until an explicit open.
+    expect(paneEl(mount).classList.contains("persona-hidden")).toBe(true);
+
+    const btn = fabricateInline(
+      mount,
+      controller,
+      "data-expand-artifact-inline",
+      "inline-test"
+    );
+    btn.click();
+    expect(paneEl(mount).classList.contains("persona-hidden")).toBe(false);
+    controller.destroy();
+  });
+
+  it("does not open the pane when onArtifactAction intercepts the open", () => {
+    const { mount, controller } = mountInline({
+      onArtifactAction: (action) =>
+        action.type === "open" ? true : undefined,
+    });
+    upsertSample(controller);
+    const btn = fabricateInline(
+      mount,
+      controller,
+      "data-expand-artifact-inline",
+      "inline-test"
+    );
+    btn.click();
+    expect(paneEl(mount).classList.contains("persona-hidden")).toBe(true);
+    controller.destroy();
+  });
+});

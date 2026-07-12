@@ -107,7 +107,7 @@ const readDisplayMode = (): ArtifactDisplayMode => {
 
 // Same DOM-is-the-source-of-truth pattern: the active pill in
 // #artifact-expand-toggle is read on every config build. Off (the default)
-// omits the layout key entirely; On sends layout.showExpandToggle.
+// omits showExpandToggle from the layout block; On sends it as true.
 const readExpandToggle = (): boolean => {
   const activeBtn = document.querySelector<HTMLButtonElement>(
     "#artifact-expand-toggle .mode-btn.active",
@@ -117,12 +117,22 @@ const readExpandToggle = (): boolean => {
 
 // Same DOM-is-the-source-of-truth pattern: the active pill in
 // #artifact-custom-actions is read on every config build. Off (the default)
-// omits the actions entirely; On spreads in the sample toolbar/card actions.
+// omits the actions entirely; On spreads in the sample toolbar/card/inline actions.
 const readCustomActions = (): boolean => {
   const activeBtn = document.querySelector<HTMLButtonElement>(
     "#artifact-custom-actions .mode-btn.active",
   );
   return activeBtn?.dataset.mode === "on";
+};
+
+// Same DOM-is-the-source-of-truth pattern: the active pill in
+// #artifact-inline-chrome is read on every config build. On (the default) keeps
+// the inline file-preview chrome; Off sends inlineChrome: false for a bare body.
+const readInlineChrome = (): boolean => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-inline-chrome .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode !== "off";
 };
 
 // ── Custom artifact actions (toolbar + card) ─────────────────────────────
@@ -199,6 +209,14 @@ const buildCustomActions = () => ({
       onClick: reportArtifactAction,
     },
   ],
+  inlineActions: [
+    {
+      id: "log-inline",
+      label: "Log",
+      icon: createDriveIcon,
+      onClick: reportArtifactAction,
+    },
+  ],
 });
 
 const readAnimationControls = () => {
@@ -236,8 +254,14 @@ const buildArtifactsFeature = () => {
           loadingAnimationSecondaryColor: secondary,
         }
       : {}),
-    ...(readExpandToggle() ? { layout: { showExpandToggle: true } } : {}),
+    // Copy is always on in the demo so the default pane toolbar shows it;
+    // the expand toggle stays behind its control pill.
+    layout: {
+      showCopyButton: true,
+      ...(readExpandToggle() ? { showExpandToggle: true } : {}),
+    },
     ...(readCustomActions() ? buildCustomActions() : {}),
+    ...(readInlineChrome() ? {} : { inlineChrome: false }),
   };
 };
 
@@ -388,6 +412,17 @@ customActionsGroup?.addEventListener("click", (event) => {
   const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
   if (!btn) return;
   customActionsGroup
+    .querySelectorAll(".mode-btn")
+    .forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyControlConfig();
+});
+
+const inlineChromeGroup = document.getElementById("artifact-inline-chrome");
+inlineChromeGroup?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
+  if (!btn) return;
+  inlineChromeGroup
     .querySelectorAll(".mode-btn")
     .forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");

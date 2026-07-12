@@ -1023,6 +1023,32 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (t.hoverBackground) cssVars['--persona-artifact-card-hover-bg'] = t.hoverBackground;
     if (t.hoverBorderColor) cssVars['--persona-artifact-card-hover-border'] = t.hoverBorderColor;
   }
+  if (artifact?.inline) {
+    const t = artifact.inline;
+    if (t.background) {
+      cssVars['--persona-artifact-inline-bg'] =
+        resolveTokenValue(theme, t.background) ?? t.background;
+    }
+    if (t.border) cssVars['--persona-artifact-inline-border'] = t.border;
+    if (t.borderRadius) cssVars['--persona-artifact-inline-radius'] = t.borderRadius;
+    if (t.chromeBackground) {
+      cssVars['--persona-artifact-inline-chrome-bg'] =
+        resolveTokenValue(theme, t.chromeBackground) ?? t.chromeBackground;
+    }
+    if (t.chromeBorder) {
+      cssVars['--persona-artifact-inline-chrome-border'] =
+        resolveTokenValue(theme, t.chromeBorder) ?? t.chromeBorder;
+    }
+    if (t.titleColor) {
+      cssVars['--persona-artifact-inline-title-color'] =
+        resolveTokenValue(theme, t.titleColor) ?? t.titleColor;
+    }
+    if (t.mutedColor) {
+      cssVars['--persona-artifact-inline-muted-color'] =
+        resolveTokenValue(theme, t.mutedColor) ?? t.mutedColor;
+    }
+    if (t.frameHeight) cssVars['--persona-artifact-inline-frame-height'] = t.frameHeight;
+  }
 
   // Interactive-state defaults. The default preset resolves container === surface,
   // which turns every hover/active rule that falls back to --persona-container
@@ -1073,6 +1099,8 @@ export const THEME_ZONES = {
   container: 'Main widget container',
   'artifact-pane': 'Artifact sidebar',
   'artifact-toolbar': 'Artifact toolbar',
+  'artifact-inline': 'Inline artifact block',
+  'artifact-inline-chrome': 'Inline artifact title bar',
 } as const;
 
 export type ThemeZone = keyof typeof THEME_ZONES;

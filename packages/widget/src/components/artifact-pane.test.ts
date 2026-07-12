@@ -295,6 +295,46 @@ describe("artifact-pane expand toggle", () => {
   });
 });
 
+const makeCopyButtonConfig = (): AgentWidgetConfig =>
+  ({
+    sanitize: false,
+    features: { artifacts: { enabled: true, layout: { showCopyButton: true } } },
+  }) as AgentWidgetConfig;
+
+const copyBtnOf = (
+  pane: ReturnType<typeof createArtifactPane>
+): HTMLButtonElement | null =>
+  pane.element.querySelector('[aria-label="Copy"]') as HTMLButtonElement | null;
+
+describe("artifact-pane default-toolbar copy button", () => {
+  it("hides the copy button by default", () => {
+    // Like the expand toggle, the button is always built (so a live config
+    // update can reveal it via setCopyButtonVisible) but starts hidden
+    // without layout.showCopyButton.
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    expect(copyBtnOf(pane)!.classList.contains("persona-hidden")).toBe(true);
+  });
+
+  it("renders the copy button when layout.showCopyButton is true", () => {
+    const pane = createArtifactPane(makeCopyButtonConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    const btn = copyBtnOf(pane);
+    expect(btn).toBeTruthy();
+    expect(btn!.classList.contains("persona-hidden")).toBe(false);
+    expect(btn!.querySelector("svg")).toBeTruthy();
+  });
+
+  it("setCopyButtonVisible reveals and re-hides the button", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    pane.setCopyButtonVisible(true);
+    expect(copyBtnOf(pane)!.classList.contains("persona-hidden")).toBe(false);
+    pane.setCopyButtonVisible(false);
+    expect(copyBtnOf(pane)!.classList.contains("persona-hidden")).toBe(true);
+  });
+});
+
 const makeToolbarActionsConfig = (
   actions: PersonaArtifactCustomAction[]
 ): AgentWidgetConfig =>

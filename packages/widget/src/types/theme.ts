@@ -425,6 +425,26 @@ export interface ArtifactPaneTokens {
   toolbarBackground?: string;
 }
 
+/** Inline artifact block chrome (`display: "inline"` file preview). */
+export interface ArtifactInlineTokens {
+  /** Background of the inline preview frame. */
+  background?: string;
+  /** Full border shorthand for the frame (e.g. `1px solid #e5e7eb`). */
+  border?: string;
+  /** Border radius of the inline preview frame. */
+  borderRadius?: string;
+  /** Background of the title/toolbar chrome bar. */
+  chromeBackground?: string;
+  /** Bottom border of the title bar. */
+  chromeBorder?: string;
+  /** Title text color in the chrome bar (artifact basename). */
+  titleColor?: string;
+  /** Muted text color for the type label / streaming status. */
+  mutedColor?: string;
+  /** Preview iframe height inside the inline body. */
+  frameHeight?: string;
+}
+
 /** Icon button chrome (used by createIconButton). */
 export interface IconButtonTokens {
   background?: string;
@@ -499,6 +519,7 @@ export interface ComponentTokens {
     tab?: ArtifactTabTokens;
     pane?: ArtifactPaneTokens;
     card?: ArtifactCardTokens;
+    inline?: ArtifactInlineTokens;
   };
   /** Collapsible widget chrome (tool/reasoning/approval bubbles). */
   collapsibleWidget?: CollapsibleWidgetTokens;

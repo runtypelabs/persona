@@ -827,6 +827,8 @@ export type AgentWidgetArtifactsLayoutConfig = {
   documentToolbarToggleActiveBorderColor?: string;
   /** Show an expand/collapse toggle in the artifact toolbar (both presets). Expanded fills the widget with the pane and hides the chat column. Default: false. */
   showExpandToggle?: boolean;
+  /** Show the copy control in the `default` toolbar preset (the `document` preset always shows it). Default: false. */
+  showCopyButton?: boolean;
   /**
    * Invoked when the document toolbar Refresh control is used (before the pane re-renders).
    * Use to replay `connectStream`, refetch, etc.
@@ -926,6 +928,31 @@ export type AgentWidgetArtifactsFeature = {
    * survive re-renders and page refresh.
    */
   cardActions?: PersonaArtifactCustomAction[];
+  /**
+   * File chrome (title bar + toolbar) around inline preview blocks
+   * (`display: "inline"`). Default when undefined: chrome on, with the built-in
+   * Copy and Expand controls. Pass `false` to render the bare preview body
+   * (frame → padded body, no chrome bar), or an object to toggle the built-in
+   * controls individually.
+   *
+   * Note: default-on chrome adds a title bar and buttons to every existing
+   * inline host on upgrade; set `inlineChrome: false` to opt out.
+   */
+  inlineChrome?:
+    | boolean
+    | {
+        /** Show the built-in Copy button (complete artifacts only). Default true. */
+        showCopy?: boolean;
+        /** Show the built-in Expand button (opens the pane for this artifact). Default true. */
+        showExpand?: boolean;
+      };
+  /**
+   * Custom action buttons for the inline chrome toolbar, rendered before the
+   * built-in Copy/Expand controls on complete artifacts. Same shape as
+   * `cardActions`; each action's `visible` gate is respected and clicks are
+   * delegated, so they survive re-renders and page refresh.
+   */
+  inlineActions?: PersonaArtifactCustomAction[];
   /**
    * Called when an artifact action is triggered (open, download, expand).
    * Return `true` to intercept: the widget then does not change state.

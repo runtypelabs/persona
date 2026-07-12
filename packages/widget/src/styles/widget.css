@@ -2676,7 +2676,12 @@
 }
 
 /* Document toolbar preset: optional layout vars: --persona-artifact-doc-toolbar-icon-color, etc. */
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn {
+/* Document-toolbar icon/copy button styling is shared by the artifact pane's
+   document preset and the inline chrome actions cluster, so both surfaces read
+   the same `components.artifact.toolbar` tokens (the vars are emitted globally
+   at the widget root). */
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2689,17 +2694,20 @@
   line-height: 1;
 }
 
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn:hover {
   color: var(--persona-artifact-toolbar-icon-hover-color, inherit);
   background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
 }
 
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-pressed="true"] {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-pressed="true"],
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn[aria-pressed="true"] {
   background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
   border-color: var(--persona-artifact-doc-toggle-active-border, var(--persona-icon-btn-active-border, var(--persona-border, #e5e7eb)));
 }
 
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-copy-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -2713,7 +2721,8 @@
   line-height: 1.25;
 }
 
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-copy-btn:hover {
   background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
 }
 
@@ -3115,16 +3124,60 @@
 }
 
 /* Inline artifact block (artifact-inline.ts, display: "inline"): carries its
-   own border/surface (registered with bubbleChrome: false, like the card). */
+   own border/surface (registered with bubbleChrome: false, like the card).
+   Reads like a file preview: a flush title/toolbar chrome bar above the body.
+   Default vars draw from the same semantic surface/border/text/muted family
+   the card uses, so light/dark themes work with zero config. */
 [data-persona-root] .persona-artifact-inline {
-  border: 1px solid var(--persona-border, #e5e7eb);
+  border: var(--persona-artifact-inline-border, 1px solid var(--persona-border, #e5e7eb));
   border-radius: var(
     --persona-artifact-inline-radius,
     var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem))
   );
-  background: var(--persona-surface, #ffffff);
-  padding: 0.75rem;
+  background: var(--persona-artifact-inline-bg, var(--persona-surface, #ffffff));
   overflow: hidden;
+}
+
+/* Title/toolbar chrome bar: flush to the frame edge (no frame padding). */
+[data-persona-root] .persona-artifact-inline-chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--persona-artifact-inline-chrome-bg, var(--persona-surface, #ffffff));
+  border-bottom: 1px solid var(--persona-artifact-inline-chrome-border, var(--persona-border, #e5e7eb));
+}
+
+/* Leading cluster: file icon + title + type label / streaming status. */
+[data-persona-root] .persona-artifact-inline-chrome-lead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  color: var(--persona-artifact-inline-title-color, var(--persona-text, #111827));
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-type,
+[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-status {
+  color: var(--persona-artifact-inline-muted-color, var(--persona-text-muted, #6b7280));
+  font-weight: 400;
+}
+
+/* Trailing cluster: custom inlineActions, copy, expand. */
+[data-persona-root] .persona-artifact-inline-chrome-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+}
+
+/* Body wraps the chrome-free preview; padding lives here so the chrome sits
+   flush to the frame edge. */
+[data-persona-root] .persona-artifact-inline-body {
+  padding: 0.75rem;
 }
 
 /* The sandboxed file-preview iframe is height: 100%, which collapses inside

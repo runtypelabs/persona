@@ -11,6 +11,7 @@ import {
 } from "../utils/artifact-custom-actions";
 import {
   renderArtifactPreviewBody,
+  artifactCopyText,
   type ArtifactPreviewBodyHandle,
 } from "./artifact-preview";
 import { renderLucideIcon } from "../utils/icons";
@@ -27,6 +28,8 @@ export type ArtifactPaneApi = {
   setExpanded: (expanded: boolean) => void;
   /** Show/hide the expand toggle; driven from the parent's config on every sync so live config updates apply. */
   setExpandToggleVisible: (visible: boolean) => void;
+  /** Show/hide the default-preset copy button; no-op in the document preset (copy is always shown there). */
+  setCopyButtonVisible: (visible: boolean) => void;
   /** Replace the toolbar custom-action list and re-render it; driven from the parent's config on every sync so live config updates apply. */
   setCustomActions: (actions: PersonaArtifactCustomAction[]) => void;
 };
@@ -163,7 +166,12 @@ export function createArtifactPane(
   } else if (documentChrome) {
     copyBtn = createIconButton({ icon: "copy", label: "Copy", className: "persona-artifact-doc-icon-btn" });
   } else {
+    // Always built (like the expand toggle) so a live config update can
+    // reveal it via setCopyButtonVisible; hidden unless layout opts in.
     copyBtn = createIconButton({ icon: "copy", label: "Copy" });
+    if (layout?.showCopyButton !== true) {
+      copyBtn.classList.add("persona-hidden");
+    }
   }
 
   const refreshBtn = documentChrome
@@ -206,16 +214,9 @@ export function createArtifactPane(
   };
 
   const defaultCopy = async () => {
-    const { markdown, jsonPayload } = getSelectedArtifactText();
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
-    const text =
-      sel?.artifactType === "markdown"
-        ? markdown
-        : sel
-          ? jsonPayload
-          : "";
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(artifactCopyText(sel));
     } catch {
       /* ignore */
     }
@@ -314,8 +315,8 @@ export function createArtifactPane(
       "div",
       "persona-flex persona-items-center persona-gap-1 persona-shrink-0"
     );
-    // Order: title, custom, expand, Close.
-    defaultActions.append(customActions, expandBtn, closeBtn);
+    // Order: title, copy, custom, expand, Close.
+    defaultActions.append(copyBtn, customActions, expandBtn, closeBtn);
     toolbar.appendChild(titleEl);
     toolbar.appendChild(defaultActions);
   }
@@ -557,6 +558,10 @@ export function createArtifactPane(
     },
     setExpandToggleVisible(visible: boolean) {
       expandBtn.classList.toggle("persona-hidden", !visible);
+    },
+    setCopyButtonVisible(visible: boolean) {
+      if (documentChrome) return;
+      copyBtn.classList.toggle("persona-hidden", !visible);
     },
     setCustomActions(actions: PersonaArtifactCustomAction[]) {
       customActionList = actions;

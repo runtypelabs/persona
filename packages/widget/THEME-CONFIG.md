@@ -538,6 +538,57 @@ The artifact reference card is the tappable card rendered inline in the chat thr
 
 Interactive-state defaults: the hover and active backgrounds for icon buttons, label buttons, artifact tabs, and the artifact card default to a visible gray step (`gray.100` for hover, `gray.200` for active, `gray.300` for the active icon-button border) whenever the theme's `container` color equals its `surface` color, which is the case for the default preset. When a theme sets `container` to a distinct color, those states anchor to `container` instead. Every one of these stays fully overridable via `components.iconButton`, `components.labelButton`, `components.artifact.tab`, and `components.artifact.card`.
 
+### Artifact Inline Aliases
+
+```css
+--persona-artifact-inline-bg
+--persona-artifact-inline-border
+--persona-artifact-inline-radius
+--persona-artifact-inline-chrome-bg
+--persona-artifact-inline-chrome-border
+--persona-artifact-inline-title-color
+--persona-artifact-inline-muted-color
+--persona-artifact-inline-frame-height
+```
+
+Inline artifact blocks (`display: "inline"`) render a file-preview frame with a flush title/toolbar chrome bar above the preview body. Style it via `components.artifact.inline`:
+
+| Property | CSS var | Description |
+|----------|---------|-------------|
+| `inline.background` | `--persona-artifact-inline-bg` | Preview frame background. Falls back to `semantic.colors.surface` |
+| `inline.border` | `--persona-artifact-inline-border` | Full border shorthand for the frame, e.g. `1px solid #e5e7eb` |
+| `inline.borderRadius` | `--persona-artifact-inline-radius` | Frame corner radius. When unset it falls back to the assistant bubble radius (`--persona-message-assistant-radius`), so inline blocks match message bubbles by default |
+| `inline.chromeBackground` | `--persona-artifact-inline-chrome-bg` | Background of the title/toolbar chrome bar |
+| `inline.chromeBorder` | `--persona-artifact-inline-chrome-border` | Bottom border of the title bar |
+| `inline.titleColor` | `--persona-artifact-inline-title-color` | Title text color (artifact basename) |
+| `inline.mutedColor` | `--persona-artifact-inline-muted-color` | Muted text for the type label / streaming status |
+| `inline.frameHeight` | `--persona-artifact-inline-frame-height` | Preview iframe height inside the inline body (default `320px`) |
+
+Color-family tokens (`background`, `chromeBackground`, `chromeBorder`, `titleColor`, `mutedColor`) accept semantic paths that resolve at build time, e.g. `chromeBackground: "semantic.colors.container"`. Defaults draw from the same semantic `surface` / `border` / text / muted family the card uses, so light and dark themes work with zero config.
+
+The chrome action buttons (copy, expand, and custom `inlineActions`) reuse the document-toolbar button styles, so `components.artifact.toolbar` styles both pane and inline controls — there is no separate inline button token set.
+
+Two `data-persona-theme-zone` regions are exposed for visual editors: `artifact-inline` (the whole inline block) and `artifact-inline-chrome` (the title bar).
+
+Host styling example:
+
+```ts
+theme: {
+  components: {
+    artifact: {
+      inline: {
+        borderRadius: "12px",
+        chromeBackground: "semantic.colors.container",
+        frameHeight: "400px",
+      },
+      toolbar: {
+        iconBorderRadius: "6px",
+      },
+    },
+  },
+}
+```
+
 ---
 
 ## Launcher (`config.launcher.*`)
