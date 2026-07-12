@@ -824,6 +824,8 @@ export type AgentWidgetArtifactsLayoutConfig = {
   documentToolbarToggleActiveBackground?: string;
   /** Active view/source toggle border color. Sets `--persona-artifact-doc-toggle-active-border`. */
   documentToolbarToggleActiveBorderColor?: string;
+  /** Show an expand/collapse toggle in the artifact toolbar (both presets). Expanded fills the widget with the pane and hides the chat column. Default: false. */
+  showExpandToggle?: boolean;
   /**
    * Invoked when the document toolbar Refresh control is used (before the pane re-renders).
    * Use to replay `connectStream`, refetch, etc.
@@ -885,13 +887,16 @@ export type AgentWidgetArtifactsFeature = {
     iframeSandbox?: string;
   };
   /**
-   * Called when an artifact card action is triggered (open, download).
-   * Return `true` to prevent the default behavior.
+   * Called when an artifact action is triggered (open, download, expand).
+   * Return `true` to intercept: the widget then does not change state.
+   * For `expand`, `expanded` is the state the toggle is about to enter and
+   * `artifactId` is the currently selected artifact (or `null` when none).
    */
-  onArtifactAction?: (action: {
-    type: 'open' | 'download';
-    artifactId: string;
-  }) => boolean | void;
+  onArtifactAction?: (
+    action:
+      | { type: 'open' | 'download'; artifactId: string }
+      | { type: 'expand'; artifactId: string | null; expanded: boolean }
+  ) => boolean | void;
   /**
    * Custom renderer for artifact reference cards shown in the message thread.
    * Return an HTMLElement to replace the default card, or `null` to use the default.

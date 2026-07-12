@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createArtifactPane } from "./artifact-pane";
 import type { AgentWidgetConfig, PersonaArtifactRecord } from "../types";
@@ -224,6 +224,70 @@ describe("artifact-pane default toolbar", () => {
     expect(close).toBeTruthy();
     expect(close.tagName).toBe("BUTTON");
     expect(close.classList.contains("persona-label-btn")).toBe(true);
+  });
+});
+
+const makeExpandConfig = (): AgentWidgetConfig =>
+  ({
+    sanitize: false,
+    features: { artifacts: { enabled: true, layout: { showExpandToggle: true } } },
+  }) as AgentWidgetConfig;
+
+const expandBtnOf = (
+  pane: ReturnType<typeof createArtifactPane>
+): HTMLButtonElement | null =>
+  pane.element.querySelector(".persona-artifact-expand-btn") as HTMLButtonElement | null;
+
+describe("artifact-pane expand toggle", () => {
+  it("hides the expand button by default", () => {
+    // The button is always built (so a live config update can reveal it via
+    // setExpandToggleVisible) but starts hidden without showExpandToggle.
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    expect(expandBtnOf(pane)!.classList.contains("persona-hidden")).toBe(true);
+  });
+
+  it("setExpandToggleVisible reveals and re-hides the button", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    pane.setExpandToggleVisible(true);
+    expect(expandBtnOf(pane)!.classList.contains("persona-hidden")).toBe(false);
+    pane.setExpandToggleVisible(false);
+    expect(expandBtnOf(pane)!.classList.contains("persona-hidden")).toBe(true);
+  });
+
+  it("renders the expand button (labelled, with an svg) when layout.showExpandToggle is true", () => {
+    const pane = createArtifactPane(makeExpandConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    const btn = expandBtnOf(pane);
+    expect(btn).toBeTruthy();
+    expect(btn?.getAttribute("aria-label")).toBe("Expand artifacts panel");
+    expect(btn?.querySelector("svg")).toBeTruthy();
+  });
+
+  it("invokes the onToggleExpand callback when clicked", () => {
+    const onToggleExpand = vi.fn();
+    const pane = createArtifactPane(makeExpandConfig(), { onSelect: () => {}, onToggleExpand });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    expandBtnOf(pane)!.click();
+    expect(onToggleExpand).toHaveBeenCalledTimes(1);
+  });
+
+  it("setExpanded flips the label/title and keeps an svg icon", () => {
+    const pane = createArtifactPane(makeExpandConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    const btn = expandBtnOf(pane)!;
+
+    pane.setExpanded(true);
+    expect(btn.getAttribute("aria-label")).toBe("Collapse artifacts panel");
+    expect(btn.title).toBe("Collapse artifacts panel");
+    // A missing/renamed "minimize" icon would leave the button empty.
+    expect(btn.querySelector("svg")).toBeTruthy();
+
+    pane.setExpanded(false);
+    expect(btn.getAttribute("aria-label")).toBe("Expand artifacts panel");
+    expect(btn.title).toBe("Expand artifacts panel");
+    expect(btn.querySelector("svg")).toBeTruthy();
   });
 });
 

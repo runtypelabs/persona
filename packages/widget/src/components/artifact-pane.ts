@@ -15,6 +15,10 @@ export type ArtifactPaneApi = {
   backdrop: HTMLElement | null;
   update: (state: { artifacts: PersonaArtifactRecord[]; selectedId: string | null }) => void;
   setMobileOpen: (open: boolean) => void;
+  /** Reflect the expanded state on the toolbar toggle (icon + label). */
+  setExpanded: (expanded: boolean) => void;
+  /** Show/hide the expand toggle; driven from the parent's config on every sync so live config updates apply. */
+  setExpandToggleVisible: (visible: boolean) => void;
 };
 
 /**
@@ -26,6 +30,8 @@ export function createArtifactPane(
     onSelect: (id: string) => void;
     /** User closed the pane (mobile drawer or split sidebar): parent should persist “hidden until reopened”. */
     onDismiss?: () => void;
+    /** User clicked the expand/collapse toggle: parent owns the state and calls back via setExpanded. */
+    onToggleExpand?: () => void;
   }
 ): ArtifactPaneApi {
   const layout = config.features?.artifacts?.layout;
@@ -157,6 +163,18 @@ export function createArtifactPane(
     ? createIconButton({ icon: "x", label: closeButtonLabel, className: "persona-artifact-doc-icon-btn" })
     : createIconButton({ icon: "x", label: closeButtonLabel });
 
+  // Always built so a live config update can reveal it (the pane is created
+  // once; syncArtifactPane re-reads the config and drives setExpandToggleVisible).
+  const expandBtn = createIconButton({
+    icon: "maximize",
+    label: "Expand artifacts panel",
+    className: "persona-artifact-expand-btn" + (documentChrome ? " persona-artifact-doc-icon-btn" : ""),
+    onClick: () => options.onToggleExpand?.(),
+  });
+  if (layout?.showExpandToggle !== true) {
+    expandBtn.classList.add("persona-hidden");
+  }
+
   const getSelectedArtifactText = (): { markdown: string; jsonPayload: string; id: string | null } => {
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
     const id = sel?.id ?? null;
@@ -265,10 +283,19 @@ export function createArtifactPane(
     } else {
       actionsRight.append(copyBtn, refreshBtn, closeIconBtn);
     }
+    // Order: copy, refresh, expand, close.
+    actionsRight.insertBefore(expandBtn, closeIconBtn);
     toolbar.append(viewToggle.element, centerTitle, actionsRight);
   } else {
+    // Group expand + Close so the toolbar's justify-between spaces
+    // [toggle] [title] [actions] instead of distributing each button.
+    const defaultActions = createElement(
+      "div",
+      "persona-flex persona-items-center persona-gap-1 persona-shrink-0"
+    );
+    defaultActions.append(expandBtn, closeBtn);
     toolbar.appendChild(titleEl);
-    toolbar.appendChild(closeBtn);
+    toolbar.appendChild(defaultActions);
   }
 
   if (panePadding) {
@@ -460,6 +487,19 @@ export function createArtifactPane(
       } else {
         applyLayoutVisibility();
       }
+    },
+    setExpanded(expanded: boolean) {
+      // Swap the icon (the state signal) and update the accessible label. We
+      // deliberately avoid aria-pressed here: the icon-btn [aria-pressed] CSS
+      // would add unwanted active styling.
+      const svg = renderLucideIcon(expanded ? "minimize" : "maximize", 16, "currentColor", 2);
+      if (svg) expandBtn.replaceChildren(svg);
+      const label = expanded ? "Collapse artifacts panel" : "Expand artifacts panel";
+      expandBtn.setAttribute("aria-label", label);
+      expandBtn.title = label;
+    },
+    setExpandToggleVisible(visible: boolean) {
+      expandBtn.classList.toggle("persona-hidden", !visible);
     }
   };
 }

@@ -1679,6 +1679,9 @@ export const createAgentExperience = (
     selectedId: string | null;
   } = { artifacts: [], selectedId: null };
   let artifactsPaneUserHidden = false;
+  // Runtime-only expand state: pane fills the split root and the chat column
+  // hides. Reset whenever the pane stops being visible (syncArtifactPane).
+  let artifactPaneExpanded = false;
   // Whether the user explicitly opened the pane (card click, showArtifacts(),
   // programmatic upsert). Auto-open is otherwise reserved for artifacts whose
   // resolved display mode is "panel": "card" keeps the card as the only
@@ -2164,6 +2167,12 @@ export const createAgentExperience = (
   let artifactResizeUnbind: (() => void) | null = null;
   let artifactResizeDocEnd: (() => void) | null = null;
   let reconcileArtifactResize: () => void = () => {};
+  // Expanded-state transition tracking: stash the resizer's inline width/maxWidth
+  // (which would otherwise beat the expanded class) once per enter, restore once
+  // per leave.
+  let artifactExpandedApplied = false;
+  let artifactStashedWidth = "";
+  let artifactStashedMaxWidth = "";
 
   function stopArtifactResizePointer() {
     artifactResizeDocEnd?.();
@@ -2213,6 +2222,7 @@ export const createAgentExperience = (
       artifactPaneApi.setMobileOpen(false);
       artifactPaneApi.element.classList.add("persona-hidden");
       artifactPaneApi.backdrop?.classList.add("persona-hidden");
+      artifactPaneExpanded = false;
     } else if (lastArtifactsState.artifacts.length > 0 && artifactPaneCanShow()) {
       // User chose “show” again (e.g. programmatic showArtifacts): clear dismiss chrome
       // and force drawer open so narrow-host / mobile slide-out is not stuck off-screen.
@@ -2228,7 +2238,34 @@ export const createAgentExperience = (
       artifactPaneApi.setMobileOpen(false);
       artifactPaneApi.element.classList.add("persona-hidden");
       artifactPaneApi.backdrop?.classList.add("persona-hidden");
+      artifactPaneExpanded = false;
     }
+    // Re-read the toggle config on every sync so a live config.update() can
+    // reveal/remove the button (the pane itself is built once). Disabling the
+    // toggle while expanded also collapses the pane.
+    const expandToggleEnabled = config.features?.artifacts?.layout?.showExpandToggle === true;
+    artifactPaneApi.setExpandToggleVisible(expandToggleEnabled);
+    if (!expandToggleEnabled) artifactPaneExpanded = false;
+    // Run the resizer stash/restore once per expanded-state transition: the
+    // resizer's inline width/maxWidth beats the expanded class, so clear it while
+    // expanded and put it back on collapse.
+    if (artifactPaneExpanded !== artifactExpandedApplied) {
+      const paneEl = artifactPaneApi.element;
+      if (artifactPaneExpanded) {
+        artifactStashedWidth = paneEl.style.width;
+        artifactStashedMaxWidth = paneEl.style.maxWidth;
+        paneEl.style.removeProperty("width");
+        paneEl.style.removeProperty("max-width");
+      } else {
+        if (artifactStashedWidth) paneEl.style.width = artifactStashedWidth;
+        if (artifactStashedMaxWidth) paneEl.style.maxWidth = artifactStashedMaxWidth;
+        artifactStashedWidth = "";
+        artifactStashedMaxWidth = "";
+      }
+      artifactExpandedApplied = artifactPaneExpanded;
+    }
+    mount.classList.toggle("persona-artifact-expanded", artifactPaneExpanded);
+    artifactPaneApi.setExpanded(artifactPaneExpanded);
     reconcileArtifactResize();
   };
 
@@ -2247,6 +2284,21 @@ export const createAgentExperience = (
       onSelect: (id) => sessionRef.current?.selectArtifact(id),
       onDismiss: () => {
         artifactsPaneUserHidden = true;
+        syncArtifactPane();
+      },
+      onToggleExpand: () => {
+        const next = !artifactPaneExpanded;
+        const artifactId =
+          lastArtifactsState.selectedId ??
+          lastArtifactsState.artifacts[lastArtifactsState.artifacts.length - 1]?.id ??
+          null;
+        const prevented = config.features?.artifacts?.onArtifactAction?.({
+          type: "expand",
+          artifactId,
+          expanded: next,
+        });
+        if (prevented === true) return;
+        artifactPaneExpanded = next;
         syncArtifactPane();
       }
     });
@@ -2290,6 +2342,7 @@ export const createAgentExperience = (
         const onPointerDown = (e: PointerEvent) => {
           if (!artifactPaneApi || e.button !== 0) return;
           if (mount.classList.contains("persona-artifact-narrow-host")) return;
+          if (mount.classList.contains("persona-artifact-expanded")) return;
           if (win.innerWidth <= 640) return;
           e.preventDefault();
           stopArtifactResizePointer();

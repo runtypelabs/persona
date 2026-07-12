@@ -141,3 +141,146 @@ describe("artifact pane auto-open gating by display mode", () => {
     }
   });
 });
+
+/**
+ * The expand toggle lives in the artifact pane toolbar (opt-in via
+ * layout.showExpandToggle). ui.ts owns the runtime-only expanded state: clicking
+ * the toolbar button toggles `persona-artifact-expanded` on the mount root, an
+ * onArtifactAction handler can intercept it, and the state resets when the pane
+ * is dismissed.
+ */
+describe("artifact pane expand toggle (full widget)", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    try {
+      window.localStorage.clear();
+    } catch {
+      /* jsdom edge cases */
+    }
+  });
+
+  function mount(
+    onArtifactAction?: NonNullable<
+      NonNullable<AgentWidgetConfig["features"]>["artifacts"]
+    >["onArtifactAction"]
+  ) {
+    const mountEl = document.createElement("div");
+    document.body.appendChild(mountEl);
+    const config: AgentWidgetConfig = {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        artifacts: {
+          enabled: true,
+          allowedTypes: ["markdown", "component"],
+          layout: { showExpandToggle: true },
+          ...(onArtifactAction ? { onArtifactAction } : {}),
+        },
+      },
+    };
+    const controller = createAgentExperience(mountEl, config);
+    return { mount: mountEl, controller };
+  }
+
+  function paneEl(mountEl: HTMLElement): HTMLElement {
+    const el = mountEl.querySelector<HTMLElement>(".persona-artifact-pane");
+    expect(el).not.toBeNull();
+    return el!;
+  }
+
+  function expandBtn(mountEl: HTMLElement): HTMLButtonElement {
+    const el = paneEl(mountEl).querySelector<HTMLButtonElement>(
+      ".persona-artifact-expand-btn"
+    );
+    expect(el).not.toBeNull();
+    return el!;
+  }
+
+  function upsertSample(controller: ReturnType<typeof createAgentExperience>) {
+    controller.upsertArtifact({
+      id: "expand-test",
+      title: "Expand test",
+      artifactType: "markdown",
+      content: "# Hello",
+    });
+  }
+
+  it("toggles persona-artifact-expanded on the mount root when the button is clicked", () => {
+    const { mount: mountEl, controller } = mount();
+    upsertSample(controller);
+    expect(mountEl.classList.contains("persona-artifact-expanded")).toBe(false);
+
+    expandBtn(mountEl).click();
+    expect(mountEl.classList.contains("persona-artifact-expanded")).toBe(true);
+
+    expandBtn(mountEl).click();
+    expect(mountEl.classList.contains("persona-artifact-expanded")).toBe(false);
+    controller.destroy();
+  });
+
+  it("does not add the class when onArtifactAction returns true for type 'expand'", () => {
+    const { mount: mountEl, controller } = mount((action) =>
+      action.type === "expand" ? true : undefined
+    );
+    upsertSample(controller);
+
+    expandBtn(mountEl).click();
+    expect(mountEl.classList.contains("persona-artifact-expanded")).toBe(false);
+    controller.destroy();
+  });
+
+  it("clears persona-artifact-expanded when the pane is dismissed", () => {
+    const { mount: mountEl, controller } = mount();
+    upsertSample(controller);
+
+    expandBtn(mountEl).click();
+    expect(mountEl.classList.contains("persona-artifact-expanded")).toBe(true);
+
+    // Default toolbar preset's Close control dismisses the pane.
+    const close = paneEl(mountEl).querySelector<HTMLButtonElement>(
+      '[aria-label="Close artifacts panel"]'
+    );
+    expect(close).not.toBeNull();
+    close!.click();
+    expect(mountEl.classList.contains("persona-artifact-expanded")).toBe(false);
+    controller.destroy();
+  });
+
+  it("reveals the toggle via a live config update and collapses when disabled again", () => {
+    const mountEl = document.createElement("div");
+    document.body.appendChild(mountEl);
+    const base: AgentWidgetConfig = {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        artifacts: { enabled: true, allowedTypes: ["markdown", "component"] },
+      },
+    };
+    const controller = createAgentExperience(mountEl, base);
+    upsertSample(controller);
+    // The pane is built once at mount, so the button exists but stays hidden
+    // until a config carrying showExpandToggle arrives via update().
+    expect(expandBtn(mountEl).classList.contains("persona-hidden")).toBe(true);
+
+    controller.update({
+      ...base,
+      features: {
+        artifacts: {
+          enabled: true,
+          allowedTypes: ["markdown", "component"],
+          layout: { showExpandToggle: true },
+        },
+      },
+    });
+    expect(expandBtn(mountEl).classList.contains("persona-hidden")).toBe(false);
+
+    expandBtn(mountEl).click();
+    expect(mountEl.classList.contains("persona-artifact-expanded")).toBe(true);
+
+    // Turning the toggle back off hides the button and collapses the pane.
+    controller.update(base);
+    expect(mountEl.classList.contains("persona-artifact-expanded")).toBe(false);
+    expect(expandBtn(mountEl).classList.contains("persona-hidden")).toBe(true);
+    controller.destroy();
+  });
+});

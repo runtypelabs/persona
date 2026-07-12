@@ -3074,6 +3074,29 @@
   }
 }
 
+/* Expanded artifact pane: pane takes the whole split root, chat column hides.
+   Split-view only: below 641px / narrow hosts the drawer already covers everything. */
+@media (min-width: 641px) {
+  [data-persona-root].persona-artifact-expanded .persona-artifact-split-root > :first-child {
+    display: none;
+  }
+  [data-persona-root].persona-artifact-expanded .persona-artifact-pane {
+    width: 100%;
+    max-width: none;
+  }
+  [data-persona-root].persona-artifact-expanded .persona-artifact-split-handle {
+    display: none !important;
+  }
+}
+@media (max-width: 640px) {
+  [data-persona-root] .persona-artifact-expand-btn {
+    display: none !important;
+  }
+}
+[data-persona-root].persona-artifact-narrow-host .persona-artifact-expand-btn {
+  display: none !important;
+}
+
 /* paneBorderRadius: works on any paneAppearance; overflow clips content to rounded shape */
 /* Previewable file artifact: sandboxed iframe fills the content area. */
 [data-persona-root] .persona-artifact-iframe {

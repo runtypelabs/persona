@@ -105,6 +105,16 @@ const readDisplayMode = (): ArtifactDisplayMode => {
   return (activeBtn?.dataset.mode ?? DISPLAY_DEFAULT) as ArtifactDisplayMode;
 };
 
+// Same DOM-is-the-source-of-truth pattern: the active pill in
+// #artifact-expand-toggle is read on every config build. Off (the default)
+// omits the layout key entirely; On sends layout.showExpandToggle.
+const readExpandToggle = (): boolean => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-expand-toggle .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode === "on";
+};
+
 const readAnimationControls = () => {
   const activeModeBtn = document.querySelector<HTMLButtonElement>(
     "#artifact-anim-mode .mode-btn.active",
@@ -140,6 +150,7 @@ const buildArtifactsFeature = () => {
           loadingAnimationSecondaryColor: secondary,
         }
       : {}),
+    ...(readExpandToggle() ? { layout: { showExpandToggle: true } } : {}),
   };
 };
 
@@ -268,6 +279,17 @@ displayModeGroup?.addEventListener("click", (event) => {
   const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
   if (!btn) return;
   displayModeGroup
+    .querySelectorAll(".mode-btn")
+    .forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyControlConfig();
+});
+
+const expandToggleGroup = document.getElementById("artifact-expand-toggle");
+expandToggleGroup?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
+  if (!btn) return;
+  expandToggleGroup
     .querySelectorAll(".mode-btn")
     .forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
