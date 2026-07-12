@@ -4108,6 +4108,28 @@ describe('AgentWidgetClient - resumeFlow clientTools refresh (client-token)', ()
     expect(resumeBodies[0]!.clientToolsFingerprint).toBeUndefined();
   });
 
+  it('an interleaved empty-tool chat turn does not lose the pending clear (Greptile P1)', async () => {
+    // Chat with tools (persisted server-side) → chat with an empty registry
+    // (omits both fields, so the paused execution's persisted tools survive)
+    // → resume must STILL send the explicit [] replace.
+    global.fetch = captureFetch();
+    let live: unknown[] = [...TOOLS];
+    const client = makeClient(() => live);
+
+    await client.dispatch(userMsg(), () => undefined); // non-empty send committed
+    live = [];
+    await client.dispatch(userMsg(), () => undefined); // empty chat: omits fields
+    expect(chatBodies[1]!.clientTools).toBeUndefined();
+    await client.resumeFlow('exec_1', { call_1: 'ok' });
+
+    expect(resumeBodies[0]!.clientTools).toEqual([]);
+    expect(resumeBodies[0]!.clientToolsFingerprint).toBeUndefined();
+
+    // The confirmed [] replace clears the flag: a second empty resume omits.
+    await client.resumeFlow('exec_1', { call_2: 'ok' });
+    expect(resumeBodies[1]!.clientTools).toBeUndefined();
+  });
+
   it('empty registry with no prior send omits both fields', async () => {
     global.fetch = captureFetch();
     const client = makeClient(() => []);

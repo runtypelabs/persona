@@ -181,6 +181,14 @@ export class AgentWidgetClient {
   // (silent re-init / expiry) forces a fresh full send.
   private lastSentClientToolsFingerprint: string | null = null;
   private clientToolsFingerprintSessionId: string | null = null;
+  // Session under which a non-empty clientTools[] was last committed and not
+  // yet confirmed cleared server-side. Distinct from the fingerprint above:
+  // an empty-tool chat turn commits a null fingerprint, but OMITTING the
+  // fields on chat doesn't clear the tools persisted for a still-paused
+  // execution — so a later resume with an empty registry must still send the
+  // explicit `clientTools: []` replace. Reset only by an explicit [] replace,
+  // a session change, or a conversation reset.
+  private sentNonEmptyClientToolsSessionId: string | null = null;
 
   // WebMCP: page-discovered tool consumption (see ./webmcp-bridge).
   // Constructed lazily: null when `config.webmcp?.enabled !== true`.
@@ -439,6 +447,7 @@ export class AgentWidgetClient {
   public resetClientToolsFingerprint(): void {
     this.lastSentClientToolsFingerprint = null;
     this.clientToolsFingerprintSessionId = null;
+    this.sentNonEmptyClientToolsSessionId = null;
   }
 
   /**
@@ -995,13 +1004,13 @@ export class AgentWidgetClient {
    * immediately so later turns keep resending in full until a clean success
    * commits a fresh one.
    *
-   * `emptyMeansReplace` (resume only): when the live snapshot is empty but the
-   * last committed send under this session was non-empty (the paused tool
-   * navigated to a page with no tool registry), ship an explicit
-   * `clientTools: []` so the server REPLACES the persisted dispatch-time set
-   * with nothing and clears its stored registry. Chat keeps its
-   * omit-when-empty behavior: on `/chat`, absent fields already mean "no tools
-   * this turn", whereas on `/resume` absence means "keep the frozen
+   * `emptyMeansReplace` (resume only): when the live snapshot is empty but a
+   * non-empty set was committed under this session and never explicitly
+   * cleared (the paused tool navigated to a page with no tool registry), ship
+   * an explicit `clientTools: []` so the server REPLACES the persisted
+   * dispatch-time set with nothing and clears its stored registry. Chat keeps
+   * its omit-when-empty behavior: on `/chat`, absent fields already mean "no
+   * tools this turn", whereas on `/resume` absence means "keep the frozen
    * dispatch-time set".
    */
   private async sendWithClientToolsDiff(
@@ -1019,14 +1028,16 @@ export class AgentWidgetClient {
     const sameSession = this.clientToolsFingerprintSessionId === sessionId;
     const unchanged =
       hasClientTools && sameSession && this.lastSentClientToolsFingerprint === clientToolsFingerprint;
-    // A committed non-null fingerprint under this session means the previous
-    // successful send was non-empty (zero-tool turns commit null), so an empty
-    // snapshot now is a real "registry vanished" transition worth replacing.
+    // Keyed on `sentNonEmptyClientToolsSessionId`, NOT the fingerprint: an
+    // interleaved empty-tool chat turn commits a null fingerprint without
+    // clearing the tools persisted for a still-paused execution, so the
+    // fingerprint alone would lose the pending clear. The dedicated flag
+    // survives omitted-empty commits and is reset only once an explicit []
+    // replace is confirmed.
     const sendEmptyReplace =
       !hasClientTools &&
       opts?.emptyMeansReplace === true &&
-      sameSession &&
-      this.lastSentClientToolsFingerprint !== null;
+      this.sentNonEmptyClientToolsSessionId === sessionId;
 
     // `forceFull` flips to true after a 409 cache-miss so the single retry
     // resends the full list.
@@ -1064,6 +1075,15 @@ export class AgentWidgetClient {
       commit: () => {
         this.lastSentClientToolsFingerprint = clientToolsFingerprint ?? null;
         this.clientToolsFingerprintSessionId = sessionId;
+        if (hasClientTools) {
+          this.sentNonEmptyClientToolsSessionId = sessionId;
+        } else if (sendEmptyReplace) {
+          // The explicit [] replaced the persisted set server-side; the
+          // pending clear is done.
+          this.sentNonEmptyClientToolsSessionId = null;
+        }
+        // Omitted-empty commits (chat with zero tools) leave the flag set:
+        // they don't touch tools persisted for a paused execution.
       },
     };
   }
