@@ -2753,16 +2753,8 @@
   background: var(--persona-artifact-toolbar-bg, var(--persona-surface, #fff));
 }
 
-/* Toggle group gap */
-[data-persona-root] .persona-artifact-toggle-group {
-  gap: var(--persona-artifact-toolbar-toggle-group-gap, 0.25rem);
-}
-
-/* Toggle button border-radius (view/code buttons) */
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-view-btn,
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-code-btn {
-  border-radius: var(--persona-artifact-toolbar-toggle-radius, var(--persona-artifact-toolbar-icon-radius, var(--persona-radius-md, 0.375rem)));
-}
+/* Toggle group + view/code button styling lives in the segmented
+   .persona-toggle-group.persona-artifact-toggle-group block further down. */
 
 /* Tab hover */
 [data-persona-root] .persona-artifact-tab:hover {
@@ -2981,12 +2973,82 @@
   border-bottom-right-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
 }
 
-/* Artifact view/source toggle: separated chips, not the segmented default */
+/* Artifact view/source toggle: one segmented pill. The container carries the
+   border; segments are borderless and the active one is highlighted, so the
+   pair reads as a single mutually exclusive switch instead of two buttons. */
 [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group {
-  gap: var(--persona-artifact-toolbar-toggle-group-gap, 0.25rem);
+  gap: var(--persona-artifact-toolbar-toggle-group-gap, 2px);
+  padding: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+  border: var(--persona-artifact-toolbar-toggle-group-border, 1px solid var(--persona-border, #e5e7eb));
+  /* Default to the toolbar button radius (document preset var, then the plain
+     icon-button var) so the pill matches the neighboring copy/close buttons
+     instead of standing out as a capsule. */
+  border-radius: var(--persona-artifact-toolbar-toggle-group-radius, var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))));
+  background: var(--persona-artifact-toolbar-toggle-group-bg, var(--persona-surface, #ffffff));
 }
 [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn {
-  border-radius: var(--persona-artifact-toolbar-toggle-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
+  border: none;
+  background: transparent;
+  /* Container radius minus the 2px padding so the segment nests concentrically. */
+  border-radius: var(--persona-artifact-toolbar-toggle-radius, calc(var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))) - 2px));
+}
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn:hover {
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
+}
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn[aria-pressed="true"] {
+  background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
+  /* Inset ring instead of a border so documentToolbarToggleActiveBorderColor
+     still applies inside the borderless segment (transparent by default). */
+  box-shadow: inset 0 0 0 1px var(--persona-artifact-doc-toggle-active-border, transparent);
+}
+
+/* Sliding selection thumb: a container ::before that translates between the
+   two equal-width segments, keyed off aria-pressed via :has(). The static
+   aria-pressed background above stays as the fallback for browsers without
+   :has() and is disabled inside the @supports block so the highlight is only
+   ever painted once. Geometry assumes the group's two segments are equal
+   width (both are square icon buttons). */
+@supports selector(:has(*)) {
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group {
+    position: relative;
+  }
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group::before {
+    content: "";
+    position: absolute;
+    top: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+    bottom: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+    left: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+    width: calc(
+      50% - var(--persona-artifact-toolbar-toggle-group-padding, 2px) -
+        (var(--persona-artifact-toolbar-toggle-group-gap, 2px) / 2)
+    );
+    border-radius: var(--persona-artifact-toolbar-toggle-radius, calc(var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))) - 2px));
+    background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
+    box-shadow: inset 0 0 0 1px var(--persona-artifact-doc-toggle-active-border, transparent);
+    transition: transform 0.18s ease;
+    pointer-events: none;
+  }
+  [data-persona-root]
+    .persona-toggle-group.persona-artifact-toggle-group:has(
+      > .persona-icon-btn:last-child[aria-pressed="true"]
+    )::before {
+    transform: translateX(calc(100% + var(--persona-artifact-toolbar-toggle-group-gap, 2px)));
+  }
+  /* Positioned so the segments paint above the absolutely positioned thumb
+     (document order applies once both are in the positioned layer). */
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn {
+    position: relative;
+  }
+  /* The thumb carries the highlight; keep the segment itself transparent. */
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn[aria-pressed="true"] {
+    background: transparent;
+    box-shadow: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group::before {
+      transition: none;
+    }
+  }
 }
 
 /* Combo button: label + chevron with dropdown */

@@ -11,3 +11,5 @@ The artifact pane copy button now copies the raw file source for file artifacts 
 The pane's default toolbar preset can now show that copy button too: set `features.artifacts.layout.showCopyButton: true` (off by default; the document preset always shows it).
 
 The pane's default toolbar Close control is now an icon button (x) to match the other toolbar controls.
+
+The pane's view/source toggle is now a segmented pill in both toolbar presets: one bordered container with borderless segments and a highlighted active segment, instead of two separated buttons. New `theme.components.artifact.toolbar` tokens (`toggleGroupPadding`, `toggleGroupBorder`, `toggleGroupBorderRadius`, `toggleGroupBackground`) style the container, and the existing `documentToolbarToggleActiveBackground` / `documentToolbarToggleActiveBorderColor` layout options still style the active segment. The active highlight slides between segments when the selection changes (CSS only, honors `prefers-reduced-motion`, falls back to a static highlight in browsers without `:has()`).

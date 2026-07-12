@@ -370,6 +370,14 @@ export interface ArtifactToolbarTokens {
   iconBorder?: string;
   toggleGroupGap?: string;
   toggleBorderRadius?: string;
+  /** Inner padding of the segmented view/source toggle pill. */
+  toggleGroupPadding?: string;
+  /** Border of the segmented view/source toggle pill (e.g., `none`). */
+  toggleGroupBorder?: string;
+  /** Corner radius of the segmented view/source toggle pill. */
+  toggleGroupBorderRadius?: string;
+  /** Background of the segmented view/source toggle pill. */
+  toggleGroupBackground?: string;
   copyBackground?: string;
   copyBorder?: string;
   copyColor?: string;

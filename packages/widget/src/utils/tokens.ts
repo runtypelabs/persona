@@ -967,6 +967,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (t.iconBorder) cssVars['--persona-artifact-toolbar-icon-border'] = t.iconBorder;
     if (t.toggleGroupGap) cssVars['--persona-artifact-toolbar-toggle-group-gap'] = t.toggleGroupGap;
     if (t.toggleBorderRadius) cssVars['--persona-artifact-toolbar-toggle-radius'] = t.toggleBorderRadius;
+    if (t.toggleGroupPadding) cssVars['--persona-artifact-toolbar-toggle-group-padding'] = t.toggleGroupPadding;
+    if (t.toggleGroupBorder) cssVars['--persona-artifact-toolbar-toggle-group-border'] = t.toggleGroupBorder;
+    if (t.toggleGroupBorderRadius) cssVars['--persona-artifact-toolbar-toggle-group-radius'] = t.toggleGroupBorderRadius;
+    if (t.toggleGroupBackground) cssVars['--persona-artifact-toolbar-toggle-group-bg'] = resolveTokenValue(theme, t.toggleGroupBackground) ?? t.toggleGroupBackground;
     if (t.copyBackground) cssVars['--persona-artifact-toolbar-copy-bg'] = t.copyBackground;
     if (t.copyBorder) cssVars['--persona-artifact-toolbar-copy-border'] = t.copyBorder;
     if (t.copyColor) cssVars['--persona-artifact-toolbar-copy-color'] = t.copyColor;
