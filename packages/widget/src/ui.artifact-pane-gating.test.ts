@@ -509,7 +509,11 @@ describe("inline artifact chrome delegation (full widget)", () => {
     controller.destroy();
   });
 
-  it("opens the pane when the Expand button is clicked", () => {
+  it("opens the pane fullscreen when the Expand button is clicked", () => {
+    // The inline block already shows the full preview at chat width, so
+    // Expand means "fullscreen this file": it skips the redundant split view
+    // even without layout.showExpandToggle (the pinned expansion survives
+    // the toggle gate; Close is the exit).
     const { mount, controller } = mountInline({});
     upsertSample(controller);
     // Inline mode keeps the pane closed until an explicit open.
@@ -523,6 +527,29 @@ describe("inline artifact chrome delegation (full widget)", () => {
     );
     btn.click();
     expect(paneEl(mount).classList.contains("persona-hidden")).toBe(false);
+    expect(mount.classList.contains("persona-artifact-expanded")).toBe(true);
+    controller.destroy();
+  });
+
+  it("Close exits the fullscreen pane and clears the pinned expansion", () => {
+    const { mount, controller } = mountInline({});
+    upsertSample(controller);
+    const btn = fabricateInline(
+      mount,
+      controller,
+      "data-expand-artifact-inline",
+      "inline-test"
+    );
+    btn.click();
+    expect(mount.classList.contains("persona-artifact-expanded")).toBe(true);
+
+    const close = paneEl(mount).querySelector<HTMLButtonElement>(
+      '[aria-label="Close artifacts panel"]'
+    );
+    expect(close).not.toBeNull();
+    close!.click();
+    expect(paneEl(mount).classList.contains("persona-hidden")).toBe(true);
+    expect(mount.classList.contains("persona-artifact-expanded")).toBe(false);
     controller.destroy();
   });
 

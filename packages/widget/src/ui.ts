@@ -1684,6 +1684,11 @@ export const createAgentExperience = (
   // Runtime-only expand state: pane fills the split root and the chat column
   // hides. Reset whenever the pane stops being visible (syncArtifactPane).
   let artifactPaneExpanded = false;
+  // Set when the expansion came from an inline block's Expand button: that is
+  // an explicit "fullscreen this file" request, so it survives the
+  // showExpandToggle gate below (which otherwise collapses the pane for hosts
+  // without the toolbar toggle). Cleared whenever the pane collapses or hides.
+  let artifactPaneExpandedPinned = false;
   // Whether the user explicitly opened the pane (card click, inline Expand,
   // showArtifacts(), programmatic upsert). Auto-open is otherwise reserved for
   // artifacts whose resolved display mode is "panel": "card" keeps the card as
@@ -1853,7 +1858,11 @@ export const createAgentExperience = (
 
   // Click delegation for the inline chrome Expand button: open this artifact in
   // the pane. Fires onArtifactAction({ type: "open" }) first so hosts can
-  // intercept, then mirrors the card-open path exactly.
+  // intercept, then mirrors the card-open path — except the pane opens
+  // expanded (fullscreen), never split: the inline block already shows the
+  // full preview at chat width, so a split pane would only duplicate it, and
+  // the click means "expand this file". The pinned flag keeps it expanded
+  // even when layout.showExpandToggle is off; Close is the exit there.
   messagesWrapper.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     const expandBtn = target.closest('[data-expand-artifact-inline]') as HTMLElement;
@@ -1868,6 +1877,8 @@ export const createAgentExperience = (
     // Expand is an explicit open: it overrides the "inline" auto-open
     // suppression for as long as artifacts exist (same as a card click).
     artifactsPaneUserOpened = true;
+    artifactPaneExpanded = true;
+    artifactPaneExpandedPinned = true;
     session.selectArtifact(artifactId);
     syncArtifactPane();
   });
@@ -2346,6 +2357,7 @@ export const createAgentExperience = (
       artifactPaneApi.element.classList.add("persona-hidden");
       artifactPaneApi.backdrop?.classList.add("persona-hidden");
       artifactPaneExpanded = false;
+      artifactPaneExpandedPinned = false;
     } else if (lastArtifactsState.artifacts.length > 0 && artifactPaneCanShow()) {
       // User chose “show” again (e.g. programmatic showArtifacts): clear dismiss chrome
       // and force drawer open so narrow-host / mobile slide-out is not stuck off-screen.
@@ -2362,17 +2374,20 @@ export const createAgentExperience = (
       artifactPaneApi.element.classList.add("persona-hidden");
       artifactPaneApi.backdrop?.classList.add("persona-hidden");
       artifactPaneExpanded = false;
+      artifactPaneExpandedPinned = false;
     }
     // Re-read the toggle config on every sync so a live config.update() can
     // reveal/remove the button (the pane itself is built once). Disabling the
-    // toggle while expanded also collapses the pane.
+    // toggle while expanded also collapses the pane — unless the expansion is
+    // pinned (inline Expand): that fullscreen request stands on its own and
+    // exits via Close.
     const expandToggleEnabled = config.features?.artifacts?.layout?.showExpandToggle === true;
     artifactPaneApi.setExpandToggleVisible(expandToggleEnabled);
     artifactPaneApi.setCopyButtonVisible(
       config.features?.artifacts?.layout?.showCopyButton === true
     );
     artifactPaneApi.setCustomActions(config.features?.artifacts?.toolbarActions ?? []);
-    if (!expandToggleEnabled) artifactPaneExpanded = false;
+    if (!expandToggleEnabled && !artifactPaneExpandedPinned) artifactPaneExpanded = false;
     // Run the resizer stash/restore once per expanded-state transition: the
     // resizer's inline width/maxWidth beats the expanded class, so clear it while
     // expanded and put it back on collapse.
@@ -2426,6 +2441,7 @@ export const createAgentExperience = (
         });
         if (prevented === true) return;
         artifactPaneExpanded = next;
+        if (!next) artifactPaneExpandedPinned = false;
         syncArtifactPane();
       }
     });
