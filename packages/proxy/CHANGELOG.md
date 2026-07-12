@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.7.0
+
+### Minor Changes
+
+- 4ff39ba: Add opt-in request guards and byte-accurate JSON body limits for dispatch, resume, and feedback routes.
+
 ## 4.6.0
 
 ### Patch Changes
