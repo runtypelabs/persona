@@ -1,6 +1,14 @@
 import { createElement } from "../utils/dom";
-import type { AgentWidgetConfig, PersonaArtifactRecord } from "../types";
+import type {
+  AgentWidgetConfig,
+  PersonaArtifactRecord,
+  PersonaArtifactCustomAction,
+} from "../types";
 import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
+import {
+  buildArtifactActionButton,
+  artifactRecordActionContext,
+} from "../utils/artifact-custom-actions";
 import {
   renderArtifactPreviewBody,
   type ArtifactPreviewBodyHandle,
@@ -19,6 +27,8 @@ export type ArtifactPaneApi = {
   setExpanded: (expanded: boolean) => void;
   /** Show/hide the expand toggle; driven from the parent's config on every sync so live config updates apply. */
   setExpandToggleVisible: (visible: boolean) => void;
+  /** Replace the toolbar custom-action list and re-render it; driven from the parent's config on every sync so live config updates apply. */
+  setCustomActions: (actions: PersonaArtifactCustomAction[]) => void;
 };
 
 /**
@@ -175,6 +185,16 @@ export function createArtifactPane(
     expandBtn.classList.add("persona-hidden");
   }
 
+  // Host container for integrator-supplied toolbar buttons. Built once and
+  // slotted into whichever preset renders; setCustomActions re-renders its
+  // children on every parent sync so live config updates apply.
+  const customActions = createElement(
+    "div",
+    "persona-flex persona-items-center persona-gap-1 persona-shrink-0 persona-artifact-toolbar-custom-actions"
+  );
+  let customActionList: PersonaArtifactCustomAction[] =
+    config.features?.artifacts?.toolbarActions ?? [];
+
   const getSelectedArtifactText = (): { markdown: string; jsonPayload: string; id: string | null } => {
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
     const id = sel?.id ?? null;
@@ -283,7 +303,8 @@ export function createArtifactPane(
     } else {
       actionsRight.append(copyBtn, refreshBtn, closeIconBtn);
     }
-    // Order: copy, refresh, expand, close.
+    // Order: copy, refresh, custom, expand, close.
+    actionsRight.insertBefore(customActions, closeIconBtn);
     actionsRight.insertBefore(expandBtn, closeIconBtn);
     toolbar.append(viewToggle.element, centerTitle, actionsRight);
   } else {
@@ -293,7 +314,8 @@ export function createArtifactPane(
       "div",
       "persona-flex persona-items-center persona-gap-1 persona-shrink-0"
     );
-    defaultActions.append(expandBtn, closeBtn);
+    // Order: title, custom, expand, Close.
+    defaultActions.append(customActions, expandBtn, closeBtn);
     toolbar.appendChild(titleEl);
     toolbar.appendChild(defaultActions);
   }
@@ -357,7 +379,42 @@ export function createArtifactPane(
     }
   };
 
+  // Selection fallback shared with render(): explicit selection, else last record.
+  const currentSelectedRecord = (): PersonaArtifactRecord | undefined =>
+    (selectedId && records.find((x) => x.id === selectedId)) || records[records.length - 1];
+
+  // Rebuild the custom-action buttons. Called from render() (so per-artifact
+  // visible() gates re-evaluate when the selection changes) and from
+  // setCustomActions (so live config updates apply). The onClick context is
+  // resolved at click time, not here, so it reflects the current content.
+  const renderCustomActions = () => {
+    const ctx = artifactRecordActionContext(currentSelectedRecord());
+    if (!ctx) {
+      // No records: no meaningful context, so render nothing.
+      customActions.replaceChildren();
+      return;
+    }
+    const buttons = customActionList
+      .filter((action) => action.visible === undefined || action.visible(ctx))
+      .map((action) =>
+        buildArtifactActionButton(action, {
+          documentChrome,
+          onClick: () => {
+            const c = artifactRecordActionContext(currentSelectedRecord());
+            if (!c) return;
+            try {
+              void Promise.resolve(action.onClick(c)).catch(() => {});
+            } catch {
+              /* ignore */
+            }
+          },
+        })
+      );
+    customActions.replaceChildren(...buttons);
+  };
+
   const render = () => {
+    renderCustomActions();
     const hideTabs = documentChrome && records.length <= 1;
     list.classList.toggle("persona-hidden", hideTabs);
 
@@ -500,6 +557,10 @@ export function createArtifactPane(
     },
     setExpandToggleVisible(visible: boolean) {
       expandBtn.classList.toggle("persona-hidden", !visible);
+    },
+    setCustomActions(actions: PersonaArtifactCustomAction[]) {
+      customActionList = actions;
+      renderCustomActions();
     }
   };
 }

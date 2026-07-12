@@ -6,6 +6,7 @@ import type {
   RuntypeStopReasonKind,
 } from "./generated/runtype-openapi-contract";
 import type { TargetResolver } from "./utils/target";
+import type { IconName } from "./utils/icons";
 
 export type { TargetResolver, ResolvedTarget } from "./utils/target";
 
@@ -852,6 +853,33 @@ export type PersonaArtifactDisplayMode =
   | "panel"   // reference card in transcript; pane also auto-opens on artifact_start (current default behavior)
   | "inline"; // artifact preview renders directly in the transcript; no pane involvement
 
+/** Context handed to custom artifact actions. Content fields are best-effort: resolved from live session state or, after a refresh, from the persisted reference-card payload. */
+export type PersonaArtifactActionContext = {
+  artifactId: string | null;
+  title: string;
+  artifactType: string;
+  markdown?: string;
+  file?: PersonaArtifactFileMeta;
+  /** Component artifacts: pretty-printed { component, props } JSON. */
+  jsonPayload?: string;
+};
+
+/** A custom action button rendered in an artifact toolbar/card slot. */
+export type PersonaArtifactCustomAction = {
+  /** Stable id, used for DOM wiring and keyed re-renders. */
+  id: string;
+  /** Accessible label; also the visible text when showLabel is true. */
+  label: string;
+  /** Registry icon name, or a factory returning your own element (e.g. a brand SVG). The factory result is author-owned code, not sanitized wire data. */
+  icon?: IconName | (() => HTMLElement | SVGElement);
+  /** Render icon + text instead of icon-only. Default: false. */
+  showLabel?: boolean;
+  /** Per-artifact gate, evaluated on each render. Omitted = always visible. */
+  visible?: (ctx: PersonaArtifactActionContext) => boolean;
+  /** May be async; rejections are swallowed like built-in action errors. */
+  onClick: (ctx: PersonaArtifactActionContext) => void | Promise<void>;
+};
+
 export type AgentWidgetArtifactsFeature = {
   /** When true, Persona shows the artifact pane and handles artifact_* SSE events */
   enabled?: boolean;
@@ -886,6 +914,18 @@ export type AgentWidgetArtifactsFeature = {
      */
     iframeSandbox?: string;
   };
+  /**
+   * Custom action buttons for the artifact pane toolbar, rendered between the
+   * refresh and expand/close controls in both toolbar presets. Re-read on live
+   * config updates.
+   */
+  toolbarActions?: PersonaArtifactCustomAction[];
+  /**
+   * Custom action buttons for the artifact reference card, rendered before the
+   * Download button on complete artifacts. Clicks are delegated, so they
+   * survive re-renders and page refresh.
+   */
+  cardActions?: PersonaArtifactCustomAction[];
   /**
    * Called when an artifact action is triggered (open, download, expand).
    * Return `true` to intercept: the widget then does not change state.

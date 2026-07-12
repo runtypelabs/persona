@@ -13,6 +13,8 @@ export type {
   PersonaArtifactDisplayMode,
   PersonaArtifactKind,
   PersonaArtifactRecord,
+  PersonaArtifactActionContext,
+  PersonaArtifactCustomAction,
   PersonaArtifactManualUpsert,
   ArtifactConfigPayload,
   AgentWidgetInitOptions,

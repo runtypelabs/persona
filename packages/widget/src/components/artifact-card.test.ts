@@ -172,6 +172,66 @@ describe("PersonaArtifactCard streaming status", () => {
   });
 });
 
+describe("PersonaArtifactCard custom card actions", () => {
+  const completeProps = {
+    artifactId: "a1",
+    title: "index.html",
+    status: "complete",
+    artifactType: "markdown",
+    markdown: "# Hi",
+    file: { path: "index.html", mimeType: "text/html", language: "html" },
+  };
+
+  it("renders a card action button before Download on complete cards", () => {
+    const root = render(completeProps, {
+      cardActions: [
+        { id: "save", label: "Save to Drive", icon: "star", onClick: () => {} },
+      ],
+    });
+
+    const btn = root.querySelector(
+      '[data-artifact-custom-action="save"]'
+    ) as HTMLButtonElement | null;
+    expect(btn).not.toBeNull();
+    expect(btn!.tagName).toBe("BUTTON");
+    // Delegated in ui.ts: the card carries the id attribute, no direct listener.
+    expect(btn!.getAttribute("data-artifact-custom-action")).toBe("save");
+
+    const dl = root.querySelector(
+      "[data-download-artifact]"
+    ) as HTMLElement | null;
+    expect(dl).not.toBeNull();
+    // Custom actions render before Download.
+    expect(
+      btn!.compareDocumentPosition(dl!) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("does not render card actions while streaming", () => {
+    const root = render(streamingProps, {
+      cardActions: [
+        { id: "save", label: "Save to Drive", icon: "star", onClick: () => {} },
+      ],
+    });
+    expect(root.querySelector("[data-artifact-custom-action]")).toBeNull();
+  });
+
+  it("suppresses a card action whose visible() returns false", () => {
+    const root = render(completeProps, {
+      cardActions: [
+        {
+          id: "save",
+          label: "Save",
+          icon: "star",
+          visible: () => false,
+          onClick: () => {},
+        },
+      ],
+    });
+    expect(root.querySelector("[data-artifact-custom-action]")).toBeNull();
+  });
+});
+
 describe("componentRegistry registration options", () => {
   const noop: ComponentRenderer = () => document.createElement("div");
 

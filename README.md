@@ -176,7 +176,7 @@ Collapsible reasoning bubbles that display model chain-of-thought with duration 
 Expandable tool call bubbles showing name, status, arguments, and results, with compact display modes, active previews, grouping, and loading animations. Optional human-in-the-loop approval bubbles include friendly summaries, hidden/collapsed technical details, agent-stated reasons, and custom approve/deny handlers. Built-in LOCAL client tools (`ask_user_question` and `suggest_replies`) can be advertised from the widget with `features.askUserQuestion.expose` and `features.suggestReplies.expose`.
 
 ### Artifacts
-Optional side-panel for rendering markdown and component content. Desktop split layout (resizable, with an optional expand-to-full-width toolbar toggle via `layout.showExpandToggle`) or mobile drawer. Enable via `features.artifacts`, configure toolbar presets, copy behavior, and appearance.
+Optional side-panel for rendering markdown and component content. Desktop split layout (resizable, with an optional expand-to-full-width toolbar toggle via `layout.showExpandToggle`) or mobile drawer. Enable via `features.artifacts`, configure toolbar presets, copy behavior, and appearance. Add product-specific buttons (icon, label, handler) to the pane toolbar and reference card with `toolbarActions` and `cardActions`.
 
 ### Event Stream Inspector
 Optional real-time event capture with search/filter, badge coloring, timestamps, expandable payloads, and output-throughput diagnostics. Enable via `features.showEventStreamToggle`. Customize rows, toolbar, and payload rendering through plugin hooks.

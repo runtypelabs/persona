@@ -115,6 +115,92 @@ const readExpandToggle = (): boolean => {
   return activeBtn?.dataset.mode === "on";
 };
 
+// Same DOM-is-the-source-of-truth pattern: the active pill in
+// #artifact-custom-actions is read on every config build. Off (the default)
+// omits the actions entirely; On spreads in the sample toolbar/card actions.
+const readCustomActions = (): boolean => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-custom-actions .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode === "on";
+};
+
+// ── Custom artifact actions (toolbar + card) ─────────────────────────────
+// Demos features.artifacts.toolbarActions and .cardActions: host-defined
+// buttons that receive the artifact context on click. Here they mimic a
+// "Save to Drive" integration: report to the status line and console, never
+// alert(). Each action carries a custom colorful icon to exercise the
+// icon-factory path.
+type ArtifactActionContext = {
+  artifactId: string;
+  title: string;
+  artifactType: string;
+  markdown?: string;
+  file?: unknown;
+  jsonPayload?: unknown;
+};
+
+let actionStatusTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const reportArtifactAction = (ctx: ArtifactActionContext): void => {
+  // Full context to the console so the whole payload is inspectable.
+  console.log("[artifact custom action]", ctx);
+  const statusEl = document.getElementById("artifact-action-status");
+  if (statusEl) {
+    statusEl.textContent = `Saved "${ctx.title}" to Drive (demo)`;
+    if (actionStatusTimeout) clearTimeout(actionStatusTimeout);
+    actionStatusTimeout = setTimeout(() => {
+      statusEl.textContent = "";
+      actionStatusTimeout = null;
+    }, 4000);
+  }
+};
+
+// A recognizable colorful Drive-ish mark, built as an inline SVG so it
+// exercises the custom-icon path (icon can be a () => SVGElement factory).
+const createDriveIcon = (): SVGElement => {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 87 78");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("aria-hidden", "true");
+  const paths: Array<[string, string]> = [
+    ["M6.6 66.85 10.45 73.5c.8 1.4 1.95 2.5 3.3 3.3L27.5 53.5H0c0 1.55.4 3.1 1.2 4.5z", "#0066da"],
+    ["M43.65 25 29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3L1.2 48c-.8 1.4-1.2 2.95-1.2 4.5h27.5z", "#00ac47"],
+    ["M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75L86.2 57.5c.8-1.4 1.2-2.95 1.2-4.5H59.9l5.85 11.5z", "#ea4335"],
+    ["M43.65 25 57.4 1.2c-1.35-.8-2.9-1.2-4.5-1.2H34.4c-1.6 0-3.15.45-4.5 1.2z", "#00832d"],
+    ["M59.9 53.5H27.5L13.75 77.3c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z", "#2684fc"],
+    ["M73.4 26.5 60.75 4.5c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25 59.9 53.5h27.45c0-1.55-.4-3.1-1.2-4.5z", "#ffba00"],
+  ];
+  for (const [d, fill] of paths) {
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", d);
+    p.setAttribute("fill", fill);
+    svg.appendChild(p);
+  }
+  return svg;
+};
+
+const buildCustomActions = () => ({
+  toolbarActions: [
+    {
+      id: "drive-toolbar",
+      label: "Save to Drive",
+      icon: createDriveIcon,
+      onClick: reportArtifactAction,
+    },
+  ],
+  cardActions: [
+    {
+      id: "drive-card",
+      label: "Save to Drive",
+      icon: createDriveIcon,
+      showLabel: true,
+      onClick: reportArtifactAction,
+    },
+  ],
+});
+
 const readAnimationControls = () => {
   const activeModeBtn = document.querySelector<HTMLButtonElement>(
     "#artifact-anim-mode .mode-btn.active",
@@ -151,6 +237,7 @@ const buildArtifactsFeature = () => {
         }
       : {}),
     ...(readExpandToggle() ? { layout: { showExpandToggle: true } } : {}),
+    ...(readCustomActions() ? buildCustomActions() : {}),
   };
 };
 
@@ -290,6 +377,17 @@ expandToggleGroup?.addEventListener("click", (event) => {
   const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
   if (!btn) return;
   expandToggleGroup
+    .querySelectorAll(".mode-btn")
+    .forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyControlConfig();
+});
+
+const customActionsGroup = document.getElementById("artifact-custom-actions");
+customActionsGroup?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
+  if (!btn) return;
+  customActionsGroup
     .querySelectorAll(".mode-btn")
     .forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");

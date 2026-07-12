@@ -3,6 +3,8 @@ import type { PersonaArtifactFileMeta } from "../types";
 import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
 import { appendCharSpans } from "../utils/tool-loading-animation";
 import { createLabelButton } from "../utils/buttons";
+import { buildArtifactActionButton } from "../utils/artifact-custom-actions";
+import type { PersonaArtifactActionContext } from "../types";
 
 /**
  * Default artifact card renderer.
@@ -102,8 +104,38 @@ function renderDefaultArtifactCard(
   meta.append(titleEl, subtitleEl);
   root.append(iconBox, meta);
 
-  // Download button (visible when artifact is complete)
+  // Custom actions + Download button render only on complete artifacts, same
+  // as Download: content-dependent actions during streaming would act on
+  // partial content, so they wait until the artifact is fully materialized.
   if (status === "complete") {
+    // Custom card actions carry NO direct listeners (the card re-renders during
+    // streaming and is morphed by idiomorph). Clicks are handled by event
+    // delegation in ui.ts, keyed off data-artifact-custom-action, mirroring the
+    // Download button's data-download-artifact delegation.
+    const cardActions = context?.config?.features?.artifacts?.cardActions;
+    if (cardActions && cardActions.length > 0) {
+      const ctx: PersonaArtifactActionContext = {
+        artifactId: artifactId || null,
+        title,
+        artifactType,
+        markdown:
+          typeof props.markdown === "string" ? props.markdown : undefined,
+        file,
+      };
+      for (const action of cardActions) {
+        try {
+          if (action.visible === undefined || action.visible(ctx)) {
+            const btn = buildArtifactActionButton(action);
+            btn.setAttribute("data-artifact-custom-action", action.id);
+            btn.className = `${btn.className} persona-flex-shrink-0`;
+            root.append(btn);
+          }
+        } catch {
+          // A single bad action must not take down the whole card.
+        }
+      }
+    }
+
     const dl = createLabelButton({
       label: "Download",
       className: "persona-flex-shrink-0",

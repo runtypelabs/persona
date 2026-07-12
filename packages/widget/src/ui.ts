@@ -29,7 +29,8 @@ import {
   ReadAloudState,
   PersonaArtifactRecord,
   PersonaArtifactManualUpsert,
-  PersonaArtifactFileMeta
+  PersonaArtifactFileMeta,
+  PersonaArtifactActionContext
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
@@ -1700,26 +1701,21 @@ export const createAgentExperience = (
     artifactPaneCanShow();
   const sessionRef: { current: AgentWidgetSession | null } = { current: null };
 
-  // Click delegation for artifact download buttons
-  messagesWrapper.addEventListener('click', (event) => {
-    const target = event.target as HTMLElement;
-    const dlBtn = target.closest('[data-download-artifact]') as HTMLElement;
-    if (!dlBtn) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const artifactId = dlBtn.getAttribute('data-download-artifact');
-    if (!artifactId) return;
-    // Let integrator intercept
-    const dlPrevented = config.features?.artifacts?.onArtifactAction?.({ type: 'download', artifactId });
-    if (dlPrevented === true) return;
-    // Try session state first, fall back to content stored in the card's rawContent props
+  // Resolve an artifact's content for card actions (download + custom actions).
+  // Tries the live session registry first, then falls back to the content
+  // persisted in the card message's rawContent props (session state is gone
+  // after a page refresh). `fromEl` is the clicked element inside the card.
+  const resolveCardArtifactContent = (
+    fromEl: HTMLElement,
+    artifactId: string
+  ): { markdown?: string; title: string; file?: PersonaArtifactFileMeta; artifactType: string } => {
     const artifact = session.getArtifactById(artifactId);
     let markdown = artifact?.markdown;
     let title = artifact?.title || 'artifact';
     let file: PersonaArtifactFileMeta | undefined = artifact?.file;
+    let artifactType: string = artifact?.artifactType ?? 'markdown';
     if (!markdown) {
-      // After page refresh, session state is gone: read from the persisted card message
-      const cardEl = dlBtn.closest('[data-open-artifact]');
+      const cardEl = fromEl.closest('[data-open-artifact]');
       const msgEl = cardEl?.closest('[data-message-id]');
       const msgId = msgEl?.getAttribute('data-message-id');
       if (msgId) {
@@ -1733,10 +1729,29 @@ export const createAgentExperience = (
             if (parsed?.props?.file && typeof parsed.props.file === 'object') {
               file = parsed.props.file as PersonaArtifactFileMeta;
             }
+            if (!artifact && typeof parsed?.props?.artifactType === 'string') {
+              artifactType = parsed.props.artifactType;
+            }
           } catch { /* ignore */ }
         }
       }
     }
+    return { markdown, title, file, artifactType };
+  };
+
+  // Click delegation for artifact download buttons
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const dlBtn = target.closest('[data-download-artifact]') as HTMLElement;
+    if (!dlBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const artifactId = dlBtn.getAttribute('data-download-artifact');
+    if (!artifactId) return;
+    // Let integrator intercept
+    const dlPrevented = config.features?.artifacts?.onArtifactAction?.({ type: 'download', artifactId });
+    if (dlPrevented === true) return;
+    const { markdown, title, file } = resolveCardArtifactContent(dlBtn, artifactId);
     if (!markdown) return;
     // File artifacts download the raw unfenced source under their real name/MIME;
     // non-file markdown artifacts keep the legacy `<title>.md` / text/markdown path.
@@ -1750,13 +1765,39 @@ export const createAgentExperience = (
     URL.revokeObjectURL(url);
   });
 
+  // Click delegation for integrator-supplied card action buttons. Actions are
+  // looked up by id from fresh config at click time so live config updates
+  // apply. Like the download listener, its stopPropagation() cannot block the
+  // card-open listener on the same element, so that listener skips these too.
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const actionBtn = target.closest('[data-artifact-custom-action]') as HTMLElement;
+    if (!actionBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const actionId = actionBtn.getAttribute('data-artifact-custom-action');
+    if (!actionId) return;
+    const cardEl = actionBtn.closest('[data-open-artifact]');
+    const artifactId = cardEl?.getAttribute('data-open-artifact') ?? null;
+    const action = config.features?.artifacts?.cardActions?.find((a) => a.id === actionId);
+    if (!action) return;
+    const { markdown, title, file, artifactType } = resolveCardArtifactContent(actionBtn, artifactId ?? '');
+    const ctx: PersonaArtifactActionContext = { artifactId, title, artifactType, markdown, file };
+    try {
+      void Promise.resolve(action.onClick(ctx)).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  });
+
   // Click delegation for artifact reference cards
   messagesWrapper.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    // Download clicks are handled by the listener above; its stopPropagation()
-    // cannot block a second listener on the same element, so skip them here
-    // explicitly or the card would also open the panel.
+    // Download and custom-action clicks are handled by the listeners above;
+    // their stopPropagation() cannot block a second listener on the same
+    // element, so skip them here explicitly or the card would also open the panel.
     if (target.closest('[data-download-artifact]')) return;
+    if (target.closest('[data-artifact-custom-action]')) return;
     const card = target.closest('[data-open-artifact]') as HTMLElement;
     if (!card) return;
     const artifactId = card.getAttribute('data-open-artifact');
@@ -2245,6 +2286,7 @@ export const createAgentExperience = (
     // toggle while expanded also collapses the pane.
     const expandToggleEnabled = config.features?.artifacts?.layout?.showExpandToggle === true;
     artifactPaneApi.setExpandToggleVisible(expandToggleEnabled);
+    artifactPaneApi.setCustomActions(config.features?.artifacts?.toolbarActions ?? []);
     if (!expandToggleEnabled) artifactPaneExpanded = false;
     // Run the resizer stash/restore once per expanded-state transition: the
     // resizer's inline width/maxWidth beats the expanded class, so clear it while

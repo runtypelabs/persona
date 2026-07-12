@@ -3,7 +3,11 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createArtifactPane } from "./artifact-pane";
-import type { AgentWidgetConfig, PersonaArtifactRecord } from "../types";
+import type {
+  AgentWidgetConfig,
+  PersonaArtifactCustomAction,
+  PersonaArtifactRecord,
+} from "../types";
 
 beforeAll(() => {
   // jsdom does not implement matchMedia; the pane's layout code touches it.
@@ -288,6 +292,133 @@ describe("artifact-pane expand toggle", () => {
     expect(btn.getAttribute("aria-label")).toBe("Expand artifacts panel");
     expect(btn.title).toBe("Expand artifacts panel");
     expect(btn.querySelector("svg")).toBeTruthy();
+  });
+});
+
+const makeToolbarActionsConfig = (
+  actions: PersonaArtifactCustomAction[]
+): AgentWidgetConfig =>
+  ({
+    sanitize: false,
+    features: { artifacts: { enabled: true, toolbarActions: actions } },
+  }) as AgentWidgetConfig;
+
+const customActionsContainer = (
+  pane: ReturnType<typeof createArtifactPane>
+): HTMLElement =>
+  pane.element.querySelector(
+    ".persona-artifact-toolbar-custom-actions"
+  ) as HTMLElement;
+
+const customActionBtns = (
+  pane: ReturnType<typeof createArtifactPane>
+): HTMLButtonElement[] =>
+  Array.from(
+    pane.element.querySelectorAll(".persona-artifact-custom-action-btn")
+  ) as HTMLButtonElement[];
+
+const markdownRecord = (
+  overrides: Partial<PersonaArtifactRecord> = {}
+): PersonaArtifactRecord => ({
+  id: "a1",
+  artifactType: "markdown",
+  title: "Doc",
+  status: "complete",
+  markdown: "# Hi",
+  ...overrides,
+});
+
+describe("artifact-pane toolbar custom actions", () => {
+  it("renders no custom-action buttons by default", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [markdownRecord()], selectedId: "a1" });
+    // The host container is always built, but stays empty without config.
+    expect(customActionsContainer(pane)).toBeTruthy();
+    expect(customActionBtns(pane).length).toBe(0);
+  });
+
+  it("renders a toolbar action and invokes onClick with the selected record's context", () => {
+    const onClick = vi.fn();
+    const pane = createArtifactPane(
+      makeToolbarActionsConfig([
+        { id: "save", label: "Save to Drive", icon: "star", onClick },
+      ]),
+      { onSelect: () => {} }
+    );
+    pane.update({
+      artifacts: [markdownRecord({ markdown: "# Report" })],
+      selectedId: "a1",
+    });
+
+    const btn = customActionsContainer(pane).querySelector(
+      ".persona-artifact-custom-action-btn"
+    ) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    expect(btn.getAttribute("aria-label")).toBe("Save to Drive");
+    expect(btn.querySelector("svg")).toBeTruthy();
+
+    btn.click();
+    expect(onClick).toHaveBeenCalledTimes(1);
+    const ctx = onClick.mock.calls[0][0];
+    expect(ctx.artifactId).toBe("a1");
+    expect(ctx.markdown).toBe("# Report");
+  });
+
+  it("renders a factory icon element verbatim inside the button", () => {
+    const custom = document.createElement("span");
+    custom.className = "my-brand-icon";
+    const pane = createArtifactPane(
+      makeToolbarActionsConfig([
+        { id: "brand", label: "Brand", icon: () => custom, onClick: () => {} },
+      ]),
+      { onSelect: () => {} }
+    );
+    pane.update({ artifacts: [markdownRecord()], selectedId: "a1" });
+    const btn = customActionBtns(pane)[0];
+    expect(btn).toBeTruthy();
+    // The exact author-provided element is slotted in, not a copy.
+    expect(btn.querySelector(".my-brand-icon")).toBe(custom);
+  });
+
+  it("gates a button with visible(ctx) on the selected record", () => {
+    const action: PersonaArtifactCustomAction = {
+      id: "file-only",
+      label: "File only",
+      icon: "star",
+      visible: (ctx) => Boolean(ctx.file),
+      onClick: () => {},
+    };
+    const pane = createArtifactPane(makeToolbarActionsConfig([action]), {
+      onSelect: () => {},
+    });
+
+    // File artifact: ctx.file is set, so the button renders.
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    expect(customActionBtns(pane).length).toBe(1);
+
+    // Plain markdown artifact: no file, so the gate hides the button.
+    pane.update({ artifacts: [markdownRecord({ id: "m1" })], selectedId: "m1" });
+    expect(customActionBtns(pane).length).toBe(0);
+  });
+
+  it("setCustomActions removes and re-adds buttons (live config update)", () => {
+    const action: PersonaArtifactCustomAction = {
+      id: "save",
+      label: "Save",
+      icon: "star",
+      onClick: () => {},
+    };
+    const pane = createArtifactPane(makeToolbarActionsConfig([action]), {
+      onSelect: () => {},
+    });
+    pane.update({ artifacts: [markdownRecord()], selectedId: "a1" });
+    expect(customActionBtns(pane).length).toBe(1);
+
+    pane.setCustomActions([]);
+    expect(customActionBtns(pane).length).toBe(0);
+
+    pane.setCustomActions([action]);
+    expect(customActionBtns(pane).length).toBe(1);
   });
 });
 

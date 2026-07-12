@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 import type { AgentWidgetConfig, PersonaArtifactDisplayMode } from "./types";
@@ -139,6 +139,130 @@ describe("artifact pane auto-open gating by display mode", () => {
       urlWithBlob.createObjectURL = origCreate;
       urlWithBlob.revokeObjectURL = origRevoke;
     }
+  });
+});
+
+/**
+ * Card custom actions (features.artifacts.cardActions) render on complete
+ * reference cards and are wired through the same messages-wrapper delegation as
+ * the Download button: looked up by id from fresh config at click time, and
+ * explicitly skipped by the card-open listener so a click never opens the pane.
+ */
+describe("artifact card custom actions (full widget)", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    try {
+      window.localStorage.clear();
+    } catch {
+      /* jsdom edge cases */
+    }
+  });
+
+  type CardActions = NonNullable<
+    NonNullable<NonNullable<AgentWidgetConfig["features"]>["artifacts"]>["cardActions"]
+  >;
+
+  function configWith(cardActions: CardActions): AgentWidgetConfig {
+    return {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        artifacts: {
+          enabled: true,
+          allowedTypes: ["markdown", "component"],
+          display: "card",
+          cardActions,
+        },
+      },
+    };
+  }
+
+  function mountWith(cardActions: CardActions) {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, configWith(cardActions));
+    return { mount, controller };
+  }
+
+  function paneEl(mount: HTMLElement): HTMLElement {
+    const el = mount.querySelector<HTMLElement>(".persona-artifact-pane");
+    expect(el).not.toBeNull();
+    return el!;
+  }
+
+  function upsertSample(controller: ReturnType<typeof createAgentExperience>) {
+    controller.upsertArtifact({
+      id: "gating-test",
+      title: "Gating test",
+      artifactType: "markdown",
+      content: "# Hello",
+    });
+  }
+
+  // Fabricate the reference card the way the default renderer shapes it (a
+  // data-open-artifact root holding a data-artifact-custom-action button),
+  // mounted inside a real message so clicks bubble through the ui.ts delegation.
+  function fabricateCard(
+    mount: HTMLElement,
+    controller: ReturnType<typeof createAgentExperience>,
+    actionId: string
+  ): HTMLButtonElement {
+    controller.injectAssistantMessage({ content: "See the artifact below." });
+    const msgEl = mount.querySelector("[data-message-id]");
+    expect(msgEl).not.toBeNull();
+    const card = document.createElement("div");
+    card.setAttribute("data-open-artifact", "gating-test");
+    const btn = document.createElement("button");
+    btn.setAttribute("data-artifact-custom-action", actionId);
+    card.appendChild(btn);
+    msgEl!.appendChild(card);
+    return btn;
+  }
+
+  it("invokes the action onClick with resolved context and does not open the pane", () => {
+    const onClick = vi.fn();
+    const { mount, controller } = mountWith([
+      { id: "save", label: "Save to Drive", icon: "star", onClick },
+    ]);
+    upsertSample(controller);
+    const btn = fabricateCard(mount, controller, "save");
+
+    btn.click();
+    expect(onClick).toHaveBeenCalledTimes(1);
+    const ctx = onClick.mock.calls[0][0];
+    expect(ctx.artifactId).toBe("gating-test");
+    // Content resolves from the live session record (upserted markdown).
+    expect(ctx.markdown).toBe("# Hello");
+
+    // Card display mode: the delegated action must not open the pane.
+    expect(paneEl(mount).classList.contains("persona-hidden")).toBe(true);
+    controller.destroy();
+  });
+
+  it("looks up the handler by id from fresh config on each click (live update)", () => {
+    const oldHandler = vi.fn();
+    const newHandler = vi.fn();
+    const { mount, controller } = mountWith([
+      { id: "save", label: "Save", icon: "star", onClick: oldHandler },
+    ]);
+    upsertSample(controller);
+
+    const firstBtn = fabricateCard(mount, controller, "save");
+    firstBtn.click();
+    expect(oldHandler).toHaveBeenCalledTimes(1);
+    expect(newHandler).not.toHaveBeenCalled();
+
+    // Swap the action of the same id via a live config update.
+    controller.update(
+      configWith([{ id: "save", label: "Save", icon: "star", onClick: newHandler }])
+    );
+
+    // Re-fabricate a card (the transcript may re-render on update) and click.
+    const secondBtn = fabricateCard(mount, controller, "save");
+    secondBtn.click();
+    expect(oldHandler).toHaveBeenCalledTimes(1);
+    expect(newHandler).toHaveBeenCalledTimes(1);
+    controller.destroy();
   });
 });
 
