@@ -2989,6 +2989,11 @@
 [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn {
   border: none;
   background: transparent;
+  /* Segment padding = standalone icon-button padding minus the container's
+     padding, so the pill's outer height matches the neighboring icon buttons
+     (the container's 1px border stands in for the border the segments lost).
+     calc() clamps to 0 if a theme sets group padding larger than icon padding. */
+  padding: calc(var(--persona-artifact-toolbar-icon-padding, var(--persona-icon-btn-padding, 0.25rem)) - var(--persona-artifact-toolbar-toggle-group-padding, 2px));
   /* Container radius minus the 2px padding so the segment nests concentrically. */
   border-radius: var(--persona-artifact-toolbar-toggle-radius, calc(var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))) - 2px));
 }

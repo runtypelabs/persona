@@ -8,7 +8,7 @@ import { createElement } from "../utils/dom";
 import { basenameOf, fileKindOf, fileTypeLabel } from "../utils/artifact-file";
 import { applyArtifactLoadingStatus } from "../utils/artifact-loading-status";
 import { artifactRecordActionContext, buildArtifactActionButton } from "../utils/artifact-custom-actions";
-import { createIconButton } from "../utils/buttons";
+import { createIconButton, createToggleGroup } from "../utils/buttons";
 import { renderLucideIcon } from "../utils/icons";
 import {
   renderArtifactPreviewBody,
@@ -375,59 +375,62 @@ function renderDefaultArtifactInline(
     "persona-flex persona-items-center persona-gap-1"
   );
 
-  // Rendered/source view toggle (created only when enabled; per-record
-  // availability is gated in updateChrome via persona-hidden, like copy). Icon +
-  // label reflect the action, not the state: showing rendered → "code" icon /
-  // "View source"; showing source → "eye" icon / "View preview" + aria-pressed.
-  const viewToggleBtn = showViewToggle
-    ? createIconButton({
-        icon: "code-xml",
-        label: "View source",
-        className: "persona-artifact-doc-icon-btn persona-flex-shrink-0"
-      })
-    : null;
   const effectiveViewMode = (): "rendered" | "source" =>
     userViewMode ?? bodyLayout.viewMode;
-  const updateViewToggleButton = () => {
-    if (!viewToggleBtn) return;
-    const showingSource = effectiveViewMode() === "source";
-    const label = showingSource ? "View preview" : "View source";
-    viewToggleBtn.setAttribute("aria-label", label);
-    viewToggleBtn.title = label;
-    viewToggleBtn.setAttribute("aria-pressed", showingSource ? "true" : "false");
-    viewToggleBtn.replaceChildren();
-    const icon = renderLucideIcon(
-      showingSource ? "eye" : "code-xml",
-      16,
-      "currentColor",
-      2
-    );
-    if (icon) viewToggleBtn.appendChild(icon);
-  };
-  if (viewToggleBtn) {
-    // Direct listener (deliberate deviation from the delegated copy/expand
-    // pattern): the toggle is purely block-local state + a re-render of this
-    // block's own preview handle. It needs no session access, and the chrome
-    // element is stable for the block's lifetime (never remounted), so a direct
-    // listener is simpler and correct here — no delegation round-trip needed.
-    viewToggleBtn.addEventListener("click", () => {
-      userViewMode = effectiveViewMode() === "source" ? "rendered" : "source";
-      // Known tradeoff: toggling away from a live file-preview iframe drops it,
-      // and toggling back rebuilds it (srcdoc reload → iframe-internal state
-      // lost). Same behavior as the pane's toggle; we deliberately do not keep a
-      // detached iframe alive.
-      runArtifactBodyTransition(
-        body,
-        bodyLayout.transition,
-        currentRecord.id + ":view",
-        () => {
+
+  // Rendered/source view toggle: the same segmented toggle group the artifact
+  // pane uses (createToggleGroup), so the inline chrome matches the pane's UX.
+  // Both segments (eye "Rendered view", code-xml "Source") are always visible and
+  // the active one is highlighted. Created only when enabled; per-record
+  // availability is gated in updateChrome via persona-hidden on the whole group,
+  // like copy. updateChrome also syncs the selected segment on every update.
+  const viewToggle = showViewToggle
+    ? createToggleGroup({
+        items: [
+          {
+            id: "rendered",
+            icon: "eye",
+            label: "Rendered view",
+            className: "persona-artifact-doc-icon-btn persona-artifact-view-btn"
+          },
+          {
+            id: "source",
+            icon: "code-xml",
+            label: "Source",
+            className: "persona-artifact-doc-icon-btn persona-artifact-code-btn"
+          }
+        ],
+        selectedId: effectiveViewMode(),
+        className: "persona-artifact-toggle-group persona-flex-shrink-0",
+        // Direct handlers via the group's own click listeners (deliberate
+        // deviation from the delegated copy/expand pattern): the toggle is purely
+        // block-local state + a re-render of this block's own preview handle. It
+        // needs no session access, and the chrome element is stable for the
+        // block's lifetime (never remounted), so direct handlers are simpler and
+        // correct here — no delegation round-trip needed.
+        onSelect: (id) => {
+          const next = id === "source" ? "source" : "rendered";
+          // Selecting the already-active segment is a no-op (createToggleGroup
+          // still fires onSelect on a re-click of the active segment).
+          if (next === effectiveViewMode()) return;
+          userViewMode = next;
+          // Known tradeoff: toggling away from a live file-preview iframe drops it,
+          // and toggling back rebuilds it (srcdoc reload → iframe-internal state
+          // lost). Same behavior as the pane's toggle; we deliberately do not keep
+          // a detached iframe alive.
+          //
+          // Swap instantly — no runArtifactBodyTransition here. The View
+          // Transition exists for the streaming→complete swap; on a toggle
+          // click its document-wide snapshot crossfade would paint over the
+          // group's sliding-thumb animation (which plays inside the snapshot
+          // window and reads as a plain dissolve). The pane's toggle also
+          // swaps its body instantly, so this keeps the two in parity: the
+          // thumb slide IS the toggle's animation.
           handle.update(currentRecord);
           applyBodyHeight(currentRecord);
         }
-      );
-      updateViewToggleButton();
-    });
-  }
+      })
+    : null;
 
   const copyBtn = showCopy
     ? createIconButton({
@@ -455,7 +458,7 @@ function renderDefaultArtifactInline(
   }
 
   actions.appendChild(customActionsWrap);
-  if (viewToggleBtn) actions.appendChild(viewToggleBtn);
+  if (viewToggle) actions.appendChild(viewToggle.element);
   if (copyBtn) actions.appendChild(copyBtn);
   if (expandBtn) actions.appendChild(expandBtn);
 
@@ -493,7 +496,7 @@ function renderDefaultArtifactInline(
     // component artifacts are hidden here (v1 decision: the pane toggle covers
     // them). Also hidden when the host forced source-only via
     // `inlineBody.viewMode: "source"` — there is no preview to switch to.
-    if (viewToggleBtn) {
+    if (viewToggle) {
       const file = rec.artifactType === "markdown" ? rec.file : undefined;
       let canToggle = false;
       if (!streaming && file && bodyLayout.viewMode !== "source") {
@@ -505,8 +508,11 @@ function renderDefaultArtifactInline(
         }
         // kind "other" → source-only, no rendered alternative → stays hidden.
       }
-      viewToggleBtn.classList.toggle("persona-hidden", !canToggle);
-      updateViewToggleButton();
+      viewToggle.element.classList.toggle("persona-hidden", !canToggle);
+      // Sync the group's selected segment on every update: inlineBlockUpdaters
+      // resets userViewMode to null on re-stream / new id, so the group must snap
+      // back to the configured default here.
+      viewToggle.setSelected(effectiveViewMode());
     }
 
     customActionsWrap.replaceChildren();

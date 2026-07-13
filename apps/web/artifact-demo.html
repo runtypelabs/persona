@@ -71,7 +71,7 @@
                 <button type="button" class="mode-btn active" data-mode="on">On</button>
                 <button type="button" class="mode-btn" data-mode="off">Off</button>
               </div>
-              <p class="hint">Add an inline chrome button that flips a completed file between its rendered preview and raw source (<code>inlineChrome.showViewToggle</code>). The button only appears when a rendered preview exists, so it stays hidden for source-only or plain markdown artifacts.</p>
+              <p class="hint">Add a segmented rendered/source toggle to the inline chrome that flips a completed file between its rendered preview and raw source (<code>inlineChrome.showViewToggle</code>), matching the artifact pane's toggle. The control only appears when a rendered preview exists, so it stays hidden for source-only or plain markdown artifacts.</p>
             </div>
             <div class="section">
               <label>Preview loading</label>
@@ -251,7 +251,7 @@
                   <span class="prop">transition</span>: <span class="string">"auto"</span>, <span class="comment">// auto | none</span>
                 },
                 <span class="prop">inlineChrome</span>: {
-                  <span class="prop">showViewToggle</span>: <span class="keyword">true</span>, <span class="comment">// rendered/source toggle button, only when a preview exists</span>
+                  <span class="prop">showViewToggle</span>: <span class="keyword">true</span>, <span class="comment">// rendered/source segmented toggle, only when a preview exists</span>
                 },
                 <span class="prop">filePreview</span>: {
                   <span class="prop">loading</span>: <span class="keyword">true</span>, <span class="comment">// true | false | { label, renderIndicator }, appears only when loading takes a moment</span>

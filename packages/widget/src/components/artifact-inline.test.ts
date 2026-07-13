@@ -644,15 +644,21 @@ describe("PersonaArtifactInline inlineBody flush and sized wrappers", () => {
 });
 
 describe("PersonaArtifactInline view toggle", () => {
-  // The toggle carries no data-attribute; its aria-label flips between the two
-  // states, so match either. Returns null only when the button was never built
-  // (showViewToggle: false).
-  const viewToggleOf = (el: HTMLElement): HTMLElement | null =>
-    el.querySelector(
-      'button[aria-label="View source"], button[aria-label="View preview"]'
-    );
+  // The toggle is a segmented group (createToggleGroup) matching the pane: two
+  // always-visible buttons — "Rendered view" (eye) and "Source" (code-xml) — with
+  // the active one carrying aria-pressed="true". The whole group is hidden via
+  // persona-hidden when the artifact has no rendered alternative, and omitted
+  // entirely for showViewToggle: false.
+  const groupOf = (el: HTMLElement): HTMLElement | null =>
+    el.querySelector(".persona-artifact-toggle-group");
+  const renderedBtn = (el: HTMLElement): HTMLElement =>
+    el.querySelector('button[aria-label="Rendered view"]') as HTMLElement;
+  const sourceBtn = (el: HTMLElement): HTMLElement =>
+    el.querySelector('button[aria-label="Source"]') as HTMLElement;
   const isHidden = (node: HTMLElement | null): boolean =>
     !!node && node.classList.contains("persona-hidden");
+  const pressed = (btn: HTMLElement): boolean =>
+    btn.getAttribute("aria-pressed") === "true";
 
   const htmlFileProps = (
     status: "streaming" | "complete"
@@ -674,37 +680,40 @@ describe("PersonaArtifactInline view toggle", () => {
     file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
   });
 
-  it("shows the toggle on a complete html file artifact", () => {
+  it("shows the segmented toggle on a complete html file artifact", () => {
     const el = PersonaArtifactInline(
       htmlFileProps("complete"),
       makeContext(makeConfig())
     );
-    const btn = viewToggleOf(el);
-    expect(btn).not.toBeNull();
-    expect(isHidden(btn)).toBe(false);
-    expect(btn!.getAttribute("aria-label")).toBe("View source");
-    expect(btn!.getAttribute("aria-pressed")).toBe("false");
+    const group = groupOf(el);
+    expect(group).not.toBeNull();
+    expect(isHidden(group)).toBe(false);
+    // Both segments present; rendered is the default active segment.
+    expect(renderedBtn(el)).not.toBeNull();
+    expect(sourceBtn(el)).not.toBeNull();
+    expect(pressed(renderedBtn(el))).toBe(true);
+    expect(pressed(sourceBtn(el))).toBe(false);
     // Placed between custom actions and the copy button.
     const copy = el.querySelector("[data-copy-artifact]") as HTMLElement;
     expect(
-      btn!.compareDocumentPosition(copy) & Node.DOCUMENT_POSITION_FOLLOWING
+      group!.compareDocumentPosition(copy) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });
 
-  it("hides the toggle while streaming", () => {
+  it("hides the group while streaming", () => {
     const el = PersonaArtifactInline(
       htmlFileProps("streaming"),
       makeContext(makeConfig({ loadingAnimation: "none" }))
     );
-    expect(isHidden(viewToggleOf(el))).toBe(true);
+    expect(isHidden(groupOf(el))).toBe(true);
   });
 
-  it("hides the toggle for plain markdown artifacts", () => {
+  it("hides the group for plain markdown artifacts", () => {
     const el = PersonaArtifactInline(completeProps(), makeContext(makeConfig()));
-    expect(isHidden(viewToggleOf(el))).toBe(true);
+    expect(isHidden(groupOf(el))).toBe(true);
   });
 
-  it("hides the toggle for component artifacts", () => {
+  it("hides the group for component artifacts", () => {
     const name = "TestInlineToggleChart";
     componentRegistry.register(name, () => {
       const node = document.createElement("div");
@@ -723,13 +732,13 @@ describe("PersonaArtifactInline view toggle", () => {
         },
         makeContext(makeConfig())
       );
-      expect(isHidden(viewToggleOf(el))).toBe(true);
+      expect(isHidden(groupOf(el))).toBe(true);
     } finally {
       componentRegistry.unregister(name);
     }
   });
 
-  it("hides the toggle for a source-only (kind 'other') file artifact", () => {
+  it("hides the group for a source-only (kind 'other') file artifact", () => {
     const el = PersonaArtifactInline(
       {
         artifactId: "o1",
@@ -741,37 +750,37 @@ describe("PersonaArtifactInline view toggle", () => {
       },
       makeContext(makeConfig())
     );
-    expect(isHidden(viewToggleOf(el))).toBe(true);
+    expect(isHidden(groupOf(el))).toBe(true);
   });
 
-  it("hides the toggle when filePreview is disabled for an html file", () => {
+  it("hides the group when filePreview is disabled for an html file", () => {
     const el = PersonaArtifactInline(
       htmlFileProps("complete"),
       makeContext(makeConfig({ filePreview: { enabled: false } }))
     );
-    expect(isHidden(viewToggleOf(el))).toBe(true);
+    expect(isHidden(groupOf(el))).toBe(true);
   });
 
-  it("hides the toggle when inlineBody.viewMode is 'source'", () => {
+  it("hides the group when inlineBody.viewMode is 'source'", () => {
     const el = PersonaArtifactInline(
       htmlFileProps("complete"),
       makeContext(makeConfig({ inlineBody: { viewMode: "source" } }))
     );
-    expect(isHidden(viewToggleOf(el))).toBe(true);
+    expect(isHidden(groupOf(el))).toBe(true);
   });
 
-  it("omits the toggle entirely for inlineChrome { showViewToggle: false }", () => {
+  it("omits the group entirely for inlineChrome { showViewToggle: false }", () => {
     const el = PersonaArtifactInline(
       htmlFileProps("complete"),
       makeContext(makeConfig({ inlineChrome: { showViewToggle: false } }))
     );
-    expect(viewToggleOf(el)).toBeNull();
+    expect(groupOf(el)).toBeNull();
     // Copy + expand remain.
     expect(el.querySelector("[data-copy-artifact]")).not.toBeNull();
     expect(el.querySelector("[data-expand-artifact-inline]")).not.toBeNull();
   });
 
-  it("flips iframe -> source and back on click, flipping aria/label and wrapper classes", () => {
+  it("flips iframe -> source and back when clicking the inactive segment", () => {
     const el = PersonaArtifactInline(
       htmlFileProps("complete"),
       makeContext(makeConfig())
@@ -780,26 +789,41 @@ describe("PersonaArtifactInline view toggle", () => {
     const bodyEl = el.querySelector(".persona-artifact-inline-body")!;
 
     // rendered -> source
-    (viewToggleOf(el) as HTMLElement).click();
+    sourceBtn(el).click();
     expect(el.querySelector("iframe")).toBeNull();
     expect(el.querySelector(".persona-code-pre")).toBeTruthy();
-    const btnSource = viewToggleOf(el)!;
-    expect(btnSource.getAttribute("aria-label")).toBe("View preview");
-    expect(btnSource.getAttribute("aria-pressed")).toBe("true");
+    expect(pressed(sourceBtn(el))).toBe(true);
+    expect(pressed(renderedBtn(el))).toBe(false);
     // Source view recomputes to full-bleed + sized.
     expect(bodyEl.classList.contains("persona-artifact-content-flush")).toBe(true);
     expect(bodyEl.classList.contains("persona-artifact-inline-body--sized")).toBe(true);
 
     // source -> rendered
-    (viewToggleOf(el) as HTMLElement).click();
+    renderedBtn(el).click();
     expect(el.querySelector("iframe")).toBeTruthy();
     expect(el.querySelector(".persona-code-pre")).toBeNull();
-    const btnBack = viewToggleOf(el)!;
-    expect(btnBack.getAttribute("aria-label")).toBe("View source");
-    expect(btnBack.getAttribute("aria-pressed")).toBe("false");
+    expect(pressed(renderedBtn(el))).toBe(true);
+    expect(pressed(sourceBtn(el))).toBe(false);
     // Preview iframe is padded (not flush) but still sized (same outer box).
     expect(bodyEl.classList.contains("persona-artifact-content-flush")).toBe(false);
     expect(bodyEl.classList.contains("persona-artifact-inline-body--sized")).toBe(true);
+  });
+
+  it("is a no-op when clicking the already-active segment", () => {
+    const el = PersonaArtifactInline(
+      htmlFileProps("complete"),
+      makeContext(makeConfig())
+    );
+    const iframeBefore = el.querySelector("iframe");
+    expect(iframeBefore).toBeTruthy();
+
+    // Clicking the active (rendered) segment does not re-render the body: the
+    // same iframe node survives and the source view is never built.
+    renderedBtn(el).click();
+    expect(el.querySelector("iframe")).toBe(iframeBefore);
+    expect(el.querySelector(".persona-code-pre")).toBeNull();
+    expect(pressed(renderedBtn(el))).toBe(true);
+    expect(pressed(sourceBtn(el))).toBe(false);
   });
 
   it("resets to the configured default view when the block restarts streaming", () => {
@@ -811,7 +835,7 @@ describe("PersonaArtifactInline view toggle", () => {
     container.appendChild(el);
 
     // Toggle to source, then a streaming restart clears the choice.
-    (viewToggleOf(el) as HTMLElement).click();
+    sourceBtn(el).click();
     expect(el.querySelector(".persona-code-pre")).toBeTruthy();
 
     updateInlineArtifactBlocks(container, [
@@ -819,9 +843,9 @@ describe("PersonaArtifactInline view toggle", () => {
     ]);
     updateInlineArtifactBlocks(container, [htmlCompleteRecord()]);
 
-    // Back on the rendered default (iframe), toggle label reset.
+    // Back on the rendered default (iframe), the group's selection reset.
     expect(el.querySelector("iframe")).toBeTruthy();
-    expect(viewToggleOf(el)!.getAttribute("aria-label")).toBe("View source");
-    expect(viewToggleOf(el)!.getAttribute("aria-pressed")).toBe("false");
+    expect(pressed(renderedBtn(el))).toBe(true);
+    expect(pressed(sourceBtn(el))).toBe(false);
   });
 });
