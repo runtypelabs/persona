@@ -160,8 +160,14 @@ describe("PersonaArtifactInline hydration from props", () => {
       "iframe.persona-artifact-iframe"
     ) as HTMLIFrameElement;
     expect(iframe).toBeTruthy();
+    // The iframe is nested in the positioned preview frame (overlay host); the
+    // geometry classes detect it through the wrapper via a descendant query.
+    expect(iframe.parentElement?.classList.contains("persona-artifact-frame")).toBe(
+      true
+    );
     expect(iframe.getAttribute("sandbox")).toBe("allow-scripts");
-    expect(iframe.srcdoc).toBe(HTML_RAW);
+    // Default loading appends the ready reporter, so the raw source is the prefix.
+    expect(iframe.srcdoc.startsWith(HTML_RAW)).toBe(true);
   });
 });
 

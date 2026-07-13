@@ -209,6 +209,17 @@ const readViewToggle = (): boolean => {
   return activeBtn?.dataset.mode !== "off";
 };
 
+// On (the default) keeps the themed loading overlay for slow file previews via
+// filePreview.loading; Off sends filePreview: { loading: false } to disable the
+// overlay and its ready-signal injection. The overlay only appears when a
+// preview takes a moment to become ready, so fast artifacts never flash it.
+const readPreviewLoading = (): boolean => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-preview-loading .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode !== "off";
+};
+
 const buildInlineBody = () => ({
   streamingView: readStreamingView(),
   viewMode: readViewMode(),
@@ -359,6 +370,14 @@ const buildArtifactsFeature = () => {
     // carry the inlineBody key (concurrent work), TS treats it as an extra
     // property, which stays assignable to the artifacts feature type.
     inlineBody: buildInlineBody(),
+    // Themed loading overlay for slow file previews. Merge onto any filePreview
+    // keys from the base config rather than clobber. loading is a recent key: if
+    // the widget types don't yet carry it (concurrent work), TS treats it as an
+    // extra property, which stays assignable to the artifacts feature type.
+    filePreview: {
+      ...artifactDemoConfigBase.features?.artifacts?.filePreview,
+      loading: readPreviewLoading(),
+    },
   };
 };
 
@@ -532,6 +551,7 @@ for (const groupId of [
   "artifact-streaming-view",
   "artifact-view-mode",
   "artifact-view-toggle",
+  "artifact-preview-loading",
   "artifact-body-height",
   "artifact-fade-mask",
   "artifact-follow-output",

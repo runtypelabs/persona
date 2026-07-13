@@ -1,5 +1,6 @@
 import { createElement } from "../utils/dom";
 import type {
+  AgentWidgetArtifactsFeature,
   AgentWidgetConfig,
   AgentWidgetMessage,
   PersonaArtifactRecord,
@@ -210,6 +211,215 @@ function fallbackComponentCard(record: PersonaArtifactRecord): HTMLElement {
   return card;
 }
 
+/** Resolved preview-loading options (see `filePreview.loading`). */
+type ResolvedPreviewLoading = {
+  enabled: boolean;
+  delayMs: number;
+  minVisibleMs: number;
+  timeoutMs: number;
+  injectReadySignal: boolean;
+};
+
+/**
+ * Resolve `filePreview.loading` to concrete values. `false` disables the overlay
+ * and injected reporter entirely; `true` / `undefined` / an object with holes
+ * fall back to the documented defaults.
+ */
+function resolvePreviewLoading(
+  loading:
+    | boolean
+    | {
+        delayMs?: number;
+        minVisibleMs?: number;
+        timeoutMs?: number;
+        injectReadySignal?: boolean;
+      }
+    | undefined
+): ResolvedPreviewLoading {
+  if (loading === false) {
+    return {
+      enabled: false,
+      delayMs: 0,
+      minVisibleMs: 0,
+      timeoutMs: 0,
+      injectReadySignal: false,
+    };
+  }
+  const o = loading && typeof loading === "object" ? loading : undefined;
+  return {
+    enabled: true,
+    delayMs: o?.delayMs ?? 200,
+    minVisibleMs: o?.minVisibleMs ?? 300,
+    timeoutMs: o?.timeoutMs ?? 8000,
+    injectReadySignal: o?.injectReadySignal !== false,
+  };
+}
+
+/** How long the overlay fade-out runs before removal; matches the CSS transition. */
+const PREVIEW_FADE_MS = 220;
+
+/**
+ * Random token tying a ready `postMessage` to the exact iframe build that
+ * injected it. Collision is harmless — worst case an early overlay dismiss, not
+ * a security issue — so `Math.random` is an acceptable fallback for `crypto`.
+ */
+function makePreviewToken(): string {
+  try {
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      const a = new Uint32Array(2);
+      crypto.getRandomValues(a);
+      return a[0].toString(36) + a[1].toString(36);
+    }
+  } catch {
+    /* fall through */
+  }
+  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+
+/**
+ * Inline reporter APPENDED (never prepended — a script before `<!doctype html>`
+ * would trip quirks mode) to the srcdoc. On `window` load it waits a double
+ * `requestAnimationFrame` (a cheap "content has painted" heuristic) then posts
+ * the ready signal to the parent. The `token` is JSON-quoted so it can't break
+ * out of the string literal.
+ */
+function buildReadyReporter(token: string): string {
+  return (
+    "\n<script>(function(){var t=" +
+    JSON.stringify(token) +
+    ";function r(){try{parent.postMessage({persona:'artifact-preview-ready',token:t},'*');}catch(e){}}" +
+    "function s(){if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){requestAnimationFrame(r);});}else{r();}}" +
+    // Split the closing tag so this JS string can't prematurely close a host
+    // <script> if the bundle is ever inlined; the srcdoc still receives </script>.
+    "if(document.readyState==='complete'){s();}else{window.addEventListener('load',s);}})();</scr" +
+    "ipt>"
+  );
+}
+
+/** Themed "Loading preview…" overlay content (config-aware like other status call sites). */
+function buildPreviewOverlay(
+  artifactsCfg: AgentWidgetArtifactsFeature | undefined
+): HTMLElement {
+  const overlay = createElement("div", "persona-artifact-frame-loading");
+  const text = createElement("div", "persona-artifact-frame-loading-text");
+  applyArtifactLoadingStatus(text, "Loading preview...", artifactsCfg);
+  overlay.appendChild(text);
+  return overlay;
+}
+
+/**
+ * Drive the preview-loading overlay for one built iframe. Plain DOM + timers, no
+ * deps. Returns a teardown that removes the window/message + iframe/load
+ * listeners, clears every timer, and drops the overlay immediately — called when
+ * the iframe is replaced/rebuilt so the reuse path never stacks listeners.
+ *
+ * Dismiss rules:
+ * - injection on (`token` set): dismiss on the matched `postMessage`, or on the
+ *   hard timeout. The iframe `load` event is intentionally ignored — the message
+ *   is strictly later and more accurate (post-DOMContentLoaded rendering).
+ * - injection off (`token` null): dismiss on `load` + a double rAF, or the timeout.
+ * The iframe itself is never hidden; the opaque themed overlay covers pre-paint.
+ */
+function setupPreviewLoading(
+  frame: HTMLElement,
+  iframe: HTMLIFrameElement,
+  token: string | null,
+  opts: ResolvedPreviewLoading,
+  artifactsCfg: AgentWidgetArtifactsFeature | undefined
+): () => void {
+  let overlay: HTMLElement | null = null;
+  let shownAt = 0;
+  let settled = false;
+  const timers = new Set<number>();
+  const clearTimers = () => {
+    timers.forEach((id) => clearTimeout(id));
+    timers.clear();
+  };
+  const addTimer = (fn: () => void, ms: number): void => {
+    const id = setTimeout(() => {
+      timers.delete(id);
+      fn();
+    }, ms) as unknown as number;
+    timers.add(id);
+  };
+
+  const removeOverlay = () => {
+    if (overlay && overlay.parentElement) overlay.remove();
+    overlay = null;
+  };
+  const showOverlay = () => {
+    if (overlay || settled) return;
+    overlay = buildPreviewOverlay(artifactsCfg);
+    frame.appendChild(overlay);
+    shownAt = Date.now();
+  };
+  const fadeOut = () => {
+    if (!overlay) return;
+    overlay.classList.add("persona-artifact-frame-loading--out");
+    addTimer(removeOverlay, PREVIEW_FADE_MS);
+  };
+
+  const detachListeners = () => {
+    if (token !== null) {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("message", onMessage);
+      }
+    } else {
+      iframe.removeEventListener("load", onLoad);
+    }
+  };
+
+  // Ready: stop listening + the delay/timeout timers, then either drop a
+  // never-shown overlay's timers or enforce minVisibleMs before fading.
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    detachListeners();
+    clearTimers();
+    if (!overlay) return;
+    const remaining = Math.max(0, opts.minVisibleMs - (Date.now() - shownAt));
+    if (remaining > 0) addTimer(fadeOut, remaining);
+    else fadeOut();
+  };
+
+  function onMessage(e: MessageEvent) {
+    if (token === null) return;
+    const d = e.data as { persona?: unknown; token?: unknown } | null;
+    if (!d || d.persona !== "artifact-preview-ready" || d.token !== token) return;
+    // An opaque-origin srcdoc reports its origin as the string "null", so origin
+    // alone is worthless — match the source window identity instead.
+    if (e.source !== iframe.contentWindow) return;
+    settle();
+  }
+  function onLoad() {
+    const raf = (cb: () => void) => {
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => cb());
+      } else {
+        setTimeout(cb, 0);
+      }
+    };
+    raf(() => raf(() => settle()));
+  }
+
+  addTimer(showOverlay, opts.delayMs);
+  addTimer(settle, opts.timeoutMs);
+  if (token !== null) {
+    if (typeof window !== "undefined") {
+      window.addEventListener("message", onMessage);
+    }
+  } else {
+    iframe.addEventListener("load", onLoad);
+  }
+
+  return () => {
+    settled = true;
+    clearTimers();
+    detachListeners();
+    removeOverlay();
+  };
+}
+
 /**
  * Render an artifact's preview body into a stable wrapper element.
  *
@@ -250,13 +460,20 @@ export function renderArtifactPreviewBody(
 
   const el = createElement("div", "persona-artifact-preview-body");
 
-  // File-preview iframe reuse: re-appending a detached iframe reloads its
-  // srcdoc, so keep the node and skip rebuilding when the artifact + source
-  // are unchanged.
-  let filePreviewIframe: HTMLIFrameElement | null = null;
+  // File-preview reuse: re-appending a detached iframe reloads its srcdoc, so
+  // keep the positioned frame (wrapper + iframe + overlay) and skip rebuilding
+  // when the artifact + source are unchanged. `filePreviewLoadingCleanup` tears
+  // down the current frame's overlay state machine (listeners + timers) before a
+  // rebuild so the reuse path never stacks listeners.
+  let filePreviewFrame: HTMLElement | null = null;
   let filePreviewKey: string | null = null;
+  let filePreviewLoadingCleanup: (() => void) | null = null;
   const resetFilePreview = () => {
-    filePreviewIframe = null;
+    if (filePreviewLoadingCleanup) {
+      filePreviewLoadingCleanup();
+      filePreviewLoadingCleanup = null;
+    }
+    filePreviewFrame = null;
     filePreviewKey = null;
   };
 
@@ -441,30 +658,62 @@ export function renderArtifactPreviewBody(
         // NUL separator: cannot appear in an id, so ids and sources never
         // collide across the boundary.
         const key = rec.id + "\u0000" + source;
-        // Reuse the existing iframe when nothing changed so idle re-renders
-        // don't reload it (re-appending a detached iframe reloads its srcdoc).
+        // Reuse the existing frame when nothing changed so idle re-renders don't
+        // reload the iframe (re-appending a detached iframe reloads its srcdoc)
+        // or restart its loading overlay / stack a second message listener.
         if (
-          filePreviewIframe &&
+          filePreviewFrame &&
           filePreviewKey === key &&
-          filePreviewIframe.parentElement === el
+          filePreviewFrame.parentElement === el
         ) {
           return;
         }
         resetSource();
         resetStatus();
+        // Tear down any prior frame's overlay state machine before rebuilding.
+        resetFilePreview();
         el.replaceChildren();
-        const sandbox =
-          config.features?.artifacts?.filePreview?.iframeSandbox ?? "allow-scripts";
+
+        const fp = config.features?.artifacts?.filePreview;
+        const sandbox = fp?.iframeSandbox ?? "allow-scripts";
+        const loadingOpts = resolvePreviewLoading(fp?.loading);
+
+        // Positioned wrapper hosts the iframe + the (absolute) loading overlay;
+        // `el` is display: contents, so the iframe needs its own positioning
+        // context. Geometry (frame owns the height, iframe is 100% of it) lives
+        // in widget.css.
+        const frame = createElement("div", "persona-artifact-frame");
         const iframe = createElement("iframe", "persona-artifact-iframe");
         iframe.setAttribute("sandbox", sandbox);
         iframe.setAttribute("data-artifact-id", rec.id);
+
         // Assign srcdoc as a property (never innerHTML / marked / DOMPurify):
         // the sandbox (no allow-same-origin → opaque origin) is the isolation
-        // boundary.
-        iframe.srcdoc = source;
-        filePreviewIframe = iframe;
+        // boundary. The ready reporter is appended (never prepended) so the
+        // document's doctype stays first.
+        let token: string | null = null;
+        if (loadingOpts.enabled && loadingOpts.injectReadySignal) {
+          token = makePreviewToken();
+          iframe.srcdoc = source + buildReadyReporter(token);
+        } else {
+          iframe.srcdoc = source;
+        }
+
+        frame.appendChild(iframe);
+        el.appendChild(frame);
+
+        if (loadingOpts.enabled) {
+          filePreviewLoadingCleanup = setupPreviewLoading(
+            frame,
+            iframe,
+            token,
+            loadingOpts,
+            config.features?.artifacts
+          );
+        }
+
+        filePreviewFrame = frame;
         filePreviewKey = key;
-        el.appendChild(iframe);
         return;
       }
 

@@ -27,6 +27,7 @@
               <button type="button" class="btn" id="btn-md">Add markdown</button>
               <button type="button" class="btn" id="btn-html-file">Add HTML file</button>
               <button type="button" class="btn" id="btn-react-file">Add React file</button>
+              <button type="button" class="btn" id="btn-slow-file">Add slow file</button>
               <button type="button" class="btn" id="btn-comp">Add component</button>
               <button type="button" class="btn" id="btn-unknown">Add unknown</button>
               <button type="button" class="btn" id="btn-clear">Clear</button>
@@ -71,6 +72,15 @@
                 <button type="button" class="mode-btn" data-mode="off">Off</button>
               </div>
               <p class="hint">Add an inline chrome button that flips a completed file between its rendered preview and raw source (<code>inlineChrome.showViewToggle</code>). The button only appears when a rendered preview exists, so it stays hidden for source-only or plain markdown artifacts.</p>
+            </div>
+            <div class="section">
+              <label>Preview loading</label>
+              <div class="mode-group" id="artifact-preview-loading">
+                <button type="button" class="mode-btn active" data-mode="on">On</button>
+                <button type="button" class="mode-btn" data-mode="custom">Custom</button>
+                <button type="button" class="mode-btn" data-mode="off">Off</button>
+              </div>
+              <p class="hint">Show a loading state over a slow file preview (<code>filePreview.loading</code>). On keeps the default spinner, Custom swaps in your own indicator via <code>loading.renderIndicator</code>, and Off disables the overlay. It appears only when the preview takes a moment to become ready, so fast artifacts never flash it. Try it with the React file artifact, which pulls React and Babel from a CDN inside the sandbox.</p>
             </div>
             <div class="section">
               <label>Body height</label>
@@ -242,6 +252,10 @@
                 },
                 <span class="prop">inlineChrome</span>: {
                   <span class="prop">showViewToggle</span>: <span class="keyword">true</span>, <span class="comment">// rendered/source toggle button, only when a preview exists</span>
+                },
+                <span class="prop">filePreview</span>: {
+                  <span class="prop">loading</span>: <span class="keyword">true</span>, <span class="comment">// true | false | { label, renderIndicator }, appears only when loading takes a moment</span>
+                  <span class="comment">// loading: { renderIndicator: (ctx) => myEl }, // full custom indicator, null falls back to default</span>
                 },
               },
             },

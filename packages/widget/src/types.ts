@@ -915,6 +915,37 @@ export type AgentWidgetArtifactsFeature = {
      * the opaque origin is what isolates the preview. Embedder-trusted config.
      */
     iframeSandbox?: string;
+    /**
+     * Loading treatment for the preview iframe. Default on.
+     *
+     * A sandboxed `iframe srcdoc` (opaque origin, `allow-scripts` only) paints
+     * blank until its content renders — seconds for artifacts that pull CDN
+     * scripts (React/Babel). The default shows a themed "Loading preview…"
+     * overlay over the iframe, dismissed the instant the content signals it has
+     * painted (an injected `postMessage` reporter) or a hard timeout elapses.
+     *
+     * `false` disables the overlay and the injected ready signal entirely (the
+     * srcdoc becomes the raw file source, the prior behavior). An object tunes
+     * the timing; omitted / `true` uses all defaults.
+     */
+    loading?:
+      | boolean
+      | {
+          /** Show the overlay only if the preview is not ready after this many ms. Default 200. */
+          delayMs?: number;
+          /** Once shown, keep the overlay visible at least this long (anti-flicker). Default 300. */
+          minVisibleMs?: number;
+          /** Give up waiting and reveal the iframe regardless after this many ms. Default 8000. */
+          timeoutMs?: number;
+          /**
+           * Append the `postMessage` ready reporter to the srcdoc so the overlay
+           * dismisses on first paint rather than the iframe `load` event (which
+           * fires before post-DOMContentLoaded rendering like Babel compilation).
+           * Default true. When false, the overlay dismisses on `load` + a double
+           * `requestAnimationFrame`, or the timeout.
+           */
+          injectReadySignal?: boolean;
+        };
   };
   /**
    * Custom action buttons for the artifact pane toolbar, rendered between the

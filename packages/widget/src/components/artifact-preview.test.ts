@@ -32,6 +32,14 @@ const wireFor = (raw: string, lang: string): string =>
 const makeConfig = (filePreview?: {
   enabled?: boolean;
   iframeSandbox?: string;
+  loading?:
+    | boolean
+    | {
+        delayMs?: number;
+        minVisibleMs?: number;
+        timeoutMs?: number;
+        injectReadySignal?: boolean;
+      };
 }): AgentWidgetConfig =>
   ({
     sanitize: false,
@@ -90,11 +98,18 @@ describe("artifact-preview markdown body", () => {
 
 describe("artifact-preview file body", () => {
   it("renders a sandboxed iframe (allow-scripts, no allow-same-origin) with srcdoc = raw source", () => {
-    const handle = renderArtifactPreviewBody(fileRecord(), { config: makeConfig() });
+    // loading:false → no injected reporter, so srcdoc is exactly the raw source.
+    const handle = renderArtifactPreviewBody(fileRecord(), {
+      config: makeConfig({ loading: false }),
+    });
     const iframe = handle.el.querySelector(
       "iframe.persona-artifact-iframe"
     ) as HTMLIFrameElement;
     expect(iframe).toBeTruthy();
+    // The iframe is wrapped in a positioned frame that hosts the loading overlay.
+    expect(iframe.parentElement?.classList.contains("persona-artifact-frame")).toBe(
+      true
+    );
     expect(iframe.getAttribute("sandbox")).toBe("allow-scripts");
     expect(iframe.getAttribute("sandbox")).not.toContain("allow-same-origin");
     expect(iframe.getAttribute("data-artifact-id")).toBe("a1");
@@ -140,7 +155,8 @@ describe("artifact-preview status transitions", () => {
     expect(handle.el.querySelector("pre")).toBeNull();
     const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
     expect(iframe).toBeTruthy();
-    expect(iframe.srcdoc).toBe(HTML_RAW);
+    // Default loading appends the ready reporter, so the raw source is the prefix.
+    expect(iframe.srcdoc.startsWith(HTML_RAW)).toBe(true);
   });
 });
 
@@ -295,6 +311,245 @@ describe("runArtifactBodyTransition", () => {
     const swap = vi.fn();
     runArtifactBodyTransition(document.createElement("div"), "none", "a1", swap);
     expect(swap).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("artifact-preview loading overlay", () => {
+  const DOCTYPE_SRC = "<!doctype html>\n<h1>hi</h1>\n";
+  const doctypeFile = (o: Partial<PersonaArtifactRecord> = {}) =>
+    fileRecord({ markdown: wireFor(DOCTYPE_SRC, "html"), ...o });
+  const frameOf = (h: { el: HTMLElement }) =>
+    h.el.querySelector(".persona-artifact-frame") as HTMLElement;
+  const overlayOf = (h: { el: HTMLElement }) =>
+    frameOf(h).querySelector(".persona-artifact-frame-loading");
+  const tokenFromSrcdoc = (srcdoc: string): string => {
+    const m = srcdoc.match(/var t=("(?:[^"\\]|\\.)*")/);
+    return m ? (JSON.parse(m[1]) as string) : "";
+  };
+
+  it("appends the ready reporter by default, keeping the doctype first", () => {
+    const handle = renderArtifactPreviewBody(doctypeFile(), { config: makeConfig() });
+    const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
+    expect(iframe.srcdoc.startsWith("<!doctype html>")).toBe(true);
+    expect(iframe.srcdoc).toContain("artifact-preview-ready");
+    // APPENDED, never prepended: the reporter follows the document body.
+    expect(iframe.srcdoc.indexOf("artifact-preview-ready")).toBeGreaterThan(
+      iframe.srcdoc.indexOf("<h1>")
+    );
+  });
+
+  it("omits the reporter entirely for loading:false (raw srcdoc, no overlay)", () => {
+    const handle = renderArtifactPreviewBody(doctypeFile(), {
+      config: makeConfig({ loading: false }),
+    });
+    const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
+    expect(iframe.srcdoc).toBe(DOCTYPE_SRC);
+    expect(iframe.srcdoc).not.toContain("artifact-preview-ready");
+  });
+
+  it("omits the reporter for injectReadySignal:false but still overlays", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({ loading: { injectReadySignal: false, delayMs: 100 } }),
+      });
+      const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
+      expect(iframe.srcdoc).toBe(DOCTYPE_SRC);
+      expect(overlayOf(handle)).toBeNull();
+      vi.advanceTimersByTime(100);
+      expect(overlayOf(handle)).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows the overlay only after delayMs, not before", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({ loading: { delayMs: 200 } }),
+      });
+      expect(overlayOf(handle)).toBeNull();
+      vi.advanceTimersByTime(199);
+      expect(overlayOf(handle)).toBeNull();
+      vi.advanceTimersByTime(1);
+      const overlay = overlayOf(handle);
+      expect(overlay).toBeTruthy();
+      // The shimmer animation wraps each char in a span (and uses a non-breaking
+      // space), so normalize whitespace before matching the label.
+      expect(overlay!.textContent!.replace(/\s+/g, " ")).toContain(
+        "Loading preview"
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("dismisses on a matched postMessage (token + source window)", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({ loading: { delayMs: 10, minVisibleMs: 0 } }),
+      });
+      const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
+      const fakeWin = {} as Window;
+      Object.defineProperty(iframe, "contentWindow", {
+        configurable: true,
+        value: fakeWin,
+      });
+      vi.advanceTimersByTime(10);
+      expect(overlayOf(handle)).toBeTruthy();
+
+      const token = tokenFromSrcdoc(iframe.srcdoc);
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: fakeWin,
+          data: { persona: "artifact-preview-ready", token },
+        })
+      );
+      // minVisible 0 → fade immediately; overlay removed after the fade window.
+      vi.advanceTimersByTime(300);
+      expect(overlayOf(handle)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ignores a postMessage with the wrong token", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({ loading: { delayMs: 10, timeoutMs: 100000 } }),
+      });
+      const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
+      const fakeWin = {} as Window;
+      Object.defineProperty(iframe, "contentWindow", {
+        configurable: true,
+        value: fakeWin,
+      });
+      vi.advanceTimersByTime(10);
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: fakeWin,
+          data: { persona: "artifact-preview-ready", token: "not-the-token" },
+        })
+      );
+      vi.advanceTimersByTime(1000);
+      expect(overlayOf(handle)).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ignores a matched token from the wrong source window", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({ loading: { delayMs: 10, timeoutMs: 100000 } }),
+      });
+      const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
+      Object.defineProperty(iframe, "contentWindow", {
+        configurable: true,
+        value: {} as Window,
+      });
+      vi.advanceTimersByTime(10);
+      const token = tokenFromSrcdoc(iframe.srcdoc);
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: {} as Window, // different object identity
+          data: { persona: "artifact-preview-ready", token },
+        })
+      );
+      vi.advanceTimersByTime(1000);
+      expect(overlayOf(handle)).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reveals on timeout when no ready signal arrives", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({
+          loading: { delayMs: 10, minVisibleMs: 0, timeoutMs: 500 },
+        }),
+      });
+      vi.advanceTimersByTime(10);
+      expect(overlayOf(handle)).toBeTruthy();
+      vi.advanceTimersByTime(490); // hard timeout
+      vi.advanceTimersByTime(300); // fade window
+      expect(overlayOf(handle)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the overlay at least minVisibleMs after a fast ready", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({ loading: { delayMs: 10, minVisibleMs: 300 } }),
+      });
+      const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
+      const fakeWin = {} as Window;
+      Object.defineProperty(iframe, "contentWindow", {
+        configurable: true,
+        value: fakeWin,
+      });
+      vi.advanceTimersByTime(10);
+      const token = tokenFromSrcdoc(iframe.srcdoc);
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: fakeWin,
+          data: { persona: "artifact-preview-ready", token },
+        })
+      );
+      // Ready arrived at shownAt, so the fade waits the full minVisibleMs.
+      vi.advanceTimersByTime(299);
+      expect(overlayOf(handle)).toBeTruthy();
+      vi.advanceTimersByTime(1 + 300);
+      expect(overlayOf(handle)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not stack message listeners across idle re-renders (reuse path)", () => {
+    const addSpy = vi.spyOn(window, "addEventListener");
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig(),
+      });
+      const msgCalls = () =>
+        addSpy.mock.calls.filter((c) => c[0] === "message").length;
+      expect(msgCalls()).toBe(1);
+      handle.update(doctypeFile()); // identical id + source → reuse, no rebuild
+      expect(msgCalls()).toBe(1);
+    } finally {
+      addSpy.mockRestore();
+    }
+  });
+
+  it("tears down the listener when the iframe is replaced (view switches to source)", () => {
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    try {
+      let mode: "rendered" | "source" = "rendered";
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig(),
+        resolveViewMode: () => mode,
+      });
+      expect(handle.el.querySelector("iframe")).toBeTruthy();
+      mode = "source";
+      handle.update(doctypeFile());
+      // iframe gone → its loading machine was torn down (listener removed).
+      expect(handle.el.querySelector("iframe")).toBeNull();
+      expect(
+        removeSpy.mock.calls.some((c) => c[0] === "message")
+      ).toBe(true);
+    } finally {
+      removeSpy.mockRestore();
+    }
   });
 });
 

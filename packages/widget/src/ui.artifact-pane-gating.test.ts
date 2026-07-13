@@ -570,3 +570,67 @@ describe("inline artifact chrome delegation (full widget)", () => {
     controller.destroy();
   });
 });
+
+/**
+ * Lazy pane rendering regression (double artifact-script execution). With
+ * display:"inline" a streamed HTML file artifact used to build TWO sandboxed
+ * srcdoc iframes at once: one in the inline transcript block (correct) and one
+ * inside the hidden .persona-artifact-pane, because the pane's update()
+ * unconditionally rendered its preview body. That executed the artifact's
+ * scripts twice. The pane must render its preview lazily and skip it while the
+ * surface is hidden.
+ */
+describe("artifact pane lazy preview (no double iframe in hidden inline pane)", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    try {
+      window.localStorage.clear();
+    } catch {
+      /* jsdom edge cases */
+    }
+  });
+
+  function mountInlineFile() {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const config: AgentWidgetConfig = {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      sanitize: false,
+      features: {
+        artifacts: {
+          enabled: true,
+          allowedTypes: ["markdown", "component"],
+          display: "inline",
+          // loading:false → an iframe would be built synchronously if rendered.
+          filePreview: { loading: false },
+        },
+      },
+    };
+    const controller = createAgentExperience(mount, config);
+    return { mount, controller };
+  }
+
+  it("keeps the hidden inline pane free of a preview iframe (only the transcript renders one)", () => {
+    const { mount, controller } = mountInlineFile();
+    controller.upsertArtifact({
+      id: "cat",
+      artifactType: "markdown",
+      title: "outputs/cat.html",
+      content: "```html\n<h1>hi</h1>\n```",
+      file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" },
+    });
+
+    const pane = mount.querySelector<HTMLElement>(".persona-artifact-pane")!;
+    expect(pane.classList.contains("persona-hidden")).toBe(true);
+    // The pane surface is hidden in inline mode, so it must not have built a
+    // second sandboxed iframe next to the inline transcript preview.
+    expect(pane.querySelector("iframe")).toBeNull();
+
+    // Opening the pane (explicit reveal) renders the preview from recorded state.
+    controller.showArtifacts();
+    expect(pane.classList.contains("persona-hidden")).toBe(false);
+    expect(pane.querySelector("iframe.persona-artifact-iframe")).not.toBeNull();
+    controller.destroy();
+  });
+});

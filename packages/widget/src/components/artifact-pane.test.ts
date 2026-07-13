@@ -62,6 +62,14 @@ const wireFor = (raw: string, lang: string): string =>
 const makeConfig = (filePreview?: {
   enabled?: boolean;
   iframeSandbox?: string;
+  loading?:
+    | boolean
+    | {
+        delayMs?: number;
+        minVisibleMs?: number;
+        timeoutMs?: number;
+        injectReadySignal?: boolean;
+      };
 }): AgentWidgetConfig =>
   ({
     sanitize: false,
@@ -85,13 +93,18 @@ const contentEl = (pane: ReturnType<typeof createArtifactPane>): HTMLElement =>
 
 describe("artifact-pane file preview", () => {
   it("renders a sandboxed iframe (allow-scripts, no allow-same-origin) with srcdoc = raw source", () => {
-    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    // loading:false → no injected reporter, so srcdoc is exactly the raw source.
+    const pane = createArtifactPane(makeConfig({ loading: false }), { onSelect: () => {} });
     pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
 
     const iframe = contentEl(pane).querySelector(
       "iframe.persona-artifact-iframe"
     ) as HTMLIFrameElement;
     expect(iframe).toBeTruthy();
+    // Pane path also wraps the iframe in the positioned frame.
+    expect(iframe.parentElement?.classList.contains("persona-artifact-frame")).toBe(
+      true
+    );
     expect(iframe.getAttribute("sandbox")).toBe("allow-scripts");
     expect(iframe.getAttribute("sandbox")).not.toContain("allow-same-origin");
     // srcdoc is the raw, unfenced source assigned as a property.
