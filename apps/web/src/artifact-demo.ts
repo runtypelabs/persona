@@ -116,6 +116,26 @@ const readExpandToggle = (): boolean => {
 };
 
 // Same DOM-is-the-source-of-truth pattern: the active pill in
+// #artifact-resizable is read on every config build. Off (the default)
+// omits resizable from the layout block; On sends it as true.
+const readResizable = (): boolean => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-resizable .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode === "on";
+};
+
+// Same DOM-is-the-source-of-truth pattern: the active pill in
+// #artifact-pane-appearance is read on every config build. Panel (the default)
+// omits paneAppearance from the layout block; Seamless sends the flush recipe.
+const readPaneAppearance = (): "panel" | "seamless" => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-pane-appearance .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode === "seamless" ? "seamless" : "panel";
+};
+
+// Same DOM-is-the-source-of-truth pattern: the active pill in
 // #artifact-custom-actions is read on every config build. Off (the default)
 // omits the actions entirely; On spreads in the sample toolbar/card/inline actions.
 const readCustomActions = (): boolean => {
@@ -393,6 +413,14 @@ const buildArtifactsFeature = () => {
       showCopyButton: true,
       paneBackground: "#ffffff",
       ...(readExpandToggle() ? { showExpandToggle: true } : {}),
+      ...(readResizable() ? { resizable: true } : {}),
+      ...(readPaneAppearance() === "seamless"
+        ? {
+            paneAppearance: "seamless" as const,
+            splitGap: "0",
+            paneShadow: "none",
+          }
+        : {}),
     },
     ...(readCustomActions() ? buildCustomActions() : {}),
     // Inline chrome On sends the object form so showViewToggle can ride along;
@@ -556,6 +584,28 @@ expandToggleGroup?.addEventListener("click", (event) => {
   const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
   if (!btn) return;
   expandToggleGroup
+    .querySelectorAll(".mode-btn")
+    .forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyControlConfig();
+});
+
+const resizableGroup = document.getElementById("artifact-resizable");
+resizableGroup?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
+  if (!btn) return;
+  resizableGroup
+    .querySelectorAll(".mode-btn")
+    .forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  applyControlConfig();
+});
+
+const paneAppearanceGroup = document.getElementById("artifact-pane-appearance");
+paneAppearanceGroup?.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
+  if (!btn) return;
+  paneAppearanceGroup
     .querySelectorAll(".mode-btn")
     .forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");

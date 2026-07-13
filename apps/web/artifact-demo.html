@@ -130,6 +130,28 @@
           </div>
 
           <div class="info-section">
+            <h3>Pane appearance</h3>
+            <p>Visual treatment for the artifact column in split mode (<code>features.artifacts.layout.paneAppearance</code>). <code>panel</code> is the bordered sidebar with gap and shadow; <code>seamless</code> is flush with chat (zero gap, no shadow).</p>
+            <div class="section">
+              <div class="mode-group" id="artifact-pane-appearance">
+                <button type="button" class="mode-btn active" data-mode="panel">Panel</button>
+                <button type="button" class="mode-btn" data-mode="seamless">Seamless</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Resizable pane</h3>
+            <p>Drag the split handle between chat and the artifact pane in desktop split mode (<code>features.artifacts.layout.resizable</code>). Hidden when the panel is narrow (drawer mode), on viewports ≤640px, or while the pane is expanded.</p>
+            <div class="section">
+              <div class="mode-group" id="artifact-resizable">
+                <button type="button" class="mode-btn active" data-mode="off">Off</button>
+                <button type="button" class="mode-btn" data-mode="on">On</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-section">
             <h3>Custom actions</h3>
             <p>Add host-defined buttons to the artifact pane toolbar, the in-chat reference card, and the inline block chrome (<code>features.artifacts.toolbarActions</code>, <code>features.artifacts.cardActions</code>, and <code>features.artifacts.inlineActions</code>). The inline "Log" action shows up in the inline chrome title bar.</p>
             <div class="section">
