@@ -453,6 +453,36 @@ export interface ArtifactInlineTokens {
   frameHeight?: string;
 }
 
+/**
+ * Syntax-highlighted artifact source view (pane + inline), rendered by
+ * `utils/code-highlight.ts`. One Light defaults ship in `widget.css`, with a
+ * One Dark override keyed off the widget's resolved color scheme (the
+ * `data-persona-color-scheme` root attribute, not the OS preference); set any
+ * of these to retheme the tokenizer palette and the line-number gutter.
+ */
+export interface CodeTokens {
+  /** Keywords, booleans, null (e.g. `const`, `true`). */
+  keywordColor?: string;
+  /** String and template literals; HTML attribute values. */
+  stringColor?: string;
+  /** Line and block comments. */
+  commentColor?: string;
+  /** Numeric literals; CSS hex colors / units. */
+  numberColor?: string;
+  /** HTML tag brackets + names; doctype. */
+  tagColor?: string;
+  /** HTML attribute names. */
+  attrColor?: string;
+  /** CSS property names; JSON object keys. */
+  propertyColor?: string;
+  /** Line-number gutter digits. */
+  lineNumberColor?: string;
+  /** Right border of the line-number gutter. */
+  gutterBorderColor?: string;
+  /** Background of the source-view code sheet (defaults to One Light/Dark editor background). */
+  background?: string;
+}
+
 /** Icon button chrome (used by createIconButton). */
 export interface IconButtonTokens {
   background?: string;
@@ -531,6 +561,8 @@ export interface ComponentTokens {
   };
   /** Collapsible widget chrome (tool/reasoning/approval bubbles). */
   collapsibleWidget?: CollapsibleWidgetTokens;
+  /** Syntax-highlighted artifact source view (tokenizer palette + gutter). */
+  code?: CodeTokens;
 }
 
 export interface PaletteExtras {

@@ -217,6 +217,21 @@ describe("artifact-pane view/source toggle", () => {
     expect(pre).toBeTruthy();
     expect(pre?.textContent).toBe(HTML_RAW);
   });
+
+  it("drops the content padding (flush class) in source view and restores it when rendered", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const content = contentEl(pane);
+    // Rendered view (iframe): padded as usual.
+    expect(content.classList.contains("persona-artifact-content-flush")).toBe(false);
+
+    toggleBtn(pane, "Source").click();
+    expect(content.classList.contains("persona-artifact-content-flush")).toBe(true);
+
+    toggleBtn(pane, "Rendered view").click();
+    expect(content.classList.contains("persona-artifact-content-flush")).toBe(false);
+  });
 });
 
 describe("artifact-pane default toolbar", () => {

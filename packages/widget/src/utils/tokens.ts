@@ -1054,6 +1054,22 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (t.frameHeight) cssVars['--persona-artifact-inline-frame-height'] = t.frameHeight;
   }
 
+  // Code (syntax-highlighted artifact source view) tokens.
+  const code = components?.code;
+  if (code) {
+    if (code.keywordColor) cssVars['--persona-code-keyword-color'] = code.keywordColor;
+    if (code.stringColor) cssVars['--persona-code-string-color'] = code.stringColor;
+    if (code.commentColor) cssVars['--persona-code-comment-color'] = code.commentColor;
+    if (code.numberColor) cssVars['--persona-code-number-color'] = code.numberColor;
+    if (code.tagColor) cssVars['--persona-code-tag-color'] = code.tagColor;
+    if (code.attrColor) cssVars['--persona-code-attr-color'] = code.attrColor;
+    if (code.propertyColor) cssVars['--persona-code-property-color'] = code.propertyColor;
+    if (code.lineNumberColor) cssVars['--persona-code-line-number-color'] = code.lineNumberColor;
+    if (code.gutterBorderColor) cssVars['--persona-code-gutter-border-color'] = code.gutterBorderColor;
+    if (code.background)
+      cssVars['--persona-code-bg'] = resolveTokenValue(theme, code.background) ?? code.background;
+  }
+
   // Interactive-state defaults. The default preset resolves container === surface,
   // which turns every hover/active rule that falls back to --persona-container
   // into a visual no-op; anchor those states one gray step down in that case.

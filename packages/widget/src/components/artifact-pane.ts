@@ -493,6 +493,14 @@ export function createArtifactPane(
       }
       preview.update(sel);
     }
+    // Source view fills the pane edge-to-edge (gutter flush left, no inset),
+    // so drop the content padding whenever the body rendered a code pre.
+    // Checked after the render rather than re-deriving the pre/markdown/iframe
+    // decision here — renderArtifactPreviewBody owns that branching.
+    content.classList.toggle(
+      "persona-artifact-content-flush",
+      Boolean(content.querySelector(".persona-code-pre"))
+    );
   };
 
   const applyLayoutVisibility = () => {

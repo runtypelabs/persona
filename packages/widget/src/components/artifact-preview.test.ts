@@ -125,6 +125,33 @@ describe("artifact-preview status transitions", () => {
   });
 });
 
+describe("artifact-preview source highlighting", () => {
+  it("renders line spans with token classes for an html file source view", () => {
+    const handle = renderArtifactPreviewBody(fileRecord(), {
+      config: makeConfig(),
+      resolveViewMode: () => "source",
+    });
+    const pre = handle.el.querySelector("pre");
+    expect(pre?.querySelector("code.persona-code")).toBeTruthy();
+    // One line span per source line (HTML_RAW ends in "\n" → 2 numbered lines).
+    const lines = handle.el.querySelectorAll(".persona-code-line");
+    expect(lines.length).toBe(2);
+    // Tokenized: at least one tag span for <h1>/<script>.
+    expect(handle.el.querySelector(".persona-code-token-tag")).toBeTruthy();
+    // Verbatim reconstruction invariant: pre text === original source.
+    expect(pre?.textContent).toBe(HTML_RAW);
+  });
+
+  it("line-numbers streaming file source too", () => {
+    const handle = renderArtifactPreviewBody(
+      fileRecord({ status: "streaming", markdown: "```html\n<h1>hi" }),
+      { config: makeConfig() }
+    );
+    expect(handle.el.querySelector(".persona-code-line")).toBeTruthy();
+    expect(handle.el.querySelector("pre")?.textContent).toBe("<h1>hi");
+  });
+});
+
 describe("artifact-preview component body", () => {
   const componentRecord = (
     overrides: Partial<PersonaArtifactRecord> = {}

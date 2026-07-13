@@ -255,9 +255,12 @@ const buildArtifactsFeature = () => {
         }
       : {}),
     // Copy is always on in the demo so the default pane toolbar shows it;
-    // the expand toggle stays behind its control pill.
+    // the expand toggle stays behind its control pill. White pane surface so
+    // the source view reads like a document sheet against this page's warm
+    // cream background.
     layout: {
       showCopyButton: true,
+      paneBackground: "#ffffff",
       ...(readExpandToggle() ? { showExpandToggle: true } : {}),
     },
     ...(readCustomActions() ? buildCustomActions() : {}),

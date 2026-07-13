@@ -337,4 +337,20 @@ describe('theme utils', () => {
       '0 1px 2px rgba(255,0,0,0.5)'
     );
   });
+
+  it('stamps the resolved color scheme on the root so scheme-scoped CSS (syntax palette) follows the widget, not the OS', () => {
+    const el = document.createElement('div');
+    applyThemeVariables(el, { colorScheme: 'light' });
+    expect(el.getAttribute('data-persona-color-scheme')).toBe('light');
+    applyThemeVariables(el, { colorScheme: 'dark' });
+    expect(el.getAttribute('data-persona-color-scheme')).toBe('dark');
+  });
+
+  it('maps components.code.background to --persona-code-bg', () => {
+    const theme = createTheme({
+      components: { code: { background: '#fafafa' } },
+    });
+    const cssVars = themeToCssVariables(theme);
+    expect(cssVars['--persona-code-bg']).toBe('#fafafa');
+  });
 });

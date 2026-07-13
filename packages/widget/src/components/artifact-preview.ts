@@ -5,6 +5,7 @@ import type {
   PersonaArtifactRecord,
 } from "../types";
 import { extractFileSource, fileKindOf } from "../utils/artifact-file";
+import { highlightCode } from "../utils/code-highlight";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors";
 import { resolveSanitizer } from "../utils/sanitize";
 import {
@@ -139,9 +140,17 @@ export function renderArtifactPreviewBody(
     filePreviewKey = null;
   };
 
-  const renderPre = (text: string) => {
-    const pre = createElement("pre", PRE_CLASS);
-    pre.textContent = text;
+  const renderPre = (
+    text: string,
+    opts?: { language?: string; path?: string }
+  ) => {
+    const pre = createElement("pre", PRE_CLASS + " persona-code-pre");
+    const code = createElement("code", "persona-code");
+    // Syntax highlighting + line-number gutter. The built fragment's
+    // textContent equals `text` verbatim; the DOM is span/#text only (no
+    // innerHTML) so it stays safe regardless of `sanitize` config.
+    code.appendChild(highlightCode(text, opts?.language, opts?.path));
+    pre.appendChild(code);
     el.appendChild(pre);
   };
 
@@ -206,8 +215,9 @@ export function renderArtifactPreviewBody(
         return;
       }
 
-      // Streaming, source view, or non-previewable kind → raw source in a <pre>.
-      renderPre(source);
+      // Streaming, source view, or non-previewable kind → raw source in a <pre>,
+      // syntax-highlighted by the file's language / path.
+      renderPre(source, { language: fileMeta.language, path: fileMeta.path });
       return;
     }
 
