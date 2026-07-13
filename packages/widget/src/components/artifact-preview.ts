@@ -9,6 +9,7 @@ import { extractFileSource, fileKindOf, fileTypeLabel } from "../utils/artifact-
 import { applyArtifactLoadingStatus } from "../utils/artifact-loading-status";
 import { highlightCode } from "../utils/code-highlight";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors";
+import { getMarkdownParsersSync, loadMarkdownParsers } from "../markdown-parsers-loader";
 import { resolveSanitizer } from "../utils/sanitize";
 import {
   componentRegistry,
@@ -541,9 +542,30 @@ export function renderArtifactPreviewBody(
 
   const md = config.markdown ? createMarkdownProcessorFromConfig(config.markdown) : null;
   const sanitize = resolveSanitizer(config.sanitize);
+  // Degraded path (IIFE/CDN build before the `markdown-parsers.js` chunk
+  // resolves): the markdown processor falls back to escapeHtml, and the default
+  // sanitizer's own fallback is escapeHtml too, so sanitizing that output would
+  // escape a SECOND time and display literal entities (mirrors
+  // `buildPostprocessor` in ui.ts). Chat messages self-heal via the
+  // parser-ready re-render at the end of createAgentExperience, but this body
+  // only re-renders on update() — so an artifact upserted right after init
+  // would stay escaped until the next update. When a render takes the
+  // fallback, schedule exactly one re-render for when the chunk lands.
+  let current = record;
+  let parserRerenderScheduled = false;
   const toHtml = (text: string) => {
+    const parsersReady = getMarkdownParsersSync() !== null;
+    if (md && !parsersReady && !parserRerenderScheduled) {
+      parserRerenderScheduled = true;
+      loadMarkdownParsers()
+        .then(() => render(current))
+        .catch(() => {
+          /* chunk failed to load (e.g. ad blocker): keep the escaped fallback */
+        });
+    }
     const raw = md ? md(text) : escapeHtml(text);
-    return sanitize ? sanitize(raw) : raw;
+    // escapeHtml output is already inert — only real markdown HTML is sanitized.
+    return md && parsersReady && sanitize ? sanitize(raw) : raw;
   };
 
   const el = createElement("div", "persona-artifact-preview-body");
@@ -713,6 +735,7 @@ export function renderArtifactPreviewBody(
   };
 
   const render = (rec: PersonaArtifactRecord) => {
+    current = rec;
     const viewMode = ctx.resolveViewMode?.(rec) ?? layout?.viewMode ?? "rendered";
     const fileMeta = rec.artifactType === "markdown" ? rec.file : undefined;
     const isStreaming = rec.status !== "complete";

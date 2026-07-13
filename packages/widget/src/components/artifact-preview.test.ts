@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   renderArtifactPreviewBody,
   runArtifactBodyTransition,
   type ArtifactBodyLayout,
 } from "./artifact-preview";
+import * as parsersLoader from "../markdown-parsers-loader";
 import type { AgentWidgetConfig, PersonaArtifactRecord } from "../types";
 import type { ComponentRenderer } from "./registry";
 
@@ -99,6 +100,82 @@ describe("artifact-preview markdown body", () => {
     expect(handle.el.querySelector(".persona-markdown-bubble")).toBeNull();
     const pre = handle.el.querySelector("pre");
     expect(pre?.textContent).toBe("## Raw");
+  });
+});
+
+/**
+ * Regression tests for the parser-ready race on the IIFE/CDN build, where
+ * `marked` + `DOMPurify` load lazily. An artifact upserted right after
+ * `initAgentWidget()` used to render as escaped plain text (literal
+ * `# Welcome`, `**bold**`) and stayed that way until the next update() forced
+ * a re-render — chat messages self-heal via the parser-ready re-render in
+ * `createAgentExperience`, but this body only re-renders on update(). Worse,
+ * the default sanitizer's own degraded fallback is `escapeHtml`, so the old
+ * blanket `sanitize(md(text))` escaped twice and displayed literal entities
+ * (`&quot;`).
+ *
+ * `vitest.setup.ts` eager-provides parsers, so `getMarkdownParsersSync()` is
+ * non-null by default -> that's the "loaded" path. The degraded path is
+ * simulated by spying on the loader module (same approach as
+ * ui.postprocess.test.ts).
+ */
+describe("artifact-preview parser-ready self-heal (parsers not loaded at first render)", () => {
+  const RAW_MD = '# Welcome\n\n**bold** "quoted"';
+  const mdConfig = { markdown: {} } as AgentWidgetConfig;
+  const mdArtifact = () =>
+    markdownRecord({ markdown: RAW_MD, status: "complete" });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders the escaped fallback exactly once, then re-renders as markdown when the chunk lands", async () => {
+    let resolveLoad!: (mod: parsersLoader.MarkdownParsersModule) => void;
+    const loadPromise = new Promise<parsersLoader.MarkdownParsersModule>((resolve) => {
+      resolveLoad = resolve;
+    });
+    const syncSpy = vi
+      .spyOn(parsersLoader, "getMarkdownParsersSync")
+      .mockReturnValue(null);
+    const loadSpy = vi
+      .spyOn(parsersLoader, "loadMarkdownParsers")
+      .mockReturnValue(loadPromise);
+
+    const handle = renderArtifactPreviewBody(mdArtifact(), { config: mdConfig });
+
+    // Degraded first paint: escaped plain text, no markdown elements.
+    expect(handle.el.querySelector("h1")).toBeNull();
+    expect(handle.el.textContent).toContain("# Welcome");
+    expect(handle.el.textContent).toContain("**bold**");
+    // Escaped exactly once: a double escape would leave a literal `&quot;`
+    // in the visible text instead of the quote character.
+    expect(handle.el.textContent).toContain('"quoted"');
+    expect(handle.el.textContent).not.toContain("&quot;");
+
+    // A second render while the chunk is still loading must not re-schedule.
+    handle.update(mdArtifact());
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+
+    // Chunk lands: the real getMarkdownParsersSync now returns the parsers
+    // eager-provided by vitest.setup.ts.
+    syncSpy.mockRestore();
+    resolveLoad(parsersLoader.getMarkdownParsersSync()!);
+    await loadPromise;
+    await Promise.resolve(); // let the scheduled .then(render) run
+
+    // Self-healed: real markdown without any user interaction.
+    expect(handle.el.querySelector("h1")?.textContent).toBe("Welcome");
+    expect(handle.el.querySelector("strong")?.textContent).toBe("bold");
+    expect(handle.el.textContent).not.toContain("**bold**");
+  });
+
+  it("does not schedule a re-render when parsers are already loaded", () => {
+    const loadSpy = vi.spyOn(parsersLoader, "loadMarkdownParsers");
+
+    const handle = renderArtifactPreviewBody(mdArtifact(), { config: mdConfig });
+
+    expect(handle.el.querySelector("h1")?.textContent).toBe("Welcome");
+    expect(loadSpy).not.toHaveBeenCalled();
   });
 });
 

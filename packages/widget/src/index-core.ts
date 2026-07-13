@@ -191,6 +191,12 @@ export {
   createDirectivePostprocessor
 } from "./postprocessors";
 export type { MarkdownProcessorOptions } from "./postprocessors";
+// Escape hatch for the IIFE/CDN build's lazy markdown chunk: hosts that inject
+// content immediately after init can `await AgentWidget.loadMarkdownParsers()`
+// to guarantee real markdown rendering on first paint. Resolves instantly on
+// the npm build (parsers are bundled eagerly).
+export { loadMarkdownParsers } from "./markdown-parsers-loader";
+export type { MarkdownParsersModule } from "./markdown-parsers-loader";
 export {
   createDefaultSanitizer,
   resolveSanitizer
