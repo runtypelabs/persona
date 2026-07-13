@@ -945,6 +945,16 @@ export type AgentWidgetArtifactsFeature = {
         showCopy?: boolean;
         /** Show the built-in Expand button (opens the pane for this artifact). Default true. */
         showExpand?: boolean;
+        /**
+         * Show the built-in rendered/source view toggle (complete artifacts
+         * only). Default true. The toggle is availability-gated: it appears only
+         * for file-backed markdown artifacts that have a rendered alternative to
+         * their source (previewable HTML/SVG, or markdown-kind files), and never
+         * when `inlineBody.viewMode: "source"` forces a source-only body. Plain
+         * markdown and component artifacts don't get it (the pane toggle covers
+         * those).
+         */
+        showViewToggle?: boolean;
       };
   /**
    * Custom action buttons for the inline chrome toolbar, rendered before the
@@ -953,6 +963,74 @@ export type AgentWidgetArtifactsFeature = {
    * delegated, so they survive re-renders and page refresh.
    */
   inlineActions?: PersonaArtifactCustomAction[];
+  /**
+   * Body layout for inline artifact blocks (`display: "inline"`). Controls how
+   * the block reserves height and behaves while a file/document artifact
+   * streams, so the streaming source no longer grows an unbounded `<pre>` and
+   * then snaps to the completed preview. Affects only the inline block; the
+   * artifact pane is unchanged.
+   *
+   * Defaults (a behavior change from prior versions, which grew with content
+   * during streaming): a fixed 320px streaming source window with tail-follow,
+   * a top edge fade, and an animated streaming→complete swap. Pass
+   * `height: "auto"` to restore the old grow-with-content streaming behavior.
+   */
+  inlineBody?: {
+    /** What the body shows while streaming. Default `"source"`. */
+    streamingView?: "source" | "status";
+    /**
+     * How the completed body renders. `"rendered"` (default) keeps the current
+     * behavior: file previews in a sandboxed iframe, markdown through the
+     * markdown pipeline. `"source"` always shows the raw syntax-highlighted
+     * source instead — for hosts where the artifact is input to the host system
+     * (a code editor, a query runner) rather than something to preview. Unlike
+     * `filePreview.enabled: false`, this also covers markdown-kind files and
+     * plain markdown artifacts. Component artifacts always render through the
+     * registry.
+     */
+    viewMode?: "rendered" | "source";
+    /**
+     * Body height per state. A number reserves that many px for the whole body
+     * region (border-box, padding included) with internal scroll — the
+     * zero-layout-shift path; `"auto"` means content-sized. A
+     * scalar applies to both the streaming and complete states; the object form
+     * sets them independently. Default `320` for both states.
+     *
+     * Note: with `"auto"` on the complete state, non-iframe bodies (rendered
+     * markdown, source view, component) are content-sized, but a file-preview
+     * iframe cannot be content-sized without postMessage plumbing, so it falls
+     * back to the CSS-var default (`--persona-artifact-inline-frame-height`,
+     * 320px).
+     *
+     * Numeric heights are applied via the CSS var
+     * `--persona-artifact-inline-body-height` on the block root. The older
+     * `--persona-artifact-inline-frame-height` var still overrides the iframe
+     * height when this one is unset, so themes pinned to it keep working.
+     */
+    height?:
+      | number
+      | "auto"
+      | { streaming?: number | "auto"; complete?: number | "auto" };
+    /**
+     * Tail-follow the newest streamed lines in a fixed-height source window: if
+     * the viewport is already at the bottom, keep it pinned as content arrives;
+     * if the reader scrolled up, don't fight them. Only meaningful for a numeric
+     * streaming height. Default `true`.
+     */
+    followOutput?: boolean;
+    /**
+     * Edge fade masks on the fixed-height streaming window (a top fade signals
+     * clipped content above). `true` = `{ top: true, bottom: true }`, `false` =
+     * none. Default `{ top: true }`.
+     */
+    fadeMask?: boolean | { top?: boolean; bottom?: boolean };
+    /**
+     * Animate the streaming→complete body swap. `"auto"` uses the View
+     * Transitions API when supported and `prefers-reduced-motion` is off;
+     * `"none"` swaps instantly. Default `"auto"`.
+     */
+    transition?: "auto" | "none";
+  };
   /**
    * Called when an artifact action is triggered (open, download, expand).
    * Return `true` to intercept: the widget then does not change state.

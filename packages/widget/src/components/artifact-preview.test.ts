@@ -1,9 +1,28 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
-import { renderArtifactPreviewBody } from "./artifact-preview";
+import { describe, expect, it, vi } from "vitest";
+import {
+  renderArtifactPreviewBody,
+  runArtifactBodyTransition,
+  type ArtifactBodyLayout,
+} from "./artifact-preview";
 import type { AgentWidgetConfig, PersonaArtifactRecord } from "../types";
 import type { ComponentRenderer } from "./registry";
+
+const layout = (o: Partial<ArtifactBodyLayout> = {}): ArtifactBodyLayout => ({
+  streamingView: "source",
+  viewMode: "rendered",
+  streamingHeight: 320,
+  completeHeight: 320,
+  followOutput: true,
+  fadeTop: true,
+  fadeBottom: false,
+  transition: "auto",
+  ...o,
+});
+
+const nextFrame = () =>
+  new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 const ZWSP = "\u200b";
 const HTML_RAW = "<h1>hi</h1>\n<script>window.x = 1;</script>\n";
@@ -149,6 +168,133 @@ describe("artifact-preview source highlighting", () => {
     );
     expect(handle.el.querySelector(".persona-code-line")).toBeTruthy();
     expect(handle.el.querySelector("pre")?.textContent).toBe("<h1>hi");
+  });
+});
+
+describe("artifact-preview inline bodyLayout", () => {
+  const streamingFile = (markdown = "```html\n<h1>hi") =>
+    fileRecord({ status: "streaming", markdown });
+
+  it("reserves a fixed-height scroll window for streaming source (numeric height)", () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout(),
+    });
+    const win = handle.el.querySelector(".persona-artifact-source-window");
+    expect(win).toBeTruthy();
+    expect(win!.classList.contains("persona-artifact-source-window--fixed")).toBe(
+      true
+    );
+    expect(win!.querySelector("pre")).toBeTruthy();
+  });
+
+  it("grows (no fixed window) for streamingHeight 'auto'", () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout({ streamingHeight: "auto" }),
+    });
+    const win = handle.el.querySelector(".persona-artifact-source-window");
+    expect(win).toBeTruthy();
+    expect(win!.classList.contains("persona-artifact-source-window--fixed")).toBe(
+      false
+    );
+  });
+
+  it("pane path (no bodyLayout) renders a bare pre with no scroll window", () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+    });
+    expect(handle.el.querySelector(".persona-artifact-source-window")).toBeNull();
+    expect(handle.el.firstElementChild?.tagName.toLowerCase()).toBe("pre");
+  });
+
+  it("keeps the same <pre>/window across streaming deltas (in-place update)", () => {
+    // Streaming source recovery drops the still-open last line (assumed fence),
+    // so a trailing sentinel line keeps the newest visible line stable.
+    const handle = renderArtifactPreviewBody(streamingFile("```html\n<h1>hi\nX"), {
+      config: makeConfig(),
+      bodyLayout: layout(),
+    });
+    const pre = handle.el.querySelector("pre");
+    const win = handle.el.querySelector(".persona-artifact-source-window");
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\nX"));
+    expect(handle.el.querySelector("pre")).toBe(pre);
+    expect(handle.el.querySelector(".persona-artifact-source-window")).toBe(win);
+    expect(handle.el.querySelector("pre")?.textContent).toContain("more");
+  });
+
+  // Stub live scroll metrics jsdom doesn't compute, with a settable scrollTop.
+  const stubScroll = (win: HTMLElement, top: number) => {
+    let cur = top;
+    Object.defineProperty(win, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(win, "clientHeight", { configurable: true, value: 320 });
+    Object.defineProperty(win, "scrollTop", {
+      configurable: true,
+      get: () => cur,
+      set: (v: number) => {
+        cur = v;
+      },
+    });
+  };
+
+  it("tail-follows when the viewport is at the bottom", async () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout(),
+    });
+    // Drain the construction-time follow before stubbing real metrics.
+    await nextFrame();
+    const win = handle.el.querySelector(
+      ".persona-artifact-source-window"
+    ) as HTMLElement;
+    stubScroll(win, 680); // dist = 1000 - 320 - 680 = 0 → at the bottom.
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\nX"));
+    await nextFrame();
+    expect(win.scrollTop).toBe(1000);
+  });
+
+  it("does not fight a reader who scrolled up", async () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout(),
+    });
+    await nextFrame();
+    const win = handle.el.querySelector(
+      ".persona-artifact-source-window"
+    ) as HTMLElement;
+    stubScroll(win, 100); // dist = 1000 - 320 - 100 = 580 → scrolled up.
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\nX"));
+    await nextFrame();
+    expect(win.scrollTop).toBe(100);
+  });
+
+  it("renders a status placeholder while streaming and the real body on complete", () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout({ streamingView: "status" }),
+    });
+    const status = handle.el.querySelector(".persona-artifact-status-view");
+    expect(status).toBeTruthy();
+    expect(status!.textContent).toContain("Generating");
+    expect(handle.el.querySelector(".persona-artifact-source-window")).toBeNull();
+
+    handle.update(fileRecord({ status: "complete" }));
+    expect(handle.el.querySelector(".persona-artifact-status-view")).toBeNull();
+    expect(handle.el.querySelector("iframe")).toBeTruthy();
+  });
+});
+
+describe("runArtifactBodyTransition", () => {
+  it("falls back to an instant swap when startViewTransition is absent", () => {
+    const swap = vi.fn();
+    runArtifactBodyTransition(document.createElement("div"), "auto", "a/1", swap);
+    expect(swap).toHaveBeenCalledTimes(1);
+  });
+
+  it("swaps instantly for transition 'none'", () => {
+    const swap = vi.fn();
+    runArtifactBodyTransition(document.createElement("div"), "none", "a1", swap);
+    expect(swap).toHaveBeenCalledTimes(1);
   });
 });
 

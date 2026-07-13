@@ -135,6 +135,89 @@ const readInlineChrome = (): boolean => {
   return activeBtn?.dataset.mode !== "off";
 };
 
+// ── Streaming body controls (inline display mode only) ───────────────────
+// Same DOM-is-the-source-of-truth pattern as the other rail controls: the
+// active pill in each #artifact-* group is read on every config build, so the
+// selection survives mount-mode re-mounts and applies via handle.update().
+// Together they populate features.artifacts.inlineBody, which only affects
+// display: "inline".
+const readStreamingView = (): "source" | "status" => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-streaming-view .mode-btn.active",
+  );
+  return (activeBtn?.dataset.mode ?? "source") as "source" | "status";
+};
+
+// 320 (default) reserves a fixed-height scroll window; "auto" grows with
+// content; "split" pins a fixed streaming height then lets the completed
+// iframe grow (streaming 320 / complete auto).
+const readBodyHeight = ():
+  | number
+  | "auto"
+  | { streaming: number; complete: "auto" } => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-body-height .mode-btn.active",
+  );
+  const mode = activeBtn?.dataset.mode ?? "320";
+  if (mode === "auto") return "auto";
+  if (mode === "split") return { streaming: 320, complete: "auto" };
+  return 320;
+};
+
+// top (default) → { top: true }; both → true (top and bottom); off → false.
+const readFadeMask = (): boolean | { top: boolean } => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-fade-mask .mode-btn.active",
+  );
+  const mode = activeBtn?.dataset.mode ?? "top";
+  if (mode === "both") return true;
+  if (mode === "off") return false;
+  return { top: true };
+};
+
+const readFollowOutput = (): boolean => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-follow-output .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode !== "off";
+};
+
+const readBodyTransition = (): "auto" | "none" => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-body-transition .mode-btn.active",
+  );
+  return (activeBtn?.dataset.mode ?? "auto") as "auto" | "none";
+};
+
+// rendered (default) previews files in an iframe; source always shows raw
+// highlighted source, the no-preview mode for code editor style hosts.
+const readViewMode = (): "rendered" | "source" => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-view-mode .mode-btn.active",
+  );
+  return (activeBtn?.dataset.mode ?? "rendered") as "rendered" | "source";
+};
+
+// On (default) adds the inline chrome rendered/source toggle button via
+// inlineChrome.showViewToggle; Off omits it. The widget auto-hides the button
+// where only one view exists (streaming, plain markdown, source-only), so it
+// only surfaces when a rendered preview is available.
+const readViewToggle = (): boolean => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-view-toggle .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode !== "off";
+};
+
+const buildInlineBody = () => ({
+  streamingView: readStreamingView(),
+  viewMode: readViewMode(),
+  height: readBodyHeight(),
+  fadeMask: readFadeMask(),
+  followOutput: readFollowOutput(),
+  transition: readBodyTransition(),
+});
+
 // ── Custom artifact actions (toolbar + card) ─────────────────────────────
 // Demos features.artifacts.toolbarActions and .cardActions: host-defined
 // buttons that receive the artifact context on click. Here they mimic a
@@ -264,7 +347,18 @@ const buildArtifactsFeature = () => {
       ...(readExpandToggle() ? { showExpandToggle: true } : {}),
     },
     ...(readCustomActions() ? buildCustomActions() : {}),
-    ...(readInlineChrome() ? {} : { inlineChrome: false }),
+    // Inline chrome On sends the object form so showViewToggle can ride along;
+    // showCopy/showExpand default to true when unspecified in the object form.
+    // Off sends inlineChrome: false for a bare inline body. showViewToggle is a
+    // recent key: if the widget types don't yet carry it (concurrent work), TS
+    // treats it as an extra property, which stays assignable to the feature type.
+    ...(readInlineChrome()
+      ? { inlineChrome: { showViewToggle: readViewToggle() } }
+      : { inlineChrome: false }),
+    // Only affects display: "inline". If the widget package types don't yet
+    // carry the inlineBody key (concurrent work), TS treats it as an extra
+    // property, which stays assignable to the artifacts feature type.
+    inlineBody: buildInlineBody(),
   };
 };
 
@@ -431,6 +525,29 @@ inlineChromeGroup?.addEventListener("click", (event) => {
   btn.classList.add("active");
   applyControlConfig();
 });
+
+// Streaming body groups all share the plain segmented-control behavior: swap
+// the active pill, then rebuild + apply the config live.
+for (const groupId of [
+  "artifact-streaming-view",
+  "artifact-view-mode",
+  "artifact-view-toggle",
+  "artifact-body-height",
+  "artifact-fade-mask",
+  "artifact-follow-output",
+  "artifact-body-transition",
+]) {
+  const group = document.getElementById(groupId);
+  group?.addEventListener("click", (event) => {
+    const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".mode-btn");
+    if (!btn) return;
+    group
+      .querySelectorAll(".mode-btn")
+      .forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    applyControlConfig();
+  });
+}
 
 const modeGroup = document.getElementById("artifact-anim-mode");
 modeGroup?.addEventListener("click", (event) => {

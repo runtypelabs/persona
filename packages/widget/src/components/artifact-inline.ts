@@ -5,12 +5,16 @@ import type {
   PersonaArtifactRecord
 } from "../types";
 import { createElement } from "../utils/dom";
-import { basenameOf, fileTypeLabel } from "../utils/artifact-file";
+import { basenameOf, fileKindOf, fileTypeLabel } from "../utils/artifact-file";
 import { applyArtifactLoadingStatus } from "../utils/artifact-loading-status";
 import { artifactRecordActionContext, buildArtifactActionButton } from "../utils/artifact-custom-actions";
 import { createIconButton } from "../utils/buttons";
 import { renderLucideIcon } from "../utils/icons";
-import { renderArtifactPreviewBody } from "./artifact-preview";
+import {
+  renderArtifactPreviewBody,
+  runArtifactBodyTransition,
+  type ArtifactBodyLayout
+} from "./artifact-preview";
 
 /**
  * Built-in inline artifact block component (display: "inline").
@@ -36,13 +40,28 @@ import { renderArtifactPreviewBody } from "./artifact-preview";
  * card-style remount — re-attaching the body would reload a live file-preview
  * iframe. While streaming the chrome shows a streaming status and hides copy +
  * custom actions; on complete it swaps the status for the type label and
- * reveals the complete-gated actions.
+ * reveals the complete-gated actions. The chrome also carries an optional
+ * per-block rendered/source view toggle (availability-gated to file artifacts
+ * that have a rendered alternative to their source), which cross-fades the body
+ * between the preview and the raw highlighted source.
  *
  * Chrome + built-in actions are configurable via
- * `config.features.artifacts.inlineChrome` (boolean or { showCopy, showExpand })
+ * `config.features.artifacts.inlineChrome`
+ * (boolean or { showCopy, showExpand, showViewToggle })
  * and `config.features.artifacts.inlineActions`. A full structural override is
  * available via `config.features.artifacts.renderInline` (mirroring the card's
  * `renderCard`), which short-circuits before the default renderer.
+ *
+ * Body layout is configured via `config.features.artifacts.inlineBody`,
+ * resolved here into a flat {@link ArtifactBodyLayout} that is threaded into the
+ * shared preview renderer (inline path only — the pane never passes it). This
+ * component owns the height model that surrounds that renderer: it sets the
+ * `--persona-artifact-inline-body-height` CSS var on the root per state, toggles
+ * the complete-state non-iframe height cap on the body wrapper, and wraps the
+ * streaming→complete swap in a View Transition when enabled. The default
+ * (fixed 320px streaming window, tail-follow, top fade, auto transition) changes
+ * the pre-existing grow-with-content streaming behavior; `inlineBody.height:
+ * "auto"` restores it.
  */
 
 const inlineBlockUpdaters = new WeakMap<
@@ -134,16 +153,81 @@ function resolveInlineChrome(cfg: AgentWidgetArtifactsFeature | undefined): {
   chromeEnabled: boolean;
   showCopy: boolean;
   showExpand: boolean;
+  showViewToggle: boolean;
 } {
   const inlineChrome = cfg?.inlineChrome;
   if (inlineChrome === false) {
-    return { chromeEnabled: false, showCopy: false, showExpand: false };
+    return {
+      chromeEnabled: false,
+      showCopy: false,
+      showExpand: false,
+      showViewToggle: false
+    };
   }
   const opts = typeof inlineChrome === "object" ? inlineChrome : undefined;
   return {
     chromeEnabled: true,
     showCopy: opts?.showCopy !== false,
-    showExpand: opts?.showExpand !== false
+    showExpand: opts?.showExpand !== false,
+    showViewToggle: opts?.showViewToggle !== false
+  };
+}
+
+/** CSS var carrying the current-state numeric body height (px); unset = "auto". */
+const BODY_HEIGHT_VAR = "--persona-artifact-inline-body-height";
+
+/**
+ * Resolve `features.artifacts.inlineBody` into the flat {@link ArtifactBodyLayout}
+ * the shared preview renderer consumes. Defaults: 320px both states, source
+ * streaming view, rendered complete view, tail-follow on, top-only edge fade,
+ * auto transition.
+ */
+function resolveInlineBody(
+  cfg: AgentWidgetArtifactsFeature | undefined
+): ArtifactBodyLayout {
+  const b = cfg?.inlineBody;
+  const streamingView = b?.streamingView === "status" ? "status" : "source";
+  const viewMode = b?.viewMode === "source" ? "source" : "rendered";
+
+  let streamingHeight: number | "auto" = 320;
+  let completeHeight: number | "auto" = 320;
+  const h = b?.height;
+  if (typeof h === "number" || h === "auto") {
+    streamingHeight = h;
+    completeHeight = h;
+  } else if (h && typeof h === "object") {
+    streamingHeight = h.streaming ?? 320;
+    completeHeight = h.complete ?? 320;
+  }
+
+  const followOutput = b?.followOutput !== false;
+
+  // fadeMask: undefined defaults to top-only; object keys default to false.
+  let fadeTop = true;
+  let fadeBottom = false;
+  const fm = b?.fadeMask;
+  if (fm === true) {
+    fadeTop = true;
+    fadeBottom = true;
+  } else if (fm === false) {
+    fadeTop = false;
+    fadeBottom = false;
+  } else if (fm && typeof fm === "object") {
+    fadeTop = fm.top === true;
+    fadeBottom = fm.bottom === true;
+  }
+
+  const transition = b?.transition === "none" ? "none" : "auto";
+
+  return {
+    streamingView,
+    viewMode,
+    streamingHeight,
+    completeHeight,
+    followOutput,
+    fadeTop,
+    fadeBottom,
+    transition
   };
 }
 
@@ -153,8 +237,19 @@ function renderDefaultArtifactInline(
 ): HTMLElement {
   const record = recordFromProps(props);
   const artifactsCfg = context.config?.features?.artifacts;
-  const { chromeEnabled, showCopy, showExpand } = resolveInlineChrome(artifactsCfg);
+  const { chromeEnabled, showCopy, showExpand, showViewToggle } =
+    resolveInlineChrome(artifactsCfg);
   const inlineActions = artifactsCfg?.inlineActions ?? [];
+  const bodyLayout = resolveInlineBody(artifactsCfg);
+
+  // Per-block rendered/source view toggle state. `null` = follow the configured
+  // default (`bodyLayout.viewMode`); a set value is the user's explicit choice
+  // for this block. Reset to `null` when content restarts streaming or a
+  // different artifact id arrives (see the block updater below) so hydrated/new
+  // content starts on the configured default. `currentRecord` tracks the latest
+  // record so the toggle's direct click handler re-renders against fresh content.
+  let userViewMode: "rendered" | "source" | null = null;
+  let currentRecord = record;
 
   const root = createElement(
     "div",
@@ -165,16 +260,88 @@ function renderDefaultArtifactInline(
     root.setAttribute("data-artifact-inline", record.id);
   }
 
-  const handle = renderArtifactPreviewBody(record, { config: context.config });
+  const handle = renderArtifactPreviewBody(record, {
+    config: context.config,
+    bodyLayout,
+    // The user's per-block toggle wins over the configured default; `null`
+    // falls back to `bodyLayout.viewMode`, so with no toggle interaction this
+    // is behavior-identical to passing no `resolveViewMode` at all.
+    resolveViewMode: () => userViewMode ?? bodyLayout.viewMode
+  });
 
   // Body wrapper is always present so the frame's padding lives here (chrome
   // sits flush to the frame edge); required even when chrome is disabled.
   const body = createElement("div", "persona-artifact-inline-body");
   body.appendChild(handle.el);
 
+  // Height model (inlineBody): set the current-state numeric height as a CSS
+  // var on the root, then classify the rendered body (post-render — the shared
+  // renderer owns the pre/iframe/markdown branching, mirroring the pane's flush
+  // toggle):
+  // - code body → `persona-artifact-content-flush`, full-bleed like the pane's
+  //   source view (gutter flush to the frame edge)
+  // - fill-capable body (fixed source window / iframe / status placeholder) →
+  //   the wrapper owns the reserved height (border-box), so flush and padded
+  //   states occupy the same outer box and every swap is layout neutral
+  // - flow body (rendered markdown, component) → complete-state max-height cap
+  const applyBodyHeight = (rec: PersonaArtifactRecord) => {
+    const streaming = rec.status !== "complete";
+    const h = streaming ? bodyLayout.streamingHeight : bodyLayout.completeHeight;
+    const numeric = typeof h === "number";
+    if (numeric) {
+      root.style.setProperty(BODY_HEIGHT_VAR, `${h}px`);
+    } else {
+      root.style.removeProperty(BODY_HEIGHT_VAR);
+    }
+    const hasCodePre = Boolean(handle.el.querySelector(".persona-code-pre"));
+    const fillCapable = Boolean(
+      handle.el.querySelector(
+        "iframe, .persona-artifact-source-window--fixed, .persona-artifact-status-view"
+      )
+    );
+    body.classList.toggle("persona-artifact-content-flush", hasCodePre);
+    body.classList.toggle(
+      "persona-artifact-inline-body--sized",
+      numeric && fillCapable
+    );
+    body.classList.toggle(
+      "persona-artifact-inline-body--cap",
+      !streaming && !fillCapable && typeof bodyLayout.completeHeight === "number"
+    );
+  };
+
+  // Body updater: set the height var, run the (optionally animated) swap on the
+  // streaming→complete boundary, then re-apply the complete-state cap.
+  let lastBodyStatus: string = record.status;
+  const runBodyUpdate = (rec: PersonaArtifactRecord) => {
+    const boundary = lastBodyStatus !== "complete" && rec.status === "complete";
+    if (boundary) {
+      // Pre-set the target (complete) height so the reserved streaming window
+      // and the completed body share a height and the swap is layout-neutral.
+      if (typeof bodyLayout.completeHeight === "number") {
+        root.style.setProperty(BODY_HEIGHT_VAR, `${bodyLayout.completeHeight}px`);
+      } else {
+        root.style.removeProperty(BODY_HEIGHT_VAR);
+      }
+      // Re-apply inside the swap too: with a live View Transition the swap
+      // callback runs after the snapshot, so the outer applyBodyHeight below
+      // would read the pre-swap DOM for iframe/window detection.
+      runArtifactBodyTransition(body, bodyLayout.transition, rec.id, () => {
+        handle.update(rec);
+        applyBodyHeight(rec);
+      });
+    } else {
+      handle.update(rec);
+    }
+    applyBodyHeight(rec);
+    lastBodyStatus = rec.status;
+  };
+
+  applyBodyHeight(record);
+
   if (!chromeEnabled) {
     root.appendChild(body);
-    inlineBlockUpdaters.set(root, (rec) => handle.update(rec));
+    inlineBlockUpdaters.set(root, runBodyUpdate);
     return root;
   }
 
@@ -208,6 +375,60 @@ function renderDefaultArtifactInline(
     "persona-flex persona-items-center persona-gap-1"
   );
 
+  // Rendered/source view toggle (created only when enabled; per-record
+  // availability is gated in updateChrome via persona-hidden, like copy). Icon +
+  // label reflect the action, not the state: showing rendered → "code" icon /
+  // "View source"; showing source → "eye" icon / "View preview" + aria-pressed.
+  const viewToggleBtn = showViewToggle
+    ? createIconButton({
+        icon: "code-xml",
+        label: "View source",
+        className: "persona-artifact-doc-icon-btn persona-flex-shrink-0"
+      })
+    : null;
+  const effectiveViewMode = (): "rendered" | "source" =>
+    userViewMode ?? bodyLayout.viewMode;
+  const updateViewToggleButton = () => {
+    if (!viewToggleBtn) return;
+    const showingSource = effectiveViewMode() === "source";
+    const label = showingSource ? "View preview" : "View source";
+    viewToggleBtn.setAttribute("aria-label", label);
+    viewToggleBtn.title = label;
+    viewToggleBtn.setAttribute("aria-pressed", showingSource ? "true" : "false");
+    viewToggleBtn.replaceChildren();
+    const icon = renderLucideIcon(
+      showingSource ? "eye" : "code-xml",
+      16,
+      "currentColor",
+      2
+    );
+    if (icon) viewToggleBtn.appendChild(icon);
+  };
+  if (viewToggleBtn) {
+    // Direct listener (deliberate deviation from the delegated copy/expand
+    // pattern): the toggle is purely block-local state + a re-render of this
+    // block's own preview handle. It needs no session access, and the chrome
+    // element is stable for the block's lifetime (never remounted), so a direct
+    // listener is simpler and correct here — no delegation round-trip needed.
+    viewToggleBtn.addEventListener("click", () => {
+      userViewMode = effectiveViewMode() === "source" ? "rendered" : "source";
+      // Known tradeoff: toggling away from a live file-preview iframe drops it,
+      // and toggling back rebuilds it (srcdoc reload → iframe-internal state
+      // lost). Same behavior as the pane's toggle; we deliberately do not keep a
+      // detached iframe alive.
+      runArtifactBodyTransition(
+        body,
+        bodyLayout.transition,
+        currentRecord.id + ":view",
+        () => {
+          handle.update(currentRecord);
+          applyBodyHeight(currentRecord);
+        }
+      );
+      updateViewToggleButton();
+    });
+  }
+
   const copyBtn = showCopy
     ? createIconButton({
         icon: "copy",
@@ -234,6 +455,7 @@ function renderDefaultArtifactInline(
   }
 
   actions.appendChild(customActionsWrap);
+  if (viewToggleBtn) actions.appendChild(viewToggleBtn);
   if (copyBtn) actions.appendChild(copyBtn);
   if (expandBtn) actions.appendChild(expandBtn);
 
@@ -266,6 +488,27 @@ function renderDefaultArtifactInline(
     // through streaming so it is always available.
     if (copyBtn) copyBtn.classList.toggle("persona-hidden", streaming);
 
+    // View toggle availability: complete file artifacts that actually have a
+    // rendered alternative to their source. Plain markdown (no file meta) and
+    // component artifacts are hidden here (v1 decision: the pane toggle covers
+    // them). Also hidden when the host forced source-only via
+    // `inlineBody.viewMode: "source"` — there is no preview to switch to.
+    if (viewToggleBtn) {
+      const file = rec.artifactType === "markdown" ? rec.file : undefined;
+      let canToggle = false;
+      if (!streaming && file && bodyLayout.viewMode !== "source") {
+        const kind = fileKindOf(file);
+        if (kind === "markdown") {
+          canToggle = true;
+        } else if (kind === "html" || kind === "svg") {
+          canToggle = artifactsCfg?.filePreview?.enabled !== false;
+        }
+        // kind "other" → source-only, no rendered alternative → stays hidden.
+      }
+      viewToggleBtn.classList.toggle("persona-hidden", !canToggle);
+      updateViewToggleButton();
+    }
+
     customActionsWrap.replaceChildren();
     if (!streaming && inlineActions.length > 0) {
       const ctx = artifactRecordActionContext(rec);
@@ -289,7 +532,15 @@ function renderDefaultArtifactInline(
   updateChrome(record);
 
   inlineBlockUpdaters.set(root, (rec) => {
-    handle.update(rec);
+    // Reset the per-block view toggle when content restarts streaming or a
+    // different artifact id arrives, so hydrated/new content starts on the
+    // configured default. Must run before runBodyUpdate → handle.update reads
+    // userViewMode via resolveViewMode.
+    if (rec.status !== "complete" || rec.id !== currentRecord.id) {
+      userViewMode = null;
+    }
+    currentRecord = rec;
+    runBodyUpdate(rec);
     updateChrome(rec);
   });
 

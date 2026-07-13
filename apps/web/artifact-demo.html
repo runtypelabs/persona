@@ -46,6 +46,69 @@
           </div>
 
           <div class="info-section">
+            <h3>Streaming body</h3>
+            <p>Tune how inline artifacts stream and settle (<code>features.artifacts.inlineBody</code>). These apply to inline display mode and take effect on the next streamed artifact.</p>
+            <div class="section">
+              <label>Streaming view</label>
+              <div class="mode-group" id="artifact-streaming-view">
+                <button type="button" class="mode-btn active" data-mode="source">Source</button>
+                <button type="button" class="mode-btn" data-mode="status">Status</button>
+              </div>
+              <p class="hint">Stream the source code, or show a quiet generating placeholder (<code>inlineBody.streamingView</code>).</p>
+            </div>
+            <div class="section">
+              <label>View mode</label>
+              <div class="mode-group" id="artifact-view-mode">
+                <button type="button" class="mode-btn active" data-mode="rendered">Rendered</button>
+                <button type="button" class="mode-btn" data-mode="source">Source</button>
+              </div>
+              <p class="hint">Preview completed files in a sandboxed iframe, or always show raw highlighted source, useful when the artifact feeds a code editor (<code>inlineBody.viewMode</code>).</p>
+            </div>
+            <div class="section">
+              <label>View toggle</label>
+              <div class="mode-group" id="artifact-view-toggle">
+                <button type="button" class="mode-btn active" data-mode="on">On</button>
+                <button type="button" class="mode-btn" data-mode="off">Off</button>
+              </div>
+              <p class="hint">Add an inline chrome button that flips a completed file between its rendered preview and raw source (<code>inlineChrome.showViewToggle</code>). The button only appears when a rendered preview exists, so it stays hidden for source-only or plain markdown artifacts.</p>
+            </div>
+            <div class="section">
+              <label>Body height</label>
+              <div class="mode-group" id="artifact-body-height">
+                <button type="button" class="mode-btn active" data-mode="320">320px</button>
+                <button type="button" class="mode-btn" data-mode="auto">Auto</button>
+                <button type="button" class="mode-btn" data-mode="split">Streaming 320, complete auto</button>
+              </div>
+              <p class="hint">Reserve a fixed-height scroll window so the streaming to complete swap causes no layout shift, or grow with content (<code>inlineBody.height</code>).</p>
+            </div>
+            <div class="section">
+              <label>Fade mask</label>
+              <div class="mode-group" id="artifact-fade-mask">
+                <button type="button" class="mode-btn active" data-mode="top">Top</button>
+                <button type="button" class="mode-btn" data-mode="both">Top and bottom</button>
+                <button type="button" class="mode-btn" data-mode="off">Off</button>
+              </div>
+              <p class="hint">Fade the scroll edges of the streaming window (<code>inlineBody.fadeMask</code>).</p>
+            </div>
+            <div class="section">
+              <label>Follow output</label>
+              <div class="mode-group" id="artifact-follow-output">
+                <button type="button" class="mode-btn active" data-mode="on">On</button>
+                <button type="button" class="mode-btn" data-mode="off">Off</button>
+              </div>
+              <p class="hint">Keep the streaming window pinned to the newest output (<code>inlineBody.followOutput</code>).</p>
+            </div>
+            <div class="section">
+              <label>Transition</label>
+              <div class="mode-group" id="artifact-body-transition">
+                <button type="button" class="mode-btn active" data-mode="auto">Auto</button>
+                <button type="button" class="mode-btn" data-mode="none">None</button>
+              </div>
+              <p class="hint">Cross-fade the streaming to complete swap where supported (<code>inlineBody.transition</code>).</p>
+            </div>
+          </div>
+
+          <div class="info-section">
             <h3>Expand toggle</h3>
             <p>Show an expand/collapse button in the artifact pane toolbar (<code>features.artifacts.layout.showExpandToggle</code>).</p>
             <div class="section">
@@ -158,7 +221,32 @@
               },
             },
           </div>
-          <p><code>panel</code> (the default) shows the reference card in the transcript and auto-opens the side pane as the artifact streams. <code>card</code> shows only the card; the pane opens when you click it. <code>inline</code> renders the full artifact preview directly in the transcript — rendered markdown, sandboxed file iframes, or registry components — with no pane involved. The switcher in the rail applies the mode live via <code>handle.update(config)</code>; it takes effect on the next streamed artifact.</p>
+          <p><code>panel</code> (the default) shows the reference card in the transcript and auto-opens the side pane as the artifact streams. <code>card</code> shows only the card; the pane opens when you click it. <code>inline</code> renders the full artifact preview directly in the transcript, rendered markdown, sandboxed file iframes, or registry components, with no pane involved. The switcher in the rail applies the mode live via <code>handle.update(config)</code>; it takes effect on the next streamed artifact.</p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Streaming body (inline)</h3>
+          <p>When <code>display: "inline"</code>, <code>features.artifacts.inlineBody</code> tunes how the body streams and settles:</p>
+          <div class="code-block">
+            <span class="prop">features</span>: {
+              <span class="prop">artifacts</span>: {
+                <span class="prop">enabled</span>: <span class="keyword">true</span>,
+                <span class="prop">display</span>: <span class="string">"inline"</span>,
+                <span class="prop">inlineBody</span>: {
+                  <span class="prop">streamingView</span>: <span class="string">"source"</span>, <span class="comment">// source | status</span>
+                  <span class="prop">viewMode</span>: <span class="string">"rendered"</span>, <span class="comment">// rendered | source (source: never preview, code editor style)</span>
+                  <span class="prop">height</span>: <span class="keyword">320</span>, <span class="comment">// number | "auto" | { streaming, complete }</span>
+                  <span class="prop">followOutput</span>: <span class="keyword">true</span>, <span class="comment">// tail-follow the streaming source</span>
+                  <span class="prop">fadeMask</span>: { <span class="prop">top</span>: <span class="keyword">true</span> }, <span class="comment">// boolean | { top, bottom }</span>
+                  <span class="prop">transition</span>: <span class="string">"auto"</span>, <span class="comment">// auto | none</span>
+                },
+                <span class="prop">inlineChrome</span>: {
+                  <span class="prop">showViewToggle</span>: <span class="keyword">true</span>, <span class="comment">// rendered/source toggle button, only when a preview exists</span>
+                },
+              },
+            },
+          </div>
+          <p>A numeric <code>height</code> reserves a fixed, internally scrolled window for the streaming source and pins the completed iframe to the same height, so the streaming to complete swap causes no layout shift. <code>"auto"</code> grows with content instead. <code>streamingView: "status"</code> shows a quiet generating placeholder in place of the streaming code, and <code>transition: "auto"</code> cross-fades the completion swap where the View Transitions API is supported. These only affect <code>display: "inline"</code>. The controls in the rail apply them live via <code>handle.update(config)</code>, landing on the next streamed artifact.</p>
         </div>
 
         <div class="notes-section">

@@ -413,3 +413,409 @@ describe("PersonaArtifactInline file-preview chrome", () => {
     expect(el.querySelector('[data-artifact-custom-action="hidden"]')).toBeNull();
   });
 });
+
+describe("PersonaArtifactInline inlineBody height model", () => {
+  const BODY_HEIGHT_VAR = "--persona-artifact-inline-body-height";
+
+  const fileStreamingProps = (): Record<string, unknown> => ({
+    artifactId: "f1",
+    title: "outputs/cat.html",
+    artifactType: "markdown",
+    status: "streaming",
+    markdown: "```html\n<h1>hi",
+    file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
+  });
+
+  const fileCompleteRecord = (): PersonaArtifactRecord => ({
+    id: "f1",
+    artifactType: "markdown",
+    title: "outputs/cat.html",
+    status: "complete",
+    markdown: wireFor(HTML_RAW, "html"),
+    file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
+  });
+
+  it("defaults to a fixed 320px streaming source window", () => {
+    const el = PersonaArtifactInline(fileStreamingProps(), makeContext(makeConfig()));
+    expect(el.style.getPropertyValue(BODY_HEIGHT_VAR)).toBe("320px");
+    expect(el.querySelector(".persona-artifact-source-window--fixed")).toBeTruthy();
+  });
+
+  it("applies a scalar numeric height to both states", () => {
+    const el = PersonaArtifactInline(
+      fileStreamingProps(),
+      makeContext(makeConfig({ inlineBody: { height: 200 } }))
+    );
+    expect(el.style.getPropertyValue(BODY_HEIGHT_VAR)).toBe("200px");
+  });
+
+  it("applies object heights per state and updates the var on complete", () => {
+    const container = document.createElement("div");
+    const el = PersonaArtifactInline(
+      fileStreamingProps(),
+      makeContext(makeConfig({ inlineBody: { height: { streaming: 150, complete: 400 } } }))
+    );
+    container.appendChild(el);
+    expect(el.style.getPropertyValue(BODY_HEIGHT_VAR)).toBe("150px");
+
+    updateInlineArtifactBlocks(container, [fileCompleteRecord()]);
+    expect(el.style.getPropertyValue(BODY_HEIGHT_VAR)).toBe("400px");
+  });
+
+  it("leaves the height var unset (no fixed window) for height 'auto'", () => {
+    const el = PersonaArtifactInline(
+      fileStreamingProps(),
+      makeContext(makeConfig({ inlineBody: { height: "auto" } }))
+    );
+    expect(el.style.getPropertyValue(BODY_HEIGHT_VAR)).toBe("");
+    expect(el.querySelector(".persona-artifact-source-window--fixed")).toBeNull();
+  });
+
+  it("renders the status placeholder while streaming with streamingView 'status'", () => {
+    const el = PersonaArtifactInline(
+      fileStreamingProps(),
+      makeContext(
+        makeConfig({ inlineBody: { streamingView: "status" }, loadingAnimation: "none" })
+      )
+    );
+    const status = el.querySelector(".persona-artifact-status-view");
+    expect(status).toBeTruthy();
+    expect(status!.textContent).toContain("Generating");
+    expect(el.querySelector(".persona-artifact-source-window")).toBeNull();
+  });
+
+  it("caps a non-iframe complete body and leaves the iframe body uncapped", () => {
+    // Non-file markdown complete → capped (no iframe).
+    const capped = PersonaArtifactInline(completeProps(), makeContext(makeConfig()));
+    expect(capped.querySelector(".persona-artifact-inline-body--cap")).toBeTruthy();
+
+    // File complete → iframe, sized by the var, so not capped.
+    const iframeEl = PersonaArtifactInline(
+      {
+        artifactId: "f1",
+        title: "outputs/cat.html",
+        artifactType: "markdown",
+        status: "complete",
+        markdown: wireFor(HTML_RAW, "html"),
+        file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
+      },
+      makeContext(makeConfig())
+    );
+    expect(iframeEl.querySelector("iframe")).toBeTruthy();
+    expect(iframeEl.querySelector(".persona-artifact-inline-body--cap")).toBeNull();
+  });
+});
+
+describe("PersonaArtifactInline inlineBody viewMode", () => {
+  const htmlFileProps = (status: "streaming" | "complete"): Record<string, unknown> => ({
+    artifactId: "f1",
+    title: "outputs/cat.html",
+    artifactType: "markdown",
+    status,
+    markdown: wireFor(HTML_RAW, "html"),
+    file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
+  });
+
+  it("keeps the rendered default: complete html file previews in an iframe", () => {
+    const el = PersonaArtifactInline(htmlFileProps("complete"), makeContext(makeConfig()));
+    expect(el.querySelector("iframe")).toBeTruthy();
+  });
+
+  it("viewMode 'source' shows highlighted source instead of the iframe preview", () => {
+    const el = PersonaArtifactInline(
+      htmlFileProps("complete"),
+      makeContext(makeConfig({ inlineBody: { viewMode: "source" } }))
+    );
+    expect(el.querySelector("iframe")).toBeNull();
+    expect(el.querySelector(".persona-code-pre")).toBeTruthy();
+    // The complete source view keeps the same sized wrapper + inner window the
+    // streaming state uses (geometry-identical swap): full-bleed like the
+    // pane's source view, no padded-wrapper cap.
+    expect(el.querySelector(".persona-artifact-source-window--fixed")).toBeTruthy();
+    const bodyEl = el.querySelector(".persona-artifact-inline-body")!;
+    expect(bodyEl.classList.contains("persona-artifact-content-flush")).toBe(true);
+    expect(bodyEl.classList.contains("persona-artifact-inline-body--sized")).toBe(true);
+    expect(bodyEl.classList.contains("persona-artifact-inline-body--cap")).toBe(false);
+  });
+
+  it("viewMode 'source' covers markdown-kind files (no rendered markdown)", () => {
+    const MD_RAW = "# Title\n";
+    const el = PersonaArtifactInline(
+      {
+        artifactId: "m1",
+        title: "notes.md",
+        artifactType: "markdown",
+        status: "complete",
+        markdown: wireFor(MD_RAW, "markdown"),
+        file: { path: "notes.md", mimeType: "text/markdown", language: "markdown" }
+      },
+      makeContext(makeConfig({ inlineBody: { viewMode: "source" } }))
+    );
+    expect(el.querySelector(".persona-markdown-bubble")).toBeNull();
+    const pre = el.querySelector(".persona-code-pre");
+    expect(pre).toBeTruthy();
+    expect(pre!.textContent).toContain("# Title");
+  });
+
+  it("viewMode 'source' covers plain markdown artifacts", () => {
+    const el = PersonaArtifactInline(
+      completeProps(),
+      makeContext(makeConfig({ inlineBody: { viewMode: "source" } }))
+    );
+    expect(el.querySelector(".persona-markdown-bubble")).toBeNull();
+    expect(el.querySelector(".persona-code-pre")).toBeTruthy();
+  });
+
+  it("viewMode 'source' keeps the streaming source window and swaps nothing on complete", () => {
+    const container = document.createElement("div");
+    const el = PersonaArtifactInline(
+      htmlFileProps("streaming"),
+      makeContext(makeConfig({ inlineBody: { viewMode: "source" } }))
+    );
+    container.appendChild(el);
+    const preBefore = el.querySelector(".persona-code-pre");
+    expect(preBefore).toBeTruthy();
+
+    updateInlineArtifactBlocks(container, [
+      {
+        id: "f1",
+        artifactType: "markdown",
+        title: "outputs/cat.html",
+        status: "complete",
+        markdown: wireFor(HTML_RAW, "html"),
+        file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
+      }
+    ]);
+    expect(el.querySelector("iframe")).toBeNull();
+    // Same <pre> node survives the streaming→complete boundary (in-place update).
+    expect(el.querySelector(".persona-code-pre")).toBe(preBefore);
+  });
+});
+
+describe("PersonaArtifactInline inlineBody flush and sized wrappers", () => {
+  it("streams source full-bleed in a sized wrapper (pane-style flush code)", () => {
+    const el = PersonaArtifactInline(
+      {
+        artifactId: "f1",
+        title: "outputs/cat.html",
+        artifactType: "markdown",
+        status: "streaming",
+        markdown: "```html\n<h1>hi",
+        file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
+      },
+      makeContext(makeConfig())
+    );
+    const bodyEl = el.querySelector(".persona-artifact-inline-body")!;
+    expect(bodyEl.classList.contains("persona-artifact-content-flush")).toBe(true);
+    expect(bodyEl.classList.contains("persona-artifact-inline-body--sized")).toBe(true);
+  });
+
+  it("keeps rendered markdown padded (no flush, no sized wrapper)", () => {
+    const el = PersonaArtifactInline(completeProps(), makeContext(makeConfig()));
+    const bodyEl = el.querySelector(".persona-artifact-inline-body")!;
+    expect(bodyEl.classList.contains("persona-artifact-content-flush")).toBe(false);
+    expect(bodyEl.classList.contains("persona-artifact-inline-body--sized")).toBe(false);
+    expect(bodyEl.classList.contains("persona-artifact-inline-body--cap")).toBe(true);
+  });
+
+  it("sizes the wrapper for the complete iframe (padded, same outer box)", () => {
+    const el = PersonaArtifactInline(
+      {
+        artifactId: "f1",
+        title: "outputs/cat.html",
+        artifactType: "markdown",
+        status: "complete",
+        markdown: wireFor(HTML_RAW, "html"),
+        file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
+      },
+      makeContext(makeConfig())
+    );
+    const bodyEl = el.querySelector(".persona-artifact-inline-body")!;
+    expect(el.querySelector("iframe")).toBeTruthy();
+    expect(bodyEl.classList.contains("persona-artifact-inline-body--sized")).toBe(true);
+    expect(bodyEl.classList.contains("persona-artifact-content-flush")).toBe(false);
+  });
+});
+
+describe("PersonaArtifactInline view toggle", () => {
+  // The toggle carries no data-attribute; its aria-label flips between the two
+  // states, so match either. Returns null only when the button was never built
+  // (showViewToggle: false).
+  const viewToggleOf = (el: HTMLElement): HTMLElement | null =>
+    el.querySelector(
+      'button[aria-label="View source"], button[aria-label="View preview"]'
+    );
+  const isHidden = (node: HTMLElement | null): boolean =>
+    !!node && node.classList.contains("persona-hidden");
+
+  const htmlFileProps = (
+    status: "streaming" | "complete"
+  ): Record<string, unknown> => ({
+    artifactId: "f1",
+    title: "outputs/cat.html",
+    artifactType: "markdown",
+    status,
+    markdown: status === "streaming" ? "```html\n<h1>hi" : wireFor(HTML_RAW, "html"),
+    file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
+  });
+
+  const htmlCompleteRecord = (): PersonaArtifactRecord => ({
+    id: "f1",
+    artifactType: "markdown",
+    title: "outputs/cat.html",
+    status: "complete",
+    markdown: wireFor(HTML_RAW, "html"),
+    file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
+  });
+
+  it("shows the toggle on a complete html file artifact", () => {
+    const el = PersonaArtifactInline(
+      htmlFileProps("complete"),
+      makeContext(makeConfig())
+    );
+    const btn = viewToggleOf(el);
+    expect(btn).not.toBeNull();
+    expect(isHidden(btn)).toBe(false);
+    expect(btn!.getAttribute("aria-label")).toBe("View source");
+    expect(btn!.getAttribute("aria-pressed")).toBe("false");
+    // Placed between custom actions and the copy button.
+    const copy = el.querySelector("[data-copy-artifact]") as HTMLElement;
+    expect(
+      btn!.compareDocumentPosition(copy) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("hides the toggle while streaming", () => {
+    const el = PersonaArtifactInline(
+      htmlFileProps("streaming"),
+      makeContext(makeConfig({ loadingAnimation: "none" }))
+    );
+    expect(isHidden(viewToggleOf(el))).toBe(true);
+  });
+
+  it("hides the toggle for plain markdown artifacts", () => {
+    const el = PersonaArtifactInline(completeProps(), makeContext(makeConfig()));
+    expect(isHidden(viewToggleOf(el))).toBe(true);
+  });
+
+  it("hides the toggle for component artifacts", () => {
+    const name = "TestInlineToggleChart";
+    componentRegistry.register(name, () => {
+      const node = document.createElement("div");
+      node.className = "test-toggle-chart";
+      return node;
+    });
+    try {
+      const el = PersonaArtifactInline(
+        {
+          artifactId: "c1",
+          title: "Chart",
+          artifactType: "component",
+          status: "complete",
+          component: name,
+          componentProps: {}
+        },
+        makeContext(makeConfig())
+      );
+      expect(isHidden(viewToggleOf(el))).toBe(true);
+    } finally {
+      componentRegistry.unregister(name);
+    }
+  });
+
+  it("hides the toggle for a source-only (kind 'other') file artifact", () => {
+    const el = PersonaArtifactInline(
+      {
+        artifactId: "o1",
+        title: "script.py",
+        artifactType: "markdown",
+        status: "complete",
+        markdown: wireFor("print(1)\n", "python"),
+        file: { path: "script.py", mimeType: "text/x-python", language: "python" }
+      },
+      makeContext(makeConfig())
+    );
+    expect(isHidden(viewToggleOf(el))).toBe(true);
+  });
+
+  it("hides the toggle when filePreview is disabled for an html file", () => {
+    const el = PersonaArtifactInline(
+      htmlFileProps("complete"),
+      makeContext(makeConfig({ filePreview: { enabled: false } }))
+    );
+    expect(isHidden(viewToggleOf(el))).toBe(true);
+  });
+
+  it("hides the toggle when inlineBody.viewMode is 'source'", () => {
+    const el = PersonaArtifactInline(
+      htmlFileProps("complete"),
+      makeContext(makeConfig({ inlineBody: { viewMode: "source" } }))
+    );
+    expect(isHidden(viewToggleOf(el))).toBe(true);
+  });
+
+  it("omits the toggle entirely for inlineChrome { showViewToggle: false }", () => {
+    const el = PersonaArtifactInline(
+      htmlFileProps("complete"),
+      makeContext(makeConfig({ inlineChrome: { showViewToggle: false } }))
+    );
+    expect(viewToggleOf(el)).toBeNull();
+    // Copy + expand remain.
+    expect(el.querySelector("[data-copy-artifact]")).not.toBeNull();
+    expect(el.querySelector("[data-expand-artifact-inline]")).not.toBeNull();
+  });
+
+  it("flips iframe -> source and back on click, flipping aria/label and wrapper classes", () => {
+    const el = PersonaArtifactInline(
+      htmlFileProps("complete"),
+      makeContext(makeConfig())
+    );
+    expect(el.querySelector("iframe")).toBeTruthy();
+    const bodyEl = el.querySelector(".persona-artifact-inline-body")!;
+
+    // rendered -> source
+    (viewToggleOf(el) as HTMLElement).click();
+    expect(el.querySelector("iframe")).toBeNull();
+    expect(el.querySelector(".persona-code-pre")).toBeTruthy();
+    const btnSource = viewToggleOf(el)!;
+    expect(btnSource.getAttribute("aria-label")).toBe("View preview");
+    expect(btnSource.getAttribute("aria-pressed")).toBe("true");
+    // Source view recomputes to full-bleed + sized.
+    expect(bodyEl.classList.contains("persona-artifact-content-flush")).toBe(true);
+    expect(bodyEl.classList.contains("persona-artifact-inline-body--sized")).toBe(true);
+
+    // source -> rendered
+    (viewToggleOf(el) as HTMLElement).click();
+    expect(el.querySelector("iframe")).toBeTruthy();
+    expect(el.querySelector(".persona-code-pre")).toBeNull();
+    const btnBack = viewToggleOf(el)!;
+    expect(btnBack.getAttribute("aria-label")).toBe("View source");
+    expect(btnBack.getAttribute("aria-pressed")).toBe("false");
+    // Preview iframe is padded (not flush) but still sized (same outer box).
+    expect(bodyEl.classList.contains("persona-artifact-content-flush")).toBe(false);
+    expect(bodyEl.classList.contains("persona-artifact-inline-body--sized")).toBe(true);
+  });
+
+  it("resets to the configured default view when the block restarts streaming", () => {
+    const container = document.createElement("div");
+    const el = PersonaArtifactInline(
+      htmlFileProps("complete"),
+      makeContext(makeConfig({ loadingAnimation: "none" }))
+    );
+    container.appendChild(el);
+
+    // Toggle to source, then a streaming restart clears the choice.
+    (viewToggleOf(el) as HTMLElement).click();
+    expect(el.querySelector(".persona-code-pre")).toBeTruthy();
+
+    updateInlineArtifactBlocks(container, [
+      { ...htmlCompleteRecord(), status: "streaming", markdown: "```html\n<h1>hi" }
+    ]);
+    updateInlineArtifactBlocks(container, [htmlCompleteRecord()]);
+
+    // Back on the rendered default (iframe), toggle label reset.
+    expect(el.querySelector("iframe")).toBeTruthy();
+    expect(viewToggleOf(el)!.getAttribute("aria-label")).toBe("View source");
+    expect(viewToggleOf(el)!.getAttribute("aria-pressed")).toBe("false");
+  });
+});

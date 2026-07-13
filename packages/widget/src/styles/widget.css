@@ -3232,6 +3232,11 @@
   white-space: pre-wrap;
   padding-left: 3em;
   counter-increment: persona-code-line;
+  /* An empty source line emits a childless span — a zero-height block whose
+     absolutely-positioned gutter number would paint on top of the next line's.
+     Reserve one line box (1lh; 1em as the older-engine fallback). */
+  min-height: 1em;
+  min-height: 1lh;
 }
 [data-persona-root] .persona-code-line::before {
   content: counter(persona-code-line);
@@ -3365,9 +3370,122 @@
 }
 
 /* The sandboxed file-preview iframe is height: 100%, which collapses inside
-   the auto-height inline block; pin a themeable fixed height instead. */
+   the auto-height inline block; pin a themeable fixed height instead.
+   Height var chain: inlineBody.height (--persona-artifact-inline-body-height,
+   set per state by artifact-inline.ts) → the legacy
+   --persona-artifact-inline-frame-height override → 320px. The legacy var still
+   wins when the new one is unset (inlineBody.height "auto"), so themes pinned to
+   it keep working. */
 [data-persona-root] .persona-artifact-inline .persona-artifact-iframe {
-  height: var(--persona-artifact-inline-frame-height, 320px);
+  height: var(
+    --persona-artifact-inline-body-height,
+    var(--persona-artifact-inline-frame-height, 320px)
+  );
+}
+
+/* Inline body height model (features.artifacts.inlineBody). The block root sets
+   --persona-artifact-inline-body-height (px) for the current state; leaving it
+   unset (inlineBody.height "auto") lets the body size to content and the iframe
+   fall back through the chain above. */
+
+/* Code bodies are full-bleed, matching the pane's source-view treatment (same
+   class the pane toggles): the line-number gutter sits flush against the frame
+   edge. Declared after .persona-artifact-inline-body so padding: 0 wins the
+   specificity tie. */
+[data-persona-root] .persona-artifact-inline-body.persona-artifact-content-flush {
+  padding: 0;
+}
+
+/* Numeric inlineBody.height: the body wrapper owns the reserved height
+   (border-box), so flush code, padded iframe, and padded status bodies all
+   occupy the same outer box and every state swap is layout neutral. Fill-capable
+   content stretches to the wrapper. */
+[data-persona-root] .persona-artifact-inline-body--sized {
+  height: var(--persona-artifact-inline-body-height, auto);
+}
+[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-source-window--fixed,
+[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-iframe {
+  height: 100%;
+}
+[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-status-view {
+  min-height: 100%;
+}
+
+/* Fixed-height streaming source window: a reserved scroll viewport so streamed
+   source no longer grows an unbounded <pre> and then snaps to the preview. The
+   height comes from the sized body wrapper above (the --fixed class is only
+   ever applied together with it). The bare (non-fixed) window is an inert
+   wrapper (pane path never adds it; the source <pre> sits directly on el
+   there). */
+[data-persona-root] .persona-artifact-source-window {
+  min-width: 0;
+}
+[data-persona-root] .persona-artifact-source-window--fixed {
+  overflow-y: auto;
+}
+
+/* Edge fade masks on the fixed window (top fade signals content clipped above).
+   mask-image works over any themed background; size via --persona-artifact-fade-size. */
+[data-persona-root]
+  .persona-artifact-fade-top:not(.persona-artifact-fade-bottom) {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 24px)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 24px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-fade-bottom:not(.persona-artifact-fade-top) {
+  -webkit-mask-image: linear-gradient(
+    to top,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 24px)
+  );
+  mask-image: linear-gradient(
+    to top,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 24px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-fade-top.persona-artifact-fade-bottom {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 24px),
+    #000 calc(100% - var(--persona-artifact-fade-size, 24px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 24px),
+    #000 calc(100% - var(--persona-artifact-fade-size, 24px)),
+    transparent 100%
+  );
+}
+
+/* Reserved-height status placeholder (inlineBody.streamingView: "status").
+   Numeric height reserves the var; "auto" falls back to a modest 160px min-height
+   so the card doesn't collapse. */
+[data-persona-root] .persona-artifact-status-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--persona-artifact-inline-body-height, 160px);
+}
+
+/* Complete-state height cap for non-iframe bodies (rendered markdown, source
+   view, component). The iframe path is sized by the iframe rule above instead,
+   so this class is only applied when the completed body has no iframe. */
+[data-persona-root] .persona-artifact-inline-body--cap {
+  max-height: var(--persona-artifact-inline-body-height, none);
+  overflow-y: auto;
 }
 
 [data-persona-root] .persona-artifact-pane {
