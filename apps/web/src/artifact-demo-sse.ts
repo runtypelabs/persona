@@ -19,7 +19,13 @@
 
 import { createMockSSEStream, type MockSSEFrame } from "@runtypelabs/persona/testing";
 
-export type ArtifactDemoButton = "md" | "html-file" | "react-file" | "comp" | "unknown";
+export type ArtifactDemoButton =
+  | "md"
+  | "html-file"
+  | "react-file"
+  | "slow-file"
+  | "comp"
+  | "unknown";
 
 /** File metadata carried on `artifact_start` for previewable file artifacts. */
 interface ArtifactFileMeta {
@@ -84,6 +90,28 @@ const REACT_HTML = `<!doctype html>
 </html>
 `;
 
+// Deterministic slow-loading HTML file for QA of the preview loading overlay:
+// a hidden <img> pointing at the dev server's delayed endpoint (see
+// demoSlowResource() in vite.config.ts) holds the iframe's load event back
+// ~3.5s, so the widget's injected ready signal fires late. The delay is
+// NETWORK, not CPU: a synchronous busy-wait would freeze the parent page
+// whenever the sandboxed frame shares its process, suppressing the very
+// overlay this sample exists to QA. The srcdoc inherits the parent's base URL,
+// so the relative path resolves against the dev server; on static hosting the
+// request 404s and the sample simply loads fast. `seq` busts any residual
+// image caching so repeated clicks stay slow. Exercises the full escalation:
+// overlay at ~200ms, the "Starting preview..." label at ~2.2s, then dismissal.
+const slowHtmlFor = (seq: number): string => `<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>Slow preview</title></head>
+  <body style="font-family: system-ui, sans-serif; text-align: center; padding: 2rem;">
+    <h1>Slow file artifact</h1>
+    <p>This page waited on a deliberately slow resource (about 3.5 seconds) before finishing loading, so you can QA the preview loading overlay and its delayed label.</p>
+    <img src="/demo/slow-pixel.gif?ms=3500&seq=${seq}" alt="" width="1" height="1" style="opacity: 0;" />
+  </body>
+</html>
+`;
+
 // Encode the way core does: escape any literal triple-backtick (backtick + ZWSP
 // + backtick backtick), then wrap in a fence.
 const ZWSP = "\u200b";
@@ -120,7 +148,7 @@ type ComponentSpec = {
 type ArtifactSpec = MarkdownSpec | ComponentSpec;
 
 /** Resolve the scripted spec for a toolbar button. */
-function specFor(button: ArtifactDemoButton): ArtifactSpec {
+function specFor(button: ArtifactDemoButton, seq: number): ArtifactSpec {
   switch (button) {
     case "md":
       return {
@@ -144,6 +172,15 @@ function specFor(button: ArtifactDemoButton): ArtifactSpec {
         title: "outputs/counter-react.html",
         content: encodeFileArtifact(REACT_HTML, "html"),
         file: { path: "outputs/counter-react.html", mimeType: "text/html", language: "html" },
+      };
+    case "slow-file":
+      return {
+        kind: "markdown",
+        intro:
+          "Here's `outputs/slow.html`, which deliberately takes a few seconds to render, for QA of the preview loading state.",
+        title: "outputs/slow.html",
+        content: encodeFileArtifact(slowHtmlFor(seq), "html"),
+        file: { path: "outputs/slow.html", mimeType: "text/html", language: "html" },
       };
     case "comp":
       return {
@@ -174,7 +211,7 @@ export function createArtifactDemoStream(
   seq: number,
   delayMs = 28
 ): ReadableStream<Uint8Array> {
-  const spec = specFor(button);
+  const spec = specFor(button, seq);
   const executionId = `artifact-demo-${seq}`;
   const turnId = `${executionId}-turn-1`;
   const textBlockId = `${executionId}-text`;

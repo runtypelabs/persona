@@ -945,6 +945,35 @@ export type AgentWidgetArtifactsFeature = {
            * `requestAnimationFrame`, or the timeout.
            */
           injectReadySignal?: boolean;
+          /**
+           * Escalation text shown beside the spinner after `labelDelayMs`.
+           * Default `"Starting preview..."`. `false` renders an icon-only
+           * indicator forever (no text ever). A short work-naming label is
+           * added only after a delay by design — icon-first, with text reserved
+           * for genuinely slow loads (per Geist/Sandpack guidance; HIG warns
+           * against the vague word "loading").
+           */
+          label?: string | false;
+          /**
+           * Delay before the escalation label fades in, measured from when the
+           * overlay actually becomes visible (i.e. after `delayMs`), not from
+           * iframe creation. Default 2000.
+           */
+          labelDelayMs?: number;
+          /**
+           * Full replacement for the default indicator (spinner + escalation
+           * label). Called once when the overlay is built; return any element
+           * (a brand mark, skeleton, custom animation) to own the indicator
+           * content entirely (the escalation-label logic is then skipped), or
+           * return `null` to fall back to the default. A thrown error also falls
+           * back. Mirrors `renderInline` / `renderCard`'s null-falls-back
+           * contract. The overlay backdrop, timing, and dismissal stay
+           * widget-owned either way.
+           */
+          renderIndicator?: (ctx: {
+            artifactId: string;
+            config: AgentWidgetConfig;
+          }) => HTMLElement | null;
         };
   };
   /**

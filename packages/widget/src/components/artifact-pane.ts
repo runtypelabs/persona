@@ -32,6 +32,15 @@ export type ArtifactPaneApi = {
   setCopyButtonVisible: (visible: boolean) => void;
   /** Replace the toolbar custom-action list and re-render it; driven from the parent's config on every sync so live config updates apply. */
   setCustomActions: (actions: PersonaArtifactCustomAction[]) => void;
+  /**
+   * Explicit "the pane surface is shown to the user" signal from the host
+   * (ui.ts), which owns the display-mode / expand / mobile-drawer routing.
+   * While hidden the pane records state on update() but does NOT build/refresh
+   * the preview DOM, so an inline/card artifact never spawns a second
+   * sandboxed iframe (which would execute artifact scripts a second time). On
+   * reveal the pane renders the current recorded state.
+   */
+  setVisible: (visible: boolean) => void;
 };
 
 /**
@@ -344,6 +353,15 @@ export function createArtifactPane(
   let records: PersonaArtifactRecord[] = [];
   let selectedId: string | null = null;
   let mobileOpen = false;
+  // Lazy-render gate. `visible` reflects the host's explicit setVisible() signal
+  // (never inferred from layout/offsetParent, so class-hiding + jsdom behave the
+  // same). It defaults to true so the pane renders eagerly when constructed
+  // directly (its historical behavior, and the path pane tests exercise); ui.ts
+  // always calls setVisible() before update() so the real widget drives it. When
+  // hidden, update() records state and sets `dirty` instead of rendering; the
+  // next reveal flushes the current state.
+  let visible = true;
+  let dirty = false;
   // Track the last tab we auto-scrolled to so we only nudge the strip when the
   // selection actually changes (not on every streaming re-render), which would
   // otherwise fight a user who has scrolled the strip manually.
@@ -527,6 +545,15 @@ export function createArtifactPane(
     }
   };
 
+  // Build/refresh the visible DOM (tab strip, title, preview body) plus the
+  // layout chrome. Gated behind `visible` so we never create a preview iframe
+  // for a pane the user isn't looking at.
+  const flush = () => {
+    dirty = false;
+    render();
+    applyLayoutVisibility();
+  };
+
   return {
     element: shell,
     backdrop,
@@ -539,8 +566,12 @@ export function createArtifactPane(
       if (records.length > 0) {
         mobileOpen = true;
       }
-      render();
-      applyLayoutVisibility();
+      // Record the latest state cheaply; only build the preview DOM when shown.
+      // While hidden (inline/card display modes), rendering here would spawn a
+      // second sandboxed srcdoc iframe alongside the inline transcript preview,
+      // executing artifact scripts twice. Defer the whole render() to reveal.
+      dirty = true;
+      if (visible) flush();
     },
     setMobileOpen(open: boolean) {
       mobileOpen = open;
@@ -571,6 +602,16 @@ export function createArtifactPane(
     setCustomActions(actions: PersonaArtifactCustomAction[]) {
       customActionList = actions;
       renderCustomActions();
+    },
+    setVisible(next: boolean) {
+      if (next === visible) return;
+      visible = next;
+      // Reveal after lazy-skipped updates: render the CURRENT recorded state.
+      // Hiding never tears down an already-rendered preview — re-appending the
+      // iframe on re-open would reload it (a hard invariant; see the reuse
+      // comments in artifact-preview.ts). Laziness only blocks building NEW
+      // previews while hidden; an already-mounted one stays put.
+      if (next && dirty) flush();
     }
   };
 }

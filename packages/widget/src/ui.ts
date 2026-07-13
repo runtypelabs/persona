@@ -2351,6 +2351,13 @@ export const createAgentExperience = (
     const threshold = config.features?.artifacts?.layout?.narrowHostMaxWidth ?? 520;
     const w = panel.getBoundingClientRect().width || 0;
     mount.classList.toggle("persona-artifact-narrow-host", w > 0 && w <= threshold);
+    // Thread the single source of truth for "pane surface is shown" into the
+    // pane BEFORE update() so it renders lazily: in inline/card display modes
+    // the pane stays hidden and must not build a second sandboxed artifact
+    // iframe (which would execute artifact scripts twice). The pane records
+    // state while hidden and renders on the next reveal. Set first so an
+    // update() that arrives while hidden is skipped, not rendered-then-hidden.
+    artifactPaneApi.setVisible(artifactPaneVisible());
     artifactPaneApi.update(lastArtifactsState);
     if (artifactsPaneUserHidden) {
       artifactPaneApi.setMobileOpen(false);

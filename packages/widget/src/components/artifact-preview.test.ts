@@ -39,6 +39,12 @@ const makeConfig = (filePreview?: {
         minVisibleMs?: number;
         timeoutMs?: number;
         injectReadySignal?: boolean;
+        label?: string | false;
+        labelDelayMs?: number;
+        renderIndicator?: (ctx: {
+          artifactId: string;
+          config: AgentWidgetConfig;
+        }) => HTMLElement | null;
       };
 }): AgentWidgetConfig =>
   ({
@@ -363,7 +369,7 @@ describe("artifact-preview loading overlay", () => {
     }
   });
 
-  it("shows the overlay only after delayMs, not before", () => {
+  it("shows the icon spinner (no text) after delayMs, not before", () => {
     vi.useFakeTimers();
     try {
       const handle = renderArtifactPreviewBody(doctypeFile(), {
@@ -375,11 +381,192 @@ describe("artifact-preview loading overlay", () => {
       vi.advanceTimersByTime(1);
       const overlay = overlayOf(handle);
       expect(overlay).toBeTruthy();
-      // The shimmer animation wraps each char in a span (and uses a non-breaking
-      // space), so normalize whitespace before matching the label.
-      expect(overlay!.textContent!.replace(/\s+/g, " ")).toContain(
-        "Loading preview"
-      );
+      // Icon-first: the default indicator is a pure-CSS spinner...
+      expect(overlay!.querySelector(".persona-spinner")).toBeTruthy();
+      // ...and the escalation label, though present in the DOM, is hidden (no
+      // --visible modifier → opacity: 0) until it fades in after labelDelayMs.
+      const label = overlay!.querySelector(".persona-artifact-frame-loading-text");
+      expect(
+        label!.classList.contains("persona-artifact-frame-loading-text--visible")
+      ).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fades in the default escalation label after labelDelayMs (from overlay-visible)", () => {
+    vi.useFakeTimers();
+    try {
+      // delayMs=100 (overlay show), labelDelayMs=200 → label reveals ~300 from
+      // start, i.e. 200 AFTER the overlay becomes visible, not from iframe create.
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({
+          loading: { delayMs: 100, labelDelayMs: 200, timeoutMs: 100000 },
+        }),
+      });
+      vi.advanceTimersByTime(100);
+      const overlay = overlayOf(handle)!;
+      const label = overlay.querySelector(".persona-artifact-frame-loading-text")!;
+      expect(label.textContent).toBe("Starting preview...");
+      expect(
+        label.classList.contains("persona-artifact-frame-loading-text--visible")
+      ).toBe(false);
+      // 199ms after the overlay showed (299 from start): still hidden.
+      vi.advanceTimersByTime(199);
+      expect(
+        label.classList.contains("persona-artifact-frame-loading-text--visible")
+      ).toBe(false);
+      // 200ms after the overlay showed (300 from start): revealed.
+      vi.advanceTimersByTime(1);
+      expect(
+        label.classList.contains("persona-artifact-frame-loading-text--visible")
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("uses a custom label string in place of the default", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({
+          loading: { delayMs: 10, labelDelayMs: 20, label: "Compiling…", timeoutMs: 100000 },
+        }),
+      });
+      vi.advanceTimersByTime(10 + 20);
+      const label = overlayOf(handle)!.querySelector(
+        ".persona-artifact-frame-loading-text"
+      )!;
+      expect(label.textContent).toBe("Compiling…");
+      expect(
+        label.classList.contains("persona-artifact-frame-loading-text--visible")
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("never renders any text for label:false (icon-only forever)", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({
+          loading: { delayMs: 10, labelDelayMs: 20, label: false, timeoutMs: 100000 },
+        }),
+      });
+      vi.advanceTimersByTime(10);
+      const overlay = overlayOf(handle)!;
+      expect(overlay.querySelector(".persona-spinner")).toBeTruthy();
+      expect(
+        overlay.querySelector(".persona-artifact-frame-loading-text")
+      ).toBeNull();
+      // Even long past labelDelayMs, no text node ever appears.
+      vi.advanceTimersByTime(1000);
+      expect(
+        overlay.querySelector(".persona-artifact-frame-loading-text")
+      ).toBeNull();
+      expect(overlay.textContent!.trim()).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("uses a renderIndicator override and suppresses the default spinner/label", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({
+          loading: {
+            delayMs: 10,
+            labelDelayMs: 20,
+            renderIndicator: ({ artifactId }) => {
+              const el = document.createElement("div");
+              el.className = "my-brand-loader";
+              el.textContent = artifactId;
+              return el;
+            },
+            timeoutMs: 100000,
+          },
+        }),
+      });
+      vi.advanceTimersByTime(10);
+      const overlay = overlayOf(handle)!;
+      const custom = overlay.querySelector(".my-brand-loader");
+      expect(custom).toBeTruthy();
+      expect(custom!.textContent).toBe("a1"); // artifactId threaded through
+      // Default spinner + label are fully suppressed.
+      expect(overlay.querySelector(".persona-spinner")).toBeNull();
+      expect(
+        overlay.querySelector(".persona-artifact-frame-loading-text")
+      ).toBeNull();
+      // No escalation label ever appears past labelDelayMs (host owns content).
+      vi.advanceTimersByTime(1000);
+      expect(
+        overlay.querySelector(".persona-artifact-frame-loading-text")
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("falls back to the default spinner when renderIndicator returns null", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({
+          loading: { delayMs: 10, renderIndicator: () => null },
+        }),
+      });
+      vi.advanceTimersByTime(10);
+      expect(overlayOf(handle)!.querySelector(".persona-spinner")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("falls back to the default spinner when renderIndicator throws", () => {
+    vi.useFakeTimers();
+    try {
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({
+          loading: {
+            delayMs: 10,
+            renderIndicator: () => {
+              throw new Error("boom");
+            },
+          },
+        }),
+      });
+      vi.advanceTimersByTime(10);
+      expect(overlayOf(handle)!.querySelector(".persona-spinner")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the label timer on teardown (no post-teardown DOM mutation)", () => {
+    vi.useFakeTimers();
+    try {
+      let mode: "rendered" | "source" = "rendered";
+      const handle = renderArtifactPreviewBody(doctypeFile(), {
+        config: makeConfig({
+          loading: { delayMs: 10, labelDelayMs: 200, timeoutMs: 100000 },
+        }),
+        resolveViewMode: () => mode,
+      });
+      vi.advanceTimersByTime(10);
+      const overlay = overlayOf(handle)!;
+      const label = overlay.querySelector(".persona-artifact-frame-loading-text")!;
+      // Tear the iframe down (switch to source) BEFORE the label timer fires.
+      mode = "source";
+      handle.update(doctypeFile());
+      // The pending label timer must have been cleared: advancing past it must
+      // not add the --visible class to the now-detached label.
+      vi.advanceTimersByTime(1000);
+      expect(
+        label.classList.contains("persona-artifact-frame-loading-text--visible")
+      ).toBe(false);
     } finally {
       vi.useRealTimers();
     }

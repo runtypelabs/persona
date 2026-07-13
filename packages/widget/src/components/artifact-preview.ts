@@ -1,6 +1,6 @@
 import { createElement } from "../utils/dom";
+import { createSpinner } from "../utils/spinner";
 import type {
-  AgentWidgetArtifactsFeature,
   AgentWidgetConfig,
   AgentWidgetMessage,
   PersonaArtifactRecord,
@@ -211,6 +211,22 @@ function fallbackComponentCard(record: PersonaArtifactRecord): HTMLElement {
   return card;
 }
 
+/** Render context handed to a custom `filePreview.loading.renderIndicator`. */
+type PreviewIndicatorContext = {
+  artifactId: string;
+  config: AgentWidgetConfig;
+};
+
+type PreviewLoadingObject = {
+  delayMs?: number;
+  minVisibleMs?: number;
+  timeoutMs?: number;
+  injectReadySignal?: boolean;
+  label?: string | false;
+  labelDelayMs?: number;
+  renderIndicator?: (ctx: PreviewIndicatorContext) => HTMLElement | null;
+};
+
 /** Resolved preview-loading options (see `filePreview.loading`). */
 type ResolvedPreviewLoading = {
   enabled: boolean;
@@ -218,6 +234,12 @@ type ResolvedPreviewLoading = {
   minVisibleMs: number;
   timeoutMs: number;
   injectReadySignal: boolean;
+  /** Escalation label text, or `false` for an icon-only indicator forever. */
+  label: string | false;
+  /** Delay before the escalation label fades in, from when the overlay shows. */
+  labelDelayMs: number;
+  /** Host override for the whole indicator; `undefined` uses the spinner+label. */
+  renderIndicator?: (ctx: PreviewIndicatorContext) => HTMLElement | null;
 };
 
 /**
@@ -226,15 +248,7 @@ type ResolvedPreviewLoading = {
  * fall back to the documented defaults.
  */
 function resolvePreviewLoading(
-  loading:
-    | boolean
-    | {
-        delayMs?: number;
-        minVisibleMs?: number;
-        timeoutMs?: number;
-        injectReadySignal?: boolean;
-      }
-    | undefined
+  loading: boolean | PreviewLoadingObject | undefined
 ): ResolvedPreviewLoading {
   if (loading === false) {
     return {
@@ -243,6 +257,8 @@ function resolvePreviewLoading(
       minVisibleMs: 0,
       timeoutMs: 0,
       injectReadySignal: false,
+      label: "Starting preview...",
+      labelDelayMs: 2000,
     };
   }
   const o = loading && typeof loading === "object" ? loading : undefined;
@@ -252,6 +268,10 @@ function resolvePreviewLoading(
     minVisibleMs: o?.minVisibleMs ?? 300,
     timeoutMs: o?.timeoutMs ?? 8000,
     injectReadySignal: o?.injectReadySignal !== false,
+    // `label: false` disables the escalation text; a string overrides the default.
+    label: o?.label === false ? false : (o?.label ?? "Starting preview..."),
+    labelDelayMs: o?.labelDelayMs ?? 2000,
+    renderIndicator: o?.renderIndicator,
   };
 }
 
@@ -285,10 +305,16 @@ function makePreviewToken(): string {
  */
 function buildReadyReporter(token: string): string {
   return (
-    "\n<script>(function(){var t=" +
+    "\n<script>(function(){var d=false;var t=" +
     JSON.stringify(token) +
-    ";function r(){try{parent.postMessage({persona:'artifact-preview-ready',token:t},'*');}catch(e){}}" +
-    "function s(){if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){requestAnimationFrame(r);});}else{r();}}" +
+    ";function r(){if(d)return;d=true;try{parent.postMessage({persona:'artifact-preview-ready',token:t},'*');}catch(e){}}" +
+    // Race a double-rAF (paint heuristic) against a short timeout: the parent's
+    // opaque loading overlay can make the browser treat this (process-isolated)
+    // iframe as occluded and throttle its rendering, in which case rAF callbacks
+    // stall indefinitely — the overlay would delay its own dismissal signal. The
+    // timeout keeps the signal bounded; the rAF path stays paint-accurate when
+    // frames are being produced.
+    "function s(){if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){requestAnimationFrame(r);});}setTimeout(r,150);}" +
     // Split the closing tag so this JS string can't prematurely close a host
     // <script> if the bundle is ever inlined; the srcdoc still receives </script>.
     "if(document.readyState==='complete'){s();}else{window.addEventListener('load',s);}})();</scr" +
@@ -296,15 +322,70 @@ function buildReadyReporter(token: string): string {
   );
 }
 
-/** Themed "Loading preview…" overlay content (config-aware like other status call sites). */
+/** Overlay handle: the element plus a callback that fades the escalation label in. */
+type PreviewOverlayHandle = {
+  el: HTMLElement;
+  /**
+   * Reveal the escalation label. No-op when the label is disabled
+   * (`label: false`) or a custom `renderIndicator` owns the content.
+   */
+  revealLabel: () => void;
+};
+
+/**
+ * Build the preview-loading overlay content.
+ *
+ * Default indicator: an icon spinner with NO text (icon-first per HIG/Geist/
+ * Sandpack — text-only "loading" is used by no reputable preview surface). The
+ * optional escalation label is rendered hidden and only faded in later, from
+ * `setupPreviewLoading`, once the wait crosses `labelDelayMs`.
+ *
+ * `renderIndicator` (host override): called once with `{ artifactId, config }`.
+ * A returned element replaces the spinner + label entirely (the escalation
+ * logic is skipped — the host owns the content); `null`/`undefined` or a thrown
+ * error falls back to the default, mirroring the inlineActions null-falls-back
+ * pattern.
+ */
 function buildPreviewOverlay(
-  artifactsCfg: AgentWidgetArtifactsFeature | undefined
-): HTMLElement {
+  artifactId: string,
+  config: AgentWidgetConfig,
+  opts: ResolvedPreviewLoading
+): PreviewOverlayHandle {
   const overlay = createElement("div", "persona-artifact-frame-loading");
-  const text = createElement("div", "persona-artifact-frame-loading-text");
-  applyArtifactLoadingStatus(text, "Loading preview...", artifactsCfg);
-  overlay.appendChild(text);
-  return overlay;
+
+  if (opts.renderIndicator) {
+    try {
+      const custom = opts.renderIndicator({ artifactId, config });
+      if (custom) {
+        overlay.appendChild(custom);
+        return { el: overlay, revealLabel: () => {} };
+      }
+    } catch {
+      /* fall through to the default spinner + label */
+    }
+  }
+
+  const indicator = createElement("div", "persona-artifact-frame-loading-indicator");
+  indicator.appendChild(createSpinner());
+
+  let labelEl: HTMLElement | null = null;
+  if (opts.label !== false) {
+    // Plain, calm text — no shimmer (deliberate escalation, per the research).
+    // Hidden until revealLabel() adds the --visible modifier (opacity transition).
+    labelEl = createElement("div", "persona-artifact-frame-loading-text");
+    labelEl.textContent = opts.label;
+    indicator.appendChild(labelEl);
+  }
+  overlay.appendChild(indicator);
+
+  return {
+    el: overlay,
+    revealLabel: () => {
+      if (labelEl) {
+        labelEl.classList.add("persona-artifact-frame-loading-text--visible");
+      }
+    },
+  };
 }
 
 /**
@@ -325,7 +406,8 @@ function setupPreviewLoading(
   iframe: HTMLIFrameElement,
   token: string | null,
   opts: ResolvedPreviewLoading,
-  artifactsCfg: AgentWidgetArtifactsFeature | undefined
+  artifactId: string,
+  config: AgentWidgetConfig
 ): () => void {
   let overlay: HTMLElement | null = null;
   let shownAt = 0;
@@ -349,9 +431,15 @@ function setupPreviewLoading(
   };
   const showOverlay = () => {
     if (overlay || settled) return;
-    overlay = buildPreviewOverlay(artifactsCfg);
+    const built = buildPreviewOverlay(artifactId, config, opts);
+    overlay = built.el;
     frame.appendChild(overlay);
     shownAt = Date.now();
+    // Escalation label timer starts NOW (overlay-visible), not from iframe
+    // creation, and lives in the same timer Set so teardown/settle clear it —
+    // no post-teardown DOM mutation. No-op when label is disabled / a custom
+    // indicator owns the content.
+    if (opts.label !== false) addTimer(built.revealLabel, opts.labelDelayMs);
   };
   const fadeOut = () => {
     if (!overlay) return;
@@ -708,7 +796,8 @@ export function renderArtifactPreviewBody(
             iframe,
             token,
             loadingOpts,
-            config.features?.artifacts
+            rec.id,
+            config
           );
         }
 

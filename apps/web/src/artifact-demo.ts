@@ -209,15 +209,52 @@ const readViewToggle = (): boolean => {
   return activeBtn?.dataset.mode !== "off";
 };
 
-// On (the default) keeps the themed loading overlay for slow file previews via
-// filePreview.loading; Off sends filePreview: { loading: false } to disable the
-// overlay and its ready-signal injection. The overlay only appears when a
-// preview takes a moment to become ready, so fast artifacts never flash it.
-const readPreviewLoading = (): boolean => {
+// On (the default) keeps the default themed spinner for slow file previews via
+// filePreview.loading; Custom swaps in a renderIndicator escape hatch (pulsing
+// dots); Off sends filePreview: { loading: false } to disable the overlay and
+// its ready-signal injection. The overlay only appears when a preview takes a
+// moment to become ready, so fast artifacts never flash it.
+type PreviewLoadingMode = "on" | "custom" | "off";
+
+const readPreviewLoadingMode = (): PreviewLoadingMode => {
   const activeBtn = document.querySelector<HTMLButtonElement>(
     "#artifact-preview-loading .mode-btn.active",
   );
-  return activeBtn?.dataset.mode !== "off";
+  return (activeBtn?.dataset.mode ?? "on") as PreviewLoadingMode;
+};
+
+// Custom preview-loading indicator: three pulsing dots in the demo accent, built
+// with plain DOM + inline styles. The keyframe is injected once (no <style> per
+// render), keeping the renderer self-contained like the ArtifactDemoPill above.
+// This is the filePreview.loading.renderIndicator escape hatch, a full swap for
+// the default spinner.
+let dotsKeyframeInjected = false;
+const createPulsingDots = (): HTMLElement => {
+  if (!dotsKeyframeInjected) {
+    const style = document.createElement("style");
+    style.textContent =
+      "@keyframes personaArtifactDotPulse{0%,80%,100%{opacity:.25;transform:scale(.7)}40%{opacity:1;transform:scale(1)}}";
+    document.head.appendChild(style);
+    dotsKeyframeInjected = true;
+  }
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "display:flex;gap:6px;align-items:center;padding:8px;";
+  for (let i = 0; i < 3; i += 1) {
+    const dot = document.createElement("span");
+    dot.style.cssText = `width:8px;height:8px;border-radius:999px;background:${ANIMATION_DEFAULTS.primary};animation:personaArtifactDotPulse 1.2s ${i * 0.16}s ease-in-out infinite;`;
+    wrap.appendChild(dot);
+  }
+  return wrap;
+};
+
+// on → loading: true; off → loading: false; custom → the renderIndicator swap.
+const buildPreviewLoading = ():
+  | boolean
+  | { renderIndicator: () => HTMLElement } => {
+  const mode = readPreviewLoadingMode();
+  if (mode === "off") return false;
+  if (mode === "custom") return { renderIndicator: () => createPulsingDots() };
+  return true;
 };
 
 const buildInlineBody = () => ({
@@ -370,13 +407,14 @@ const buildArtifactsFeature = () => {
     // carry the inlineBody key (concurrent work), TS treats it as an extra
     // property, which stays assignable to the artifacts feature type.
     inlineBody: buildInlineBody(),
-    // Themed loading overlay for slow file previews. Merge onto any filePreview
-    // keys from the base config rather than clobber. loading is a recent key: if
-    // the widget types don't yet carry it (concurrent work), TS treats it as an
-    // extra property, which stays assignable to the artifacts feature type.
+    // Themed loading indicator for slow file previews. Merge onto any filePreview
+    // keys from the base config rather than clobber. loading (and its object form
+    // with renderIndicator) is a recent key: if the widget types don't yet carry
+    // it (concurrent work), TS treats it as an extra property, which stays
+    // assignable to the artifacts feature type.
     filePreview: {
       ...artifactDemoConfigBase.features?.artifacts?.filePreview,
-      loading: readPreviewLoading(),
+      loading: buildPreviewLoading(),
     },
   };
 };
@@ -470,6 +508,7 @@ const wireButton = (id: string, button: ArtifactDemoButton): void => {
 wireButton("btn-md", "md");
 wireButton("btn-html-file", "html-file");
 wireButton("btn-react-file", "react-file");
+wireButton("btn-slow-file", "slow-file");
 wireButton("btn-comp", "comp");
 wireButton("btn-unknown", "unknown");
 

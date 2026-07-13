@@ -589,6 +589,65 @@ theme: {
 }
 ```
 
+### Artifact Preview Loading Indicator
+
+While a previewable file artifact (HTML/SVG) renders inside its sandboxed
+iframe, Persona shows a loading overlay. The default indicator is an **icon
+spinner** (no text): icon-first loading is the norm for preview surfaces
+(Sandpack, embeds, v0/ChatGPT) and design systems (Apple HIG, Material, Carbon,
+Geist), and a concise work-naming label is faded in only as an escalation once
+the wait crosses `labelDelayMs` (default 2s). Under `prefers-reduced-motion:
+reduce` the spinner stops rotating (the static arc still reads as a ring) and
+the label fade is dropped.
+
+Style the spinner with plain CSS variables (no theme-token path needed):
+
+| CSS var | Default | Description |
+|---------|---------|-------------|
+| `--persona-artifact-spinner-size` | `28px` | Spinner diameter |
+| `--persona-artifact-spinner-color` | `--persona-accent` → `--persona-primary` → `#171717` | Rotating arc color (the interactive/brand hue) |
+| `--persona-artifact-spinner-track-color` | `--persona-border` → `#e5e7eb` | Faint full ring behind the arc |
+| `--persona-artifact-spinner-speed` | `0.8s` | One full rotation duration |
+| `--persona-artifact-frame-loading-color` | `--persona-text-muted` → `#6b7280` | Escalation label text color |
+
+The spinner element itself uses the reusable class `persona-spinner` (a small
+`<svg>` with `.persona-spinner-track` + `.persona-spinner-arc` circles), so
+these vars also style it anywhere else the spinner is reused.
+
+**Escalation label** (`features.artifacts.filePreview.loading`): set
+`label: "..."` to change the escalation text, or `label: false` for an
+icon-only indicator that never shows text. `labelDelayMs` controls how long
+after the overlay appears the label fades in.
+
+**Full indicator override** (`renderIndicator`): replace the spinner + label
+entirely with your own element (a brand mark, skeleton, custom animation). It
+is called once when the overlay is built:
+
+```ts
+config: {
+  features: {
+    artifacts: {
+      filePreview: {
+        loading: {
+          label: "Building preview…",
+          labelDelayMs: 1500,
+          renderIndicator: ({ artifactId, config }) => {
+            const el = document.createElement("div");
+            el.className = "my-brand-loader";
+            return el; // return null to fall back to the default spinner
+          },
+        },
+      },
+    },
+  },
+}
+```
+
+Returning `null` (or throwing) falls back to the default spinner, mirroring the
+`renderInline` / `renderCard` null-falls-back contract. When a custom indicator
+is used, the escalation-label logic is skipped (the host owns the content); the
+overlay backdrop, timing, and dismissal stay widget-owned either way.
+
 ---
 
 ## Launcher (`config.launcher.*`)

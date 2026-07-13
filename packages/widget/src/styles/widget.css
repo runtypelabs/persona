@@ -3215,6 +3215,17 @@
 [data-persona-root] .persona-artifact-frame-loading--out {
   opacity: 0;
 }
+/* Default indicator column: the icon spinner, with the escalation label (when
+   present) stacked below it. Icon-first, text only as a later escalation. */
+[data-persona-root] .persona-artifact-frame-loading-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+}
+/* Escalation label: calm, muted, small — NO shimmer (deliberate, per research).
+   Hidden until setupPreviewLoading adds --visible after labelDelayMs; a plain
+   opacity transition fades it in. */
 [data-persona-root] .persona-artifact-frame-loading-text {
   color: var(
     --persona-artifact-frame-loading-color,
@@ -3222,6 +3233,66 @@
   );
   font-size: 0.8125rem;
   font-weight: 500;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+[data-persona-root] .persona-artifact-frame-loading-text--visible {
+  opacity: 1;
+}
+
+/* Reusable icon spinner (utils/spinner.ts): a faint full track ring with a
+   rotating arc on top. Icon-first loading is the norm across preview surfaces
+   (Sandpack, embeds, v0/ChatGPT) and design systems (HIG/Material/Carbon/Geist);
+   text-only "loading" is used by none. The arc spins via a GPU-friendly
+   `transform: rotate` keyframe. Fallback chains:
+   - size:  --persona-artifact-spinner-size (default 28px)
+   - arc:   --persona-artifact-spinner-color → --persona-accent → --persona-primary
+            → neutral dark (the interactive/brand hue)
+   - track: --persona-artifact-spinner-track-color → --persona-border → light gray
+   - speed: --persona-artifact-spinner-speed (default 0.8s) */
+[data-persona-root] .persona-spinner {
+  width: var(--persona-artifact-spinner-size, 28px);
+  height: var(--persona-artifact-spinner-size, 28px);
+  transform-origin: center;
+  animation: persona-spinner-rotate var(--persona-artifact-spinner-speed, 0.8s)
+    linear infinite;
+}
+[data-persona-root] .persona-spinner-track {
+  fill: none;
+  stroke: var(
+    --persona-artifact-spinner-track-color,
+    var(--persona-border, #e5e7eb)
+  );
+  stroke-width: 2.5;
+}
+[data-persona-root] .persona-spinner-arc {
+  fill: none;
+  stroke: var(
+    --persona-artifact-spinner-color,
+    var(--persona-accent, var(--persona-primary, #171717))
+  );
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  /* r=9 → circumference ≈ 56.5; ~15u arc reads as a quarter-ish sweep. */
+  stroke-dasharray: 15 42;
+}
+@keyframes persona-spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Reduced motion: stop the rotation (the static arc still reads as a ring) and
+   drop the label fade. */
+@media (prefers-reduced-motion: reduce) {
+  [data-persona-root] .persona-spinner {
+    animation: none;
+  }
+  [data-persona-root] .persona-artifact-frame-loading-text {
+    transition: none;
+  }
 }
 
 /* Shared artifact preview body wrapper (artifact-preview.ts): generates no box

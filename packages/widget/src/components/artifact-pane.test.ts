@@ -181,6 +181,120 @@ describe("artifact-pane file preview", () => {
   });
 });
 
+describe("artifact-pane lazy rendering (hidden pane)", () => {
+  it("does not build the preview iframe while the pane is hidden", () => {
+    // loading:false → an iframe would be built immediately if we rendered.
+    const pane = createArtifactPane(makeConfig({ loading: false }), { onSelect: () => {} });
+    pane.setVisible(false);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const content = contentEl(pane);
+    // No preview DOM at all while hidden: no iframe, and not even the source pre.
+    expect(content.querySelector("iframe")).toBeNull();
+    expect(content.querySelector("pre")).toBeNull();
+  });
+
+  it("renders the current recorded state on reveal (after lazy-skipped updates)", () => {
+    const pane = createArtifactPane(makeConfig({ loading: false }), { onSelect: () => {} });
+    pane.setVisible(false);
+    // Two hidden updates; the second one is the state that must render on reveal.
+    pane.update({ artifacts: [fileRecord({ id: "a1", title: "outputs/one.html" })], selectedId: "a1" });
+    pane.update({
+      artifacts: [
+        fileRecord({ id: "a1", title: "outputs/one.html" }),
+        fileRecord({
+          id: "a2",
+          title: "outputs/two.html",
+          file: { path: "outputs/two.html", mimeType: "text/html", language: "html" },
+        }),
+      ],
+      selectedId: "a2",
+    });
+    expect(contentEl(pane).querySelector("iframe")).toBeNull();
+
+    pane.setVisible(true);
+    const iframe = contentEl(pane).querySelector(
+      "iframe.persona-artifact-iframe"
+    ) as HTMLIFrameElement;
+    expect(iframe).toBeTruthy();
+    // Latest state won: the selected artifact is a2, so its id rode onto the iframe.
+    expect(iframe.getAttribute("data-artifact-id")).toBe("a2");
+  });
+
+  it("renders eagerly by default (visible path) when constructed directly — panel mode is unaffected", () => {
+    // No setVisible call: the pane defaults to visible, matching panel display
+    // mode where ui.ts drives setVisible(true) whenever records exist.
+    const pane = createArtifactPane(makeConfig({ loading: false }), { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    expect(contentEl(pane).querySelector("iframe")).toBeTruthy();
+  });
+
+  it("keeps the already-rendered preview iframe (same node) across hide/show", () => {
+    const pane = createArtifactPane(makeConfig({ loading: false }), { onSelect: () => {} });
+    pane.setVisible(true);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    const first = contentEl(pane).querySelector("iframe") as HTMLIFrameElement;
+    expect(first).toBeTruthy();
+
+    // Hide (user collapses): the mounted preview must survive so re-open does
+    // not reload the iframe.
+    pane.setVisible(false);
+    expect(contentEl(pane).querySelector("iframe")).toBe(first);
+
+    // Reveal again with the same artifact: same node, not a rebuild.
+    pane.setVisible(true);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    expect(contentEl(pane).querySelector("iframe")).toBe(first);
+  });
+
+  it("does not build a NEW artifact's iframe while hidden, then renders it on reveal", () => {
+    const pane = createArtifactPane(makeConfig({ loading: false }), { onSelect: () => {} });
+    pane.setVisible(true);
+    pane.update({ artifacts: [fileRecord({ id: "a1" })], selectedId: "a1" });
+    const first = contentEl(pane).querySelector("iframe") as HTMLIFrameElement;
+    expect(first.getAttribute("data-artifact-id")).toBe("a1");
+
+    // Hide, then a NEW artifact arrives while hidden: no iframe rebuild yet.
+    pane.setVisible(false);
+    pane.update({
+      artifacts: [
+        fileRecord({ id: "a1" }),
+        fileRecord({
+          id: "a2",
+          title: "outputs/two.html",
+          file: { path: "outputs/two.html", mimeType: "text/html", language: "html" },
+        }),
+      ],
+      selectedId: "a2",
+    });
+    // Still the old node (no render happened while hidden).
+    expect(contentEl(pane).querySelector("iframe")).toBe(first);
+
+    pane.setVisible(true);
+    const shown = contentEl(pane).querySelector("iframe") as HTMLIFrameElement;
+    expect(shown.getAttribute("data-artifact-id")).toBe("a2");
+  });
+
+  it("renders a streaming artifact live after reveal (source while streaming, iframe on complete)", () => {
+    const pane = createArtifactPane(makeConfig({ loading: false }), { onSelect: () => {} });
+    pane.setVisible(false);
+    // Still streaming when the pane opens.
+    pane.update({
+      artifacts: [fileRecord({ status: "streaming", markdown: "```html\n<h1>hi" })],
+      selectedId: "a1",
+    });
+    pane.setVisible(true);
+    // Streaming → raw source, no iframe yet.
+    expect(contentEl(pane).querySelector("iframe")).toBeNull();
+    expect(contentEl(pane).querySelector("pre")?.textContent).toBe("<h1>hi");
+
+    // Continues receiving updates while visible; completion swaps to the iframe.
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    expect(contentEl(pane).querySelector("pre")).toBeNull();
+    expect(contentEl(pane).querySelector("iframe.persona-artifact-iframe")).toBeTruthy();
+  });
+});
+
 const toggleBtn = (
   pane: ReturnType<typeof createArtifactPane>,
   label: string
