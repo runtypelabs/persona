@@ -809,10 +809,6 @@ const mountCollapsedStarterExamples = (): void => {
   const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
   if (!widget || !pillRoot) return;
   const existing = pillRoot.querySelector<HTMLElement>("[data-analytics-composer-starters]");
-  if (widget.getMessages().length > 0) {
-    existing?.remove();
-    return;
-  }
   if (existing) return;
 
   const starters = document.createElement("section");
