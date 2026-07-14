@@ -366,7 +366,9 @@ body.analytics-artifact-open #analytics-agent-root .persona-artifact-pane { widt
 body.analytics-artifact-open::after {
   content: "";
   position: fixed;
-  z-index: 99998;
+  /* Keep the scrim below #analytics-agent-root's stacking context (z: 100).
+     A viewport-sized z-index here would also blur the artifact itself. */
+  z-index: 99;
   inset: 0;
   background: rgba(17, 24, 21, .36);
   backdrop-filter: blur(5px);

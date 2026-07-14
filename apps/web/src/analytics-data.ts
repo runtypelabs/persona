@@ -139,6 +139,13 @@ export const ANALYTICS_SCHEMA = {
   },
 } as const;
 
+export const ANALYTICS_SAMPLE_PROMPTS = [
+  "18-month product revenue · stacked area",
+  "Source quality · conversion vs engagement scatter",
+  "Active MRR mix by plan · stacked bars",
+  "Source × device conversion · heatmap",
+] as const;
+
 const REGIONS = ["North America", "Europe", "Asia Pacific", "Latin America"] as const;
 const SEGMENTS = ["Startup", "SMB", "Mid-market", "Enterprise"] as const;
 const CHANNELS = ["Organic", "Paid search", "Partner", "Referral", "Events"] as const;

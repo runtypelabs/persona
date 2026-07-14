@@ -26,9 +26,13 @@ describe("buildPillComposer (single-row pill composer)", () => {
     expect(elements.sendButton.getAttribute("data-persona-composer-submit")).toBe("");
   });
 
-  it("hides suggestions and status text by default in pill mode", () => {
+  it("keeps suggestions available above the pill and hides status text", () => {
     const elements = buildPillComposer({ config: { apiUrl: "/api" } });
-    expect(elements.suggestions.style.display).toBe("none");
+    const footerChildren = Array.from(elements.footer.children);
+    expect(elements.suggestions.style.display).toBe("");
+    expect(footerChildren.indexOf(elements.suggestions)).toBeLessThan(
+      footerChildren.indexOf(elements.composerForm)
+    );
     expect(elements.statusText.style.display).toBe("none");
   });
 

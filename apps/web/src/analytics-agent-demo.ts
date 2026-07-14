@@ -15,6 +15,7 @@ import type { ChartAssemblyInput } from "flint-chart";
 import type { EChartsOption } from "echarts";
 import {
   ANALYTICS_SCHEMA,
+  ANALYTICS_SAMPLE_PROMPTS,
   AnalyticsDatabase,
   type AnalyticsQueryResult,
   type AnalyticsRow,
@@ -346,7 +347,7 @@ const registerAnalyticsTools = (): AbortController => {
           chartType: {
             type: "string",
             description:
-              "A Flint chart type such as Line Chart, Area Chart, Bar Chart, Grouped Bar Chart, Scatter Plot, Donut Chart, or Heatmap.",
+              "A Flint chart type such as Line Chart, Area Chart, Bar Chart, Grouped Bar Chart, Stacked Bar Chart, Scatter Plot, Donut Chart, or Heatmap.",
           },
           encodings: {
             type: "object",
@@ -644,12 +645,7 @@ const config: AgentWidgetConfig = {
       "Ask a business question in plain English. Atlas writes SQL against this browser-local warehouse and turns the result into an interactive Flint chart.",
     inputPlaceholder: "Ask anything about your data…",
   },
-  suggestionChips: [
-    "Chart monthly revenue by product",
-    "Which channels convert best?",
-    "Show MRR by plan over time",
-    "Find an unexpected growth signal",
-  ],
+  suggestionChips: [...ANALYTICS_SAMPLE_PROMPTS],
   messageActions: { showCopy: true, showUpvote: false, showDownvote: false },
   features: {
     ...DEFAULT_WIDGET_CONFIG.features,

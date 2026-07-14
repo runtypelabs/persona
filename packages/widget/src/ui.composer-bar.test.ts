@@ -438,6 +438,29 @@ describe("createAgentExperience composer-bar mode", () => {
     controller.destroy();
   });
 
+  it("renders configured suggestion chips in the composer-bar footer", () => {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { mountMode: "composer-bar" },
+      suggestionChips: ["Revenue trend", "Channel mix"],
+    });
+
+    const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
+    const suggestions = pillRoot?.querySelector<HTMLElement>(
+      "[data-persona-composer-suggestions]"
+    );
+    expect(suggestions?.querySelectorAll("button")).toHaveLength(2);
+
+    controller.open();
+    expect(pillRoot!.dataset.state).toBe("expanded");
+    expect(suggestions!.isConnected).toBe(true);
+
+    controller.destroy();
+  });
+
   it("hides the container when collapsed and shows it (display:flex) when expanded", () => {
     const mount = document.createElement("div");
     document.body.appendChild(mount);

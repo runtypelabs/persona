@@ -22,6 +22,7 @@ export type RuntypeExecutionStreamEvent = ({
   totalSteps?: number;
   type: "execution_start";
 }) | ({
+  claudeManagedAgentId?: string;
   completedAt?: string;
   durationMs?: number;
   executionId: string;
@@ -103,6 +104,7 @@ export type RuntypeExecutionStreamEvent = ({
   type: "step_start";
 } | ({
   completedAt?: string;
+  cost?: number;
   durationMs?: number;
   error?: string;
   executionId: string;
@@ -208,6 +210,11 @@ export type RuntypeExecutionStreamEvent = ({
   artifactType: "markdown" | "component";
   component?: string;
   executionId?: string;
+  file?: {
+  language?: string;
+  mimeType: string;
+  path: string;
+};
   id: string;
   seq?: number;
   title?: string;
@@ -466,7 +473,7 @@ export type RuntypeFlowSSEEvent = {
   completedAt?: string;
   duration?: number;
   durationMs?: number;
-  error?: string;
+  error?: string | null;
   executionId?: string;
   executionTime?: number;
   id?: string;
@@ -735,6 +742,18 @@ export type RuntypeClientChatRequest = {
 export type RuntypeClientChatStreamEvent = RuntypeExecutionStreamEvent;
 
 export type RuntypeClientResumeRequest = {
+  clientTools?: Array<{
+  description: string;
+  name: string;
+  origin?: "webmcp" | "sdk";
+  pageOrigin?: string;
+  parametersSchema: {
+  type: "object";
+  [key: string]: unknown;
+};
+  untrustedContentHint?: boolean;
+}>;
+  clientToolsFingerprint?: string;
   executionId: string;
   messages?: Array<{
   content: string | (Array<{
