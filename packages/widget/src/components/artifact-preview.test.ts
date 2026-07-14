@@ -130,16 +130,21 @@ describe("artifact-preview parser-ready self-heal (parsers not loaded at first r
   });
 
   it("renders the escaped fallback exactly once, then re-renders as markdown when the chunk lands", async () => {
-    let resolveLoad!: (mod: parsersLoader.MarkdownParsersModule) => void;
-    const loadPromise = new Promise<parsersLoader.MarkdownParsersModule>((resolve) => {
-      resolveLoad = resolve;
-    });
+    // The real `onMarkdownParsersReady` no-ops here (vitest.setup.ts eager-
+    // provides parsers into the loader's moduleCache), so spy on the module
+    // namespace and capture the callback instead. artifact-preview.ts calls it
+    // through the module binding, so the spy intercepts — same mechanism as the
+    // getMarkdownParsersSync spy below.
+    let readyCb: (() => void) | null = null;
+    const readySpy = vi
+      .spyOn(parsersLoader, "onMarkdownParsersReady")
+      .mockImplementation((cb: () => void) => {
+        readyCb = cb;
+        return () => {};
+      });
     const syncSpy = vi
       .spyOn(parsersLoader, "getMarkdownParsersSync")
       .mockReturnValue(null);
-    const loadSpy = vi
-      .spyOn(parsersLoader, "loadMarkdownParsers")
-      .mockReturnValue(loadPromise);
 
     const handle = renderArtifactPreviewBody(mdArtifact(), { config: mdConfig });
 
@@ -152,16 +157,15 @@ describe("artifact-preview parser-ready self-heal (parsers not loaded at first r
     expect(handle.el.textContent).toContain('"quoted"');
     expect(handle.el.textContent).not.toContain("&quot;");
 
-    // A second render while the chunk is still loading must not re-schedule.
+    // A second render while the chunk is still loading must not re-subscribe.
     handle.update(mdArtifact());
-    expect(loadSpy).toHaveBeenCalledTimes(1);
+    expect(readySpy).toHaveBeenCalledTimes(1);
 
     // Chunk lands: the real getMarkdownParsersSync now returns the parsers
-    // eager-provided by vitest.setup.ts.
+    // eager-provided by vitest.setup.ts, and the captured ready callback fires.
     syncSpy.mockRestore();
-    resolveLoad(parsersLoader.getMarkdownParsersSync()!);
-    await loadPromise;
-    await Promise.resolve(); // let the scheduled .then(render) run
+    expect(readyCb).toBeTypeOf("function");
+    readyCb!();
 
     // Self-healed: real markdown without any user interaction.
     expect(handle.el.querySelector("h1")?.textContent).toBe("Welcome");
@@ -170,12 +174,12 @@ describe("artifact-preview parser-ready self-heal (parsers not loaded at first r
   });
 
   it("does not schedule a re-render when parsers are already loaded", () => {
-    const loadSpy = vi.spyOn(parsersLoader, "loadMarkdownParsers");
+    const readySpy = vi.spyOn(parsersLoader, "onMarkdownParsersReady");
 
     const handle = renderArtifactPreviewBody(mdArtifact(), { config: mdConfig });
 
     expect(handle.el.querySelector("h1")?.textContent).toBe("Welcome");
-    expect(loadSpy).not.toHaveBeenCalled();
+    expect(readySpy).not.toHaveBeenCalled();
   });
 });
 

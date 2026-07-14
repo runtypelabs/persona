@@ -9,7 +9,7 @@ import { extractFileSource, fileKindOf, fileTypeLabel } from "../utils/artifact-
 import { applyArtifactLoadingStatus } from "../utils/artifact-loading-status";
 import { highlightCode } from "../utils/code-highlight";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors";
-import { getMarkdownParsersSync, loadMarkdownParsers } from "../markdown-parsers-loader";
+import { getMarkdownParsersSync, onMarkdownParsersReady } from "../markdown-parsers-loader";
 import { resolveSanitizer } from "../utils/sanitize";
 import {
   componentRegistry,
@@ -549,19 +549,20 @@ export function renderArtifactPreviewBody(
   // `buildPostprocessor` in ui.ts). Chat messages self-heal via the
   // parser-ready re-render at the end of createAgentExperience, but this body
   // only re-renders on update() — so an artifact upserted right after init
-  // would stay escaped until the next update. When a render takes the
-  // fallback, schedule exactly one re-render for when the chunk lands.
+  // would stay escaped until the next update. When a render takes the fallback,
+  // self-heal through the shared `onMarkdownParsersReady` registry — the single
+  // self-heal path every markdown surface shares — instead of an ad-hoc
+  // `loadMarkdownParsers().then(...)`. The `parserRerenderScheduled` flag keeps
+  // repeated renders from stacking subscriptions. The returned unsubscribe is
+  // intentionally ignored: the subscription is fire-once and the preview handle
+  // exposes no teardown hook to call it from.
   let current = record;
   let parserRerenderScheduled = false;
   const toHtml = (text: string) => {
     const parsersReady = getMarkdownParsersSync() !== null;
     if (md && !parsersReady && !parserRerenderScheduled) {
       parserRerenderScheduled = true;
-      loadMarkdownParsers()
-        .then(() => render(current))
-        .catch(() => {
-          /* chunk failed to load (e.g. ad blocker): keep the escaped fallback */
-        });
+      onMarkdownParsersReady(() => render(current));
     }
     const raw = md ? md(text) : escapeHtml(text);
     // escapeHtml output is already inert — only real markdown HTML is sanitized.
