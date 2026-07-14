@@ -64,9 +64,20 @@ import {
  * "auto"` restores it.
  */
 
+export type InlineArtifactUpdateOptions = {
+  /**
+   * Skip the streaming→complete View Transition for this update. The View
+   * Transition captures the whole document, so running it while the transcript
+   * is still streaming cross-fades a stale snapshot of the moving message text
+   * over the live text — which reads as ghosting/motion blur on the chat
+   * messages. The body swap still happens, just instantly.
+   */
+  suppressTransition?: boolean;
+};
+
 const inlineBlockUpdaters = new WeakMap<
   HTMLElement,
-  (record: PersonaArtifactRecord) => void
+  (record: PersonaArtifactRecord, opts?: InlineArtifactUpdateOptions) => void
 >();
 
 /**
@@ -82,7 +93,8 @@ const inlineBlockUpdaters = new WeakMap<
  */
 export function updateInlineArtifactBlocks(
   root: HTMLElement,
-  artifacts: PersonaArtifactRecord[]
+  artifacts: PersonaArtifactRecord[],
+  opts?: InlineArtifactUpdateOptions
 ): void {
   if (artifacts.length === 0) return;
   const byId = new Map(artifacts.map((a) => [a.id, a]));
@@ -90,7 +102,7 @@ export function updateInlineArtifactBlocks(
     const update = inlineBlockUpdaters.get(el);
     if (!update) return;
     const record = byId.get(el.getAttribute("data-artifact-inline") ?? "");
-    if (record) update(record);
+    if (record) update(record, opts);
   });
 }
 
@@ -313,7 +325,10 @@ function renderDefaultArtifactInline(
   // Body updater: set the height var, run the (optionally animated) swap on the
   // streaming→complete boundary, then re-apply the complete-state cap.
   let lastBodyStatus: string = record.status;
-  const runBodyUpdate = (rec: PersonaArtifactRecord) => {
+  const runBodyUpdate = (
+    rec: PersonaArtifactRecord,
+    opts?: InlineArtifactUpdateOptions
+  ) => {
     const boundary = lastBodyStatus !== "complete" && rec.status === "complete";
     if (boundary) {
       // Pre-set the target (complete) height so the reserved streaming window
@@ -326,10 +341,15 @@ function renderDefaultArtifactInline(
       // Re-apply inside the swap too: with a live View Transition the swap
       // callback runs after the snapshot, so the outer applyBodyHeight below
       // would read the pre-swap DOM for iframe/window detection.
-      runArtifactBodyTransition(body, bodyLayout.transition, rec.id, () => {
-        handle.update(rec);
-        applyBodyHeight(rec);
-      });
+      runArtifactBodyTransition(
+        body,
+        opts?.suppressTransition ? "none" : bodyLayout.transition,
+        rec.id,
+        () => {
+          handle.update(rec);
+          applyBodyHeight(rec);
+        }
+      );
     } else {
       handle.update(rec);
     }
@@ -537,7 +557,7 @@ function renderDefaultArtifactInline(
 
   updateChrome(record);
 
-  inlineBlockUpdaters.set(root, (rec) => {
+  inlineBlockUpdaters.set(root, (rec, opts) => {
     // Reset the per-block view toggle when content restarts streaming or a
     // different artifact id arrives, so hydrated/new content starts on the
     // configured default. Must run before runBodyUpdate → handle.update reads
@@ -546,7 +566,7 @@ function renderDefaultArtifactInline(
       userViewMode = null;
     }
     currentRecord = rec;
-    runBodyUpdate(rec);
+    runBodyUpdate(rec, opts);
     updateChrome(rec);
   });
 

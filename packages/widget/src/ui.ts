@@ -5566,7 +5566,9 @@ export const createAgentExperience = (
     // Freshly (re)built inline artifact blocks render from their persisted
     // props; sync them with the live registry so a block created after the
     // last onArtifactsState emission still shows current content.
-    updateInlineArtifactBlocks(messagesWrapper, lastArtifactsState.artifacts);
+    updateInlineArtifactBlocks(messagesWrapper, lastArtifactsState.artifacts, {
+      suppressTransition: isStreaming,
+    });
     ensureToolElapsedTimer();
     renderSuggestions(messages);
     scheduleAutoScroll(!isStreaming);
@@ -5743,8 +5745,14 @@ export const createAgentExperience = (
         artifactsPaneUserOpened = false;
       }
       // Route streaming registry updates (artifact_delta / artifact_complete)
-      // into any inline artifact blocks in the transcript.
-      updateInlineArtifactBlocks(messagesWrapper, state.artifacts);
+      // into any inline artifact blocks in the transcript. Suppress the
+      // streaming→complete View Transition while the session is still
+      // streaming: it captures the whole document, and cross-fading a stale
+      // snapshot over still-moving message text reads as ghosting/motion blur
+      // on the transcript.
+      updateInlineArtifactBlocks(messagesWrapper, state.artifacts, {
+        suppressTransition: isStreaming,
+      });
       syncArtifactPane();
       persistState();
     },

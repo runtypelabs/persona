@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PersonaArtifactInline,
   updateInlineArtifactBlocks
@@ -78,6 +78,68 @@ describe("PersonaArtifactInline default render", () => {
       { ...record, markdown: "# Hello world" }
     ]);
     expect(el.textContent).toContain("Hello world");
+  });
+
+  describe("streaming→complete View Transition gating", () => {
+    // Typed loosely (cast through unknown) because lib.dom's own
+    // startViewTransition signature differs from this minimal stub.
+    type VTStub = {
+      startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+    };
+
+    const stubViewTransition = () => {
+      const start = vi.fn((cb: () => void) => {
+        cb();
+        return { finished: Promise.resolve() };
+      });
+      (document as unknown as VTStub).startViewTransition = start;
+      return start;
+    };
+
+    afterEach(() => {
+      delete (document as unknown as VTStub).startViewTransition;
+    });
+
+    const setupBlock = () => {
+      const container = document.createElement("div");
+      const el = PersonaArtifactInline(streamingProps(), makeContext(makeConfig()));
+      container.appendChild(el);
+      const completeRecord: PersonaArtifactRecord = {
+        id: "a1",
+        artifactType: "markdown",
+        title: "Notes",
+        status: "complete",
+        markdown: "# Done"
+      };
+      return { container, el, completeRecord };
+    };
+
+    it("animates the boundary swap via startViewTransition by default", async () => {
+      const start = stubViewTransition();
+      const { container, el, completeRecord } = setupBlock();
+
+      updateInlineArtifactBlocks(container, [
+        { ...completeRecord, status: "streaming" }
+      ]);
+      expect(start).not.toHaveBeenCalled();
+
+      updateInlineArtifactBlocks(container, [completeRecord]);
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(el.textContent).toContain("Done");
+      // Let `finished` settle so the module-level in-flight guard resets.
+      await Promise.resolve();
+    });
+
+    it("swaps instantly when suppressTransition is set (transcript still streaming)", () => {
+      const start = stubViewTransition();
+      const { container, el, completeRecord } = setupBlock();
+
+      updateInlineArtifactBlocks(container, [completeRecord], {
+        suppressTransition: true
+      });
+      expect(start).not.toHaveBeenCalled();
+      expect(el.textContent).toContain("Done");
+    });
   });
 
   it("ignores records for other artifact ids and empty registry states", () => {
