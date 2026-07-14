@@ -413,6 +413,31 @@ describe("createAgentExperience composer-bar mode", () => {
     controller.destroy();
   });
 
+  it("keeps the pill composer mounted when artifacts enable the split layout", () => {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { mountMode: "composer-bar" },
+      features: { artifacts: { enabled: true } },
+    });
+
+    const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
+    const composerInput = pillRoot?.querySelector<HTMLTextAreaElement>(
+      "[data-persona-composer-input]"
+    );
+    expect(pillRoot).not.toBeNull();
+    expect(composerInput).not.toBeNull();
+    expect(composerInput!.placeholder).toBeTruthy();
+
+    controller.open();
+    expect(pillRoot!.dataset.state).toBe("expanded");
+    expect(composerInput!.isConnected).toBe(true);
+
+    controller.destroy();
+  });
+
   it("hides the container when collapsed and shows it (display:flex) when expanded", () => {
     const mount = document.createElement("div");
     document.body.appendChild(mount);

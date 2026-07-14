@@ -2342,21 +2342,23 @@ export const createAgentExperience = (
     }
   } else {
     panel.appendChild(container);
-    // Composer-bar mode: the pill (footer) and peek banner live in a
-    // viewport-fixed sibling of the wrapper (`pillRoot`) so they're
-    // independent of the wrapper's geometry transitions. Critical for
-    // modal mode: the wrapper there has `transform: translate(-50%, -50%)`
-    // which would establish a containing block trapping any `position: fixed`
-    // descendant. Order inside pillRoot: peekBanner (slim row above pill)
-    // → footer (pill). pillRoot's `gap` spaces them; the peek is hidden by
-    // default until ui.ts toggles `.persona-pill-peek--visible` based on
-    // streaming/hover/open state via syncComposerBarPeek().
-    if (isComposerBar() && pillRoot) {
-      if (panelElements.peekBanner) {
-        pillRoot.appendChild(panelElements.peekBanner);
-      }
-      pillRoot.appendChild(footer);
+  }
+
+  // Composer-bar mode: the pill (footer) and peek banner live in a
+  // viewport-fixed sibling of the wrapper (`pillRoot`) so they're
+  // independent of both the wrapper's geometry transitions and the panel's
+  // optional artifact split layout. Critical for modal mode: the wrapper
+  // there has `transform: translate(-50%, -50%)`, which would establish a
+  // containing block trapping any `position: fixed` descendant.
+  //
+  // Order inside pillRoot: peekBanner (slim row above pill) → footer (pill).
+  // pillRoot's `gap` spaces them; the peek is hidden by default until ui.ts
+  // toggles `.persona-pill-peek--visible` based on streaming/hover/open state.
+  if (isComposerBar() && pillRoot) {
+    if (panelElements.peekBanner) {
+      pillRoot.appendChild(panelElements.peekBanner);
     }
+    pillRoot.appendChild(footer);
   }
   mount.appendChild(wrapper);
   // pillRoot is mounted *after* wrapper so it naturally stacks on top
