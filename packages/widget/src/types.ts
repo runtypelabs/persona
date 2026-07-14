@@ -1076,12 +1076,38 @@ export type AgentWidgetArtifactsFeature = {
      * the viewport is already at the bottom, keep it pinned as content arrives;
      * if the reader scrolled up, don't fight them. Only meaningful for a numeric
      * streaming height. Default `true`.
+     *
+     * Precedence: ignored when `overflow: "clip"` (a clipped window shows the
+     * top of the document and never scrolls, so there is no tail to follow).
      */
     followOutput?: boolean;
     /**
+     * How a fixed-height source window handles content taller than the window.
+     *
+     * - `"scroll"` (default) — the current behavior: an internally scrollable
+     *   window that tail-follows the newest streamed lines (see `followOutput`),
+     *   so the reader sees the growing tail of the document.
+     * - `"clip"` — a fixed-height window that shows the TOP of the document,
+     *   `overflow: hidden` with no internal scroll and no tail-follow
+     *   (`followOutput` is ignored in this mode). When content overflows the
+     *   window a bottom edge fade signals there is more below (the top is always
+     *   visible, so a top fade never applies); an explicit `fadeMask` still wins
+     *   over this clip-mode default. When the inline chrome's Expand control is
+     *   enabled the whole body doubles as an expand hitbox (click / Enter / Space
+     *   opens the artifact in the pane), matching the industry inline-card
+     *   pattern; otherwise the clip is purely visual.
+     *
+     * Only meaningful for a numeric streaming/complete height. Default
+     * `"scroll"`.
+     */
+    overflow?: "scroll" | "clip";
+    /**
      * Edge fade masks on the fixed-height streaming window (a top fade signals
-     * clipped content above). `true` = `{ top: true, bottom: true }`, `false` =
-     * none. Default `{ top: true }`.
+     * clipped content above, a bottom fade signals clipped content below). Each
+     * fade renders only when content is actually clipped on that edge, so with
+     * tail-follow pinned at the bottom the bottom fade stays inert until the
+     * reader scrolls up mid-stream. `true` = `{ top: true, bottom: true }`,
+     * `false` = none. Default `{ top: true, bottom: true }`.
      */
     fadeMask?: boolean | { top?: boolean; bottom?: boolean };
     /**
@@ -1090,6 +1116,27 @@ export type AgentWidgetArtifactsFeature = {
      * `"none"` swaps instantly. Default `"auto"`.
      */
     transition?: "auto" | "none";
+    /**
+     * What the block becomes once the artifact completes.
+     *
+     * - `"inline"` (default) — the streamed body stays inline forever, as
+     *   configured by the other `inlineBody` options.
+     * - `"card"` — the block streams inline as configured, then collapses to the
+     *   compact artifact reference card once the artifact completes (the Copilot
+     *   "chiclet" / Claude side-panel handoff pattern), keeping the thread
+     *   scannable. The collapse plays as a short CSS height transition (skipped
+     *   under `prefers-reduced-motion`); it does not use the View Transitions
+     *   API, so `transition` does not affect it. After the collapse the card's
+     *   normal actions apply (click opens the artifact pane). `viewMode`, the
+     *   inline rendered/source view toggle, `inlineActions`, and inline copy are
+     *   streaming-phase-only in this mode and inert once the block is a card
+     *   (there is nothing to toggle or copy on a collapsed card). Blocks that are
+     *   already complete when they first render (page-refresh hydration) render
+     *   the card directly, with no flash of the inline body and no animation.
+     *
+     * Default `"inline"`.
+     */
+    completeDisplay?: "inline" | "card";
   };
   /**
    * Called when an artifact action is triggered (open, download, expand).

@@ -15,6 +15,7 @@ import {
   runArtifactBodyTransition,
   type ArtifactBodyLayout
 } from "./artifact-preview";
+import { PersonaArtifactCard } from "./artifact-card";
 
 /**
  * Built-in inline artifact block component (display: "inline").
@@ -160,6 +161,77 @@ function chromeLabelsFor(record: PersonaArtifactRecord): {
   return { title, typeLabel };
 }
 
+/**
+ * Build the card component's prop shape from a live preview record, for the
+ * `completeDisplay: "card"` collapse. The card renderer reads title / status /
+ * type / id and (for markdown records) markdown + file meta; component records
+ * only need id + title + type. Mirrors the prop keys `recordFromProps` reads.
+ */
+function cardPropsFromRecord(
+  record: PersonaArtifactRecord
+): Record<string, unknown> {
+  const props: Record<string, unknown> = {
+    artifactId: record.id,
+    title: record.title ?? "",
+    status: record.status,
+    artifactType: record.artifactType
+  };
+  if (record.artifactType === "markdown") {
+    if (typeof record.markdown === "string") props.markdown = record.markdown;
+    if (record.file) props.file = record.file;
+  }
+  return props;
+}
+
+/**
+ * Collapse animation for `completeDisplay: "card"`: transition the block root's
+ * height from the reserved streaming height (`startHeight`, measured before the
+ * card was swapped in) down to the card's height over ~200ms ease-out, then
+ * clear back to `auto`. Plain CSS transition, never a View Transition.
+ *
+ * Degrades to an instant swap (no-op) under `prefers-reduced-motion` and when
+ * the block has no layout — detached from the document or a zero-height measure
+ * (tests/jsdom) — so nothing is left behind on the root.
+ */
+function animateInlineCollapse(root: HTMLElement, startHeight: number): void {
+  if (!startHeight || !root.isConnected) return;
+  let reduceMotion = false;
+  try {
+    reduceMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    reduceMotion = false;
+  }
+  if (reduceMotion) return;
+  const endHeight = root.getBoundingClientRect().height;
+  if (!endHeight || Math.abs(endHeight - startHeight) < 1) return;
+
+  root.style.height = `${startHeight}px`;
+  root.style.overflow = "hidden";
+  // Force a reflow so the start height is committed before the transition arms.
+  void root.offsetHeight;
+  root.style.transition = "height 200ms ease-out";
+  root.style.height = `${endHeight}px`;
+
+  let done = false;
+  const clear = () => {
+    if (done) return;
+    done = true;
+    root.removeEventListener("transitionend", onEnd);
+    root.style.removeProperty("height");
+    root.style.removeProperty("overflow");
+    root.style.removeProperty("transition");
+  };
+  const onEnd = (e: TransitionEvent) => {
+    if (e.propertyName === "height") clear();
+  };
+  root.addEventListener("transitionend", onEnd);
+  // Fallback in case transitionend never fires (interrupted layout, etc.).
+  window.setTimeout(clear, 260);
+}
+
 /** Resolve the inline chrome config knobs (chrome on by default). */
 function resolveInlineChrome(cfg: AgentWidgetArtifactsFeature | undefined): {
   chromeEnabled: boolean;
@@ -191,10 +263,10 @@ const BODY_HEIGHT_VAR = "--persona-artifact-inline-body-height";
 /**
  * Resolve `features.artifacts.inlineBody` into the flat {@link ArtifactBodyLayout}
  * the shared preview renderer consumes. Defaults: 320px both states, source
- * streaming view, rendered complete view, tail-follow on, top-only edge fade,
- * auto transition.
+ * streaming view, rendered complete view, tail-follow on, top+bottom edge fade
+ * (each edge clip-gated at render time), auto transition.
  */
-function resolveInlineBody(
+export function resolveInlineBody(
   cfg: AgentWidgetArtifactsFeature | undefined
 ): ArtifactBodyLayout {
   const b = cfg?.inlineBody;
@@ -212,11 +284,21 @@ function resolveInlineBody(
     completeHeight = h.complete ?? 320;
   }
 
-  const followOutput = b?.followOutput !== false;
+  // Clip mode shows the top of the document in a static window: no tail-follow
+  // (followOutput is ignored — the window never scrolls), and its unset-fadeMask
+  // default flips to bottom-only (the top is always visible, so a top fade would
+  // never be correct). An explicit fadeMask still wins below.
+  const overflow = b?.overflow === "clip" ? "clip" : "scroll";
+  const followOutput = overflow === "clip" ? false : b?.followOutput !== false;
 
-  // fadeMask: undefined defaults to top-only; object keys default to false.
-  let fadeTop = true;
-  let fadeBottom = false;
+  // fadeMask: when unset, the default depends on the overflow mode — scroll gets
+  // both edges (top + bottom), clip gets bottom-only. An explicit value (boolean
+  // or object) always wins over that mode default. Each edge is clip-gated at
+  // runtime in artifact-preview.ts `updateFadeClasses` (only shown when that edge
+  // is actually clipped), so with scroll+tail-follow pinned at the bottom the
+  // bottom fade stays visually inert until the reader scrolls up mid-stream.
+  let fadeTop: boolean;
+  let fadeBottom: boolean;
   const fm = b?.fadeMask;
   if (fm === true) {
     fadeTop = true;
@@ -227,9 +309,16 @@ function resolveInlineBody(
   } else if (fm && typeof fm === "object") {
     fadeTop = fm.top === true;
     fadeBottom = fm.bottom === true;
+  } else if (overflow === "clip") {
+    fadeTop = false;
+    fadeBottom = true;
+  } else {
+    fadeTop = true;
+    fadeBottom = true;
   }
 
   const transition = b?.transition === "none" ? "none" : "auto";
+  const completeDisplay = b?.completeDisplay === "card" ? "card" : "inline";
 
   return {
     streamingView,
@@ -237,9 +326,11 @@ function resolveInlineBody(
     streamingHeight,
     completeHeight,
     followOutput,
+    overflow,
     fadeTop,
     fadeBottom,
-    transition
+    transition,
+    completeDisplay
   };
 }
 
@@ -253,6 +344,7 @@ function renderDefaultArtifactInline(
     resolveInlineChrome(artifactsCfg);
   const inlineActions = artifactsCfg?.inlineActions ?? [];
   const bodyLayout = resolveInlineBody(artifactsCfg);
+  const collapseToCard = bodyLayout.completeDisplay === "card";
 
   // Per-block rendered/source view toggle state. `null` = follow the configured
   // default (`bodyLayout.viewMode`); a set value is the user's explicit choice
@@ -270,6 +362,31 @@ function renderDefaultArtifactInline(
   root.setAttribute("data-persona-theme-zone", "artifact-inline");
   if (record.id) {
     root.setAttribute("data-artifact-inline", record.id);
+  }
+
+  // completeDisplay: "card" — collapse the block to the compact reference card
+  // once the artifact completes. `PersonaArtifactCard` is the public card entry,
+  // so a host `features.artifacts.renderCard` override still applies. The card
+  // is mounted on the SAME root (data-artifact-inline keying + theme zone
+  // survive); the frame chrome styling is dropped via a modifier class because
+  // the card carries its own border/background. The registered updater becomes a
+  // card-sync updater so later records (title/status changes) re-render the card.
+  const renderCardChild = (rec: PersonaArtifactRecord): HTMLElement =>
+    PersonaArtifactCard(cardPropsFromRecord(rec), context);
+  const mountCard = (rec: PersonaArtifactRecord): void => {
+    root.classList.add("persona-artifact-inline--card");
+    root.style.removeProperty(BODY_HEIGHT_VAR);
+    root.replaceChildren(renderCardChild(rec));
+    inlineBlockUpdaters.set(root, (r) => {
+      root.replaceChildren(renderCardChild(r));
+    });
+  };
+
+  // Hydration: a block whose props arrive already-complete renders the card
+  // directly — no flash of the inline body, no collapse animation.
+  if (collapseToCard && record.status === "complete") {
+    mountCard(record);
+    return root;
   }
 
   const handle = renderArtifactPreviewBody(record, {
@@ -358,6 +475,27 @@ function renderDefaultArtifactInline(
   };
 
   applyBodyHeight(record);
+
+  // Clip-mode expand hitbox: in `inlineBody.overflow: "clip"` the body shows a
+  // static top-of-document window with no internal scroll, so — when the chrome's
+  // Expand control is enabled and the record has an id — the whole body doubles
+  // as the expand affordance (industry inline-card pattern). Reuse the existing
+  // `data-expand-artifact-inline` delegation in ui.ts (matched via closest(), so
+  // a body-level attribute works; Enter/Space are handled by the same keydown
+  // delegation). The aria-label is refreshed in updateChrome as the title
+  // streams in. When Expand is disabled the clip stays purely visual.
+  const clipExpandHitbox =
+    bodyLayout.overflow === "clip" && showExpand && !!record.id;
+  if (clipExpandHitbox) {
+    body.setAttribute("data-expand-artifact-inline", record.id);
+    body.setAttribute("role", "button");
+    body.setAttribute("tabindex", "0");
+    body.classList.add("persona-cursor-pointer");
+    body.setAttribute(
+      "aria-label",
+      `Open ${chromeLabelsFor(record).title} in panel`
+    );
+  }
 
   if (!chromeEnabled) {
     root.appendChild(body);
@@ -489,6 +627,10 @@ function renderDefaultArtifactInline(
     const { title, typeLabel } = chromeLabelsFor(rec);
     titleEl.textContent = title;
     titleEl.title = title;
+    // Keep the clip-mode body hitbox's label in sync with the streaming title.
+    if (clipExpandHitbox) {
+      body.setAttribute("aria-label", `Open ${title} in panel`);
+    }
 
     const streaming = rec.status !== "complete";
     // Reset the meta span (className replace clears stale animation classes).
@@ -558,6 +700,26 @@ function renderDefaultArtifactInline(
   updateChrome(record);
 
   inlineBlockUpdaters.set(root, (rec, opts) => {
+    // completeDisplay: "card" — on the streaming→complete boundary, collapse the
+    // whole block (chrome + body) to the reference card on the same root instead
+    // of swapping the body. Measure the reserved streaming height first, mount
+    // the card (which re-registers a card-sync updater, so this closure won't run
+    // again), then animate the height down. The plain-CSS collapse replaces the
+    // body's View Transition here, so `runBodyUpdate` is deliberately bypassed —
+    // it must not double-fire runArtifactBodyTransition for this boundary.
+    if (
+      collapseToCard &&
+      lastBodyStatus !== "complete" &&
+      rec.status === "complete"
+    ) {
+      const startHeight = root.isConnected
+        ? root.getBoundingClientRect().height
+        : 0;
+      lastBodyStatus = "complete";
+      mountCard(rec);
+      animateInlineCollapse(root, startHeight);
+      return;
+    }
     // Reset the per-block view toggle when content restarts streaming or a
     // different artifact id arrives, so hydrated/new content starts on the
     // configured default. Must run before runBodyUpdate → handle.update reads

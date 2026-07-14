@@ -184,15 +184,15 @@ const readBodyHeight = ():
   return 320;
 };
 
-// top (default) → { top: true }; both → true (top and bottom); off → false.
+// both (default) → true (top and bottom); top → { top: true }; off → false.
 const readFadeMask = (): boolean | { top: boolean } => {
   const activeBtn = document.querySelector<HTMLButtonElement>(
     "#artifact-fade-mask .mode-btn.active",
   );
-  const mode = activeBtn?.dataset.mode ?? "top";
-  if (mode === "both") return true;
+  const mode = activeBtn?.dataset.mode ?? "both";
+  if (mode === "top") return { top: true };
   if (mode === "off") return false;
-  return { top: true };
+  return true;
 };
 
 const readFollowOutput = (): boolean => {
@@ -202,11 +202,30 @@ const readFollowOutput = (): boolean => {
   return activeBtn?.dataset.mode !== "off";
 };
 
+// scroll (default) → tail-following scroll window; clip → fixed top-of-document
+// window with no internal scroll (inlineBody.overflow).
+const readOverflow = (): "scroll" | "clip" => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-overflow .mode-btn.active",
+  );
+  return (activeBtn?.dataset.mode ?? "scroll") as "scroll" | "clip";
+};
+
 const readBodyTransition = (): "auto" | "none" => {
   const activeBtn = document.querySelector<HTMLButtonElement>(
     "#artifact-body-transition .mode-btn.active",
   );
   return (activeBtn?.dataset.mode ?? "auto") as "auto" | "none";
+};
+
+// inline (default) keeps the streamed body in place; card collapses the block
+// to the compact reference card once the artifact completes
+// (inlineBody.completeDisplay).
+const readCompleteDisplay = (): "inline" | "card" => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-complete-display .mode-btn.active",
+  );
+  return (activeBtn?.dataset.mode ?? "inline") as "inline" | "card";
 };
 
 // rendered (default) previews files in an iframe; source always shows raw
@@ -283,7 +302,9 @@ const buildInlineBody = () => ({
   height: readBodyHeight(),
   fadeMask: readFadeMask(),
   followOutput: readFollowOutput(),
+  overflow: readOverflow(),
   transition: readBodyTransition(),
+  completeDisplay: readCompleteDisplay(),
 });
 
 // ── Custom artifact actions (toolbar + card) ─────────────────────────────
@@ -644,7 +665,9 @@ for (const groupId of [
   "artifact-body-height",
   "artifact-fade-mask",
   "artifact-follow-output",
+  "artifact-overflow",
   "artifact-body-transition",
+  "artifact-complete-display",
 ]) {
   const group = document.getElementById(groupId);
   group?.addEventListener("click", (event) => {

@@ -16,9 +16,11 @@ const layout = (o: Partial<ArtifactBodyLayout> = {}): ArtifactBodyLayout => ({
   streamingHeight: 320,
   completeHeight: 320,
   followOutput: true,
+  overflow: "scroll",
   fadeTop: true,
   fadeBottom: false,
   transition: "auto",
+  completeDisplay: "inline",
   ...o,
 });
 
@@ -371,6 +373,126 @@ describe("artifact-preview inline bodyLayout", () => {
     expect(win.scrollTop).toBe(100);
   });
 
+  // Mutable-metric variant: lets a test grow the window and move scrollTop
+  // between updates (the plain stubScroll above pins scrollHeight/clientHeight).
+  const stubScrollLive = (
+    win: HTMLElement,
+    init: { scrollHeight: number; clientHeight: number; scrollTop: number }
+  ) => {
+    const s = { ...init };
+    Object.defineProperty(win, "scrollHeight", {
+      configurable: true,
+      get: () => s.scrollHeight,
+    });
+    Object.defineProperty(win, "clientHeight", {
+      configurable: true,
+      get: () => s.clientHeight,
+    });
+    Object.defineProperty(win, "scrollTop", {
+      configurable: true,
+      get: () => s.scrollTop,
+      set: (v: number) => {
+        s.scrollTop = v;
+      },
+    });
+    return s;
+  };
+
+  it("stops tail-follow after an upward wheel gesture while overflowing", async () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout(),
+    });
+    await nextFrame();
+    const win = handle.el.querySelector(
+      ".persona-artifact-source-window"
+    ) as HTMLElement;
+    stubScroll(win, 680); // dist = 0 → at the bottom (would normally pin).
+    // Upward wheel over an overflowing window latches "escaped".
+    win.dispatchEvent(new WheelEvent("wheel", { deltaY: -20 }));
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\nX"));
+    await nextFrame();
+    // Latched: the pin is suppressed even though the reader was at the bottom.
+    expect(win.scrollTop).toBe(680);
+    // A further delta must not re-pin while still latched.
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\n<p>again\nX"));
+    await nextFrame();
+    expect(win.scrollTop).toBe(680);
+  });
+
+  it("re-engages tail-follow when the reader returns within 40px of the bottom", async () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout(),
+    });
+    await nextFrame();
+    const win = handle.el.querySelector(
+      ".persona-artifact-source-window"
+    ) as HTMLElement;
+    stubScroll(win, 680);
+    win.dispatchEvent(new WheelEvent("wheel", { deltaY: -20 })); // escape
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\nX"));
+    await nextFrame();
+    expect(win.scrollTop).toBe(680); // still latched, no pin.
+
+    // Reader flicks back to the bottom → scroll event clears the latch.
+    win.dispatchEvent(new Event("scroll"));
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\n<p>again\nX"));
+    await nextFrame();
+    expect(win.scrollTop).toBe(1000); // follow resumed.
+  });
+
+  it("clears the escaped latch on completion so a reused window follows again", async () => {
+    // viewMode "source" keeps the completed record in the source window (no
+    // iframe swap), so the same window is reused and we can observe the reset.
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout({ viewMode: "source" }),
+    });
+    await nextFrame();
+    const win = handle.el.querySelector(
+      ".persona-artifact-source-window"
+    ) as HTMLElement;
+    stubScroll(win, 680);
+    win.dispatchEvent(new WheelEvent("wheel", { deltaY: -20 })); // escape
+
+    // Completion clears the latch.
+    handle.update(fileRecord({ status: "complete" }));
+    await nextFrame();
+    expect(handle.el.querySelector(".persona-artifact-source-window")).toBe(win);
+
+    // A later streaming delta at the bottom pins again — the latch was cleared.
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\nX"));
+    await nextFrame();
+    expect(win.scrollTop).toBe(1000);
+  });
+
+  it("does not latch on an upward wheel when the window does not overflow", async () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout(),
+    });
+    await nextFrame();
+    const win = handle.el.querySelector(
+      ".persona-artifact-source-window"
+    ) as HTMLElement;
+    // No overflow yet (scrollHeight === clientHeight): the gesture is ignored.
+    const metrics = stubScrollLive(win, {
+      scrollHeight: 320,
+      clientHeight: 320,
+      scrollTop: 0,
+    });
+    win.dispatchEvent(new WheelEvent("wheel", { deltaY: -20 }));
+
+    // Content grows to overflow and the reader is at the bottom; because the
+    // earlier wheel never latched, follow still pins.
+    metrics.scrollHeight = 1000;
+    metrics.scrollTop = 680; // dist = 1000 - 320 - 680 = 0.
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\nX"));
+    await nextFrame();
+    expect(win.scrollTop).toBe(1000);
+  });
+
   it("renders a status placeholder while streaming and the real body on complete", () => {
     const handle = renderArtifactPreviewBody(streamingFile(), {
       config: makeConfig(),
@@ -384,6 +506,55 @@ describe("artifact-preview inline bodyLayout", () => {
     handle.update(fileRecord({ status: "complete" }));
     expect(handle.el.querySelector(".persona-artifact-status-view")).toBeNull();
     expect(handle.el.querySelector("iframe")).toBeTruthy();
+  });
+
+  it("adds the --clip class (plus --fixed) for overflow 'clip'", () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout({ overflow: "clip", followOutput: false, fadeBottom: true }),
+    });
+    const win = handle.el.querySelector(".persona-artifact-source-window")!;
+    expect(win.classList.contains("persona-artifact-source-window--fixed")).toBe(true);
+    expect(win.classList.contains("persona-artifact-source-window--clip")).toBe(true);
+  });
+
+  it("does not add the --clip class for overflow 'scroll'", () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout(),
+    });
+    const win = handle.el.querySelector(".persona-artifact-source-window")!;
+    expect(win.classList.contains("persona-artifact-source-window--clip")).toBe(false);
+  });
+
+  it("never tail-follows in clip mode even when the reader is at the bottom", async () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout({ overflow: "clip", followOutput: false, fadeBottom: true }),
+    });
+    await nextFrame();
+    const win = handle.el.querySelector(
+      ".persona-artifact-source-window"
+    ) as HTMLElement;
+    stubScroll(win, 0); // top of the document; dist to bottom = 680.
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\nX"));
+    await nextFrame();
+    // Clip windows never pin the tail: scrollTop stays at the top.
+    expect(win.scrollTop).toBe(0);
+  });
+
+  it("shows the bottom fade class when clipped content overflows, never the top fade", () => {
+    const handle = renderArtifactPreviewBody(streamingFile(), {
+      config: makeConfig(),
+      bodyLayout: layout({ overflow: "clip", followOutput: false, fadeBottom: true }),
+    });
+    const win = handle.el.querySelector(
+      ".persona-artifact-source-window"
+    ) as HTMLElement;
+    stubScroll(win, 0); // overflowing (scrollHeight 1000 > clientHeight 320).
+    handle.update(streamingFile("```html\n<h1>hi\n<p>more\nX"));
+    expect(win.classList.contains("persona-artifact-fade-bottom")).toBe(true);
+    expect(win.classList.contains("persona-artifact-fade-top")).toBe(false);
   });
 });
 

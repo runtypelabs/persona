@@ -3,10 +3,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PersonaArtifactInline,
+  resolveInlineBody,
   updateInlineArtifactBlocks
 } from "./artifact-inline";
 import { componentRegistry } from "./registry";
 import type {
+  AgentWidgetArtifactsFeature,
   AgentWidgetConfig,
   AgentWidgetMessage,
   PersonaArtifactRecord
@@ -574,6 +576,72 @@ describe("PersonaArtifactInline inlineBody height model", () => {
   });
 });
 
+describe("resolveInlineBody fadeMask defaults", () => {
+  it("defaults to top+bottom fade when fadeMask is undefined", () => {
+    const layout = resolveInlineBody({} as AgentWidgetArtifactsFeature);
+    expect(layout.fadeTop).toBe(true);
+    expect(layout.fadeBottom).toBe(true);
+  });
+
+  it("keeps an explicit { top: true } as top-only (bottom off)", () => {
+    const layout = resolveInlineBody({
+      inlineBody: { fadeMask: { top: true } }
+    } as AgentWidgetArtifactsFeature);
+    expect(layout.fadeTop).toBe(true);
+    expect(layout.fadeBottom).toBe(false);
+  });
+
+  it("disables both fades for fadeMask false", () => {
+    const layout = resolveInlineBody({
+      inlineBody: { fadeMask: false }
+    } as AgentWidgetArtifactsFeature);
+    expect(layout.fadeTop).toBe(false);
+    expect(layout.fadeBottom).toBe(false);
+  });
+
+  it("enables both fades for fadeMask true", () => {
+    const layout = resolveInlineBody({
+      inlineBody: { fadeMask: true }
+    } as AgentWidgetArtifactsFeature);
+    expect(layout.fadeTop).toBe(true);
+    expect(layout.fadeBottom).toBe(true);
+  });
+});
+
+describe("resolveInlineBody overflow precedence", () => {
+  it("defaults overflow to 'scroll' with tail-follow on and top+bottom fade", () => {
+    const layout = resolveInlineBody({} as AgentWidgetArtifactsFeature);
+    expect(layout.overflow).toBe("scroll");
+    expect(layout.followOutput).toBe(true);
+    expect(layout.fadeTop).toBe(true);
+    expect(layout.fadeBottom).toBe(true);
+  });
+
+  it("ignores followOutput in clip mode (forced off) even when set true", () => {
+    const layout = resolveInlineBody({
+      inlineBody: { overflow: "clip", followOutput: true }
+    } as AgentWidgetArtifactsFeature);
+    expect(layout.overflow).toBe("clip");
+    expect(layout.followOutput).toBe(false);
+  });
+
+  it("defaults clip mode to bottom-only fade (no top fade)", () => {
+    const layout = resolveInlineBody({
+      inlineBody: { overflow: "clip" }
+    } as AgentWidgetArtifactsFeature);
+    expect(layout.fadeTop).toBe(false);
+    expect(layout.fadeBottom).toBe(true);
+  });
+
+  it("lets an explicit fadeMask win over the clip-mode fade default", () => {
+    const layout = resolveInlineBody({
+      inlineBody: { overflow: "clip", fadeMask: { top: true, bottom: false } }
+    } as AgentWidgetArtifactsFeature);
+    expect(layout.fadeTop).toBe(true);
+    expect(layout.fadeBottom).toBe(false);
+  });
+});
+
 describe("PersonaArtifactInline inlineBody viewMode", () => {
   const htmlFileProps = (status: "streaming" | "complete"): Record<string, unknown> => ({
     artifactId: "f1",
@@ -909,5 +977,233 @@ describe("PersonaArtifactInline view toggle", () => {
     expect(el.querySelector("iframe")).toBeTruthy();
     expect(pressed(renderedBtn(el))).toBe(true);
     expect(pressed(sourceBtn(el))).toBe(false);
+  });
+});
+
+describe("resolveInlineBody completeDisplay", () => {
+  it("defaults completeDisplay to 'inline'", () => {
+    const layout = resolveInlineBody({} as AgentWidgetArtifactsFeature);
+    expect(layout.completeDisplay).toBe("inline");
+  });
+
+  it("resolves completeDisplay 'card' when set", () => {
+    const layout = resolveInlineBody({
+      inlineBody: { completeDisplay: "card" }
+    } as AgentWidgetArtifactsFeature);
+    expect(layout.completeDisplay).toBe("card");
+  });
+});
+
+describe("PersonaArtifactInline completeDisplay 'card'", () => {
+  const cardConfig = () => makeConfig({ inlineBody: { completeDisplay: "card" } });
+
+  it("keeps the streamed inline body while streaming (no card yet)", () => {
+    const el = PersonaArtifactInline(streamingProps(), makeContext(cardConfig()));
+    // Streaming phase renders the normal inline chrome + body, not the card.
+    expect(el.querySelector(".persona-artifact-inline-chrome")).not.toBeNull();
+    expect(el.querySelector(".persona-artifact-inline-body")).not.toBeNull();
+    expect(el.querySelector(".persona-artifact-card")).toBeNull();
+    expect(el.classList.contains("persona-artifact-inline--card")).toBe(false);
+  });
+
+  it("collapses chrome + body to the card on the streaming→complete boundary, same root", () => {
+    const container = document.createElement("div");
+    const el = PersonaArtifactInline(streamingProps(), makeContext(cardConfig()));
+    container.appendChild(el);
+    expect(el.querySelector(".persona-artifact-inline-chrome")).not.toBeNull();
+
+    updateInlineArtifactBlocks(container, [
+      {
+        id: "a1",
+        artifactType: "markdown",
+        title: "Notes",
+        status: "complete",
+        markdown: "# Done"
+      }
+    ]);
+
+    // Same root element, data-artifact-inline + theme zone preserved.
+    expect(container.firstElementChild).toBe(el);
+    expect(el.getAttribute("data-artifact-inline")).toBe("a1");
+    expect(el.getAttribute("data-persona-theme-zone")).toBe("artifact-inline");
+    // Chrome + body replaced by the reference card.
+    expect(el.querySelector(".persona-artifact-inline-chrome")).toBeNull();
+    expect(el.querySelector(".persona-artifact-inline-body")).toBeNull();
+    const card = el.querySelector(".persona-artifact-card") as HTMLElement | null;
+    expect(card).not.toBeNull();
+    expect(card!.getAttribute("data-open-artifact")).toBe("a1");
+    expect(card!.textContent).toContain("Notes");
+    // Frame styling neutralized so the nested card is the sole visual.
+    expect(el.classList.contains("persona-artifact-inline--card")).toBe(true);
+  });
+
+  it("does not run the View Transition on the card-collapse boundary", () => {
+    type VTStub = {
+      startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+    };
+    const start = vi.fn((cb: () => void) => {
+      cb();
+      return { finished: Promise.resolve() };
+    });
+    (document as unknown as VTStub).startViewTransition = start;
+    try {
+      const container = document.createElement("div");
+      const el = PersonaArtifactInline(streamingProps(), makeContext(cardConfig()));
+      container.appendChild(el);
+      updateInlineArtifactBlocks(container, [
+        {
+          id: "a1",
+          artifactType: "markdown",
+          title: "Notes",
+          status: "complete",
+          markdown: "# Done"
+        }
+      ]);
+      // The plain-CSS collapse replaces the body View Transition.
+      expect(start).not.toHaveBeenCalled();
+      expect(el.querySelector(".persona-artifact-card")).not.toBeNull();
+    } finally {
+      delete (document as unknown as VTStub).startViewTransition;
+    }
+  });
+
+  it("hydrates an already-complete block straight to the card (no inline body flash)", () => {
+    const el = PersonaArtifactInline(completeProps(), makeContext(cardConfig()));
+    expect(el.querySelector(".persona-artifact-inline-chrome")).toBeNull();
+    expect(el.querySelector(".persona-artifact-inline-body")).toBeNull();
+    const card = el.querySelector(".persona-artifact-card") as HTMLElement | null;
+    expect(card).not.toBeNull();
+    expect(card!.getAttribute("data-open-artifact")).toBe("a1");
+    expect(el.classList.contains("persona-artifact-inline--card")).toBe(true);
+  });
+
+  it("keeps routing records to the block after the collapse (card stays in sync)", () => {
+    const container = document.createElement("div");
+    const el = PersonaArtifactInline(
+      completeProps(),
+      makeContext(cardConfig())
+    );
+    container.appendChild(el);
+    expect(el.querySelector(".persona-artifact-card")?.textContent).toContain(
+      "Notes"
+    );
+
+    updateInlineArtifactBlocks(container, [
+      {
+        id: "a1",
+        artifactType: "markdown",
+        title: "Renamed",
+        status: "complete",
+        markdown: "# Done"
+      }
+    ]);
+    const card = el.querySelector(".persona-artifact-card") as HTMLElement | null;
+    expect(card).not.toBeNull();
+    expect(card!.textContent).toContain("Renamed");
+  });
+
+  it("leaves no explicit height on the root in the jsdom instant path", () => {
+    const container = document.createElement("div");
+    // Detached container → root is not connected → collapse degrades to an
+    // instant swap, leaving no inline height/overflow/transition behind.
+    const el = PersonaArtifactInline(streamingProps(), makeContext(cardConfig()));
+    container.appendChild(el);
+    updateInlineArtifactBlocks(container, [
+      {
+        id: "a1",
+        artifactType: "markdown",
+        title: "Notes",
+        status: "complete",
+        markdown: "# Done"
+      }
+    ]);
+    expect(el.style.height).toBe("");
+    expect(el.style.overflow).toBe("");
+    expect(el.style.transition).toBe("");
+    expect(
+      el.style.getPropertyValue("--persona-artifact-inline-body-height")
+    ).toBe("");
+  });
+
+  it("default 'inline' completeDisplay stays inline through completion (no card)", () => {
+    const container = document.createElement("div");
+    const el = PersonaArtifactInline(streamingProps(), makeContext(makeConfig()));
+    container.appendChild(el);
+    updateInlineArtifactBlocks(container, [
+      {
+        id: "a1",
+        artifactType: "markdown",
+        title: "Notes",
+        status: "complete",
+        markdown: "# Done"
+      }
+    ]);
+    expect(el.querySelector(".persona-artifact-card")).toBeNull();
+    expect(el.querySelector(".persona-artifact-inline-chrome")).not.toBeNull();
+    expect(el.querySelector(".persona-artifact-inline-body")).not.toBeNull();
+  });
+});
+
+describe("PersonaArtifactInline clip-mode expand hitbox", () => {
+  const fileStreamingProps = (): Record<string, unknown> => ({
+    artifactId: "f1",
+    title: "outputs/cat.html",
+    artifactType: "markdown",
+    status: "streaming",
+    markdown: "```html\n<h1>hi",
+    file: { path: "outputs/cat.html", mimeType: "text/html", language: "html" }
+  });
+  const bodyOf = (el: HTMLElement): HTMLElement =>
+    el.querySelector(".persona-artifact-inline-body") as HTMLElement;
+
+  it("marks the body as an expand hitbox in clip mode with expand enabled", () => {
+    const el = PersonaArtifactInline(
+      fileStreamingProps(),
+      makeContext(makeConfig({ inlineBody: { overflow: "clip" } }))
+    );
+    const body = bodyOf(el);
+    expect(body.getAttribute("data-expand-artifact-inline")).toBe("f1");
+    expect(body.getAttribute("role")).toBe("button");
+    expect(body.getAttribute("tabindex")).toBe("0");
+    expect(body.classList.contains("persona-cursor-pointer")).toBe(true);
+    // File artifacts use the basename as the chrome title.
+    expect(body.getAttribute("aria-label")).toBe("Open cat.html in panel");
+  });
+
+  it("does not mark the body when overflow is 'scroll' (default)", () => {
+    const el = PersonaArtifactInline(
+      fileStreamingProps(),
+      makeContext(makeConfig({ inlineBody: { overflow: "scroll" } }))
+    );
+    expect(
+      bodyOf(el).hasAttribute("data-expand-artifact-inline")
+    ).toBe(false);
+  });
+
+  it("does not mark the body in clip mode when expand is disabled", () => {
+    const el = PersonaArtifactInline(
+      fileStreamingProps(),
+      makeContext(
+        makeConfig({
+          inlineBody: { overflow: "clip" },
+          inlineChrome: { showExpand: false }
+        })
+      )
+    );
+    expect(
+      bodyOf(el).hasAttribute("data-expand-artifact-inline")
+    ).toBe(false);
+  });
+
+  it("does not mark the body in clip mode when chrome is off (no expand control)", () => {
+    const el = PersonaArtifactInline(
+      fileStreamingProps(),
+      makeContext(
+        makeConfig({ inlineBody: { overflow: "clip" }, inlineChrome: false })
+      )
+    );
+    expect(
+      bodyOf(el).hasAttribute("data-expand-artifact-inline")
+    ).toBe(false);
   });
 });

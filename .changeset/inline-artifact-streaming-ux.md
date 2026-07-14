@@ -1,0 +1,10 @@
+---
+"@runtypelabs/persona": minor
+---
+
+Inline artifact streaming UX upgrade, aligning the inline block with the norms set by Claude.ai, ChatGPT Canvas, Copilot, and the Vercel Chat SDK:
+
+- **New `inlineBody.overflow`** (`"scroll" | "clip"`, default `"scroll"`). `"clip"` renders a fixed-height window showing the top of the document with `overflow: hidden` and no internal scroll or tail-follow (`followOutput` is ignored). A bottom edge fade appears when content overflows, and when the inline chrome's Expand control is enabled the whole body doubles as an expand hitbox: click, Enter, or Space opens the artifact in the pane. An explicit `fadeMask` still wins over the clip-mode fade default.
+- **New `inlineBody.completeDisplay`** (`"inline" | "card"`, default `"inline"`). With `"card"`, the block streams inline as configured and then collapses to the compact artifact reference card once the artifact completes. The collapse plays as a short CSS height transition (skipped under `prefers-reduced-motion`) rather than a View Transition. Blocks that arrive already complete, such as on page-refresh hydration, render the card directly with no flash of the inline body. After collapse the card's normal actions apply; `viewMode`, the view toggle, `inlineActions`, and inline copy are streaming-phase-only in this mode.
+- **Gesture-based unstick.** Streaming source windows now stop tail-following on an upward wheel or touch gesture, not just on scroll position, and re-engage when the reader returns within 40px of the bottom or the stream completes. Growth-induced scroll is never mistaken for reader intent, so follow no longer freezes mid-stream.
+- **Fade-mask defaults.** The edge fade size fallback moves from 24px to 40px, and the default `inlineBody.fadeMask` is now top+bottom instead of top-only. The bottom fade is clip-gated at render time: it stays inert while tail-follow is pinned and only appears when the reader scrolls up mid-stream. Themes pinning `--persona-artifact-fade-size` are unaffected.

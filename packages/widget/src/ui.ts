@@ -1908,11 +1908,17 @@ export const createAgentExperience = (
     syncArtifactPane();
   });
 
-  // Keyboard support for artifact cards
+  // Keyboard support for artifact cards and the clip-mode inline expand hitbox
+  // (both expose a data-* attribute on a focusable element; Enter/Space forward
+  // to the element's own click, which the delegated click handlers above own).
   messagesWrapper.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const target = event.target as HTMLElement;
-    if (!target.hasAttribute('data-open-artifact')) return;
+    if (
+      !target.hasAttribute('data-open-artifact') &&
+      !target.hasAttribute('data-expand-artifact-inline')
+    )
+      return;
     event.preventDefault();
     target.click();
   });

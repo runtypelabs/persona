@@ -3449,6 +3449,18 @@
   overflow: hidden;
 }
 
+/* completeDisplay: "card" — once the block collapses to the compact reference
+   card it keeps the same root (updater keying + theme zone survive) but must
+   drop the inline frame styling, since the nested card carries its own border,
+   background, and radius. overflow: visible so the card's focus outline (which
+   uses outline-offset) isn't clipped. */
+[data-persona-root] .persona-artifact-inline.persona-artifact-inline--card {
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+
 /* Title/toolbar chrome bar: flush to the frame edge (no frame padding). */
 [data-persona-root] .persona-artifact-inline-chrome {
   display: flex;
@@ -3547,19 +3559,29 @@
   overflow-y: auto;
 }
 
+/* Clipped preview window (inlineBody.overflow: "clip"): a fixed-height window
+   showing the top of the document with no internal scroll. Applied together with
+   --fixed (which supplies the reserved height via the --sized body wrapper and
+   the fill-capable detection in artifact-inline.ts); declared after --fixed so
+   this overflow: hidden wins its overflow-y: auto on the specificity tie. */
+[data-persona-root] .persona-artifact-source-window--clip {
+  overflow: hidden;
+}
+
 /* Edge fade masks on the fixed window (top fade signals content clipped above).
-   mask-image works over any themed background; size via --persona-artifact-fade-size. */
+   mask-image works over any themed background; size via --persona-artifact-fade-size
+   (defaults to 40px). */
 [data-persona-root]
   .persona-artifact-fade-top:not(.persona-artifact-fade-bottom) {
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--persona-artifact-fade-size, 24px)
+    #000 var(--persona-artifact-fade-size, 40px)
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--persona-artifact-fade-size, 24px)
+    #000 var(--persona-artifact-fade-size, 40px)
   );
 }
 [data-persona-root]
@@ -3567,12 +3589,12 @@
   -webkit-mask-image: linear-gradient(
     to top,
     transparent 0,
-    #000 var(--persona-artifact-fade-size, 24px)
+    #000 var(--persona-artifact-fade-size, 40px)
   );
   mask-image: linear-gradient(
     to top,
     transparent 0,
-    #000 var(--persona-artifact-fade-size, 24px)
+    #000 var(--persona-artifact-fade-size, 40px)
   );
 }
 [data-persona-root]
@@ -3580,15 +3602,15 @@
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--persona-artifact-fade-size, 24px),
-    #000 calc(100% - var(--persona-artifact-fade-size, 24px)),
+    #000 var(--persona-artifact-fade-size, 40px),
+    #000 calc(100% - var(--persona-artifact-fade-size, 40px)),
     transparent 100%
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--persona-artifact-fade-size, 24px),
-    #000 calc(100% - var(--persona-artifact-fade-size, 24px)),
+    #000 var(--persona-artifact-fade-size, 40px),
+    #000 calc(100% - var(--persona-artifact-fade-size, 40px)),
     transparent 100%
   );
 }

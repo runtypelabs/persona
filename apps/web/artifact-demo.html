@@ -94,8 +94,8 @@
             <div class="section">
               <label>Fade mask</label>
               <div class="mode-group" id="artifact-fade-mask">
-                <button type="button" class="mode-btn active" data-mode="top">Top</button>
-                <button type="button" class="mode-btn" data-mode="both">Top and bottom</button>
+                <button type="button" class="mode-btn" data-mode="top">Top</button>
+                <button type="button" class="mode-btn active" data-mode="both">Top and bottom</button>
                 <button type="button" class="mode-btn" data-mode="off">Off</button>
               </div>
               <p class="hint">Fade the scroll edges of the streaming window (<code>inlineBody.fadeMask</code>).</p>
@@ -109,12 +109,28 @@
               <p class="hint">Keep the streaming window pinned to the newest output (<code>inlineBody.followOutput</code>).</p>
             </div>
             <div class="section">
+              <label>Overflow</label>
+              <div class="mode-group" id="artifact-overflow">
+                <button type="button" class="mode-btn active" data-mode="scroll">Scroll</button>
+                <button type="button" class="mode-btn" data-mode="clip">Clip</button>
+              </div>
+              <p class="hint">Scroll follows the streaming tail; clip shows the top of the document in a fixed window with no internal scroll, and the body opens the pane when expand is on (<code>inlineBody.overflow</code>).</p>
+            </div>
+            <div class="section">
               <label>Transition</label>
               <div class="mode-group" id="artifact-body-transition">
                 <button type="button" class="mode-btn active" data-mode="auto">Auto</button>
                 <button type="button" class="mode-btn" data-mode="none">None</button>
               </div>
               <p class="hint">Cross-fade the streaming to complete swap where supported (<code>inlineBody.transition</code>).</p>
+            </div>
+            <div class="section">
+              <label>On complete</label>
+              <div class="mode-group" id="artifact-complete-display">
+                <button type="button" class="mode-btn active" data-mode="inline">Stay inline</button>
+                <button type="button" class="mode-btn" data-mode="card">Collapse to card</button>
+              </div>
+              <p class="hint">Keep the streamed body inline, or collapse the block to the compact reference card once the artifact completes, the Copilot chiclet / Claude handoff pattern (<code>inlineBody.completeDisplay</code>). The collapse plays as a short height transition; click the collapsed card to open the pane.</p>
             </div>
           </div>
 

@@ -72,12 +72,27 @@ export type ArtifactBodyLayout = {
   completeHeight: number | "auto";
   /** Tail-follow the newest lines while a numeric-height source window streams. */
   followOutput: boolean;
+  /**
+   * Overflow handling for a fixed-height source window. `"scroll"` (default) is
+   * an internally scrollable, tail-following window; `"clip"` is a fixed-height
+   * window showing the TOP of the document with `overflow: hidden`, no internal
+   * scroll listeners, and no tail-follow (`resolveInlineBody` forces
+   * `followOutput` off and the bottom-only fade default in this mode).
+   */
+  overflow: "scroll" | "clip";
   /** Show a top edge fade on the fixed window when content is clipped above. */
   fadeTop: boolean;
   /** Show a bottom edge fade on the fixed window when content is clipped below. */
   fadeBottom: boolean;
   /** Wrap the streaming→complete swap in a View Transition when supported. */
   transition: "auto" | "none";
+  /**
+   * What the inline block becomes once the artifact completes. `"inline"`
+   * (default) keeps the streamed body in place; `"card"` collapses the block to
+   * the compact reference card. Consumed only by the inline block component
+   * (`artifact-inline.ts`) — the shared preview renderer ignores it.
+   */
+  completeDisplay: "inline" | "card";
 };
 
 export type ArtifactPreviewContext = {
@@ -595,10 +610,17 @@ export function renderArtifactPreviewBody(
   let sourceRoot: HTMLElement | null = null;
   let sourceCode: HTMLElement | null = null;
   let sourceKey: string | null = null;
+  // Per-window "the reader deliberately scrolled away from the tail" latch.
+  // Set by an upward wheel / a touch drag (real intent), NEVER by a `scroll`
+  // event — growth-induced scroll is the industry-wide freeze bug we avoid.
+  // Cleared when the reader lands back near the bottom or the stream completes.
+  // Lives in this closure so it resets with the window (resetSource).
+  let escaped = false;
   const resetSource = () => {
     sourceRoot = null;
     sourceCode = null;
     sourceKey = null;
+    escaped = false;
   };
 
   // Status-view reuse: kept stable across streaming deltas so the "Generating …"
@@ -664,10 +686,46 @@ export function renderArtifactPreviewBody(
         const scroll = createElement("div", "persona-artifact-source-window");
         scroll.appendChild(pre);
         el.appendChild(scroll);
-        if (typeof scroll.addEventListener === "function") {
-          scroll.addEventListener("scroll", () => updateFadeClasses(scroll), {
-            passive: true,
-          });
+        // Clip mode (overflow: "clip") is a static top-of-document window:
+        // `overflow: hidden`, no internal scroll, no tail-follow — so it wires
+        // none of the scroll/wheel/touch intent listeners below (there is
+        // nothing to scroll and nothing to unstick).
+        const clip = layout?.overflow === "clip";
+        if (!clip && typeof scroll.addEventListener === "function") {
+          // Does the window actually clip content? Gesture intent only counts
+          // while there is somewhere to scroll to.
+          const overflows = () => scroll.scrollHeight - scroll.clientHeight > 1;
+          // `scroll` fires for BOTH user scrolling and growth-induced reflow, so
+          // it never SETS the escaped latch (that misread is the freeze bug).
+          // It only clears the latch when the reader has returned to the bottom.
+          scroll.addEventListener(
+            "scroll",
+            () => {
+              if (isNearBottom(scroll)) escaped = false;
+              updateFadeClasses(scroll);
+            },
+            { passive: true }
+          );
+          // An upward wheel over an overflowing window is deliberate: the reader
+          // wants to look back, so stop pinning the tail (matches
+          // use-stick-to-bottom's `deltaY < 0` unstick).
+          scroll.addEventListener(
+            "wheel",
+            (e) => {
+              if (overflows() && e.deltaY < 0) escaped = true;
+            },
+            { passive: true }
+          );
+          // Touch drags carry no reliable direction here, so any touch move over
+          // an overflowing window is treated as taking manual control; the scroll
+          // listener re-engages follow once they flick back to the bottom.
+          scroll.addEventListener(
+            "touchmove",
+            () => {
+              if (overflows()) escaped = true;
+            },
+            { passive: true }
+          );
         }
         sourceRoot = scroll;
       } else {
@@ -681,6 +739,13 @@ export function renderArtifactPreviewBody(
     const scroll = useWindow ? sourceRoot : null;
     if (scroll) {
       scroll.classList.toggle("persona-artifact-source-window--fixed", fixed);
+      // Clip windows carry both classes: --fixed supplies the reserved height +
+      // fill-capable detection (artifact-inline.ts), and --clip overrides its
+      // overflow-y: auto with overflow: hidden (declared later in widget.css).
+      scroll.classList.toggle(
+        "persona-artifact-source-window--clip",
+        fixed && layout?.overflow === "clip"
+      );
     }
     // Measure before the swap: tail-follow only when the reader was already at
     // the bottom (don't fight a reader who scrolled up).
@@ -691,10 +756,16 @@ export function renderArtifactPreviewBody(
     sourceCode!.replaceChildren(highlightCode(text, opts?.language, opts?.path));
     if (scroll) {
       // Follow only while streaming; the complete render keeps whatever scroll
-      // position the window ended on.
+      // position the window ended on. Two gates stop the pin: the `escaped`
+      // latch (an explicit wheel-up / touch gesture — sharp intent detection)
+      // and the positional `wasNearBottom` fallback (covers programmatic and
+      // keyboard scrolling, which fire neither wheel nor touch). Completion
+      // clears the latch so a reused window follows the next stream from scratch.
       const streaming = rec.status !== "complete";
-      if (fixed && streaming && layout?.followOutput && wasNearBottom) {
+      if (fixed && streaming && layout?.followOutput && !escaped && wasNearBottom) {
         stickToBottom(scroll);
+      } else if (!streaming) {
+        escaped = false;
       }
       updateFadeClasses(scroll);
     }
