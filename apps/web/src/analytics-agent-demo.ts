@@ -52,6 +52,27 @@ const FLINT_COMPONENT = "NorthstarFlintChart";
 const database = new AnalyticsDatabase();
 let widget: AgentWidgetInitHandle | null = null;
 
+const ANALYTICS_TOOL_ACTIVITY: Record<string, readonly [active: string, complete: string]> = {
+  describe_analytics_data: ["Reviewing the available data", "Reviewed the available data"],
+  run_analytics_sql: ["Analyzing the numbers", "Analyzed the numbers"],
+  create_flint_chart: ["Designing the visualization", "Created the visualization"],
+};
+
+const getToolActivityLabel = (
+  toolName: string | undefined,
+): readonly [active: string, complete: string] | undefined => {
+  const bareName = toolName?.replace(/^webmcp:/, "");
+  return bareName ? ANALYTICS_TOOL_ACTIVITY[bareName] : undefined;
+};
+
+const renderGroupedToolActivity = (
+  toolCalls: Array<{ name?: string; status: "pending" | "running" | "complete" }>,
+): string => {
+  const activeTool = [...toolCalls].reverse().find((toolCall) => toolCall.status !== "complete");
+  if (!activeTool) return "Analysis ready";
+  return `${getToolActivityLabel(activeTool.name)?.[0] ?? "Working through your request"}…`;
+};
+
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const apiUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-analytics`
@@ -680,10 +701,31 @@ const config: AgentWidgetConfig = {
   },
   suggestionChips: [],
   messageActions: { showCopy: true, showUpvote: false, showDownvote: false },
+  toolCall: {
+    ...DEFAULT_WIDGET_CONFIG.toolCall,
+    borderRadius: "0",
+    loadingAnimationColor: "#6d5dfc",
+    loadingAnimationSecondaryColor: "#9d8cff",
+    loadingAnimationDuration: 1500,
+    renderCollapsedSummary: ({ toolCall, isActive }) => {
+      const label = getToolActivityLabel(toolCall.name);
+      if (!label) return isActive ? "Working through your request…" : "Completed an analysis step";
+      return isActive ? `${label[0]}…` : label[1];
+    },
+    renderGroupedSummary: ({ toolCalls }) => renderGroupedToolActivity(toolCalls),
+  },
   features: {
     ...DEFAULT_WIDGET_CONFIG.features,
-    showReasoning: true,
+    showReasoning: false,
     showToolCalls: true,
+    toolCallDisplay: {
+      ...DEFAULT_WIDGET_CONFIG.features?.toolCallDisplay,
+      collapsedMode: "tool-name",
+      activePreview: false,
+      grouped: true,
+      expandable: false,
+      loadingAnimation: "shimmer-color",
+    },
     artifacts: {
       enabled: true,
       allowedTypes: ["component"],
