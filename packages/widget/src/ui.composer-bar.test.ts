@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 
 describe("createAgentExperience composer-bar mode", () => {
   afterEach(() => {
+    vi.unstubAllGlobals();
     document.body.innerHTML = "";
     // The widget's default localStorage adapter persists chat history
     // across createAgentExperience calls. Clear it so each test starts
@@ -329,18 +330,26 @@ describe("createAgentExperience composer-bar mode", () => {
     controller.destroy();
   });
 
-  it("clicking the clear-chat button clears injected messages", () => {
+  it("clicking the clear-chat button clears messages and artifacts", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
     const mount = document.createElement("div");
     document.body.appendChild(mount);
 
     const controller = createAgentExperience(mount, {
       apiUrl: "https://api.example.com/chat",
       launcher: { mountMode: "composer-bar" },
+      features: { artifacts: { enabled: true } },
     });
 
     controller.injectAssistantMessage({ content: "hello there" });
     controller.injectUserMessage({ content: "ping" });
+    controller.upsertArtifact({
+      artifactType: "markdown",
+      title: "Generated analysis",
+      content: "# Revenue trend",
+    });
     expect(controller.getMessages().length).toBeGreaterThan(0);
+    expect(controller.getArtifacts()).toHaveLength(1);
 
     const clearChat = mount.querySelector<HTMLButtonElement>(
       "[aria-label='Clear chat'], [aria-label='Start over']"
@@ -349,6 +358,7 @@ describe("createAgentExperience composer-bar mode", () => {
     clearChat!.click();
 
     expect(controller.getMessages().length).toBe(0);
+    expect(controller.getArtifacts()).toHaveLength(0);
 
     controller.destroy();
   });

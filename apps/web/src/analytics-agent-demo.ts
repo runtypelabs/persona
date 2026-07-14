@@ -728,6 +728,10 @@ const config: AgentWidgetConfig = {
     agentIconBackgroundColor: "#6d5dfc",
     autoExpand: false,
     zIndex: 100000,
+    clearChat: {
+      ...DEFAULT_WIDGET_CONFIG.launcher?.clearChat,
+      tooltipText: "Reset chat and artifacts",
+    },
     composerBar: {
       collapsedMaxWidth: "720px",
       bottomOffset: "18px",
@@ -749,23 +753,16 @@ widget = initAgentWidget({
   config,
 });
 
-const runStarterScenario = async (
+const startAgentScenario = (
   scenario: AnalyticsStarterScenario,
   trigger: HTMLButtonElement,
-): Promise<void> => {
+): void => {
   trigger.disabled = true;
-  widget?.injectUserMessage({ content: scenario.prompt });
-  try {
-    await createFlintArtifact(scenario);
-    widget?.injectAssistantMessage({
-      content: `I ran the analysis and opened **${scenario.title}** as an interactive Flint chart.`,
-    });
-  } catch (error) {
-    widget?.injectAssistantMessage({
-      content: `I couldn't build that chart. ${error instanceof Error ? error.message : "Please try again."}`,
-    });
-    trigger.disabled = false;
-  }
+  const submitted = widget?.submitMessage(scenario.prompt) ?? false;
+  // Submission expands the chat synchronously, hiding this starter surface.
+  // Re-enable it for the next time the user returns to the collapsed state.
+  trigger.disabled = false;
+  if (!submitted) widget?.focusInput();
 };
 
 const mountStarterExamples = (): void => {
@@ -798,7 +795,7 @@ const mountStarterExamples = (): void => {
       </span>
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
     `;
-    button.addEventListener("click", () => void runStarterScenario(scenario, button));
+    button.addEventListener("click", () => startAgentScenario(scenario, button));
     list.appendChild(button);
   }
   starters.appendChild(list);
@@ -834,7 +831,7 @@ const mountCollapsedStarterExamples = (): void => {
       </span>
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
     `;
-    button.addEventListener("click", () => void runStarterScenario(scenario, button));
+    button.addEventListener("click", () => startAgentScenario(scenario, button));
     actions.appendChild(button);
   }
   starters.appendChild(actions);

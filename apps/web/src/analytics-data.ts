@@ -153,9 +153,9 @@ export type AnalyticsStarterScenario = {
 };
 
 /**
- * First-run examples are fixed recipes rather than model-only prompts. That
- * keeps the showcase deterministic while still exercising the same local SQL,
- * Flint compiler, Persona artifact, data-table, and SQL-view pipeline.
+ * Each starter includes a known-good reference recipe for compilation tests,
+ * but the UI submits the natural-language prompt through Atlas so the agent
+ * still inspects the warehouse, writes SQL, and builds the Flint artifact.
  */
 export const ANALYTICS_STARTER_SCENARIOS: readonly AnalyticsStarterScenario[] = [
   {
@@ -163,7 +163,8 @@ export const ANALYTICS_STARTER_SCENARIOS: readonly AnalyticsStarterScenario[] = 
     index: "01",
     eyebrow: "Stacked area",
     title: "Map product revenue momentum",
-    prompt: "Show me how product revenue has shifted over the last 18 months.",
+    prompt:
+      "Analyze how product revenue has shifted over the last 18 months. Write and validate the SQL, then create an interactive Flint stacked area chart with month on the x-axis, revenue on the y-axis, and product as the color series. Summarize the most important change in the mix.",
     description:
       "An 18-month view of revenue momentum reveals how each product contributes to the total growth curve.",
     sql:
@@ -177,7 +178,8 @@ export const ANALYTICS_STARTER_SCENARIOS: readonly AnalyticsStarterScenario[] = 
     index: "02",
     eyebrow: "Bubble scatter",
     title: "Compare acquisition quality",
-    prompt: "Which acquisition sources balance conversion, engagement, and traffic volume best?",
+    prompt:
+      "Compare acquisition source quality using conversion rate, average session duration, and session volume. Write and validate the SQL, then create an interactive Flint bubble scatter chart with conversion rate on x, engagement on y, source as color, and session volume as bubble size. Call out the strongest efficient channel.",
     description:
       "Conversion rate, engagement, and session volume make channel quality and scale visible in a single view.",
     sql:
