@@ -13,6 +13,7 @@ import {
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 import type { ChartAssemblyInput } from "flint-chart";
 import type { EChartsOption } from "echarts";
+import { installComposerAttentionHint } from "./analytics-composer-hint";
 import {
   ANALYTICS_SCHEMA,
   ANALYTICS_STARTER_SCENARIOS,
@@ -799,6 +800,11 @@ const mountStarterExamples = (): void => {
 };
 
 mountStarterExamples();
+const composerAttentionHint = installComposerAttentionHint({
+  root: mount,
+  isOpen: () => widget?.isOpen() ?? false,
+});
+const stopWatchingWidgetOpen = widget.on("widget:opened", composerAttentionHint.engage);
 
 document.querySelectorAll<HTMLElement>("[data-ask]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -833,6 +839,8 @@ const starterObserver = new MutationObserver(mountStarterExamples);
 starterObserver.observe(mount, { childList: true, subtree: true });
 
 window.addEventListener("beforeunload", () => {
+  composerAttentionHint.destroy();
+  stopWatchingWidgetOpen();
   artifactObserver.disconnect();
   starterObserver.disconnect();
   toolController.abort();

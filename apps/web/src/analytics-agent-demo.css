@@ -318,6 +318,7 @@ tbody tr:last-child td { border-bottom: 0; }
 #analytics-agent-root { position: relative; z-index: 100; }
 #analytics-agent-root .persona-widget-pill-root { z-index: 100002; }
 #analytics-agent-root .persona-pill-composer {
+  position: relative;
   border-radius: 0 !important;
   border-color: rgba(62, 52, 133, .16) !important;
   box-shadow: 0 18px 50px rgba(31, 28, 63, .2), 0 3px 10px rgba(31, 28, 63, .09) !important;
@@ -325,6 +326,33 @@ tbody tr:last-child td { border-bottom: 0; }
 #analytics-agent-root .persona-pill-composer:focus-within { box-shadow: 0 20px 58px rgba(83, 67, 214, .24), 0 0 0 3px rgba(109, 93, 252, .12) !important; }
 #analytics-agent-root .persona-widget-container,
 #analytics-agent-root [data-persona-intro-card] { border-radius: 0 !important; }
+
+/* One quiet, idle-only cue for the demo's primary action. The masked gradient
+   sweeps the square composer edge, then disappears and does not replay. */
+#analytics-agent-root .persona-pill-composer.northstar-composer-hint::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: -2px;
+  padding: 2px;
+  border-radius: 1px;
+  background: linear-gradient(110deg, #4285f4, #9b72cb, #d96570, #f9ab00, #57bb8a, #4285f4);
+  background-size: 280% 100%;
+  pointer-events: none;
+  opacity: 0;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: northstar-composer-rainbow 5.2s cubic-bezier(.4, 0, .2, 1) 1 both;
+}
+@keyframes northstar-composer-rainbow {
+  0% { opacity: 0; background-position: 0% 50%; }
+  14%, 76% { opacity: .78; }
+  100% { opacity: 0; background-position: 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #analytics-agent-root .persona-pill-composer.northstar-composer-hint::before { animation: none; }
+}
 
 /* Starter analyses use the product's square, editorial list language instead
    of floating chips. Each row launches a deterministic SQL + Flint recipe. */
