@@ -15,7 +15,7 @@ import type { ChartAssemblyInput } from "flint-chart";
 import type { EChartsOption } from "echarts";
 import {
   ANALYTICS_SCHEMA,
-  ANALYTICS_SAMPLE_PROMPTS,
+  ANALYTICS_STARTER_SCENARIOS,
   AnalyticsDatabase,
   type AnalyticsQueryResult,
   type AnalyticsRow,
@@ -286,6 +286,58 @@ const normalizeSemanticTypes = (value: unknown): Record<string, string> => {
   );
 };
 
+const createFlintArtifact = async ({
+  title,
+  description,
+  sql,
+  chartType,
+  encodings,
+  semanticTypes,
+}: {
+  title: string;
+  description: string;
+  sql: string;
+  chartType: string;
+  encodings: unknown;
+  semanticTypes: unknown;
+}): Promise<{ artifactId: string; plottedRows: number }> => {
+  const result = database.query(sql, 1000);
+  if (result.rows.length === 0) throw new Error("The query returned no rows to chart.");
+  const input = {
+    data: { values: result.rows },
+    semantic_types: normalizeSemanticTypes(semanticTypes),
+    chart_spec: {
+      chartType,
+      encodings: normalizeEncodings(encodings),
+      baseSize: { width: 980, height: 520 },
+    },
+  } as ChartAssemblyInput;
+
+  // Compile before opening the artifact so invalid chart specs return a
+  // useful error rather than a blank artifact surface.
+  const { assembleECharts } = await import("flint-chart");
+  assembleECharts(input);
+  if (!widget) throw new Error("The Persona analytics agent is not ready yet.");
+
+  const id = `flint-${Date.now()}`;
+  widget.upsertArtifact({
+    id,
+    artifactType: "component",
+    title: title.trim(),
+    component: FLINT_COMPONENT,
+    props: {
+      title: title.trim(),
+      description: description.trim(),
+      sql: sql.trim(),
+      rowCount: result.rowCount,
+      elapsedMs: result.elapsedMs,
+      input,
+    },
+  });
+  widget.showArtifacts();
+  return { artifactId: id, plottedRows: result.rows.length };
+};
+
 const registerAnalyticsTools = (): AbortController => {
   initializeWebMCPPolyfill();
   const modelContext = (
@@ -381,46 +433,20 @@ const registerAnalyticsTools = (): AbortController => {
           throw new Error("title, description, sql, and chartType are required strings.");
         }
 
-        const result = database.query(sql, 1000);
-        if (result.rows.length === 0) throw new Error("The query returned no rows to chart.");
-        const input = {
-          data: { values: result.rows },
-          semantic_types: normalizeSemanticTypes(semanticTypes),
-          chart_spec: {
-            chartType,
-            encodings: normalizeEncodings(encodings),
-            baseSize: { width: 980, height: 520 },
-          },
-        } as ChartAssemblyInput;
-
-        // Compile before opening the artifact so invalid chart specs return a
-        // useful tool error to the agent rather than a blank artifact surface.
-        const { assembleECharts } = await import("flint-chart");
-        assembleECharts(input);
-        if (!widget) throw new Error("The Persona analytics agent is not ready yet.");
-
-        const id = `flint-${Date.now()}`;
-        widget.upsertArtifact({
-          id,
-          artifactType: "component",
-          title: title.trim(),
-          component: FLINT_COMPONENT,
-          props: {
-            title: title.trim(),
-            description: description.trim(),
-            sql: sql.trim(),
-            rowCount: result.rowCount,
-            elapsedMs: result.elapsedMs,
-            input,
-          },
+        const artifact = await createFlintArtifact({
+          title,
+          description,
+          sql,
+          chartType,
+          encodings,
+          semanticTypes,
         });
-        widget.showArtifacts();
         return {
           created: true,
-          artifactId: id,
+          artifactId: artifact.artifactId,
           title: title.trim(),
           chartType,
-          plottedRows: result.rows.length,
+          plottedRows: artifact.plottedRows,
           message: "The interactive Flint chart is open in the full-screen artifact workspace.",
         };
       },
@@ -461,7 +487,7 @@ const analyticsTheme: NonNullable<AgentWidgetConfig["theme"]> = {
         950: "#101713",
       },
     },
-    radius: { sm: "6px", md: "8px", lg: "12px", xl: "16px", "2xl": "18px" },
+    radius: { sm: "0", md: "0", lg: "0", xl: "0", "2xl": "0", full: "0" },
     typography: {
       fontFamily: {
         sans: "Inter, 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -482,16 +508,21 @@ const analyticsTheme: NonNullable<AgentWidgetConfig["theme"]> = {
     },
   },
   components: {
-    button: { primary: { background: "#6d5dfc", foreground: "#ffffff" } },
+    button: {
+      borderRadius: "0",
+      primary: { background: "#6d5dfc", foreground: "#ffffff", borderRadius: "0" },
+    },
+    launcher: { borderRadius: "0" },
     panel: {
       border: "1px solid #e1e6e3",
-      borderRadius: "16px",
+      borderRadius: "0",
       shadow: "0 28px 80px rgba(29, 38, 34, .18)",
     },
     message: {
-      user: { background: "#ece9ff", text: "#30256f", borderRadius: "13px" },
-      assistant: { background: "#ffffff", text: "#17211e", borderRadius: "13px" },
+      user: { background: "#ece9ff", text: "#30256f", borderRadius: "0" },
+      assistant: { background: "#ffffff", text: "#17211e", borderRadius: "0" },
     },
+    introCard: { borderRadius: "0" },
     input: { background: "#ffffff" },
     artifact: {
       pane: { background: "#f8faf9" },
@@ -645,7 +676,7 @@ const config: AgentWidgetConfig = {
       "Ask a business question in plain English. Atlas writes SQL against this browser-local warehouse and turns the result into an interactive Flint chart.",
     inputPlaceholder: "Ask anything about your data…",
   },
-  suggestionChips: [...ANALYTICS_SAMPLE_PROMPTS],
+  suggestionChips: [],
   messageActions: { showCopy: true, showUpvote: false, showDownvote: false },
   features: {
     ...DEFAULT_WIDGET_CONFIG.features,
@@ -716,6 +747,59 @@ widget = initAgentWidget({
   config,
 });
 
+const mountStarterExamples = (): void => {
+  const introCard = mount.querySelector<HTMLElement>("[data-persona-intro-card]");
+  if (!widget || !introCard) return;
+  const existing = introCard.querySelector<HTMLElement>("[data-analytics-starters]");
+  if (widget.getMessages().length > 0) {
+    existing?.remove();
+    return;
+  }
+  if (existing) return;
+
+  const starters = document.createElement("section");
+  starters.className = "northstar-starters";
+  starters.dataset.analyticsStarters = "";
+  starters.appendChild(createTextElement("div", "northstar-starters-label", "Start with an analysis"));
+
+  const list = document.createElement("div");
+  list.className = "northstar-starters-list";
+  for (const scenario of ANALYTICS_STARTER_SCENARIOS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "northstar-starter";
+    button.dataset.scenario = scenario.id;
+    button.innerHTML = `
+      <span class="northstar-starter-index">${scenario.index}</span>
+      <span class="northstar-starter-copy">
+        <span class="northstar-starter-eyebrow">${scenario.eyebrow}</span>
+        <strong>${scenario.title}</strong>
+      </span>
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
+    `;
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      widget?.injectUserMessage({ content: scenario.prompt });
+      try {
+        await createFlintArtifact(scenario);
+        widget?.injectAssistantMessage({
+          content: `I ran the analysis and opened **${scenario.title}** as an interactive Flint chart.`,
+        });
+      } catch (error) {
+        widget?.injectAssistantMessage({
+          content: `I couldn't build that chart. ${error instanceof Error ? error.message : "Please try again."}`,
+        });
+        button.disabled = false;
+      }
+    });
+    list.appendChild(button);
+  }
+  starters.appendChild(list);
+  introCard.appendChild(starters);
+};
+
+mountStarterExamples();
+
 document.querySelectorAll<HTMLElement>("[data-ask]").forEach((button) => {
   button.addEventListener("click", () => {
     const question = button.dataset.ask;
@@ -745,8 +829,12 @@ artifactObserver.observe(mount, {
 });
 syncArtifactFullscreen();
 
+const starterObserver = new MutationObserver(mountStarterExamples);
+starterObserver.observe(mount, { childList: true, subtree: true });
+
 window.addEventListener("beforeunload", () => {
   artifactObserver.disconnect();
+  starterObserver.disconnect();
   toolController.abort();
 });
 

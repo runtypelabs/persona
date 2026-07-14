@@ -139,11 +139,63 @@ export const ANALYTICS_SCHEMA = {
   },
 } as const;
 
-export const ANALYTICS_SAMPLE_PROMPTS = [
-  "18-month product revenue · stacked area",
-  "Source quality · conversion vs engagement scatter",
-  "Active MRR mix by plan · stacked bars",
-  "Source × device conversion · heatmap",
+export type AnalyticsStarterScenario = {
+  id: string;
+  index: string;
+  eyebrow: string;
+  title: string;
+  prompt: string;
+  description: string;
+  sql: string;
+  chartType: string;
+  encodings: Record<string, string>;
+  semanticTypes: Record<string, string>;
+};
+
+/**
+ * First-run examples are fixed recipes rather than model-only prompts. That
+ * keeps the showcase deterministic while still exercising the same local SQL,
+ * Flint compiler, Persona artifact, data-table, and SQL-view pipeline.
+ */
+export const ANALYTICS_STARTER_SCENARIOS: readonly AnalyticsStarterScenario[] = [
+  {
+    id: "revenue-momentum",
+    index: "01",
+    eyebrow: "Stacked area",
+    title: "Map product revenue momentum",
+    prompt: "Show me how product revenue has shifted over the last 18 months.",
+    description:
+      "An 18-month view of revenue momentum reveals how each product contributes to the total growth curve.",
+    sql:
+      "SELECT order_month, product, ROUND(SUM(revenue), 2) AS revenue FROM orders WHERE status = 'completed' GROUP BY order_month, product ORDER BY order_month, product",
+    chartType: "Area Chart",
+    encodings: { x: "order_month", y: "revenue", color: "product" },
+    semanticTypes: { order_month: "YearMonth", product: "Category", revenue: "Revenue" },
+  },
+  {
+    id: "acquisition-quality",
+    index: "02",
+    eyebrow: "Bubble scatter",
+    title: "Compare acquisition quality",
+    prompt: "Which acquisition sources balance conversion, engagement, and traffic volume best?",
+    description:
+      "Conversion rate, engagement, and session volume make channel quality and scale visible in a single view.",
+    sql:
+      "SELECT source, ROUND(100 * SUM(converted) / COUNT(*), 2) AS conversion_rate, ROUND(AVG(duration_seconds), 2) AS avg_duration_seconds, COUNT(*) AS sessions FROM sessions GROUP BY source ORDER BY source",
+    chartType: "Scatter Plot",
+    encodings: {
+      x: "conversion_rate",
+      y: "avg_duration_seconds",
+      color: "source",
+      size: "sessions",
+    },
+    semanticTypes: {
+      source: "Category",
+      conversion_rate: "Percentage",
+      avg_duration_seconds: "Duration",
+      sessions: "Quantity",
+    },
+  },
 ] as const;
 
 const REGIONS = ["North America", "Europe", "Asia Pacific", "Latin America"] as const;

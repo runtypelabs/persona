@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { assembleECharts, type ChartAssemblyInput } from "flint-chart";
 import {
   AnalyticsDatabase,
-  ANALYTICS_SAMPLE_PROMPTS,
+  ANALYTICS_STARTER_SCENARIOS,
   generateAnalyticsDataset,
   validateReadOnlySql,
 } from "./analytics-data";
@@ -64,86 +64,24 @@ describe("analytics demo data", () => {
     expect(option.series).toHaveLength(1);
   });
 
-  it("compiles the four curated sample scenarios into varied Flint charts", () => {
+  it("compiles both deterministic starter scenarios into varied Flint charts", () => {
     const database = new AnalyticsDatabase(new Date("2026-07-14T00:00:00Z"), 42);
-    const scenarios: ChartAssemblyInput[] = [
-      {
-        data: {
-          values: database.query(
-            "SELECT order_month, product, ROUND(SUM(revenue), 2) AS revenue FROM orders WHERE status = 'completed' GROUP BY order_month, product ORDER BY order_month, product",
-          ).rows,
-        },
-        semantic_types: { order_month: "YearMonth", product: "Category", revenue: "Revenue" },
-        chart_spec: {
-          chartType: "Area Chart",
-          encodings: {
-            x: { field: "order_month" },
-            y: { field: "revenue" },
-            color: { field: "product" },
-          },
-        },
+    const scenarios: ChartAssemblyInput[] = ANALYTICS_STARTER_SCENARIOS.map((scenario) => ({
+      data: { values: database.query(scenario.sql).rows },
+      semantic_types: scenario.semanticTypes,
+      chart_spec: {
+        chartType: scenario.chartType,
+        encodings: Object.fromEntries(
+          Object.entries(scenario.encodings).map(([channel, field]) => [channel, { field }]),
+        ),
       },
-      {
-        data: {
-          values: database.query(
-            "SELECT source, ROUND(100 * SUM(converted) / COUNT(*), 2) AS conversion_rate, ROUND(AVG(duration_seconds), 2) AS avg_duration_seconds, COUNT(*) AS sessions FROM sessions GROUP BY source ORDER BY source",
-          ).rows,
-        },
-        semantic_types: {
-          source: "Category",
-          conversion_rate: "Percentage",
-          avg_duration_seconds: "Duration",
-          sessions: "Quantity",
-        },
-        chart_spec: {
-          chartType: "Scatter Plot",
-          encodings: {
-            x: { field: "conversion_rate" },
-            y: { field: "avg_duration_seconds" },
-            color: { field: "source" },
-            size: { field: "sessions" },
-          },
-        },
-      },
-      {
-        data: {
-          values: database.query(
-            "SELECT snapshot_month, plan_name, ROUND(SUM(mrr), 2) AS mrr FROM subscription_snapshots WHERE status = 'active' GROUP BY snapshot_month, plan_name ORDER BY snapshot_month, plan_name",
-          ).rows,
-        },
-        semantic_types: { snapshot_month: "YearMonth", plan_name: "Category", mrr: "Revenue" },
-        chart_spec: {
-          chartType: "Stacked Bar Chart",
-          encodings: {
-            x: { field: "snapshot_month" },
-            y: { field: "mrr" },
-            color: { field: "plan_name" },
-          },
-        },
-      },
-      {
-        data: {
-          values: database.query(
-            "SELECT source, device, ROUND(100 * SUM(converted) / COUNT(*), 2) AS conversion_rate FROM sessions GROUP BY source, device ORDER BY source, device",
-          ).rows,
-        },
-        semantic_types: { source: "Category", device: "Category", conversion_rate: "Percentage" },
-        chart_spec: {
-          chartType: "Heatmap",
-          encodings: {
-            x: { field: "source" },
-            y: { field: "device" },
-            color: { field: "conversion_rate" },
-          },
-        },
-      },
-    ];
+    })) as ChartAssemblyInput[];
 
-    expect(ANALYTICS_SAMPLE_PROMPTS).toHaveLength(scenarios.length);
+    expect(ANALYTICS_STARTER_SCENARIOS).toHaveLength(2);
     for (const scenario of scenarios) {
       const option = assembleECharts(scenario) as { series?: unknown[] };
       expect(option.series?.length).toBeGreaterThan(0);
     }
-    expect(new Set(scenarios.map((scenario) => scenario.chart_spec.chartType)).size).toBe(4);
+    expect(new Set(scenarios.map((scenario) => scenario.chart_spec.chartType)).size).toBe(2);
   });
 });

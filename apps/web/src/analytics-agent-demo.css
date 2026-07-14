@@ -318,10 +318,46 @@ tbody tr:last-child td { border-bottom: 0; }
 #analytics-agent-root { position: relative; z-index: 100; }
 #analytics-agent-root .persona-widget-pill-root { z-index: 100002; }
 #analytics-agent-root .persona-pill-composer {
+  border-radius: 0 !important;
   border-color: rgba(62, 52, 133, .16) !important;
   box-shadow: 0 18px 50px rgba(31, 28, 63, .2), 0 3px 10px rgba(31, 28, 63, .09) !important;
 }
 #analytics-agent-root .persona-pill-composer:focus-within { box-shadow: 0 20px 58px rgba(83, 67, 214, .24), 0 0 0 3px rgba(109, 93, 252, .12) !important; }
+#analytics-agent-root .persona-widget-container,
+#analytics-agent-root [data-persona-intro-card] { border-radius: 0 !important; }
+
+/* Starter analyses use the product's square, editorial list language instead
+   of floating chips. Each row launches a deterministic SQL + Flint recipe. */
+.northstar-starters { margin-top: 24px; padding-top: 17px; border-top: 1px solid #e8ebe9; }
+.northstar-starters-label { margin-bottom: 9px; color: #87928d; font-size: 9px; font-weight: 680; letter-spacing: .08em; text-transform: uppercase; }
+.northstar-starters-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid #dde2df; border-bottom: 1px solid #dde2df; }
+.northstar-starter {
+  min-width: 0;
+  min-height: 78px;
+  padding: 13px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  color: #17211e;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.northstar-starter + .northstar-starter { border-left: 1px solid #dde2df; }
+.northstar-starter:hover { background: #f5f3ff; color: #4e3ce8; }
+.northstar-starter:focus-visible { outline: 2px solid #6d5dfc; outline-offset: -2px; }
+.northstar-starter:disabled { opacity: .55; cursor: wait; }
+.northstar-starter-index { color: #a0aaa5; font: 9px/1 "SFMono-Regular", Consolas, monospace; }
+.northstar-starter-copy { min-width: 0; }
+.northstar-starter-copy span,
+.northstar-starter-copy strong { display: block; }
+.northstar-starter-eyebrow { margin-bottom: 5px; color: #7869ed; font-size: 8px; font-weight: 720; letter-spacing: .07em; text-transform: uppercase; }
+.northstar-starter-copy strong { font-size: 10px; line-height: 1.35; font-weight: 640; }
+.northstar-starter svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; }
 
 /* The transcript grows upward from the persistent composer rather than
    appearing as a disconnected modal. The panel deliberately overlaps the
@@ -358,9 +394,9 @@ body.analytics-artifact-open #analytics-agent-root .persona-widget-wrapper[data-
   height: calc(100vh - 24px) !important;
   max-height: none !important;
   transform: none !important;
-  border-radius: 16px !important;
+  border-radius: 0 !important;
 }
-body.analytics-artifact-open #analytics-agent-root .persona-widget-container { border-radius: 16px !important; overflow: hidden; box-shadow: 0 34px 100px rgba(20, 28, 25, .28) !important; }
+body.analytics-artifact-open #analytics-agent-root .persona-widget-container { border-radius: 0 !important; overflow: hidden; box-shadow: 0 34px 100px rgba(20, 28, 25, .28) !important; }
 body.analytics-artifact-open #analytics-agent-root .persona-artifact-split-root > :first-child { flex: 0 0 380px !important; }
 body.analytics-artifact-open #analytics-agent-root .persona-artifact-pane { width: calc(100% - 380px) !important; max-width: none !important; }
 body.analytics-artifact-open::after {
@@ -436,6 +472,8 @@ body.analytics-artifact-open::after {
   .revenue-chart { height: 220px; }
   .donut-wrap { float: none; width: auto; }
   .mix-list { padding-top: 0; }
+  .northstar-starters-list { grid-template-columns: 1fr; }
+  .northstar-starter + .northstar-starter { border-top: 1px solid #dde2df; border-left: 0; }
   body.analytics-artifact-open #analytics-agent-root .persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] { inset: 0 !important; width: 100vw !important; height: 100dvh !important; border-radius: 0 !important; }
   body.analytics-artifact-open #analytics-agent-root .persona-artifact-split-root > :first-child { flex: 1 1 auto !important; }
   body.analytics-artifact-open #analytics-agent-root .persona-artifact-pane { width: 100% !important; }
