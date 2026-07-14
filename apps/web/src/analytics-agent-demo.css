@@ -378,6 +378,80 @@ tbody tr:last-child td { border-bottom: 0; }
   #analytics-agent-root .persona-pill-composer.northstar-composer-hint::after { animation: none; }
 }
 
+/* Default-state starters sit in Persona's fixed pill root, immediately above
+   the composer. They disappear once the conversation opens or input receives
+   focus, leaving the expanded welcome card to carry the same two recipes. */
+.northstar-composer-starters { display: none; }
+#analytics-agent-root .persona-widget-pill-root[data-state="collapsed"] > .northstar-composer-starters {
+  width: 100%;
+  display: grid;
+  gap: 7px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 160ms ease, transform 160ms ease;
+  animation: northstar-starters-arrive 360ms cubic-bezier(.22, 1, .36, 1) both;
+}
+#analytics-agent-root .persona-widget-pill-root[data-state="collapsed"]:has(.persona-pill-composer:focus-within) > .northstar-composer-starters {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+}
+.northstar-composer-starters-label {
+  color: #6f7b76;
+  font-size: 9px;
+  font-weight: 720;
+  letter-spacing: .08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.northstar-composer-starter-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.northstar-composer-starter {
+  min-width: 0;
+  min-height: 58px;
+  padding: 9px 11px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d8d2ff;
+  border-radius: 0;
+  background: rgba(255, 255, 255, .96);
+  color: #202b26;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(41, 33, 105, .13), 0 2px 6px rgba(26, 34, 30, .06);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+  transition: border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
+}
+.northstar-composer-starter:hover {
+  border-color: #9e91ff;
+  color: #4e3ce8;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(63, 49, 155, .18), 0 3px 8px rgba(26, 34, 30, .07);
+}
+.northstar-composer-starter:focus-visible { outline: 2px solid #6d5dfc; outline-offset: 2px; }
+.northstar-composer-starter:disabled { opacity: .55; cursor: wait; transform: none; }
+.northstar-composer-starter-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: #ece9ff;
+  color: #5a49eb;
+  font: 700 9px/1 "SFMono-Regular", Consolas, monospace;
+}
+.northstar-composer-starter > span:nth-child(2) { min-width: 0; }
+.northstar-composer-starter small,
+.northstar-composer-starter strong { display: block; }
+.northstar-composer-starter small { margin-bottom: 3px; color: #796bea; font-size: 8px; font-weight: 720; letter-spacing: .06em; text-transform: uppercase; }
+.northstar-composer-starter strong { overflow: hidden; font-size: 10px; line-height: 1.25; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.northstar-composer-starter svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; }
+@keyframes northstar-starters-arrive {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Starter analyses use the product's square, editorial list language instead
    of floating chips. Each row launches a deterministic SQL + Flint recipe. */
 .northstar-starters { margin-top: 24px; padding-top: 17px; border-top: 1px solid #e8ebe9; }
@@ -524,6 +598,11 @@ body.analytics-artifact-open::after {
   .revenue-chart { height: 220px; }
   .donut-wrap { float: none; width: auto; }
   .mix-list { padding-top: 0; }
+  .northstar-composer-starters-label { display: none; }
+  .northstar-composer-starter { min-height: 48px; padding: 7px 8px; gap: 7px; }
+  .northstar-composer-starter-icon { width: 24px; height: 24px; }
+  .northstar-composer-starter small { display: none; }
+  .northstar-composer-starter strong { font-size: 9px; }
   .northstar-starters-list { grid-template-columns: 1fr; }
   .northstar-starter + .northstar-starter { border-top: 1px solid #dde2df; border-left: 0; }
   body.analytics-artifact-open #analytics-agent-root .persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] { inset: 0 !important; width: 100vw !important; height: 100dvh !important; border-radius: 0 !important; }

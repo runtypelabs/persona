@@ -18,6 +18,7 @@ import {
   ANALYTICS_SCHEMA,
   ANALYTICS_STARTER_SCENARIOS,
   AnalyticsDatabase,
+  type AnalyticsStarterScenario,
   type AnalyticsQueryResult,
   type AnalyticsRow,
 } from "./analytics-data";
@@ -748,6 +749,25 @@ widget = initAgentWidget({
   config,
 });
 
+const runStarterScenario = async (
+  scenario: AnalyticsStarterScenario,
+  trigger: HTMLButtonElement,
+): Promise<void> => {
+  trigger.disabled = true;
+  widget?.injectUserMessage({ content: scenario.prompt });
+  try {
+    await createFlintArtifact(scenario);
+    widget?.injectAssistantMessage({
+      content: `I ran the analysis and opened **${scenario.title}** as an interactive Flint chart.`,
+    });
+  } catch (error) {
+    widget?.injectAssistantMessage({
+      content: `I couldn't build that chart. ${error instanceof Error ? error.message : "Please try again."}`,
+    });
+    trigger.disabled = false;
+  }
+};
+
 const mountStarterExamples = (): void => {
   const introCard = mount.querySelector<HTMLElement>("[data-persona-intro-card]");
   if (!widget || !introCard) return;
@@ -778,28 +798,61 @@ const mountStarterExamples = (): void => {
       </span>
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
     `;
-    button.addEventListener("click", async () => {
-      button.disabled = true;
-      widget?.injectUserMessage({ content: scenario.prompt });
-      try {
-        await createFlintArtifact(scenario);
-        widget?.injectAssistantMessage({
-          content: `I ran the analysis and opened **${scenario.title}** as an interactive Flint chart.`,
-        });
-      } catch (error) {
-        widget?.injectAssistantMessage({
-          content: `I couldn't build that chart. ${error instanceof Error ? error.message : "Please try again."}`,
-        });
-        button.disabled = false;
-      }
-    });
+    button.addEventListener("click", () => void runStarterScenario(scenario, button));
     list.appendChild(button);
   }
   starters.appendChild(list);
   introCard.appendChild(starters);
 };
 
-mountStarterExamples();
+const mountCollapsedStarterExamples = (): void => {
+  const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
+  if (!widget || !pillRoot) return;
+  const existing = pillRoot.querySelector<HTMLElement>("[data-analytics-composer-starters]");
+  if (widget.getMessages().length > 0) {
+    existing?.remove();
+    return;
+  }
+  if (existing) return;
+
+  const starters = document.createElement("section");
+  starters.className = "northstar-composer-starters";
+  starters.dataset.analyticsComposerStarters = "";
+  starters.setAttribute("aria-label", "Starter analyses");
+  starters.appendChild(
+    createTextElement("span", "northstar-composer-starters-label", "Start with an analysis"),
+  );
+
+  const actions = document.createElement("div");
+  actions.className = "northstar-composer-starter-actions";
+  for (const scenario of ANALYTICS_STARTER_SCENARIOS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "northstar-composer-starter";
+    button.dataset.scenario = scenario.id;
+    button.innerHTML = `
+      <span class="northstar-composer-starter-icon" aria-hidden="true">${scenario.index}</span>
+      <span>
+        <small>${scenario.eyebrow}</small>
+        <strong>${scenario.title}</strong>
+      </span>
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
+    `;
+    button.addEventListener("click", () => void runStarterScenario(scenario, button));
+    actions.appendChild(button);
+  }
+  starters.appendChild(actions);
+
+  const footer = pillRoot.querySelector(".persona-widget-footer--pill");
+  pillRoot.insertBefore(starters, footer);
+};
+
+const syncStarterExamples = (): void => {
+  mountStarterExamples();
+  mountCollapsedStarterExamples();
+};
+
+syncStarterExamples();
 const composerAttentionHint = installComposerAttentionHint({
   root: mount,
   isOpen: () => widget?.isOpen() ?? false,
@@ -835,7 +888,7 @@ artifactObserver.observe(mount, {
 });
 syncArtifactFullscreen();
 
-const starterObserver = new MutationObserver(mountStarterExamples);
+const starterObserver = new MutationObserver(syncStarterExamples);
 starterObserver.observe(mount, { childList: true, subtree: true });
 
 window.addEventListener("beforeunload", () => {
