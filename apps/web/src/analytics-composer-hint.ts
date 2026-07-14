@@ -18,7 +18,7 @@ type ComposerAttentionHintOptions = {
 export function installComposerAttentionHint({
   root,
   isOpen,
-  idleMs = 8_000,
+  idleMs = 4_000,
   durationMs = 5_200,
 }: ComposerAttentionHintOptions): ComposerAttentionHint {
   const doc = root.ownerDocument;
