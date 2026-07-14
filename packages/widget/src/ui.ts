@@ -4177,6 +4177,12 @@ export const createAgentExperience = (
           currentGroup.push(message);
           return;
         }
+        // A hidden reasoning row does not create a visible break in the
+        // transcript, so it should not split an otherwise contiguous tool
+        // sequence into separate groups.
+        if (message.variant === "reasoning" && !showReasoning) {
+          return;
+        }
         if (currentGroup.length > 1) {
           toolGroups.push(currentGroup);
         }
@@ -4231,11 +4237,19 @@ export const createAgentExperience = (
         const stack = document.createElement("div");
         stack.className = "persona-tool-group-stack persona-flex persona-flex-col";
 
-        groupContainer.append(summary, stack);
+        const summaryOnly = config.features?.toolCallDisplay?.groupedMode === "summary";
+        groupContainer.appendChild(summary);
+        if (!summaryOnly) {
+          groupContainer.appendChild(stack);
+        }
         groupWrapper.appendChild(groupContainer);
         wrappers[0].before(groupWrapper);
 
         wrappers.forEach((wrapper, wrapperIndex) => {
+          if (summaryOnly) {
+            wrapper.remove();
+            return;
+          }
           const item = document.createElement("div");
           item.className = "persona-tool-group-item persona-relative";
           item.setAttribute("data-persona-tool-group-item", "true");

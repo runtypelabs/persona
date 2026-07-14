@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="A browser-local analytics workspace with an embedded Persona data agent and Flint chart artifacts."
+      content="A product analytics workspace with an embedded data analyst."
     />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="/src/analytics-agent-demo.css" />
-    <title>Northstar Analytics — Persona data agent demo</title>
+    <title>Northstar Analytics</title>
   </head>
   <body>
     <div class="app-shell">
@@ -70,12 +70,9 @@
             <div class="health-icon"><span></span></div>
             <div>
               <strong>Warehouse healthy</strong>
-              <small id="database-status">Loading local dataset…</small>
+              <small id="database-status">Checking data sources…</small>
             </div>
           </div>
-          <a class="persona-credit" href="https://persona-chat.dev" target="_blank" rel="noreferrer">
-            Data agent powered by <strong>Persona</strong>
-          </a>
         </div>
       </aside>
 
@@ -163,7 +160,7 @@
                 <div class="chart-axis-labels" id="revenue-month-labels"></div>
               </div>
               <footer class="panel-foot">
-                <button class="ask-inline" type="button" data-ask="Compare revenue growth by product over the last 12 months and create a Flint grouped bar chart.">
+                <button class="ask-inline" type="button" data-ask="Compare revenue growth by product over the last 12 months and show me the clearest visual comparison.">
                   <span class="mini-spark">✦</span> Ask the data agent to explain this trend
                   <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6"/></svg>
                 </button>
@@ -196,14 +193,13 @@
                 <h2>Partner traffic is quietly outperforming</h2>
                 <p>Partner-sourced sessions convert at a higher rate than paid search. Ask the agent to quantify the opportunity.</p>
               </div>
-              <button type="button" class="insight-ask" data-ask="Analyze partner versus paid search performance. Quantify conversion rate, revenue per session, and create the clearest Flint chart for the comparison.">
+              <button type="button" class="insight-ask" data-ask="Compare partner and paid search performance. Quantify conversion rate and revenue per session, then show me the clearest visual comparison.">
                 Investigate with Atlas
                 <svg viewBox="0 0 20 20"><path d="M4 10h12M11 5l5 5-5 5"/></svg>
               </button>
             </article>
           </section>
 
-          <p class="demo-note">Demo data is generated deterministically and queried entirely in your browser.</p>
         </div>
       </main>
     </div>

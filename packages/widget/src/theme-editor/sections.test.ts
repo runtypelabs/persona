@@ -67,6 +67,7 @@ describe("theme editor scroll-to-bottom controls", () => {
     expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.activeMinHeight")).toBe(true);
     expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.expandable")).toBe(true);
     expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.grouped")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.groupedMode")).toBe(true);
   });
 
   it("exposes collapsed reasoning preview controls", () => {

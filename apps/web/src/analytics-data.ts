@@ -164,7 +164,7 @@ export const ANALYTICS_STARTER_SCENARIOS: readonly AnalyticsStarterScenario[] = 
     eyebrow: "Stacked area",
     title: "Map product revenue momentum",
     prompt:
-      "Analyze how product revenue has shifted over the last 18 months. Write and validate the SQL, then create an interactive Flint stacked area chart with month on the x-axis, revenue on the y-axis, and product as the color series. Summarize the most important change in the mix.",
+      "Show me how product revenue mix has shifted over the last 18 months. Use a stacked area chart and call out the most important change.",
     description:
       "An 18-month view of revenue momentum reveals how each product contributes to the total growth curve.",
     sql:
@@ -179,7 +179,7 @@ export const ANALYTICS_STARTER_SCENARIOS: readonly AnalyticsStarterScenario[] = 
     eyebrow: "Bubble scatter",
     title: "Compare acquisition quality",
     prompt:
-      "Compare acquisition source quality using conversion rate, average session duration, and session volume. Write and validate the SQL, then create an interactive Flint bubble scatter chart with conversion rate on x, engagement on y, source as color, and session volume as bubble size. Call out the strongest efficient channel.",
+      "Which acquisition sources combine the best conversion, engagement, and scale? Show me as a bubble chart and call out the strongest efficient channel.",
     description:
       "Conversion rate, engagement, and session volume make channel quality and scale visible in a single view.",
     sql:

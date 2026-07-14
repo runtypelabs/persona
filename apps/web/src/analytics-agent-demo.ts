@@ -44,8 +44,6 @@ type FlintArtifactProps = {
   title: string;
   description: string;
   sql: string;
-  rowCount: number;
-  elapsedMs: number;
   input: ChartAssemblyInput;
 };
 
@@ -149,20 +147,11 @@ const FlintChartRenderer: ComponentRenderer = (rawProps) => {
   hero.className = "northstar-artifact-hero";
   const heroCopy = document.createElement("div");
   heroCopy.append(
-    createTextElement("div", "northstar-artifact-kicker", "Generated analysis"),
+    createTextElement("div", "northstar-artifact-kicker", "Atlas analysis"),
     createTextElement("h2", "", props.title),
     createTextElement("p", "northstar-artifact-description", props.description),
   );
-  const badges = document.createElement("div");
-  badges.className = "northstar-artifact-badges";
-  const flintBadge = createTextElement("span", "northstar-artifact-badge", "Compiled with ");
-  const flintName = createTextElement("strong", "", "Flint");
-  flintBadge.appendChild(flintName);
-  badges.append(
-    flintBadge,
-    createTextElement("span", "northstar-artifact-badge", `${props.rowCount} rows`),
-  );
-  hero.append(heroCopy, badges);
+  hero.appendChild(heroCopy);
 
   const shell = document.createElement("div");
   shell.className = "northstar-chart-shell";
@@ -172,8 +161,7 @@ const FlintChartRenderer: ComponentRenderer = (rawProps) => {
   tabs.className = "northstar-chart-tabs";
   const tabDefinitions = [
     ["chart", "Chart"],
-    ["data", "Data"],
-    ["sql", "SQL"],
+    ["data", "Table"],
   ] as const;
   for (const [id, label] of tabDefinitions) {
     const button = createTextElement("button", `northstar-chart-tab${id === "chart" ? " active" : ""}`, label) as HTMLButtonElement;
@@ -181,28 +169,19 @@ const FlintChartRenderer: ComponentRenderer = (rawProps) => {
     button.dataset.tab = id;
     tabs.appendChild(button);
   }
-  const queryMeta = document.createElement("div");
-  queryMeta.className = "northstar-query-meta";
-  queryMeta.appendChild(createTextElement("span", "", `Browser SQL · ${props.elapsedMs.toFixed(1)} ms`));
-  toolbar.append(tabs, queryMeta);
+  toolbar.appendChild(tabs);
 
   const chartView = document.createElement("div");
   chartView.className = "northstar-chart-view";
   chartView.dataset.panel = "chart";
   const chartCanvas = document.createElement("div");
   chartCanvas.className = "northstar-chart-canvas";
-  const loading = createTextElement("div", "northstar-chart-loading", "Compiling the Flint chart…");
+  const loading = createTextElement("div", "northstar-chart-loading", "Preparing your analysis…");
   chartView.append(chartCanvas, loading);
 
   const rows = (props.input.data as { values?: AnalyticsRow[] }).values ?? [];
   const dataPanel = renderDataTable(rows);
-  const sqlPanel = document.createElement("div");
-  sqlPanel.className = "northstar-artifact-panel";
-  sqlPanel.dataset.panel = "sql";
-  const sql = createTextElement("pre", "northstar-sql", props.sql);
-  sqlPanel.appendChild(sql);
-
-  shell.append(toolbar, chartView, dataPanel, sqlPanel);
+  shell.append(toolbar, chartView, dataPanel);
   root.append(hero, shell);
 
   tabs.addEventListener("click", (event) => {
@@ -264,7 +243,7 @@ const FlintChartRenderer: ComponentRenderer = (rawProps) => {
       connectionObserver.observe(document.body, { childList: true, subtree: true });
     } catch (error) {
       loading.className = "northstar-artifact-error";
-      loading.textContent = `Flint could not compile this chart: ${error instanceof Error ? error.message : String(error)}`;
+      loading.textContent = `We couldn't build this chart: ${error instanceof Error ? error.message : String(error)}`;
     }
   }, 0);
 
@@ -289,7 +268,7 @@ const renderArtifactCard: NonNullable<
   copy.className = "northstar-artifact-card-copy";
   copy.append(
     createTextElement("strong", "", artifact.title || "Generated analysis"),
-    createTextElement("span", "", "Interactive Flint chart · Open full screen"),
+    createTextElement("span", "", "Interactive analysis · Open"),
   );
   const arrow = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   arrow.setAttribute("viewBox", "0 0 20 20");
@@ -359,7 +338,7 @@ const createFlintArtifact = async ({
   // useful error rather than a blank artifact surface.
   const { assembleECharts } = await import("flint-chart");
   assembleECharts(input);
-  if (!widget) throw new Error("The Persona analytics agent is not ready yet.");
+  if (!widget) throw new Error("The data analyst is not ready yet.");
 
   const id = `flint-${Date.now()}`;
   widget.upsertArtifact({
@@ -371,8 +350,6 @@ const createFlintArtifact = async ({
       title: title.trim(),
       description: description.trim(),
       sql: sql.trim(),
-      rowCount: result.rowCount,
-      elapsedMs: result.elapsedMs,
       input,
     },
   });
@@ -431,7 +408,7 @@ const registerAnalyticsTools = (): AbortController => {
       name: "create_flint_chart",
       title: "Create an interactive Flint chart",
       description:
-        "Run a read-only SQL query, compile the result through Microsoft's Flint visualization language, and open it as a full-screen Persona component artifact. Use after validating the SQL with run_analytics_sql.",
+        "Run a read-only SQL query, compile the result through Microsoft's Flint visualization language, and open it in the analysis workspace. Use after validating the SQL with run_analytics_sql.",
       inputSchema: {
         type: "object",
         properties: {
@@ -489,7 +466,7 @@ const registerAnalyticsTools = (): AbortController => {
           title: title.trim(),
           chartType,
           plottedRows: artifact.plottedRows,
-          message: "The interactive Flint chart is open in the full-screen artifact workspace.",
+          message: "The interactive chart is open in the analysis workspace.",
         };
       },
     },
@@ -596,7 +573,7 @@ const renderDashboard = (): void => {
   document.getElementById("metric-mrr")!.textContent = money(mrrValue, true);
   document.getElementById("metric-conversion")!.textContent = `${conversionValue.toFixed(1)}%`;
   document.getElementById("chart-revenue-total")!.textContent = money(revenueValue, true);
-  document.getElementById("database-status")!.textContent = `5 tables · ${compactNumber(database.rowCount)} rows · browser-local`;
+  document.getElementById("database-status")!.textContent = "5 sources · Synced just now";
 
   const values = monthly.map((row) => readNumber(row, "revenue"));
   const max = Math.max(...values, 1) * 1.1;
@@ -715,7 +692,7 @@ const config: AgentWidgetConfig = {
     showWelcomeCard: true,
     welcomeTitle: "Meet Atlas, your data analyst",
     welcomeSubtitle:
-      "Ask a business question in plain English. Atlas writes SQL against this browser-local warehouse and turns the result into an interactive Flint chart.",
+      "Ask a business question in plain English. Atlas explores your workspace and turns the answer into a clear, interactive analysis.",
     inputPlaceholder: "Ask anything about your data…",
   },
   suggestionChips: [],
@@ -742,6 +719,7 @@ const config: AgentWidgetConfig = {
       collapsedMode: "tool-name",
       activePreview: false,
       grouped: true,
+      groupedMode: "summary",
       expandable: false,
       loadingAnimation: "shimmer-color",
     },
@@ -760,10 +738,7 @@ const config: AgentWidgetConfig = {
         panePadding: "24px",
         paneShadow: "none",
         paneBorderRadius: "0",
-        toolbarPreset: "document",
-        documentToolbarIconColor: "#718079",
-        documentToolbarToggleActiveBackground: "#ece9ff",
-        documentToolbarToggleActiveBorderColor: "#d8d2ff",
+        toolbarPreset: "default",
         expandLauncherPanelWhenOpen: false,
       },
     },
@@ -813,6 +788,41 @@ widget = initAgentWidget({
   windowKey: "northstarAtlas",
   config,
 });
+
+let viewSwitch: HTMLElement | null = null;
+
+const ensureViewSwitch = (): HTMLElement | null => {
+  const wrapper = mount.querySelector<HTMLElement>(".persona-widget-wrapper");
+  if (!wrapper) return null;
+  if (viewSwitch?.isConnected) return viewSwitch;
+
+  viewSwitch = document.createElement("div");
+  viewSwitch.className = "northstar-view-switch";
+  viewSwitch.setAttribute("role", "group");
+  viewSwitch.setAttribute("aria-label", "Workspace view");
+  viewSwitch.innerHTML = `
+    <button type="button" data-analytics-view="chat" aria-pressed="false">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12v8H9l-3.5 3v-3H4z"/></svg>
+      Chat
+    </button>
+    <button type="button" data-analytics-view="analysis" aria-pressed="false">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15V9m4 6V5m4 10v-3m4 3V7"/></svg>
+      Analysis
+    </button>
+  `;
+  viewSwitch.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-analytics-view]");
+    if (!button || !widget) return;
+    if (button.dataset.analyticsView === "analysis") {
+      widget.showArtifacts();
+    } else {
+      widget.hideArtifacts();
+      window.setTimeout(() => widget?.focusInput(), 0);
+    }
+  });
+  wrapper.appendChild(viewSwitch);
+  return viewSwitch;
+};
 
 const startAgentScenario = (
   scenario: AnalyticsStarterScenario,
@@ -931,6 +941,16 @@ const syncArtifactFullscreen = (): void => {
     pane != null &&
     !pane.classList.contains("persona-hidden");
   document.body.classList.toggle("analytics-artifact-open", visible);
+
+  const switchElement = ensureViewSwitch();
+  if (!switchElement) return;
+  const showSwitch = wrapper?.dataset.state === "expanded" && (widget?.getArtifacts().length ?? 0) > 0;
+  switchElement.hidden = !showSwitch;
+  switchElement.querySelectorAll<HTMLButtonElement>("[data-analytics-view]").forEach((button) => {
+    const active = (button.dataset.analyticsView === "analysis") === visible;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
 };
 
 const artifactObserver = new MutationObserver(syncArtifactFullscreen);
