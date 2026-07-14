@@ -13,6 +13,7 @@ import {
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 import type { ChartAssemblyInput } from "flint-chart";
 import type { EChartsOption } from "echarts";
+import { fitFlintInputToCanvas } from "./analytics-chart-layout";
 import { installComposerAttentionHint } from "./analytics-composer-hint";
 import {
   ANALYTICS_SCHEMA,
@@ -226,15 +227,33 @@ const FlintChartRenderer: ComponentRenderer = (rawProps) => {
         import("flint-chart"),
         import("echarts"),
       ]);
-      const option = assembleECharts(props.input) as EChartsOption;
-      option.backgroundColor = "transparent";
-      option.animationDuration = 620;
-      option.color = ["#6d5dfc", "#0c956b", "#e49a2d", "#3686e9", "#cd5f91", "#52a9a3"];
       const chart = echarts.init(chartCanvas, undefined, { renderer: "canvas" });
-      chart.setOption(option, true);
-      loading.remove();
 
-      const resizeObserver = new ResizeObserver(() => chart.resize());
+      let lastCanvasSize = "";
+      const renderResponsiveChart = (): void => {
+        const width = chartCanvas.clientWidth;
+        const height = chartCanvas.clientHeight;
+        const canvasSize = `${Math.round(width)}x${Math.round(height)}`;
+        if (canvasSize === lastCanvasSize) {
+          chart.resize();
+          return;
+        }
+        lastCanvasSize = canvasSize;
+
+        const option = assembleECharts(
+          fitFlintInputToCanvas(props.input, width, height),
+        ) as EChartsOption;
+        option.backgroundColor = "transparent";
+        option.animationDuration = 620;
+        option.color = ["#6d5dfc", "#0c956b", "#e49a2d", "#3686e9", "#cd5f91", "#52a9a3"];
+        chart.resize();
+        chart.setOption(option, true);
+        loading.remove();
+      };
+
+      renderResponsiveChart();
+
+      const resizeObserver = new ResizeObserver(renderResponsiveChart);
       resizeObserver.observe(chartCanvas);
       const connectionObserver = new MutationObserver(() => {
         if (root.isConnected) return;
