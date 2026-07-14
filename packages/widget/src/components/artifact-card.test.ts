@@ -4,7 +4,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { PersonaArtifactCard } from "./artifact-card";
 import { componentRegistry, type ComponentRenderer } from "./registry";
 import type { ComponentContext } from "./registry";
-import type { AgentWidgetArtifactsFeature, AgentWidgetConfig } from "../types";
+import type {
+  AgentWidgetArtifactsFeature,
+  AgentWidgetConfig,
+  PersonaArtifactStatusLabelContext,
+} from "../types";
 
 const makeContext = (
   artifacts?: AgentWidgetArtifactsFeature
@@ -169,6 +173,68 @@ describe("PersonaArtifactCard streaming status", () => {
     expect(dl!.textContent).toBe("Download");
     // Subtitle shows the file type label, not a "Generating" status.
     expect(root.textContent).not.toContain("Generating");
+  });
+});
+
+describe("PersonaArtifactCard statusLabel", () => {
+  // Reconstruct the (possibly char-span animated) status label text.
+  const labelText = (root: HTMLElement): string => {
+    const label = root.querySelector(
+      ".persona-artifact-status-label"
+    ) as HTMLElement | null;
+    if (!label) return "";
+    const chars = label.querySelectorAll(".persona-tool-char");
+    if (chars.length === 0) return label.textContent ?? "";
+    return Array.from(chars)
+      .map((c) => (c.textContent === NBSP ? " " : c.textContent))
+      .join("");
+  };
+
+  it("replaces the default status text with a plain string", () => {
+    const root = render(streamingProps, { statusLabel: "Cooking up your file..." });
+    expect(labelText(root)).toBe("Cooking up your file...");
+    expect(root.textContent).not.toContain("Generating");
+  });
+
+  it("calls a statusLabel function with the card surface and ctx", () => {
+    const calls: PersonaArtifactStatusLabelContext[] = [];
+    const root = render(streamingProps, {
+      statusLabel: (ctx) => {
+        calls.push(ctx);
+        return "Custom label";
+      },
+    });
+    expect(calls.length).toBe(1);
+    expect(calls[0].surface).toBe("card");
+    expect(calls[0].artifactId).toBe("a1");
+    expect(calls[0].artifactType).toBe("markdown");
+    // file: index.html -> fileTypeLabel "HTML".
+    expect(calls[0].typeLabel).toBe("HTML");
+    expect(typeof calls[0].content).toBe("function");
+    expect(labelText(root)).toBe("Custom label");
+  });
+
+  it("renders a { label, detail } as an animated label + plain detail span", () => {
+    const root = render(streamingProps, {
+      statusLabel: () => ({ label: "Writing", detail: "just started" }),
+    });
+    expect(labelText(root)).toBe("Writing");
+    const detail = root.querySelector(
+      ".persona-artifact-status-detail"
+    ) as HTMLElement | null;
+    expect(detail).not.toBeNull();
+    expect(detail!.textContent).toBe("just started");
+    // The detail span is un-animated (no char spans / loading classes).
+    expect(detail!.querySelector(".persona-tool-char")).toBeNull();
+  });
+
+  it("falls back to the default label when statusLabel throws", () => {
+    const root = render(streamingProps, {
+      statusLabel: () => {
+        throw new Error("boom");
+      },
+    });
+    expect(labelText(root)).toBe("Generating html...");
   });
 });
 

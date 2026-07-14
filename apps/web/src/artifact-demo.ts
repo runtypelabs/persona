@@ -8,6 +8,7 @@ import {
   type AgentWidgetConfig,
   type ComponentRenderer,
   type AgentWidgetInitHandle,
+  type PersonaArtifactStatusLabelContext,
 } from "@runtypelabs/persona";
 import {
   createDemoConfigInspector,
@@ -307,6 +308,73 @@ const buildInlineBody = () => ({
   completeDisplay: readCompleteDisplay(),
 });
 
+// ── Status label control ─────────────────────────────────────────────────
+// Same DOM-is-the-source-of-truth pattern: the active pill in
+// #artifact-status-label is read on every config build and populates
+// features.artifacts.statusLabel, which replaces the default "Generating
+// <type>..." label on ALL three surfaces (the reference card status line, the
+// inline chrome meta, and the inline status body). It is independent of
+// inlineBody, so it shows up on the card in card/panel display too, not just
+// inline. Default leaves the key unset (current behavior); the other modes
+// exercise the string and function forms.
+type StatusLabelMode = "default" | "custom" | "progress" | "phase";
+
+const readStatusLabelMode = (): StatusLabelMode => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-status-label .mode-btn.active",
+  );
+  return (activeBtn?.dataset.mode ?? "default") as StatusLabelMode;
+};
+
+// default → undefined (unset); custom → the string form; progress/phase → the
+// function form. A function runs once per surface per streaming delta and must
+// stay pure and fast. Returning { label, detail } gives an animated label
+// (stable unless its text changes) plus a plain detail span updated per delta.
+const buildStatusLabel = ():
+  | string
+  | ((
+      ctx: PersonaArtifactStatusLabelContext,
+    ) => string | { label: string; detail?: string })
+  | undefined => {
+  const mode = readStatusLabelMode();
+  if (mode === "custom") {
+    // String form: one fixed label across every surface, the localization /
+    // brand-voice case.
+    return "Writing your draft...";
+  }
+  if (mode === "progress") {
+    // Live counters in the detail; the label stays stable so it keeps
+    // animating. The inline chrome is cramped, so return a shorter,
+    // line-only detail there to show surface awareness.
+    return (ctx) => {
+      const label = `Writing ${ctx.typeLabel.toLowerCase()}...`;
+      const seconds = Math.round(ctx.elapsedMs / 1000);
+      const detail =
+        ctx.surface === "inline-chrome"
+          ? `${ctx.lines} lines`
+          : `${ctx.lines} lines, ${seconds}s`;
+      return { label, detail };
+    };
+  }
+  if (mode === "phase") {
+    // Content-driven phase narration: find the last markdown heading in the
+    // accumulated source and name it. The label re-animates only when the
+    // phase actually changes; before any heading arrives it falls back to the
+    // generic label.
+    return (ctx) => {
+      const matches = ctx.content().match(/^#{1,3}\s+(.+)$/gm);
+      const lastHeading = matches
+        ? matches[matches.length - 1].replace(/^#{1,3}\s+/, "").trim()
+        : "";
+      const label = lastHeading
+        ? `Writing: ${lastHeading}`
+        : `Writing ${ctx.typeLabel.toLowerCase()}...`;
+      return { label, detail: `${ctx.chars} chars` };
+    };
+  }
+  return undefined;
+};
+
 // ── Custom artifact actions (toolbar + card) ─────────────────────────────
 // Demos features.artifacts.toolbarActions and .cardActions: host-defined
 // buttons that receive the artifact context on click. Here they mimic a
@@ -415,9 +483,13 @@ const readAnimationControls = () => {
 // for shimmer-color.
 const buildArtifactsFeature = () => {
   const { mode, duration, primary, secondary } = readAnimationControls();
+  // Only send statusLabel when a non-default mode is picked; Default leaves the
+  // key unset so the widget keeps its built-in "Generating <type>..." label.
+  const statusLabel = buildStatusLabel();
   return {
     ...artifactDemoConfigBase.features?.artifacts,
     display: readDisplayMode(),
+    ...(statusLabel !== undefined ? { statusLabel } : {}),
     loadingAnimation: mode,
     loadingAnimationDuration: duration,
     ...(mode === "shimmer-color"
@@ -668,6 +740,7 @@ for (const groupId of [
   "artifact-overflow",
   "artifact-body-transition",
   "artifact-complete-display",
+  "artifact-status-label",
 ]) {
   const group = document.getElementById(groupId);
   group?.addEventListener("click", (event) => {

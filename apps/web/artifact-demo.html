@@ -135,6 +135,20 @@
           </div>
 
           <div class="info-section">
+            <h3>Status label</h3>
+            <p>Replace the default "Generating …" label while an artifact streams (<code>features.artifacts.statusLabel</code>). This applies to all three surfaces: the reference card status line, the inline chrome meta, and the inline status body.</p>
+            <div class="section">
+              <div class="mode-group" id="artifact-status-label">
+                <button type="button" class="mode-btn active" data-mode="default">Default</button>
+                <button type="button" class="mode-btn" data-mode="custom">Custom text</button>
+                <button type="button" class="mode-btn" data-mode="progress">Live progress</button>
+                <button type="button" class="mode-btn" data-mode="phase">Phase aware</button>
+              </div>
+              <p class="hint">Default keeps the built-in "Generating …" label. Custom text swaps a fixed string, for localization or brand voice. Live progress returns a function with an animated label plus a live detail (line and second counters; the cramped inline chrome gets a shorter, line-only detail). Phase aware reads the streamed markdown headings and narrates the current section, re-animating only when the heading changes. Use the markdown button to watch the phase label step through sections; source and status streaming views both surface it.</p>
+            </div>
+          </div>
+
+          <div class="info-section">
             <h3>Expand toggle</h3>
             <p>Show an expand/collapse button in the artifact pane toolbar (<code>features.artifacts.layout.showExpandToggle</code>).</p>
             <div class="section">

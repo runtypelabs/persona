@@ -3489,6 +3489,24 @@
   font-weight: 400;
 }
 
+/* Streaming status: animated label span + optional plain detail span (live
+   counters). The label carries the loading animation; the detail updates freely
+   per delta and stays un-animated. Shared by the card, the inline chrome, and
+   the inline status body (features.artifacts.statusLabel). Keep the status span
+   from blowing out the chrome bar when a long detail streams in. */
+[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-status {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+[data-persona-root] .persona-artifact-status-detail {
+  color: var(--persona-artifact-inline-muted-color, var(--persona-text-muted, #6b7280));
+  margin-left: 0.375rem;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Trailing cluster: custom inlineActions, copy, expand. */
 [data-persona-root] .persona-artifact-inline-chrome-actions {
   display: flex;

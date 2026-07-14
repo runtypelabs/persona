@@ -34,9 +34,23 @@ interface ArtifactFileMeta {
   language: string;
 }
 
-/** Markdown sample streamed via `artifact_delta` chunks. */
-const MARKDOWN_SAMPLE =
-  "## Hello\n\nThis **markdown** artifact streamed frame by frame from the demo toolbar, the same way a real agent emits it.";
+// Markdown sample streamed via `artifact_delta` chunks. It carries three
+// section headings so the phase-aware status label (features.artifacts
+// .statusLabel, see artifact-demo.ts) visibly steps Overview → Key points →
+// Wrap up as the content streams in.
+const MARKDOWN_SAMPLE = `## Overview
+
+This **markdown** artifact streamed frame by frame from the demo toolbar, the same way a real agent emits it.
+
+## Key points
+
+- Every frame is a real \`artifact_delta\` chunk on the wire.
+- The reference card, inline chrome, and status body all read the same stream.
+- A phase-aware status label can follow the newest heading as it arrives.
+
+## Wrap up
+
+By the time this last section lands, a phase-aware label has stepped through each heading in turn.`;
 
 // Previewable HTML file artifact (as a Claude Managed agent would emit one): the
 // content is a fenced code block on the wire, and `file` metadata lets Persona

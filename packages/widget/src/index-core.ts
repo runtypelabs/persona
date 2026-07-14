@@ -14,6 +14,7 @@ export type {
   PersonaArtifactKind,
   PersonaArtifactRecord,
   PersonaArtifactActionContext,
+  PersonaArtifactStatusLabelContext,
   PersonaArtifactCustomAction,
   PersonaArtifactManualUpsert,
   ArtifactConfigPayload,

@@ -11,7 +11,8 @@ import type {
   AgentWidgetArtifactsFeature,
   AgentWidgetConfig,
   AgentWidgetMessage,
-  PersonaArtifactRecord
+  PersonaArtifactRecord,
+  PersonaArtifactStatusLabelContext
 } from "../types";
 import type { ComponentContext } from "./registry";
 
@@ -1205,5 +1206,123 @@ describe("PersonaArtifactInline clip-mode expand hitbox", () => {
     expect(
       bodyOf(el).hasAttribute("data-expand-artifact-inline")
     ).toBe(false);
+  });
+});
+
+describe("PersonaArtifactInline statusLabel (inline chrome)", () => {
+  const rec = (markdown: string): PersonaArtifactRecord => ({
+    id: "a1",
+    artifactType: "markdown",
+    title: "Notes",
+    status: "streaming",
+    markdown
+  });
+
+  const mount = (artifacts: Record<string, unknown>) => {
+    const el = PersonaArtifactInline(
+      streamingProps(),
+      makeContext(makeConfig(artifacts))
+    );
+    const container = document.createElement("div");
+    container.appendChild(el);
+    return { el, container };
+  };
+
+  const labelEl = (el: HTMLElement): HTMLElement | null =>
+    el.querySelector(
+      ".persona-artifact-inline-status .persona-artifact-status-label"
+    );
+  const detailEl = (el: HTMLElement): HTMLElement | null =>
+    el.querySelector(
+      ".persona-artifact-inline-status .persona-artifact-status-detail"
+    );
+
+  it("passes the inline-chrome surface and streamed counts; content() is lazy", () => {
+    const calls: PersonaArtifactStatusLabelContext[] = [];
+    const { el, container } = mount({
+      loadingAnimation: "none",
+      statusLabel: (ctx: PersonaArtifactStatusLabelContext) => {
+        calls.push(ctx);
+        return { label: "Writing", detail: `${ctx.lines} lines` };
+      }
+    });
+    updateInlineArtifactBlocks(container, [rec("line one\nline two")]);
+    const last = calls[calls.length - 1];
+    expect(last.surface).toBe("inline-chrome");
+    expect(last.artifactId).toBe("a1");
+    expect(last.artifactType).toBe("markdown");
+    expect(last.chars).toBe("line one\nline two".length);
+    expect(last.lines).toBe(2);
+    // content() returns the accumulated markdown only when the host calls it.
+    expect(last.content()).toBe("line one\nline two");
+    expect(detailEl(el)?.textContent).toBe("2 lines");
+  });
+
+  it("updates the detail per delta while keeping the animated label element stable", () => {
+    const { el, container } = mount({
+      loadingAnimation: "none",
+      statusLabel: (ctx: PersonaArtifactStatusLabelContext) => ({
+        label: "Writing",
+        detail: `${ctx.chars}`
+      })
+    });
+    updateInlineArtifactBlocks(container, [rec("Hello")]);
+    const label1 = labelEl(el);
+    expect(detailEl(el)?.textContent).toBe("5");
+    updateInlineArtifactBlocks(container, [rec("Hello world")]);
+    const label2 = labelEl(el);
+    expect(detailEl(el)?.textContent).toBe("11");
+    // Same node: an unchanged label is never re-applied, so the loading
+    // animation does not restart on a detail-only update.
+    expect(label1).not.toBeNull();
+    expect(label1).toBe(label2);
+  });
+
+  it("re-applies the label element when the label text changes", () => {
+    const { el, container } = mount({
+      loadingAnimation: "none",
+      statusLabel: (ctx: PersonaArtifactStatusLabelContext) => ({
+        label: ctx.chars > 6 ? "Almost done" : "Writing"
+      })
+    });
+    updateInlineArtifactBlocks(container, [rec("short")]);
+    expect(labelEl(el)?.textContent).toBe("Writing");
+    updateInlineArtifactBlocks(container, [rec("a longer body")]);
+    expect(labelEl(el)?.textContent).toBe("Almost done");
+  });
+
+  it("replaces the default status with a plain string", () => {
+    const { el, container } = mount({
+      loadingAnimation: "none",
+      statusLabel: "One moment..."
+    });
+    updateInlineArtifactBlocks(container, [rec("Hi")]);
+    expect(labelEl(el)?.textContent).toBe("One moment...");
+    expect(
+      el.querySelector(".persona-artifact-inline-status")?.textContent
+    ).not.toContain("Generating");
+  });
+
+  it("falls back to the default label when the function throws", () => {
+    const { el, container } = mount({
+      loadingAnimation: "none",
+      statusLabel: () => {
+        throw new Error("boom");
+      }
+    });
+    updateInlineArtifactBlocks(container, [rec("Hi")]);
+    // Plain markdown artifact (no file) → typeLabel "Document".
+    expect(labelEl(el)?.textContent).toBe("Generating document...");
+  });
+
+  it("still applies the loading animation to the label span by default", () => {
+    const { el, container } = mount({
+      statusLabel: () => ({ label: "Writing", detail: "x" })
+    });
+    updateInlineArtifactBlocks(container, [rec("Hi")]);
+    const label = labelEl(el);
+    expect(label?.classList.contains("persona-tool-loading-shimmer")).toBe(true);
+    // The detail span never carries the animation.
+    expect(detailEl(el)?.querySelector(".persona-tool-char")).toBeNull();
   });
 });

@@ -6,7 +6,11 @@ import type {
 } from "../types";
 import { createElement } from "../utils/dom";
 import { basenameOf, fileKindOf, fileTypeLabel } from "../utils/artifact-file";
-import { applyArtifactLoadingStatus } from "../utils/artifact-loading-status";
+import {
+  applyArtifactStatus,
+  clearArtifactStatusTracking,
+  resolveArtifactStatusLabel
+} from "../utils/artifact-status-label";
 import { artifactRecordActionContext, buildArtifactActionButton } from "../utils/artifact-custom-actions";
 import { createIconButton, createToggleGroup } from "../utils/buttons";
 import { renderLucideIcon } from "../utils/icons";
@@ -633,19 +637,25 @@ function renderDefaultArtifactInline(
     }
 
     const streaming = rec.status !== "complete";
-    // Reset the meta span (className replace clears stale animation classes).
-    metaEl.className = streaming
-      ? "persona-artifact-inline-status"
-      : "persona-artifact-inline-type";
-    metaEl.removeAttribute("data-preserve-animation");
-    metaEl.replaceChildren();
     if (streaming) {
-      applyArtifactLoadingStatus(
-        metaEl,
-        `Generating ${typeLabel.toLowerCase()}...`,
-        artifactsCfg
-      );
+      // Animation-stable: only switch the meta span into status mode (clearing
+      // its children) on the type→status transition. On subsequent deltas the
+      // span is left in place so applyArtifactStatus can reuse the animated
+      // label span (re-applied only when the label text changes) and update the
+      // plain detail span freely.
+      if (!metaEl.classList.contains("persona-artifact-inline-status")) {
+        metaEl.className = "persona-artifact-inline-status";
+        metaEl.removeAttribute("data-preserve-animation");
+        metaEl.replaceChildren();
+      }
+      const resolved = resolveArtifactStatusLabel(rec, artifactsCfg, "inline-chrome");
+      applyArtifactStatus(metaEl, resolved, artifactsCfg);
     } else {
+      // Reset the meta span (className replace clears stale animation classes).
+      clearArtifactStatusTracking(rec.id);
+      metaEl.className = "persona-artifact-inline-type";
+      metaEl.removeAttribute("data-preserve-animation");
+      metaEl.replaceChildren();
       metaEl.textContent = typeLabel;
     }
 

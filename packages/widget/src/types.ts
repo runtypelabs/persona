@@ -866,6 +866,31 @@ export type PersonaArtifactActionContext = {
   jsonPayload?: string;
 };
 
+/**
+ * Context passed to a `features.artifacts.statusLabel` function on every
+ * artifact streaming update, once per visible surface. Treat it as read-only:
+ * the function should be pure and fast (it runs per streaming delta, per
+ * surface).
+ */
+export type PersonaArtifactStatusLabelContext = {
+  artifactId: string;
+  artifactType: "markdown" | "component";
+  title?: string;
+  /** The default subject, e.g. "document", "component", or a file type label like "HTML file". */
+  typeLabel: string;
+  file?: PersonaArtifactFileMeta;
+  /** Accumulated streamed content length so far (0 for component artifacts). */
+  chars: number;
+  /** Accumulated line count so far (0 for component artifacts). */
+  lines: number;
+  /** Milliseconds since this artifact's first streaming update was seen. */
+  elapsedMs: number;
+  /** Lazy accessor for the accumulated markdown source (empty string for component artifacts). Call only if needed; parsing cost is opt-in. */
+  content: () => string;
+  /** Which surface is asking, so hosts can shorten for cramped spots. */
+  surface: "card" | "inline-chrome" | "status-body";
+};
+
 /** A custom action button rendered in an artifact toolbar/card slot. */
 export type PersonaArtifactCustomAction = {
   /** Stable id, used for DOM wiring and keyed re-renders. */
@@ -1178,6 +1203,32 @@ export type AgentWidgetArtifactsFeature = {
     config: AgentWidgetConfig;
     defaultRenderer: () => HTMLElement;
   }) => HTMLElement | null;
+  /**
+   * Text shown while an artifact streams, in place of the default
+   * `Generating <type>...` status. Applies to every streaming surface: the
+   * reference card status line, the inline chrome meta label, and the inline
+   * streaming status body (`inlineBody.streamingView: "status"`).
+   *
+   * - A plain string replaces the default label everywhere (localization or
+   *   brand voice).
+   * - A function is called on every artifact update for each visible surface;
+   *   it must be pure and fast. Returning a string sets the animated label
+   *   only. Returning `{ label, detail }` splits the status into an animated
+   *   label (re-applied only when its text changes, so the loading animation
+   *   stays stable) and a plain un-animated detail span that may update freely
+   *   per delta (live counters).
+   *
+   * Default when unset: the current behavior, `Generating <type>...` with no
+   * detail. If the function throws, the default label is used for that update
+   * (a bad host callback must never break rendering). There is deliberately no
+   * percent progress: streams do not announce total length, so counts and
+   * elapsed time are the only truthful signals.
+   */
+  statusLabel?:
+    | string
+    | ((ctx: PersonaArtifactStatusLabelContext) =>
+        | string
+        | { label: string; detail?: string });
   /**
    * Animation applied to the artifact card's "Generating …" status text while
    * the artifact streams. Character-by-character modes (`shimmer`,

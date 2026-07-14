@@ -7,7 +7,11 @@ import {
   type ArtifactBodyLayout,
 } from "./artifact-preview";
 import * as parsersLoader from "../markdown-parsers-loader";
-import type { AgentWidgetConfig, PersonaArtifactRecord } from "../types";
+import type {
+  AgentWidgetConfig,
+  PersonaArtifactRecord,
+  PersonaArtifactStatusLabelContext,
+} from "../types";
 import type { ComponentRenderer } from "./registry";
 
 const layout = (o: Partial<ArtifactBodyLayout> = {}): ArtifactBodyLayout => ({
@@ -1042,5 +1046,77 @@ describe("artifact-preview component body", () => {
       },
     });
     expect(handle.el.textContent).toContain("Component: MyChart");
+  });
+});
+
+describe("artifact-preview status body statusLabel", () => {
+  const cfg = (artifacts: Record<string, unknown>): AgentWidgetConfig =>
+    ({
+      sanitize: false,
+      features: { artifacts: { enabled: true, ...artifacts } },
+    }) as AgentWidgetConfig;
+  const statusLayout = () => layout({ streamingView: "status" });
+  const streamingMd = (markdown: string): PersonaArtifactRecord => ({
+    id: "s1",
+    artifactType: "markdown",
+    title: "Notes",
+    status: "streaming",
+    markdown,
+  });
+  const labelEl = (el: HTMLElement): HTMLElement | null =>
+    el.querySelector(
+      ".persona-artifact-status-view-text .persona-artifact-status-label"
+    );
+  const detailEl = (el: HTMLElement): HTMLElement | null =>
+    el.querySelector(
+      ".persona-artifact-status-view-text .persona-artifact-status-detail"
+    );
+
+  it("replaces the default status with a plain string", () => {
+    const handle = renderArtifactPreviewBody(streamingMd("Hi"), {
+      config: cfg({ loadingAnimation: "none", statusLabel: "Generating your notes" }),
+      bodyLayout: statusLayout(),
+    });
+    expect(labelEl(handle.el)?.textContent).toBe("Generating your notes");
+    expect(handle.el.textContent).not.toContain("Generating document");
+  });
+
+  it("passes the status-body surface and re-resolves the detail per delta", () => {
+    const calls: PersonaArtifactStatusLabelContext[] = [];
+    const handle = renderArtifactPreviewBody(streamingMd("Hello"), {
+      config: cfg({
+        loadingAnimation: "none",
+        statusLabel: (ctx: PersonaArtifactStatusLabelContext) => {
+          calls.push(ctx);
+          return { label: "Writing", detail: `${ctx.chars} chars` };
+        },
+      }),
+      bodyLayout: statusLayout(),
+    });
+    expect(calls[calls.length - 1].surface).toBe("status-body");
+    const label1 = labelEl(handle.el);
+    expect(detailEl(handle.el)?.textContent).toBe("5 chars");
+
+    handle.update(streamingMd("Hello world"));
+    const label2 = labelEl(handle.el);
+    expect(detailEl(handle.el)?.textContent).toBe("11 chars");
+    // The status view and its animated label element are reused across deltas
+    // (rebuilding them would restart the animation).
+    expect(label1).not.toBeNull();
+    expect(label1).toBe(label2);
+  });
+
+  it("falls back to the default label when the function throws", () => {
+    const handle = renderArtifactPreviewBody(streamingMd("Hi"), {
+      config: cfg({
+        loadingAnimation: "none",
+        statusLabel: () => {
+          throw new Error("boom");
+        },
+      }),
+      bodyLayout: statusLayout(),
+    });
+    // Plain markdown artifact (no file) → typeLabel "Document".
+    expect(labelEl(handle.el)?.textContent).toBe("Generating document...");
   });
 });

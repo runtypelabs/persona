@@ -1,7 +1,11 @@
 import type { ComponentContext, ComponentRenderer } from "./registry";
-import type { PersonaArtifactFileMeta } from "../types";
+import type { PersonaArtifactFileMeta, PersonaArtifactRecord } from "../types";
 import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
-import { applyArtifactLoadingStatus } from "../utils/artifact-loading-status";
+import {
+  applyArtifactStatus,
+  clearArtifactStatusTracking,
+  resolveArtifactStatusLabel
+} from "../utils/artifact-status-label";
 import { createLabelButton } from "../utils/buttons";
 import { buildArtifactActionButton } from "../utils/artifact-custom-actions";
 import type { PersonaArtifactActionContext } from "../types";
@@ -69,12 +73,22 @@ function renderDefaultArtifactCard(
 
   if (status === "streaming") {
     const artifactsCfg = context?.config?.features?.artifacts;
-    const text = `Generating ${subtitle.toLowerCase()}...`;
-
-    const statusText = document.createElement("span");
-    subtitleEl.appendChild(statusText);
-    applyArtifactLoadingStatus(statusText, text, artifactsCfg);
+    // The card re-renders only at streaming-start and completion (deltas flow to
+    // the pane / inline block, not here), so live counters don't tick on the
+    // card; the string / label form still applies. Build a minimal record from
+    // the card props so the shared resolver derives the same typeLabel + ctx.
+    const record: PersonaArtifactRecord = {
+      id: artifactId,
+      artifactType: artifactType === "component" ? "component" : "markdown",
+      title: rawTitle,
+      status: "streaming",
+      ...(typeof props.markdown === "string" ? { markdown: props.markdown } : {}),
+      ...(file ? { file } : {})
+    };
+    const resolved = resolveArtifactStatusLabel(record, artifactsCfg, "card");
+    applyArtifactStatus(subtitleEl, resolved, artifactsCfg);
   } else {
+    if (artifactId) clearArtifactStatusTracking(artifactId);
     subtitleEl.textContent = subtitle;
   }
 

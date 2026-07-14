@@ -5,8 +5,12 @@ import type {
   AgentWidgetMessage,
   PersonaArtifactRecord,
 } from "../types";
-import { extractFileSource, fileKindOf, fileTypeLabel } from "../utils/artifact-file";
-import { applyArtifactLoadingStatus } from "../utils/artifact-loading-status";
+import { extractFileSource, fileKindOf } from "../utils/artifact-file";
+import {
+  applyArtifactStatus,
+  clearArtifactStatusTracking,
+  resolveArtifactStatusLabel
+} from "../utils/artifact-status-label";
 import { highlightCode } from "../utils/code-highlight";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors";
 import { getMarkdownParsersSync, onMarkdownParsersReady } from "../markdown-parsers-loader";
@@ -783,23 +787,29 @@ export function renderArtifactPreviewBody(
 
   // A quiet, reserved-height placeholder shown while streaming when
   // `streamingView: "status"`. Reuses the same animated status the chrome uses.
+  //
+  // The status VIEW element is reused across streaming deltas (rebuilding it
+  // would restart the loading animation), but the label/detail are re-resolved
+  // and re-applied on every update — that's what makes a dynamic `statusLabel`
+  // (live counters via `{ label, detail }`) tick. `applyArtifactStatus` keeps
+  // the animated label span stable, only re-applying it when its text changes.
   const renderStatusView = (rec: PersonaArtifactRecord) => {
     const key = rec.id;
+    const artifactsCfg = config.features?.artifacts;
+    const resolved = resolveArtifactStatusLabel(rec, artifactsCfg, "status-body");
     if (statusView && statusKey === key && statusView.parentElement === el) {
+      const textEl = statusView.querySelector<HTMLElement>(
+        ".persona-artifact-status-view-text"
+      );
+      if (textEl) applyArtifactStatus(textEl, resolved, artifactsCfg);
       return;
     }
     resetFilePreview();
     resetSource();
     el.replaceChildren();
-    const fileMeta = rec.artifactType === "markdown" ? rec.file : undefined;
-    const label = fileMeta
-      ? fileTypeLabel(fileMeta).toLowerCase()
-      : rec.artifactType === "component"
-        ? "component"
-        : "document";
     const wrap = createElement("div", "persona-artifact-status-view");
     const textEl = createElement("div", "persona-artifact-status-view-text");
-    applyArtifactLoadingStatus(textEl, `Generating ${label}...`, config.features?.artifacts);
+    applyArtifactStatus(textEl, resolved, artifactsCfg);
     wrap.appendChild(textEl);
     el.appendChild(wrap);
     statusView = wrap;
@@ -811,6 +821,10 @@ export function renderArtifactPreviewBody(
     const viewMode = ctx.resolveViewMode?.(rec) ?? layout?.viewMode ?? "rendered";
     const fileMeta = rec.artifactType === "markdown" ? rec.file : undefined;
     const isStreaming = rec.status !== "complete";
+    // Drop the status-label elapsed tracking once the artifact completes so the
+    // module-level map can't grow without bound (no-op for untracked ids / the
+    // pane path).
+    if (!isStreaming) clearArtifactStatusTracking(rec.id);
     // Numeric height for the current state → fixed window (source view only).
     // The complete state sizes the same inner window the streaming state does
     // (never the padded body wrapper), so a source→source completion is
