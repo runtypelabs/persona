@@ -250,8 +250,11 @@ button { color: inherit; }
 .atlas-entry-identity div > span { margin-top: 3px; color: #7d8983; font-size: 11px; }
 .atlas-entry-context { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; color: #7f8a85; font-size: 10px; font-weight: 570; }
 .atlas-entry-context i { width: 6px; height: 6px; border-radius: 50%; background: #17a174; }
-.atlas-entry-slot { position: relative; height: 110px; }
-.atlas-entry.atlas-entry-has-conversation:not(.atlas-entry-engaged) .atlas-entry-slot { height: 70px; }
+/* The slot holds the actual Persona pill in document flow, so it sizes
+   itself around the composer and chips; a fixed height only applies while
+   the pill is lifted out for the focused workspace. */
+.atlas-entry-slot { position: relative; }
+.atlas-entry.atlas-entry-engaged .atlas-entry-slot { height: 96px; }
 .atlas-entry.atlas-entry-engaged .atlas-entry-slot::after {
   content: "Atlas is open in a focused workspace";
   position: absolute;
@@ -365,13 +368,13 @@ tbody tr:last-child td { border-bottom: 0; }
    product integration details; widget colors and chrome come from config. */
 #analytics-agent-root { position: relative; z-index: 100; }
 #analytics-agent-root .persona-widget-pill-root { z-index: 100002; }
-#analytics-agent-root .persona-pill-composer {
+:is(#analytics-agent-root, .atlas-entry-slot) .persona-pill-composer {
   position: relative;
   border-radius: 0 !important;
   border-color: rgba(62, 52, 133, .16) !important;
   box-shadow: 0 18px 50px rgba(31, 28, 63, .2), 0 3px 10px rgba(31, 28, 63, .09) !important;
 }
-#analytics-agent-root .persona-pill-composer:focus-within { box-shadow: 0 20px 58px rgba(83, 67, 214, .24), 0 0 0 3px rgba(109, 93, 252, .12) !important; }
+:is(#analytics-agent-root, .atlas-entry-slot) .persona-pill-composer:focus-within { box-shadow: 0 20px 58px rgba(83, 67, 214, .24), 0 0 0 3px rgba(109, 93, 252, .12) !important; }
 #analytics-agent-root .persona-widget-container,
 #analytics-agent-root [data-persona-intro-card] { border-radius: 0 !important; }
 
@@ -388,8 +391,24 @@ body.analytics-chat-open::after {
   backdrop-filter: blur(4px) saturate(.92);
 }
 
-body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root,
+/* Parked: the pill is reparented into the entry slot and participates in
+   normal layout — it scrolls with the page and the Atlas box grows around
+   it. The !importants neutralize Persona's fixed bottom-center placement
+   and inline width/offset styles. */
+.atlas-entry-slot .persona-widget-pill-root {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin-top: 16px;
+  transform: none !important;
+}
+/* The fly-to-workspace transition animates in viewport coordinates. */
 #analytics-agent-root .persona-widget-pill-root.northstar-entry-transitioning {
+  position: fixed !important;
   top: var(--northstar-entry-top) !important;
   right: auto !important;
   bottom: auto !important;
@@ -397,27 +416,18 @@ body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root,
   width: var(--northstar-entry-width) !important;
   max-width: none !important;
   transform: none !important;
-}
-/* Resting: absolute inside the mount, so the pill scrolls in document flow
-   instead of being re-synced to the page a frame late on every scroll. */
-body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root {
-  position: absolute !important;
-}
-/* The fly-to-workspace transition animates in viewport coordinates. */
-#analytics-agent-root .persona-widget-pill-root.northstar-entry-transitioning {
-  position: fixed !important;
   transition: top 260ms cubic-bezier(.2, .8, .2, 1), left 260ms cubic-bezier(.2, .8, .2, 1), width 260ms cubic-bezier(.2, .8, .2, 1);
 }
-body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root[data-state="collapsed"] [data-persona-composer-suggestions] {
+body.analytics-entry-home :is(#analytics-agent-root, .atlas-entry-slot) .persona-widget-pill-root[data-state="collapsed"] [data-persona-composer-suggestions] {
   margin: 10px 0 0;
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   order: 2;
 }
-body.analytics-entry-home #analytics-agent-root .persona-widget-footer--pill { gap: 0; }
-body.analytics-entry-home #analytics-agent-root .persona-pill-composer { order: 1; box-shadow: none !important; }
-#analytics-agent-root [data-persona-composer-suggestions] button {
+body.analytics-entry-home :is(#analytics-agent-root, .atlas-entry-slot) .persona-widget-footer--pill { gap: 0; }
+body.analytics-entry-home :is(#analytics-agent-root, .atlas-entry-slot) .persona-pill-composer { order: 1; box-shadow: none !important; }
+:is(#analytics-agent-root, .atlas-entry-slot) [data-persona-composer-suggestions] button {
   min-height: 46px;
   border-radius: 0 !important;
   border-color: #dfe4e1 !important;
@@ -427,8 +437,8 @@ body.analytics-entry-home #analytics-agent-root .persona-pill-composer { order: 
   text-align: left;
   white-space: normal;
 }
-body.analytics-entry-home #analytics-agent-root [data-persona-composer-suggestions] button + button { border-left: 0 !important; }
-#analytics-agent-root [data-persona-composer-suggestions] button:hover { background: #f5f3ff !important; color: #4e3ce8 !important; }
+body.analytics-entry-home :is(#analytics-agent-root, .atlas-entry-slot) [data-persona-composer-suggestions] button + button { border-left: 0 !important; }
+:is(#analytics-agent-root, .atlas-entry-slot) [data-persona-composer-suggestions] button:hover { background: #f5f3ff !important; color: #4e3ce8 !important; }
 
 #analytics-agent-root .persona-tool-group {
   border: 1px solid #dde2df;
@@ -680,15 +690,14 @@ body.analytics-artifact-open::after {
   .atlas-entry-heading { min-height: 76px; align-items: flex-start; padding: 14px 0; flex-direction: column; gap: 8px; }
   .atlas-entry-identity div > span { font-size: 10px; }
   .atlas-entry-context { padding-left: 41px; }
-  .atlas-entry-slot { height: 166px; }
-  .atlas-entry.atlas-entry-has-conversation:not(.atlas-entry-engaged) .atlas-entry-slot { height: 74px; }
+  .atlas-entry.atlas-entry-engaged .atlas-entry-slot { height: 88px; }
   #analytics-agent-root .persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] .persona-widget-body::before {
     min-height: 82px;
     padding: 14px 16px 24px;
     font-size: 8px;
   }
-  body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root[data-state="collapsed"] [data-persona-composer-suggestions] { grid-template-columns: 1fr; }
-  body.analytics-entry-home #analytics-agent-root [data-persona-composer-suggestions] button + button { border-top: 0 !important; border-left: 1px solid #dfe4e1 !important; }
+  body.analytics-entry-home :is(#analytics-agent-root, .atlas-entry-slot) .persona-widget-pill-root[data-state="collapsed"] [data-persona-composer-suggestions] { grid-template-columns: 1fr; }
+  body.analytics-entry-home :is(#analytics-agent-root, .atlas-entry-slot) [data-persona-composer-suggestions] button + button { border-top: 0 !important; border-left: 1px solid #dfe4e1 !important; }
   .metrics-grid { grid-template-columns: 1fr; }
   .legend { display: none; }
   .revenue-chart { height: 220px; }

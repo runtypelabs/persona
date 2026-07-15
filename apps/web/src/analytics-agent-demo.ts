@@ -988,7 +988,6 @@ let entryEngaged = widget.isOpen();
 let hadConversation = widget.getMessages().length > 0 || widget.getArtifacts().length > 0;
 entry.classList.toggle("atlas-entry-has-conversation", hadConversation);
 let entryTransitionTimer: number | null = null;
-let entryPositionFrame: number | null = null;
 
 const setEntryGeometry = (left: number, top: number, width: number): void => {
   pillRoot.style.setProperty("--northstar-entry-left", `${Math.round(left)}px`);
@@ -1002,27 +1001,23 @@ const clearEntryGeometry = (): void => {
   pillRoot.style.removeProperty("--northstar-entry-width");
 };
 
-const positionInlineEntry = (): void => {
-  entryPositionFrame = null;
-  if (entryEngaged) return;
-  // The resting pill is absolutely positioned inside the widget mount so it
-  // scrolls in document flow — a fixed pill re-synced per scroll event always
-  // trails the page by a frame. Coordinates are therefore mount-relative.
-  const rootBounds = mount.getBoundingClientRect();
-  const bounds = entrySlot.getBoundingClientRect();
-  setEntryGeometry(bounds.left - rootBounds.left, bounds.top - rootBounds.top, bounds.width);
-};
-
-const scheduleInlineEntryPosition = (): void => {
-  if (entryPositionFrame != null) window.cancelAnimationFrame(entryPositionFrame);
-  entryPositionFrame = window.requestAnimationFrame(positionInlineEntry);
-};
-
 const finishEntryTransition = (): void => {
   if (entryTransitionTimer != null) window.clearTimeout(entryTransitionTimer);
   entryTransitionTimer = null;
   pillRoot.classList.remove("northstar-entry-transitioning");
   clearEntryGeometry();
+};
+
+// At rest the pill is reparented into the entry slot, so the Atlas box sizes
+// itself around the composer and chips in normal document flow — no
+// coordinate syncing, and everything stays inside the box. Reparenting drops
+// focus, so callers restore it when the composer input was active.
+const parkPillInEntry = (): void => {
+  if (pillRoot.parentElement !== entrySlot) entrySlot.appendChild(pillRoot);
+};
+
+const liftPillFromEntry = (): void => {
+  if (pillRoot.parentElement !== mount) mount.appendChild(pillRoot);
 };
 
 const engageEntry = (): void => {
@@ -1033,12 +1028,18 @@ const engageEntry = (): void => {
 
   entryEngaged = true;
   const start = pillRoot.getBoundingClientRect();
-  setEntryGeometry(start.left, start.top, start.width);
   document.body.classList.remove("analytics-entry-home");
   document.body.classList.add("analytics-chat-open");
   entry.classList.add("atlas-entry-engaged");
+  // Lift the pill back to the mount and animate it (in viewport coordinates)
+  // from its in-slot position to the bottom workspace position.
+  liftPillFromEntry();
+  setEntryGeometry(start.left, start.top, start.width);
   pillRoot.classList.add("northstar-entry-transitioning");
   widget?.open();
+  // Reparenting interrupts the browser's natural click-to-focus chain, so
+  // engagement always lands focus in the composer explicitly.
+  widget?.focusInput();
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reducedMotion) {
@@ -1055,15 +1056,15 @@ const engageEntry = (): void => {
 };
 
 const restoreInlineEntry = (closeWidget = true): void => {
-  if (entryTransitionTimer != null) window.clearTimeout(entryTransitionTimer);
-  entryTransitionTimer = null;
   entryEngaged = false;
   entry.classList.remove("atlas-entry-engaged");
-  pillRoot.classList.remove("northstar-entry-transitioning");
+  finishEntryTransition();
   document.body.classList.remove("analytics-chat-open");
   document.body.classList.add("analytics-entry-home");
+  const hadFocus = pillRoot.contains(document.activeElement);
+  parkPillInEntry();
   if (closeWidget) widget?.close();
-  positionInlineEntry();
+  if (hadFocus) widget?.focusInput();
 };
 
 if (entryEngaged) {
@@ -1071,7 +1072,7 @@ if (entryEngaged) {
   document.body.classList.add("analytics-chat-open");
 } else {
   document.body.classList.add("analytics-entry-home");
-  positionInlineEntry();
+  parkPillInEntry();
 }
 
 const engageEntryFromInput = (event: Event): void => {
@@ -1092,13 +1093,6 @@ const stopWatchingWidgetOpen = widget.on("widget:opened", () => {
 const stopWatchingWidgetClose = widget.on("widget:closed", () => {
   if (entryEngaged) restoreInlineEntry(false);
 });
-window.addEventListener("resize", scheduleInlineEntryPosition);
-// Catches layout shifts that fire no resize event (font loads, panels
-// growing above the entry); scrolling needs no handler because the resting
-// pill lives in document flow.
-const entryLayoutObserver = new ResizeObserver(scheduleInlineEntryPosition);
-entryLayoutObserver.observe(entrySlot);
-entryLayoutObserver.observe(document.body);
 
 // Explicit ask buttons submit immediately — a control labeled as an ask
 // should start the analysis, not hand back a half-finished draft. Softer
@@ -1158,11 +1152,8 @@ window.addEventListener("beforeunload", () => {
   stopWatchingWidgetClose();
   artifactObserver.disconnect();
   if (entryTransitionTimer != null) window.clearTimeout(entryTransitionTimer);
-  if (entryPositionFrame != null) window.cancelAnimationFrame(entryPositionFrame);
   pillRoot.removeEventListener("focusin", engageEntryFromInput);
   pillRoot.removeEventListener("pointerdown", engageEntryFromInput, true);
-  window.removeEventListener("resize", scheduleInlineEntryPosition);
-  entryLayoutObserver.disconnect();
   toolController.abort();
 });
 
