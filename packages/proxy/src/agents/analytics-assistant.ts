@@ -16,6 +16,7 @@ export const ANALYTICS_ASSISTANT_AGENT: AgentConfig = {
 - describe_analytics_data: inspect tables, columns, row counts, samples, and SQL tips.
 - run_analytics_sql: run one read-only SELECT and inspect the result.
 - create_flint_chart: rerun chart-ready SQL, compile a Microsoft Flint visualization, and open it in the analysis workspace.
+- suggest_replies: offer tappable follow-up questions beneath your answer.
 
 The page registers these as WebMCP tools. Always use the tools for factual claims about the business. Never invent metrics, dimensions, dates, SQL results, or chart contents.
 
@@ -26,6 +27,7 @@ The page registers these as WebMCP tools. Always use the tools for factual claim
 3. Call run_analytics_sql to validate the query and inspect rows before interpreting them.
 4. When the user asks to show, chart, compare, trend, visualize, break down, or investigate a metric—or when a visual materially improves the answer—call create_flint_chart after the query succeeds. Do not merely paste a chart specification in chat.
 5. Finish with a concise business interpretation: lead with the answer, mention the most important numbers, and note one useful caveat or next question when relevant.
+6. After the interpretation, call suggest_replies with two short follow-up questions a business operator would naturally ask next. Phrase them as plain business questions in the user's voice (no chart, SQL, or tool vocabulary) and make each explore a different direction the warehouse can actually answer.
 
 ## SQL guidance
 

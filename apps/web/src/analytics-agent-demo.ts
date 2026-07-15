@@ -12,7 +12,7 @@ import {
 } from "@runtypelabs/persona";
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 import type { ChartAssemblyInput } from "flint-chart";
-import type { EChartsOption } from "echarts";
+import type { ECharts, EChartsOption } from "echarts";
 import { fitFlintInputToCanvas } from "./analytics-chart-layout";
 import {
   ANALYTICS_SCHEMA,
@@ -63,14 +63,6 @@ const getToolActivityLabel = (
   return bareName ? ANALYTICS_TOOL_ACTIVITY[bareName] : undefined;
 };
 
-const renderGroupedToolActivity = (
-  toolCalls: Array<{ name?: string; status: "pending" | "running" | "complete" }>,
-): string => {
-  const activeTool = [...toolCalls].reverse().find((toolCall) => toolCall.status !== "complete");
-  if (!activeTool) return "Analysis ready";
-  return `${getToolActivityLabel(activeTool.name)?.[0] ?? "Working through your request"}…`;
-};
-
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const apiUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-analytics`
@@ -108,6 +100,45 @@ const createTextElement = (
   return element;
 };
 
+// Visually hidden live region: sighted users read analysis progress from the
+// grouped activity checklist; screen readers hear the same updates here.
+const statusAnnouncer = createTextElement("div", "northstar-sr-status", "");
+statusAnnouncer.setAttribute("role", "status");
+document.body.appendChild(statusAnnouncer);
+const announceStatus = (text: string): void => {
+  if (statusAnnouncer.textContent !== text) statusAnnouncer.textContent = text;
+};
+
+const renderGroupedToolActivity = (
+  toolCalls: Array<{ name?: string; status: "pending" | "running" | "complete" }>,
+): HTMLElement => {
+  const steps: Array<{ label: string; done: boolean }> = [];
+  for (const toolCall of toolCalls) {
+    const labels = getToolActivityLabel(toolCall.name);
+    const done = toolCall.status === "complete";
+    const label = done
+      ? (labels?.[1] ?? "Completed an analysis step")
+      : `${labels?.[0] ?? "Working through your request"}…`;
+    // Consecutive repeats of one activity (e.g. several validation queries)
+    // read as a single step.
+    if (steps[steps.length - 1]?.label === label) continue;
+    steps.push({ label, done });
+  }
+  const allDone = steps.every((step) => step.done);
+  const list = document.createElement("span");
+  list.className = "northstar-activity-steps";
+  for (const step of steps) {
+    list.appendChild(
+      createTextElement("span", `northstar-activity-step${step.done ? " done" : ""}`, step.label),
+    );
+  }
+  if (allDone) {
+    list.appendChild(createTextElement("span", "northstar-activity-step ready", "Analysis ready"));
+  }
+  announceStatus(allDone ? "Analysis ready" : (steps.find((step) => !step.done)?.label ?? ""));
+  return list;
+};
+
 const renderDataTable = (rows: AnalyticsRow[]): HTMLElement => {
   const wrap = document.createElement("div");
   wrap.className = "northstar-artifact-panel";
@@ -134,7 +165,132 @@ const renderDataTable = (rows: AnalyticsRow[]): HTMLElement => {
   }
   table.append(thead, tbody);
   wrap.appendChild(table);
+  if (rows.length > 100) {
+    wrap.appendChild(
+      createTextElement(
+        "div",
+        "northstar-table-note",
+        `Showing the first 100 of ${rows.length.toLocaleString()} rows`,
+      ),
+    );
+  }
   return wrap;
+};
+
+const CHART_COLORS = ["#6d5dfc", "#0c956b", "#e49a2d", "#3686e9", "#cd5f91", "#52a9a3"];
+
+/**
+ * Render a Flint chart into `canvas`, recompile it against the live canvas
+ * dimensions on resize, and dispose it once `root` leaves the document.
+ * Returns the ECharts instance so callers can attach interaction listeners.
+ */
+const mountResponsiveFlintChart = async (
+  root: HTMLElement,
+  canvas: HTMLElement,
+  input: ChartAssemblyInput,
+  onFirstRender?: () => void,
+): Promise<ECharts> => {
+  const [{ assembleECharts }, echarts] = await Promise.all([
+    import("flint-chart"),
+    import("echarts"),
+  ]);
+  const chart = echarts.init(canvas, undefined, { renderer: "canvas" });
+
+  let lastCanvasSize = "";
+  let rendered = false;
+  const renderResponsiveChart = (): void => {
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const canvasSize = `${Math.round(width)}x${Math.round(height)}`;
+    if (canvasSize === lastCanvasSize) {
+      chart.resize();
+      return;
+    }
+    lastCanvasSize = canvasSize;
+
+    const option = assembleECharts(fitFlintInputToCanvas(input, width, height)) as EChartsOption;
+    option.backgroundColor = "transparent";
+    option.animationDuration = 620;
+    option.color = CHART_COLORS;
+    chart.resize();
+    chart.setOption(option, true);
+    if (!rendered) {
+      rendered = true;
+      onFirstRender?.();
+    }
+  };
+
+  renderResponsiveChart();
+
+  const resizeObserver = new ResizeObserver(renderResponsiveChart);
+  resizeObserver.observe(canvas);
+  const connectionObserver = new MutationObserver(() => {
+    if (root.isConnected) return;
+    resizeObserver.disconnect();
+    connectionObserver.disconnect();
+    chart.dispose();
+  });
+  connectionObserver.observe(document.body, { childList: true, subtree: true });
+  return chart;
+};
+
+/**
+ * A clicked chart region becomes a drafted (not auto-sent) follow-up so the
+ * user can adjust the question before asking Atlas.
+ */
+const draftFollowUpFromChartClick = (params: unknown): void => {
+  const { seriesName, name } = (params ?? {}) as { seriesName?: unknown; name?: unknown };
+  const subject = [seriesName, name]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join(" in ");
+  if (!subject || !widget) return;
+  widget.open();
+  widget.setMessage(`Tell me more about ${subject} — what's driving it?`);
+  widget.focusInput();
+};
+
+/**
+ * Pin a generated analysis into the dashboard grid as a first-class panel.
+ * Pinned panels are session-only: the demo warehouse itself is rebuilt on
+ * every load, so persisting chart specs without their data would mislead.
+ */
+const pinAnalysisToDashboard = (props: FlintArtifactProps): void => {
+  const grid = document.querySelector(".dashboard-grid");
+  if (!grid) return;
+
+  const panel = document.createElement("article");
+  panel.className = "panel pinned-panel";
+  const heading = document.createElement("header");
+  heading.className = "panel-heading";
+  const copy = document.createElement("div");
+  copy.append(
+    createTextElement("h2", "", props.title),
+    createTextElement("p", "", props.description),
+  );
+  const actions = document.createElement("div");
+  actions.className = "pinned-actions";
+  const badge = createTextElement("span", "pinned-badge", "✦ Atlas");
+  const remove = createTextElement("button", "text-button", "Remove") as HTMLButtonElement;
+  remove.type = "button";
+  remove.addEventListener("click", () => panel.remove());
+  actions.append(badge, remove);
+  heading.append(copy, actions);
+
+  const canvas = document.createElement("div");
+  canvas.className = "pinned-chart-canvas";
+  panel.append(heading, canvas);
+  grid.appendChild(panel);
+  mountResponsiveFlintChart(panel, canvas, props.input)
+    .then((chart) => chart.on("click", draftFollowUpFromChartClick))
+    .catch(() => panel.remove());
+
+  // Close the focused workspace so the new dashboard panel is the payoff.
+  widget?.close();
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.setTimeout(
+    () => panel.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" }),
+    320,
+  );
 };
 
 const FlintChartRenderer: ComponentRenderer = (rawProps) => {
@@ -161,6 +317,7 @@ const FlintChartRenderer: ComponentRenderer = (rawProps) => {
   const tabDefinitions = [
     ["chart", "Chart"],
     ["data", "Table"],
+    ["sql", "SQL"],
   ] as const;
   for (const [id, label] of tabDefinitions) {
     const button = createTextElement("button", `northstar-chart-tab${id === "chart" ? " active" : ""}`, label) as HTMLButtonElement;
@@ -169,6 +326,27 @@ const FlintChartRenderer: ComponentRenderer = (rawProps) => {
     tabs.appendChild(button);
   }
   toolbar.appendChild(tabs);
+
+  const toolbarActions = document.createElement("div");
+  toolbarActions.className = "northstar-chart-actions";
+  const clickHint = createTextElement(
+    "span",
+    "northstar-chart-hint",
+    "Click a point to ask about it",
+  );
+  const pinButton = createTextElement(
+    "button",
+    "northstar-chart-pin",
+    "Pin to dashboard",
+  ) as HTMLButtonElement;
+  pinButton.type = "button";
+  pinButton.addEventListener("click", () => {
+    pinAnalysisToDashboard(props);
+    pinButton.textContent = "Pinned ✓";
+    pinButton.disabled = true;
+  });
+  toolbarActions.append(clickHint, pinButton);
+  toolbar.appendChild(toolbarActions);
 
   const chartView = document.createElement("div");
   chartView.className = "northstar-chart-view";
@@ -180,7 +358,14 @@ const FlintChartRenderer: ComponentRenderer = (rawProps) => {
 
   const rows = (props.input.data as { values?: AnalyticsRow[] }).values ?? [];
   const dataPanel = renderDataTable(rows);
-  shell.append(toolbar, chartView, dataPanel);
+  const sqlPanel = document.createElement("div");
+  sqlPanel.className = "northstar-artifact-panel";
+  sqlPanel.dataset.panel = "sql";
+  const sqlBlock = document.createElement("pre");
+  sqlBlock.className = "northstar-artifact-sql";
+  sqlBlock.textContent = props.sql;
+  sqlPanel.appendChild(sqlBlock);
+  shell.append(toolbar, chartView, dataPanel, sqlPanel);
   root.append(hero, shell);
 
   tabs.addEventListener("click", (event) => {
@@ -201,45 +386,10 @@ const FlintChartRenderer: ComponentRenderer = (rawProps) => {
 
   window.setTimeout(async () => {
     try {
-      const [{ assembleECharts }, echarts] = await Promise.all([
-        import("flint-chart"),
-        import("echarts"),
-      ]);
-      const chart = echarts.init(chartCanvas, undefined, { renderer: "canvas" });
-
-      let lastCanvasSize = "";
-      const renderResponsiveChart = (): void => {
-        const width = chartCanvas.clientWidth;
-        const height = chartCanvas.clientHeight;
-        const canvasSize = `${Math.round(width)}x${Math.round(height)}`;
-        if (canvasSize === lastCanvasSize) {
-          chart.resize();
-          return;
-        }
-        lastCanvasSize = canvasSize;
-
-        const option = assembleECharts(
-          fitFlintInputToCanvas(props.input, width, height),
-        ) as EChartsOption;
-        option.backgroundColor = "transparent";
-        option.animationDuration = 620;
-        option.color = ["#6d5dfc", "#0c956b", "#e49a2d", "#3686e9", "#cd5f91", "#52a9a3"];
-        chart.resize();
-        chart.setOption(option, true);
-        loading.remove();
-      };
-
-      renderResponsiveChart();
-
-      const resizeObserver = new ResizeObserver(renderResponsiveChart);
-      resizeObserver.observe(chartCanvas);
-      const connectionObserver = new MutationObserver(() => {
-        if (root.isConnected) return;
-        resizeObserver.disconnect();
-        connectionObserver.disconnect();
-        chart.dispose();
-      });
-      connectionObserver.observe(document.body, { childList: true, subtree: true });
+      const chart = await mountResponsiveFlintChart(root, chartCanvas, props.input, () =>
+        loading.remove(),
+      );
+      chart.on("click", draftFollowUpFromChartClick);
     } catch (error) {
       loading.className = "northstar-artifact-error";
       loading.textContent = `We couldn't build this chart: ${error instanceof Error ? error.message : String(error)}`;
@@ -728,10 +878,24 @@ const config: AgentWidgetConfig = {
     },
     renderGroupedSummary: ({ toolCalls }) => renderGroupedToolActivity(toolCalls),
   },
+  // The date-range picker is display-only in the demo, but the agent still
+  // hears the dashboard's frame of reference on every request.
+  contextProviders: [
+    () => ({
+      dashboard: {
+        workspace: "Acme Labs (production)",
+        page: "Revenue intelligence overview",
+        dateRange: "Last 12 months",
+        latestDataMonth: database.latestMonth,
+      },
+    }),
+  ],
   features: {
     ...DEFAULT_WIDGET_CONFIG.features,
     showReasoning: false,
     showToolCalls: true,
+    // Lets Atlas end an analysis with tappable follow-up questions.
+    suggestReplies: { expose: true },
     toolCallDisplay: {
       ...DEFAULT_WIDGET_CONFIG.features?.toolCallDisplay,
       collapsedMode: "tool-name",
@@ -841,8 +1005,12 @@ const clearEntryGeometry = (): void => {
 const positionInlineEntry = (): void => {
   entryPositionFrame = null;
   if (entryEngaged) return;
+  // The resting pill is absolutely positioned inside the widget mount so it
+  // scrolls in document flow — a fixed pill re-synced per scroll event always
+  // trails the page by a frame. Coordinates are therefore mount-relative.
+  const rootBounds = mount.getBoundingClientRect();
   const bounds = entrySlot.getBoundingClientRect();
-  setEntryGeometry(bounds.left, bounds.top, bounds.width);
+  setEntryGeometry(bounds.left - rootBounds.left, bounds.top - rootBounds.top, bounds.width);
 };
 
 const scheduleInlineEntryPosition = (): void => {
@@ -903,7 +1071,7 @@ if (entryEngaged) {
   document.body.classList.add("analytics-chat-open");
 } else {
   document.body.classList.add("analytics-entry-home");
-  scheduleInlineEntryPosition();
+  positionInlineEntry();
 }
 
 const engageEntryFromInput = (event: Event): void => {
@@ -925,11 +1093,31 @@ const stopWatchingWidgetClose = widget.on("widget:closed", () => {
   if (entryEngaged) restoreInlineEntry(false);
 });
 window.addEventListener("resize", scheduleInlineEntryPosition);
-window.addEventListener("scroll", scheduleInlineEntryPosition, { passive: true });
+// Catches layout shifts that fire no resize event (font loads, panels
+// growing above the entry); scrolling needs no handler because the resting
+// pill lives in document flow.
+const entryLayoutObserver = new ResizeObserver(scheduleInlineEntryPosition);
+entryLayoutObserver.observe(entrySlot);
+entryLayoutObserver.observe(document.body);
 
+// Explicit ask buttons submit immediately — a control labeled as an ask
+// should start the analysis, not hand back a half-finished draft. Softer
+// surfaces (sidebar navigation) use data-ask-draft below instead, which only
+// drafts the question so the user can adjust it before sending.
 document.querySelectorAll<HTMLElement>("[data-ask]").forEach((button) => {
-  button.addEventListener("click", () => {
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
     const question = button.dataset.ask;
+    if (!question || !widget) return;
+    widget.open();
+    widget.submitMessage(question);
+  });
+});
+
+document.querySelectorAll<HTMLElement>("[data-ask-draft]").forEach((link) => {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    const question = link.dataset.askDraft;
     if (!question || !widget) return;
     widget.open();
     widget.setMessage(question);
@@ -974,7 +1162,7 @@ window.addEventListener("beforeunload", () => {
   pillRoot.removeEventListener("focusin", engageEntryFromInput);
   pillRoot.removeEventListener("pointerdown", engageEntryFromInput, true);
   window.removeEventListener("resize", scheduleInlineEntryPosition);
-  window.removeEventListener("scroll", scheduleInlineEntryPosition);
+  entryLayoutObserver.disconnect();
   toolController.abort();
 });
 

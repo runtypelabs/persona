@@ -390,7 +390,6 @@ body.analytics-chat-open::after {
 
 body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root,
 #analytics-agent-root .persona-widget-pill-root.northstar-entry-transitioning {
-  position: fixed !important;
   top: var(--northstar-entry-top) !important;
   right: auto !important;
   bottom: auto !important;
@@ -399,7 +398,14 @@ body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root,
   max-width: none !important;
   transform: none !important;
 }
+/* Resting: absolute inside the mount, so the pill scrolls in document flow
+   instead of being re-synced to the page a frame late on every scroll. */
+body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root {
+  position: absolute !important;
+}
+/* The fly-to-workspace transition animates in viewport coordinates. */
 #analytics-agent-root .persona-widget-pill-root.northstar-entry-transitioning {
+  position: fixed !important;
   transition: top 260ms cubic-bezier(.2, .8, .2, 1), left 260ms cubic-bezier(.2, .8, .2, 1), width 260ms cubic-bezier(.2, .8, .2, 1);
 }
 body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root[data-state="collapsed"] [data-persona-composer-suggestions] {
@@ -439,6 +445,40 @@ body.analytics-entry-home #analytics-agent-root [data-persona-composer-suggestio
 }
 #analytics-agent-root .persona-tool-group-summary::before,
 #analytics-agent-root .persona-tool-group-summary::after { display: none; }
+
+/* Grouped activity renders as a cumulative checklist so multi-step agent
+   work stays legible instead of one line replacing itself. */
+#analytics-agent-root .northstar-activity-steps { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 0; }
+#analytics-agent-root .northstar-activity-step { display: inline-flex; align-items: center; gap: 7px; color: #6757ea; font-size: 10px; font-weight: 620; }
+#analytics-agent-root .northstar-activity-step:not(.done):not(.ready)::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6d5dfc;
+  animation: northstar-step-pulse 1.1s ease-in-out infinite;
+}
+#analytics-agent-root .northstar-activity-step.done { color: #7d8983; font-weight: 560; }
+#analytics-agent-root .northstar-activity-step.done::before { content: "✓"; color: #17a174; font-weight: 700; }
+#analytics-agent-root .northstar-activity-step.ready { color: #128d67; font-weight: 650; }
+#analytics-agent-root .northstar-activity-step.ready::before { content: "✓"; font-weight: 700; }
+@keyframes northstar-step-pulse {
+  0%, 100% { opacity: .35; }
+  50% { opacity: 1; }
+}
+
+/* Visually hidden live region announcing analysis progress. */
+.northstar-sr-status {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* The transcript grows upward from the persistent composer rather than
    appearing as a disconnected modal. The panel deliberately overlaps the
@@ -548,6 +588,11 @@ body.analytics-artifact-open::after {
 .northstar-chart-tabs { display: flex; gap: 3px; }
 .northstar-chart-tab { padding: 7px 10px; border: 0; border-radius: 0; background: transparent; color: #7a8680; font-size: 11px; font-weight: 590; cursor: pointer; }
 .northstar-chart-tab.active { background: #efedff; color: #5545df; }
+.northstar-chart-actions { min-width: 0; display: inline-flex; align-items: center; gap: 12px; }
+.northstar-chart-hint { overflow: hidden; color: #9aa49e; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.northstar-chart-pin { padding: 7px 11px; flex: 0 0 auto; border: 1px solid #d9d2ff; background: #f5f3ff; color: #5545df; font-size: 10px; font-weight: 620; cursor: pointer; }
+.northstar-chart-pin:hover:not(:disabled) { background: #ece9ff; }
+.northstar-chart-pin:disabled { border-color: #cdeadd; background: #eefaf4; color: #128d67; cursor: default; }
 .northstar-chart-view { position: relative; min-height: 0; flex: 1 1 auto; display: flex; padding: clamp(8px, 1.2cqw, 18px); }
 .northstar-chart-canvas { width: 100%; height: auto; min-width: 0; min-height: 280px; flex: 1 1 auto; }
 .northstar-chart-loading { position: absolute; inset: 0; display: grid; place-items: center; color: #8d9892; font-size: 10px; background: #fff; }
@@ -558,7 +603,16 @@ body.analytics-artifact-open::after {
 .northstar-data-table th, .northstar-data-table td { padding: 9px 11px; border-bottom: 1px solid #edf0ee; font-size: 9px; text-align: left; white-space: nowrap; }
 .northstar-data-table th { position: sticky; top: -18px; background: #f7f9f8; color: #66736d; font-weight: 650; text-transform: none; letter-spacing: 0; }
 .northstar-data-table td { color: #56625c; }
+.northstar-table-note { padding: 10px 11px 2px; color: #98a19d; font-size: 9px; }
+.northstar-artifact-sql { margin: 0; padding: 14px; border: 1px solid #edf0ee; background: #f8faf9; color: #45514b; font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 .northstar-artifact-error { margin: auto; max-width: 520px; padding: 24px; border: 1px solid #f0cfcf; border-radius: 0; background: #fff5f5; color: #8b3535; font-size: 11px; line-height: 1.6; }
+
+/* Analyses pinned from the artifact workspace become dashboard panels. */
+.pinned-panel { grid-column: 1 / -1; }
+.pinned-panel .panel-heading p { max-width: 72ch; }
+.pinned-actions { display: inline-flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.pinned-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; background: #ece9ff; color: #5c4ce4; font-size: 8px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.pinned-chart-canvas { height: 340px; margin: 10px 14px 16px; }
 
 .northstar-artifact-card { margin: 6px 0 2px; padding: 11px 12px; display: flex; align-items: center; gap: 10px; border: 1px solid #e2e5e3; border-radius: 0; background: #fff; cursor: pointer; box-shadow: 0 1px 2px rgba(20,34,27,.04); }
 .northstar-artifact-card:hover { border-color: #cfc8ff; background: #faf9ff; }
@@ -581,6 +635,7 @@ body.analytics-artifact-open::after {
   .northstar-artifact-description { font-size: 11px; }
   .northstar-chart-toolbar { min-height: 44px; padding: 0 8px; }
   .northstar-chart-tab { padding: 6px 8px; font-size: 10px; }
+  .northstar-chart-hint { display: none; }
 }
 
 @media (max-width: 1100px) {
