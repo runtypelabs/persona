@@ -543,7 +543,9 @@ body.analytics-entry-home :is(#analytics-agent-root, .atlas-entry-slot) [data-pe
    full-screen analyst workspace; dismissing it returns to the anchored chat. */
 body.analytics-artifact-open { overflow: hidden; }
 body.analytics-artifact-open #analytics-agent-root .persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] {
-  --northstar-chat-column: clamp(320px, 23vw, 380px);
+  /* The transcript column earns real width on large displays instead of
+     pinning at 380px while the artifact takes everything else. */
+  --northstar-chat-column: clamp(340px, 24vw, 520px);
   inset: 8px !important;
   top: 8px !important;
   right: 8px !important;
@@ -582,7 +584,7 @@ body.analytics-artifact-open #analytics-agent-root .persona-artifact-toolbar > b
 body.analytics-artifact-open #analytics-agent-root .persona-artifact-content {
   display: flex !important;
   flex-direction: column;
-  padding: clamp(14px, 1.5vw, 28px) !important;
+  padding: clamp(14px, 1.8vw, 40px) !important;
   padding-bottom: max(92px, calc(76px + env(safe-area-inset-bottom))) !important;
   overflow: hidden !important;
 }

@@ -213,6 +213,31 @@ const mountResponsiveFlintChart = async (
     option.backgroundColor = "transparent";
     option.animationDuration = 620;
     option.color = CHART_COLORS;
+    // Flint emits vertical legends at an absolute `left` computed from the
+    // compile-time canvas. The grid uses edge-relative offsets and survives
+    // resizes, but an absolute legend drifts off-canvas whenever the pane's
+    // rendered width differs from the compiled width — re-anchor it to the
+    // right edge so it stays inside at every width.
+    const legends = option.legend ? (Array.isArray(option.legend) ? option.legend : [option.legend]) : [];
+    let legendReanchored = false;
+    for (const legend of legends) {
+      if (legend.orient === "vertical" && legend.left != null) {
+        legend.left = undefined;
+        legend.right = 12;
+        legendReanchored = true;
+      }
+    }
+    if (legendReanchored && option.graphic) {
+      // Flint's legend *title* ships as a separate absolute-left text graphic
+      // (often past the canvas edge entirely); keep it with the legend.
+      const graphics = Array.isArray(option.graphic) ? option.graphic : [option.graphic];
+      for (const element of graphics as Array<{ type?: string; left?: unknown; right?: unknown }>) {
+        if (element?.type === "text" && element.left != null) {
+          element.left = undefined;
+          element.right = 12;
+        }
+      }
+    }
     chart.resize();
     chart.setOption(option, true);
     if (!rendered) {
@@ -985,9 +1010,11 @@ const entrySlot = document.getElementById("atlas-entry-slot");
 const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
 if (!entry || !entrySlot || !pillRoot) throw new Error("Atlas entry surface is missing.");
 
-// Persona writes its theme variables onto the mount; the parked pill lives in
-// the entry slot instead, so mirror the same variables there or every token
-// (send button, borders, text colors) silently falls back to defaults.
+// Persona applies its theme variables inside the widget wrapper, but the
+// composer-bar pill root is a *sibling* of the wrapper, so it never inherits
+// them (the workspace send button rendered default-dark). Set them on the
+// mount for the lifted state and on the entry slot for the parked state.
+applyThemeVariables(mount, config);
 applyThemeVariables(entrySlot, config);
 
 let entryEngaged = widget.isOpen();
@@ -1093,6 +1120,23 @@ const engageEntryFromInput = (event: Event): void => {
 };
 pillRoot.addEventListener("focusin", engageEntryFromInput);
 pillRoot.addEventListener("pointerdown", engageEntryFromInput, { capture: true });
+// Starter chips send through session.sendMessage() directly — expand-on-submit
+// only covers the composer form — so launching the workspace is the host's
+// job. Capture phase is required: the chip's own click handler clears the
+// suggestions row synchronously, so by the bubble phase the button is
+// detached and no longer matches the selector. The event path is precomputed,
+// so the chip's send handler still runs after this.
+const engageEntryFromSuggestion = (event: Event): void => {
+  if (entryEngaged) return;
+  const target = event.target;
+  if (
+    target instanceof Element &&
+    target.closest("[data-persona-composer-suggestions] button")
+  ) {
+    engageEntry();
+  }
+};
+pillRoot.addEventListener("click", engageEntryFromSuggestion, { capture: true });
 const stopWatchingWidgetOpen = widget.on("widget:opened", () => {
   if (!entryEngaged) engageEntry();
 });
@@ -1160,6 +1204,7 @@ window.addEventListener("beforeunload", () => {
   if (entryTransitionTimer != null) window.clearTimeout(entryTransitionTimer);
   pillRoot.removeEventListener("focusin", engageEntryFromInput);
   pillRoot.removeEventListener("pointerdown", engageEntryFromInput, true);
+  pillRoot.removeEventListener("click", engageEntryFromSuggestion, true);
   toolController.abort();
 });
 
