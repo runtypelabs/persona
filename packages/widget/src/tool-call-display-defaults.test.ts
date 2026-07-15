@@ -8,6 +8,7 @@ describe("tool call display defaults", () => {
       collapsedMode: "tool-call",
       activePreview: false,
       grouped: false,
+      groupedMode: "stack",
       previewMaxLines: 3,
       expandable: true,
       loadingAnimation: "none",

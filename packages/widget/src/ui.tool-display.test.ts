@@ -201,4 +201,55 @@ describe("createAgentExperience tool call display modes", () => {
 
     controller.destroy();
   });
+
+  it("keeps tool calls grouped across reasoning that is hidden", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        showReasoning: false,
+        toolCallDisplay: {
+          grouped: true,
+        },
+      },
+    } as any);
+
+    injectToolMessage(controller, { id: "tool-1", name: "Inspect data" });
+    injectReasoningMessage(controller, { id: "reason-1", chunks: ["Choosing a query"] });
+    injectToolMessage(controller, { id: "tool-2", name: "Run analysis" });
+
+    const group = mount.querySelector("[data-persona-tool-group='true']");
+    expect(group).not.toBeNull();
+    expect(group?.querySelectorAll("[data-persona-tool-group-item]")).toHaveLength(2);
+
+    controller.destroy();
+  });
+
+  it("can render a grouped tool sequence as one summary item", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        toolCallDisplay: {
+          grouped: true,
+          groupedMode: "summary",
+        },
+      },
+      toolCall: {
+        renderGroupedSummary: () => "Analysis ready",
+      },
+    } as any);
+
+    injectToolMessage(controller, { id: "tool-1", name: "Inspect data", status: "complete" });
+    injectToolMessage(controller, { id: "tool-2", name: "Run analysis", status: "complete" });
+
+    const group = mount.querySelector("[data-persona-tool-group='true']");
+    expect(group?.textContent).toContain("Analysis ready");
+    expect(group?.querySelector("[data-persona-tool-group-item]")).toBeNull();
+    expect(mount.querySelector(".persona-tool-bubble")).toBeNull();
+
+    controller.destroy();
+  });
 });

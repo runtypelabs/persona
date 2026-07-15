@@ -33,6 +33,16 @@ export const TIER_ORDER: readonly Tier[] = ["patterns", "start", "reference"];
 
 export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
   {
+    slug: "analytics-agent-demo",
+    href: "/analytics-agent-demo.html",
+    title: "Talk to Your Data",
+    blurb: "Browser-local SQL, WebMCP tools, and full-screen Flint chart artifacts.",
+    badge: "Featured",
+    tier: "start",
+    tags: ["agent", "analytics", "artifacts", "webmcp"],
+    modes: ["launcher"],
+  },
+  {
     slug: "tool-loading-demo",
     href: "/tool-loading-demo.html",
     title: "Tool & Reasoning Loaders",

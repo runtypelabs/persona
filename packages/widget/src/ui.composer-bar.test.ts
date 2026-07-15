@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 
 describe("createAgentExperience composer-bar mode", () => {
   afterEach(() => {
+    vi.unstubAllGlobals();
     document.body.innerHTML = "";
     // The widget's default localStorage adapter persists chat history
     // across createAgentExperience calls. Clear it so each test starts
@@ -329,18 +330,26 @@ describe("createAgentExperience composer-bar mode", () => {
     controller.destroy();
   });
 
-  it("clicking the clear-chat button clears injected messages", () => {
+  it("clicking the clear-chat button clears messages and artifacts", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
     const mount = document.createElement("div");
     document.body.appendChild(mount);
 
     const controller = createAgentExperience(mount, {
       apiUrl: "https://api.example.com/chat",
       launcher: { mountMode: "composer-bar" },
+      features: { artifacts: { enabled: true } },
     });
 
     controller.injectAssistantMessage({ content: "hello there" });
     controller.injectUserMessage({ content: "ping" });
+    controller.upsertArtifact({
+      artifactType: "markdown",
+      title: "Generated analysis",
+      content: "# Revenue trend",
+    });
     expect(controller.getMessages().length).toBeGreaterThan(0);
+    expect(controller.getArtifacts()).toHaveLength(1);
 
     const clearChat = mount.querySelector<HTMLButtonElement>(
       "[aria-label='Clear chat'], [aria-label='Start over']"
@@ -349,6 +358,7 @@ describe("createAgentExperience composer-bar mode", () => {
     clearChat!.click();
 
     expect(controller.getMessages().length).toBe(0);
+    expect(controller.getArtifacts()).toHaveLength(0);
 
     controller.destroy();
   });
@@ -409,6 +419,54 @@ describe("createAgentExperience composer-bar mode", () => {
     expect(footer!.parentElement).toBe(pillRoot);
     expect(panel!.contains(footer!)).toBe(false);
     expect(container!.contains(footer!)).toBe(false);
+
+    controller.destroy();
+  });
+
+  it("keeps the pill composer mounted when artifacts enable the split layout", () => {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { mountMode: "composer-bar" },
+      features: { artifacts: { enabled: true } },
+    });
+
+    const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
+    const composerInput = pillRoot?.querySelector<HTMLTextAreaElement>(
+      "[data-persona-composer-input]"
+    );
+    expect(pillRoot).not.toBeNull();
+    expect(composerInput).not.toBeNull();
+    expect(composerInput!.placeholder).toBeTruthy();
+
+    controller.open();
+    expect(pillRoot!.dataset.state).toBe("expanded");
+    expect(composerInput!.isConnected).toBe(true);
+
+    controller.destroy();
+  });
+
+  it("renders configured suggestion chips in the composer-bar footer", () => {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { mountMode: "composer-bar" },
+      suggestionChips: ["Revenue trend", "Channel mix"],
+    });
+
+    const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
+    const suggestions = pillRoot?.querySelector<HTMLElement>(
+      "[data-persona-composer-suggestions]"
+    );
+    expect(suggestions?.querySelectorAll("button")).toHaveLength(2);
+
+    controller.open();
+    expect(pillRoot!.dataset.state).toBe("expanded");
+    expect(suggestions!.isConnected).toBe(true);
 
     controller.destroy();
   });

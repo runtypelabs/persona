@@ -806,6 +806,10 @@ export type AgentWidgetArtifactsLayoutConfig = {
    * @default 'default'
    */
   toolbarPreset?: "default" | "document";
+  /** Visible title in the artifact toolbar. @default "Artifacts" */
+  toolbarTitle?: string;
+  /** Label for the artifact dismiss control. @default "Close" */
+  closeButtonLabel?: string;
   /**
    * When `toolbarPreset` is `document`, show a visible "Copy" label next to the copy icon.
    */
@@ -1012,6 +1016,13 @@ export type AgentWidgetToolCallDisplayFeature = {
    * @default false
    */
   grouped?: boolean;
+  /**
+   * Controls how a grouped tool sequence is rendered.
+   * - `"stack"`: show the group summary and each child tool row.
+   * - `"summary"`: show one consolidated summary row only.
+   * @default "stack"
+   */
+  groupedMode?: "stack" | "summary";
   /**
    * When false, tool call bubbles show only the collapsed summary with no
    * expand/collapse toggle. Users see tool awareness without full details.

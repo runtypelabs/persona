@@ -16,6 +16,7 @@ import {
   TRAVEL_PLANNER_AGENT,
   DOCS_ASSISTANT_AGENT,
   CHAT_ASSISTANT_AGENT,
+  ANALYTICS_ASSISTANT_AGENT,
   createCheckoutSession,
   type CheckoutItem,
 } from "@runtypelabs/persona-proxy";
@@ -249,6 +250,16 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
     upstreamUrl,
   });
 
+  const analyticsAssistantApp = createChatProxyApp({
+    ...proxyProtection,
+    path: "/api/chat/dispatch-analytics",
+    apiKey,
+    allowedOrigins,
+    agentId: env.AGENT_ID_ANALYTICS || undefined,
+    agentConfig: env.AGENT_ID_ANALYTICS ? undefined : ANALYTICS_ASSISTANT_AGENT,
+    upstreamUrl,
+  });
+
   app.route("/", directiveApp);
   app.route("/", actionApp);
   app.route("/", metadataApp);
@@ -265,6 +276,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   app.route("/", agentLoopApp);
   app.route("/", docsAssistantApp);
   app.route("/", chatAssistantApp);
+  app.route("/", analyticsAssistantApp);
 
   app.post("/api/tts", async (c) => {
     const origin = c.req.header("origin");

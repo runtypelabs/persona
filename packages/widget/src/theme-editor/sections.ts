@@ -834,6 +834,8 @@ const artifactCustomizationSectionDef: SectionDef = {
   id: 'artifacts-customization', title: 'Artifact Customization', collapsed: true,
   fields: [
     { id: 'art-toolbar', label: 'Toolbar Preset', type: 'select', path: 'features.artifacts.layout.toolbarPreset', defaultValue: 'default', options: [{ value: 'default', label: 'Default' }, { value: 'document', label: 'Document' }] },
+    { id: 'art-toolbar-title', label: 'Toolbar Title', type: 'text', path: 'features.artifacts.layout.toolbarTitle', defaultValue: 'Artifacts' },
+    { id: 'art-close-label', label: 'Close Button Label', type: 'text', path: 'features.artifacts.layout.closeButtonLabel', defaultValue: 'Close' },
     { id: 'art-pane-width', label: 'Pane Width', description: 'CSS width (e.g. 40%, 28rem)', type: 'text', path: 'features.artifacts.layout.paneWidth', defaultValue: '40%' },
     { id: 'art-pane-max-width', label: 'Pane Max Width', type: 'text', path: 'features.artifacts.layout.paneMaxWidth', defaultValue: '28rem' },
     { id: 'art-split-gap', label: 'Split Gap', type: 'text', path: 'features.artifacts.layout.splitGap', defaultValue: '0.5rem' },
@@ -864,6 +866,7 @@ const debugSectionDef: SectionDef = {
     { id: 'dev-tool-active-min-height', label: 'Tool Active Min Height', description: 'CSS min-height for collapsed active tool rows (e.g. 5rem)', type: 'text', path: 'features.toolCallDisplay.activeMinHeight', defaultValue: '' },
     { id: 'dev-tool-expandable', label: 'Tool Calls Expandable', description: 'Allow expanding tool call rows to see full details', type: 'toggle', path: 'features.toolCallDisplay.expandable', defaultValue: true },
     { id: 'dev-tool-grouped', label: 'Group Sequential Tool Calls', description: 'Render consecutive tool rows inside a grouped container', type: 'toggle', path: 'features.toolCallDisplay.grouped', defaultValue: false },
+    { id: 'dev-tool-grouped-mode', label: 'Grouped Tool Detail', description: 'Show each tool step or one consolidated summary', type: 'select', path: 'features.toolCallDisplay.groupedMode', defaultValue: 'stack', options: [{ value: 'stack', label: 'Show Steps' }, { value: 'summary', label: 'Summary Only' }] },
     { id: 'dev-reasoning-expandable', label: 'Reasoning Expandable', description: 'Allow expanding reasoning rows to see full details', type: 'toggle', path: 'features.reasoningDisplay.expandable', defaultValue: true },
     { id: 'dev-reasoning-active-preview', label: 'Reasoning Preview While Active', description: 'Show a lightweight preview in collapsed active reasoning rows', type: 'toggle', path: 'features.reasoningDisplay.activePreview', defaultValue: false },
     { id: 'dev-reasoning-preview-lines', label: 'Reasoning Preview Lines', type: 'select', path: 'features.reasoningDisplay.previewMaxLines', defaultValue: 3, options: [{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }, { value: '5', label: '5' }], formatValue: (v: unknown) => String(v ?? 3), parseValue: (v: unknown) => Number(v) },

@@ -585,6 +585,7 @@ export default defineConfig({
         'client-token-feedback-demo': path.resolve(__dirname, 'client-token-feedback-demo.html'),
         'docked-panel-demo': path.resolve(__dirname, 'docked-panel-demo.html'),
         'persistent-composer': path.resolve(__dirname, 'persistent-composer.html'),
+        'analytics-agent-demo': path.resolve(__dirname, 'analytics-agent-demo.html'),
         // Agent demo
         'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
         // WebMCP: page-discovered tools

@@ -72,9 +72,10 @@ export const buildPillPeekBanner = (): PillPeekBanner => {
  * Returns the same `ComposerElements` shape as `buildComposer` so panel.ts
  * and ui.ts plumbing is unconditional past the choice of builder.
  *
- * Suggestions row + status text are built (so plugin code that mutates
- * them keeps working and `bindComposerRefsFromFooter` finds them) but are
- * `display: none` by default: pill UX is just textarea + 3 buttons.
+ * Suggestions row + status text are built so plugin code that mutates them
+ * keeps working and `bindComposerRefsFromFooter` finds them. CSS hides the
+ * suggestions while collapsed and reveals them above the pill when expanded;
+ * status text stays hidden because the pill UX has no room for it.
  *
  * Attachment previews float ABOVE the pill in their own row when
  * AttachmentManager toggles the previews container's `display` property
@@ -89,7 +90,6 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
   });
 
   const suggestions = createSuggestionsRow();
-  suggestions.style.display = "none";
   const statusText = createStatusText(config);
   statusText.style.display = "none";
 
@@ -150,11 +150,11 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
 
   // Footer assembly:
   //   [previews row, hidden until attachments exist]
+  //   [suggestions, visible only while expanded]
   //   [pill form]
-  //   [hidden suggestions]
   //   [hidden status]
   if (attachment) footer.append(attachment.previewsContainer);
-  footer.append(composerForm, suggestions, statusText);
+  footer.append(suggestions, composerForm, statusText);
 
   // The pill flattens left/right into the form's grid; there's no separate
   // wrapper. Surface the form itself as `actionsRow` to satisfy the

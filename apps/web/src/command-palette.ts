@@ -63,6 +63,14 @@ const DEFAULT_PLACEHOLDER = "Search demos, pages, or topics...";
 
 const FEATURED_DEMOS: readonly CommandPaletteItem[] = [
   {
+    id: "featured:analytics-agent",
+    title: "Talk to Your Data",
+    href: "/analytics-agent-demo.html",
+    section: "Featured demos",
+    subtitle: "Query a browser-local warehouse and generate Flint chart artifacts.",
+    keywords: ["analytics", "sql", "data", "flint", "charts", "agent"],
+  },
+  {
     id: "featured:webmcp-storefront",
     title: "WebMCP Storefront",
     href: "/webmcp-demo.html",

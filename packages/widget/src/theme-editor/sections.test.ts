@@ -67,6 +67,15 @@ describe("theme editor scroll-to-bottom controls", () => {
     expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.activeMinHeight")).toBe(true);
     expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.expandable")).toBe(true);
     expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.grouped")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.groupedMode")).toBe(true);
+  });
+
+  it("exposes product-facing artifact toolbar copy", () => {
+    const section = CONFIGURE_SECTIONS.find((entry) => entry.id === "artifacts-customization");
+    const paths = section?.fields.map((field) => field.path) ?? [];
+
+    expect(paths).toContain("features.artifacts.layout.toolbarTitle");
+    expect(paths).toContain("features.artifacts.layout.closeButtonLabel");
   });
 
   it("exposes collapsed reasoning preview controls", () => {

@@ -3789,6 +3789,20 @@
   gap: 8px;
 }
 
+/* Configured / agent-pushed suggestion chips belong to the expanded
+ * conversation surface, not the always-on collapsed composer. Keeping the
+ * row in pillRoot lets it sit directly above the textarea without re-entering
+ * the transcript's scrolling region. */
+.persona-widget-pill-root[data-state="collapsed"] [data-persona-composer-suggestions] {
+  display: none;
+}
+
+.persona-widget-pill-root[data-state="expanded"] [data-persona-composer-suggestions] {
+  display: flex;
+  justify-content: center;
+  margin: 0 8px 4px;
+}
+
 /* Attachment previews row (above the pill). AttachmentManager toggles
  * display:flex when items are added; default is display:none. */
 .persona-pill-composer__previews {

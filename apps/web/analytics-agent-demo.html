@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A product analytics workspace with an embedded data analyst."
+    />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/src/analytics-agent-demo.css" />
+    <title>Northstar Analytics</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Northstar navigation">
+        <a class="brand" href="/" aria-label="Northstar home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="m12 2 2.25 7.75L22 12l-7.75 2.25L12 22l-2.25-7.75L2 12l7.75-2.25L12 2Z" />
+              <circle cx="12" cy="12" r="2.25" />
+            </svg>
+          </span>
+          <span>northstar</span>
+        </a>
+
+        <button class="workspace-switcher" type="button">
+          <span class="workspace-avatar">AL</span>
+          <span>
+            <strong>Acme Labs</strong>
+            <small>Production</small>
+          </span>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg>
+        </button>
+
+        <nav class="primary-nav">
+          <p class="nav-label">Workspace</p>
+          <a class="nav-item active" href="#overview">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/><rect x="3" y="12" width="5" height="5" rx="1"/><rect x="12" y="12" width="5" height="5" rx="1"/></svg>
+            Overview
+          </a>
+          <a class="nav-item" href="#reports" data-ask-draft="Summarize how the business performed over the last quarter.">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16.5V11l4-3 3 2 6-6"/><path d="M12 4h4v4"/></svg>
+            Reports
+          </a>
+          <a class="nav-item" href="#funnels" data-ask-draft="How does session-to-purchase conversion vary across our acquisition channels?">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h14l-5.5 6.3v4.2l-3 1.5v-5.7L3 4Z"/></svg>
+            Funnels
+          </a>
+          <a class="nav-item" href="#retention" data-ask-draft="How has customer retention trended over the past year?">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 7.5A7 7 0 1 0 17 12"/><path d="M13 3h4v4"/></svg>
+            Retention
+          </a>
+
+          <p class="nav-label nav-label-spaced">Data</p>
+          <a class="nav-item" href="#warehouse">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="5" rx="6.5" ry="2.5"/><path d="M3.5 5v5c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5V5"/><path d="M3.5 10v5c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5v-5"/></svg>
+            Warehouse
+            <span class="nav-status"></span>
+          </a>
+          <a class="nav-item" href="#definitions">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3.5h8.5L16 7v9.5H4z"/><path d="M12 3.5V7h4M7 10h6M7 13h4"/></svg>
+            Definitions
+          </a>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="data-health">
+            <div class="health-icon"><span></span></div>
+            <div>
+              <strong>Warehouse healthy</strong>
+              <small id="database-status">Checking data sources…</small>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div class="breadcrumbs"><span>Analytics</span><b>/</b><strong>Overview</strong></div>
+          <div class="topbar-actions">
+            <button class="icon-button" type="button" aria-label="Search">
+              <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 3.3 3.3"/></svg>
+            </button>
+            <button class="icon-button notification" type="button" aria-label="Notifications">
+              <svg viewBox="0 0 20 20"><path d="M5 8a5 5 0 0 1 10 0c0 5 2 5.5 2 5.5H3S5 13 5 8Z"/><path d="M8 16h4"/></svg>
+              <span></span>
+            </button>
+            <span class="topbar-divider"></span>
+            <button class="profile-button" type="button"><span>NB</span><svg viewBox="0 0 20 20"><path d="m6 8 4 4 4-4"/></svg></button>
+          </div>
+        </header>
+
+        <div class="content" id="overview">
+          <section class="page-heading">
+            <div>
+              <div class="eyebrow"><span></span> Revenue intelligence</div>
+              <h1>Your business, at a glance</h1>
+              <p>Monitor growth, conversion, and customer health across every channel.</p>
+            </div>
+            <div class="heading-actions">
+              <button class="date-control" type="button">
+                <svg viewBox="0 0 20 20"><rect x="3" y="4.5" width="14" height="12" rx="2"/><path d="M6.5 2.5v4M13.5 2.5v4M3 8h14"/></svg>
+                Last 12 months
+                <svg class="chevron" viewBox="0 0 20 20"><path d="m6 8 4 4 4-4"/></svg>
+              </button>
+              <button class="share-control" type="button">
+                <svg viewBox="0 0 20 20"><path d="M10 13V3M6.5 6.5 10 3l3.5 3.5"/><path d="M4 10.5v5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5v-5"/></svg>
+                Export
+              </button>
+            </div>
+          </section>
+
+          <section class="atlas-entry" id="atlas-entry" aria-labelledby="atlas-entry-title">
+            <div class="atlas-entry-heading">
+              <div class="atlas-entry-identity">
+                <span class="atlas-entry-mark" aria-hidden="true">✦</span>
+                <div>
+                  <strong id="atlas-entry-title">Atlas · Ask about this overview</strong>
+                  <span>Explore what changed, why it changed, or where to focus next.</span>
+                </div>
+              </div>
+              <span class="atlas-entry-context"><i></i> Production · Last 12 months</span>
+            </div>
+            <div class="atlas-entry-slot" id="atlas-entry-slot"></div>
+          </section>
+
+          <section class="metrics-grid" aria-label="Key business metrics">
+            <article class="metric-card">
+              <div class="metric-top"><span>Net revenue</span><button type="button" aria-label="Revenue options">•••</button></div>
+              <div class="metric-value" id="metric-revenue">—</div>
+              <div class="metric-meta"><span class="metric-change up"><svg viewBox="0 0 16 16"><path d="m4 10 4-4 4 4"/></svg>18.4%</span><span>vs previous period</span></div>
+              <div class="metric-sparkline purple" aria-hidden="true"><i style="height:28%"></i><i style="height:44%"></i><i style="height:38%"></i><i style="height:56%"></i><i style="height:52%"></i><i style="height:68%"></i><i style="height:62%"></i><i style="height:82%"></i><i style="height:76%"></i><i style="height:92%"></i></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-top"><span>Active customers</span><button type="button" aria-label="Customers options">•••</button></div>
+              <div class="metric-value" id="metric-customers">—</div>
+              <div class="metric-meta"><span class="metric-change up"><svg viewBox="0 0 16 16"><path d="m4 10 4-4 4 4"/></svg>12.1%</span><span>vs previous period</span></div>
+              <div class="metric-sparkline green" aria-hidden="true"><i style="height:34%"></i><i style="height:42%"></i><i style="height:49%"></i><i style="height:46%"></i><i style="height:61%"></i><i style="height:65%"></i><i style="height:72%"></i><i style="height:70%"></i><i style="height:84%"></i><i style="height:88%"></i></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-top"><span>Conversion rate</span><button type="button" aria-label="Conversion options">•••</button></div>
+              <div class="metric-value" id="metric-conversion">—</div>
+              <div class="metric-meta"><span class="metric-change down"><svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg>1.8%</span><span>vs previous period</span></div>
+              <div class="metric-sparkline amber" aria-hidden="true"><i style="height:82%"></i><i style="height:72%"></i><i style="height:76%"></i><i style="height:65%"></i><i style="height:69%"></i><i style="height:57%"></i><i style="height:62%"></i><i style="height:50%"></i><i style="height:54%"></i><i style="height:46%"></i></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-top"><span>Monthly recurring</span><button type="button" aria-label="MRR options">•••</button></div>
+              <div class="metric-value" id="metric-mrr">—</div>
+              <div class="metric-meta"><span class="metric-change up"><svg viewBox="0 0 16 16"><path d="m4 10 4-4 4 4"/></svg>8.7%</span><span>vs previous period</span></div>
+              <div class="metric-sparkline blue" aria-hidden="true"><i style="height:22%"></i><i style="height:30%"></i><i style="height:38%"></i><i style="height:45%"></i><i style="height:49%"></i><i style="height:58%"></i><i style="height:65%"></i><i style="height:73%"></i><i style="height:80%"></i><i style="height:89%"></i></div>
+            </article>
+          </section>
+
+          <section class="dashboard-grid">
+            <article class="panel revenue-panel">
+              <header class="panel-heading">
+                <div><h2>Revenue over time</h2><p>Completed orders, net of discounts</p></div>
+                <div class="legend"><span><i class="legend-dot current"></i>Current period</span><span><i class="legend-dot previous"></i>Previous period</span></div>
+              </header>
+              <div class="chart-summary"><strong id="chart-revenue-total">—</strong><span>total revenue</span></div>
+              <div class="revenue-chart" id="revenue-chart" aria-label="Revenue line chart">
+                <svg viewBox="0 0 900 260" preserveAspectRatio="none" role="img">
+                  <defs>
+                    <linearGradient id="revenue-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6d5dfc" stop-opacity=".2"/><stop offset="1" stop-color="#6d5dfc" stop-opacity="0"/></linearGradient>
+                  </defs>
+                  <g class="chart-grid-lines"><path d="M42 20H882M42 76H882M42 132H882M42 188H882M42 244H882"/></g>
+                  <path id="revenue-previous-line" class="previous-line" d="" />
+                  <path id="revenue-area-path" class="area-path" d="" />
+                  <path id="revenue-current-line" class="current-line" d="" />
+                  <g id="revenue-points"></g>
+                </svg>
+                <div class="chart-axis-labels" id="revenue-month-labels"></div>
+              </div>
+              <footer class="panel-foot">
+                <button class="ask-inline" type="button" data-ask="What's driving our revenue growth over the last 12 months?">
+                  <span class="mini-spark">✦</span> Ask Atlas to explain this trend
+                  <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6"/></svg>
+                </button>
+              </footer>
+            </article>
+
+            <article class="panel mix-panel">
+              <header class="panel-heading"><div><h2>Revenue mix</h2><p>Share by product</p></div><button class="panel-menu" type="button">•••</button></header>
+              <div class="donut-wrap">
+                <div class="donut" id="product-donut"><div><strong>4</strong><span>products</span></div></div>
+              </div>
+              <div class="mix-list" id="product-mix-list"></div>
+            </article>
+
+            <article class="panel channel-panel">
+              <header class="panel-heading"><div><h2>Channel performance</h2><p>Acquisition efficiency for the current period</p></div><button class="text-button" type="button">View report <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6"/></svg></button></header>
+              <div class="table-scroll">
+                <table>
+                  <thead><tr><th>Channel</th><th>Sessions</th><th>Conversion</th><th>Revenue</th><th>Trend</th></tr></thead>
+                  <tbody id="channel-table-body"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="panel insight-panel">
+              <div class="insight-glow"></div>
+              <div class="insight-icon">✦</div>
+              <div class="insight-copy">
+                <span>Agent insight</span>
+                <h2>Partner traffic is quietly outperforming</h2>
+                <p>Partner-sourced sessions convert at a higher rate than paid search. Ask the agent to quantify the opportunity.</p>
+              </div>
+              <button type="button" class="insight-ask" data-ask="Why is partner traffic outperforming paid search, and how big is the opportunity?">
+                Investigate with Atlas
+                <svg viewBox="0 0 20 20"><path d="M4 10h12M11 5l5 5-5 5"/></svg>
+              </button>
+            </article>
+          </section>
+
+        </div>
+      </main>
+    </div>
+
+    <div id="analytics-agent-root"></div>
+    <script type="module" src="/src/analytics-agent-demo.ts"></script>
+  </body>
+</html>

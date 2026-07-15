@@ -6,3 +6,7 @@ allowBuilds:
   esbuild: true
   sharp: true
   workerd: true
+minimumReleaseAgeExclude:
+  - flint-chart@0.2.1
+overrides:
+  "alasql>react-native-fs": "-"

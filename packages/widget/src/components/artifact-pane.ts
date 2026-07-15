@@ -43,6 +43,8 @@ export function createArtifactPane(
   const layout = config.features?.artifacts?.layout;
   const toolbarPreset = layout?.toolbarPreset ?? "default";
   const documentChrome = toolbarPreset === "document";
+  const toolbarTitle = layout?.toolbarTitle ?? "Artifacts";
+  const closeButtonLabel = layout?.closeButtonLabel ?? "Close";
   const panePadding = layout?.panePadding?.trim();
 
   const md = config.markdown ? createMarkdownProcessorFromConfig(config.markdown) : null;
@@ -91,15 +93,15 @@ export function createArtifactPane(
     toolbar.classList.add("persona-artifact-toolbar-document");
   }
   const titleEl = createElement("span", "persona-text-xs persona-font-medium persona-truncate");
-  titleEl.textContent = "Artifacts";
+  titleEl.textContent = toolbarTitle;
 
   const closeBtn = createElement(
     "button",
     "persona-rounded-md persona-border persona-border-persona-border persona-px-2 persona-py-1 persona-text-xs persona-bg-persona-surface"
   );
   closeBtn.type = "button";
-  closeBtn.textContent = "Close";
-  closeBtn.setAttribute("aria-label", "Close artifacts panel");
+  closeBtn.textContent = closeButtonLabel;
+  closeBtn.setAttribute("aria-label", closeButtonLabel);
   closeBtn.addEventListener("click", () => {
     dismissLocalUi();
     options.onDismiss?.();
@@ -159,8 +161,8 @@ export function createArtifactPane(
     ? createIconButton({ icon: "refresh-cw", label: "Refresh", className: "persona-artifact-doc-icon-btn" })
     : createIconButton({ icon: "refresh-cw", label: "Refresh" });
   const closeIconBtn = documentChrome
-    ? createIconButton({ icon: "x", label: "Close", className: "persona-artifact-doc-icon-btn" })
-    : createIconButton({ icon: "x", label: "Close" });
+    ? createIconButton({ icon: "x", label: closeButtonLabel, className: "persona-artifact-doc-icon-btn" })
+    : createIconButton({ icon: "x", label: closeButtonLabel });
 
   const getSelectedArtifactText = (): { markdown: string; jsonPayload: string; id: string | null } => {
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
@@ -352,7 +354,7 @@ export function createArtifactPane(
       const baseTitle = rawTitle.replace(/\s*·\s*MD\s*$/i, "").trim() || "Document";
       centerTitle.textContent = `${baseTitle} · ${kind}`;
     } else {
-      titleEl.textContent = "Artifacts";
+      titleEl.textContent = toolbarTitle;
     }
 
     if (sel.artifactType === "markdown") {
