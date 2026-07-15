@@ -14,12 +14,10 @@ import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 import type { ChartAssemblyInput } from "flint-chart";
 import type { EChartsOption } from "echarts";
 import { fitFlintInputToCanvas } from "./analytics-chart-layout";
-import { installComposerAttentionHint } from "./analytics-composer-hint";
 import {
   ANALYTICS_SCHEMA,
   ANALYTICS_STARTER_SCENARIOS,
   AnalyticsDatabase,
-  type AnalyticsStarterScenario,
   type AnalyticsQueryResult,
   type AnalyticsRow,
 } from "./analytics-data";
@@ -48,6 +46,7 @@ type FlintArtifactProps = {
 };
 
 const FLINT_COMPONENT = "NorthstarFlintChart";
+const EXPANDED_COMPOSER_MAX_WIDTH = 960;
 const database = new AnalyticsDatabase();
 let widget: AgentWidgetInitHandle | null = null;
 
@@ -277,6 +276,21 @@ const renderArtifactCard: NonNullable<
   return card;
 };
 
+const injectArtifactCard = (artifactId: string, title: string): void => {
+  widget?.injectComponentDirective({
+    component: "PersonaArtifactCard",
+    props: {
+      artifactId,
+      title,
+      artifactType: "component",
+      status: "complete",
+    },
+    text: "",
+    llmContent: `[Created the analysis: ${title}]`,
+    id: `artifact-card-${artifactId}`,
+  });
+};
+
 const normalizeEncodings = (value: unknown): Record<string, { field: string }> => {
   if (typeof value !== "object" || value == null || Array.isArray(value)) {
     throw new Error("encodings must be an object mapping channels to fields.");
@@ -460,6 +474,7 @@ const registerAnalyticsTools = (): AbortController => {
           encodings,
           semanticTypes,
         });
+        window.setTimeout(() => injectArtifactCard(artifact.artifactId, title.trim()), 0);
         return {
           created: true,
           artifactId: artifact.artifactId,
@@ -689,13 +704,16 @@ const config: AgentWidgetConfig = {
   colorScheme: "light",
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    showWelcomeCard: true,
-    welcomeTitle: "Meet Atlas, your data analyst",
-    welcomeSubtitle:
-      "Ask a business question in plain English. Atlas explores your workspace and turns the answer into a clear, interactive analysis.",
-    inputPlaceholder: "Ask anything about your data…",
+    showWelcomeCard: false,
+    inputPlaceholder: "Ask what changed, why it changed, or where to focus next…",
   },
-  suggestionChips: [],
+  suggestionChips: ANALYTICS_STARTER_SCENARIOS.map((scenario) => scenario.prompt),
+  suggestionChipsConfig: {
+    fontFamily: "sans-serif",
+    fontWeight: "620",
+    paddingX: "14px",
+    paddingY: "10px",
+  },
   messageActions: { showCopy: true, showUpvote: false, showDownvote: false },
   toolCall: {
     ...DEFAULT_WIDGET_CONFIG.toolCall,
@@ -739,6 +757,8 @@ const config: AgentWidgetConfig = {
         paneShadow: "none",
         paneBorderRadius: "0",
         toolbarPreset: "default",
+        toolbarTitle: "Analysis",
+        closeButtonLabel: "Back to chat",
         expandLauncherPanelWhenOpen: false,
       },
     },
@@ -751,7 +771,7 @@ const config: AgentWidgetConfig = {
   layout: {
     header: { layout: "minimal", showCloseButton: true },
     messages: { layout: "bubble", timestamp: { show: false }, avatar: { show: false } },
-    contentMaxWidth: "720px",
+    contentMaxWidth: "820px",
   },
   launcher: {
     ...DEFAULT_WIDGET_CONFIG.launcher,
@@ -773,9 +793,9 @@ const config: AgentWidgetConfig = {
       bottomOffset: "18px",
       expandOnSubmit: true,
       expandedSize: "anchored",
-      expandedMaxWidth: "900px",
+      expandedMaxWidth: `${EXPANDED_COMPOSER_MAX_WIDTH}px`,
       expandedTopOffset: "96px",
-      contentMaxWidth: "720px",
+      contentMaxWidth: "820px",
     },
   },
 };
@@ -789,139 +809,112 @@ widget = initAgentWidget({
   config,
 });
 
-let viewSwitch: HTMLElement | null = null;
+const entry = document.getElementById("atlas-entry");
+const entrySlot = document.getElementById("atlas-entry-slot");
+const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
+if (!entry || !entrySlot || !pillRoot) throw new Error("Atlas entry surface is missing.");
 
-const ensureViewSwitch = (): HTMLElement | null => {
-  const wrapper = mount.querySelector<HTMLElement>(".persona-widget-wrapper");
-  if (!wrapper) return null;
-  if (viewSwitch?.isConnected) return viewSwitch;
+let entryEngaged = widget.getMessages().length > 0 || widget.getArtifacts().length > 0;
+let hadConversation = entryEngaged;
+let entryTransitionTimer: number | null = null;
+let entryPositionFrame: number | null = null;
 
-  viewSwitch = document.createElement("div");
-  viewSwitch.className = "northstar-view-switch";
-  viewSwitch.setAttribute("role", "group");
-  viewSwitch.setAttribute("aria-label", "Workspace view");
-  viewSwitch.innerHTML = `
-    <button type="button" data-analytics-view="chat" aria-pressed="false">
-      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12v8H9l-3.5 3v-3H4z"/></svg>
-      Chat
-    </button>
-    <button type="button" data-analytics-view="analysis" aria-pressed="false">
-      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15V9m4 6V5m4 10v-3m4 3V7"/></svg>
-      Analysis
-    </button>
-  `;
-  viewSwitch.addEventListener("click", (event) => {
-    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-analytics-view]");
-    if (!button || !widget) return;
-    if (button.dataset.analyticsView === "analysis") {
-      widget.showArtifacts();
-    } else {
-      widget.hideArtifacts();
-      window.setTimeout(() => widget?.focusInput(), 0);
-    }
-  });
-  wrapper.appendChild(viewSwitch);
-  return viewSwitch;
+const setEntryGeometry = (left: number, top: number, width: number): void => {
+  pillRoot.style.setProperty("--northstar-entry-left", `${Math.round(left)}px`);
+  pillRoot.style.setProperty("--northstar-entry-top", `${Math.round(top)}px`);
+  pillRoot.style.setProperty("--northstar-entry-width", `${Math.round(width)}px`);
 };
 
-const startAgentScenario = (
-  scenario: AnalyticsStarterScenario,
-  trigger: HTMLButtonElement,
-): void => {
-  trigger.disabled = true;
-  const submitted = widget?.submitMessage(scenario.prompt) ?? false;
-  // Submission expands the chat synchronously, hiding this starter surface.
-  // Re-enable it for the next time the user returns to the collapsed state.
-  trigger.disabled = false;
-  if (!submitted) widget?.focusInput();
+const clearEntryGeometry = (): void => {
+  pillRoot.style.removeProperty("--northstar-entry-left");
+  pillRoot.style.removeProperty("--northstar-entry-top");
+  pillRoot.style.removeProperty("--northstar-entry-width");
 };
 
-const mountStarterExamples = (): void => {
-  const introCard = mount.querySelector<HTMLElement>("[data-persona-intro-card]");
-  if (!widget || !introCard) return;
-  const existing = introCard.querySelector<HTMLElement>("[data-analytics-starters]");
-  if (widget.getMessages().length > 0) {
-    existing?.remove();
+const positionInlineEntry = (): void => {
+  entryPositionFrame = null;
+  if (entryEngaged || entry.hidden) return;
+  const bounds = entrySlot.getBoundingClientRect();
+  setEntryGeometry(bounds.left, bounds.top, bounds.width);
+};
+
+const scheduleInlineEntryPosition = (): void => {
+  if (entryPositionFrame != null) window.cancelAnimationFrame(entryPositionFrame);
+  entryPositionFrame = window.requestAnimationFrame(positionInlineEntry);
+};
+
+const finishEntryTransition = (): void => {
+  if (entryTransitionTimer != null) window.clearTimeout(entryTransitionTimer);
+  entryTransitionTimer = null;
+  pillRoot.classList.remove("northstar-entry-transitioning");
+  clearEntryGeometry();
+  entry.hidden = true;
+};
+
+const engageEntry = (): void => {
+  if (entryEngaged) {
+    widget?.open();
     return;
   }
-  if (existing) return;
 
-  const starters = document.createElement("section");
-  starters.className = "northstar-starters";
-  starters.dataset.analyticsStarters = "";
-  starters.appendChild(createTextElement("div", "northstar-starters-label", "Start with an analysis"));
+  entryEngaged = true;
+  const start = pillRoot.getBoundingClientRect();
+  setEntryGeometry(start.left, start.top, start.width);
+  document.body.classList.remove("analytics-entry-home");
+  entry.classList.add("atlas-entry-engaged");
+  pillRoot.classList.add("northstar-entry-transitioning");
+  widget?.open();
 
-  const list = document.createElement("div");
-  list.className = "northstar-starters-list";
-  for (const scenario of ANALYTICS_STARTER_SCENARIOS) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "northstar-starter";
-    button.dataset.scenario = scenario.id;
-    button.innerHTML = `
-      <span class="northstar-starter-index">${scenario.index}</span>
-      <span class="northstar-starter-copy">
-        <span class="northstar-starter-eyebrow">${scenario.eyebrow}</span>
-        <strong>${scenario.title}</strong>
-      </span>
-      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
-    `;
-    button.addEventListener("click", () => startAgentScenario(scenario, button));
-    list.appendChild(button);
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reducedMotion) {
+    finishEntryTransition();
+    return;
   }
-  starters.appendChild(list);
-  introCard.appendChild(starters);
+
+  window.requestAnimationFrame(() => {
+    const width = Math.min(EXPANDED_COMPOSER_MAX_WIDTH, window.innerWidth - 32);
+    const height = pillRoot.getBoundingClientRect().height;
+    setEntryGeometry((window.innerWidth - width) / 2, window.innerHeight - height - 18, width);
+  });
+  entryTransitionTimer = window.setTimeout(finishEntryTransition, 280);
 };
 
-const mountCollapsedStarterExamples = (): void => {
-  const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
-  if (!widget || !pillRoot) return;
-  const existing = pillRoot.querySelector<HTMLElement>("[data-analytics-composer-starters]");
-  if (existing) return;
+const restoreInlineEntry = (): void => {
+  if (entryTransitionTimer != null) window.clearTimeout(entryTransitionTimer);
+  entryTransitionTimer = null;
+  entryEngaged = false;
+  entry.hidden = false;
+  entry.classList.remove("atlas-entry-engaged");
+  pillRoot.classList.remove("northstar-entry-transitioning");
+  document.body.classList.add("analytics-entry-home");
+  widget?.close();
+  scheduleInlineEntryPosition();
+};
 
-  const starters = document.createElement("section");
-  starters.className = "northstar-composer-starters";
-  starters.dataset.analyticsComposerStarters = "";
-  starters.setAttribute("aria-label", "Starter analyses");
-  starters.appendChild(
-    createTextElement("span", "northstar-composer-starters-label", "Start with an analysis"),
-  );
+if (entryEngaged) {
+  entry.hidden = true;
+} else {
+  document.body.classList.add("analytics-entry-home");
+  scheduleInlineEntryPosition();
+}
 
-  const actions = document.createElement("div");
-  actions.className = "northstar-composer-starter-actions";
-  for (const scenario of ANALYTICS_STARTER_SCENARIOS) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "northstar-composer-starter";
-    button.dataset.scenario = scenario.id;
-    button.innerHTML = `
-      <span class="northstar-composer-starter-icon" aria-hidden="true">${scenario.index}</span>
-      <span>
-        <small>${scenario.eyebrow}</small>
-        <strong>${scenario.title}</strong>
-      </span>
-      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4"/></svg>
-    `;
-    button.addEventListener("click", () => startAgentScenario(scenario, button));
-    actions.appendChild(button);
+const engageEntryFromInput = (event: Event): void => {
+  const target = event.target;
+  if (
+    !entryEngaged &&
+    target instanceof Element &&
+    target.closest("[data-persona-composer-input]")
+  ) {
+    engageEntry();
   }
-  starters.appendChild(actions);
-
-  const footer = pillRoot.querySelector(".persona-widget-footer--pill");
-  pillRoot.insertBefore(starters, footer);
 };
-
-const syncStarterExamples = (): void => {
-  mountStarterExamples();
-  mountCollapsedStarterExamples();
-};
-
-syncStarterExamples();
-const composerAttentionHint = installComposerAttentionHint({
-  root: mount,
-  isOpen: () => widget?.isOpen() ?? false,
+pillRoot.addEventListener("focusin", engageEntryFromInput);
+pillRoot.addEventListener("pointerdown", engageEntryFromInput, { capture: true });
+const stopWatchingWidgetOpen = widget.on("widget:opened", () => {
+  if (!entryEngaged) engageEntry();
 });
-const stopWatchingWidgetOpen = widget.on("widget:opened", composerAttentionHint.engage);
+window.addEventListener("resize", scheduleInlineEntryPosition);
+window.addEventListener("scroll", scheduleInlineEntryPosition, { passive: true });
 
 document.querySelectorAll<HTMLElement>("[data-ask]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -941,16 +934,14 @@ const syncArtifactFullscreen = (): void => {
     pane != null &&
     !pane.classList.contains("persona-hidden");
   document.body.classList.toggle("analytics-artifact-open", visible);
-
-  const switchElement = ensureViewSwitch();
-  if (!switchElement) return;
-  const showSwitch = wrapper?.dataset.state === "expanded" && (widget?.getArtifacts().length ?? 0) > 0;
-  switchElement.hidden = !showSwitch;
-  switchElement.querySelectorAll<HTMLButtonElement>("[data-analytics-view]").forEach((button) => {
-    const active = (button.dataset.analyticsView === "analysis") === visible;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", String(active));
-  });
+  const hasConversation =
+    (widget?.getMessages().length ?? 0) > 0 || (widget?.getArtifacts().length ?? 0) > 0;
+  if (hasConversation) {
+    hadConversation = true;
+  } else if (hadConversation) {
+    hadConversation = false;
+    restoreInlineEntry();
+  }
 };
 
 const artifactObserver = new MutationObserver(syncArtifactFullscreen);
@@ -962,14 +953,15 @@ artifactObserver.observe(mount, {
 });
 syncArtifactFullscreen();
 
-const starterObserver = new MutationObserver(syncStarterExamples);
-starterObserver.observe(mount, { childList: true, subtree: true });
-
 window.addEventListener("beforeunload", () => {
-  composerAttentionHint.destroy();
   stopWatchingWidgetOpen();
   artifactObserver.disconnect();
-  starterObserver.disconnect();
+  if (entryTransitionTimer != null) window.clearTimeout(entryTransitionTimer);
+  if (entryPositionFrame != null) window.cancelAnimationFrame(entryPositionFrame);
+  pillRoot.removeEventListener("focusin", engageEntryFromInput);
+  pillRoot.removeEventListener("pointerdown", engageEntryFromInput, true);
+  window.removeEventListener("resize", scheduleInlineEntryPosition);
+  window.removeEventListener("scroll", scheduleInlineEntryPosition);
   toolController.abort();
 });
 

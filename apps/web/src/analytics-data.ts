@@ -161,10 +161,10 @@ export const ANALYTICS_STARTER_SCENARIOS: readonly AnalyticsStarterScenario[] = 
   {
     id: "revenue-momentum",
     index: "01",
-    eyebrow: "Stacked area",
-    title: "Map product revenue momentum",
+    eyebrow: "Revenue strategy",
+    title: "Understand the revenue mix",
     prompt:
-      "Show me how product revenue mix has shifted over the last 18 months. Use a stacked area chart and call out the most important change.",
+      "How has our product revenue mix changed over the last 18 months, and what should I pay attention to?",
     description:
       "An 18-month view of revenue momentum reveals how each product contributes to the total growth curve.",
     sql:
@@ -176,10 +176,10 @@ export const ANALYTICS_STARTER_SCENARIOS: readonly AnalyticsStarterScenario[] = 
   {
     id: "acquisition-quality",
     index: "02",
-    eyebrow: "Bubble scatter",
-    title: "Compare acquisition quality",
+    eyebrow: "Growth efficiency",
+    title: "Find efficient growth channels",
     prompt:
-      "Which acquisition sources combine the best conversion, engagement, and scale? Show me as a bubble chart and call out the strongest efficient channel.",
+      "Which acquisition sources are driving the most efficient growth, and where might we be underinvesting?",
     description:
       "Conversion rate, engagement, and session volume make channel quality and scale visible in a single view.",
     sql:

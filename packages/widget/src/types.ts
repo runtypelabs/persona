@@ -806,6 +806,10 @@ export type AgentWidgetArtifactsLayoutConfig = {
    * @default 'default'
    */
   toolbarPreset?: "default" | "document";
+  /** Visible title in the artifact toolbar. @default "Artifacts" */
+  toolbarTitle?: string;
+  /** Label for the artifact dismiss control. @default "Close" */
+  closeButtonLabel?: string;
   /**
    * When `toolbarPreset` is `document`, show a visible "Copy" label next to the copy icon.
    */

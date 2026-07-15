@@ -834,6 +834,8 @@ const artifactCustomizationSectionDef: SectionDef = {
   id: 'artifacts-customization', title: 'Artifact Customization', collapsed: true,
   fields: [
     { id: 'art-toolbar', label: 'Toolbar Preset', type: 'select', path: 'features.artifacts.layout.toolbarPreset', defaultValue: 'default', options: [{ value: 'default', label: 'Default' }, { value: 'document', label: 'Document' }] },
+    { id: 'art-toolbar-title', label: 'Toolbar Title', type: 'text', path: 'features.artifacts.layout.toolbarTitle', defaultValue: 'Artifacts' },
+    { id: 'art-close-label', label: 'Close Button Label', type: 'text', path: 'features.artifacts.layout.closeButtonLabel', defaultValue: 'Close' },
     { id: 'art-pane-width', label: 'Pane Width', description: 'CSS width (e.g. 40%, 28rem)', type: 'text', path: 'features.artifacts.layout.paneWidth', defaultValue: '40%' },
     { id: 'art-pane-max-width', label: 'Pane Max Width', type: 'text', path: 'features.artifacts.layout.paneMaxWidth', defaultValue: '28rem' },
     { id: 'art-split-gap', label: 'Split Gap', type: 'text', path: 'features.artifacts.layout.splitGap', defaultValue: '0.5rem' },

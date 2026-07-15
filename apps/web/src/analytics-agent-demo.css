@@ -216,7 +216,30 @@ button { color: inherit; }
 .date-control svg, .share-control svg { width: 15px; height: 15px; fill: none; stroke: #6e7974; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .date-control .chevron { margin-left: 5px; width: 12px; }
 
-.metrics-grid { margin-top: 28px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
+.atlas-entry {
+  max-height: 220px;
+  margin-top: 24px;
+  padding: 0 22px 18px;
+  border: 1px solid #dfe4e1;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 12px 34px rgba(27, 38, 32, .07);
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 260ms ease, margin 260ms ease, padding 260ms ease, border-width 260ms ease, opacity 180ms ease;
+}
+.atlas-entry[hidden] { display: none; }
+.atlas-entry.atlas-entry-engaged { max-height: 0; margin-top: 0; padding-top: 0; padding-bottom: 0; border-width: 0; opacity: 0; }
+.atlas-entry-heading { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #edf0ee; }
+.atlas-entry-identity { min-width: 0; display: flex; align-items: center; gap: 11px; }
+.atlas-entry-mark { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; background: #6d5dfc; color: #fff; font-size: 12px; }
+.atlas-entry-identity strong, .atlas-entry-identity span { display: block; }
+.atlas-entry-identity strong { color: #202b26; font-size: 13px; font-weight: 670; letter-spacing: -.01em; }
+.atlas-entry-identity div > span { margin-top: 3px; color: #7d8983; font-size: 11px; }
+.atlas-entry-context { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; color: #7f8a85; font-size: 10px; font-weight: 570; }
+.atlas-entry-context i { width: 6px; height: 6px; border-radius: 50%; background: #17a174; }
+.atlas-entry-slot { height: 110px; }
+
+.metrics-grid { margin-top: 20px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
 .metric-card, .panel {
   border: 1px solid var(--line);
   background: var(--surface);
@@ -324,36 +347,41 @@ tbody tr:last-child td { border-bottom: 0; }
 #analytics-agent-root .persona-widget-container,
 #analytics-agent-root [data-persona-intro-card] { border-radius: 0 !important; }
 
-#analytics-agent-root .northstar-view-switch {
-  position: absolute;
-  z-index: 90;
-  top: 9px;
-  left: 50%;
-  display: flex;
-  align-items: center;
-  padding: 3px;
-  border: 1px solid #dce2de;
-  background: rgba(255, 255, 255, .96);
-  box-shadow: 0 4px 14px rgba(28, 38, 33, .08);
-  transform: translateX(-50%);
+body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root,
+#analytics-agent-root .persona-widget-pill-root.northstar-entry-transitioning {
+  position: fixed !important;
+  top: var(--northstar-entry-top) !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: var(--northstar-entry-left) !important;
+  width: var(--northstar-entry-width) !important;
+  max-width: none !important;
+  transform: none !important;
 }
-#analytics-agent-root .northstar-view-switch[hidden] { display: none !important; }
-#analytics-agent-root .northstar-view-switch button {
-  min-height: 30px;
-  padding: 0 11px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: #6d7973;
-  font: 620 10px/1 Inter, sans-serif;
-  cursor: pointer;
+#analytics-agent-root .persona-widget-pill-root.northstar-entry-transitioning {
+  transition: top 260ms cubic-bezier(.2, .8, .2, 1), left 260ms cubic-bezier(.2, .8, .2, 1), width 260ms cubic-bezier(.2, .8, .2, 1);
 }
-#analytics-agent-root .northstar-view-switch button:hover { color: #4e3ce8; background: #f5f3ff; }
-#analytics-agent-root .northstar-view-switch button.active { color: #fff; background: #6554ee; }
-#analytics-agent-root .northstar-view-switch svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: square; stroke-linejoin: miter; }
+body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root[data-state="collapsed"] [data-persona-composer-suggestions] {
+  margin: 10px 0 0;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  order: 2;
+}
+body.analytics-entry-home #analytics-agent-root .persona-widget-footer--pill { gap: 0; }
+body.analytics-entry-home #analytics-agent-root .persona-pill-composer { order: 1; box-shadow: none !important; }
+#analytics-agent-root [data-persona-composer-suggestions] button {
+  min-height: 46px;
+  border-radius: 0 !important;
+  border-color: #dfe4e1 !important;
+  color: #4f5b55 !important;
+  font-size: 12px !important;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+}
+body.analytics-entry-home #analytics-agent-root [data-persona-composer-suggestions] button + button { border-left: 0 !important; }
+#analytics-agent-root [data-persona-composer-suggestions] button:hover { background: #f5f3ff !important; color: #4e3ce8 !important; }
 
 #analytics-agent-root .persona-tool-group {
   border: 1px solid #dde2df;
@@ -370,164 +398,6 @@ tbody tr:last-child td { border-bottom: 0; }
 }
 #analytics-agent-root .persona-tool-group-summary::before,
 #analytics-agent-root .persona-tool-group-summary::after { display: none; }
-
-/* One quiet, idle-only cue for the demo's primary action. The masked gradient
-   sweeps the square composer edge, then disappears and does not replay. */
-#analytics-agent-root .persona-pill-composer.northstar-composer-hint::before {
-  content: "";
-  position: absolute;
-  z-index: 2;
-  inset: -2px;
-  padding: 2px;
-  border-radius: 1px;
-  background: linear-gradient(110deg, #4285f4, #9b72cb, #d96570, #f9ab00, #57bb8a, #4285f4);
-  background-size: 280% 100%;
-  pointer-events: none;
-  opacity: 0;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: northstar-composer-rainbow 5.2s cubic-bezier(.4, 0, .2, 1) 1 both;
-}
-#analytics-agent-root .persona-pill-composer.northstar-composer-hint::after {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  inset: -12px;
-  padding: 12px;
-  border-radius: 4px;
-  background: linear-gradient(110deg, #4285f4, #9b72cb, #d96570, #f9ab00, #57bb8a, #4285f4);
-  background-size: 280% 100%;
-  pointer-events: none;
-  opacity: 0;
-  filter: blur(11px) saturate(1.35);
-  transform: scale(.985);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: northstar-composer-bloom 5.2s cubic-bezier(.4, 0, .2, 1) 1 both;
-}
-@keyframes northstar-composer-rainbow {
-  0% { opacity: 0; background-position: 0% 50%; }
-  14%, 76% { opacity: .78; }
-  100% { opacity: 0; background-position: 100% 50%; }
-}
-@keyframes northstar-composer-bloom {
-  0% { opacity: 0; background-position: 0% 50%; transform: scale(.985); }
-  18%, 70% { opacity: .68; }
-  100% { opacity: 0; background-position: 100% 50%; transform: scale(1.015); }
-}
-@media (prefers-reduced-motion: reduce) {
-  #analytics-agent-root .persona-pill-composer.northstar-composer-hint::before,
-  #analytics-agent-root .persona-pill-composer.northstar-composer-hint::after { animation: none; }
-}
-
-/* Default-state starters sit in Persona's fixed pill root, immediately above
-   the composer. They disappear once the conversation opens or input receives
-   focus, leaving the expanded welcome card to carry the same two recipes. */
-.northstar-composer-starters { display: none; }
-#analytics-agent-root .persona-widget-pill-root[data-state="collapsed"] > .northstar-composer-starters {
-  width: 100%;
-  display: grid;
-  gap: 7px;
-  opacity: 1;
-  transform: translateY(0);
-  transition: opacity 160ms ease, transform 160ms ease;
-  animation: northstar-starters-arrive 360ms cubic-bezier(.22, 1, .36, 1) both;
-}
-#analytics-agent-root .persona-widget-pill-root[data-state="collapsed"]:has(.persona-pill-composer:focus-within) > .northstar-composer-starters {
-  opacity: 0;
-  transform: translateY(6px);
-  pointer-events: none;
-}
-.northstar-composer-starters-label {
-  color: #6f7b76;
-  font-size: 9px;
-  font-weight: 720;
-  letter-spacing: .08em;
-  text-align: center;
-  text-transform: uppercase;
-}
-.northstar-composer-starter-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.northstar-composer-starter {
-  min-width: 0;
-  min-height: 58px;
-  padding: 9px 11px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid #d8d2ff;
-  border-radius: 0;
-  background: rgba(255, 255, 255, .96);
-  color: #202b26;
-  text-align: left;
-  cursor: pointer;
-  box-shadow: 0 10px 28px rgba(41, 33, 105, .13), 0 2px 6px rgba(26, 34, 30, .06);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
-  backdrop-filter: blur(12px) saturate(1.2);
-  transition: border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
-}
-.northstar-composer-starter:hover {
-  border-color: #9e91ff;
-  color: #4e3ce8;
-  transform: translateY(-2px);
-  box-shadow: 0 14px 34px rgba(63, 49, 155, .18), 0 3px 8px rgba(26, 34, 30, .07);
-}
-.northstar-composer-starter:focus-visible { outline: 2px solid #6d5dfc; outline-offset: 2px; }
-.northstar-composer-starter:disabled { opacity: .55; cursor: wait; transform: none; }
-.northstar-composer-starter-icon {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  background: #ece9ff;
-  color: #5a49eb;
-  font: 700 9px/1 "SFMono-Regular", Consolas, monospace;
-}
-.northstar-composer-starter > span:nth-child(2) { min-width: 0; }
-.northstar-composer-starter small,
-.northstar-composer-starter strong { display: block; }
-.northstar-composer-starter small { margin-bottom: 3px; color: #796bea; font-size: 8px; font-weight: 720; letter-spacing: .06em; text-transform: uppercase; }
-.northstar-composer-starter strong { overflow: hidden; font-size: 10px; line-height: 1.25; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.northstar-composer-starter svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; }
-@keyframes northstar-starters-arrive {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Starter analyses use the product's square, editorial list language instead
-   of floating chips. Each row starts a real Atlas conversation. */
-.northstar-starters { margin-top: 24px; padding-top: 17px; border-top: 1px solid #e8ebe9; }
-.northstar-starters-label { margin-bottom: 9px; color: #87928d; font-size: 9px; font-weight: 680; letter-spacing: .08em; text-transform: uppercase; }
-.northstar-starters-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid #dde2df; border-bottom: 1px solid #dde2df; }
-.northstar-starter {
-  min-width: 0;
-  min-height: 78px;
-  padding: 13px 14px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 11px;
-  border: 0;
-  border-radius: 0;
-  background: #fff;
-  color: #17211e;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 160ms ease, color 160ms ease;
-}
-.northstar-starter + .northstar-starter { border-left: 1px solid #dde2df; }
-.northstar-starter:hover { background: #f5f3ff; color: #4e3ce8; }
-.northstar-starter:focus-visible { outline: 2px solid #6d5dfc; outline-offset: -2px; }
-.northstar-starter:disabled { opacity: .55; cursor: wait; }
-.northstar-starter-index { color: #a0aaa5; font: 9px/1 "SFMono-Regular", Consolas, monospace; }
-.northstar-starter-copy { min-width: 0; }
-.northstar-starter-copy span,
-.northstar-starter-copy strong { display: block; }
-.northstar-starter-eyebrow { margin-bottom: 5px; color: #7869ed; font-size: 8px; font-weight: 720; letter-spacing: .07em; text-transform: uppercase; }
-.northstar-starter-copy strong { font-size: 10px; line-height: 1.35; font-weight: 640; }
-.northstar-starter svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; }
 
 /* The transcript grows upward from the persistent composer rather than
    appearing as a disconnected modal. The panel deliberately overlaps the
@@ -574,17 +444,26 @@ body.analytics-artifact-open #analytics-agent-root .persona-artifact-pane {
   max-width: none !important;
   container: northstar-artifact / inline-size;
 }
-body.analytics-artifact-open #analytics-agent-root .northstar-view-switch {
-  left: calc(var(--northstar-chat-column) + 18px);
-  transform: none;
-}
 body.analytics-artifact-open #analytics-agent-root [data-persona-intro-card] { display: none !important; }
-body.analytics-artifact-open #analytics-agent-root .persona-artifact-toolbar { display: none !important; }
+body.analytics-artifact-open #analytics-agent-root .persona-artifact-toolbar {
+  min-height: 52px;
+  padding: 0 clamp(14px, 1.5vw, 28px) !important;
+  background: #fff;
+}
+body.analytics-artifact-open #analytics-agent-root .persona-artifact-toolbar > span { color: #4f5b55; font-size: 11px; font-weight: 680; }
+body.analytics-artifact-open #analytics-agent-root .persona-artifact-toolbar > button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 0;
+  color: #fff;
+  background: #6554ee;
+  font-size: 10px;
+  font-weight: 650;
+}
 body.analytics-artifact-open #analytics-agent-root .persona-artifact-content {
   display: flex !important;
   flex-direction: column;
   padding: clamp(14px, 1.5vw, 28px) !important;
-  padding-top: 66px !important;
   padding-bottom: max(92px, calc(76px + env(safe-area-inset-bottom))) !important;
   overflow: hidden !important;
 }
@@ -662,7 +541,6 @@ body.analytics-artifact-open::after {
     height: 100dvh !important;
   }
   body.analytics-artifact-open #analytics-agent-root .persona-artifact-split-root > :first-child { display: none !important; }
-  body.analytics-artifact-open #analytics-agent-root .northstar-view-switch { left: 12px; transform: none; }
   body.analytics-artifact-open #analytics-agent-root .persona-artifact-pane {
     position: relative !important;
     inset: auto !important;
@@ -685,21 +563,20 @@ body.analytics-artifact-open::after {
   .page-heading { align-items: flex-start; flex-direction: column; }
   .heading-actions { width: 100%; }
   .date-control { flex: 1; }
+  .atlas-entry { max-height: 300px; padding: 0 14px 14px; }
+  .atlas-entry-heading { min-height: 76px; align-items: flex-start; padding: 14px 0; flex-direction: column; gap: 8px; }
+  .atlas-entry-identity div > span { font-size: 10px; }
+  .atlas-entry-context { padding-left: 41px; }
+  .atlas-entry-slot { height: 166px; }
+  body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root[data-state="collapsed"] [data-persona-composer-suggestions] { grid-template-columns: 1fr; }
+  body.analytics-entry-home #analytics-agent-root [data-persona-composer-suggestions] button + button { border-top: 0 !important; border-left: 1px solid #dfe4e1 !important; }
   .metrics-grid { grid-template-columns: 1fr; }
   .legend { display: none; }
   .revenue-chart { height: 220px; }
   .donut-wrap { float: none; width: auto; }
   .mix-list { padding-top: 0; }
-  .northstar-composer-starters-label { display: none; }
-  .northstar-composer-starter { min-height: 48px; padding: 7px 8px; gap: 7px; }
-  .northstar-composer-starter-icon { width: 24px; height: 24px; }
-  .northstar-composer-starter small { display: none; }
-  .northstar-composer-starter strong { font-size: 9px; }
-  .northstar-starters-list { grid-template-columns: 1fr; }
-  .northstar-starter + .northstar-starter { border-top: 1px solid #dde2df; border-left: 0; }
   body.analytics-artifact-open #analytics-agent-root .persona-artifact-content {
     padding: 12px !important;
-    padding-top: 62px !important;
     padding-bottom: max(88px, calc(72px + env(safe-area-inset-bottom))) !important;
   }
 }

@@ -70,6 +70,14 @@ describe("theme editor scroll-to-bottom controls", () => {
     expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.groupedMode")).toBe(true);
   });
 
+  it("exposes product-facing artifact toolbar copy", () => {
+    const section = CONFIGURE_SECTIONS.find((entry) => entry.id === "artifacts-customization");
+    const paths = section?.fields.map((field) => field.path) ?? [];
+
+    expect(paths).toContain("features.artifacts.layout.toolbarTitle");
+    expect(paths).toContain("features.artifacts.layout.closeButtonLabel");
+  });
+
   it("exposes collapsed reasoning preview controls", () => {
     const debugSection = CONFIGURE_SECTIONS.find((section) => section.id === "debug-inspection");
 

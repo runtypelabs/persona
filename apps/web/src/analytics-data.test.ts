@@ -84,4 +84,11 @@ describe("analytics demo data", () => {
     }
     expect(new Set(scenarios.map((scenario) => scenario.chart_spec.chartType)).size).toBe(2);
   });
+
+  it("phrases starter prompts as business questions rather than chart instructions", () => {
+    for (const scenario of ANALYTICS_STARTER_SCENARIOS) {
+      expect(scenario.prompt).not.toMatch(/\b(chart|graph|plot|sql|flint|x-axis|y-axis)\b/i);
+      expect(scenario.prompt).toMatch(/\?$/);
+    }
+  });
 });
