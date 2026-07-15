@@ -248,7 +248,8 @@ button { color: inherit; }
 .atlas-entry-identity strong, .atlas-entry-identity span { display: block; }
 .atlas-entry-identity strong { color: #202b26; font-size: 13px; font-weight: 670; letter-spacing: -.01em; }
 .atlas-entry-identity div > span { margin-top: 3px; color: #7d8983; font-size: 11px; }
-.atlas-entry-context { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; color: #7f8a85; font-size: 10px; font-weight: 570; }
+/* Solid chip behind the label so it stays legible over the wave graphic. */
+.atlas-entry-context { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 5px 10px; background: rgba(255, 255, 255, .88); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); color: #66716c; font-size: 10px; font-weight: 570; }
 .atlas-entry-context i { width: 6px; height: 6px; border-radius: 50%; background: #17a174; }
 /* The slot holds the actual Persona pill in document flow, so it sizes
    itself around the composer and chips; a fixed height only applies while
@@ -406,6 +407,9 @@ body.analytics-chat-open::after {
   margin-top: 16px;
   transform: none !important;
 }
+/* The peek banner is invisible-but-space-reserving chrome for the floating
+   pill; inside the compact entry box it is pure dead space. */
+.atlas-entry-slot .persona-pill-peek { display: none !important; }
 /* The fly-to-workspace transition animates in viewport coordinates. */
 #analytics-agent-root .persona-widget-pill-root.northstar-entry-transitioning {
   position: fixed !important;
@@ -508,9 +512,11 @@ body.analytics-entry-home :is(#analytics-agent-root, .atlas-entry-slot) [data-pe
   content: "ATLAS  /  REVENUE INTELLIGENCE";
   min-height: 94px;
   margin: -48px -24px 8px;
-  padding: 18px 22px 28px;
+  /* Label sits in the solid top band; the clipped wave edge and dips only
+     affect the bottom third, where text would straddle purple and white. */
+  padding: 16px 22px;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   flex: 0 0 auto;
   box-sizing: border-box;
   color: rgba(255, 255, 255, .9);
@@ -689,11 +695,11 @@ body.analytics-artifact-open::after {
   .atlas-entry { padding: 0 14px 14px; }
   .atlas-entry-heading { min-height: 76px; align-items: flex-start; padding: 14px 0; flex-direction: column; gap: 8px; }
   .atlas-entry-identity div > span { font-size: 10px; }
-  .atlas-entry-context { padding-left: 41px; }
+  .atlas-entry-context { margin-left: 41px; }
   .atlas-entry.atlas-entry-engaged .atlas-entry-slot { height: 88px; }
   #analytics-agent-root .persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] .persona-widget-body::before {
     min-height: 82px;
-    padding: 14px 16px 24px;
+    padding: 12px 16px;
     font-size: 8px;
   }
   body.analytics-entry-home :is(#analytics-agent-root, .atlas-entry-slot) .persona-widget-pill-root[data-state="collapsed"] [data-persona-composer-suggestions] { grid-template-columns: 1fr; }

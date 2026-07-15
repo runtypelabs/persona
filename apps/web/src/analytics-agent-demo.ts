@@ -2,6 +2,7 @@ import "@runtypelabs/persona/widget.css";
 
 import {
   DEFAULT_WIDGET_CONFIG,
+  applyThemeVariables,
   componentRegistry,
   createLocalStorageAdapter,
   initAgentWidget,
@@ -984,6 +985,11 @@ const entrySlot = document.getElementById("atlas-entry-slot");
 const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
 if (!entry || !entrySlot || !pillRoot) throw new Error("Atlas entry surface is missing.");
 
+// Persona writes its theme variables onto the mount; the parked pill lives in
+// the entry slot instead, so mirror the same variables there or every token
+// (send button, borders, text colors) silently falls back to defaults.
+applyThemeVariables(entrySlot, config);
+
 let entryEngaged = widget.isOpen();
 let hadConversation = widget.getMessages().length > 0 || widget.getArtifacts().length > 0;
 entry.classList.toggle("atlas-entry-has-conversation", hadConversation);
@@ -1061,10 +1067,10 @@ const restoreInlineEntry = (closeWidget = true): void => {
   finishEntryTransition();
   document.body.classList.remove("analytics-chat-open");
   document.body.classList.add("analytics-entry-home");
-  const hadFocus = pillRoot.contains(document.activeElement);
   parkPillInEntry();
   if (closeWidget) widget?.close();
-  if (hadFocus) widget?.focusInput();
+  // Deliberately no focus restore here: focusing the parked composer would
+  // fire focusin on the pill and immediately re-engage the workspace.
 };
 
 if (entryEngaged) {
