@@ -111,6 +111,15 @@ export function updateInlineArtifactBlocks(
   });
 }
 
+/**
+ * Whether `el` is an inline artifact block root with a live registry updater.
+ * Lets the message renderer (ui.ts) reuse a mounted block across bubble
+ * rebuilds instead of replacing it.
+ */
+export function hasLiveInlineArtifactBlock(el: HTMLElement): boolean {
+  return inlineBlockUpdaters.has(el);
+}
+
 /** Rebuild a preview record from the persisted block props (hydration path). */
 function recordFromProps(props: Record<string, unknown>): PersonaArtifactRecord {
   const id = typeof props.artifactId === "string" ? props.artifactId : "";
@@ -188,17 +197,51 @@ function cardPropsFromRecord(
 }
 
 /**
- * Collapse animation for `completeDisplay: "card"`: transition the block root's
- * height from the reserved streaming height (`startHeight`, measured before the
- * card was swapped in) down to the card's height over ~200ms ease-out, then
- * clear back to `auto`. Plain CSS transition, never a View Transition.
- *
- * Degrades to an instant swap (no-op) under `prefers-reduced-motion` and when
- * the block has no layout — detached from the document or a zero-height measure
- * (tests/jsdom) — so nothing is left behind on the root.
+ * Tuning knobs for the `completeDisplay: "card"` collapse handoff (see
+ * animateInlineCollapse below). All values are milliseconds unless noted.
  */
-function animateInlineCollapse(root: HTMLElement, startHeight: number): void {
-  if (!startHeight || !root.isConnected) return;
+/** Phase 1: how long the streamed chrome + body fade out in place. */
+const COLLAPSE_FADE_OUT_MS = 180;
+/** Phase 2 height collapse: base duration before the distance term. */
+const COLLAPSE_HEIGHT_BASE_MS = 240;
+/** Phase 2 height collapse: extra ms per pixel of collapse distance. */
+const COLLAPSE_HEIGHT_MS_PER_PX = 0.8;
+/** Phase 2 height collapse: duration clamp (min/max). */
+const COLLAPSE_HEIGHT_MIN_MS = 300;
+const COLLAPSE_HEIGHT_MAX_MS = 500;
+/** Phase 2 height collapse: easing (M3 standard curve). */
+const COLLAPSE_HEIGHT_EASING = "cubic-bezier(0.2, 0, 0, 1)";
+/** Card fade-in duration. */
+const COLLAPSE_CARD_FADE_IN_MS = 240;
+/**
+ * Card fade-in start, as a fraction of the height duration (0 = fade in with
+ * the collapse, 1 = only after the height has fully settled).
+ */
+const COLLAPSE_CARD_FADE_DELAY_FRACTION = 0.35;
+
+/**
+ * Collapse animation for `completeDisplay: "card"`: fade the streamed chrome +
+ * body out under a locked height, then `swap()` in the card and collapse the
+ * height down to it while the card fades in. `onSettled` fires exactly once at
+ * the end so the caller can hand updater ownership back to the card. Timings
+ * live in the COLLAPSE_* constants above; the height duration scales with the
+ * collapse distance.
+ *
+ * Runs on the Web Animations API, not CSS transitions: the completion window
+ * re-renders the transcript several times (props embed, turn/execution
+ * completion, lazy-chunk rebuilds) and may reparent this root, and a DOM move
+ * cancels CSS transitions but not `element.animate()`.
+ *
+ * Degrades to an instant swap under `prefers-reduced-motion`, without layout
+ * (detached / zero-height measure in tests), or without `element.animate`.
+ * `swap()` and `onSettled()` always run.
+ */
+function animateInlineCollapse(
+  root: HTMLElement,
+  startHeight: number,
+  opts: { swap: () => void; onSettled: () => void }
+): void {
+  const { swap, onSettled } = opts;
   let reduceMotion = false;
   try {
     reduceMotion =
@@ -208,32 +251,113 @@ function animateInlineCollapse(root: HTMLElement, startHeight: number): void {
   } catch {
     reduceMotion = false;
   }
-  if (reduceMotion) return;
-  const endHeight = root.getBoundingClientRect().height;
-  if (!endHeight || Math.abs(endHeight - startHeight) < 1) return;
+  if (
+    !startHeight ||
+    !root.isConnected ||
+    reduceMotion ||
+    typeof root.animate !== "function"
+  ) {
+    swap();
+    onSettled();
+    return;
+  }
 
+  // Phase 1 — fade the streamed content out under a locked height. The lock
+  // is inline style (survives DOM moves); the fades are WAAPI (survive too).
   root.style.height = `${startHeight}px`;
   root.style.overflow = "hidden";
-  // Force a reflow so the start height is committed before the transition arms.
-  void root.offsetHeight;
-  root.style.transition = "height 200ms ease-out";
-  root.style.height = `${endHeight}px`;
+  const fadeOuts: Animation[] = [];
+  for (const child of Array.from(root.children)) {
+    if (child instanceof HTMLElement) {
+      fadeOuts.push(
+        child.animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: COLLAPSE_FADE_OUT_MS,
+          easing: "ease-out",
+          fill: "forwards"
+        })
+      );
+    }
+  }
 
-  let done = false;
-  const clear = () => {
-    if (done) return;
-    done = true;
-    root.removeEventListener("transitionend", onEnd);
-    root.style.removeProperty("height");
-    root.style.removeProperty("overflow");
-    root.style.removeProperty("transition");
-  };
-  const onEnd = (e: TransitionEvent) => {
-    if (e.propertyName === "height") clear();
-  };
-  root.addEventListener("transitionend", onEnd);
-  // Fallback in case transitionend never fires (interrupted layout, etc.).
-  window.setTimeout(clear, 260);
+  window.setTimeout(() => {
+    // The faded-out children are about to be replaced; drop their fills so
+    // the animations don't linger.
+    for (const anim of fadeOuts) anim.cancel();
+    swap();
+    const clearRoot = () => {
+      root.style.removeProperty("height");
+      root.style.removeProperty("overflow");
+    };
+    if (!root.isConnected) {
+      clearRoot();
+      onSettled();
+      return;
+    }
+
+    // Measure the card height without painting a frame: auto → read → relock.
+    root.style.height = "auto";
+    const endHeight = root.getBoundingClientRect().height;
+    root.style.height = `${startHeight}px`;
+    if (!endHeight || Math.abs(endHeight - startHeight) < 1) {
+      clearRoot();
+      onSettled();
+      return;
+    }
+
+    // Phase 2 — collapse the height while the card fades in.
+    const distance = Math.abs(startHeight - endHeight);
+    const duration = Math.round(
+      Math.min(
+        COLLAPSE_HEIGHT_MAX_MS,
+        Math.max(
+          COLLAPSE_HEIGHT_MIN_MS,
+          COLLAPSE_HEIGHT_BASE_MS + distance * COLLAPSE_HEIGHT_MS_PER_PX
+        )
+      )
+    );
+    const cardFadeDelay = Math.round(
+      duration * COLLAPSE_CARD_FADE_DELAY_FRACTION
+    );
+    const card =
+      root.firstElementChild instanceof HTMLElement
+        ? root.firstElementChild
+        : null;
+    const cardFade = card
+      ? card.animate([{ opacity: 0 }, { opacity: 1 }], {
+          duration: COLLAPSE_CARD_FADE_IN_MS,
+          delay: cardFadeDelay,
+          easing: "ease-out",
+          fill: "backwards"
+        })
+      : null;
+    const heightAnim = root.animate(
+      [{ height: `${startHeight}px` }, { height: `${endHeight}px` }],
+      { duration, easing: COLLAPSE_HEIGHT_EASING }
+    );
+    // The animation overrides the inline lock while it plays; park the inline
+    // height on the end value so there is no jump when it finishes.
+    root.style.height = `${endHeight}px`;
+
+    let done = false;
+    const clear = () => {
+      if (done) return;
+      done = true;
+      clearRoot();
+      onSettled();
+    };
+    // Settle when BOTH animations are done (the card fade can outlast the
+    // height collapse); a cancelled animation rejects `finished`, which
+    // allSettled treats as done.
+    Promise.allSettled(
+      [heightAnim.finished, cardFade?.finished].filter(Boolean)
+    ).then(clear);
+    // Fallback in case `finished` never resolves (interrupted layout, etc.).
+    // Covers whichever ends later: the height collapse or the card fade-in.
+    window.setTimeout(
+      clear,
+      Math.max(duration, cardFadeDelay + COLLAPSE_CARD_FADE_IN_MS) + 120
+    );
+  }, COLLAPSE_FADE_OUT_MS);
 }
 
 /** Resolve the inline chrome config knobs (chrome on by default). */
@@ -712,11 +836,11 @@ function renderDefaultArtifactInline(
   inlineBlockUpdaters.set(root, (rec, opts) => {
     // completeDisplay: "card" — on the streaming→complete boundary, collapse the
     // whole block (chrome + body) to the reference card on the same root instead
-    // of swapping the body. Measure the reserved streaming height first, mount
-    // the card (which re-registers a card-sync updater, so this closure won't run
-    // again), then animate the height down. The plain-CSS collapse replaces the
-    // body's View Transition here, so `runBodyUpdate` is deliberately bypassed —
-    // it must not double-fire runArtifactBodyTransition for this boundary.
+    // of swapping the body. Measure the reserved streaming height first, then
+    // run the staged collapse (fade out → card mount → height collapse). The
+    // WAAPI collapse replaces the body's View Transition here, so
+    // `runBodyUpdate` is deliberately bypassed — it must not double-fire
+    // runArtifactBodyTransition for this boundary.
     if (
       collapseToCard &&
       lastBodyStatus !== "complete" &&
@@ -726,8 +850,34 @@ function renderDefaultArtifactInline(
         ? root.getBoundingClientRect().height
         : 0;
       lastBodyStatus = "complete";
-      mountCard(rec);
-      animateInlineCollapse(root, startHeight);
+      // Buffer records for the whole animation — a card-sync replaceChildren
+      // mid-collapse would cut the card fade. onSettled hands ownership back
+      // to the card-sync updater.
+      let latest = rec;
+      let dirtySinceSwap = false;
+      const buffer = (r: PersonaArtifactRecord) => {
+        latest = r;
+        dirtySinceSwap = true;
+      };
+      inlineBlockUpdaters.set(root, buffer);
+      animateInlineCollapse(root, startHeight, {
+        swap: () => {
+          mountCard(latest);
+          dirtySinceSwap = false;
+          inlineBlockUpdaters.set(root, buffer);
+        },
+        onSettled: () => {
+          // mountCard re-registers the card-sync updater; skip the re-render
+          // when nothing changed while the animation ran.
+          if (dirtySinceSwap) {
+            mountCard(latest);
+          } else {
+            inlineBlockUpdaters.set(root, (r) => {
+              root.replaceChildren(renderCardChild(r));
+            });
+          }
+        }
+      });
       return;
     }
     // Reset the per-block view toggle when content restarts streaming or a

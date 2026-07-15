@@ -47,8 +47,8 @@
           </div>
 
           <div class="info-section">
-            <h3>Streaming body</h3>
-            <p>Tune how inline artifacts stream and settle (<code>features.artifacts.inlineBody</code>). These apply to inline display mode and take effect on the next streamed artifact.</p>
+            <h3>While it streams</h3>
+            <p>What the user sees during generation: the inline body view (<code>inlineBody.streamingView</code>), the status text (<code>features.artifacts.statusLabel</code>), and its animation (<code>features.artifacts.loadingAnimation</code>). The status options apply to the reference card, the inline chrome, and the status body.</p>
             <div class="section">
               <label>Streaming view</label>
               <div class="mode-group" id="artifact-streaming-view">
@@ -57,6 +57,111 @@
               </div>
               <p class="hint">Stream the source code, or show a quiet generating placeholder (<code>inlineBody.streamingView</code>).</p>
             </div>
+            <div class="section">
+              <label>Status label</label>
+              <div class="mode-group" id="artifact-status-label">
+                <button type="button" class="mode-btn active" data-mode="default">Default</button>
+                <button type="button" class="mode-btn" data-mode="custom">Custom text</button>
+                <button type="button" class="mode-btn" data-mode="progress">Live progress</button>
+                <button type="button" class="mode-btn" data-mode="phase">Phase aware</button>
+              </div>
+              <p class="hint">Replace the default "Generating …" label (<code>features.artifacts.statusLabel</code>). Custom text swaps a fixed string, for localization or brand voice. Live progress adds a live detail with line and second counters (the cramped inline chrome gets a shorter, line-only detail). Phase aware reads the streamed markdown headings and narrates the current section, re-animating only when the heading changes; stream the markdown sample to watch it step through sections.</p>
+            </div>
+            <div class="section">
+              <label>Animation mode</label>
+              <div class="mode-group" id="artifact-anim-mode">
+                <button type="button" class="mode-btn active" data-mode="shimmer">Shimmer</button>
+                <button type="button" class="mode-btn" data-mode="pulse">Pulse</button>
+                <button type="button" class="mode-btn" data-mode="shimmer-color">Shimmer color</button>
+                <button type="button" class="mode-btn" data-mode="rainbow">Rainbow</button>
+                <button type="button" class="mode-btn" data-mode="none">None</button>
+              </div>
+              <p class="hint">Animation for the status text (<code>features.artifacts.loadingAnimation</code>). Changes apply live.</p>
+            </div>
+            <div class="section">
+              <label>Animation duration</label>
+              <div class="range-row">
+                <input type="range" id="artifact-anim-duration" min="500" max="5000" step="100" value="2000" />
+                <span id="artifact-anim-duration-label">2000ms</span>
+              </div>
+            </div>
+            <div class="section" id="artifact-color-section">
+              <label>Shimmer color options</label>
+              <div class="color-row">
+                <label>Primary</label>
+                <input type="color" id="artifact-color-primary" value="#0ea5e9" />
+                <label>Secondary</label>
+                <input type="color" id="artifact-color-secondary" value="#3b82f6" />
+              </div>
+            </div>
+            <div class="btn-row">
+              <button type="button" id="btn-anim-reset">Reset to defaults</button>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Streaming window</h3>
+            <p>Geometry and scroll etiquette of the fixed streaming window (<code>features.artifacts.inlineBody</code>). Inline display mode; takes effect on the next streamed artifact.</p>
+            <div class="section">
+              <label>Body height</label>
+              <div class="mode-group" id="artifact-body-height">
+                <button type="button" class="mode-btn active" data-mode="320">320px</button>
+                <button type="button" class="mode-btn" data-mode="auto">Auto</button>
+                <button type="button" class="mode-btn" data-mode="split">Streaming 320, complete auto</button>
+              </div>
+              <p class="hint">Reserve a fixed-height scroll window so the streaming to complete swap causes no layout shift, or grow with content (<code>inlineBody.height</code>).</p>
+            </div>
+            <div class="section">
+              <label>Follow output</label>
+              <div class="mode-group" id="artifact-follow-output">
+                <button type="button" class="mode-btn active" data-mode="on">On</button>
+                <button type="button" class="mode-btn" data-mode="off">Off</button>
+              </div>
+              <p class="hint">Keep the streaming window pinned to the newest output (<code>inlineBody.followOutput</code>).</p>
+            </div>
+            <div class="section">
+              <label>Overflow</label>
+              <div class="mode-group" id="artifact-overflow">
+                <button type="button" class="mode-btn active" data-mode="scroll">Scroll</button>
+                <button type="button" class="mode-btn" data-mode="clip">Clip</button>
+              </div>
+              <p class="hint">Scroll follows the streaming tail; clip shows the top of the document in a fixed window with no internal scroll, and the body opens the pane when expand is on (<code>inlineBody.overflow</code>).</p>
+            </div>
+            <div class="section">
+              <label>Fade mask</label>
+              <div class="mode-group" id="artifact-fade-mask">
+                <button type="button" class="mode-btn" data-mode="top">Top</button>
+                <button type="button" class="mode-btn active" data-mode="both">Top and bottom</button>
+                <button type="button" class="mode-btn" data-mode="off">Off</button>
+              </div>
+              <p class="hint">Fade the scroll edges of the streaming window (<code>inlineBody.fadeMask</code>).</p>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Settling</h3>
+            <p>How the block settles when the stream completes (<code>features.artifacts.inlineBody</code>).</p>
+            <div class="section">
+              <label>Transition</label>
+              <div class="mode-group" id="artifact-body-transition">
+                <button type="button" class="mode-btn active" data-mode="auto">Auto</button>
+                <button type="button" class="mode-btn" data-mode="none">None</button>
+              </div>
+              <p class="hint">Cross-fade the streaming to complete swap where supported (<code>inlineBody.transition</code>).</p>
+            </div>
+            <div class="section">
+              <label>On complete</label>
+              <div class="mode-group" id="artifact-complete-display">
+                <button type="button" class="mode-btn active" data-mode="inline">Stay inline</button>
+                <button type="button" class="mode-btn" data-mode="card">Collapse to card</button>
+              </div>
+              <p class="hint">Keep the streamed body inline, or collapse the block to the compact reference card once the artifact completes, the Copilot chiclet / Claude handoff pattern (<code>inlineBody.completeDisplay</code>). The collapse plays as a short height transition; click the collapsed card to open the pane.</p>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Completed body</h3>
+            <p>What the completed inline body offers (<code>inlineBody.viewMode</code>, <code>inlineChrome.showViewToggle</code>, <code>filePreview.loading</code>).</p>
             <div class="section">
               <label>View mode</label>
               <div class="mode-group" id="artifact-view-mode">
@@ -81,70 +186,6 @@
                 <button type="button" class="mode-btn" data-mode="off">Off</button>
               </div>
               <p class="hint">Show a loading state over a slow file preview (<code>filePreview.loading</code>). On keeps the default spinner, Custom swaps in your own indicator via <code>loading.renderIndicator</code>, and Off disables the overlay. It appears only when the preview takes a moment to become ready, so fast artifacts never flash it. Try it with the React file artifact, which pulls React and Babel from a CDN inside the sandbox.</p>
-            </div>
-            <div class="section">
-              <label>Body height</label>
-              <div class="mode-group" id="artifact-body-height">
-                <button type="button" class="mode-btn active" data-mode="320">320px</button>
-                <button type="button" class="mode-btn" data-mode="auto">Auto</button>
-                <button type="button" class="mode-btn" data-mode="split">Streaming 320, complete auto</button>
-              </div>
-              <p class="hint">Reserve a fixed-height scroll window so the streaming to complete swap causes no layout shift, or grow with content (<code>inlineBody.height</code>).</p>
-            </div>
-            <div class="section">
-              <label>Fade mask</label>
-              <div class="mode-group" id="artifact-fade-mask">
-                <button type="button" class="mode-btn" data-mode="top">Top</button>
-                <button type="button" class="mode-btn active" data-mode="both">Top and bottom</button>
-                <button type="button" class="mode-btn" data-mode="off">Off</button>
-              </div>
-              <p class="hint">Fade the scroll edges of the streaming window (<code>inlineBody.fadeMask</code>).</p>
-            </div>
-            <div class="section">
-              <label>Follow output</label>
-              <div class="mode-group" id="artifact-follow-output">
-                <button type="button" class="mode-btn active" data-mode="on">On</button>
-                <button type="button" class="mode-btn" data-mode="off">Off</button>
-              </div>
-              <p class="hint">Keep the streaming window pinned to the newest output (<code>inlineBody.followOutput</code>).</p>
-            </div>
-            <div class="section">
-              <label>Overflow</label>
-              <div class="mode-group" id="artifact-overflow">
-                <button type="button" class="mode-btn active" data-mode="scroll">Scroll</button>
-                <button type="button" class="mode-btn" data-mode="clip">Clip</button>
-              </div>
-              <p class="hint">Scroll follows the streaming tail; clip shows the top of the document in a fixed window with no internal scroll, and the body opens the pane when expand is on (<code>inlineBody.overflow</code>).</p>
-            </div>
-            <div class="section">
-              <label>Transition</label>
-              <div class="mode-group" id="artifact-body-transition">
-                <button type="button" class="mode-btn active" data-mode="auto">Auto</button>
-                <button type="button" class="mode-btn" data-mode="none">None</button>
-              </div>
-              <p class="hint">Cross-fade the streaming to complete swap where supported (<code>inlineBody.transition</code>).</p>
-            </div>
-            <div class="section">
-              <label>On complete</label>
-              <div class="mode-group" id="artifact-complete-display">
-                <button type="button" class="mode-btn active" data-mode="inline">Stay inline</button>
-                <button type="button" class="mode-btn" data-mode="card">Collapse to card</button>
-              </div>
-              <p class="hint">Keep the streamed body inline, or collapse the block to the compact reference card once the artifact completes, the Copilot chiclet / Claude handoff pattern (<code>inlineBody.completeDisplay</code>). The collapse plays as a short height transition; click the collapsed card to open the pane.</p>
-            </div>
-          </div>
-
-          <div class="info-section">
-            <h3>Status label</h3>
-            <p>Replace the default "Generating …" label while an artifact streams (<code>features.artifacts.statusLabel</code>). This applies to all three surfaces: the reference card status line, the inline chrome meta, and the inline status body.</p>
-            <div class="section">
-              <div class="mode-group" id="artifact-status-label">
-                <button type="button" class="mode-btn active" data-mode="default">Default</button>
-                <button type="button" class="mode-btn" data-mode="custom">Custom text</button>
-                <button type="button" class="mode-btn" data-mode="progress">Live progress</button>
-                <button type="button" class="mode-btn" data-mode="phase">Phase aware</button>
-              </div>
-              <p class="hint">Default keeps the built-in "Generating …" label. Custom text swaps a fixed string, for localization or brand voice. Live progress returns a function with an animated label plus a live detail (line and second counters; the cramped inline chrome gets a shorter, line-only detail). Phase aware reads the streamed markdown headings and narrates the current section, re-animating only when the heading changes. Use the markdown button to watch the phase label step through sections; source and status streaming views both surface it.</p>
             </div>
           </div>
 
@@ -204,39 +245,6 @@
             </div>
           </div>
 
-          <div class="info-section">
-            <h3>Card loading animation</h3>
-            <p>Style the "Generating…" status on the in-chat reference card while an artifact streams. Changes apply live and to the next streamed card.</p>
-            <div class="section">
-              <label>Animation mode</label>
-              <div class="mode-group" id="artifact-anim-mode">
-                <button type="button" class="mode-btn active" data-mode="shimmer">Shimmer</button>
-                <button type="button" class="mode-btn" data-mode="pulse">Pulse</button>
-                <button type="button" class="mode-btn" data-mode="shimmer-color">Shimmer color</button>
-                <button type="button" class="mode-btn" data-mode="rainbow">Rainbow</button>
-                <button type="button" class="mode-btn" data-mode="none">None</button>
-              </div>
-            </div>
-            <div class="section">
-              <label>Animation duration</label>
-              <div class="range-row">
-                <input type="range" id="artifact-anim-duration" min="500" max="5000" step="100" value="2000" />
-                <span id="artifact-anim-duration-label">2000ms</span>
-              </div>
-            </div>
-            <div class="section" id="artifact-color-section">
-              <label>Shimmer color options</label>
-              <div class="color-row">
-                <label>Primary</label>
-                <input type="color" id="artifact-color-primary" value="#0ea5e9" />
-                <label>Secondary</label>
-                <input type="color" id="artifact-color-secondary" value="#3b82f6" />
-              </div>
-            </div>
-            <div class="btn-row">
-              <button type="button" id="btn-anim-reset">Reset to defaults</button>
-            </div>
-          </div>
         </aside>
         <div class="stage-widget">
           <div class="embed" id="artifact-root"></div>
@@ -299,8 +307,10 @@
                   <span class="prop">viewMode</span>: <span class="string">"rendered"</span>, <span class="comment">// rendered | source (source: never preview, code editor style)</span>
                   <span class="prop">height</span>: <span class="keyword">320</span>, <span class="comment">// number | "auto" | { streaming, complete }</span>
                   <span class="prop">followOutput</span>: <span class="keyword">true</span>, <span class="comment">// tail-follow the streaming source</span>
-                  <span class="prop">fadeMask</span>: { <span class="prop">top</span>: <span class="keyword">true</span> }, <span class="comment">// boolean | { top, bottom }</span>
+                  <span class="prop">overflow</span>: <span class="string">"scroll"</span>, <span class="comment">// scroll | clip (clip: fixed top-of-document preview, no internal scroll)</span>
+                  <span class="prop">fadeMask</span>: { <span class="prop">top</span>: <span class="keyword">true</span>, <span class="prop">bottom</span>: <span class="keyword">true</span> }, <span class="comment">// boolean | { top, bottom }, default both, shown only when clipped</span>
                   <span class="prop">transition</span>: <span class="string">"auto"</span>, <span class="comment">// auto | none</span>
+                  <span class="prop">completeDisplay</span>: <span class="string">"inline"</span>, <span class="comment">// inline | card (card: collapse to the reference card on complete)</span>
                 },
                 <span class="prop">inlineChrome</span>: {
                   <span class="prop">showViewToggle</span>: <span class="keyword">true</span>, <span class="comment">// rendered/source segmented toggle, only when a preview exists</span>
@@ -316,8 +326,8 @@
         </div>
 
         <div class="notes-section">
-          <h3 class="notes-section-title">Card loading animation</h3>
-          <p>The reference card's "Generating…" status animates while the artifact streams. Configure it on <code>features.artifacts</code>:</p>
+          <h3 class="notes-section-title">Status loading animation</h3>
+          <p>The streaming "Generating…" status animates on the reference card, the inline chrome, and the inline status body, and the text itself is replaceable via <code>features.artifacts.statusLabel</code> (a string, or a function receiving live stream context for dynamic labels). Configure the animation on <code>features.artifacts</code>:</p>
           <div class="code-block">
             <span class="prop">features</span>: {
               <span class="prop">artifacts</span>: {

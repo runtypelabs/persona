@@ -110,7 +110,10 @@ import { EventStreamStore } from "./utils/event-stream-store";
 import { ThroughputTracker } from "./utils/throughput-tracker";
 import { createEventStreamView } from "./components/event-stream-view";
 import { createArtifactPane, type ArtifactPaneApi } from "./components/artifact-pane";
-import { updateInlineArtifactBlocks } from "./components/artifact-inline";
+import {
+  hasLiveInlineArtifactBlock,
+  updateInlineArtifactBlocks
+} from "./components/artifact-inline";
 import {
   artifactsSidebarEnabled,
   applyArtifactLayoutCssVars,
@@ -4263,11 +4266,48 @@ export const createAgentExperience = (
           let liveBubble: HTMLElement | null = null;
 
           if (needsRebuild) {
-            const componentBubble = renderComponentDirective(directive, {
+            let componentBubble = renderComponentDirective(directive, {
               config,
               message,
               transform
             });
+            // Reuse a mounted inline artifact block instead of the fresh
+            // render: replacing it would cut the collapse-to-card animation
+            // short and reload live file-preview iframes.
+            if (
+              componentBubble &&
+              directive.component === "PersonaArtifactInline"
+            ) {
+              const fresh = componentBubble.hasAttribute(
+                "data-artifact-inline"
+              )
+                ? componentBubble
+                : componentBubble.querySelector<HTMLElement>(
+                    "[data-artifact-inline]"
+                  );
+              const artifactId =
+                fresh?.getAttribute("data-artifact-inline") ?? "";
+              const escapedId =
+                typeof CSS !== "undefined" && typeof CSS.escape === "function"
+                  ? CSS.escape(artifactId)
+                  : artifactId;
+              const live = artifactId
+                ? (container
+                    .querySelector<HTMLElement>(`#wrapper-${message.id}`)
+                    ?.querySelector<HTMLElement>(
+                      `[data-artifact-inline="${escapedId}"]`
+                    ) ?? null)
+                : null;
+              if (
+                fresh &&
+                live &&
+                live !== fresh &&
+                hasLiveInlineArtifactBlock(live)
+              ) {
+                if (fresh === componentBubble) componentBubble = live;
+                else fresh.replaceWith(live);
+              }
+            }
             if (componentBubble) {
               if (wrapChrome) {
                 const componentWrapper = document.createElement("div");
