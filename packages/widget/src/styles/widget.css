@@ -3633,6 +3633,53 @@
   );
 }
 
+/* Edge fade on the horizontally scrollable tab strip. Visual hint only; the
+   tablist keyboard behavior is the real affordance. Sized via
+   --persona-artifact-tab-fade-size (default 24px). */
+[data-persona-root]
+  .persona-artifact-tab-fade-start:not(.persona-artifact-tab-fade-end) {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-tab-fade-end:not(.persona-artifact-tab-fade-start) {
+  -webkit-mask-image: linear-gradient(
+    to left,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+  mask-image: linear-gradient(
+    to left,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-tab-fade-start.persona-artifact-tab-fade-end {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px),
+    #000 calc(100% - var(--persona-artifact-tab-fade-size, 24px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px),
+    #000 calc(100% - var(--persona-artifact-tab-fade-size, 24px)),
+    transparent 100%
+  );
+}
+
 /* Reserved-height status placeholder (inlineBody.streamingView: "status").
    Numeric height reserves the var; "auto" falls back to a modest 160px min-height
    so the card doesn't collapse. */

@@ -362,7 +362,7 @@ describe("artifact pane expand toggle (full widget)", () => {
 
     // Default toolbar preset's Close control dismisses the pane.
     const close = paneEl(mountEl).querySelector<HTMLButtonElement>(
-      '[aria-label="Close artifacts panel"]'
+      '[aria-label="Close"]'
     );
     expect(close).not.toBeNull();
     close!.click();
@@ -544,7 +544,7 @@ describe("inline artifact chrome delegation (full widget)", () => {
     expect(mount.classList.contains("persona-artifact-expanded")).toBe(true);
 
     const close = paneEl(mount).querySelector<HTMLButtonElement>(
-      '[aria-label="Close artifacts panel"]'
+      '[aria-label="Close"]'
     );
     expect(close).not.toBeNull();
     close!.click();

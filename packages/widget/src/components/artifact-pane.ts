@@ -336,6 +336,36 @@ export function createArtifactPane(
     "div",
     "persona-artifact-list persona-shrink-0 persona-flex persona-gap-1 persona-overflow-x-auto persona-p-2 persona-border-b persona-border-persona-border"
   );
+  list.setAttribute("role", "tablist");
+
+  // Toggle the tab-strip edge fades from scroll position. RTL reports a negative
+  // scrollLeft, so normalize against the max offset rather than trusting sign.
+  const updateTabFades = (el: HTMLElement) => {
+    const max = el.scrollWidth - el.clientWidth;
+    const overflow = max > 1;
+    const offset = Math.abs(el.scrollLeft);
+    el.classList.toggle("persona-artifact-tab-fade-start", overflow && offset > 1);
+    el.classList.toggle("persona-artifact-tab-fade-end", overflow && offset < max - 1);
+  };
+  // rAF-throttle the scroll-driven fade recompute (falls back to setTimeout).
+  let tabFadeRaf = 0;
+  const scheduleTabFades = () => {
+    if (tabFadeRaf) return;
+    const run = () => {
+      tabFadeRaf = 0;
+      updateTabFades(list);
+    };
+    tabFadeRaf =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame(run)
+        : (setTimeout(run, 0) as unknown as number);
+  };
+  list.addEventListener("scroll", () => scheduleTabFades(), { passive: true });
+  // Recompute on mid-stream tab additions and pane resizes.
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(() => updateTabFades(list)).observe(list);
+  }
+
   const content = createElement(
     "div",
     "persona-artifact-content persona-flex-1 persona-min-h-0 persona-overflow-y-auto persona-p-3"
@@ -434,14 +464,44 @@ export function createArtifactPane(
     const hideTabs = documentChrome && records.length <= 1;
     list.classList.toggle("persona-hidden", hideTabs);
 
+    // Selecting a tab re-renders the whole strip, so capture whether focus was
+    // inside it and restore focus to the new roving stop below. Without this,
+    // keyboard nav dies after one arrow (the focused tab node is destroyed).
+    const hadFocus =
+      typeof document !== "undefined" && list.contains(document.activeElement);
+
     list.replaceChildren();
     let activeTab: HTMLButtonElement | null = null;
-    for (const r of records) {
+    const tabEls: HTMLButtonElement[] = [];
+    // Bring a focused/selected tab out from under the edge fade.
+    const revealTab = (tab: HTMLButtonElement) => {
+      if (typeof tab.scrollIntoView === "function") {
+        tab.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    };
+    // Arrow keys move selection one step (clamped at the ends); Home/End jump to
+    // the edges. Automatic activation routes through onSelect so the host owns
+    // selection state.
+    const onTabKeydown = (e: KeyboardEvent, index: number) => {
+      let next = index;
+      if (e.key === "ArrowRight") next = Math.min(index + 1, records.length - 1);
+      else if (e.key === "ArrowLeft") next = Math.max(index - 1, 0);
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = records.length - 1;
+      else return;
+      e.preventDefault();
+      if (next === index) return;
+      // Selection re-renders the strip; the rebuild restores focus to the new
+      // selected tab (see `hadFocus` above), so just drive selection here.
+      options.onSelect(records[next].id);
+    };
+    for (const [index, r] of records.entries()) {
       const tab = createElement(
         "button",
         "persona-artifact-tab persona-shrink-0 persona-rounded-lg persona-px-2 persona-py-1 persona-text-xs persona-border persona-border-transparent persona-text-persona-primary"
       );
       tab.type = "button";
+      tab.setAttribute("role", "tab");
       // Prefer the file basename over the full path so tabs stay readable
       // (matches the toolbar title); keep the full path/title in a tooltip.
       const fileMeta = r.artifactType === "markdown" ? r.file : undefined;
@@ -450,12 +510,34 @@ export function createArtifactPane(
       tab.textContent = label;
       tab.title = tooltip;
       tab.setAttribute("aria-label", tooltip);
-      if (r.id === selectedId) {
+      const selected = r.id === selectedId;
+      tab.setAttribute("aria-selected", selected ? "true" : "false");
+      // Roving tabindex: only the active tab is a tab stop.
+      tab.tabIndex = selected ? 0 : -1;
+      if (selected) {
         tab.classList.add("persona-bg-persona-container", "persona-border-persona-border");
         activeTab = tab;
       }
       tab.addEventListener("click", () => options.onSelect(r.id));
+      tab.addEventListener("keydown", (e) => onTabKeydown(e, index));
+      tab.addEventListener("focus", () => revealTab(tab));
       list.appendChild(tab);
+      tabEls.push(tab);
+    }
+    // Nothing selected: the first tab is the roving stop.
+    if (!activeTab && tabEls.length > 0) {
+      tabEls[0].tabIndex = 0;
+    }
+
+    // Restore focus to the roving stop after the rebuild so arrow-key nav
+    // continues to work across the selection re-render. Guarded by `hadFocus`
+    // so a background re-render (e.g. streaming) never steals focus.
+    if (hadFocus) {
+      const stop = activeTab ?? tabEls[0];
+      if (stop && typeof stop.focus === "function") {
+        revealTab(stop);
+        stop.focus();
+      }
     }
 
     // Keep the selected tab visible when the selection changes (e.g. a new
@@ -467,6 +549,9 @@ export function createArtifactPane(
         activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
       }
     }
+
+    // Recompute the edge fades after tabs and the selection scroll settle.
+    updateTabFades(list);
 
     const sel =
       (selectedId && records.find((x) => x.id === selectedId)) ||

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createArtifactPane } from "./artifact-pane";
 import type {
@@ -366,7 +366,7 @@ describe("artifact-pane default toolbar", () => {
     const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
     pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
 
-    const close = toggleBtn(pane, "Close artifacts panel");
+    const close = toggleBtn(pane, "Close");
     expect(close).toBeTruthy();
     expect(close.tagName).toBe("BUTTON");
     expect(close.classList.contains("persona-icon-btn")).toBe(true);
@@ -697,5 +697,147 @@ describe("artifact-pane tabs", () => {
     } finally {
       Element.prototype.scrollIntoView = orig;
     }
+  });
+});
+
+const listIn = (pane: ReturnType<typeof createArtifactPane>): HTMLElement =>
+  pane.element.querySelector(".persona-artifact-list") as HTMLElement;
+
+const setGeom = (el: HTMLElement, scrollWidth: number, clientWidth: number, scrollLeft: number) => {
+  Object.defineProperty(el, "scrollWidth", { configurable: true, value: scrollWidth });
+  Object.defineProperty(el, "clientWidth", { configurable: true, value: clientWidth });
+  Object.defineProperty(el, "scrollLeft", { configurable: true, writable: true, value: scrollLeft });
+};
+
+const twoFileRecords = (): PersonaArtifactRecord[] => [
+  fileRecord({
+    id: "a1",
+    title: "outputs/one.html",
+    file: { path: "outputs/one.html", mimeType: "text/html", language: "html" },
+  }),
+  fileRecord({
+    id: "a2",
+    title: "outputs/two.html",
+    file: { path: "outputs/two.html", mimeType: "text/html", language: "html" },
+  }),
+];
+
+describe("artifact-pane tab edge fade", () => {
+  beforeEach(() => {
+    // Run the rAF-throttled scroll recompute synchronously for determinism.
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the end fade only when scrolled to the start of an overflowing strip", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    const list = listIn(pane);
+    setGeom(list, 400, 200, 0);
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
+    expect(list.classList.contains("persona-artifact-tab-fade-end")).toBe(true);
+    expect(list.classList.contains("persona-artifact-tab-fade-start")).toBe(false);
+  });
+
+  it("shows both fades mid-scroll", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    const list = listIn(pane);
+    setGeom(list, 400, 200, 0);
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
+    setGeom(list, 400, 200, 100);
+    list.dispatchEvent(new Event("scroll"));
+    expect(list.classList.contains("persona-artifact-tab-fade-start")).toBe(true);
+    expect(list.classList.contains("persona-artifact-tab-fade-end")).toBe(true);
+  });
+
+  it("shows the start fade only at the end of the scroll", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    const list = listIn(pane);
+    setGeom(list, 400, 200, 0);
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
+    setGeom(list, 400, 200, 200);
+    list.dispatchEvent(new Event("scroll"));
+    expect(list.classList.contains("persona-artifact-tab-fade-start")).toBe(true);
+    expect(list.classList.contains("persona-artifact-tab-fade-end")).toBe(false);
+  });
+
+  it("shows neither fade when the strip does not overflow", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    const list = listIn(pane);
+    setGeom(list, 200, 200, 0);
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
+    expect(list.classList.contains("persona-artifact-tab-fade-start")).toBe(false);
+    expect(list.classList.contains("persona-artifact-tab-fade-end")).toBe(false);
+  });
+});
+
+describe("artifact-pane tablist accessibility", () => {
+  it("exposes the strip as a tablist with role=tab and aria-selected per tab", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a2" });
+    expect(listIn(pane).getAttribute("role")).toBe("tablist");
+    const tabs = tabsIn(pane);
+    expect(tabs.every((t) => t.getAttribute("role") === "tab")).toBe(true);
+    expect(tabs[0].getAttribute("aria-selected")).toBe("false");
+    expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("keeps a single roving tab stop on the selected tab", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a2" });
+    const tabs = tabsIn(pane);
+    expect(tabs.filter((t) => t.tabIndex === 0).length).toBe(1);
+    expect(tabs[1].tabIndex).toBe(0);
+    expect(tabs[0].tabIndex).toBe(-1);
+  });
+
+  it("moves selection with Arrow, Home and End keys via onSelect", () => {
+    const selected: string[] = [];
+    const pane = createArtifactPane(makeConfig(), {
+      onSelect: (id) => selected.push(id),
+    });
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
+    const tabs = tabsIn(pane);
+
+    tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(selected[selected.length - 1]).toBe("a2");
+
+    tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    expect(selected[selected.length - 1]).toBe("a1");
+
+    tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    expect(selected[selected.length - 1]).toBe("a2");
+  });
+
+  it("keeps keyboard focus on the newly selected tab across the selection re-render", () => {
+    // The host re-renders the strip on selection (update -> render ->
+    // replaceChildren). Focus must land on the new selected tab or arrow nav
+    // dies after one press.
+    let selectedId = "a1";
+    const pane = createArtifactPane(makeConfig(), {
+      onSelect: (id) => {
+        selectedId = id;
+        pane.update({ artifacts: twoFileRecords(), selectedId });
+      },
+    });
+    document.body.appendChild(pane.element);
+    pane.update({ artifacts: twoFileRecords(), selectedId });
+
+    const first = tabsIn(pane)[0];
+    first.focus();
+    expect(document.activeElement).toBe(first);
+
+    first.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+
+    const after = tabsIn(pane);
+    expect(after[1].getAttribute("aria-selected")).toBe("true");
+    // Focus survived the rebuild and moved to the new selected tab, so a second
+    // arrow keeps working.
+    expect(document.activeElement).toBe(after[1]);
   });
 });
