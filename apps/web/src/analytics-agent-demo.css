@@ -217,19 +217,32 @@ button { color: inherit; }
 .date-control .chevron { margin-left: 5px; width: 12px; }
 
 .atlas-entry {
-  max-height: 220px;
+  position: relative;
   margin-top: 24px;
   padding: 0 22px 18px;
   border: 1px solid #dfe4e1;
   background: rgba(255, 255, 255, .94);
   box-shadow: 0 12px 34px rgba(27, 38, 32, .07);
-  opacity: 1;
   overflow: hidden;
-  transition: max-height 260ms ease, margin 260ms ease, padding 260ms ease, border-width 260ms ease, opacity 180ms ease;
 }
-.atlas-entry[hidden] { display: none; }
-.atlas-entry.atlas-entry-engaged { max-height: 0; margin-top: 0; padding-top: 0; padding-bottom: 0; border-width: 0; opacity: 0; }
-.atlas-entry-heading { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #edf0ee; }
+.atlas-entry::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  width: min(44%, 560px);
+  height: 68px;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 560 80'%3E%3Cpath d='M-20 62 C58 4 132 78 212 30 S365 75 454 24 S548 45 590 8' fill='none' stroke='%236d5dfc' stroke-width='2.2' stroke-linecap='round'/%3E%3Cpath d='M22 76 C92 26 154 90 240 46 S390 86 488 36' fill='none' stroke='%23f07869' stroke-width='1.4' stroke-linecap='round' opacity='.78'/%3E%3C/svg%3E") center / cover no-repeat,
+    radial-gradient(ellipse at 86% -25%, rgba(240, 120, 105, .2) 0 30%, transparent 31%),
+    radial-gradient(ellipse at 47% -40%, rgba(109, 93, 252, .18) 0 36%, transparent 37%);
+  opacity: .72;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 38%);
+  mask-image: linear-gradient(90deg, transparent, #000 38%);
+}
+.atlas-entry-heading { position: relative; z-index: 1; min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #edf0ee; }
 .atlas-entry-identity { min-width: 0; display: flex; align-items: center; gap: 11px; }
 .atlas-entry-mark { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; background: #6d5dfc; color: #fff; font-size: 12px; }
 .atlas-entry-identity strong, .atlas-entry-identity span { display: block; }
@@ -237,7 +250,22 @@ button { color: inherit; }
 .atlas-entry-identity div > span { margin-top: 3px; color: #7d8983; font-size: 11px; }
 .atlas-entry-context { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; color: #7f8a85; font-size: 10px; font-weight: 570; }
 .atlas-entry-context i { width: 6px; height: 6px; border-radius: 50%; background: #17a174; }
-.atlas-entry-slot { height: 110px; }
+.atlas-entry-slot { position: relative; height: 110px; }
+.atlas-entry.atlas-entry-has-conversation:not(.atlas-entry-engaged) .atlas-entry-slot { height: 70px; }
+.atlas-entry.atlas-entry-engaged .atlas-entry-slot::after {
+  content: "Atlas is open in a focused workspace";
+  position: absolute;
+  inset: 14px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgba(109, 93, 252, .22);
+  color: #756b9f;
+  background: linear-gradient(110deg, rgba(247, 245, 255, .72), rgba(255, 248, 244, .64));
+  font-size: 10px;
+  font-weight: 620;
+  letter-spacing: .02em;
+}
 
 .metrics-grid { margin-top: 20px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
 .metric-card, .panel {
@@ -347,6 +375,19 @@ tbody tr:last-child td { border-bottom: 0; }
 #analytics-agent-root .persona-widget-container,
 #analytics-agent-root [data-persona-intro-card] { border-radius: 0 !important; }
 
+body.analytics-chat-open { overflow: hidden; }
+body.analytics-chat-open::after {
+  content: "";
+  position: fixed;
+  /* The focused-workspace scrim stays below Persona's z:100 host context so
+     it separates the dashboard without softening the chat itself. */
+  z-index: 99;
+  inset: 0;
+  background: rgba(25, 31, 28, .18);
+  -webkit-backdrop-filter: blur(4px) saturate(.92);
+  backdrop-filter: blur(4px) saturate(.92);
+}
+
 body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root,
 #analytics-agent-root .persona-widget-pill-root.northstar-entry-transitioning {
   position: fixed !important;
@@ -411,6 +452,28 @@ body.analytics-entry-home #analytics-agent-root [data-persona-composer-suggestio
 #analytics-agent-root .persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"][data-expanded-size="anchored"] .persona-widget-container {
   transform-origin: 50% 100%;
   animation: northstar-chat-rise 320ms cubic-bezier(.2, .85, .25, 1) both;
+  box-shadow: 0 34px 110px rgba(23, 26, 49, .28), 0 8px 26px rgba(23, 26, 49, .12) !important;
+}
+#analytics-agent-root .persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] .persona-widget-body::before {
+  content: "ATLAS  /  REVENUE INTELLIGENCE";
+  min-height: 94px;
+  margin: -48px -24px 8px;
+  padding: 18px 22px 28px;
+  display: flex;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  color: rgba(255, 255, 255, .9);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 900 120'%3E%3Cpath d='M-40 86 C90 8 190 116 318 50 S558 110 690 38 S852 62 950 4' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' opacity='.52'/%3E%3Cpath d='M-12 108 C110 42 224 126 354 70 S590 126 760 54 S880 70 940 30' fill='none' stroke='%23ffd7a8' stroke-width='1.6' stroke-linecap='round' opacity='.66'/%3E%3C/svg%3E") center / cover no-repeat,
+    radial-gradient(ellipse at 12% -35%, rgba(255, 170, 79, .9) 0 24%, transparent 25%),
+    radial-gradient(ellipse at 76% -50%, rgba(255, 117, 99, .9) 0 29%, transparent 30%),
+    linear-gradient(112deg, #292258 0%, #5142c9 48%, #7a5af0 69%, #ef796a 100%);
+  clip-path: polygon(0 0, 100% 0, 100% 68%, 94% 74%, 88% 68%, 82% 79%, 75% 71%, 68% 83%, 61% 71%, 54% 79%, 46% 72%, 38% 84%, 30% 72%, 22% 80%, 14% 69%, 7% 77%, 0 71%);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-shadow: 0 1px 2px rgba(28, 22, 65, .22);
 }
 @keyframes northstar-chat-rise {
   from { opacity: 0; transform: translateY(28px) scale(.985); }
@@ -468,13 +531,8 @@ body.analytics-artifact-open #analytics-agent-root .persona-artifact-content {
   overflow: hidden !important;
 }
 body.analytics-artifact-open::after {
-  content: "";
-  position: fixed;
-  /* Keep the scrim below #analytics-agent-root's stacking context (z: 100).
-     A viewport-sized z-index here would also blur the artifact itself. */
-  z-index: 99;
-  inset: 0;
   background: rgba(17, 24, 21, .36);
+  -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
 }
 
@@ -563,11 +621,17 @@ body.analytics-artifact-open::after {
   .page-heading { align-items: flex-start; flex-direction: column; }
   .heading-actions { width: 100%; }
   .date-control { flex: 1; }
-  .atlas-entry { max-height: 300px; padding: 0 14px 14px; }
+  .atlas-entry { padding: 0 14px 14px; }
   .atlas-entry-heading { min-height: 76px; align-items: flex-start; padding: 14px 0; flex-direction: column; gap: 8px; }
   .atlas-entry-identity div > span { font-size: 10px; }
   .atlas-entry-context { padding-left: 41px; }
   .atlas-entry-slot { height: 166px; }
+  .atlas-entry.atlas-entry-has-conversation:not(.atlas-entry-engaged) .atlas-entry-slot { height: 74px; }
+  #analytics-agent-root .persona-widget-wrapper[data-persona-composer-bar][data-state="expanded"] .persona-widget-body::before {
+    min-height: 82px;
+    padding: 14px 16px 24px;
+    font-size: 8px;
+  }
   body.analytics-entry-home #analytics-agent-root .persona-widget-pill-root[data-state="collapsed"] [data-persona-composer-suggestions] { grid-template-columns: 1fr; }
   body.analytics-entry-home #analytics-agent-root [data-persona-composer-suggestions] button + button { border-top: 0 !important; border-left: 1px solid #dfe4e1 !important; }
   .metrics-grid { grid-template-columns: 1fr; }

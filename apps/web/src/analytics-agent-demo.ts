@@ -784,8 +784,14 @@ const config: AgentWidgetConfig = {
     agentIconBackgroundColor: "#6d5dfc",
     autoExpand: false,
     zIndex: 100000,
+    closeButtonColor: "#fff",
+    closeButtonBackgroundColor: "rgba(41, 34, 88, .34)",
+    closeButtonBorderRadius: "0px",
     clearChat: {
       ...DEFAULT_WIDGET_CONFIG.launcher?.clearChat,
+      iconColor: "#fff",
+      backgroundColor: "rgba(41, 34, 88, .34)",
+      borderRadius: "0px",
       tooltipText: "Reset chat and artifacts",
     },
     composerBar: {
@@ -814,8 +820,9 @@ const entrySlot = document.getElementById("atlas-entry-slot");
 const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root");
 if (!entry || !entrySlot || !pillRoot) throw new Error("Atlas entry surface is missing.");
 
-let entryEngaged = widget.getMessages().length > 0 || widget.getArtifacts().length > 0;
-let hadConversation = entryEngaged;
+let entryEngaged = widget.isOpen();
+let hadConversation = widget.getMessages().length > 0 || widget.getArtifacts().length > 0;
+entry.classList.toggle("atlas-entry-has-conversation", hadConversation);
 let entryTransitionTimer: number | null = null;
 let entryPositionFrame: number | null = null;
 
@@ -833,7 +840,7 @@ const clearEntryGeometry = (): void => {
 
 const positionInlineEntry = (): void => {
   entryPositionFrame = null;
-  if (entryEngaged || entry.hidden) return;
+  if (entryEngaged) return;
   const bounds = entrySlot.getBoundingClientRect();
   setEntryGeometry(bounds.left, bounds.top, bounds.width);
 };
@@ -848,7 +855,6 @@ const finishEntryTransition = (): void => {
   entryTransitionTimer = null;
   pillRoot.classList.remove("northstar-entry-transitioning");
   clearEntryGeometry();
-  entry.hidden = true;
 };
 
 const engageEntry = (): void => {
@@ -861,6 +867,7 @@ const engageEntry = (): void => {
   const start = pillRoot.getBoundingClientRect();
   setEntryGeometry(start.left, start.top, start.width);
   document.body.classList.remove("analytics-entry-home");
+  document.body.classList.add("analytics-chat-open");
   entry.classList.add("atlas-entry-engaged");
   pillRoot.classList.add("northstar-entry-transitioning");
   widget?.open();
@@ -879,20 +886,21 @@ const engageEntry = (): void => {
   entryTransitionTimer = window.setTimeout(finishEntryTransition, 280);
 };
 
-const restoreInlineEntry = (): void => {
+const restoreInlineEntry = (closeWidget = true): void => {
   if (entryTransitionTimer != null) window.clearTimeout(entryTransitionTimer);
   entryTransitionTimer = null;
   entryEngaged = false;
-  entry.hidden = false;
   entry.classList.remove("atlas-entry-engaged");
   pillRoot.classList.remove("northstar-entry-transitioning");
+  document.body.classList.remove("analytics-chat-open");
   document.body.classList.add("analytics-entry-home");
-  widget?.close();
-  scheduleInlineEntryPosition();
+  if (closeWidget) widget?.close();
+  positionInlineEntry();
 };
 
 if (entryEngaged) {
-  entry.hidden = true;
+  entry.classList.add("atlas-entry-engaged");
+  document.body.classList.add("analytics-chat-open");
 } else {
   document.body.classList.add("analytics-entry-home");
   scheduleInlineEntryPosition();
@@ -912,6 +920,9 @@ pillRoot.addEventListener("focusin", engageEntryFromInput);
 pillRoot.addEventListener("pointerdown", engageEntryFromInput, { capture: true });
 const stopWatchingWidgetOpen = widget.on("widget:opened", () => {
   if (!entryEngaged) engageEntry();
+});
+const stopWatchingWidgetClose = widget.on("widget:closed", () => {
+  if (entryEngaged) restoreInlineEntry(false);
 });
 window.addEventListener("resize", scheduleInlineEntryPosition);
 window.addEventListener("scroll", scheduleInlineEntryPosition, { passive: true });
@@ -942,6 +953,7 @@ const syncArtifactFullscreen = (): void => {
     hadConversation = false;
     restoreInlineEntry();
   }
+  entry.classList.toggle("atlas-entry-has-conversation", hasConversation);
 };
 
 const artifactObserver = new MutationObserver(syncArtifactFullscreen);
@@ -955,6 +967,7 @@ syncArtifactFullscreen();
 
 window.addEventListener("beforeunload", () => {
   stopWatchingWidgetOpen();
+  stopWatchingWidgetClose();
   artifactObserver.disconnect();
   if (entryTransitionTimer != null) window.clearTimeout(entryTransitionTimer);
   if (entryPositionFrame != null) window.cancelAnimationFrame(entryPositionFrame);
