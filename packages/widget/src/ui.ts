@@ -2403,6 +2403,8 @@ export const createAgentExperience = (
       config.features?.artifacts?.layout?.showCopyButton === true
     );
     artifactPaneApi.setCustomActions(config.features?.artifacts?.toolbarActions ?? []);
+    artifactPaneApi.setTabFade(config.features?.artifacts?.layout?.tabFade);
+    artifactPaneApi.setRenderTabBar(config.features?.artifacts?.renderTabBar);
     if (!expandToggleEnabled && !artifactPaneExpandedPinned) artifactPaneExpanded = false;
     // Run the resizer stash/restore once per expanded-state transition: the
     // resizer's inline width/maxWidth beats the expanded class, so clear it while

@@ -4,10 +4,12 @@ import {
   initAgentWidget,
   componentRegistry,
   markdownPostprocessor,
+  createRovingTablist,
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetConfig,
   type ComponentRenderer,
   type AgentWidgetInitHandle,
+  type PersonaArtifactRecord,
   type PersonaArtifactStatusLabelContext,
 } from "@runtypelabs/persona";
 import {
@@ -134,6 +136,269 @@ const readPaneAppearance = (): "panel" | "seamless" => {
     "#artifact-pane-appearance .mode-btn.active",
   );
   return activeBtn?.dataset.mode === "seamless" ? "seamless" : "panel";
+};
+
+// Same DOM-is-the-source-of-truth pattern: the active pill in
+// #artifact-tab-overflow selects which tab bar the pane renders. Scroll (the
+// default) leaves renderTabBar unset so the built-in strip renders; Buttons and
+// Menu each swap in a custom bar via features.artifacts.renderTabBar.
+const readTabOverflow = (): "scroll" | "buttons" | "menu" => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-tab-overflow .mode-btn.active",
+  );
+  return (activeBtn?.dataset.mode ?? "scroll") as "scroll" | "buttons" | "menu";
+};
+
+// Same DOM-is-the-source-of-truth pattern: the active pill in #artifact-tab-fade
+// is read on every config build. On (the default) omits tabFade; Off sends false.
+const readTabFade = (): boolean => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-tab-fade .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode !== "off";
+};
+
+// ── Custom tab bars (features.artifacts.renderTabBar) ────────────────────
+// Reference implementations hosts copy. renderTabBar is re-invoked whenever the
+// records or selection change and must return a FRESH element each time; the
+// pane replaces the previous bar wholesale, so per-invocation listeners never
+// leak. createRovingTablist supplies the WAI-ARIA tablist behavior (roles,
+// aria-selected, roving tabindex, Arrow/Home/End, focus survives rebuild) so we
+// do not re-implement keyboard accessibility. The bars mount inside the pane, so
+// persona- utility classes and theme variables apply; controls align to the
+// pane's ~8px toolbar inset.
+type TabBarContext = {
+  records: PersonaArtifactRecord[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+};
+type TabBarRenderer = (ctx: TabBarContext) => HTMLElement;
+
+// Basename for file tabs (title stays the full path); mirrors the built-in strip.
+const tabLabelOf = (
+  r: PersonaArtifactRecord,
+): { label: string; tooltip: string } => {
+  const fileMeta = r.artifactType === "markdown" ? r.file : undefined;
+  const label = fileMeta
+    ? fileMeta.path.split("/").pop() || fileMeta.path
+    : r.title || r.id.slice(0, 8);
+  const tooltip = fileMeta?.path || r.title || label;
+  return { label, tooltip };
+};
+
+// One tab <button> per record, styled with the same persona- utility classes as
+// the built-in strip so the custom bars match the pane theme.
+const buildTabButton = (
+  r: PersonaArtifactRecord,
+  active: boolean,
+): HTMLButtonElement => {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className =
+    "persona-artifact-tab persona-shrink-0 persona-rounded-lg persona-px-2 persona-py-1 persona-text-xs persona-border persona-border-transparent persona-text-persona-primary";
+  const { label, tooltip } = tabLabelOf(r);
+  btn.textContent = label;
+  btn.title = tooltip;
+  btn.setAttribute("aria-label", tooltip);
+  if (active) {
+    btn.classList.add("persona-bg-persona-container", "persona-border-persona-border");
+  }
+  return btn;
+};
+
+// Build a scrollable strip filled with tab buttons and wire the roving tablist.
+const buildTabStrip = (ctx: TabBarContext): HTMLElement => {
+  const strip = document.createElement("div");
+  // Own layout: horizontal scroll, no wrap, hidden native scrollbar (the bar
+  // provides its own overflow affordance).
+  strip.style.cssText =
+    "display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none;scroll-behavior:smooth;";
+  const tablist = createRovingTablist(strip, {
+    onSelect: (i) => ctx.onSelect(ctx.records[i].id),
+  });
+  // beforeRender() snapshots focus so the controller restores the roving stop
+  // after we replace the tab DOM (keyboard nav dies otherwise).
+  tablist.beforeRender();
+  const tabEls: HTMLElement[] = [];
+  let selectedIndex = -1;
+  ctx.records.forEach((r, index) => {
+    const active = r.id === ctx.selectedId;
+    if (active) selectedIndex = index;
+    const btn = buildTabButton(r, active);
+    // The controller handles keyboard selection; pointer selection is ours.
+    btn.addEventListener("click", () => ctx.onSelect(r.id));
+    strip.appendChild(btn);
+    tabEls.push(btn);
+  });
+  tablist.render(tabEls, selectedIndex);
+  return strip;
+};
+
+// A chevron scroll button; hidden until its edge overflows.
+const createChevron = (dir: "left" | "right"): HTMLButtonElement => {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.setAttribute(
+    "aria-label",
+    dir === "left" ? "Scroll tabs left" : "Scroll tabs right",
+  );
+  btn.textContent = dir === "left" ? "‹" : "›";
+  btn.style.cssText =
+    "display:none;align-items:center;justify-content:center;flex:0 0 auto;width:24px;height:24px;font-size:18px;line-height:1;border:none;border-radius:6px;background:transparent;color:var(--persona-primary,inherit);cursor:pointer;";
+  return btn;
+};
+
+// Buttons bar: [chevron-left][scrollable strip][chevron-right]. The chevrons
+// scroll the strip by ~80% of its visible width and only appear when that edge
+// has hidden tabs.
+const createButtonsTabBar: TabBarRenderer = (ctx) => {
+  const bar = document.createElement("div");
+  // Match the built-in strip's persona-p-2 (8px all sides) so tabs and chevrons
+  // align with the toolbar controls above.
+  bar.style.cssText =
+    "display:flex;align-items:center;gap:4px;padding:8px;min-width:0;";
+
+  const leftBtn = createChevron("left");
+  const rightBtn = createChevron("right");
+  const strip = buildTabStrip(ctx);
+
+  const updateChevrons = (): void => {
+    const maxScroll = strip.scrollWidth - strip.clientWidth;
+    const overflowing = maxScroll > 1;
+    const atStart = strip.scrollLeft <= 1;
+    const atEnd = strip.scrollLeft >= maxScroll - 1;
+    leftBtn.style.display = overflowing && !atStart ? "flex" : "none";
+    rightBtn.style.display = overflowing && !atEnd ? "flex" : "none";
+    // Optional edge fade: mask whichever side still has hidden tabs.
+    const left = overflowing && !atStart ? "transparent" : "#000";
+    const right = overflowing && !atEnd ? "transparent" : "#000";
+    strip.style.maskImage = `linear-gradient(to right, ${left} 0, #000 16px, #000 calc(100% - 16px), ${right} 100%)`;
+  };
+  const scrollStep = (dir: number): void => {
+    strip.scrollBy({ left: dir * strip.clientWidth * 0.8, behavior: "smooth" });
+  };
+  leftBtn.addEventListener("click", () => scrollStep(-1));
+  rightBtn.addEventListener("click", () => scrollStep(1));
+  strip.addEventListener("scroll", updateChevrons);
+  // Measure after the bar is in the DOM.
+  requestAnimationFrame(updateChevrons);
+
+  bar.append(leftBtn, strip, rightBtn);
+  return bar;
+};
+
+// Menu item styles. Hover/focus need real CSS pseudo-classes (inline styles
+// cannot express :hover, and a JS mouseenter approach misses keyboard focus), so
+// the bar carries its own scoped <style>. Co-located in the bar so it resolves
+// even when the widget renders inside a shadow root.
+const MENU_ITEM_CSS = `
+.demo-tab-menu-item {
+  display:block; width:100%; text-align:left; padding:6px 8px;
+  border:none; border-radius:6px; font-size:12px; background:transparent;
+  color:var(--persona-primary, inherit); cursor:pointer;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  transition:background 0.12s ease;
+}
+.demo-tab-menu-item:hover,
+.demo-tab-menu-item:focus-visible {
+  background:var(--persona-artifact-tab-hover-bg, #f3f4f6); outline:none;
+}
+.demo-tab-menu-item[aria-current="true"] {
+  background:var(--persona-artifact-tab-hover-bg, #f3f4f6); font-weight:600;
+}`;
+
+// Menu bar: the scrollable strip plus a trailing "more" button that opens a
+// dropdown listing every artifact by basename. Kept intentionally simple: a
+// jump-list of ALL artifacts. A host could instead show only the overflowing
+// tabs with a "+N" count.
+const createMenuTabBar: TabBarRenderer = (ctx) => {
+  const bar = document.createElement("div");
+  // Match the built-in strip's persona-p-2 (8px all sides) so tabs and the menu
+  // button align with the toolbar controls above.
+  bar.style.cssText =
+    "display:flex;align-items:center;gap:4px;padding:8px;min-width:0;position:relative;";
+
+  const strip = buildTabStrip(ctx);
+
+  // Icon-only "more" button; aria-label carries the accessible name since the
+  // glyph alone conveys nothing to a screen reader.
+  const menuBtn = document.createElement("button");
+  menuBtn.type = "button";
+  menuBtn.setAttribute("aria-haspopup", "true");
+  menuBtn.setAttribute("aria-expanded", "false");
+  menuBtn.setAttribute("aria-label", "All artifacts");
+  menuBtn.textContent = "⋯";
+  menuBtn.style.cssText =
+    "display:flex;align-items:center;justify-content:center;flex:0 0 auto;width:24px;height:24px;font-size:18px;line-height:1;border:none;border-radius:6px;background:transparent;color:var(--persona-primary,inherit);cursor:pointer;";
+
+  const menu = document.createElement("div");
+  menu.setAttribute("role", "menu");
+  menu.style.cssText =
+    "position:absolute;top:100%;right:8px;z-index:20;display:none;flex-direction:column;min-width:180px;max-height:280px;overflow-y:auto;padding:4px;background:var(--persona-surface,#fff);border:1px solid var(--persona-border,#e5e7eb);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);";
+
+  const onDocClick = (e: MouseEvent): void => {
+    if (!bar.contains(e.target as Node)) closeMenu();
+  };
+  // The artifact preview is a sandboxed iframe: clicks inside it never reach the
+  // parent document, so a document click listener alone can't dismiss the menu
+  // when the user clicks the preview. Focus moving into the iframe blurs the top
+  // window, so close on window blur too. Escape closes and restores focus.
+  const onWinBlur = (): void => closeMenu();
+  const onKeydown = (e: KeyboardEvent): void => {
+    if (e.key === "Escape") {
+      closeMenu();
+      menuBtn.focus();
+    }
+  };
+  const closeMenu = (): void => {
+    menu.style.display = "none";
+    menuBtn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("click", onDocClick, true);
+    window.removeEventListener("blur", onWinBlur);
+    document.removeEventListener("keydown", onKeydown);
+  };
+  const openMenu = (): void => {
+    menu.style.display = "flex";
+    menuBtn.setAttribute("aria-expanded", "true");
+    document.addEventListener("click", onDocClick, true);
+    window.addEventListener("blur", onWinBlur);
+    document.addEventListener("keydown", onKeydown);
+  };
+  menuBtn.addEventListener("click", () => {
+    if (menu.style.display === "none") openMenu();
+    else closeMenu();
+  });
+
+  ctx.records.forEach((r) => {
+    const active = r.id === ctx.selectedId;
+    const item = document.createElement("button");
+    item.type = "button";
+    item.setAttribute("role", "menuitem");
+    item.className = "demo-tab-menu-item";
+    if (active) item.setAttribute("aria-current", "true");
+    const { label, tooltip } = tabLabelOf(r);
+    item.textContent = label;
+    item.title = tooltip;
+    item.addEventListener("click", () => {
+      ctx.onSelect(r.id);
+      closeMenu();
+    });
+    menu.appendChild(item);
+  });
+
+  const style = document.createElement("style");
+  style.textContent = MENU_ITEM_CSS;
+  bar.append(strip, menuBtn, menu, style);
+  return bar;
+};
+
+// Select the custom bar for the current overflow mode; Scroll returns undefined
+// so the pane keeps its built-in strip.
+const buildTabBar = (): TabBarRenderer | undefined => {
+  const mode = readTabOverflow();
+  if (mode === "buttons") return createButtonsTabBar;
+  if (mode === "menu") return createMenuTabBar;
+  return undefined;
 };
 
 // Same DOM-is-the-source-of-truth pattern: the active pill in
@@ -486,10 +751,14 @@ const buildArtifactsFeature = () => {
   // Only send statusLabel when a non-default mode is picked; Default leaves the
   // key unset so the widget keeps its built-in "Generating <type>..." label.
   const statusLabel = buildStatusLabel();
+  // Custom tab bar for Buttons/Menu; undefined in Scroll mode leaves the
+  // built-in strip in place.
+  const tabBar = buildTabBar();
   return {
     ...artifactDemoConfigBase.features?.artifacts,
     display: readDisplayMode(),
     ...(statusLabel !== undefined ? { statusLabel } : {}),
+    ...(tabBar ? { renderTabBar: tabBar } : {}),
     loadingAnimation: mode,
     loadingAnimationDuration: duration,
     ...(mode === "shimmer-color"
@@ -507,6 +776,9 @@ const buildArtifactsFeature = () => {
       paneBackground: "#ffffff",
       ...(readExpandToggle() ? { showExpandToggle: true } : {}),
       ...(readResizable() ? { resizable: true } : {}),
+      // Edge fade for the built-in Scroll strip; send only when turned Off.
+      // The custom Buttons/Menu bars (renderTabBar) own their own affordances.
+      ...(readTabFade() ? {} : { tabFade: false }),
       ...(readPaneAppearance() === "seamless"
         ? {
             paneAppearance: "seamless" as const,
@@ -730,6 +1002,8 @@ inlineChromeGroup?.addEventListener("click", (event) => {
 // Streaming body groups all share the plain segmented-control behavior: swap
 // the active pill, then rebuild + apply the config live.
 for (const groupId of [
+  "artifact-tab-overflow",
+  "artifact-tab-fade",
   "artifact-streaming-view",
   "artifact-view-mode",
   "artifact-view-toggle",

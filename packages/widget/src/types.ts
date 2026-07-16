@@ -829,6 +829,10 @@ export type AgentWidgetArtifactsLayoutConfig = {
   showExpandToggle?: boolean;
   /** Show the copy control in the `default` toolbar preset (the `document` preset always shows it). Default: false. */
   showCopyButton?: boolean;
+  /** Edge fade on the scrollable tab strip. true = both ends (dynamic). @default true */
+  tabFade?: boolean | { start?: boolean; end?: boolean };
+  /** Tab fade width (CSS length). @default 24px */
+  tabFadeSize?: string;
   /**
    * Invoked when the document toolbar Refresh control is used (before the pane re-renders).
    * Use to replay `connectStream`, refetch, etc.
@@ -1048,6 +1052,19 @@ export type AgentWidgetArtifactsFeature = {
    * delegated, so they survive re-renders and page refresh.
    */
   inlineActions?: PersonaArtifactCustomAction[];
+  /**
+   * Replace the artifact tab strip entirely (Seam A). Return an element mounted in
+   * place of the built-in `.persona-artifact-list`; the pane still owns the toolbar,
+   * preview body, iframe reuse, and lazy-render gate. Re-invoked when the records or
+   * selection change. Custom bars own their own accessibility; use `createRovingTablist`
+   * to keep keyboard/tablist behavior. When set, the built-in strip (scroll, fade,
+   * tablist) is not rendered.
+   */
+  renderTabBar?: (ctx: {
+    records: PersonaArtifactRecord[];
+    selectedId: string | null;
+    onSelect: (id: string) => void;
+  }) => HTMLElement;
   /**
    * Body layout for inline artifact blocks (`display: "inline"`). Controls how
    * the block reserves height and behaves while a file/document artifact

@@ -223,6 +223,29 @@
           </div>
 
           <div class="info-section">
+            <h3>Tab bar</h3>
+            <p>Which tab bar the panel renders when there are more artifacts than fit. Scroll is the built-in default (a single accessible scroll strip with an edge fade). Buttons and Menu are host-provided reference bars, mounted via the <code>features.artifacts.renderTabBar</code> hook and kept accessible with the exported <code>createRovingTablist</code> helper: Buttons wraps the strip in chevron scroll controls, Menu adds a trailing dropdown of every artifact. Stream several artifacts (click a file button 5+ times) in Panel mode to see it overflow.</p>
+            <div class="section">
+              <div class="mode-group" id="artifact-tab-overflow">
+                <button type="button" class="mode-btn active" data-mode="scroll">Scroll</button>
+                <button type="button" class="mode-btn" data-mode="buttons">Buttons</button>
+                <button type="button" class="mode-btn" data-mode="menu">Menu</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Tab edge fade</h3>
+            <p>Directional edge fade on the built-in Scroll strip (<code>features.artifacts.layout.tabFade</code>). On (default) fades whichever edge has more tabs off-screen; Off shows a hard cut. Applies only to the Scroll bar; the custom Buttons and Menu bars own their own affordances.</p>
+            <div class="section">
+              <div class="mode-group" id="artifact-tab-fade">
+                <button type="button" class="mode-btn active" data-mode="on">On</button>
+                <button type="button" class="mode-btn" data-mode="off">Off</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-section">
             <h3>Custom actions</h3>
             <p>Add host-defined buttons to the artifact pane toolbar, the in-chat reference card, and the inline block chrome (<code>features.artifacts.toolbarActions</code>, <code>features.artifacts.cardActions</code>, and <code>features.artifacts.inlineActions</code>). The inline "Log" action shows up in the inline chrome title bar.</p>
             <div class="section">

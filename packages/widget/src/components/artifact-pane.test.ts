@@ -725,7 +725,7 @@ const twoFileRecords = (): PersonaArtifactRecord[] => [
 describe("artifact-pane tab edge fade", () => {
   beforeEach(() => {
     // Run the rAF-throttled scroll recompute synchronously for determinism.
-    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    vi.stubGlobal("requestAnimationFrame", (cb: (time: number) => void) => {
       cb(0);
       return 0;
     });
@@ -773,6 +773,175 @@ describe("artifact-pane tab edge fade", () => {
     pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
     expect(list.classList.contains("persona-artifact-tab-fade-start")).toBe(false);
     expect(list.classList.contains("persona-artifact-tab-fade-end")).toBe(false);
+  });
+});
+
+const fadeConfig = (tabFade: boolean | { start?: boolean; end?: boolean }): AgentWidgetConfig =>
+  ({
+    sanitize: false,
+    features: { artifacts: { enabled: true, layout: { tabFade } } },
+  }) as AgentWidgetConfig;
+
+describe("artifact-pane tabFade / tabFadeSize config", () => {
+  beforeEach(() => {
+    vi.stubGlobal("requestAnimationFrame", (cb: (time: number) => void) => {
+      cb(0);
+      return 0;
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("never adds either fade class when tabFade is false", () => {
+    const pane = createArtifactPane(fadeConfig(false), { onSelect: () => {} });
+    const list = listIn(pane);
+    setGeom(list, 400, 200, 0);
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
+    expect(list.classList.contains("persona-artifact-tab-fade-start")).toBe(false);
+    expect(list.classList.contains("persona-artifact-tab-fade-end")).toBe(false);
+    // Still false after a mid-scroll where the default config would show both.
+    setGeom(list, 400, 200, 100);
+    list.dispatchEvent(new Event("scroll"));
+    expect(list.classList.contains("persona-artifact-tab-fade-start")).toBe(false);
+    expect(list.classList.contains("persona-artifact-tab-fade-end")).toBe(false);
+  });
+
+  it("gates only the start edge when tabFade.start is false", () => {
+    const pane = createArtifactPane(fadeConfig({ start: false }), { onSelect: () => {} });
+    const list = listIn(pane);
+    // Mid-scroll: default would show both, but start is disabled.
+    setGeom(list, 400, 200, 100);
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
+    list.dispatchEvent(new Event("scroll"));
+    expect(list.classList.contains("persona-artifact-tab-fade-start")).toBe(false);
+    expect(list.classList.contains("persona-artifact-tab-fade-end")).toBe(true);
+    // At the far end the end fade also drops; start stays off.
+    setGeom(list, 400, 200, 200);
+    list.dispatchEvent(new Event("scroll"));
+    expect(list.classList.contains("persona-artifact-tab-fade-start")).toBe(false);
+    expect(list.classList.contains("persona-artifact-tab-fade-end")).toBe(false);
+  });
+
+  it("sets --persona-artifact-tab-fade-size from tabFadeSize", () => {
+    const pane = createArtifactPane(
+      {
+        sanitize: false,
+        features: { artifacts: { enabled: true, layout: { tabFadeSize: "32px" } } },
+      } as AgentWidgetConfig,
+      { onSelect: () => {} }
+    );
+    const list = listIn(pane);
+    expect(list.style.getPropertyValue("--persona-artifact-tab-fade-size")).toBe("32px");
+  });
+});
+
+describe("artifact-pane renderTabBar hook", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const renderBarConfig = (
+    renderTabBar: NonNullable<
+      NonNullable<AgentWidgetConfig["features"]>["artifacts"]
+    >["renderTabBar"]
+  ): AgentWidgetConfig =>
+    ({
+      sanitize: false,
+      features: { artifacts: { enabled: true, renderTabBar } },
+    }) as AgentWidgetConfig;
+
+  it("hides the built-in list and mounts the custom bar between toolbar and content", () => {
+    const bar = document.createElement("nav");
+    bar.className = "my-custom-bar";
+    const pane = createArtifactPane(renderBarConfig(() => bar), { onSelect: () => {} });
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
+
+    // Built-in strip exists but is hidden; the custom mount is shown.
+    const list = pane.element.querySelector(".persona-artifact-list") as HTMLElement;
+    expect(list.classList.contains("persona-hidden")).toBe(true);
+    // The custom bar is mounted inside the stable host.
+    const mount = pane.element.querySelector(".persona-artifact-tab-custom") as HTMLElement;
+    expect(mount).toBeTruthy();
+    expect(mount.classList.contains("persona-hidden")).toBe(false);
+    expect(mount.querySelector(".my-custom-bar")).toBe(bar);
+    // Order: toolbar, then the bar mount, then content.
+    const toolbar = pane.element.querySelector(".persona-artifact-toolbar");
+    const content = pane.element.querySelector(".persona-artifact-content");
+    const children = Array.from(pane.element.children);
+    expect(children.indexOf(toolbar as Element)).toBeLessThan(children.indexOf(mount));
+    expect(children.indexOf(mount)).toBeLessThan(children.indexOf(content as Element));
+  });
+
+  it("routes selection from the custom bar through onSelect", () => {
+    const selected: string[] = [];
+    const pane = createArtifactPane(
+      renderBarConfig((ctx) => {
+        const bar = document.createElement("div");
+        for (const r of ctx.records) {
+          const b = document.createElement("button");
+          b.textContent = r.id;
+          b.addEventListener("click", () => ctx.onSelect(r.id));
+          bar.appendChild(b);
+        }
+        return bar;
+      }),
+      { onSelect: (id) => selected.push(id) }
+    );
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
+
+    const mount = pane.element.querySelector(".persona-artifact-tab-custom") as HTMLElement;
+    const btns = Array.from(mount.querySelectorAll("button")) as HTMLButtonElement[];
+    btns[1].click();
+    expect(selected[selected.length - 1]).toBe("a2");
+  });
+
+  it("re-invokes the hook when records change but not on an identical re-render", () => {
+    let calls = 0;
+    const pane = createArtifactPane(
+      renderBarConfig((ctx) => {
+        calls += 1;
+        const bar = document.createElement("div");
+        bar.textContent = ctx.records.map((r) => r.id).join(",");
+        return bar;
+      }),
+      { onSelect: () => {} }
+    );
+
+    const [a1, a2] = twoFileRecords();
+    pane.update({ artifacts: [a1], selectedId: "a1" });
+    expect(calls).toBe(1);
+
+    // Identical re-render: same ids + selection, so the signature gate skips it.
+    pane.update({ artifacts: [a1], selectedId: "a1" });
+    expect(calls).toBe(1);
+
+    // Records changed: the hook re-runs.
+    pane.update({ artifacts: [a1, a2], selectedId: "a2" });
+    expect(calls).toBe(2);
+  });
+
+  it("swaps between the built-in strip and a custom bar via setRenderTabBar", () => {
+    // Starts on the built-in strip (no renderTabBar in config).
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({ artifacts: twoFileRecords(), selectedId: "a1" });
+    const list = pane.element.querySelector(".persona-artifact-list") as HTMLElement;
+    const mount = pane.element.querySelector(".persona-artifact-tab-custom") as HTMLElement;
+    expect(list.classList.contains("persona-hidden")).toBe(false);
+    expect(mount.classList.contains("persona-hidden")).toBe(true);
+
+    // Live switch to a custom bar: strip hides, custom mount shows and populates.
+    const bar = document.createElement("nav");
+    bar.className = "swapped-bar";
+    pane.setRenderTabBar(() => bar);
+    expect(list.classList.contains("persona-hidden")).toBe(true);
+    expect(mount.classList.contains("persona-hidden")).toBe(false);
+    expect(mount.querySelector(".swapped-bar")).toBe(bar);
+
+    // Live switch back to the built-in strip.
+    pane.setRenderTabBar(undefined);
+    expect(list.classList.contains("persona-hidden")).toBe(false);
+    expect(mount.classList.contains("persona-hidden")).toBe(true);
   });
 });
 

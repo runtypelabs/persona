@@ -17,6 +17,7 @@ import {
 import { renderLucideIcon } from "../utils/icons";
 import { createDropdownMenu, type DropdownMenuHandle } from "../utils/dropdown";
 import { createIconButton, createLabelButton, createToggleGroup } from "../utils/buttons";
+import { createRovingTablist } from "../utils/roving-tablist";
 
 export type ArtifactPaneApi = {
   element: HTMLElement;
@@ -32,6 +33,18 @@ export type ArtifactPaneApi = {
   setCopyButtonVisible: (visible: boolean) => void;
   /** Replace the toolbar custom-action list and re-render it; driven from the parent's config on every sync so live config updates apply. */
   setCustomActions: (actions: PersonaArtifactCustomAction[]) => void;
+  /** Update the tab-strip edge fade live; driven from the parent's config on every sync. */
+  setTabFade: (cfg: boolean | { start?: boolean; end?: boolean } | undefined) => void;
+  /** Swap the tab bar live between the built-in strip (undefined) and a host renderTabBar; driven from the parent's config on every sync. */
+  setRenderTabBar: (
+    fn:
+      | ((ctx: {
+          records: PersonaArtifactRecord[];
+          selectedId: string | null;
+          onSelect: (id: string) => void;
+        }) => HTMLElement)
+      | undefined
+  ) => void;
   /**
    * Explicit "the pane surface is shown to the user" signal from the host
    * (ui.ts), which owns the display-mode / expand / mobile-drawer routing.
@@ -62,6 +75,18 @@ export function createArtifactPane(
   const toolbarTitle = layout?.toolbarTitle ?? "Artifacts";
   const closeButtonLabel = layout?.closeButtonLabel ?? "Close";
   const panePadding = layout?.panePadding?.trim();
+
+  const tabFadeSize = layout?.tabFadeSize?.trim();
+  // Per-edge fade enablement is mutable so setTabFade can switch it live (the
+  // host re-reads config on every sync). false disables both edges; the object
+  // form gates each edge; true/undefined keeps both dynamic.
+  const resolveFade = (
+    cfg: boolean | { start?: boolean; end?: boolean } | undefined
+  ) => ({
+    start: cfg === false ? false : typeof cfg === "object" && cfg ? cfg.start !== false : true,
+    end: cfg === false ? false : typeof cfg === "object" && cfg ? cfg.end !== false : true,
+  });
+  let { start: fadeStartEnabled, end: fadeEndEnabled } = resolveFade(layout?.tabFade);
 
   const backdrop =
     typeof document !== "undefined"
@@ -336,16 +361,42 @@ export function createArtifactPane(
     "div",
     "persona-artifact-list persona-shrink-0 persona-flex persona-gap-1 persona-overflow-x-auto persona-p-2 persona-border-b persona-border-persona-border"
   );
-  list.setAttribute("role", "tablist");
+  if (tabFadeSize) {
+    list.style.setProperty("--persona-artifact-tab-fade-size", tabFadeSize);
+  }
+
+  // Seam A: a full tab-bar replacement. Both the built-in strip and a custom
+  // mount are always built so renderTabBar can switch live (the host re-reads
+  // config on every sync); render() shows the active one and hides the other.
+  let currentRenderTabBar = config.features?.artifacts?.renderTabBar;
+  // Stable host for the replacement bar, mounted where the strip goes; hidden
+  // until a custom bar is active.
+  const customBarMount = createElement(
+    "div",
+    "persona-artifact-tab-custom persona-shrink-0 persona-border-b persona-border-persona-border persona-hidden"
+  );
+
+  // Accessible tablist behavior for the built-in strip (roles, roving tabindex,
+  // Arrow/Home/End, focus survival). The host owns a11y for a custom bar.
+  const tablist = createRovingTablist(list, {
+    onSelect: (index) => options.onSelect(records[index].id),
+  });
 
   // Toggle the tab-strip edge fades from scroll position. RTL reports a negative
   // scrollLeft, so normalize against the max offset rather than trusting sign.
+  // Per-edge fade classes are gated by config.
   const updateTabFades = (el: HTMLElement) => {
     const max = el.scrollWidth - el.clientWidth;
     const overflow = max > 1;
     const offset = Math.abs(el.scrollLeft);
-    el.classList.toggle("persona-artifact-tab-fade-start", overflow && offset > 1);
-    el.classList.toggle("persona-artifact-tab-fade-end", overflow && offset < max - 1);
+    el.classList.toggle(
+      "persona-artifact-tab-fade-start",
+      fadeStartEnabled && overflow && offset > 1
+    );
+    el.classList.toggle(
+      "persona-artifact-tab-fade-end",
+      fadeEndEnabled && overflow && offset < max - 1
+    );
   };
   // rAF-throttle the scroll-driven fade recompute (falls back to setTimeout).
   let tabFadeRaf = 0;
@@ -371,13 +422,16 @@ export function createArtifactPane(
     "persona-artifact-content persona-flex-1 persona-min-h-0 persona-overflow-y-auto persona-p-3"
   );
   if (panePadding) {
-    list.style.paddingLeft = panePadding;
-    list.style.paddingRight = panePadding;
+    for (const el of [list, customBarMount]) {
+      el.style.paddingLeft = panePadding;
+      el.style.paddingRight = panePadding;
+    }
     content.style.padding = panePadding;
   }
 
   shell.appendChild(toolbar);
   shell.appendChild(list);
+  shell.appendChild(customBarMount);
   shell.appendChild(content);
 
   let records: PersonaArtifactRecord[] = [];
@@ -396,6 +450,9 @@ export function createArtifactPane(
   // selection actually changes (not on every streaming re-render), which would
   // otherwise fight a user who has scrolled the strip manually.
   let lastScrolledTabId: string | null = null;
+  // Signature of the last renderTabBar invocation (record ids + selection) so a
+  // streaming re-render with an unchanged bar does not tear down the host bar.
+  let customBarSig = "";
 
   // Shared preview body renderer (artifact-preview.ts). One handle serves the
   // whole content area; it is updated with whichever record is selected and
@@ -462,96 +519,71 @@ export function createArtifactPane(
   const render = () => {
     renderCustomActions();
     const hideTabs = documentChrome && records.length <= 1;
-    list.classList.toggle("persona-hidden", hideTabs);
+    const useCustom = Boolean(currentRenderTabBar);
+    // Show the active bar and hide the other; both hide in the ≤1 document case.
+    list.classList.toggle("persona-hidden", hideTabs || useCustom);
+    customBarMount.classList.toggle("persona-hidden", hideTabs || !useCustom);
 
-    // Selecting a tab re-renders the whole strip, so capture whether focus was
-    // inside it and restore focus to the new roving stop below. Without this,
-    // keyboard nav dies after one arrow (the focused tab node is destroyed).
-    const hadFocus =
-      typeof document !== "undefined" && list.contains(document.activeElement);
-
-    list.replaceChildren();
-    let activeTab: HTMLButtonElement | null = null;
-    const tabEls: HTMLButtonElement[] = [];
-    // Bring a focused/selected tab out from under the edge fade.
-    const revealTab = (tab: HTMLButtonElement) => {
-      if (typeof tab.scrollIntoView === "function") {
-        tab.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (useCustom && currentRenderTabBar) {
+      // Signature-gate so unrelated streaming re-renders don't tear down the
+      // host bar and lose its internal state or focus.
+      const sig = records.map((r) => r.id).join("|") + " " + (selectedId ?? "");
+      if (sig !== customBarSig) {
+        customBarSig = sig;
+        const bar = currentRenderTabBar({
+          records,
+          selectedId,
+          onSelect: options.onSelect,
+        });
+        customBarMount.replaceChildren(bar);
       }
-    };
-    // Arrow keys move selection one step (clamped at the ends); Home/End jump to
-    // the edges. Automatic activation routes through onSelect so the host owns
-    // selection state.
-    const onTabKeydown = (e: KeyboardEvent, index: number) => {
-      let next = index;
-      if (e.key === "ArrowRight") next = Math.min(index + 1, records.length - 1);
-      else if (e.key === "ArrowLeft") next = Math.max(index - 1, 0);
-      else if (e.key === "Home") next = 0;
-      else if (e.key === "End") next = records.length - 1;
-      else return;
-      e.preventDefault();
-      if (next === index) return;
-      // Selection re-renders the strip; the rebuild restores focus to the new
-      // selected tab (see `hadFocus` above), so just drive selection here.
-      options.onSelect(records[next].id);
-    };
-    for (const [index, r] of records.entries()) {
-      const tab = createElement(
-        "button",
-        "persona-artifact-tab persona-shrink-0 persona-rounded-lg persona-px-2 persona-py-1 persona-text-xs persona-border persona-border-transparent persona-text-persona-primary"
-      );
-      tab.type = "button";
-      tab.setAttribute("role", "tab");
-      // Prefer the file basename over the full path so tabs stay readable
-      // (matches the toolbar title); keep the full path/title in a tooltip.
-      const fileMeta = r.artifactType === "markdown" ? r.file : undefined;
-      const label = fileMeta ? basenameOf(fileMeta.path) : r.title || r.id.slice(0, 8);
-      const tooltip = fileMeta?.path || r.title || label;
-      tab.textContent = label;
-      tab.title = tooltip;
-      tab.setAttribute("aria-label", tooltip);
-      const selected = r.id === selectedId;
-      tab.setAttribute("aria-selected", selected ? "true" : "false");
-      // Roving tabindex: only the active tab is a tab stop.
-      tab.tabIndex = selected ? 0 : -1;
-      if (selected) {
-        tab.classList.add("persona-bg-persona-container", "persona-border-persona-border");
-        activeTab = tab;
+    } else {
+      // Capture focus before replacing tab DOM so the controller restores the
+      // roving stop after the rebuild (keyboard nav dies otherwise).
+      tablist.beforeRender();
+      list.replaceChildren();
+      const tabEls: HTMLButtonElement[] = [];
+      let selectedIndex = -1;
+      for (const [index, r] of records.entries()) {
+        const tab = createElement(
+          "button",
+          "persona-artifact-tab persona-shrink-0 persona-rounded-lg persona-px-2 persona-py-1 persona-text-xs persona-border persona-border-transparent persona-text-persona-primary"
+        );
+        tab.type = "button";
+        // Prefer the file basename over the full path so tabs stay readable
+        // (matches the toolbar title); keep the full path/title in a tooltip.
+        const fileMeta = r.artifactType === "markdown" ? r.file : undefined;
+        const label = fileMeta ? basenameOf(fileMeta.path) : r.title || r.id.slice(0, 8);
+        const tooltip = fileMeta?.path || r.title || label;
+        tab.textContent = label;
+        tab.title = tooltip;
+        tab.setAttribute("aria-label", tooltip);
+        if (r.id === selectedId) {
+          tab.classList.add("persona-bg-persona-container", "persona-border-persona-border");
+          selectedIndex = index;
+        }
+        tab.addEventListener("click", () => options.onSelect(r.id));
+        list.appendChild(tab);
+        tabEls.push(tab);
       }
-      tab.addEventListener("click", () => options.onSelect(r.id));
-      tab.addEventListener("keydown", (e) => onTabKeydown(e, index));
-      tab.addEventListener("focus", () => revealTab(tab));
-      list.appendChild(tab);
-      tabEls.push(tab);
-    }
-    // Nothing selected: the first tab is the roving stop.
-    if (!activeTab && tabEls.length > 0) {
-      tabEls[0].tabIndex = 0;
-    }
+      // The controller owns role/aria-selected/roving tabindex, keyboard nav,
+      // and focus restoration across this rebuild.
+      tablist.render(tabEls, selectedIndex);
 
-    // Restore focus to the roving stop after the rebuild so arrow-key nav
-    // continues to work across the selection re-render. Guarded by `hadFocus`
-    // so a background re-render (e.g. streaming) never steals focus.
-    if (hadFocus) {
-      const stop = activeTab ?? tabEls[0];
-      if (stop && typeof stop.focus === "function") {
-        revealTab(stop);
-        stop.focus();
+      // Keep the selected tab visible when the selection changes (e.g. a new
+      // artifact streams in and auto-selects). `inline: "nearest"` is a no-op
+      // when the tab is already visible, so this never yanks the strip needlessly.
+      if (selectedIndex >= 0 && selectedId !== lastScrolledTabId) {
+        lastScrolledTabId = selectedId;
+        const activeTab = tabEls[selectedIndex];
+        if (typeof activeTab.scrollIntoView === "function") {
+          activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
       }
-    }
 
-    // Keep the selected tab visible when the selection changes (e.g. a new
-    // artifact streams in and auto-selects). `inline: "nearest"` is a no-op
-    // when the tab is already visible, so this never yanks the strip needlessly.
-    if (activeTab && selectedId !== lastScrolledTabId) {
-      lastScrolledTabId = selectedId;
-      if (typeof activeTab.scrollIntoView === "function") {
-        activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
-      }
+      // Recompute the edge fades after tabs and the selection scroll settle.
+      updateTabFades(list);
     }
-
-    // Recompute the edge fades after tabs and the selection scroll settle.
-    updateTabFades(list);
 
     const sel =
       (selectedId && records.find((x) => x.id === selectedId)) ||
@@ -687,6 +719,23 @@ export function createArtifactPane(
     setCustomActions(actions: PersonaArtifactCustomAction[]) {
       customActionList = actions;
       renderCustomActions();
+    },
+    setTabFade(cfg: boolean | { start?: boolean; end?: boolean } | undefined) {
+      const resolved = resolveFade(cfg);
+      if (resolved.start === fadeStartEnabled && resolved.end === fadeEndEnabled) {
+        return;
+      }
+      fadeStartEnabled = resolved.start;
+      fadeEndEnabled = resolved.end;
+      updateTabFades(list);
+    },
+    setRenderTabBar(fn) {
+      if (fn === currentRenderTabBar) return;
+      currentRenderTabBar = fn;
+      // Force a custom-bar rebuild on the next render and re-render now so the
+      // switch (built-in <-> custom) applies live.
+      customBarSig = "";
+      render();
     },
     setVisible(next: boolean) {
       if (next === visible) return;
