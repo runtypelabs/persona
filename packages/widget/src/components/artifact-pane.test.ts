@@ -921,6 +921,36 @@ describe("artifact-pane renderTabBar hook", () => {
     expect(calls).toBe(2);
   });
 
+  it("does not remount a stable node returned across updates, preserving focus", () => {
+    // A renderer may return the SAME element every call (updating in place) to
+    // keep internal state. The pane must skip replaceChildren for an unchanged
+    // node; remounting detaches the subtree and would blur a focused child,
+    // breaking a custom bar's roving keyboard focus after one selection change.
+    const bar = document.createElement("div");
+    const child = document.createElement("button");
+    child.textContent = "tab";
+    bar.appendChild(child);
+    const pane = createArtifactPane(renderBarConfig(() => bar), {
+      onSelect: () => {},
+    });
+    document.body.appendChild(pane.element);
+    const [a1, a2] = twoFileRecords();
+    pane.update({ artifacts: [a1, a2], selectedId: "a1" });
+
+    const mount = pane.element.querySelector(
+      ".persona-artifact-tab-custom"
+    ) as HTMLElement;
+    expect(mount.firstElementChild).toBe(bar);
+    child.focus();
+    expect(document.activeElement).toBe(child);
+
+    // Selection changes: the hook re-runs and returns the same bar. Focus on the
+    // child must survive because the pane leaves the mounted node in place.
+    pane.update({ artifacts: [a1, a2], selectedId: "a2" });
+    expect(mount.firstElementChild).toBe(bar);
+    expect(document.activeElement).toBe(child);
+  });
+
   it("swaps between the built-in strip and a custom bar via setRenderTabBar", () => {
     // Starts on the built-in strip (no renderTabBar in config).
     const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });

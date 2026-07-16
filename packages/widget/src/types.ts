@@ -1059,6 +1059,12 @@ export type AgentWidgetArtifactsFeature = {
    * selection change. Custom bars own their own accessibility; use `createRovingTablist`
    * to keep keyboard/tablist behavior. When set, the built-in strip (scroll, fade,
    * tablist) is not rendered.
+   *
+   * Return either a fresh element per call, or the SAME element updated in place.
+   * Returning a stable element preserves internal state across selection changes:
+   * the pane skips remounting an unchanged node, so a roving tablist keeps keyboard
+   * focus on the selected tab (a fresh element per call drops focus and breaks
+   * Arrow-key nav). See the reference bars in `apps/web/src/artifact-demo.ts`.
    */
   renderTabBar?: (ctx: {
     records: PersonaArtifactRecord[];

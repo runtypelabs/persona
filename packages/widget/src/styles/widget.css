@@ -2761,6 +2761,15 @@
   background: var(--persona-artifact-tab-hover-bg, var(--persona-container, #f3f4f6));
 }
 
+/* Keyboard focus ring, themed to match cards/buttons instead of the UA default
+   (which varies by browser). Custom renderTabBar bars reuse .persona-artifact-tab,
+   so they inherit the same ring; give a scroll container enough padding that the
+   2px offset isn't clipped. */
+[data-persona-root] .persona-artifact-tab:focus-visible {
+  outline: 2px solid var(--persona-accent, #171717);
+  outline-offset: 2px;
+}
+
 /* Tab list container */
 [data-persona-root] .persona-artifact-list {
   background: var(--persona-artifact-tab-list-bg, transparent);

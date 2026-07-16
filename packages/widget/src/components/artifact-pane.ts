@@ -535,7 +535,14 @@ export function createArtifactPane(
           selectedId,
           onSelect: options.onSelect,
         });
-        customBarMount.replaceChildren(bar);
+        // A renderer may return the SAME element across invocations to keep its
+        // internal state (e.g. a roving tablist's keyboard focus on the selected
+        // tab). Only remount when the node actually changed; replaceChildren
+        // detaches the subtree, which would blur a focused tab and break arrow
+        // nav on every selection change.
+        if (customBarMount.firstElementChild !== bar) {
+          customBarMount.replaceChildren(bar);
+        }
       }
     } else {
       // Capture focus before replacing tab DOM so the controller restores the

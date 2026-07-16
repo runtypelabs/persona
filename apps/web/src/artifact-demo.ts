@@ -206,32 +206,71 @@ const buildTabButton = (
   return btn;
 };
 
-// Build a scrollable strip filled with tab buttons and wire the roving tablist.
-const buildTabStrip = (ctx: TabBarContext): HTMLElement => {
+// Memoize a build-once / update-per-call bar so renderTabBar returns a STABLE
+// element. The pane skips remounting an unchanged node, and that is what lets a
+// custom bar keep internal state (crucially, the roving tablist's keyboard focus)
+// across selection changes. Returning a fresh element every call re-mounts the
+// bar, blurs the focused tab, and breaks Arrow-key nav after the first press.
+const persistentBar = (
+  build: () => { bar: HTMLElement; update: (ctx: TabBarContext) => void },
+): TabBarRenderer => {
+  let inst: ReturnType<typeof build> | null = null;
+  return (ctx) => {
+    if (!inst) inst = build();
+    inst.update(ctx);
+    return inst.bar;
+  };
+};
+
+// A persistent scrollable strip + roving tablist controller. Reused across
+// renderTabBar calls: update() reconciles the tab buttons in place while
+// createRovingTablist restores keyboard focus to the selected tab after the
+// rebuild. Mirrors how the built-in strip persists its .persona-artifact-list
+// element and only ever replaces its children.
+type StripController = {
+  strip: HTMLElement;
+  update: (ctx: TabBarContext) => void;
+};
+const createTabStrip = (): StripController => {
   const strip = document.createElement("div");
   // Own layout: horizontal scroll, no wrap, hidden native scrollbar (the bar
   // provides its own overflow affordance).
+  //
+  // overflow-x:auto forces overflow-y to clip, so the strip's box would cut off
+  // a focused tab's outline (2px ring + 2px offset). Pad the scroll container by
+  // more than that ring and pull it back with an equal negative margin: the clip
+  // box gains room for the ring on all sides while the visible height, gaps, and
+  // tab positions stay put. (The built-in strip gets this for free from its p-2.)
   strip.style.cssText =
-    "display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none;scroll-behavior:smooth;";
+    "display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none;scroll-behavior:smooth;padding:6px;margin:-6px;";
+  // The controller lives as long as the strip, so its delegated keydown/focusin
+  // listeners survive every button rebuild; onSelect/records read the latest ctx.
+  let records: PersonaArtifactRecord[] = [];
+  let onSelect: (id: string) => void = () => {};
   const tablist = createRovingTablist(strip, {
-    onSelect: (i) => ctx.onSelect(ctx.records[i].id),
+    onSelect: (i) => onSelect(records[i].id),
   });
-  // beforeRender() snapshots focus so the controller restores the roving stop
-  // after we replace the tab DOM (keyboard nav dies otherwise).
-  tablist.beforeRender();
-  const tabEls: HTMLElement[] = [];
-  let selectedIndex = -1;
-  ctx.records.forEach((r, index) => {
-    const active = r.id === ctx.selectedId;
-    if (active) selectedIndex = index;
-    const btn = buildTabButton(r, active);
-    // The controller handles keyboard selection; pointer selection is ours.
-    btn.addEventListener("click", () => ctx.onSelect(r.id));
-    strip.appendChild(btn);
-    tabEls.push(btn);
-  });
-  tablist.render(tabEls, selectedIndex);
-  return strip;
+  const update = (ctx: TabBarContext): void => {
+    records = ctx.records;
+    onSelect = ctx.onSelect;
+    // beforeRender() snapshots focus so the controller restores the roving stop
+    // after we replace the tab DOM (keyboard nav dies otherwise).
+    tablist.beforeRender();
+    strip.replaceChildren();
+    const tabEls: HTMLElement[] = [];
+    let selectedIndex = -1;
+    ctx.records.forEach((r, index) => {
+      const active = r.id === ctx.selectedId;
+      if (active) selectedIndex = index;
+      const btn = buildTabButton(r, active);
+      // The controller handles keyboard selection; pointer selection is ours.
+      btn.addEventListener("click", () => ctx.onSelect(r.id));
+      strip.appendChild(btn);
+      tabEls.push(btn);
+    });
+    tablist.render(tabEls, selectedIndex);
+  };
+  return { strip, update };
 };
 
 // A chevron scroll button; hidden until its edge overflows.
@@ -251,7 +290,7 @@ const createChevron = (dir: "left" | "right"): HTMLButtonElement => {
 // Buttons bar: [chevron-left][scrollable strip][chevron-right]. The chevrons
 // scroll the strip by ~80% of its visible width and only appear when that edge
 // has hidden tabs.
-const createButtonsTabBar: TabBarRenderer = (ctx) => {
+const createButtonsTabBar: TabBarRenderer = persistentBar(() => {
   const bar = document.createElement("div");
   // Match the built-in strip's persona-p-2 (8px all sides) so tabs and chevrons
   // align with the toolbar controls above.
@@ -260,7 +299,7 @@ const createButtonsTabBar: TabBarRenderer = (ctx) => {
 
   const leftBtn = createChevron("left");
   const rightBtn = createChevron("right");
-  const strip = buildTabStrip(ctx);
+  const { strip, update } = createTabStrip();
 
   const updateChevrons = (): void => {
     const maxScroll = strip.scrollWidth - strip.clientWidth;
@@ -277,15 +316,21 @@ const createButtonsTabBar: TabBarRenderer = (ctx) => {
   const scrollStep = (dir: number): void => {
     strip.scrollBy({ left: dir * strip.clientWidth * 0.8, behavior: "smooth" });
   };
+  // Built once; the strip element and its listeners persist across updates.
   leftBtn.addEventListener("click", () => scrollStep(-1));
   rightBtn.addEventListener("click", () => scrollStep(1));
   strip.addEventListener("scroll", updateChevrons);
-  // Measure after the bar is in the DOM.
-  requestAnimationFrame(updateChevrons);
 
   bar.append(leftBtn, strip, rightBtn);
-  return bar;
-};
+  return {
+    bar,
+    update: (ctx) => {
+      update(ctx);
+      // Re-measure after the buttons are reconciled and laid out.
+      requestAnimationFrame(updateChevrons);
+    },
+  };
+});
 
 // Menu item styles. Hover/focus need real CSS pseudo-classes (inline styles
 // cannot express :hover, and a JS mouseenter approach misses keyboard focus), so
@@ -311,14 +356,14 @@ const MENU_ITEM_CSS = `
 // dropdown listing every artifact by basename. Kept intentionally simple: a
 // jump-list of ALL artifacts. A host could instead show only the overflowing
 // tabs with a "+N" count.
-const createMenuTabBar: TabBarRenderer = (ctx) => {
+const createMenuTabBar: TabBarRenderer = persistentBar(() => {
   const bar = document.createElement("div");
   // Match the built-in strip's persona-p-2 (8px all sides) so tabs and the menu
   // button align with the toolbar controls above.
   bar.style.cssText =
     "display:flex;align-items:center;gap:4px;padding:8px;min-width:0;position:relative;";
 
-  const strip = buildTabStrip(ctx);
+  const { strip, update: updateStrip } = createTabStrip();
 
   // Icon-only "more" button; aria-label carries the accessible name since the
   // glyph alone conveys nothing to a screen reader.
@@ -369,28 +414,36 @@ const createMenuTabBar: TabBarRenderer = (ctx) => {
     else closeMenu();
   });
 
-  ctx.records.forEach((r) => {
-    const active = r.id === ctx.selectedId;
-    const item = document.createElement("button");
-    item.type = "button";
-    item.setAttribute("role", "menuitem");
-    item.className = "demo-tab-menu-item";
-    if (active) item.setAttribute("aria-current", "true");
-    const { label, tooltip } = tabLabelOf(r);
-    item.textContent = label;
-    item.title = tooltip;
-    item.addEventListener("click", () => {
-      ctx.onSelect(r.id);
-      closeMenu();
-    });
-    menu.appendChild(item);
-  });
-
   const style = document.createElement("style");
   style.textContent = MENU_ITEM_CSS;
   bar.append(strip, menuBtn, menu, style);
-  return bar;
-};
+
+  return {
+    bar,
+    update: (ctx) => {
+      updateStrip(ctx);
+      // Rebuild the jump-list from the current records. Menu items don't hold
+      // the roving focus (the strip does), so a full rebuild is safe; the open
+      // state is untouched so a mid-stream tab addition doesn't dismiss the menu.
+      const items = ctx.records.map((r) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.setAttribute("role", "menuitem");
+        item.className = "demo-tab-menu-item";
+        if (r.id === ctx.selectedId) item.setAttribute("aria-current", "true");
+        const { label, tooltip } = tabLabelOf(r);
+        item.textContent = label;
+        item.title = tooltip;
+        item.addEventListener("click", () => {
+          ctx.onSelect(r.id);
+          closeMenu();
+        });
+        return item;
+      });
+      menu.replaceChildren(...items);
+    },
+  };
+});
 
 // Select the custom bar for the current overflow mode; Scroll returns undefined
 // so the pane keeps its built-in strip.
