@@ -1,9 +1,0 @@
----
-"@runtypelabs/persona": minor
----
-
-Panel and seamless artifact splits now render as one welded card. In the desktop side-by-side layout, the card border and radius wrap the chat column and the artifact pane together (the border moves onto the outer panel, which already carried the union radius and shadow), instead of bordering only the chat column and leaving the pane as a naked glued-on slot. `panel` shows a hairline divider on the pane's chat-facing edge; `seamless` shows no internal chrome at all. The default 0.5rem split gap and the faint pane left shadow are removed for these appearances (both weld at gap 0). `detached` is unchanged (two separate elevated cards with the page showing through the gap). Narrow-host drawer and mobile fullscreen are unchanged. An explicit `splitGap`, `paneBorder`, `paneBorderLeft`, or `paneShadow` still overrides the welded defaults.
-
-`unifiedSplitChrome` is now deprecated and a no-op: welding is the default for panel and seamless, so the option no longer changes rendering (and no longer warns when combined with `detached`). `unifiedSplitOuterRadius` is still honored as an override of the pane's outer-right corner radius; when unset, the welded outer corners now derive from the same resolved panel radius as the chat card, so a custom `components.panel.borderRadius` stays symmetric across the card.
-
-The welded chrome now stands down whenever the widget is in mobile fullscreen, including a fullscreen driven by a custom `launcher.mobileBreakpoint` above 640px, so a fullscreen panel no longer paints welded corner radii onto its flush layout. A docked widget with a welded split keeps a dock-facing hairline against the host page, and an explicit nonzero `splitGap` is now honored geometrically in welded splits (resize clamps and the seam handle account for the gap).

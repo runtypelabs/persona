@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.8.0
+
+### Minor Changes
+
+- ea30232: Add a server-pinned analytics assistant agent for browser-local SQL and Flint chart demos.
+
 ## 4.7.0
 
 ### Minor Changes
