@@ -39,6 +39,7 @@ const wireFor = (raw: string, lang: string): string =>
 const makeConfig = (filePreview?: {
   enabled?: boolean;
   iframeSandbox?: string;
+  dangerouslyAllowSameOrigin?: boolean;
   loading?:
     | boolean
     | {
@@ -216,6 +217,38 @@ describe("artifact-preview file body", () => {
     });
     const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
     expect(iframe.getAttribute("sandbox")).toBe("allow-scripts allow-forms");
+  });
+
+  it("strips allow-same-origin from iframeSandbox and warns", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const handle = renderArtifactPreviewBody(fileRecord(), {
+        config: makeConfig({ iframeSandbox: "allow-scripts allow-same-origin" }),
+      });
+      const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
+      expect(iframe.getAttribute("sandbox")).toBe("allow-scripts");
+      expect(warn).toHaveBeenCalledOnce();
+      expect(warn.mock.calls[0][0]).toContain("allow-same-origin");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("keeps allow-same-origin when dangerouslyAllowSameOrigin is set", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const handle = renderArtifactPreviewBody(fileRecord(), {
+        config: makeConfig({
+          iframeSandbox: "allow-scripts allow-same-origin",
+          dangerouslyAllowSameOrigin: true,
+        }),
+      });
+      const iframe = handle.el.querySelector("iframe") as HTMLIFrameElement;
+      expect(iframe.getAttribute("sandbox")).toBe("allow-scripts allow-same-origin");
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("forces source view (no iframe) when filePreview.enabled is false", () => {

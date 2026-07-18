@@ -967,10 +967,18 @@ export type AgentWidgetArtifactsFeature = {
     enabled?: boolean;
     /**
      * `sandbox` attribute for the preview iframe. Defaults to `"allow-scripts"`.
-     * Never include `allow-same-origin` unless you fully trust the file source:
-     * the opaque origin is what isolates the preview. Embedder-trusted config.
+     * `allow-same-origin` is stripped (with a console warning) unless
+     * `dangerouslyAllowSameOrigin` is set: the opaque origin is what isolates
+     * the preview from the host page. Embedder-trusted config.
      */
     iframeSandbox?: string;
+    /**
+     * Allows `allow-same-origin` to pass through `iframeSandbox`. Off by
+     * default because it lets agent-written file content run with the host
+     * page's origin (DOM, storage, credentialed requests). Only set this when
+     * every previewed file source is fully trusted.
+     */
+    dangerouslyAllowSameOrigin?: boolean;
     /**
      * Loading treatment for the preview iframe. Default on.
      *

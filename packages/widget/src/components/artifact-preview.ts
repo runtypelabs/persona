@@ -872,7 +872,18 @@ export function renderArtifactPreviewBody(
         el.replaceChildren();
 
         const fp = config.features?.artifacts?.filePreview;
-        const sandbox = fp?.iframeSandbox ?? "allow-scripts";
+        // allow-same-origin would give agent-written srcdoc content the host
+        // page's origin; require the explicit dangerouslyAllowSameOrigin flag.
+        let sandbox = fp?.iframeSandbox ?? "allow-scripts";
+        if (!fp?.dangerouslyAllowSameOrigin && sandbox.includes("allow-same-origin")) {
+          console.warn(
+            "[AgentWidget] Stripped allow-same-origin from filePreview.iframeSandbox: it lets artifact content run with the page origin. Set filePreview.dangerouslyAllowSameOrigin to keep it."
+          );
+          sandbox = sandbox
+            .split(/\s+/)
+            .filter((token) => token && token !== "allow-same-origin")
+            .join(" ");
+        }
         const loadingOpts = resolvePreviewLoading(fp?.loading);
 
         // Positioned wrapper hosts the iframe + the (absolute) loading overlay;
