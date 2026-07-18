@@ -460,9 +460,6 @@ importers:
       partial-json:
         specifier: ^0.1.7
         version: 0.1.7
-      zod:
-        specifier: ^3.22.4
-        version: 3.25.76
     devDependencies:
       '@size-limit/file':
         specifier: ^12.1.0

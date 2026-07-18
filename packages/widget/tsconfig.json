@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2019",
+    "target": "ES2020",
     "module": "ES2020",
     "moduleResolution": "Node",
     "strict": true,
@@ -8,7 +8,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "lib": ["ES2019", "DOM"],
+    "lib": ["ES2020", "DOM"],
     "baseUrl": ".",
     "paths": {
       "@runtypelabs/persona": ["src"]
