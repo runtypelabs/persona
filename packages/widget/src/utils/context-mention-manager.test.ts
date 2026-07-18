@@ -58,6 +58,12 @@ describe("ContextMentionManager", () => {
     expect(bundle.blocks).toEqual(["```App.tsx\nFILE BODY\n```"]);
   });
 
+  it("shows the context row on the first add (visibility computed after tracking)", () => {
+    const { manager, contextRow, source } = makeManager();
+    expect(manager.add(source, item("App.tsx"))).toBe(true);
+    expect(contextRow.style.display).toBe("flex");
+  });
+
   it("formats multiple mentions in order via llmFormat, numbering document blocks 1-based", async () => {
     const { manager } = makeManager({ llmFormat: "document" });
     const source: AgentWidgetContextMentionSource = {

@@ -138,8 +138,10 @@ export class ContextMentionManager {
       onRemove: () => this.remove(key),
     });
     this.opts.contextRow.appendChild(pending.chip.el);
-    this.updateRowVisibility();
+    // startPending pushes into this.mentions, which updateRowVisibility reads —
+    // reversed order left the row hidden until the second chip.
     this.startPending(pending);
+    this.updateRowVisibility();
     return true;
   }
 
