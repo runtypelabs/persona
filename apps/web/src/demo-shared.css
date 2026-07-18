@@ -573,7 +573,6 @@ a {
   background: var(--paper);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
@@ -1251,7 +1250,6 @@ body.demo-code-active [data-persona-root] { display: none; }
   background: var(--paper);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 .panel-header {

@@ -115,8 +115,8 @@ const FEATURED_DEMOS: readonly CommandPaletteItem[] = [
     title: "Docked Panel",
     href: "/docked-panel-demo.html",
     section: "Featured demos",
-    subtitle: "A dashboard copilot docked to the side of the page.",
-    keywords: ["docked", "dashboard", "layout", "webmcp"],
+    subtitle: "A dashboard copilot docked to the side of the page, flush or as a detached card.",
+    keywords: ["docked", "dashboard", "layout", "webmcp", "detached", "inset", "card"],
   },
   {
     id: "featured:fullscreen",

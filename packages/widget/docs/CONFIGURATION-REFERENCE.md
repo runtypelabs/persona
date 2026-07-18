@@ -642,10 +642,11 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `paneAppearance` | `'panel' \| 'seamless'?` | `panel` (default), bordered sidebar with left border, gap, and shadow. `seamless`, flush with chat: no border or shadow, container background, zero gap (with `resizable`, the drag handle overlays the seam). |
 | `paneBorderRadius` | `string?` | Border radius on the artifact pane. Works with any `paneAppearance`. |
 | `paneShadow` | `string?` | CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow. |
+| `chatShadow` | `string?` | CSS `box-shadow` on the chat column card in a detached split. Defaults to the same elevation as the artifact pane; set `"none"` to keep the chat flat while the pane stays raised. |
 | `paneBorder` | `string?` | Full CSS `border` shorthand on the artifact pane (e.g. `"1px solid #cccccc"`). Overrides default/`rounded` borders. If set, `paneBorderLeft` is ignored. |
 | `paneBorderLeft` | `string?` | `border-left` shorthand only: typical for the split edge next to chat (works with or without `resizable`). Example: `"1px solid #cccccc"`. |
-| `unifiedSplitChrome` | `boolean?` | Desktop split only: square the main chat card’s **top-right / bottom-right** radii and round the artifact pane’s **top-right / bottom-right** to match the panel (`--persona-radius-lg`) so both columns read as one shell. |
-| `unifiedSplitOuterRadius` | `string?` | Outer-right radius on the artifact side when `unifiedSplitChrome` is true. If omitted, uses `--persona-radius-lg`, or `paneBorderRadius` when `paneAppearance: 'rounded'`. |
+| `unifiedSplitChrome` | `boolean?` | **Deprecated no-op.** `panel` and `seamless` splits now weld into one card by default (the border and radius wrap chat + pane on the outer panel, and each column rounds only its outer corners). This flag no longer does anything. |
+| `unifiedSplitOuterRadius` | `string?` | Desktop welded split only: override the artifact pane’s **outer-right** corner radius. If omitted, it matches the resolved panel radius (`--persona-panel-radius`, which follows `components.panel.borderRadius`), the same value the chat card’s left corners use. |
 
 ### State & Storage
 

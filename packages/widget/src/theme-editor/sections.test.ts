@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { COMPONENTS_SECTIONS, CONFIGURE_SECTIONS, INTERFACE_ROLES_SECTION } from "./sections";
+import { COMPONENTS_SECTIONS, CONFIGURE_SECTIONS, INTERFACE_ROLES_SECTION, STYLE_SECTIONS } from "./sections";
 import { ALL_ROLES } from "./role-mappings";
 
 describe("theme editor scroll-to-bottom controls", () => {
@@ -44,6 +44,14 @@ describe("theme editor scroll-to-bottom controls", () => {
     expect(fieldPaths).toContain("theme.components.composer.shadow");
   });
 
+  it("exposes detached panel token controls", () => {
+    const componentPaths = COMPONENTS_SECTIONS.flatMap((section) => section.fields.map((field) => field.path));
+    const stylePaths = STYLE_SECTIONS.flatMap((section) => section.fields.map((field) => field.path));
+
+    expect(componentPaths).toContain("theme.components.panel.inset");
+    expect(stylePaths).toContain("theme.components.panel.canvasBackground");
+  });
+
   it("adds a scroll-to-bottom interface role mapping", () => {
     const role = ALL_ROLES.find((entry) => entry.roleId === "role-scroll-to-bottom");
 
@@ -76,6 +84,14 @@ describe("theme editor scroll-to-bottom controls", () => {
 
     expect(paths).toContain("features.artifacts.layout.toolbarTitle");
     expect(paths).toContain("features.artifacts.layout.closeButtonLabel");
+
+    // The deprecated no-op unifiedSplitChrome control is gone (welding is now default).
+    expect(paths).not.toContain("features.artifacts.layout.unifiedSplitChrome");
+    // Split gap defaults to the welded 0, not the old 0.5rem.
+    const splitGap = section?.fields.find(
+      (field) => field.path === "features.artifacts.layout.splitGap"
+    );
+    expect(splitGap?.defaultValue).toBe("0");
   });
 
   it("exposes collapsed reasoning preview controls", () => {

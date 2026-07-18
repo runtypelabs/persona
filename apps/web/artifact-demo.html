@@ -202,11 +202,34 @@
 
           <div class="info-section">
             <h3>Pane appearance</h3>
-            <p>Visual treatment for the artifact column in split mode (<code>features.artifacts.layout.paneAppearance</code>). <code>panel</code> is the bordered sidebar with gap and shadow; <code>seamless</code> is flush with chat (zero gap, no shadow).</p>
+            <p>Visual treatment for the artifact column in a desktop split (<code>features.artifacts.layout.paneAppearance</code>). <code>panel</code> is one card with a hairline divider between chat and the artifact pane; <code>seamless</code> is one card with no divider; <code>detached</code> floats chat and the pane as separate elevated cards, with the split gap widening to the panel inset token, corners rounding on all sides, and the page canvas showing through the gap. Detached is also the automatic default when the chat panel itself is detached (<code>launcher.detachedPanel</code>). In a detached split, the Chat surface control below can render the chat flat and flush so only the artifact pane floats.</p>
             <div class="section">
               <div class="mode-group" id="artifact-pane-appearance">
                 <button type="button" class="mode-btn active" data-mode="panel">Panel</button>
                 <button type="button" class="mode-btn" data-mode="seamless">Seamless</button>
+                <button type="button" class="mode-btn" data-mode="detached">Detached</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Chat surface</h3>
+            <p>Chat treatment for the Detached pane appearance (<code>features.artifacts.layout.chatSurface</code>). Card (the default) renders the chat as its own inset card matching the artifact pane; Flush renders the chat flat on the page so only the artifact pane floats as a card, the reference look. Flush is a steady state: the chat stays flat whether or not an artifact is open. Switch the view to Inline to see it.</p>
+            <div class="section">
+              <div class="mode-group" id="artifact-chat-surface">
+                <button type="button" class="mode-btn active" data-mode="card">Card</button>
+                <button type="button" class="mode-btn" data-mode="flush">Flush</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3>Detached framing</h3>
+            <p>Where the screen-edge margin comes from. On artifact open pairs with the Detached pane appearance, so the margin appears only once a detached split opens (<code>features.artifacts.layout.paneAppearance: "detached"</code>); Always keeps the whole widget inset even when idle, under any pane appearance (<code>launcher.detachedPanel</code>). Switch the view to Inline to see it.</p>
+            <div class="section">
+              <div class="mode-group" id="artifact-detached-framing">
+                <button type="button" class="mode-btn active" data-mode="on-open">On artifact open</button>
+                <button type="button" class="mode-btn" data-mode="always">Always</button>
               </div>
             </div>
           </div>

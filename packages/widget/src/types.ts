@@ -728,7 +728,13 @@ export type AgentWidgetControllerEventMap = {
  * new artifact content arrives or the host calls `showArtifacts()` on the widget handle.
  */
 export type AgentWidgetArtifactsLayoutConfig = {
-  /** Flex gap between chat column and artifact pane. @default 0.5rem */
+  /**
+   * Flex gap between chat column and artifact pane.
+   * @default 0 (welded); detached uses the panel inset
+   * @remarks In welded appearances (`panel` / `seamless`) a nonzero gap opens a
+   * visible seam in the single card. It is honored geometrically (resize clamps
+   * and the seam handle account for it) but is usually undesired.
+   */
   splitGap?: string;
   /** Artifact column width in split mode. @default 40% */
   paneWidth?: string;
@@ -759,16 +765,39 @@ export type AgentWidgetArtifactsLayoutConfig = {
   /** Optional max artifact width cap while resizing (`px` only). Layout still bounds by chat min width. */
   resizableMaxWidth?: string;
   /**
-   * Visual treatment for the artifact column in split mode.
-   * - `'panel'`: bordered sidebar with left border, gap, and shadow (default).
-   * - `'seamless'`: flush with chat: no border or shadow, container background, zero gap.
+   * Visual treatment for the artifact column in a desktop split.
+   * - `'panel'`: one welded card (border + radius wrap chat + pane) with a hairline
+   *   divider on the pane's chat-facing edge, zero gap (default).
+   * - `'seamless'`: the same welded card with no internal divider or chrome, zero gap.
+   * - `'detached'`: two separate elevated cards: gap from `--persona-panel-inset`,
+   *   all-side border and radius on each, and canvas background behind the split.
+   *   In an inline embed this also insets the split from the container edges on all
+   *   sides (the page canvas shows through), so the all-side margin no longer requires
+   *   `launcher.detachedPanel`.
+   *
+   * Default is `'panel'` unless `launcher.detachedPanel` is true, in which case an unset
+   * `paneAppearance` resolves to `'detached'`. An explicit value always wins.
    * @default 'panel'
    */
-  paneAppearance?: "panel" | "seamless";
+  paneAppearance?: "panel" | "seamless" | "detached";
   /** Border radius on the artifact pane (CSS length). Works with any `paneAppearance`. */
   paneBorderRadius?: string;
   /** CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow. */
   paneShadow?: string;
+  /**
+   * CSS `box-shadow` for the chat column card in a detached split. Defaults to the same
+   * elevation as the artifact pane; set to `"none"` to keep the chat flat while the pane stays raised.
+   */
+  chatShadow?: string;
+  /**
+   * Chat column surface in a detached split. `"card"` (default) renders the chat as an inset card
+   * matching the artifact pane; `"flush"` renders the chat flush with the container (no border, radius,
+   * or shadow) and insets only the artifact pane, so the chat is flat background and the pane floats.
+   * Only affects an inline-embedded detached split (the container-filling case); in floating, docked,
+   * or sidebar modes it falls back to the card look.
+   * @default 'card'
+   */
+  chatSurface?: "card" | "flush";
   /**
    * Full `border` shorthand for the artifact `<aside>` (all sides). Overrides default pane borders.
    * Example: `"1px solid #cccccc"`.
@@ -780,14 +809,12 @@ export type AgentWidgetArtifactsLayoutConfig = {
    */
   paneBorderLeft?: string;
   /**
-   * Desktop split only (not narrow-host drawer / not ≤640px): square the **main chat card’s**
-   * top-right and bottom-right radii, and round the **artifact pane’s** top-right and bottom-right
-   * to match `persona-rounded-2xl` (`--persona-radius-lg`) so the two columns read as one shell.
+   * @deprecated No-op. Panel and seamless splits now weld into one card by default.
    */
   unifiedSplitChrome?: boolean;
   /**
-   * When `unifiedSplitChrome` is true, outer-right corner radius on the artifact column (CSS length).
-   * @default matches theme large radius (`--persona-radius-lg`)
+   * Desktop welded split only: override the artifact pane's outer-right corner radius (CSS length).
+   * @default matches the panel radius (`--persona-panel-radius`)
    */
   unifiedSplitOuterRadius?: string;
   /**
@@ -2155,6 +2182,24 @@ export type AgentWidgetLauncherConfig = {
    * @default false
    */
   sidebarMode?: boolean;
+  /**
+   * When true, the widget panel renders as a detached card inset within its region,
+   * with rounded corners on all sides and elevation (shadow plus hairline border),
+   * instead of sitting flush against the region edges.
+   *
+   * The gap around the card is themed via `theme.components.panel.inset`. The
+   * background revealed behind it is themed via `theme.components.panel.canvasBackground`
+   * in docked and inline embed modes. In sidebar mode the gap stays click-through, so the
+   * host page shows through it the same way it does in floating mode, and canvasBackground
+   * is a no-op there.
+   *
+   * Applies to sidebar, docked, and inline embed modes. Ignored in mobile fullscreen,
+   * where chrome is already suppressed. Floating mode is unchanged, since it already
+   * renders as a detached card.
+   *
+   * @default false
+   */
+  detachedPanel?: boolean;
   /**
    * Width of the sidebar panel when sidebarMode is true.
    * @default "420px"

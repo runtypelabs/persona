@@ -109,10 +109,15 @@ function buildOttoTheme() {
         },
       },
     },
-    components: {
-      panel: { borderRadius: "0" },
-      header: { borderRadius: "0" },
-    },
+    components: detachedCheck.checked
+      ? // Detached card: keep the theme's rounded defaults so the inset card
+        // reads as elevated; header still squares against the container clip.
+        { header: { borderRadius: "0" } }
+      : // Flush dock: zero radius so the panel sits cleanly against the admin edge.
+        {
+          panel: { borderRadius: "0" },
+          header: { borderRadius: "0" },
+        },
   };
 }
 
@@ -160,12 +165,21 @@ const dockSideSelect = document.getElementById("dock-side") as HTMLSelectElement
 const dockWidthInput = document.getElementById("dock-width") as HTMLInputElement | null;
 const dockRevealSelect = document.getElementById("dock-reveal") as HTMLSelectElement | null;
 const dockAnimateCheck = document.getElementById("dock-animate") as HTMLInputElement | null;
+const dockDetachedCheck = document.getElementById("dock-detached") as HTMLInputElement | null;
 const applyDockBtn = document.getElementById("apply-dock-settings") as HTMLButtonElement | null;
 const toggleBtn = document.getElementById("assistant-toggle") as HTMLButtonElement | null;
 const dockStatus = document.getElementById("dock-status");
 const workspaceMainEl = document.getElementById("workspace-main");
 
-if (!dockSideSelect || !dockWidthInput || !dockRevealSelect || !dockAnimateCheck || !applyDockBtn || !toggleBtn) {
+if (
+  !dockSideSelect ||
+  !dockWidthInput ||
+  !dockRevealSelect ||
+  !dockAnimateCheck ||
+  !dockDetachedCheck ||
+  !applyDockBtn ||
+  !toggleBtn
+) {
   throw new Error("Docked demo controls are missing");
 }
 
@@ -173,6 +187,7 @@ const sideSelect = dockSideSelect;
 const widthInput = dockWidthInput;
 const revealSelect = dockRevealSelect;
 const animateCheck = dockAnimateCheck;
+const detachedCheck = dockDetachedCheck;
 const assistantToggle = toggleBtn;
 
 type DockRevealOption = "resize" | "emerge" | "overlay" | "push";
@@ -199,6 +214,7 @@ function getDemoLauncher() {
     ...DEFAULT_WIDGET_CONFIG.launcher,
     mountMode: "docked" as const,
     dock: getDockConfig(),
+    detachedPanel: detachedCheck.checked,
     autoExpand: false,
     fullHeight: true,
     // Below the same breakpoint used by the demo chrome, Otto takes over the
@@ -225,7 +241,8 @@ function formatDockOptionsLine(dock: ReturnType<typeof getDockConfig>): string {
           ? "overlay transform"
           : "push track transform";
   const animHint = dock.animate ? "transition on" : "transition off (snap)";
-  return `reveal: ${dock.reveal} (${revealHint}) · animate: ${animHint}`;
+  const detachedHint = detachedCheck.checked ? " · detached card" : "";
+  return `reveal: ${dock.reveal} (${revealHint}) · animate: ${animHint}${detachedHint}`;
 }
 
 function syncToggleUi(): void {
@@ -306,7 +323,8 @@ function bindControllerEvents(): void {
 
 function applyDockSettings(): void {
   syncWorkspaceMainDockSide();
-  controller.update({ launcher: getDemoLauncher() });
+  // Theme rides along: the detached toggle swaps the panel radius overrides.
+  controller.update({ launcher: getDemoLauncher(), theme: buildOttoTheme() });
   updateStatus("Layout updated.");
 }
 

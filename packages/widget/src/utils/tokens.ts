@@ -13,6 +13,11 @@ import {
   DEFAULT_FLOATING_LAUNCHER_WIDTH,
 } from '../defaults';
 
+// Detached/docked panel defaults, shared by the panel token defaults, the alias
+// fallbacks below, host-layout, the theme editor, and the artifact gate.
+export const DEFAULT_PANEL_INSET = '16px';
+export const DEFAULT_PANEL_CANVAS_BACKGROUND = 'transparent';
+
 export const DEFAULT_PALETTE = {
   colors: {
     primary: {
@@ -287,6 +292,8 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     maxHeight: 'calc(100vh - 80px)',
     borderRadius: 'palette.radius.xl',
     shadow: 'palette.shadows.xl',
+    inset: DEFAULT_PANEL_INSET,
+    canvasBackground: DEFAULT_PANEL_CANVAS_BACKGROUND,
   },
   header: {
     // Header role: solid primary
@@ -742,6 +749,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-panel-shadow'] ??
     cssVars['--persona-palette-shadows-xl'] ??
     '0 25px 50px -12px rgba(0, 0, 0, 0.25)';
+  cssVars['--persona-panel-inset'] =
+    cssVars['--persona-components-panel-inset'] ?? DEFAULT_PANEL_INSET;
+  cssVars['--persona-panel-canvas-bg'] =
+    cssVars['--persona-components-panel-canvasBackground'] ?? DEFAULT_PANEL_CANVAS_BACKGROUND;
   cssVars['--persona-launcher-shadow'] =
     cssVars['--persona-components-launcher-shadow'] ??
     '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)';

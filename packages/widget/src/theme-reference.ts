@@ -115,7 +115,7 @@ export const THEME_TOKEN_DOCS = {
       panel: {
         description: 'Chat panel container.',
         properties:
-          'width, maxWidth (440px), height (600px), maxHeight, borderRadius, shadow.',
+          'width, maxWidth (440px), height (600px), maxHeight, borderRadius, shadow, inset (16px, gap around a detached panel), canvasBackground (transparent, fills the region behind a detached panel in docked and inline embed modes; a no-op in sidebar mode, where the gap stays click-through and the host page shows through like floating). inset and canvasBackground apply only when launcher.detachedPanel is true or artifacts.layout.paneAppearance is "detached".',
       },
       header: {
         description: 'Chat panel header.',

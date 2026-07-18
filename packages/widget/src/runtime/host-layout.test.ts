@@ -527,4 +527,167 @@ describe("createWidgetHostLayout docked", () => {
       layout.destroy();
     });
   });
+
+  describe("detached docked", () => {
+    it("leaves the dock slot flush when detachedPanel is unset", () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: true,
+          dock: { width: "320px" },
+        },
+      });
+
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      expect(dockSlot?.style.padding).toBe("");
+      expect(dockSlot?.style.background).toBe("");
+
+      layout.destroy();
+    });
+
+    it("pads the dock slot with the default inset and canvas when detached", () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: true,
+          detachedPanel: true,
+          dock: { width: "320px" },
+        },
+      });
+
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      expect(dockSlot?.style.padding).toBe("16px");
+      expect(dockSlot?.style.background).toBe("transparent");
+      expect(dockSlot?.style.boxSizing).toBe("border-box");
+
+      layout.destroy();
+    });
+
+    it("resolves detached inset and canvas from panel theme tokens", () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: true,
+          detachedPanel: true,
+          dock: { width: "320px" },
+        },
+        theme: {
+          components: { panel: { inset: "24px", canvasBackground: "#eee" } },
+        },
+      });
+
+      const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+      expect(dockSlot?.style.padding).toBe("24px");
+      expect(dockSlot?.style.background).toBe("rgb(238, 238, 238)");
+
+      layout.destroy();
+    });
+
+    it("shrinks the emerge host by the inset so it fits the padded slot", () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: true,
+          detachedPanel: true,
+          dock: { width: "320px", reveal: "emerge" },
+        },
+      });
+
+      const host = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="host"]');
+      // jsdom simplifies the calc expression (320px - 2 * 16px).
+      expect(host?.style.width).toBe("calc(288px)");
+
+      layout.destroy();
+    });
+
+    it("resolves a percentage emerge width to px before subtracting the inset", () => {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: {
+          mountMode: "docked",
+          autoExpand: true,
+          detachedPanel: true,
+          dock: { width: "50%", reveal: "emerge" },
+        },
+      });
+      const shell = layout.shell!;
+      Object.defineProperty(shell, "clientWidth", { get: () => 800, configurable: true });
+      layout.updateConfig({
+        launcher: {
+          mountMode: "docked",
+          autoExpand: true,
+          detachedPanel: true,
+          dock: { width: "50%", reveal: "emerge" },
+        },
+      });
+
+      const host = shell.querySelector<HTMLElement>('[data-persona-dock-role="host"]');
+      // 50% of 800px resolved to px, then jsdom simplifies (400px - 2 * 16px).
+      expect(host?.style.width).toBe("calc(368px)");
+
+      layout.destroy();
+    });
+
+    it("clears detached chrome and pads nothing while the panel is collapsed", () => {
+      for (const reveal of ["resize", "emerge"] as const) {
+        const parent = document.createElement("div");
+        document.body.appendChild(parent);
+        const target = document.createElement("div");
+        parent.appendChild(target);
+
+        const layout = createWidgetHostLayout(target, {
+          launcher: {
+            mountMode: "docked",
+            autoExpand: false,
+            detachedPanel: true,
+            dock: { width: "320px", reveal },
+          },
+        });
+
+        const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
+        // Collapsed: truly 0-width slot with no padding/background/box-sizing residue.
+        expect(dockSlot?.style.width, reveal).toBe("0px");
+        expect(dockSlot?.style.padding, reveal).toBe("");
+        expect(dockSlot?.style.background, reveal).toBe("");
+        expect(dockSlot?.style.boxSizing, reveal).toBe("");
+        // Padding rides the width transition so the canvas gutter shrinks with the column.
+        expect(dockSlot?.style.transition, reveal).toContain("padding");
+
+        // Opening restores the chrome; closing clears it again.
+        layout.syncWidgetState({ open: true, launcherEnabled: true });
+        expect(dockSlot?.style.padding, reveal).toBe("16px");
+        expect(dockSlot?.style.boxSizing, reveal).toBe("border-box");
+        layout.syncWidgetState({ open: false, launcherEnabled: true });
+        expect(dockSlot?.style.padding, reveal).toBe("");
+        expect(dockSlot?.style.boxSizing, reveal).toBe("");
+
+        layout.destroy();
+        document.body.innerHTML = "";
+      }
+    });
+  });
 });

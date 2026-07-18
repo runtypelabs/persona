@@ -130,12 +130,38 @@ const readResizable = (): boolean => {
 
 // Same DOM-is-the-source-of-truth pattern: the active pill in
 // #artifact-pane-appearance is read on every config build. Panel (the default)
-// omits paneAppearance from the layout block; Seamless sends the flush recipe.
-const readPaneAppearance = (): "panel" | "seamless" => {
+// omits paneAppearance from the layout block; Seamless sends the flush recipe;
+// Detached sends the floating-card value and lets the widget's inset/canvas
+// panel tokens drive the gap.
+const readPaneAppearance = (): "panel" | "seamless" | "detached" => {
   const activeBtn = document.querySelector<HTMLButtonElement>(
     "#artifact-pane-appearance .mode-btn.active",
   );
-  return activeBtn?.dataset.mode === "seamless" ? "seamless" : "panel";
+  const mode = activeBtn?.dataset.mode;
+  return mode === "seamless" || mode === "detached" ? mode : "panel";
+};
+
+// Same DOM-is-the-source-of-truth pattern: the active pill in
+// #artifact-chat-surface is read on every config build. Card (the default)
+// omits chatSurface; Flush sends chatSurface: "flush" and only bites in a
+// detached split, where the chat goes flat and flush and only the pane floats.
+const readChatFlush = (): boolean => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-chat-surface .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode === "flush";
+};
+
+// Same DOM-is-the-source-of-truth pattern: the active pill in
+// #artifact-detached-framing is read on every config build. On artifact open
+// (the default) leaves detachedPanel unset so the inset appears only when a
+// detached-appearance pane opens; Always sets launcher.detachedPanel so the
+// widget stays inset even when idle.
+const readAlwaysInset = (): boolean => {
+  const activeBtn = document.querySelector<HTMLButtonElement>(
+    "#artifact-detached-framing .mode-btn.active",
+  );
+  return activeBtn?.dataset.mode === "always";
 };
 
 // Same DOM-is-the-source-of-truth pattern: the active pill in
@@ -838,7 +864,25 @@ const buildArtifactsFeature = () => {
             splitGap: "0",
             paneShadow: "none",
           }
-        : {}),
+        : readPaneAppearance() === "detached"
+          ? // Detached: the widget widens the split gap to the panel inset
+            // token and adds all-side radius, border, and elevation. This
+            // page's warm background shows through the gap by default. Flush
+            // chat surface drops the chat card entirely so only the pane floats.
+            {
+              paneAppearance: "detached" as const,
+              // Flush squares the outer panel, so round the floating pane on its
+              // own token instead of inheriting the squared panel radius.
+              ...(readChatFlush()
+                ? { chatSurface: "flush" as const, paneBorderRadius: "0.75rem" }
+                : {}),
+            }
+          : // Panel: send it explicitly only under Always inset, so
+            // launcher.detachedPanel does not flip it to detached via the
+            // coordinated default; otherwise omit it (minimal default config).
+            readAlwaysInset()
+            ? { paneAppearance: "panel" as const }
+            : {}),
     },
     ...(readCustomActions() ? buildCustomActions() : {}),
     // Inline chrome On sends the object form so showViewToggle can ride along;
@@ -865,8 +909,16 @@ const buildArtifactsFeature = () => {
   };
 };
 
-const buildConfig = (mode: Mode): AgentWidgetConfig =>
-  ({
+const buildConfig = (mode: Mode): AgentWidgetConfig => {
+  // Flush chat surface: the widget makes the flush chat backdrop transparent, so
+  // this page's cream shows through with no theme override needed.
+  const chatFlush = readPaneAppearance() === "detached" && readChatFlush();
+  // Inset look: the whole panel floats, so round it via squareInlinePanel (which
+  // respects a caller-set radius). Flush is excluded: there the panel fills the
+  // container flush and must stay square, only the pane rounds (paneBorderRadius).
+  const insetLook =
+    !chatFlush && (readPaneAppearance() === "detached" || readAlwaysInset());
+  return {
     ...artifactDemoConfigBase,
     features: {
       ...artifactDemoConfigBase.features,
@@ -887,9 +939,26 @@ const buildConfig = (mode: Mode): AgentWidgetConfig =>
             autoExpand: true,
             width: "100%",
             fullHeight: true,
+            // Always keeps the inline widget inset even when no artifact is open.
+            ...(readAlwaysInset() ? { detachedPanel: true } : {}),
           },
+    theme: {
+      ...artifactDemoConfigBase.theme,
+      ...(insetLook
+        ? {
+            components: {
+              ...artifactDemoConfigBase.theme?.components,
+              panel: {
+                ...artifactDemoConfigBase.theme?.components?.panel,
+                borderRadius: "0.75rem",
+              },
+            },
+          }
+        : {}),
+    },
     layout: { showHeader: false },
-  }) as AgentWidgetConfig;
+  } as AgentWidgetConfig;
+};
 
 // Reassigned on every mode switch; the artifact toolbar buttons below read it
 // lazily so they always target the current widget.
@@ -1055,6 +1124,8 @@ inlineChromeGroup?.addEventListener("click", (event) => {
 // Streaming body groups all share the plain segmented-control behavior: swap
 // the active pill, then rebuild + apply the config live.
 for (const groupId of [
+  "artifact-chat-surface",
+  "artifact-detached-framing",
   "artifact-tab-overflow",
   "artifact-tab-fade",
   "artifact-streaming-view",

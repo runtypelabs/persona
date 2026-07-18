@@ -3155,7 +3155,9 @@
     max-width: var(--persona-artifact-pane-max-width, 28rem);
     min-width: var(--persona-artifact-pane-min-width, 0);
     flex-shrink: 0;
-    box-shadow: var(--persona-artifact-pane-shadow, -2px 0 12px rgba(15, 23, 42, 0.06));
+    /* No default elevation on the pane; welded reads as one card, detached and
+       the drawer set their own shadow. Explicit paneShadow still wins. */
+    box-shadow: var(--persona-artifact-pane-shadow, none);
   }
 }
 
@@ -3755,22 +3757,70 @@
   border: var(--persona-artifact-pane-border) !important;
 }
 
+/* paneAppearance: 'detached': floating card with gap, all-side border, radius, elevation, canvas behind */
+/* Split gap defaults to --persona-panel-inset from ui.ts; canvas paints behind both columns. */
+[data-persona-root].persona-artifact-appearance-detached .persona-artifact-split-root {
+  background: var(--persona-panel-canvas-bg);
+}
+
+/* Desktop split only (drawer keeps its own chrome). Non-!important so explicit
+   paneBorder / paneShadow / paneBorderRadius overrides still win. */
+@media (min-width: 641px) {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-appearance-detached .persona-artifact-pane {
+    border-radius: var(
+      --persona-artifact-pane-radius,
+      var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))
+    );
+    border: var(--persona-panel-border, 1px solid var(--persona-border, #e5e7eb));
+    box-shadow: var(
+      --persona-artifact-pane-shadow,
+      var(--persona-panel-shadow, var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25)))
+    );
+  }
+}
+
+/* chatSurface: 'flush': chat is flat flush background, only the pane floats. The
+   chat has no perimeter inset, so inset the pane on 3 sides (left gap comes from
+   the existing detached split flex gap). Keeps the pane's border/radius/shadow. */
+@media (min-width: 641px) {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-chat-flush .persona-artifact-pane {
+    margin-top: var(--persona-panel-inset);
+    margin-right: var(--persona-panel-inset);
+    margin-bottom: var(--persona-panel-inset);
+  }
+}
+
 /*
- * Unified split chrome: one visual shell (desktop split only; narrowed via :not(.narrow-host) + breakpoint).
- * Main chat card (.persona-widget-container) loses inner-right rounding; artifact gains matching outer-right.
+ * Welded split chrome (panel + seamless): one card. The outer panel carries the
+ * border + radius + shadow (set in ui.ts); each column rounds only its outer
+ * corners and clips, so the columns fill the panel's rounded rect and butt flush
+ * at the seam. Desktop split only (narrowed via :not(.narrow-host) + breakpoint).
+ * Toggled from ui.ts by splitChromeMode(); the pane's flex layout owns gap 0.
  */
 @media (min-width: 641px) {
-  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-unified-split .persona-widget-container {
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-artifact-split-root {
+    position: relative;
   }
 
-  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-unified-split .persona-artifact-pane {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-widget-container {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    overflow: hidden;
+  }
+
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-artifact-pane {
     border-top-left-radius: 0 !important;
     border-bottom-left-radius: 0 !important;
-    border-top-right-radius: var(--persona-artifact-unified-outer-radius, var(--persona-radius-lg, 1rem)) !important;
-    border-bottom-right-radius: var(--persona-artifact-unified-outer-radius, var(--persona-radius-lg, 1rem)) !important;
+    border-top-right-radius: var(--persona-artifact-welded-outer-radius, var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))) !important;
+    border-bottom-right-radius: var(--persona-artifact-welded-outer-radius, var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))) !important;
     overflow: hidden;
+  }
+
+  /* panel appearance: a hairline divider on the pane's chat-facing edge. seamless
+     omits it (it already zeroes border-left). Non-!important so paneBorder /
+     paneBorderLeft overrides win. */
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split.persona-artifact-appearance-panel .persona-artifact-pane {
+    border-left: 1px solid var(--persona-border, #e5e7eb);
   }
 }
 

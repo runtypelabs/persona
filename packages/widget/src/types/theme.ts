@@ -194,6 +194,10 @@ export interface PanelTokens extends ComponentTokenSet {
   maxWidth: string;
   height: string;
   maxHeight: string;
+  /** Gap between the detached panel and its region edges. Only used when detached. */
+  inset?: string;
+  /** Background of the region revealed behind a detached panel. */
+  canvasBackground?: string;
 }
 
 export interface HeaderTokens extends ComponentTokenSet {

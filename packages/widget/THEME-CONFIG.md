@@ -311,6 +311,44 @@ Semantic tokens provide intent-based naming that references palette values.
 | `maxHeight` | `calc(100vh - 80px)` |
 | `borderRadius` | `palette.radius.xl` |
 | `shadow` | `palette.shadows.xl` |
+| `inset` | `16px` |
+| `canvasBackground` | `transparent` |
+
+`inset` and `canvasBackground` take effect only when the panel renders as a detached card, i.e. when you set `launcher.detachedPanel: true` or `artifacts.layout.paneAppearance: "detached"`. On a flush panel they are inert. `inset` is the gap between the detached card and the edges of the region it occupies, so the canvas behind it shows on all four sides.
+
+In an inline embed, `paneAppearance: "detached"` insets the whole split from the container edges on all sides once an artifact opens (the chat is flush until then). `launcher.detachedPanel: true` is the way to keep the widget inset even when no artifact is open. The only difference is when the margin exists: on artifact open versus always.
+
+`canvasBackground` fills that revealed region in docked and inline embed modes; it defaults to `transparent`. In sidebar (floating) mode it is a no-op: the gaps must stay click-through for the host page, so the host page shows through the gap the same way a floating panel does, and no canvas can paint over it. When it does apply, set it to the semantic background so the inset reads on any host page, even a solid white one:
+
+```js
+launcher: { mountMode: "docked", detachedPanel: true },
+theme: { components: { panel: { inset: "24px", canvasBackground: "semantic.colors.background" } } }
+```
+
+The existing `borderRadius`, `shadow`, and `border` tokens style the detached card's elevation. See the widget docs for how detached appearance behaves per layout mode.
+
+The `shadow` token's `palette.shadows.xl` default applies to floating panels and detached cards. Flush inline embeds (`launcher.enabled: false` without `detachedPanel`) render with no shadow by default: a panel that fills its container is not a floating card. Set `components.panel.shadow` explicitly to elevate a flush embed anyway.
+
+When the panel renders as a detached card the widget root carries a `data-persona-panel-detached` attribute. It is a stable styling hook: host pages and custom CSS can key off `[data-persona-panel-detached]` to target the detached state without depending on internal class names.
+
+Elevation is per card, not per group. When a detached artifact pane is open beside the chat in the desktop side-by-side layout, the outer panel drops its shadow and each surface carries its own: the chat column and the artifact pane each read as a separate card over the canvas, instead of one outer shadow wrapping both plus the gap between them. `shadow` still tunes that elevation, applied to each card. The mount root carries `persona-artifact-detached-split` while this state is active. To flatten the chat column while the pane stays raised (elevation on the panel only, the Claude.ai look), set `artifacts.layout.chatShadow: "none"`; it drives the `--persona-artifact-chat-shadow` token, a front lookup that only affects the chat card and defaults to the same elevation as the pane when unset.
+
+### Chat surface: card vs flush
+
+With the detached pane appearance, `artifacts.layout.chatSurface` chooses how the chat reads:
+
+- `card` (default): the chat is an inset card matching the artifact pane, so the split shows two matched cards over the canvas.
+- `flush`: the chat is flat, flush background (no border, radius, or shadow) and only the artifact pane insets as a floating card. This is the flat-chat plus floating-pane reference look, elevation on the pane alone. Flush is a steady state: the chat stays flat whether or not a pane is open, so opening or closing an artifact never flips the chat chrome. `chatShadow` is moot here (the chat card is gone). The outer panel fills its container flush, so it squares its corners by default; an explicit `components.panel.borderRadius` still wins.
+
+The flush chat paints no backdrop of its own: the container, messages body, and composer footer backgrounds go transparent (and the footer's top hairline is dropped), so the host page shows through and the chat reads as part of the page with no theme changes. To pin an explicit backdrop color instead, set `components.panel.canvasBackground`; it colors the whole area behind the flush chat and the floating pane. Do not re-tint `semantic.colors.surface` for this: that token is the background of message bubbles, cards, and the composer input, so tinting it bleeds into every element surface. Flush only takes effect on an inline embed (the container-filling case) with the detached pane appearance; in floating, docked, or sidebar modes, and on a panel or seamless appearance, it is a no-op that falls back to the card look.
+
+The artifact pane's `layout.paneAppearance` picks how the desktop split reads:
+
+- `panel` (default): one welded card. The border and radius wrap chat and the artifact pane together, with a hairline divider on the pane's chat-facing edge and no gap.
+- `seamless`: the same welded card with no internal divider or chrome.
+- `detached`: two separate elevated cards with the page canvas showing through the gap (described above).
+
+Panel and seamless carry `persona-artifact-welded-split` on the mount root while active. `unifiedSplitChrome` is a deprecated no-op (welding is the default); `unifiedSplitOuterRadius` still overrides the pane's outer-right corner radius. An explicit `splitGap`, `paneBorder`, `paneBorderLeft`, or `paneShadow` overrides the welded defaults.
 
 ### Header (`components.header.*`)
 
@@ -506,6 +544,17 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-attachment-image-bg
 --persona-attachment-image-border
 ```
+
+### Panel Aliases
+
+```css
+--persona-panel-border      /* components.panel.border */
+--persona-panel-shadow      /* components.panel.shadow */
+--persona-panel-inset       /* components.panel.inset, default 16px */
+--persona-panel-canvas-bg   /* components.panel.canvasBackground, default transparent */
+```
+
+`--persona-panel-inset` and `--persona-panel-canvas-bg` drive the detached panel appearance (`launcher.detachedPanel: true` or `artifacts.layout.paneAppearance: "detached"`): the inset is the gap around the card and the canvas background fills the region revealed behind it.
 
 ### Intro Card Aliases
 
