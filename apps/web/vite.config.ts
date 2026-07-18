@@ -420,6 +420,47 @@ function previewEmbedCheck(): Plugin {
   };
 }
 
+// 1x1 transparent GIF served after an artificial delay. The artifact demo's
+// "Add slow file" sample references it so the sandboxed preview's load event is
+// held back by slow NETWORK (async, the main thread stays free). A CPU
+// busy-wait cannot be used for this: when the sandboxed srcdoc frame shares the
+// parent page's process, a synchronous wait freezes the page and the loading
+// overlay's timers never fire. Dev/preview servers only; on static hosting the
+// request 404s and the sample simply loads fast.
+const SLOW_PIXEL_GIF = Buffer.from(
+  "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+  "base64"
+);
+function demoSlowResource(): Plugin {
+  const register = (middlewares: {
+    use: (route: string, handler: (req: any, res: any) => void) => void;
+  }) => {
+    middlewares.use("/demo/slow-pixel.gif", (req, res) => {
+      const query = (req.url ?? "").split("?")[1] ?? "";
+      const ms = Math.min(
+        15000,
+        Math.max(0, Number(new URLSearchParams(query).get("ms")) || 3500)
+      );
+      setTimeout(() => {
+        res.setHeader("Content-Type", "image/gif");
+        // no-store so repeated "Add slow file" clicks stay slow instead of
+        // hitting the browser cache.
+        res.setHeader("Cache-Control", "no-store");
+        res.end(SLOW_PIXEL_GIF);
+      }, ms);
+    });
+  };
+  return {
+    name: "demo-slow-resource",
+    configureServer(server) {
+      register(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      register(server.middlewares);
+    },
+  };
+}
+
 // Font sets used by the shared stylesheets. Every surface now shares the
 // homepage's editorial/terminal identity (Bitcount wordmark, Geist body, Syne
 // headings, JetBrains Mono labels + code), so the gallery/demo (demo-shared.css)
@@ -538,6 +579,7 @@ export default defineConfig({
     serveJsPaint(),
     llmsTxt(),
     previewEmbedCheck(),
+    demoSlowResource(),
     galleryFonts(),
     commandPaletteEntry(),
   ],

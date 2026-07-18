@@ -1,5 +1,6 @@
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { PersonaArtifactCard } from "./artifact-card";
+import { PersonaArtifactInline } from "./artifact-inline";
 
 /**
  * Context provided to component renderers
@@ -22,19 +23,41 @@ export type ComponentRenderer = (
 ) => HTMLElement;
 
 /**
+ * Per-component registration options
+ */
+export interface ComponentRegistrationOptions {
+  /**
+   * When false, the component directive renders bare in the thread (no
+   * persona-message-bubble chrome).
+   * @default true
+   */
+  bubbleChrome?: boolean;
+}
+
+/**
  * Component registry for managing custom components
  */
 class ComponentRegistry {
   private components: Map<string, ComponentRenderer> = new Map();
+  private options: Map<string, ComponentRegistrationOptions> = new Map();
 
   /**
    * Register a custom component
    */
-  register(name: string, renderer: ComponentRenderer): void {
+  register(
+    name: string,
+    renderer: ComponentRenderer,
+    options?: ComponentRegistrationOptions
+  ): void {
     if (this.components.has(name)) {
       console.warn(`[ComponentRegistry] Component "${name}" is already registered. Overwriting.`);
     }
     this.components.set(name, renderer);
+    if (options) {
+      this.options.set(name, options);
+    } else {
+      this.options.delete(name);
+    }
   }
 
   /**
@@ -42,6 +65,7 @@ class ComponentRegistry {
    */
   unregister(name: string): void {
     this.components.delete(name);
+    this.options.delete(name);
   }
 
   /**
@@ -59,6 +83,13 @@ class ComponentRegistry {
   }
 
   /**
+   * Get the registration options for a component, if any were supplied
+   */
+  getOptions(name: string): ComponentRegistrationOptions | undefined {
+    return this.options.get(name);
+  }
+
+  /**
    * Get all registered component names
    */
   getAllNames(): string[] {
@@ -70,6 +101,7 @@ class ComponentRegistry {
    */
   clear(): void {
     this.components.clear();
+    this.options.clear();
   }
 
   /**
@@ -87,5 +119,8 @@ class ComponentRegistry {
  */
 export const componentRegistry = new ComponentRegistry();
 
-// Register built-in components
-componentRegistry.register("PersonaArtifactCard", PersonaArtifactCard);
+// Register built-in components. The artifact card and inline block carry
+// their own border and surface, so they render bare in the thread to avoid
+// double-boxing.
+componentRegistry.register("PersonaArtifactCard", PersonaArtifactCard, { bubbleChrome: false });
+componentRegistry.register("PersonaArtifactInline", PersonaArtifactInline, { bubbleChrome: false });

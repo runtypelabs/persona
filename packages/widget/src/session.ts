@@ -28,6 +28,10 @@ import {
   generateAssistantMessageId
 } from "./utils/message-id";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "./utils/content";
+import {
+  buildArtifactRefRawContent,
+  resolveArtifactDisplayMode
+} from "./utils/artifact-display";
 import type {
   VoiceProvider,
   VoiceStatus,
@@ -2607,31 +2611,80 @@ export class AgentWidgetSession {
     const id =
       manual.id ||
       `art_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
-    if (manual.artifactType === "markdown") {
-      const rec: PersonaArtifactRecord = {
-        id,
-        artifactType: "markdown",
-        title: manual.title,
-        status: "complete",
-        markdown: manual.content
-      };
-      this.artifacts.set(id, rec);
-      this.selectedArtifactId = id;
-      this.emitArtifactsState();
-      return rec;
-    }
-    const rec: PersonaArtifactRecord = {
-      id,
-      artifactType: "component",
-      title: manual.title,
-      status: "complete",
-      component: manual.component,
-      props: manual.props ?? {}
-    };
+    const rec: PersonaArtifactRecord =
+      manual.artifactType === "markdown"
+        ? {
+            id,
+            artifactType: "markdown",
+            title: manual.title,
+            status: "complete",
+            markdown: manual.content,
+            ...(manual.file ? { file: manual.file } : {})
+          }
+        : {
+            id,
+            artifactType: "component",
+            title: manual.title,
+            status: "complete",
+            component: manual.component,
+            props: manual.props ?? {}
+          };
     this.artifacts.set(id, rec);
     this.selectedArtifactId = id;
     this.emitArtifactsState();
+    if (manual.transcript !== false) {
+      this.injectArtifactRefBlock(rec);
+    }
     return rec;
+  }
+
+  /**
+   * Injects (or refreshes) the in-thread artifact block for a programmatically
+   * upserted artifact, matching the streamed UX: the resolved display mode
+   * picks the component ("card"/"panel" → reference card, "inline" → inline
+   * preview).
+   *
+   * Unlike the streamed path (which embeds content on `artifact_complete`),
+   * the programmatic record is complete up front, so the final markdown /
+   * file meta / component name + props are embedded immediately and the block
+   * hydrates after a refresh without the original registry state.
+   *
+   * A re-upsert of the same id rebuilds the existing block's persisted
+   * rawContent in place (the registry is not persisted, so hydration reads
+   * these props); without this the block would keep the first version's
+   * content after a refresh.
+   */
+  private injectArtifactRefBlock(rec: PersonaArtifactRecord): void {
+    const refId = `artifact-ref-${rec.id}`;
+    const displayMode = resolveArtifactDisplayMode(
+      this.config.features?.artifacts,
+      rec.artifactType
+    );
+    const rawContent = buildArtifactRefRawContent(displayMode, {
+      artifactId: rec.id,
+      title: rec.title,
+      artifactType: rec.artifactType,
+      status: "complete",
+      ...(rec.file ? { file: rec.file } : {}),
+      ...(rec.component ? { component: rec.component } : {}),
+      ...(rec.props ? { componentProps: rec.props } : {}),
+      ...(rec.markdown !== undefined ? { markdown: rec.markdown } : {})
+    });
+    // Re-upsert: mutate the STORED message (inject stores a copy via
+    // ensureSequence, so a local copy would be lost) and notify so the
+    // transcript re-renders and persistence picks up the new version.
+    const existing = this.messages.find((m) => m.id === refId);
+    if (existing) {
+      existing.rawContent = rawContent;
+      existing.streaming = false;
+      this.callbacks.onMessagesChanged([...this.messages]);
+      return;
+    }
+    this.injectAssistantMessage({
+      id: refId,
+      content: "",
+      rawContent
+    });
   }
 
   private clearArtifactState(): void {
@@ -2657,7 +2710,8 @@ export class AgentWidgetSession {
             artifactType: "markdown",
             title: ev.title,
             status: "streaming",
-            markdown: ""
+            markdown: "",
+            ...(ev.file ? { file: ev.file } : {})
           });
         } else {
           this.artifacts.set(ev.id, {

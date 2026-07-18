@@ -1,11 +1,23 @@
 import { createElement } from "../utils/dom";
-import type { AgentWidgetConfig, AgentWidgetMessage, PersonaArtifactRecord } from "../types";
-import { escapeHtml, createMarkdownProcessorFromConfig } from "../postprocessors";
-import { resolveSanitizer } from "../utils/sanitize";
-import { componentRegistry, type ComponentContext } from "./registry";
+import type {
+  AgentWidgetConfig,
+  PersonaArtifactRecord,
+  PersonaArtifactCustomAction,
+} from "../types";
+import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
+import {
+  buildArtifactActionButton,
+  artifactRecordActionContext,
+} from "../utils/artifact-custom-actions";
+import {
+  renderArtifactPreviewBody,
+  artifactCopyText,
+  type ArtifactPreviewBodyHandle,
+} from "./artifact-preview";
 import { renderLucideIcon } from "../utils/icons";
 import { createDropdownMenu, type DropdownMenuHandle } from "../utils/dropdown";
-import { createIconButton, createLabelButton } from "../utils/buttons";
+import { createIconButton, createLabelButton, createToggleGroup } from "../utils/buttons";
+import { createRovingTablist } from "../utils/roving-tablist";
 
 export type ArtifactPaneApi = {
   element: HTMLElement;
@@ -13,21 +25,36 @@ export type ArtifactPaneApi = {
   backdrop: HTMLElement | null;
   update: (state: { artifacts: PersonaArtifactRecord[]; selectedId: string | null }) => void;
   setMobileOpen: (open: boolean) => void;
+  /** Reflect the expanded state on the toolbar toggle (icon + label). */
+  setExpanded: (expanded: boolean) => void;
+  /** Show/hide the expand toggle; driven from the parent's config on every sync so live config updates apply. */
+  setExpandToggleVisible: (visible: boolean) => void;
+  /** Show/hide the default-preset copy button; no-op in the document preset (copy is always shown there). */
+  setCopyButtonVisible: (visible: boolean) => void;
+  /** Replace the toolbar custom-action list and re-render it; driven from the parent's config on every sync so live config updates apply. */
+  setCustomActions: (actions: PersonaArtifactCustomAction[]) => void;
+  /** Update the tab-strip edge fade live; driven from the parent's config on every sync. */
+  setTabFade: (cfg: boolean | { start?: boolean; end?: boolean } | undefined) => void;
+  /** Swap the tab bar live between the built-in strip (undefined) and a host renderTabBar; driven from the parent's config on every sync. */
+  setRenderTabBar: (
+    fn:
+      | ((ctx: {
+          records: PersonaArtifactRecord[];
+          selectedId: string | null;
+          onSelect: (id: string) => void;
+        }) => HTMLElement)
+      | undefined
+  ) => void;
+  /**
+   * Explicit "the pane surface is shown to the user" signal from the host
+   * (ui.ts), which owns the display-mode / expand / mobile-drawer routing.
+   * While hidden the pane records state on update() but does NOT build/refresh
+   * the preview DOM, so an inline/card artifact never spawns a second
+   * sandboxed iframe (which would execute artifact scripts a second time). On
+   * reveal the pane renders the current recorded state.
+   */
+  setVisible: (visible: boolean) => void;
 };
-
-function fallbackComponentCard(sel: PersonaArtifactRecord): HTMLElement {
-  const card = createElement(
-    "div",
-    "persona-rounded-lg persona-border persona-border-persona-border persona-p-3 persona-text-persona-primary"
-  );
-  const title = createElement("div", "persona-font-semibold persona-text-sm persona-mb-2");
-  title.textContent = sel.component ? `Component: ${sel.component}` : "Component";
-  const pre = createElement("pre", "persona-font-mono persona-text-xs persona-whitespace-pre-wrap persona-overflow-x-auto");
-  pre.textContent = JSON.stringify(sel.props ?? {}, null, 2);
-  card.appendChild(title);
-  card.appendChild(pre);
-  return card;
-}
 
 /**
  * Right-hand artifact sidebar / mobile drawer content.
@@ -38,6 +65,8 @@ export function createArtifactPane(
     onSelect: (id: string) => void;
     /** User closed the pane (mobile drawer or split sidebar): parent should persist “hidden until reopened”. */
     onDismiss?: () => void;
+    /** User clicked the expand/collapse toggle: parent owns the state and calls back via setExpanded. */
+    onToggleExpand?: () => void;
   }
 ): ArtifactPaneApi {
   const layout = config.features?.artifacts?.layout;
@@ -47,12 +76,17 @@ export function createArtifactPane(
   const closeButtonLabel = layout?.closeButtonLabel ?? "Close";
   const panePadding = layout?.panePadding?.trim();
 
-  const md = config.markdown ? createMarkdownProcessorFromConfig(config.markdown) : null;
-  const sanitize = resolveSanitizer(config.sanitize);
-  const toHtml = (text: string) => {
-    const raw = md ? md(text) : escapeHtml(text);
-    return sanitize ? sanitize(raw) : raw;
-  };
+  const tabFadeSize = layout?.tabFadeSize?.trim();
+  // Per-edge fade enablement is mutable so setTabFade can switch it live (the
+  // host re-reads config on every sync). false disables both edges; the object
+  // form gates each edge; true/undefined keeps both dynamic.
+  const resolveFade = (
+    cfg: boolean | { start?: boolean; end?: boolean } | undefined
+  ) => ({
+    start: cfg === false ? false : typeof cfg === "object" && cfg ? cfg.start !== false : true,
+    end: cfg === false ? false : typeof cfg === "object" && cfg ? cfg.end !== false : true,
+  });
+  let { start: fadeStartEnabled, end: fadeEndEnabled } = resolveFade(layout?.tabFade);
 
   const backdrop =
     typeof document !== "undefined"
@@ -95,13 +129,7 @@ export function createArtifactPane(
   const titleEl = createElement("span", "persona-text-xs persona-font-medium persona-truncate");
   titleEl.textContent = toolbarTitle;
 
-  const closeBtn = createElement(
-    "button",
-    "persona-rounded-md persona-border persona-border-persona-border persona-px-2 persona-py-1 persona-text-xs persona-bg-persona-surface"
-  );
-  closeBtn.type = "button";
-  closeBtn.textContent = closeButtonLabel;
-  closeBtn.setAttribute("aria-label", closeButtonLabel);
+  const closeBtn = createIconButton({ icon: "x", label: closeButtonLabel });
   closeBtn.addEventListener("click", () => {
     dismissLocalUi();
     options.onDismiss?.();
@@ -109,13 +137,28 @@ export function createArtifactPane(
 
   /** Document preset: view vs raw source */
   let viewMode: "rendered" | "source" = "rendered";
-  const leftTools = createElement("div", "persona-flex persona-items-center persona-gap-1 persona-shrink-0 persona-artifact-toggle-group");
-  const viewBtn = documentChrome
-    ? createIconButton({ icon: "eye", label: "Rendered view", className: "persona-artifact-doc-icon-btn persona-artifact-view-btn" })
-    : createIconButton({ icon: "eye", label: "Rendered view" });
-  const codeBtn = documentChrome
-    ? createIconButton({ icon: "code-2", label: "Source", className: "persona-artifact-doc-icon-btn persona-artifact-code-btn" })
-    : createIconButton({ icon: "code-2", label: "Source" });
+  const viewToggle = createToggleGroup({
+    items: [
+      {
+        id: "rendered",
+        icon: "eye",
+        label: "Rendered view",
+        className: documentChrome ? "persona-artifact-doc-icon-btn persona-artifact-view-btn" : undefined,
+      },
+      {
+        id: "source",
+        icon: "code-xml",
+        label: "Source",
+        className: documentChrome ? "persona-artifact-doc-icon-btn persona-artifact-code-btn" : undefined,
+      },
+    ],
+    selectedId: "rendered",
+    className: "persona-artifact-toggle-group persona-shrink-0",
+    onSelect: (id) => {
+      viewMode = id === "source" ? "source" : "rendered";
+      render();
+    },
+  });
   const actionsRight = createElement("div", "persona-flex persona-items-center persona-gap-1 persona-shrink-0");
   const showCopyLabel = layout?.documentToolbarShowCopyLabel === true;
   const showCopyChevron = layout?.documentToolbarShowCopyChevron === true;
@@ -154,7 +197,12 @@ export function createArtifactPane(
   } else if (documentChrome) {
     copyBtn = createIconButton({ icon: "copy", label: "Copy", className: "persona-artifact-doc-icon-btn" });
   } else {
+    // Always built (like the expand toggle) so a live config update can
+    // reveal it via setCopyButtonVisible; hidden unless layout opts in.
     copyBtn = createIconButton({ icon: "copy", label: "Copy" });
+    if (layout?.showCopyButton !== true) {
+      copyBtn.classList.add("persona-hidden");
+    }
   }
 
   const refreshBtn = documentChrome
@@ -163,6 +211,28 @@ export function createArtifactPane(
   const closeIconBtn = documentChrome
     ? createIconButton({ icon: "x", label: closeButtonLabel, className: "persona-artifact-doc-icon-btn" })
     : createIconButton({ icon: "x", label: closeButtonLabel });
+
+  // Always built so a live config update can reveal it (the pane is created
+  // once; syncArtifactPane re-reads the config and drives setExpandToggleVisible).
+  const expandBtn = createIconButton({
+    icon: "maximize",
+    label: "Expand artifacts panel",
+    className: "persona-artifact-expand-btn" + (documentChrome ? " persona-artifact-doc-icon-btn" : ""),
+    onClick: () => options.onToggleExpand?.(),
+  });
+  if (layout?.showExpandToggle !== true) {
+    expandBtn.classList.add("persona-hidden");
+  }
+
+  // Host container for integrator-supplied toolbar buttons. Built once and
+  // slotted into whichever preset renders; setCustomActions re-renders its
+  // children on every parent sync so live config updates apply.
+  const customActions = createElement(
+    "div",
+    "persona-flex persona-items-center persona-gap-1 persona-shrink-0 persona-artifact-toolbar-custom-actions"
+  );
+  let customActionList: PersonaArtifactCustomAction[] =
+    config.features?.artifacts?.toolbarActions ?? [];
 
   const getSelectedArtifactText = (): { markdown: string; jsonPayload: string; id: string | null } => {
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
@@ -175,16 +245,9 @@ export function createArtifactPane(
   };
 
   const defaultCopy = async () => {
-    const { markdown, jsonPayload } = getSelectedArtifactText();
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
-    const text =
-      sel?.artifactType === "markdown"
-        ? markdown
-        : sel
-          ? jsonPayload
-          : "";
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(artifactCopyText(sel));
     } catch {
       /* ignore */
     }
@@ -260,22 +323,6 @@ export function createArtifactPane(
     options.onDismiss?.();
   });
 
-  const syncViewToggleState = () => {
-    if (!documentChrome) return;
-    viewBtn.setAttribute("aria-pressed", viewMode === "rendered" ? "true" : "false");
-    codeBtn.setAttribute("aria-pressed", viewMode === "source" ? "true" : "false");
-  };
-  viewBtn.addEventListener("click", () => {
-    viewMode = "rendered";
-    syncViewToggleState();
-    render();
-  });
-  codeBtn.addEventListener("click", () => {
-    viewMode = "source";
-    syncViewToggleState();
-    render();
-  });
-
   const centerTitle = createElement(
     "span",
     "persona-min-w-0 persona-flex-1 persona-text-xs persona-font-medium persona-text-persona-primary persona-truncate persona-text-center md:persona-text-left"
@@ -283,17 +330,26 @@ export function createArtifactPane(
 
   if (documentChrome) {
     toolbar.replaceChildren();
-    leftTools.append(viewBtn, codeBtn);
     if (copyWrap) {
       actionsRight.append(copyWrap, refreshBtn, closeIconBtn);
     } else {
       actionsRight.append(copyBtn, refreshBtn, closeIconBtn);
     }
-    toolbar.append(leftTools, centerTitle, actionsRight);
-    syncViewToggleState();
+    // Order: copy, refresh, custom, expand, close.
+    actionsRight.insertBefore(customActions, closeIconBtn);
+    actionsRight.insertBefore(expandBtn, closeIconBtn);
+    toolbar.append(viewToggle.element, centerTitle, actionsRight);
   } else {
+    // Group expand + Close so the toolbar's justify-between spaces
+    // [toggle] [title] [actions] instead of distributing each button.
+    const defaultActions = createElement(
+      "div",
+      "persona-flex persona-items-center persona-gap-1 persona-shrink-0"
+    );
+    // Order: title, copy, custom, expand, Close.
+    defaultActions.append(copyBtn, customActions, expandBtn, closeBtn);
     toolbar.appendChild(titleEl);
-    toolbar.appendChild(closeBtn);
+    toolbar.appendChild(defaultActions);
   }
 
   if (panePadding) {
@@ -305,98 +361,288 @@ export function createArtifactPane(
     "div",
     "persona-artifact-list persona-shrink-0 persona-flex persona-gap-1 persona-overflow-x-auto persona-p-2 persona-border-b persona-border-persona-border"
   );
+  if (tabFadeSize) {
+    list.style.setProperty("--persona-artifact-tab-fade-size", tabFadeSize);
+  }
+
+  // Seam A: a full tab-bar replacement. Both the built-in strip and a custom
+  // mount are always built so renderTabBar can switch live (the host re-reads
+  // config on every sync); render() shows the active one and hides the other.
+  let currentRenderTabBar = config.features?.artifacts?.renderTabBar;
+  // Stable host for the replacement bar, mounted where the strip goes; hidden
+  // until a custom bar is active.
+  const customBarMount = createElement(
+    "div",
+    "persona-artifact-tab-custom persona-shrink-0 persona-border-b persona-border-persona-border persona-hidden"
+  );
+
+  // Accessible tablist behavior for the built-in strip (roles, roving tabindex,
+  // Arrow/Home/End, focus survival). The host owns a11y for a custom bar.
+  const tablist = createRovingTablist(list, {
+    onSelect: (index) => options.onSelect(records[index].id),
+  });
+
+  // Toggle the tab-strip edge fades from scroll position. RTL reports a negative
+  // scrollLeft, so normalize against the max offset rather than trusting sign.
+  // Per-edge fade classes are gated by config.
+  const updateTabFades = (el: HTMLElement) => {
+    const max = el.scrollWidth - el.clientWidth;
+    const overflow = max > 1;
+    const offset = Math.abs(el.scrollLeft);
+    el.classList.toggle(
+      "persona-artifact-tab-fade-start",
+      fadeStartEnabled && overflow && offset > 1
+    );
+    el.classList.toggle(
+      "persona-artifact-tab-fade-end",
+      fadeEndEnabled && overflow && offset < max - 1
+    );
+  };
+  // rAF-throttle the scroll-driven fade recompute (falls back to setTimeout).
+  let tabFadeRaf = 0;
+  const scheduleTabFades = () => {
+    if (tabFadeRaf) return;
+    const run = () => {
+      tabFadeRaf = 0;
+      updateTabFades(list);
+    };
+    tabFadeRaf =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame(run)
+        : (setTimeout(run, 0) as unknown as number);
+  };
+  list.addEventListener("scroll", () => scheduleTabFades(), { passive: true });
+  // Recompute on mid-stream tab additions and pane resizes.
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(() => updateTabFades(list)).observe(list);
+  }
+
   const content = createElement(
     "div",
     "persona-artifact-content persona-flex-1 persona-min-h-0 persona-overflow-y-auto persona-p-3"
   );
   if (panePadding) {
-    list.style.paddingLeft = panePadding;
-    list.style.paddingRight = panePadding;
+    for (const el of [list, customBarMount]) {
+      el.style.paddingLeft = panePadding;
+      el.style.paddingRight = panePadding;
+    }
     content.style.padding = panePadding;
   }
 
   shell.appendChild(toolbar);
   shell.appendChild(list);
+  shell.appendChild(customBarMount);
   shell.appendChild(content);
 
   let records: PersonaArtifactRecord[] = [];
   let selectedId: string | null = null;
   let mobileOpen = false;
+  // Lazy-render gate. `visible` reflects the host's explicit setVisible() signal
+  // (never inferred from layout/offsetParent, so class-hiding + jsdom behave the
+  // same). It defaults to true so the pane renders eagerly when constructed
+  // directly (its historical behavior, and the path pane tests exercise); ui.ts
+  // always calls setVisible() before update() so the real widget drives it. When
+  // hidden, update() records state and sets `dirty` instead of rendering; the
+  // next reveal flushes the current state.
+  let visible = true;
+  let dirty = false;
+  // Track the last tab we auto-scrolled to so we only nudge the strip when the
+  // selection actually changes (not on every streaming re-render), which would
+  // otherwise fight a user who has scrolled the strip manually.
+  let lastScrolledTabId: string | null = null;
+  // Signature of the last renderTabBar invocation (record ids + selection) so a
+  // streaming re-render with an unchanged bar does not tear down the host bar.
+  let customBarSig = "";
+
+  // Shared preview body renderer (artifact-preview.ts). One handle serves the
+  // whole content area; it is updated with whichever record is selected and
+  // internally reuses the file-preview iframe across idle re-renders.
+  let preview: ArtifactPreviewBodyHandle | null = null;
+  let fileToggleMounted = false;
+  const resolveViewMode = (rec: PersonaArtifactRecord): "rendered" | "source" => {
+    const isFile = rec.artifactType === "markdown" && Boolean(rec.file);
+    // File artifacts honor the toggle in every toolbar preset; plain markdown
+    // only has a source view in the document toolbar preset.
+    if (isFile) return viewMode;
+    return documentChrome ? viewMode : "rendered";
+  };
+  // For the default (non-document) toolbar, mount the rendered/source toggle only
+  // while a previewable file artifact is selected. The document toolbar already
+  // carries the toggle permanently, so it is mounted once at build time. Here we
+  // add/remove the group from the toolbar as the selection gains or loses a
+  // previewable file (the toggle group owns its own buttons and aria-pressed state).
+  const updateFileToggleVisibility = (previewable: boolean) => {
+    if (documentChrome) return;
+    if (previewable && !fileToggleMounted) {
+      toolbar.insertBefore(viewToggle.element, titleEl);
+      fileToggleMounted = true;
+    } else if (!previewable && fileToggleMounted) {
+      viewToggle.element.remove();
+      fileToggleMounted = false;
+    }
+  };
+
+  // Selection fallback shared with render(): explicit selection, else last record.
+  const currentSelectedRecord = (): PersonaArtifactRecord | undefined =>
+    (selectedId && records.find((x) => x.id === selectedId)) || records[records.length - 1];
+
+  // Rebuild the custom-action buttons. Called from render() (so per-artifact
+  // visible() gates re-evaluate when the selection changes) and from
+  // setCustomActions (so live config updates apply). The onClick context is
+  // resolved at click time, not here, so it reflects the current content.
+  const renderCustomActions = () => {
+    const ctx = artifactRecordActionContext(currentSelectedRecord());
+    if (!ctx) {
+      // No records: no meaningful context, so render nothing.
+      customActions.replaceChildren();
+      return;
+    }
+    const buttons = customActionList
+      .filter((action) => action.visible === undefined || action.visible(ctx))
+      .map((action) =>
+        buildArtifactActionButton(action, {
+          documentChrome,
+          onClick: () => {
+            const c = artifactRecordActionContext(currentSelectedRecord());
+            if (!c) return;
+            try {
+              void Promise.resolve(action.onClick(c)).catch(() => {});
+            } catch {
+              /* ignore */
+            }
+          },
+        })
+      );
+    customActions.replaceChildren(...buttons);
+  };
 
   const render = () => {
+    renderCustomActions();
     const hideTabs = documentChrome && records.length <= 1;
-    list.classList.toggle("persona-hidden", hideTabs);
+    const useCustom = Boolean(currentRenderTabBar);
+    // Show the active bar and hide the other; both hide in the ≤1 document case.
+    list.classList.toggle("persona-hidden", hideTabs || useCustom);
+    customBarMount.classList.toggle("persona-hidden", hideTabs || !useCustom);
 
-    list.replaceChildren();
-    for (const r of records) {
-      const tab = createElement(
-        "button",
-        "persona-artifact-tab persona-shrink-0 persona-rounded-lg persona-px-2 persona-py-1 persona-text-xs persona-border persona-border-transparent persona-text-persona-primary"
-      );
-      tab.type = "button";
-      tab.textContent = r.title || r.id.slice(0, 8);
-      if (r.id === selectedId) {
-        tab.classList.add("persona-bg-persona-container", "persona-border-persona-border");
+    if (useCustom && currentRenderTabBar) {
+      // Signature-gate so unrelated streaming re-renders don't tear down the
+      // host bar and lose its internal state or focus.
+      const sig = records.map((r) => r.id).join("|") + " " + (selectedId ?? "");
+      if (sig !== customBarSig) {
+        customBarSig = sig;
+        const bar = currentRenderTabBar({
+          records,
+          selectedId,
+          onSelect: options.onSelect,
+        });
+        // A renderer may return the SAME element across invocations to keep its
+        // internal state (e.g. a roving tablist's keyboard focus on the selected
+        // tab). Only remount when the node actually changed; replaceChildren
+        // detaches the subtree, which would blur a focused tab and break arrow
+        // nav on every selection change.
+        if (customBarMount.firstElementChild !== bar) {
+          customBarMount.replaceChildren(bar);
+        }
       }
-      tab.addEventListener("click", () => options.onSelect(r.id));
-      list.appendChild(tab);
+    } else {
+      // Capture focus before replacing tab DOM so the controller restores the
+      // roving stop after the rebuild (keyboard nav dies otherwise).
+      tablist.beforeRender();
+      list.replaceChildren();
+      const tabEls: HTMLButtonElement[] = [];
+      let selectedIndex = -1;
+      for (const [index, r] of records.entries()) {
+        const tab = createElement(
+          "button",
+          "persona-artifact-tab persona-shrink-0 persona-rounded-lg persona-px-2 persona-py-1 persona-text-xs persona-border persona-border-transparent persona-text-persona-primary"
+        );
+        tab.type = "button";
+        // Prefer the file basename over the full path so tabs stay readable
+        // (matches the toolbar title); keep the full path/title in a tooltip.
+        const fileMeta = r.artifactType === "markdown" ? r.file : undefined;
+        const label = fileMeta ? basenameOf(fileMeta.path) : r.title || r.id.slice(0, 8);
+        const tooltip = fileMeta?.path || r.title || label;
+        tab.textContent = label;
+        tab.title = tooltip;
+        tab.setAttribute("aria-label", tooltip);
+        if (r.id === selectedId) {
+          tab.classList.add("persona-bg-persona-container", "persona-border-persona-border");
+          selectedIndex = index;
+        }
+        tab.addEventListener("click", () => options.onSelect(r.id));
+        list.appendChild(tab);
+        tabEls.push(tab);
+      }
+      // The controller owns role/aria-selected/roving tabindex, keyboard nav,
+      // and focus restoration across this rebuild.
+      tablist.render(tabEls, selectedIndex);
+
+      // Keep the selected tab visible when the selection changes (e.g. a new
+      // artifact streams in and auto-selects). `inline: "nearest"` is a no-op
+      // when the tab is already visible, so this never yanks the strip needlessly.
+      if (selectedIndex >= 0 && selectedId !== lastScrolledTabId) {
+        lastScrolledTabId = selectedId;
+        const activeTab = tabEls[selectedIndex];
+        if (typeof activeTab.scrollIntoView === "function") {
+          activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+      }
+
+      // Recompute the edge fades after tabs and the selection scroll settle.
+      updateTabFades(list);
     }
 
-    content.replaceChildren();
     const sel =
       (selectedId && records.find((x) => x.id === selectedId)) ||
       records[records.length - 1];
-    if (!sel) return;
-
-    if (documentChrome) {
-      const kind = sel.artifactType === "markdown" ? "MD" : sel.component ?? "Component";
-      const rawTitle = (sel.title || "Document").trim();
-      const baseTitle = rawTitle.replace(/\s*·\s*MD\s*$/i, "").trim() || "Document";
-      centerTitle.textContent = `${baseTitle} · ${kind}`;
-    } else {
-      titleEl.textContent = toolbarTitle;
-    }
-
-    if (sel.artifactType === "markdown") {
-      if (documentChrome && viewMode === "source") {
-        const pre = createElement(
-          "pre",
-          "persona-font-mono persona-text-xs persona-whitespace-pre-wrap persona-break-words persona-text-persona-primary"
-        );
-        pre.textContent = sel.markdown ?? "";
-        content.appendChild(pre);
-        return;
-      }
-      const wrap = createElement("div", "persona-text-sm persona-leading-relaxed persona-markdown-bubble");
-      wrap.innerHTML = toHtml(sel.markdown ?? "");
-      content.appendChild(wrap);
+    if (!sel) {
+      content.replaceChildren();
+      preview = null;
+      updateFileToggleVisibility(false);
       return;
     }
 
-    const renderer = sel.component ? componentRegistry.get(sel.component) : undefined;
-    if (renderer) {
-      const stubMessage: AgentWidgetMessage = {
-        id: sel.id,
-        role: "assistant",
-        content: "",
-        createdAt: new Date().toISOString()
-      };
-      const ctx: ComponentContext = {
-        message: stubMessage,
-        config,
-        updateProps: () => {}
-      };
-      try {
-        const el = renderer(sel.props ?? {}, ctx);
-        if (el) {
-          content.appendChild(el);
-          return;
-        }
-      } catch {
-        /* fall through */
-      }
+    const selFile = sel.artifactType === "markdown" ? sel.file : undefined;
+
+    // Expose the rendered/source toggle for previewable file artifacts even
+    // outside the document toolbar preset.
+    updateFileToggleVisibility(Boolean(selFile));
+
+    if (documentChrome) {
+      const kind = selFile
+        ? fileTypeLabel(selFile)
+        : sel.artifactType === "markdown"
+          ? "MD"
+          : sel.component ?? "Component";
+      const rawTitle = (sel.title || "Document").trim();
+      const baseTitle = selFile
+        ? basenameOf(selFile.path)
+        : rawTitle.replace(/\s*·\s*MD\s*$/i, "").trim() || "Document";
+      centerTitle.textContent = `${baseTitle} · ${kind}`;
+    } else {
+      titleEl.textContent = selFile ? basenameOf(selFile.path) : toolbarTitle;
     }
-    content.appendChild(fallbackComponentCard(sel));
+
+    // Delegate the body to the shared preview renderer. Keep the handle's
+    // element attached across updates: re-attaching would reload a live
+    // file-preview iframe.
+    if (!preview) {
+      preview = renderArtifactPreviewBody(sel, { config, resolveViewMode });
+      content.replaceChildren(preview.el);
+    } else {
+      if (preview.el.parentElement !== content) {
+        content.replaceChildren(preview.el);
+      }
+      preview.update(sel);
+    }
+    // Source view fills the pane edge-to-edge (gutter flush left, no inset),
+    // so drop the content padding whenever the body rendered a code pre.
+    // Checked after the render rather than re-deriving the pre/markdown/iframe
+    // decision here — renderArtifactPreviewBody owns that branching.
+    content.classList.toggle(
+      "persona-artifact-content-flush",
+      Boolean(content.querySelector(".persona-code-pre"))
+    );
   };
 
   const applyLayoutVisibility = () => {
@@ -423,6 +669,15 @@ export function createArtifactPane(
     }
   };
 
+  // Build/refresh the visible DOM (tab strip, title, preview body) plus the
+  // layout chrome. Gated behind `visible` so we never create a preview iframe
+  // for a pane the user isn't looking at.
+  const flush = () => {
+    dirty = false;
+    render();
+    applyLayoutVisibility();
+  };
+
   return {
     element: shell,
     backdrop,
@@ -435,8 +690,12 @@ export function createArtifactPane(
       if (records.length > 0) {
         mobileOpen = true;
       }
-      render();
-      applyLayoutVisibility();
+      // Record the latest state cheaply; only build the preview DOM when shown.
+      // While hidden (inline/card display modes), rendering here would spawn a
+      // second sandboxed srcdoc iframe alongside the inline transcript preview,
+      // executing artifact scripts twice. Defer the whole render() to reveal.
+      dirty = true;
+      if (visible) flush();
     },
     setMobileOpen(open: boolean) {
       mobileOpen = open;
@@ -446,6 +705,54 @@ export function createArtifactPane(
       } else {
         applyLayoutVisibility();
       }
+    },
+    setExpanded(expanded: boolean) {
+      // Swap the icon (the state signal) and update the accessible label. We
+      // deliberately avoid aria-pressed here: the icon-btn [aria-pressed] CSS
+      // would add unwanted active styling.
+      const svg = renderLucideIcon(expanded ? "minimize" : "maximize", 16, "currentColor", 2);
+      if (svg) expandBtn.replaceChildren(svg);
+      const label = expanded ? "Collapse artifacts panel" : "Expand artifacts panel";
+      expandBtn.setAttribute("aria-label", label);
+      expandBtn.title = label;
+    },
+    setExpandToggleVisible(visible: boolean) {
+      expandBtn.classList.toggle("persona-hidden", !visible);
+    },
+    setCopyButtonVisible(visible: boolean) {
+      if (documentChrome) return;
+      copyBtn.classList.toggle("persona-hidden", !visible);
+    },
+    setCustomActions(actions: PersonaArtifactCustomAction[]) {
+      customActionList = actions;
+      renderCustomActions();
+    },
+    setTabFade(cfg: boolean | { start?: boolean; end?: boolean } | undefined) {
+      const resolved = resolveFade(cfg);
+      if (resolved.start === fadeStartEnabled && resolved.end === fadeEndEnabled) {
+        return;
+      }
+      fadeStartEnabled = resolved.start;
+      fadeEndEnabled = resolved.end;
+      updateTabFades(list);
+    },
+    setRenderTabBar(fn) {
+      if (fn === currentRenderTabBar) return;
+      currentRenderTabBar = fn;
+      // Force a custom-bar rebuild on the next render and re-render now so the
+      // switch (built-in <-> custom) applies live.
+      customBarSig = "";
+      render();
+    },
+    setVisible(next: boolean) {
+      if (next === visible) return;
+      visible = next;
+      // Reveal after lazy-skipped updates: render the CURRENT recorded state.
+      // Hiding never tears down an already-rendered preview — re-appending the
+      // iframe on re-open would reload it (a hard invariant; see the reuse
+      // comments in artifact-preview.ts). Laziness only blocks building NEW
+      // previews while hidden; an already-mounted one stays put.
+      if (next && dirty) flush();
     }
   };
 }

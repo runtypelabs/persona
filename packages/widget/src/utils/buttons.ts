@@ -149,6 +149,8 @@ export interface ToggleGroupItem {
   icon?: string;
   /** Accessible label for the button. */
   label: string;
+  /** Extra CSS class(es) appended after "persona-icon-btn". */
+  className?: string;
 }
 
 /** Options for {@link createToggleGroup}. */
@@ -202,6 +204,7 @@ export function createToggleGroup(options: CreateToggleGroupOptions): ToggleGrou
       btn = createIconButton({
         icon: item.icon,
         label: item.label,
+        className: item.className,
         onClick: () => {
           currentId = item.id;
           updatePressed();
@@ -209,7 +212,10 @@ export function createToggleGroup(options: CreateToggleGroupOptions): ToggleGrou
         },
       });
     } else {
-      btn = createElement("button", "persona-icon-btn");
+      btn = createElement(
+        "button",
+        "persona-icon-btn" + (item.className ? " " + item.className : ""),
+      );
       btn.type = "button";
       btn.setAttribute("aria-label", item.label);
       btn.title = item.label;

@@ -48,6 +48,15 @@ describe("examples command palette", () => {
     expect(dialog?.hidden).toBe(true);
   });
 
+  test("renders a GitHub repo link in the demo shell header", () => {
+    renderExamplesShell("artifact-demo");
+
+    const githubLink = document.querySelector<HTMLAnchorElement>(".shell-github");
+    expect(githubLink).not.toBeNull();
+    expect(githubLink?.href).toBe("https://github.com/runtypelabs/persona");
+    expect(githubLink?.getAttribute("aria-label")).toBe("Persona on GitHub");
+  });
+
   test("promotes dynamic components as the canonical streamed UI demo", () => {
     const hrefs = ADVANCED_EXAMPLES.map((entry) => entry.href);
 

@@ -192,6 +192,38 @@ describe('theme utils', () => {
     expect(surfaceVars['--persona-artifact-toolbar-bg']).toBe('#f9fafb');
   });
 
+  it('maps artifact inline chrome tokens to dedicated CSS variables (with semantic refs)', () => {
+    const theme = createTheme({
+      components: {
+        artifact: {
+          inline: {
+            background: 'semantic.colors.surface',
+            border: '1px solid #e5e7eb',
+            borderRadius: '12px',
+            chromeBackground: 'semantic.colors.container',
+            chromeBorder: '#e5e7eb',
+            titleColor: 'palette.colors.gray.900',
+            mutedColor: 'palette.colors.gray.500',
+            frameHeight: '400px',
+          },
+        },
+      },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    // semantic.* refs resolve to concrete colors; plain values pass through.
+    // surface and container both default to gray.50.
+    expect(cssVars['--persona-artifact-inline-bg']).toBe('#f9fafb');
+    expect(cssVars['--persona-artifact-inline-border']).toBe('1px solid #e5e7eb');
+    expect(cssVars['--persona-artifact-inline-radius']).toBe('12px');
+    expect(cssVars['--persona-artifact-inline-chrome-bg']).toBe('#f9fafb');
+    expect(cssVars['--persona-artifact-inline-chrome-border']).toBe('#e5e7eb');
+    expect(cssVars['--persona-artifact-inline-title-color']).toBe('#111827');
+    expect(cssVars['--persona-artifact-inline-muted-color']).toBe('#6b7280');
+    expect(cssVars['--persona-artifact-inline-frame-height']).toBe('400px');
+  });
+
   it('maps component bubble shadow tokens to consumer CSS variables', () => {
     const cfg = {
       colorScheme: 'light' as const,
@@ -304,5 +336,21 @@ describe('theme utils', () => {
     expect(el.style.getPropertyValue('--persona-tool-bubble-shadow').trim()).toBe(
       '0 1px 2px rgba(255,0,0,0.5)'
     );
+  });
+
+  it('stamps the resolved color scheme on the root so scheme-scoped CSS (syntax palette) follows the widget, not the OS', () => {
+    const el = document.createElement('div');
+    applyThemeVariables(el, { colorScheme: 'light' });
+    expect(el.getAttribute('data-persona-color-scheme')).toBe('light');
+    applyThemeVariables(el, { colorScheme: 'dark' });
+    expect(el.getAttribute('data-persona-color-scheme')).toBe('dark');
+  });
+
+  it('maps components.code.background to --persona-code-bg', () => {
+    const theme = createTheme({
+      components: { code: { background: '#fafafa' } },
+    });
+    const cssVars = themeToCssVariables(theme);
+    expect(cssVars['--persona-code-bg']).toBe('#fafafa');
   });
 });

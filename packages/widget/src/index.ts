@@ -37,3 +37,11 @@ export type {
   DemoCarouselOptions,
   DemoCarouselHandle
 } from "./components/demo-carousel";
+
+// Accessible roving-tabindex tablist helper for custom artifact tab bars
+// (features.artifacts.renderTabBar).
+export { createRovingTablist } from "./utils/roving-tablist";
+export type {
+  RovingTablistController,
+  RovingTablistOptions
+} from "./utils/roving-tablist";

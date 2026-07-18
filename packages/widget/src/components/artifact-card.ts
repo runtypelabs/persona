@@ -1,4 +1,14 @@
 import type { ComponentContext, ComponentRenderer } from "./registry";
+import type { PersonaArtifactFileMeta, PersonaArtifactRecord } from "../types";
+import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
+import {
+  applyArtifactStatus,
+  clearArtifactStatusTracking,
+  resolveArtifactStatusLabel
+} from "../utils/artifact-status-label";
+import { createLabelButton } from "../utils/buttons";
+import { buildArtifactActionButton } from "../utils/artifact-custom-actions";
+import type { PersonaArtifactActionContext } from "../types";
 
 /**
  * Default artifact card renderer.
@@ -6,26 +16,32 @@ import type { ComponentContext, ComponentRenderer } from "./registry";
  */
 function renderDefaultArtifactCard(
   props: Record<string, unknown>,
-  _context: ComponentContext
+  context: ComponentContext
 ): HTMLElement {
-  const title =
+  const file =
+    props.file && typeof props.file === "object" && !Array.isArray(props.file)
+      ? (props.file as PersonaArtifactFileMeta)
+      : undefined;
+  const rawTitle =
     typeof props.title === "string" && props.title
       ? props.title
       : "Untitled artifact";
+  // File artifacts show the basename (title stays the full path on the wire).
+  const title = file ? basenameOf(file.path) : rawTitle;
   const artifactId =
     typeof props.artifactId === "string" ? props.artifactId : "";
   const status = props.status === "streaming" ? "streaming" : "complete";
   const artifactType =
     typeof props.artifactType === "string" ? props.artifactType : "markdown";
-  const subtitle =
-    artifactType === "component" ? "Component" : "Document";
+  const subtitle = file
+    ? fileTypeLabel(file)
+    : artifactType === "component"
+      ? "Component"
+      : "Document";
 
   const root = document.createElement("div");
   root.className =
-    "persona-flex persona-w-full persona-max-w-full persona-items-center persona-gap-3 persona-rounded-xl persona-px-4 persona-py-3";
-  root.style.border = "1px solid var(--persona-border, #e5e7eb)";
-  root.style.backgroundColor = "var(--persona-surface, #ffffff)";
-  root.style.cursor = "pointer";
+    "persona-artifact-card persona-flex persona-w-full persona-max-w-full persona-items-center persona-gap-3 persona-px-4 persona-py-3";
   root.tabIndex = 0;
   root.setAttribute("role", "button");
   root.setAttribute("aria-label", `Open ${title} in artifact panel`);
@@ -56,35 +72,66 @@ function renderDefaultArtifactCard(
   subtitleEl.style.color = "var(--persona-muted, #9ca3af)";
 
   if (status === "streaming") {
-    // Pulsing dot for streaming status
-    const dot = document.createElement("span");
-    dot.className = "persona-inline-block persona-w-1.5 persona-h-1.5 persona-rounded-full";
-    dot.style.backgroundColor = "var(--persona-primary, #171717)";
-    dot.style.animation = "persona-pulse 1.5s ease-in-out infinite";
-    subtitleEl.appendChild(dot);
-
-    const statusText = document.createElement("span");
-    statusText.textContent = `Generating ${subtitle.toLowerCase()}...`;
-    subtitleEl.appendChild(statusText);
+    const artifactsCfg = context?.config?.features?.artifacts;
+    // The card re-renders only at streaming-start and completion (deltas flow to
+    // the pane / inline block, not here), so live counters don't tick on the
+    // card; the string / label form still applies. Build a minimal record from
+    // the card props so the shared resolver derives the same typeLabel + ctx.
+    const record: PersonaArtifactRecord = {
+      id: artifactId,
+      artifactType: artifactType === "component" ? "component" : "markdown",
+      title: rawTitle,
+      status: "streaming",
+      ...(typeof props.markdown === "string" ? { markdown: props.markdown } : {}),
+      ...(file ? { file } : {})
+    };
+    const resolved = resolveArtifactStatusLabel(record, artifactsCfg, "card");
+    applyArtifactStatus(subtitleEl, resolved, artifactsCfg);
   } else {
+    if (artifactId) clearArtifactStatusTracking(artifactId);
     subtitleEl.textContent = subtitle;
   }
 
   meta.append(titleEl, subtitleEl);
   root.append(iconBox, meta);
 
-  // Download button (visible when artifact is complete)
+  // Custom actions + Download button render only on complete artifacts, same
+  // as Download: content-dependent actions during streaming would act on
+  // partial content, so they wait until the artifact is fully materialized.
   if (status === "complete") {
-    const dl = document.createElement("button");
-    dl.type = "button";
-    dl.textContent = "Download";
+    // Custom card actions carry NO direct listeners (the card re-renders during
+    // streaming and is morphed by idiomorph). Clicks are handled by event
+    // delegation in ui.ts, keyed off data-artifact-custom-action, mirroring the
+    // Download button's data-download-artifact delegation.
+    const cardActions = context?.config?.features?.artifacts?.cardActions;
+    if (cardActions && cardActions.length > 0) {
+      const ctx: PersonaArtifactActionContext = {
+        artifactId: artifactId || null,
+        title,
+        artifactType,
+        markdown:
+          typeof props.markdown === "string" ? props.markdown : undefined,
+        file,
+      };
+      for (const action of cardActions) {
+        try {
+          if (action.visible === undefined || action.visible(ctx)) {
+            const btn = buildArtifactActionButton(action);
+            btn.setAttribute("data-artifact-custom-action", action.id);
+            btn.className = `${btn.className} persona-flex-shrink-0`;
+            root.append(btn);
+          }
+        } catch {
+          // A single bad action must not take down the whole card.
+        }
+      }
+    }
+
+    const dl = createLabelButton({
+      label: "Download",
+      className: "persona-flex-shrink-0",
+    });
     dl.title = `Download ${title}`;
-    dl.className =
-      "persona-flex-shrink-0 persona-rounded-md persona-px-3 persona-py-1.5 persona-text-xs persona-font-medium";
-    dl.style.border = "1px solid var(--persona-border, #e5e7eb)";
-    dl.style.color = "var(--persona-text, #1f2937)";
-    dl.style.backgroundColor = "transparent";
-    dl.style.cursor = "pointer";
     dl.setAttribute("data-download-artifact", artifactId);
     root.append(dl);
   }

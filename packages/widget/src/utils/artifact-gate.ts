@@ -39,6 +39,26 @@ function clearDocumentToolbarLayoutVars(mount: HTMLElement): void {
   mount.style.removeProperty("--persona-artifact-doc-toggle-active-border");
 }
 
+const ARTIFACT_APPEARANCE_MODES = ["panel", "seamless", "detached"] as const;
+type ArtifactAppearance = (typeof ARTIFACT_APPEARANCE_MODES)[number];
+
+/** Resolve the effective pane appearance, applying the detached-panel coordinated default. */
+function resolveArtifactPaneAppearance(config: AgentWidgetConfig): ArtifactAppearance {
+  const raw = config.features?.artifacts?.layout?.paneAppearance;
+  if (raw && (ARTIFACT_APPEARANCE_MODES as readonly string[]).includes(raw)) {
+    return raw as ArtifactAppearance;
+  }
+  if (raw) return "panel";
+  // Coordinated default: a detached panel gets a detached pane unless overridden.
+  return config.launcher?.detachedPanel ? "detached" : "panel";
+}
+
+/** True when the effective pane appearance resolves to "detached" (explicit or coordinated default). */
+export function isArtifactPaneAppearanceDetached(config: AgentWidgetConfig | undefined): boolean {
+  if (!config || !artifactsSidebarEnabled(config)) return false;
+  return resolveArtifactPaneAppearance(config) === "detached";
+}
+
 export function applyArtifactLayoutCssVars(mount: HTMLElement, config: AgentWidgetConfig): void {
   if (!artifactsSidebarEnabled(config)) {
     mount.style.removeProperty("--persona-artifact-split-gap");
@@ -52,7 +72,12 @@ export function applyArtifactLayoutCssVars(mount: HTMLElement, config: AgentWidg
     return;
   }
   const l = config.features?.artifacts?.layout;
-  mount.style.setProperty("--persona-artifact-split-gap", l?.splitGap ?? "0.5rem");
+  // Detached shows the canvas between columns; panel/seamless weld at gap 0.
+  const gapDefault =
+    resolveArtifactPaneAppearance(config) === "detached"
+      ? "var(--persona-panel-inset)"
+      : "0";
+  mount.style.setProperty("--persona-artifact-split-gap", l?.splitGap ?? gapDefault);
   mount.style.setProperty("--persona-artifact-pane-width", l?.paneWidth ?? "40%");
   mount.style.setProperty("--persona-artifact-pane-max-width", l?.paneMaxWidth ?? "28rem");
   if (l?.paneMinWidth) {
@@ -95,22 +120,18 @@ export function applyArtifactLayoutCssVars(mount: HTMLElement, config: AgentWidg
   applyArtifactPaneBorderTheme(mount, config);
 }
 
-const ARTIFACT_APPEARANCE_MODES = ["panel", "seamless"] as const;
-
-/** Toggle root classes for artifact pane appearance, radius, shadow, and unified chrome. */
+/** Toggle root classes for artifact pane appearance, radius, and shadow vars. */
 export function applyArtifactPaneAppearance(mount: HTMLElement, config: AgentWidgetConfig): void {
   for (const m of ARTIFACT_APPEARANCE_MODES) {
     mount.classList.remove(`persona-artifact-appearance-${m}`);
   }
-  mount.classList.remove("persona-artifact-unified-split");
   mount.style.removeProperty("--persona-artifact-pane-radius");
   mount.style.removeProperty("--persona-artifact-pane-shadow");
-  mount.style.removeProperty("--persona-artifact-unified-outer-radius");
+  mount.style.removeProperty("--persona-artifact-chat-shadow");
   if (!artifactsSidebarEnabled(config)) return;
 
   const layout = config.features?.artifacts?.layout;
-  const raw = layout?.paneAppearance ?? "panel";
-  const mode = (ARTIFACT_APPEARANCE_MODES as readonly string[]).includes(raw) ? raw : "panel";
+  const mode = resolveArtifactPaneAppearance(config);
   mount.classList.add(`persona-artifact-appearance-${mode}`);
 
   const radius = layout?.paneBorderRadius?.trim();
@@ -123,13 +144,17 @@ export function applyArtifactPaneAppearance(mount: HTMLElement, config: AgentWid
     mount.style.setProperty("--persona-artifact-pane-shadow", shadow);
   }
 
-  if (layout?.unifiedSplitChrome === true) {
-    mount.classList.add("persona-artifact-unified-split");
-    const outer = layout.unifiedSplitOuterRadius?.trim() || radius;
-    if (outer) {
-      mount.style.setProperty("--persona-artifact-unified-outer-radius", outer);
-    }
+  // Chat card gains its own front shadow lookup so a detached split can flatten
+  // the chat column while the pane stays raised. Unset falls back to the pane chain.
+  const chatShadow = layout?.chatShadow?.trim();
+  if (chatShadow) {
+    mount.style.setProperty("--persona-artifact-chat-shadow", chatShadow);
   }
+
+  // Panel/seamless splits weld by default; `unifiedSplitChrome` is a deprecated
+  // no-op. The welded outer-right radius (`--persona-artifact-welded-outer-radius`)
+  // is owned by ui.ts syncPanelChrome so it derives from the same resolved panel
+  // radius as the chat card; `unifiedSplitOuterRadius` / `paneBorderRadius` win there.
 }
 
 /** Widen floating panel when artifacts show (default true); `false` opts out. */

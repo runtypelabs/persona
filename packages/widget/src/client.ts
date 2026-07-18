@@ -21,10 +21,15 @@ import {
   ClientFeedbackRequest,
   ClientFeedbackType,
   PersonaArtifactKind,
+  PersonaArtifactFileMeta,
   ContentPart,
   WebMcpConfirmHandler
 } from "./types";
 import { WebMcpBridge, computeClientToolsFingerprint, isWebMcpToolName } from "./webmcp-bridge";
+import {
+  buildArtifactRefRawContent,
+  resolveArtifactDisplayMode
+} from "./utils/artifact-display";
 import { resolveTarget } from "./utils/target";
 import { builtInClientToolsForDispatch } from "./ask-user-question-tool";
 import {
@@ -1701,12 +1706,25 @@ export class AgentWidgetClient {
 
     // Track tool call IDs for artifact emit tools so we can suppress their UI
     const artifactToolCallIds = new Set<string>();
-    // Track artifact reference card messages so we can update them on artifact_complete
+    // Track artifact block messages (reference card or inline block) so we can
+    // update them on artifact_complete
     const artifactCardMessages = new Map<string, AgentWidgetMessage>();
     // Track artifact IDs that already have a reference card (from auto-creation or transcript_insert)
     const artifactIdsWithCards = new Set<string>();
-    // Accumulate artifact markdown content for embedding in card props on complete
-    const artifactContent = new Map<string, { markdown: string; title?: string }>();
+    // Accumulate artifact markdown content (and component props) for embedding
+    // in block props on complete. `props` accumulates across `artifact_update`
+    // events so an inline component block hydrates with its real props after a
+    // refresh (the session artifact registry, which also tracks them live, is
+    // not persisted).
+    const artifactContent = new Map<
+      string,
+      {
+        markdown: string;
+        title?: string;
+        file?: PersonaArtifactFileMeta;
+        props?: Record<string, unknown>;
+      }
+    >();
     const isArtifactEmitToolName = (name: string | undefined): boolean => {
       if (!name) return false;
       const normalized = name.replace(/_+/g, "_").replace(/^_|_$/g, "");
@@ -3105,17 +3123,57 @@ export class AgentWidgetClient {
             const at = payload.artifactType as PersonaArtifactKind;
             const artId = String(payload.id);
             const artTitle = typeof payload.title === "string" ? payload.title : undefined;
+            // Additive `file` metadata: validate shape (object with string path +
+            // string mimeType; optional string language). Drop silently if malformed
+            // so old/new backends and unexpected payloads never break the stream.
+            const rawFile = payload.file;
+            let artFile: PersonaArtifactFileMeta | undefined;
+            if (
+              rawFile &&
+              typeof rawFile === "object" &&
+              !Array.isArray(rawFile) &&
+              typeof rawFile.path === "string" &&
+              typeof rawFile.mimeType === "string"
+            ) {
+              artFile = {
+                path: rawFile.path,
+                mimeType: rawFile.mimeType,
+                ...(typeof rawFile.language === "string" ? { language: rawFile.language } : {}),
+              };
+            }
             onEvent({
               type: "artifact_start",
               id: artId,
               artifactType: at,
               title: artTitle,
-              component: typeof payload.component === "string" ? payload.component : undefined
+              component: typeof payload.component === "string" ? payload.component : undefined,
+              ...(artFile ? { file: artFile } : {})
             });
-            artifactContent.set(artId, { markdown: "", title: artTitle });
-            // Insert inline artifact reference card (skip if already present from transcript_insert)
+            // Seed component props from artifact_start when the payload
+            // carries them; artifact_update events accumulate the rest below.
+            const startProps =
+              payload.props && typeof payload.props === "object" && !Array.isArray(payload.props)
+                ? { ...(payload.props as Record<string, unknown>) }
+                : undefined;
+            artifactContent.set(artId, {
+              markdown: "",
+              title: artTitle,
+              file: artFile,
+              ...(startProps ? { props: startProps } : {})
+            });
+            // Insert the in-thread artifact block (skip if already present from
+            // transcript_insert). The resolved display mode picks the component:
+            // "card"/"panel" inject the reference card; "inline" injects the
+            // inline preview block. Both share the rawContent JSON-component
+            // shape so transcript persistence and hydration work unchanged.
             if (!artifactIdsWithCards.has(artId)) {
               artifactIdsWithCards.add(artId);
+              const displayMode = resolveArtifactDisplayMode(
+                this.config.features?.artifacts,
+                at
+              );
+              const artComponent =
+                typeof payload.component === "string" ? payload.component : undefined;
               const cardMsg: AgentWidgetMessage = {
                 id: `artifact-ref-${artId}`,
                 role: "assistant",
@@ -3123,9 +3181,13 @@ export class AgentWidgetClient {
                 createdAt: new Date().toISOString(),
                 streaming: true,
                 sequence: nextSequence(),
-                rawContent: JSON.stringify({
-                  component: "PersonaArtifactCard",
-                  props: { artifactId: artId, title: artTitle, artifactType: at, status: "streaming" },
+                rawContent: buildArtifactRefRawContent(displayMode, {
+                  artifactId: artId,
+                  title: artTitle,
+                  artifactType: at,
+                  status: "streaming",
+                  ...(artFile ? { file: artFile } : {}),
+                  ...(artComponent ? { component: artComponent } : {}),
                 }),
               };
               artifactCardMessages.set(artId, cardMsg);
@@ -3152,6 +3214,13 @@ export class AgentWidgetClient {
               props,
               component: typeof payload.component === "string" ? payload.component : undefined
             });
+            // Accumulate for hydration: embedded on artifact_complete so an
+            // inline component block re-renders with its real props after a
+            // refresh.
+            const updateAcc = artifactContent.get(String(payload.id));
+            if (updateAcc) {
+              updateAcc.props = { ...(updateAcc.props ?? {}), ...props };
+            }
           } else if (payloadType === "artifact_complete") {
             const artCompleteId = String(payload.id);
             onEvent({ type: "artifact_complete", id: artCompleteId });
@@ -3167,6 +3236,20 @@ export class AgentWidgetClient {
                   const acc = artifactContent.get(artCompleteId);
                   if (acc?.markdown) {
                     parsed.props.markdown = acc.markdown;
+                  }
+                  // Persist file metadata too so the download path unfences correctly after refresh.
+                  if (acc?.file) {
+                    parsed.props.file = acc.file;
+                  }
+                  // Embed accumulated component props so an inline component
+                  // block hydrates with its real props after a refresh. Only
+                  // the inline block reads them; the card never does.
+                  if (
+                    parsed.component === "PersonaArtifactInline" &&
+                    acc?.props &&
+                    Object.keys(acc.props).length > 0
+                  ) {
+                    parsed.props.componentProps = acc.props;
                   }
                 }
                 refMsg.rawContent = JSON.stringify(parsed);

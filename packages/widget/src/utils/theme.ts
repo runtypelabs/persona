@@ -194,6 +194,13 @@ export const applyThemeVariables = (
   for (const [name, value] of Object.entries(cssVars)) {
     element.style.setProperty(name, value);
   }
+
+  // Stamp the resolved scheme so stylesheet rules can key scheme-specific
+  // defaults (e.g. the syntax-highlight palette) off the widget's own color
+  // scheme instead of the OS prefers-color-scheme, which diverges whenever a
+  // host pins colorScheme. Re-applied on every theme application, so live
+  // config updates and theme-observer callbacks keep it current.
+  element.setAttribute("data-persona-color-scheme", getColorScheme(config));
 };
 
 export const createThemeObserver = (

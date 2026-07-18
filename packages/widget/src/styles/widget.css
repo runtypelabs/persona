@@ -725,6 +725,10 @@
   flex-shrink: 0;
 }
 
+.persona-shrink-0 {
+  flex-shrink: 0;
+}
+
 .persona-min-w-0 {
   min-width: 0;
 }
@@ -861,6 +865,10 @@
 
 .persona-overflow-y-auto {
   overflow-y: auto;
+}
+
+.persona-overflow-x-auto {
+  overflow-x: auto;
 }
 
 .persona-widget-body {
@@ -2668,7 +2676,12 @@
 }
 
 /* Document toolbar preset: optional layout vars: --persona-artifact-doc-toolbar-icon-color, etc. */
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn {
+/* Document-toolbar icon/copy button styling is shared by the artifact pane's
+   document preset and the inline chrome actions cluster, so both surfaces read
+   the same `components.artifact.toolbar` tokens (the vars are emitted globally
+   at the widget root). */
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2681,17 +2694,20 @@
   line-height: 1;
 }
 
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn:hover {
   color: var(--persona-artifact-toolbar-icon-hover-color, inherit);
-  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-container, #f3f4f6));
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
 }
 
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-pressed="true"] {
-  background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-container, #f3f4f6));
-  border-color: var(--persona-artifact-doc-toggle-active-border, var(--persona-border, #e5e7eb));
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-pressed="true"],
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn[aria-pressed="true"] {
+  background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
+  border-color: var(--persona-artifact-doc-toggle-active-border, var(--persona-icon-btn-active-border, var(--persona-border, #e5e7eb)));
 }
 
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn {
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-copy-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -2705,8 +2721,9 @@
   line-height: 1.25;
 }
 
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover {
-  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-container, #f3f4f6));
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-copy-btn:hover {
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
 }
 
 [data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-label {
@@ -2718,6 +2735,12 @@
   background: var(--persona-artifact-tab-bg, transparent);
   border-radius: var(--persona-artifact-tab-radius, 0.5rem);
   color: var(--persona-artifact-tab-color, inherit);
+  /* Keep each tab on one line and cap its width so the strip scrolls
+     horizontally instead of wrapping/overflowing the pane. */
+  white-space: nowrap;
+  max-width: var(--persona-artifact-tab-max-width, 12rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 [data-persona-root] .persona-artifact-tab.persona-bg-persona-container {
@@ -2730,20 +2753,21 @@
   background: var(--persona-artifact-toolbar-bg, var(--persona-surface, #fff));
 }
 
-/* Toggle group gap */
-[data-persona-root] .persona-artifact-toggle-group {
-  gap: var(--persona-artifact-toolbar-toggle-group-gap, 0.25rem);
-}
-
-/* Toggle button border-radius (view/code buttons) */
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-view-btn,
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-code-btn {
-  border-radius: var(--persona-artifact-toolbar-toggle-radius, var(--persona-artifact-toolbar-icon-radius, var(--persona-radius-md, 0.375rem)));
-}
+/* Toggle group + view/code button styling lives in the segmented
+   .persona-toggle-group.persona-artifact-toggle-group block further down. */
 
 /* Tab hover */
 [data-persona-root] .persona-artifact-tab:hover {
   background: var(--persona-artifact-tab-hover-bg, var(--persona-container, #f3f4f6));
+}
+
+/* Keyboard focus ring, themed to match cards/buttons instead of the UA default
+   (which varies by browser). Custom renderTabBar bars reuse .persona-artifact-tab,
+   so they inherit the same ring; give a scroll container enough padding that the
+   2px offset isn't clipped. */
+[data-persona-root] .persona-artifact-tab:focus-visible {
+  outline: 2px solid var(--persona-accent, #171717);
+  outline-offset: 2px;
 }
 
 /* Tab list container */
@@ -2751,11 +2775,40 @@
   background: var(--persona-artifact-tab-list-bg, transparent);
   border-bottom-color: var(--persona-artifact-tab-list-border-color, var(--persona-border, #e5e7eb));
   padding: var(--persona-artifact-tab-list-padding, 0.5rem);
+  /* Thin, unobtrusive horizontal scrollbar for the tab strip. */
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
+}
+
+[data-persona-root] .persona-artifact-list::-webkit-scrollbar {
+  height: 6px;
+}
+
+[data-persona-root] .persona-artifact-list::-webkit-scrollbar-thumb {
+  background: var(--persona-artifact-tab-list-scrollbar, var(--persona-border, #e5e7eb));
+  border-radius: 9999px;
 }
 
 /* Toolbar border override */
 [data-persona-root] .persona-artifact-toolbar-document {
   border-bottom: var(--persona-artifact-toolbar-border, 1px solid var(--persona-border, #e5e7eb));
+}
+
+/* Artifact reference card (chat thread) */
+[data-persona-root] .persona-artifact-card {
+  background: var(--persona-artifact-card-bg, var(--persona-surface, #ffffff));
+  border: var(--persona-artifact-card-border, 1px solid var(--persona-border, #e5e7eb));
+  border-radius: var(--persona-artifact-card-radius, var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem)));
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+[data-persona-root] .persona-artifact-card:hover {
+  background: var(--persona-artifact-card-hover-bg, #f3f4f6);
+  border-color: var(--persona-artifact-card-hover-border, var(--persona-border, #e5e7eb));
+}
+[data-persona-root] .persona-artifact-card:focus-visible {
+  outline: 2px solid var(--persona-accent, #171717);
+  outline-offset: 2px;
 }
 
 /* ── Composable button utilities ── */
@@ -2929,6 +2982,89 @@
   border-bottom-right-radius: var(--persona-toggle-group-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem)));
 }
 
+/* Artifact view/source toggle: one segmented pill. The container carries the
+   border; segments are borderless and the active one is highlighted, so the
+   pair reads as a single mutually exclusive switch instead of two buttons. */
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group {
+  gap: var(--persona-artifact-toolbar-toggle-group-gap, 2px);
+  padding: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+  border: var(--persona-artifact-toolbar-toggle-group-border, 1px solid var(--persona-border, #e5e7eb));
+  /* Default to the toolbar button radius (document preset var, then the plain
+     icon-button var) so the pill matches the neighboring copy/close buttons
+     instead of standing out as a capsule. */
+  border-radius: var(--persona-artifact-toolbar-toggle-group-radius, var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))));
+  background: var(--persona-artifact-toolbar-toggle-group-bg, var(--persona-surface, #ffffff));
+}
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn {
+  border: none;
+  background: transparent;
+  /* Segment padding = standalone icon-button padding minus the container's
+     padding, so the pill's outer height matches the neighboring icon buttons
+     (the container's 1px border stands in for the border the segments lost).
+     calc() clamps to 0 if a theme sets group padding larger than icon padding. */
+  padding: calc(var(--persona-artifact-toolbar-icon-padding, var(--persona-icon-btn-padding, 0.25rem)) - var(--persona-artifact-toolbar-toggle-group-padding, 2px));
+  /* Container radius minus the 2px padding so the segment nests concentrically. */
+  border-radius: var(--persona-artifact-toolbar-toggle-radius, calc(var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))) - 2px));
+}
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn:hover {
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
+}
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn[aria-pressed="true"] {
+  background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
+  /* Inset ring instead of a border so documentToolbarToggleActiveBorderColor
+     still applies inside the borderless segment (transparent by default). */
+  box-shadow: inset 0 0 0 1px var(--persona-artifact-doc-toggle-active-border, transparent);
+}
+
+/* Sliding selection thumb: a container ::before that translates between the
+   two equal-width segments, keyed off aria-pressed via :has(). The static
+   aria-pressed background above stays as the fallback for browsers without
+   :has() and is disabled inside the @supports block so the highlight is only
+   ever painted once. Geometry assumes the group's two segments are equal
+   width (both are square icon buttons). */
+@supports selector(:has(*)) {
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group {
+    position: relative;
+  }
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group::before {
+    content: "";
+    position: absolute;
+    top: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+    bottom: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+    left: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+    width: calc(
+      50% - var(--persona-artifact-toolbar-toggle-group-padding, 2px) -
+        (var(--persona-artifact-toolbar-toggle-group-gap, 2px) / 2)
+    );
+    border-radius: var(--persona-artifact-toolbar-toggle-radius, calc(var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))) - 2px));
+    background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
+    box-shadow: inset 0 0 0 1px var(--persona-artifact-doc-toggle-active-border, transparent);
+    transition: transform 0.18s ease;
+    pointer-events: none;
+  }
+  [data-persona-root]
+    .persona-toggle-group.persona-artifact-toggle-group:has(
+      > .persona-icon-btn:last-child[aria-pressed="true"]
+    )::before {
+    transform: translateX(calc(100% + var(--persona-artifact-toolbar-toggle-group-gap, 2px)));
+  }
+  /* Positioned so the segments paint above the absolutely positioned thumb
+     (document order applies once both are in the positioned layer). */
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn {
+    position: relative;
+  }
+  /* The thumb carries the highlight; keep the segment itself transparent. */
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn[aria-pressed="true"] {
+    background: transparent;
+    box-shadow: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group::before {
+      transition: none;
+    }
+  }
+}
+
 /* Combo button: label + chevron with dropdown */
 [data-persona-root] .persona-combo-btn {
   font-size: var(--persona-combo-btn-font-size, 0.8125rem);
@@ -3019,11 +3155,560 @@
     max-width: var(--persona-artifact-pane-max-width, 28rem);
     min-width: var(--persona-artifact-pane-min-width, 0);
     flex-shrink: 0;
-    box-shadow: var(--persona-artifact-pane-shadow, -2px 0 12px rgba(15, 23, 42, 0.06));
+    /* No default elevation on the pane; welded reads as one card, detached and
+       the drawer set their own shadow. Explicit paneShadow still wins. */
+    box-shadow: var(--persona-artifact-pane-shadow, none);
   }
 }
 
+/* Expanded artifact pane: pane takes the whole split root, chat column hides.
+   Split-view only: below 641px / narrow hosts the drawer already covers everything. */
+@media (min-width: 641px) {
+  [data-persona-root].persona-artifact-expanded .persona-artifact-split-root > :first-child {
+    display: none;
+  }
+  [data-persona-root].persona-artifact-expanded .persona-artifact-pane {
+    width: 100%;
+    max-width: none;
+  }
+  [data-persona-root].persona-artifact-expanded .persona-artifact-split-handle {
+    display: none !important;
+  }
+}
+@media (max-width: 640px) {
+  [data-persona-root] .persona-artifact-expand-btn {
+    display: none !important;
+  }
+}
+[data-persona-root].persona-artifact-narrow-host .persona-artifact-expand-btn {
+  display: none !important;
+}
+
 /* paneBorderRadius: works on any paneAppearance; overflow clips content to rounded shape */
+/* Positioned frame wrapping the sandboxed preview iframe (artifact-preview.ts).
+   `position: relative` gives the absolute loading overlay a containing block
+   (the shared preview body is display: contents, so the iframe alone has no
+   positioning context). The frame owns the rendered height and the iframe is
+   100% of it — see the pane default here and the inline overrides below.
+
+   Opaque-canvas / color-scheme trap: an opaque-origin srcdoc (sandbox without
+   allow-same-origin) that declares no color-scheme can get a UA-forced opaque
+   canvas that flashes before content paints. Declaring color-scheme on the
+   iframe plus an explicit background on both the frame and iframe makes the
+   pre-paint surface a deliberate, themeable canvas rather than an uncontrolled
+   flash. Artifact content generally assumes a light canvas, so white stays the
+   default; override via --persona-artifact-frame-bg. */
+[data-persona-root] .persona-artifact-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--persona-artifact-frame-bg, #ffffff);
+}
+/* Previewable file artifact: sandboxed iframe fills its frame. */
+[data-persona-root] .persona-artifact-iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  color-scheme: light;
+  background: var(--persona-artifact-frame-bg, #ffffff);
+}
+
+/* Loading overlay above the preview iframe (artifact-preview.ts): absolutely
+   fills the frame with the same themed canvas the iframe paints onto, so the
+   pre-paint area reads as one deliberate surface. Appended only after
+   `loading.delayMs`; the --out modifier fades it before removal. */
+[data-persona-root] .persona-artifact-frame-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--persona-artifact-frame-bg, #ffffff);
+  opacity: 1;
+  transition: opacity var(--persona-artifact-frame-loading-fade, 200ms) ease;
+}
+[data-persona-root] .persona-artifact-frame-loading--out {
+  opacity: 0;
+}
+/* Default indicator column: the icon spinner, with the escalation label (when
+   present) stacked below it. Icon-first, text only as a later escalation. */
+[data-persona-root] .persona-artifact-frame-loading-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+}
+/* Escalation label: calm, muted, small — NO shimmer (deliberate, per research).
+   Hidden until setupPreviewLoading adds --visible after labelDelayMs; a plain
+   opacity transition fades it in. */
+[data-persona-root] .persona-artifact-frame-loading-text {
+  color: var(
+    --persona-artifact-frame-loading-color,
+    var(--persona-text-muted, #6b7280)
+  );
+  font-size: 0.8125rem;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+[data-persona-root] .persona-artifact-frame-loading-text--visible {
+  opacity: 1;
+}
+
+/* Reusable icon spinner (utils/spinner.ts): a faint full track ring with a
+   rotating arc on top. Icon-first loading is the norm across preview surfaces
+   (Sandpack, embeds, v0/ChatGPT) and design systems (HIG/Material/Carbon/Geist);
+   text-only "loading" is used by none. The arc spins via a GPU-friendly
+   `transform: rotate` keyframe. Fallback chains:
+   - size:  --persona-artifact-spinner-size (default 28px)
+   - arc:   --persona-artifact-spinner-color → --persona-accent → --persona-primary
+            → neutral dark (the interactive/brand hue)
+   - track: --persona-artifact-spinner-track-color → --persona-border → light gray
+   - speed: --persona-artifact-spinner-speed (default 0.8s) */
+[data-persona-root] .persona-spinner {
+  width: var(--persona-artifact-spinner-size, 28px);
+  height: var(--persona-artifact-spinner-size, 28px);
+  transform-origin: center;
+  animation: persona-spinner-rotate var(--persona-artifact-spinner-speed, 0.8s)
+    linear infinite;
+}
+[data-persona-root] .persona-spinner-track {
+  fill: none;
+  stroke: var(
+    --persona-artifact-spinner-track-color,
+    var(--persona-border, #e5e7eb)
+  );
+  stroke-width: 2.5;
+}
+[data-persona-root] .persona-spinner-arc {
+  fill: none;
+  stroke: var(
+    --persona-artifact-spinner-color,
+    var(--persona-accent, var(--persona-primary, #171717))
+  );
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  /* r=9 → circumference ≈ 56.5; ~15u arc reads as a quarter-ish sweep. */
+  stroke-dasharray: 15 42;
+}
+@keyframes persona-spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Reduced motion: stop the rotation (the static arc still reads as a ring) and
+   drop the label fade. */
+@media (prefers-reduced-motion: reduce) {
+  [data-persona-root] .persona-spinner {
+    animation: none;
+  }
+  [data-persona-root] .persona-artifact-frame-loading-text {
+    transition: none;
+  }
+}
+
+/* Shared artifact preview body wrapper (artifact-preview.ts): generates no box
+   so children (e.g. the iframe's height: 100%) lay out against the host
+   container exactly as if they were its direct children. */
+[data-persona-root] .persona-artifact-preview-body {
+  display: contents;
+}
+
+/* Syntax-highlighted source view (code-highlight.ts). The host <pre> keeps its
+   wrapping (persona-whitespace-pre-wrap); <code> resets white-space to normal so
+   the literal "\n" separator text nodes between block line spans collapse
+   visually while still reconstructing the verbatim source via textContent. Each
+   line reserves a left gutter whose number is drawn by a CSS counter — never
+   real text, so it is not selectable or copyable. */
+/* The source view sits directly on the pane surface (transparent, matching
+   Claude's code view); set --persona-code-bg via theme.components.code.background
+   to render it as an inset sheet instead. */
+[data-persona-root] .persona-code-pre {
+  margin: 0;
+  background: var(--persona-code-bg, transparent);
+  border-radius: var(--persona-radius-md, 0.375rem);
+  padding: 0.5rem 0.75rem 0.5rem 0.25rem;
+}
+
+/* Pane source view is full-bleed: the pane drops its content padding (class
+   toggled in artifact-pane.ts when the body rendered a code pre) so the
+   line-number gutter sits flush against the pane's left edge. */
+[data-persona-root] .persona-artifact-content-flush {
+  padding: 0;
+}
+[data-persona-root] .persona-artifact-content-flush .persona-code-pre {
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  border-radius: 0;
+  min-height: 100%;
+}
+[data-persona-root] .persona-code {
+  display: block;
+  white-space: normal;
+  counter-reset: persona-code-line;
+  /* Defend against host-page element rules (`code { background/padding/… }`):
+     without Shadow DOM those selectors reach into the widget, and inline-code
+     chip styling on a full source view reads as a mystery tinted block. */
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+[data-persona-root] .persona-code-line {
+  display: block;
+  position: relative;
+  white-space: pre-wrap;
+  padding-left: 3em;
+  counter-increment: persona-code-line;
+  /* An empty source line emits a childless span — a zero-height block whose
+     absolutely-positioned gutter number would paint on top of the next line's.
+     Reserve one line box (1lh; 1em as the older-engine fallback). */
+  min-height: 1em;
+  min-height: 1lh;
+}
+[data-persona-root] .persona-code-line::before {
+  content: counter(persona-code-line);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2em;
+  padding-right: 0.5em;
+  text-align: right;
+  color: var(--persona-code-line-number-color, #a0a1a7);
+  border-right: 1px solid
+    var(--persona-code-gutter-border-color, var(--persona-border, #e5e7eb));
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Default syntax palette: One Light (Atom), the same theme Claude.ai's code
+   view uses. Numbers and attribute names share One's constant orange; CSS
+   properties / JSON keys take the function blue so keys stay distinct from
+   string values. */
+[data-persona-root] .persona-code-token-keyword {
+  color: var(--persona-code-keyword-color, #a626a4);
+}
+[data-persona-root] .persona-code-token-string {
+  color: var(--persona-code-string-color, #50a14f);
+}
+[data-persona-root] .persona-code-token-comment {
+  color: var(--persona-code-comment-color, #a0a1a7);
+  font-style: italic;
+}
+[data-persona-root] .persona-code-token-number {
+  color: var(--persona-code-number-color, #986801);
+}
+[data-persona-root] .persona-code-token-tag {
+  color: var(--persona-code-tag-color, #e45649);
+}
+[data-persona-root] .persona-code-token-attr {
+  color: var(--persona-code-attr-color, #986801);
+}
+[data-persona-root] .persona-code-token-property {
+  color: var(--persona-code-property-color, #4078f2);
+}
+
+/* Dark-scheme defaults for the syntax palette (One Dark counterparts of the
+   One Light defaults above). Keyed off the widget's resolved scheme, stamped
+   as data-persona-color-scheme by applyThemeVariables — NOT the OS
+   prefers-color-scheme, which diverges whenever a host pins colorScheme.
+   The widget's semantic vars can't drive these (syntax colors aren't
+   derivable from surface/text). Explicit theme.components.code values still
+   win in both schemes. */
+[data-persona-root][data-persona-color-scheme="dark"] .persona-code-line::before {
+  color: var(--persona-code-line-number-color, #4b5263);
+  border-right-color: var(--persona-code-gutter-border-color, #3b4048);
+}
+[data-persona-root][data-persona-color-scheme="dark"] .persona-code-token-keyword {
+  color: var(--persona-code-keyword-color, #c678dd);
+}
+[data-persona-root][data-persona-color-scheme="dark"] .persona-code-token-string {
+  color: var(--persona-code-string-color, #98c379);
+}
+[data-persona-root][data-persona-color-scheme="dark"] .persona-code-token-comment {
+  color: var(--persona-code-comment-color, #5c6370);
+}
+[data-persona-root][data-persona-color-scheme="dark"] .persona-code-token-number {
+  color: var(--persona-code-number-color, #d19a66);
+}
+[data-persona-root][data-persona-color-scheme="dark"] .persona-code-token-tag {
+  color: var(--persona-code-tag-color, #e06c75);
+}
+[data-persona-root][data-persona-color-scheme="dark"] .persona-code-token-attr {
+  color: var(--persona-code-attr-color, #d19a66);
+}
+[data-persona-root][data-persona-color-scheme="dark"] .persona-code-token-property {
+  color: var(--persona-code-property-color, #61afef);
+}
+
+/* Inline artifact block (artifact-inline.ts, display: "inline"): carries its
+   own border/surface (registered with bubbleChrome: false, like the card).
+   Reads like a file preview: a flush title/toolbar chrome bar above the body.
+   Default vars draw from the same semantic surface/border/text/muted family
+   the card uses, so light/dark themes work with zero config. */
+[data-persona-root] .persona-artifact-inline {
+  border: var(--persona-artifact-inline-border, 1px solid var(--persona-border, #e5e7eb));
+  border-radius: var(
+    --persona-artifact-inline-radius,
+    var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem))
+  );
+  background: var(--persona-artifact-inline-bg, var(--persona-surface, #ffffff));
+  overflow: hidden;
+}
+
+/* completeDisplay: "card" — once the block collapses to the compact reference
+   card it keeps the same root (updater keying + theme zone survive) but must
+   drop the inline frame styling, since the nested card carries its own border,
+   background, and radius. overflow: visible so the card's focus outline (which
+   uses outline-offset) isn't clipped. */
+[data-persona-root] .persona-artifact-inline.persona-artifact-inline--card {
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+
+/* Title/toolbar chrome bar: flush to the frame edge (no frame padding). */
+[data-persona-root] .persona-artifact-inline-chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--persona-artifact-inline-chrome-bg, var(--persona-surface, #ffffff));
+  border-bottom: 1px solid var(--persona-artifact-inline-chrome-border, var(--persona-border, #e5e7eb));
+}
+
+/* Leading cluster: file icon + title + type label / streaming status. */
+[data-persona-root] .persona-artifact-inline-chrome-lead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  color: var(--persona-artifact-inline-title-color, var(--persona-text, #111827));
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-type,
+[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-status {
+  color: var(--persona-artifact-inline-muted-color, var(--persona-text-muted, #6b7280));
+  font-weight: 400;
+}
+
+/* Streaming status: animated label span + optional plain detail span (live
+   counters). The label carries the loading animation; the detail updates freely
+   per delta and stays un-animated. Shared by the card, the inline chrome, and
+   the inline status body (features.artifacts.statusLabel). Keep the status span
+   from blowing out the chrome bar when a long detail streams in. */
+[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-status {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+[data-persona-root] .persona-artifact-status-detail {
+  color: var(--persona-artifact-inline-muted-color, var(--persona-text-muted, #6b7280));
+  margin-left: 0.375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Trailing cluster: custom inlineActions, copy, expand. */
+[data-persona-root] .persona-artifact-inline-chrome-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+}
+
+/* Body wraps the chrome-free preview; padding lives here so the chrome sits
+   flush to the frame edge. */
+[data-persona-root] .persona-artifact-inline-body {
+  padding: 0.75rem;
+}
+
+/* The preview frame (and its 100%-height iframe) is height: 100%, which
+   collapses inside the auto-height inline block; pin a themeable fixed height on
+   the frame instead. Height var chain: inlineBody.height
+   (--persona-artifact-inline-body-height, set per state by artifact-inline.ts) →
+   the legacy --persona-artifact-inline-frame-height override → 320px. The legacy
+   var still wins when the new one is unset (inlineBody.height "auto"), so themes
+   pinned to it keep working. The --sized rule below (equal specificity, declared
+   later) overrides this to 100% when the body wrapper owns the height. */
+[data-persona-root] .persona-artifact-inline .persona-artifact-frame {
+  height: var(
+    --persona-artifact-inline-body-height,
+    var(--persona-artifact-inline-frame-height, 320px)
+  );
+}
+
+/* Inline body height model (features.artifacts.inlineBody). The block root sets
+   --persona-artifact-inline-body-height (px) for the current state; leaving it
+   unset (inlineBody.height "auto") lets the body size to content and the iframe
+   fall back through the chain above. */
+
+/* Code bodies are full-bleed, matching the pane's source-view treatment (same
+   class the pane toggles): the line-number gutter sits flush against the frame
+   edge. Declared after .persona-artifact-inline-body so padding: 0 wins the
+   specificity tie. */
+[data-persona-root] .persona-artifact-inline-body.persona-artifact-content-flush {
+  padding: 0;
+}
+
+/* Numeric inlineBody.height: the body wrapper owns the reserved height
+   (border-box), so flush code, padded iframe, and padded status bodies all
+   occupy the same outer box and every state swap is layout neutral. Fill-capable
+   content stretches to the wrapper. */
+[data-persona-root] .persona-artifact-inline-body--sized {
+  height: var(--persona-artifact-inline-body-height, auto);
+}
+[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-source-window--fixed,
+[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-frame {
+  height: 100%;
+}
+[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-status-view {
+  min-height: 100%;
+}
+
+/* Fixed-height streaming source window: a reserved scroll viewport so streamed
+   source no longer grows an unbounded <pre> and then snaps to the preview. The
+   height comes from the sized body wrapper above (the --fixed class is only
+   ever applied together with it). The bare (non-fixed) window is an inert
+   wrapper (pane path never adds it; the source <pre> sits directly on el
+   there). */
+[data-persona-root] .persona-artifact-source-window {
+  min-width: 0;
+}
+[data-persona-root] .persona-artifact-source-window--fixed {
+  overflow-y: auto;
+}
+
+/* Clipped preview window (inlineBody.overflow: "clip"): a fixed-height window
+   showing the top of the document with no internal scroll. Applied together with
+   --fixed (which supplies the reserved height via the --sized body wrapper and
+   the fill-capable detection in artifact-inline.ts); declared after --fixed so
+   this overflow: hidden wins its overflow-y: auto on the specificity tie. */
+[data-persona-root] .persona-artifact-source-window--clip {
+  overflow: hidden;
+}
+
+/* Edge fade masks on the fixed window (top fade signals content clipped above).
+   mask-image works over any themed background; size via --persona-artifact-fade-size
+   (defaults to 40px). */
+[data-persona-root]
+  .persona-artifact-fade-top:not(.persona-artifact-fade-bottom) {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-fade-bottom:not(.persona-artifact-fade-top) {
+  -webkit-mask-image: linear-gradient(
+    to top,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px)
+  );
+  mask-image: linear-gradient(
+    to top,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-fade-top.persona-artifact-fade-bottom {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px),
+    #000 calc(100% - var(--persona-artifact-fade-size, 40px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px),
+    #000 calc(100% - var(--persona-artifact-fade-size, 40px)),
+    transparent 100%
+  );
+}
+
+/* Edge fade on the horizontally scrollable tab strip. Visual hint only; the
+   tablist keyboard behavior is the real affordance. Sized via
+   --persona-artifact-tab-fade-size (default 24px). */
+[data-persona-root]
+  .persona-artifact-tab-fade-start:not(.persona-artifact-tab-fade-end) {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-tab-fade-end:not(.persona-artifact-tab-fade-start) {
+  -webkit-mask-image: linear-gradient(
+    to left,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+  mask-image: linear-gradient(
+    to left,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-tab-fade-start.persona-artifact-tab-fade-end {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px),
+    #000 calc(100% - var(--persona-artifact-tab-fade-size, 24px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px),
+    #000 calc(100% - var(--persona-artifact-tab-fade-size, 24px)),
+    transparent 100%
+  );
+}
+
+/* Reserved-height status placeholder (inlineBody.streamingView: "status").
+   Numeric height reserves the var; "auto" falls back to a modest 160px min-height
+   so the card doesn't collapse. */
+[data-persona-root] .persona-artifact-status-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--persona-artifact-inline-body-height, 160px);
+}
+
+/* Complete-state height cap for non-iframe bodies (rendered markdown, source
+   view, component). The iframe path is sized by the iframe rule above instead,
+   so this class is only applied when the completed body has no iframe. */
+[data-persona-root] .persona-artifact-inline-body--cap {
+  max-height: var(--persona-artifact-inline-body-height, none);
+  overflow-y: auto;
+}
+
 [data-persona-root] .persona-artifact-pane {
   border-radius: var(--persona-artifact-pane-radius, 0);
   overflow: hidden;
@@ -3072,22 +3757,70 @@
   border: var(--persona-artifact-pane-border) !important;
 }
 
+/* paneAppearance: 'detached': floating card with gap, all-side border, radius, elevation, canvas behind */
+/* Split gap defaults to --persona-panel-inset from ui.ts; canvas paints behind both columns. */
+[data-persona-root].persona-artifact-appearance-detached .persona-artifact-split-root {
+  background: var(--persona-panel-canvas-bg);
+}
+
+/* Desktop split only (drawer keeps its own chrome). Non-!important so explicit
+   paneBorder / paneShadow / paneBorderRadius overrides still win. */
+@media (min-width: 641px) {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-appearance-detached .persona-artifact-pane {
+    border-radius: var(
+      --persona-artifact-pane-radius,
+      var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))
+    );
+    border: var(--persona-panel-border, 1px solid var(--persona-border, #e5e7eb));
+    box-shadow: var(
+      --persona-artifact-pane-shadow,
+      var(--persona-panel-shadow, var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25)))
+    );
+  }
+}
+
+/* chatSurface: 'flush': chat is flat flush background, only the pane floats. The
+   chat has no perimeter inset, so inset the pane on 3 sides (left gap comes from
+   the existing detached split flex gap). Keeps the pane's border/radius/shadow. */
+@media (min-width: 641px) {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-chat-flush .persona-artifact-pane {
+    margin-top: var(--persona-panel-inset);
+    margin-right: var(--persona-panel-inset);
+    margin-bottom: var(--persona-panel-inset);
+  }
+}
+
 /*
- * Unified split chrome: one visual shell (desktop split only; narrowed via :not(.narrow-host) + breakpoint).
- * Main chat card (.persona-widget-container) loses inner-right rounding; artifact gains matching outer-right.
+ * Welded split chrome (panel + seamless): one card. The outer panel carries the
+ * border + radius + shadow (set in ui.ts); each column rounds only its outer
+ * corners and clips, so the columns fill the panel's rounded rect and butt flush
+ * at the seam. Desktop split only (narrowed via :not(.narrow-host) + breakpoint).
+ * Toggled from ui.ts by splitChromeMode(); the pane's flex layout owns gap 0.
  */
 @media (min-width: 641px) {
-  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-unified-split .persona-widget-container {
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-artifact-split-root {
+    position: relative;
   }
 
-  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-unified-split .persona-artifact-pane {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-widget-container {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    overflow: hidden;
+  }
+
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-artifact-pane {
     border-top-left-radius: 0 !important;
     border-bottom-left-radius: 0 !important;
-    border-top-right-radius: var(--persona-artifact-unified-outer-radius, var(--persona-radius-lg, 1rem)) !important;
-    border-bottom-right-radius: var(--persona-artifact-unified-outer-radius, var(--persona-radius-lg, 1rem)) !important;
+    border-top-right-radius: var(--persona-artifact-welded-outer-radius, var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))) !important;
+    border-bottom-right-radius: var(--persona-artifact-welded-outer-radius, var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))) !important;
     overflow: hidden;
+  }
+
+  /* panel appearance: a hairline divider on the pane's chat-facing edge. seamless
+     omits it (it already zeroes border-left). Non-!important so paneBorder /
+     paneBorderLeft overrides win. */
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split.persona-artifact-appearance-panel .persona-artifact-pane {
+    border-left: 1px solid var(--persona-border, #e5e7eb);
   }
 }
 

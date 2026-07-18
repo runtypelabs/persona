@@ -194,6 +194,10 @@ export interface PanelTokens extends ComponentTokenSet {
   maxWidth: string;
   height: string;
   maxHeight: string;
+  /** Gap between the detached panel and its region edges. Only used when detached. */
+  inset?: string;
+  /** Background of the region revealed behind a detached panel. */
+  canvasBackground?: string;
 }
 
 export interface HeaderTokens extends ComponentTokenSet {
@@ -370,6 +374,14 @@ export interface ArtifactToolbarTokens {
   iconBorder?: string;
   toggleGroupGap?: string;
   toggleBorderRadius?: string;
+  /** Inner padding of the segmented view/source toggle pill. */
+  toggleGroupPadding?: string;
+  /** Border of the segmented view/source toggle pill (e.g., `none`). */
+  toggleGroupBorder?: string;
+  /** Corner radius of the segmented view/source toggle pill. */
+  toggleGroupBorderRadius?: string;
+  /** Background of the segmented view/source toggle pill. */
+  toggleGroupBackground?: string;
   copyBackground?: string;
   copyBorder?: string;
   copyColor?: string;
@@ -403,6 +415,17 @@ export interface ArtifactTabTokens {
   listPadding?: string;
 }
 
+/** Artifact reference card (chat thread) chrome. */
+export interface ArtifactCardTokens {
+  background?: string;
+  /** Full border shorthand (e.g. `1px solid #e5e7eb`). */
+  border?: string;
+  borderRadius?: string;
+  hoverBackground?: string;
+  /** Border color on hover. */
+  hoverBorderColor?: string;
+}
+
 /** Artifact pane chrome. */
 export interface ArtifactPaneTokens {
   /**
@@ -412,6 +435,56 @@ export interface ArtifactPaneTokens {
    */
   background?: string;
   toolbarBackground?: string;
+}
+
+/** Inline artifact block chrome (`display: "inline"` file preview). */
+export interface ArtifactInlineTokens {
+  /** Background of the inline preview frame. */
+  background?: string;
+  /** Full border shorthand for the frame (e.g. `1px solid #e5e7eb`). */
+  border?: string;
+  /** Border radius of the inline preview frame. */
+  borderRadius?: string;
+  /** Background of the title/toolbar chrome bar. */
+  chromeBackground?: string;
+  /** Bottom border of the title bar. */
+  chromeBorder?: string;
+  /** Title text color in the chrome bar (artifact basename). */
+  titleColor?: string;
+  /** Muted text color for the type label / streaming status. */
+  mutedColor?: string;
+  /** Preview iframe height inside the inline body. */
+  frameHeight?: string;
+}
+
+/**
+ * Syntax-highlighted artifact source view (pane + inline), rendered by
+ * `utils/code-highlight.ts`. One Light defaults ship in `widget.css`, with a
+ * One Dark override keyed off the widget's resolved color scheme (the
+ * `data-persona-color-scheme` root attribute, not the OS preference); set any
+ * of these to retheme the tokenizer palette and the line-number gutter.
+ */
+export interface CodeTokens {
+  /** Keywords, booleans, null (e.g. `const`, `true`). */
+  keywordColor?: string;
+  /** String and template literals; HTML attribute values. */
+  stringColor?: string;
+  /** Line and block comments. */
+  commentColor?: string;
+  /** Numeric literals; CSS hex colors / units. */
+  numberColor?: string;
+  /** HTML tag brackets + names; doctype. */
+  tagColor?: string;
+  /** HTML attribute names. */
+  attrColor?: string;
+  /** CSS property names; JSON object keys. */
+  propertyColor?: string;
+  /** Line-number gutter digits. */
+  lineNumberColor?: string;
+  /** Right border of the line-number gutter. */
+  gutterBorderColor?: string;
+  /** Background of the source-view code sheet (defaults to One Light/Dark editor background). */
+  background?: string;
 }
 
 /** Icon button chrome (used by createIconButton). */
@@ -487,9 +560,13 @@ export interface ComponentTokens {
     toolbar?: ArtifactToolbarTokens;
     tab?: ArtifactTabTokens;
     pane?: ArtifactPaneTokens;
+    card?: ArtifactCardTokens;
+    inline?: ArtifactInlineTokens;
   };
   /** Collapsible widget chrome (tool/reasoning/approval bubbles). */
   collapsibleWidget?: CollapsibleWidgetTokens;
+  /** Syntax-highlighted artifact source view (tokenizer palette + gutter). */
+  code?: CodeTokens;
 }
 
 export interface PaletteExtras {

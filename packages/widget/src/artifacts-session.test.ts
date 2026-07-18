@@ -77,4 +77,182 @@ describe("AgentWidgetSession artifacts", () => {
     expect(session.getArtifacts()).toHaveLength(1);
     expect(session.getArtifacts()[0].markdown).toBe("C");
   });
+
+  it("stores file metadata via applyArtifactStreamEvent and keeps accumulating deltas", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    const file = { path: "outputs/cat.html", mimeType: "text/html", language: "html" };
+    session.injectTestEvent({
+      type: "artifact_start",
+      id: "f1",
+      artifactType: "markdown",
+      title: "outputs/cat.html",
+      file
+    });
+    session.injectTestEvent({ type: "artifact_delta", id: "f1", artDelta: "```html\n" });
+    session.injectTestEvent({ type: "artifact_delta", id: "f1", artDelta: "<h1>hi</h1>\n```" });
+    const rec = session.getArtifactById("f1");
+    expect(rec?.file).toEqual(file);
+    expect(rec?.markdown).toBe("```html\n<h1>hi</h1>\n```");
+  });
+
+  it("upsertArtifact injects a card transcript block by default", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    const rec = session.upsertArtifact({
+      artifactType: "markdown",
+      title: "Doc",
+      content: "# Hi"
+    });
+    const block = session
+      .getMessages()
+      .find((m) => m.id === `artifact-ref-${rec.id}`);
+    expect(block).toBeDefined();
+    expect(block?.role).toBe("assistant");
+    const parsed = JSON.parse(block!.rawContent!);
+    expect(parsed.component).toBe("PersonaArtifactCard");
+    expect(parsed.props).toMatchObject({
+      artifactId: rec.id,
+      title: "Doc",
+      artifactType: "markdown",
+      status: "complete",
+      markdown: "# Hi"
+    });
+  });
+
+  it("upsertArtifact injects an inline block when display resolves to inline", () => {
+    const session = new AgentWidgetSession(
+      { features: { artifacts: { enabled: true, display: "inline" } } },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    const rec = session.upsertArtifact({
+      artifactType: "component",
+      title: "Chart",
+      component: "MyChart",
+      props: { series: [1, 2] }
+    });
+    const block = session
+      .getMessages()
+      .find((m) => m.id === `artifact-ref-${rec.id}`);
+    expect(block).toBeDefined();
+    const parsed = JSON.parse(block!.rawContent!);
+    expect(parsed.component).toBe("PersonaArtifactInline");
+    // Inline blocks render component artifacts through the registry, so the
+    // component name AND its props are embedded in the block props (the
+    // registry is not persisted, so hydration re-invokes the renderer from
+    // these).
+    expect(parsed.props.component).toBe("MyChart");
+    expect(parsed.props.componentProps).toEqual({ series: [1, 2] });
+    expect(parsed.props.status).toBe("complete");
+  });
+
+  it("upsertArtifact with transcript: false injects no transcript block", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    session.upsertArtifact({
+      id: "pane-only",
+      artifactType: "markdown",
+      content: "C",
+      transcript: false
+    });
+    expect(session.getArtifacts()).toHaveLength(1);
+    expect(session.getMessages()).toHaveLength(0);
+  });
+
+  it("upsertArtifact update to an existing artifact does not duplicate the block", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    session.upsertArtifact({ id: "a1", artifactType: "markdown", content: "v1" });
+    session.upsertArtifact({ id: "a1", artifactType: "markdown", content: "v2" });
+    const blocks = session
+      .getMessages()
+      .filter((m) => m.id === "artifact-ref-a1");
+    expect(blocks).toHaveLength(1);
+    expect(session.getArtifacts()).toHaveLength(1);
+    expect(session.getArtifactById("a1")?.markdown).toBe("v2");
+  });
+
+  it("upsertArtifact re-upsert rebuilds the existing block's persisted props", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    session.upsertArtifact({
+      id: "a1",
+      artifactType: "markdown",
+      title: "T1",
+      content: "v1"
+    });
+    session.upsertArtifact({
+      id: "a1",
+      artifactType: "markdown",
+      title: "T2",
+      content: "v2"
+    });
+    const blocks = session
+      .getMessages()
+      .filter((m) => m.id === "artifact-ref-a1");
+    expect(blocks).toHaveLength(1);
+    const parsed = JSON.parse(blocks[0].rawContent!);
+    expect(parsed.props.markdown).toBe("v2");
+    expect(parsed.props.title).toBe("T2");
+  });
+
+  it("stores file metadata via upsertArtifact", () => {
+    const session = new AgentWidgetSession(
+      {},
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {}
+      }
+    );
+    const file = { path: "notes.md", mimeType: "text/markdown" };
+    session.upsertArtifact({
+      artifactType: "markdown",
+      title: "notes.md",
+      content: "```md\n# Hi\n\n```",
+      file
+    });
+    expect(session.getArtifactById(session.getArtifacts()[0].id)?.file).toEqual(file);
+  });
 });

@@ -6,6 +6,7 @@ import type {
   RuntypeStopReasonKind,
 } from "./generated/runtype-openapi-contract";
 import type { TargetResolver } from "./utils/target";
+import type { IconName } from "./utils/icons";
 
 export type { TargetResolver, ResolvedTarget } from "./utils/target";
 
@@ -727,7 +728,13 @@ export type AgentWidgetControllerEventMap = {
  * new artifact content arrives or the host calls `showArtifacts()` on the widget handle.
  */
 export type AgentWidgetArtifactsLayoutConfig = {
-  /** Flex gap between chat column and artifact pane. @default 0.5rem */
+  /**
+   * Flex gap between chat column and artifact pane.
+   * @default 0 (welded); detached uses the panel inset
+   * @remarks In welded appearances (`panel` / `seamless`) a nonzero gap opens a
+   * visible seam in the single card. It is honored geometrically (resize clamps
+   * and the seam handle account for it) but is usually undesired.
+   */
   splitGap?: string;
   /** Artifact column width in split mode. @default 40% */
   paneWidth?: string;
@@ -758,16 +765,39 @@ export type AgentWidgetArtifactsLayoutConfig = {
   /** Optional max artifact width cap while resizing (`px` only). Layout still bounds by chat min width. */
   resizableMaxWidth?: string;
   /**
-   * Visual treatment for the artifact column in split mode.
-   * - `'panel'`: bordered sidebar with left border, gap, and shadow (default).
-   * - `'seamless'`: flush with chat: no border or shadow, container background, zero gap.
+   * Visual treatment for the artifact column in a desktop split.
+   * - `'panel'`: one welded card (border + radius wrap chat + pane) with a hairline
+   *   divider on the pane's chat-facing edge, zero gap (default).
+   * - `'seamless'`: the same welded card with no internal divider or chrome, zero gap.
+   * - `'detached'`: two separate elevated cards: gap from `--persona-panel-inset`,
+   *   all-side border and radius on each, and canvas background behind the split.
+   *   In an inline embed this also insets the split from the container edges on all
+   *   sides (the page canvas shows through), so the all-side margin no longer requires
+   *   `launcher.detachedPanel`.
+   *
+   * Default is `'panel'` unless `launcher.detachedPanel` is true, in which case an unset
+   * `paneAppearance` resolves to `'detached'`. An explicit value always wins.
    * @default 'panel'
    */
-  paneAppearance?: "panel" | "seamless";
+  paneAppearance?: "panel" | "seamless" | "detached";
   /** Border radius on the artifact pane (CSS length). Works with any `paneAppearance`. */
   paneBorderRadius?: string;
   /** CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow. */
   paneShadow?: string;
+  /**
+   * CSS `box-shadow` for the chat column card in a detached split. Defaults to the same
+   * elevation as the artifact pane; set to `"none"` to keep the chat flat while the pane stays raised.
+   */
+  chatShadow?: string;
+  /**
+   * Chat column surface in a detached split. `"card"` (default) renders the chat as an inset card
+   * matching the artifact pane; `"flush"` renders the chat flush with the container (no border, radius,
+   * or shadow) and insets only the artifact pane, so the chat is flat background and the pane floats.
+   * Only affects an inline-embedded detached split (the container-filling case); in floating, docked,
+   * or sidebar modes it falls back to the card look.
+   * @default 'card'
+   */
+  chatSurface?: "card" | "flush";
   /**
    * Full `border` shorthand for the artifact `<aside>` (all sides). Overrides default pane borders.
    * Example: `"1px solid #cccccc"`.
@@ -779,14 +809,12 @@ export type AgentWidgetArtifactsLayoutConfig = {
    */
   paneBorderLeft?: string;
   /**
-   * Desktop split only (not narrow-host drawer / not ≤640px): square the **main chat card’s**
-   * top-right and bottom-right radii, and round the **artifact pane’s** top-right and bottom-right
-   * to match `persona-rounded-2xl` (`--persona-radius-lg`) so the two columns read as one shell.
+   * @deprecated No-op. Panel and seamless splits now weld into one card by default.
    */
   unifiedSplitChrome?: boolean;
   /**
-   * When `unifiedSplitChrome` is true, outer-right corner radius on the artifact column (CSS length).
-   * @default matches theme large radius (`--persona-radius-lg`)
+   * Desktop welded split only: override the artifact pane's outer-right corner radius (CSS length).
+   * @default matches the panel radius (`--persona-panel-radius`)
    */
   unifiedSplitOuterRadius?: string;
   /**
@@ -824,6 +852,14 @@ export type AgentWidgetArtifactsLayoutConfig = {
   documentToolbarToggleActiveBackground?: string;
   /** Active view/source toggle border color. Sets `--persona-artifact-doc-toggle-active-border`. */
   documentToolbarToggleActiveBorderColor?: string;
+  /** Show an expand/collapse toggle in the artifact toolbar (both presets). Expanded fills the widget with the pane and hides the chat column. Default: false. */
+  showExpandToggle?: boolean;
+  /** Show the copy control in the `default` toolbar preset (the `document` preset always shows it). Default: false. */
+  showCopyButton?: boolean;
+  /** Edge fade on the scrollable tab strip. true = both ends (dynamic). @default true */
+  tabFade?: boolean | { start?: boolean; end?: boolean };
+  /** Tab fade width (CSS length). @default 24px */
+  tabFadeSize?: string;
   /**
    * Invoked when the document toolbar Refresh control is used (before the pane re-renders).
    * Use to replay `connectStream`, refetch, etc.
@@ -845,21 +881,357 @@ export type AgentWidgetArtifactsLayoutConfig = {
   }) => void | Promise<void>;
 };
 
+export type PersonaArtifactDisplayMode =
+  | "card"    // reference card in transcript; pane opens on click
+  | "panel"   // reference card in transcript; pane also auto-opens on artifact_start (current default behavior)
+  | "inline"; // artifact preview renders directly in the transcript; no pane involvement
+
+/** Context handed to custom artifact actions. Content fields are best-effort: resolved from live session state or, after a refresh, from the persisted reference-card payload. */
+export type PersonaArtifactActionContext = {
+  artifactId: string | null;
+  title: string;
+  artifactType: string;
+  markdown?: string;
+  file?: PersonaArtifactFileMeta;
+  /** Component artifacts: pretty-printed { component, props } JSON. */
+  jsonPayload?: string;
+};
+
+/**
+ * Context passed to a `features.artifacts.statusLabel` function on every
+ * artifact streaming update, once per visible surface. Treat it as read-only:
+ * the function should be pure and fast (it runs per streaming delta, per
+ * surface).
+ */
+export type PersonaArtifactStatusLabelContext = {
+  artifactId: string;
+  artifactType: "markdown" | "component";
+  title?: string;
+  /** The default subject, e.g. "document", "component", or a file type label like "HTML file". */
+  typeLabel: string;
+  file?: PersonaArtifactFileMeta;
+  /** Accumulated streamed content length so far (0 for component artifacts). */
+  chars: number;
+  /** Accumulated line count so far (0 for component artifacts). */
+  lines: number;
+  /** Milliseconds since this artifact's first streaming update was seen. */
+  elapsedMs: number;
+  /** Lazy accessor for the accumulated markdown source (empty string for component artifacts). Call only if needed; parsing cost is opt-in. */
+  content: () => string;
+  /** Which surface is asking, so hosts can shorten for cramped spots. */
+  surface: "card" | "inline-chrome" | "status-body";
+};
+
+/** A custom action button rendered in an artifact toolbar/card slot. */
+export type PersonaArtifactCustomAction = {
+  /** Stable id, used for DOM wiring and keyed re-renders. */
+  id: string;
+  /** Accessible label; also the visible text when showLabel is true. */
+  label: string;
+  /** Registry icon name, or a factory returning your own element (e.g. a brand SVG). The factory result is author-owned code, not sanitized wire data. */
+  icon?: IconName | (() => HTMLElement | SVGElement);
+  /** Render icon + text instead of icon-only. Default: false. */
+  showLabel?: boolean;
+  /** Per-artifact gate, evaluated on each render. Omitted = always visible. */
+  visible?: (ctx: PersonaArtifactActionContext) => boolean;
+  /** May be async; rejections are swallowed like built-in action errors. */
+  onClick: (ctx: PersonaArtifactActionContext) => void | Promise<void>;
+};
+
 export type AgentWidgetArtifactsFeature = {
   /** When true, Persona shows the artifact pane and handles artifact_* SSE events */
   enabled?: boolean;
   /** If set, artifact events for other types are ignored */
   allowedTypes?: PersonaArtifactKind[];
+  /**
+   * Where artifact bodies render. A single mode applies to all artifacts;
+   * the object form sets a default plus per-type overrides.
+   * Defaults to "panel" (current behavior).
+   */
+  display?:
+    | PersonaArtifactDisplayMode
+    | {
+        default?: PersonaArtifactDisplayMode;
+        byType?: Partial<Record<PersonaArtifactKind, PersonaArtifactDisplayMode>>;
+      };
   /** Split / drawer dimensions and launcher widen behavior */
   layout?: AgentWidgetArtifactsLayoutConfig;
   /**
-   * Called when an artifact card action is triggered (open, download).
-   * Return `true` to prevent the default behavior.
+   * Controls inline preview of previewable file artifacts (HTML/SVG written by
+   * a Claude Managed agent). When a markdown artifact carries `file` metadata,
+   * the pane can render an isolated `<iframe srcdoc>` sandbox instead of a code
+   * block.
    */
-  onArtifactAction?: (action: {
-    type: 'open' | 'download';
-    artifactId: string;
-  }) => boolean | void;
+  filePreview?: {
+    /** Enable rendered preview for html/svg files. Defaults to enabled. Set false to force source view. */
+    enabled?: boolean;
+    /**
+     * `sandbox` attribute for the preview iframe. Defaults to `"allow-scripts"`.
+     * `allow-same-origin` is stripped (with a console warning) unless
+     * `dangerouslyAllowSameOrigin` is set: the opaque origin is what isolates
+     * the preview from the host page. Embedder-trusted config.
+     */
+    iframeSandbox?: string;
+    /**
+     * Allows `allow-same-origin` to pass through `iframeSandbox`. Off by
+     * default because it lets agent-written file content run with the host
+     * page's origin (DOM, storage, credentialed requests). Only set this when
+     * every previewed file source is fully trusted.
+     */
+    dangerouslyAllowSameOrigin?: boolean;
+    /**
+     * Loading treatment for the preview iframe. Default on.
+     *
+     * A sandboxed `iframe srcdoc` (opaque origin, `allow-scripts` only) paints
+     * blank until its content renders — seconds for artifacts that pull CDN
+     * scripts (React/Babel). The default shows a themed "Loading preview…"
+     * overlay over the iframe, dismissed the instant the content signals it has
+     * painted (an injected `postMessage` reporter) or a hard timeout elapses.
+     *
+     * `false` disables the overlay and the injected ready signal entirely (the
+     * srcdoc becomes the raw file source, the prior behavior). An object tunes
+     * the timing; omitted / `true` uses all defaults.
+     */
+    loading?:
+      | boolean
+      | {
+          /** Show the overlay only if the preview is not ready after this many ms. Default 200. */
+          delayMs?: number;
+          /** Once shown, keep the overlay visible at least this long (anti-flicker). Default 300. */
+          minVisibleMs?: number;
+          /** Give up waiting and reveal the iframe regardless after this many ms. Default 8000. */
+          timeoutMs?: number;
+          /**
+           * Append the `postMessage` ready reporter to the srcdoc so the overlay
+           * dismisses on first paint rather than the iframe `load` event (which
+           * fires before post-DOMContentLoaded rendering like Babel compilation).
+           * Default true. When false, the overlay dismisses on `load` + a double
+           * `requestAnimationFrame`, or the timeout.
+           */
+          injectReadySignal?: boolean;
+          /**
+           * Escalation text shown beside the spinner after `labelDelayMs`.
+           * Default `"Starting preview..."`. `false` renders an icon-only
+           * indicator forever (no text ever). A short work-naming label is
+           * added only after a delay by design — icon-first, with text reserved
+           * for genuinely slow loads (per Geist/Sandpack guidance; HIG warns
+           * against the vague word "loading").
+           */
+          label?: string | false;
+          /**
+           * Delay before the escalation label fades in, measured from when the
+           * overlay actually becomes visible (i.e. after `delayMs`), not from
+           * iframe creation. Default 2000.
+           */
+          labelDelayMs?: number;
+          /**
+           * Full replacement for the default indicator (spinner + escalation
+           * label). Called once when the overlay is built; return any element
+           * (a brand mark, skeleton, custom animation) to own the indicator
+           * content entirely (the escalation-label logic is then skipped), or
+           * return `null` to fall back to the default. A thrown error also falls
+           * back. Mirrors `renderInline` / `renderCard`'s null-falls-back
+           * contract. The overlay backdrop, timing, and dismissal stay
+           * widget-owned either way.
+           */
+          renderIndicator?: (ctx: {
+            artifactId: string;
+            config: AgentWidgetConfig;
+          }) => HTMLElement | null;
+        };
+  };
+  /**
+   * Custom action buttons for the artifact pane toolbar, rendered between the
+   * refresh and expand/close controls in both toolbar presets. Re-read on live
+   * config updates.
+   */
+  toolbarActions?: PersonaArtifactCustomAction[];
+  /**
+   * Custom action buttons for the artifact reference card, rendered before the
+   * Download button on complete artifacts. Clicks are delegated, so they
+   * survive re-renders and page refresh.
+   */
+  cardActions?: PersonaArtifactCustomAction[];
+  /**
+   * File chrome (title bar + toolbar) around inline preview blocks
+   * (`display: "inline"`). Default when undefined: chrome on, with the built-in
+   * Copy and Expand controls. Pass `false` to render the bare preview body
+   * (frame → padded body, no chrome bar), or an object to toggle the built-in
+   * controls individually.
+   *
+   * Note: default-on chrome adds a title bar and buttons to every existing
+   * inline host on upgrade; set `inlineChrome: false` to opt out.
+   */
+  inlineChrome?:
+    | boolean
+    | {
+        /** Show the built-in Copy button (complete artifacts only). Default true. */
+        showCopy?: boolean;
+        /** Show the built-in Expand button (opens the pane for this artifact). Default true. */
+        showExpand?: boolean;
+        /**
+         * Show the built-in rendered/source view toggle (complete artifacts
+         * only). Default true. The toggle is availability-gated: it appears only
+         * for file-backed markdown artifacts that have a rendered alternative to
+         * their source (previewable HTML/SVG, or markdown-kind files), and never
+         * when `inlineBody.viewMode: "source"` forces a source-only body. Plain
+         * markdown and component artifacts don't get it (the pane toggle covers
+         * those).
+         */
+        showViewToggle?: boolean;
+      };
+  /**
+   * Custom action buttons for the inline chrome toolbar, rendered before the
+   * built-in Copy/Expand controls on complete artifacts. Same shape as
+   * `cardActions`; each action's `visible` gate is respected and clicks are
+   * delegated, so they survive re-renders and page refresh.
+   */
+  inlineActions?: PersonaArtifactCustomAction[];
+  /**
+   * Replace the artifact tab strip entirely (Seam A). Return an element mounted in
+   * place of the built-in `.persona-artifact-list`; the pane still owns the toolbar,
+   * preview body, iframe reuse, and lazy-render gate. Re-invoked when the records or
+   * selection change. Custom bars own their own accessibility; use `createRovingTablist`
+   * to keep keyboard/tablist behavior. When set, the built-in strip (scroll, fade,
+   * tablist) is not rendered.
+   *
+   * Return either a fresh element per call, or the SAME element updated in place.
+   * Returning a stable element preserves internal state across selection changes:
+   * the pane skips remounting an unchanged node, so a roving tablist keeps keyboard
+   * focus on the selected tab (a fresh element per call drops focus and breaks
+   * Arrow-key nav). See the reference bars in `apps/web/src/artifact-demo.ts`.
+   */
+  renderTabBar?: (ctx: {
+    records: PersonaArtifactRecord[];
+    selectedId: string | null;
+    onSelect: (id: string) => void;
+  }) => HTMLElement;
+  /**
+   * Body layout for inline artifact blocks (`display: "inline"`). Controls how
+   * the block reserves height and behaves while a file/document artifact
+   * streams, so the streaming source no longer grows an unbounded `<pre>` and
+   * then snaps to the completed preview. Affects only the inline block; the
+   * artifact pane is unchanged.
+   *
+   * Defaults (a behavior change from prior versions, which grew with content
+   * during streaming): a fixed 320px streaming source window with tail-follow,
+   * a top edge fade, and an animated streaming→complete swap. Pass
+   * `height: "auto"` to restore the old grow-with-content streaming behavior.
+   */
+  inlineBody?: {
+    /** What the body shows while streaming. Default `"source"`. */
+    streamingView?: "source" | "status";
+    /**
+     * How the completed body renders. `"rendered"` (default) keeps the current
+     * behavior: file previews in a sandboxed iframe, markdown through the
+     * markdown pipeline. `"source"` always shows the raw syntax-highlighted
+     * source instead — for hosts where the artifact is input to the host system
+     * (a code editor, a query runner) rather than something to preview. Unlike
+     * `filePreview.enabled: false`, this also covers markdown-kind files and
+     * plain markdown artifacts. Component artifacts always render through the
+     * registry.
+     */
+    viewMode?: "rendered" | "source";
+    /**
+     * Body height per state. A number reserves that many px for the whole body
+     * region (border-box, padding included) with internal scroll — the
+     * zero-layout-shift path; `"auto"` means content-sized. A
+     * scalar applies to both the streaming and complete states; the object form
+     * sets them independently. Default `320` for both states.
+     *
+     * Note: with `"auto"` on the complete state, non-iframe bodies (rendered
+     * markdown, source view, component) are content-sized, but a file-preview
+     * iframe cannot be content-sized without postMessage plumbing, so it falls
+     * back to the CSS-var default (`--persona-artifact-inline-frame-height`,
+     * 320px).
+     *
+     * Numeric heights are applied via the CSS var
+     * `--persona-artifact-inline-body-height` on the block root. The older
+     * `--persona-artifact-inline-frame-height` var still overrides the iframe
+     * height when this one is unset, so themes pinned to it keep working.
+     */
+    height?:
+      | number
+      | "auto"
+      | { streaming?: number | "auto"; complete?: number | "auto" };
+    /**
+     * Tail-follow the newest streamed lines in a fixed-height source window: if
+     * the viewport is already at the bottom, keep it pinned as content arrives;
+     * if the reader scrolled up, don't fight them. Only meaningful for a numeric
+     * streaming height. Default `true`.
+     *
+     * Precedence: ignored when `overflow: "clip"` (a clipped window shows the
+     * top of the document and never scrolls, so there is no tail to follow).
+     */
+    followOutput?: boolean;
+    /**
+     * How a fixed-height source window handles content taller than the window.
+     *
+     * - `"scroll"` (default) — the current behavior: an internally scrollable
+     *   window that tail-follows the newest streamed lines (see `followOutput`),
+     *   so the reader sees the growing tail of the document.
+     * - `"clip"` — a fixed-height window that shows the TOP of the document,
+     *   `overflow: hidden` with no internal scroll and no tail-follow
+     *   (`followOutput` is ignored in this mode). When content overflows the
+     *   window a bottom edge fade signals there is more below (the top is always
+     *   visible, so a top fade never applies); an explicit `fadeMask` still wins
+     *   over this clip-mode default. When the inline chrome's Expand control is
+     *   enabled the whole body doubles as an expand hitbox (click / Enter / Space
+     *   opens the artifact in the pane), matching the industry inline-card
+     *   pattern; otherwise the clip is purely visual.
+     *
+     * Only meaningful for a numeric streaming/complete height. Default
+     * `"scroll"`.
+     */
+    overflow?: "scroll" | "clip";
+    /**
+     * Edge fade masks on the fixed-height streaming window (a top fade signals
+     * clipped content above, a bottom fade signals clipped content below). Each
+     * fade renders only when content is actually clipped on that edge, so with
+     * tail-follow pinned at the bottom the bottom fade stays inert until the
+     * reader scrolls up mid-stream. `true` = `{ top: true, bottom: true }`,
+     * `false` = none. Default `{ top: true, bottom: true }`.
+     */
+    fadeMask?: boolean | { top?: boolean; bottom?: boolean };
+    /**
+     * Animate the streaming→complete body swap. `"auto"` uses the View
+     * Transitions API when supported and `prefers-reduced-motion` is off;
+     * `"none"` swaps instantly. Default `"auto"`.
+     */
+    transition?: "auto" | "none";
+    /**
+     * What the block becomes once the artifact completes.
+     *
+     * - `"inline"` (default) — the streamed body stays inline forever, as
+     *   configured by the other `inlineBody` options.
+     * - `"card"` — the block streams inline as configured, then collapses to the
+     *   compact artifact reference card once the artifact completes (the Copilot
+     *   "chiclet" / Claude side-panel handoff pattern), keeping the thread
+     *   scannable. The collapse plays as a short CSS height transition (skipped
+     *   under `prefers-reduced-motion`); it does not use the View Transitions
+     *   API, so `transition` does not affect it. After the collapse the card's
+     *   normal actions apply (click opens the artifact pane). `viewMode`, the
+     *   inline rendered/source view toggle, `inlineActions`, and inline copy are
+     *   streaming-phase-only in this mode and inert once the block is a card
+     *   (there is nothing to toggle or copy on a collapsed card). Blocks that are
+     *   already complete when they first render (page-refresh hydration) render
+     *   the card directly, with no flash of the inline body and no animation.
+     *
+     * Default `"inline"`.
+     */
+    completeDisplay?: "inline" | "card";
+  };
+  /**
+   * Called when an artifact action is triggered (open, download, expand).
+   * Return `true` to intercept: the widget then does not change state.
+   * For `expand`, `expanded` is the state the toggle is about to enter and
+   * `artifactId` is the currently selected artifact (or `null` when none).
+   */
+  onArtifactAction?: (
+    action:
+      | { type: 'open' | 'download'; artifactId: string }
+      | { type: 'expand'; artifactId: string | null; expanded: boolean }
+  ) => boolean | void;
   /**
    * Custom renderer for artifact reference cards shown in the message thread.
    * Return an HTMLElement to replace the default card, or `null` to use the default.
@@ -874,6 +1246,73 @@ export type AgentWidgetArtifactsFeature = {
     config: AgentWidgetConfig;
     defaultRenderer: () => HTMLElement;
   }) => HTMLElement | null;
+  /**
+   * Custom renderer for inline artifact blocks (display: "inline"), mirroring
+   * `renderCard`. Return an element to replace the default inline preview,
+   * or null to use the default.
+   */
+  renderInline?: (context: {
+    artifact: {
+      artifactId: string;
+      title: string;
+      artifactType: string;
+      status: string;
+    };
+    config: AgentWidgetConfig;
+    defaultRenderer: () => HTMLElement;
+  }) => HTMLElement | null;
+  /**
+   * Text shown while an artifact streams, in place of the default
+   * `Generating <type>...` status. Applies to every streaming surface: the
+   * reference card status line, the inline chrome meta label, and the inline
+   * streaming status body (`inlineBody.streamingView: "status"`).
+   *
+   * - A plain string replaces the default label everywhere (localization or
+   *   brand voice).
+   * - A function is called on every artifact update for each visible surface;
+   *   it must be pure and fast. Returning a string sets the animated label
+   *   only. Returning `{ label, detail }` splits the status into an animated
+   *   label (re-applied only when its text changes, so the loading animation
+   *   stays stable) and a plain un-animated detail span that may update freely
+   *   per delta (live counters).
+   *
+   * Default when unset: the current behavior, `Generating <type>...` with no
+   * detail. If the function throws, the default label is used for that update
+   * (a bad host callback must never break rendering). There is deliberately no
+   * percent progress: streams do not announce total length, so counts and
+   * elapsed time are the only truthful signals.
+   */
+  statusLabel?:
+    | string
+    | ((ctx: PersonaArtifactStatusLabelContext) =>
+        | string
+        | { label: string; detail?: string });
+  /**
+   * Animation applied to the artifact card's "Generating …" status text while
+   * the artifact streams. Character-by-character modes (`shimmer`,
+   * `shimmer-color`, `rainbow`) wrap each character in a span with a staggered
+   * `animation-delay`; `pulse` fades the whole status text; `none` disables the
+   * animation. Honors `prefers-reduced-motion`.
+   * @default "shimmer"
+   */
+  loadingAnimation?: AgentWidgetToolCallLoadingAnimation;
+  /**
+   * Duration of one full animation cycle in milliseconds.
+   * Applies to pulse, shimmer, shimmer-color, and rainbow modes.
+   * @default 2000
+   */
+  loadingAnimationDuration?: number;
+  /**
+   * Primary color for shimmer-color animation mode.
+   * Defaults to the current text color.
+   */
+  loadingAnimationColor?: string;
+  /**
+   * Secondary/end color for shimmer-color animation mode.
+   * Creates a gradient sweep between `loadingAnimationColor` and this color.
+   * @default "#3b82f6"
+   */
+  loadingAnimationSecondaryColor?: string;
 };
 
 /**
@@ -1751,6 +2190,24 @@ export type AgentWidgetLauncherConfig = {
    * @default false
    */
   sidebarMode?: boolean;
+  /**
+   * When true, the widget panel renders as a detached card inset within its region,
+   * with rounded corners on all sides and elevation (shadow plus hairline border),
+   * instead of sitting flush against the region edges.
+   *
+   * The gap around the card is themed via `theme.components.panel.inset`. The
+   * background revealed behind it is themed via `theme.components.panel.canvasBackground`
+   * in docked and inline embed modes. In sidebar mode the gap stays click-through, so the
+   * host page shows through it the same way it does in floating mode, and canvasBackground
+   * is a no-op there.
+   *
+   * Applies to sidebar, docked, and inline embed modes. Ignored in mobile fullscreen,
+   * where chrome is already suppressed. Floating mode is unchanged, since it already
+   * renders as a detached card.
+   *
+   * @default false
+   */
+  detachedPanel?: boolean;
   /**
    * Width of the sidebar panel when sidebarMode is true.
    * @default "420px"
@@ -4812,6 +5269,22 @@ export type InjectComponentDirectiveOptions = {
   sequence?: number;
 };
 
+/**
+ * Optional file metadata attached to a markdown artifact that represents a
+ * concrete file written by a Claude Managed agent (e.g. `/mnt/session/outputs/cat.html`).
+ * Additive: the artifact content stays a fenced code block on the wire for
+ * backward compatibility; new widgets use this to recover the raw source and
+ * offer a preview. Mirrors the `file` field on the core `artifact_start` event.
+ */
+export type PersonaArtifactFileMeta = {
+  /** Full path of the written file (also used as the artifact title). */
+  path: string;
+  /** MIME type of the file (used for download and preview decisions). */
+  mimeType: string;
+  /** Fence language the content was encoded with (html/xml/md/text). */
+  language?: string;
+};
+
 export type PersonaArtifactRecord = {
   id: string;
   artifactType: PersonaArtifactKind;
@@ -4820,17 +5293,30 @@ export type PersonaArtifactRecord = {
   markdown?: string;
   component?: string;
   props?: Record<string, unknown>;
+  /** Present when this markdown artifact is a previewable file (see PersonaArtifactFileMeta). */
+  file?: PersonaArtifactFileMeta;
 };
 
 /** Programmatic artifact upsert (controller / window API) */
 export type PersonaArtifactManualUpsert =
-  | { id?: string; artifactType: "markdown"; title?: string; content: string }
+  | {
+      id?: string;
+      artifactType: "markdown";
+      title?: string;
+      content: string;
+      /** Optional file metadata for previewable file artifacts. */
+      file?: PersonaArtifactFileMeta;
+      /** Set false to update the registry/pane without a transcript block (pre-4.x behavior). */
+      transcript?: boolean;
+    }
   | {
       id?: string;
       artifactType: "component";
       title?: string;
       component: string;
       props?: Record<string, unknown>;
+      /** Set false to update the registry/pane without a transcript block (pre-4.x behavior). */
+      transcript?: boolean;
     };
 
 export type AgentWidgetEvent =
@@ -4861,6 +5347,8 @@ export type AgentWidgetEvent =
       artifactType: PersonaArtifactKind;
       title?: string;
       component?: string;
+      /** Present when this markdown artifact is a previewable file. */
+      file?: PersonaArtifactFileMeta;
     }
   | { type: "artifact_delta"; id: string; artDelta: string }
   | {

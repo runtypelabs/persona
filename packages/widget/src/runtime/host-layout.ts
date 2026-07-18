@@ -5,6 +5,12 @@ import type {
 } from "../types";
 import { isDockedMountMode, resolveDockConfig } from "../utils/dock";
 import { DEFAULT_OVERLAY_Z_INDEX } from "../utils/constants";
+import { createThemeObserver, getActiveTheme } from "../utils/theme";
+import {
+  DEFAULT_PANEL_CANVAS_BACKGROUND,
+  DEFAULT_PANEL_INSET,
+  resolveTokenValue,
+} from "../utils/tokens";
 
 export type WidgetHostLayoutMode = "direct" | "docked";
 
@@ -208,6 +214,51 @@ const orderDockChildren = (
   }
 };
 
+/**
+ * Detached inset + canvas literals for the dockSlot. The panel CSS vars are set
+ * inline on the widget root inside the slot, so they cannot cascade up to the
+ * slot; resolve the token values here and apply literals.
+ */
+const resolveDetachedSlotStyles = (
+  config: AgentWidgetConfig | undefined
+): { inset: string; canvasBackground: string } => {
+  const theme = getActiveTheme(config);
+  const panel = theme.components?.panel;
+  const resolve = (raw: string | undefined, fallback: string): string => {
+    if (raw == null || raw === "") return fallback;
+    return resolveTokenValue(theme, raw) ?? raw;
+  };
+  return {
+    inset: resolve(panel?.inset, DEFAULT_PANEL_INSET),
+    canvasBackground: resolve(panel?.canvasBackground, DEFAULT_PANEL_CANVAS_BACKGROUND),
+  };
+};
+
+type DetachedSlotStyles = { inset: string; canvasBackground: string };
+
+/**
+ * Detached docked mode pads the slot so the canvas shows around the panel card.
+ * Padding, never margin, keeps parseDockWidthToPx push math truthful; box-sizing
+ * border-box keeps the slot outer width (and max-height) inclusive of the
+ * padding so the panel shrinks inside rather than overflowing.
+ */
+const applyDetachedDockSlotChrome = (
+  dockSlot: HTMLElement,
+  detached: boolean,
+  inset: string,
+  canvasBackground: string
+): void => {
+  if (!detached) {
+    dockSlot.style.padding = "";
+    dockSlot.style.background = "";
+    dockSlot.style.boxSizing = "";
+    return;
+  }
+  dockSlot.style.boxSizing = "border-box";
+  dockSlot.style.padding = inset;
+  dockSlot.style.background = canvasBackground;
+};
+
 const applyDockStyles = (
   shell: HTMLElement,
   pushTrack: HTMLElement,
@@ -215,10 +266,16 @@ const applyDockStyles = (
   dockSlot: HTMLElement,
   host: HTMLElement,
   config: AgentWidgetConfig | undefined,
-  expanded: boolean
+  expanded: boolean,
+  // Cached slot styles; null when not detached. Resolved once per config/scheme
+  // change so getActiveTheme never runs on the resize/ResizeObserver path.
+  detachedSlotStyles: DetachedSlotStyles | null
 ): void => {
   const dock = resolveDockConfig(config);
   const usePush = dock.reveal === "push";
+  const detached = detachedSlotStyles != null;
+  const detachedInset = detachedSlotStyles?.inset ?? "";
+  const detachedCanvas = detachedSlotStyles?.canvasBackground ?? "";
 
   migrateDockChildren(shell, pushTrack, contentSlot, dockSlot, usePush);
   orderDockChildren(shell, pushTrack, contentSlot, dockSlot, dock.side, usePush);
@@ -260,6 +317,8 @@ const applyDockStyles = (
     clearMobileFullscreenDockSlotStyles(dockSlot);
     resetContentSlotFlexSizing(contentSlot);
     clearEmergeDockStyles(host, dockSlot);
+    // Mobile fullscreen is flush regardless of detachedPanel.
+    applyDetachedDockSlotChrome(dockSlot, false, "", "");
 
     shell.style.display = "flex";
     shell.style.flexDirection = "column";
@@ -314,6 +373,9 @@ const applyDockStyles = (
   shell.removeAttribute("data-persona-dock-mobile-fullscreen");
   clearMobileFullscreenDockSlotStyles(dockSlot);
   applyDockSlotMaxHeight(dockSlot, dock.maxHeight);
+  // Chrome only when open: a collapsed detached slot with padding + border-box
+  // floors at 2*inset, painting a permanent canvas strip past the 0px width.
+  applyDetachedDockSlotChrome(dockSlot, detached && expanded, detachedInset, detachedCanvas);
 
   if (dock.reveal === "overlay") {
     shell.style.display = "flex";
@@ -435,8 +497,10 @@ const applyDockStyles = (
     }
 
     const width = expanded ? dock.width : "0px";
+    // Detached collapse snaps padding off as width animates to 0; animate padding
+    // alongside so the canvas gutter shrinks with the column.
     const dockTransition = dock.animate
-      ? "width 180ms ease, min-width 180ms ease, max-width 180ms ease, flex-basis 180ms ease"
+      ? `width 180ms ease, min-width 180ms ease, max-width 180ms ease, flex-basis 180ms ease${detached ? ", padding 180ms ease" : ""}`
       : "none";
     const collapsedClosed = !expanded;
 
@@ -454,9 +518,17 @@ const applyDockStyles = (
 
     if (isEmerge) {
       dockSlot.style.alignItems = dock.side === "right" ? "flex-start" : "flex-end";
-      host.style.width = dock.width;
-      host.style.minWidth = dock.width;
-      host.style.maxWidth = dock.width;
+      // Emerge pins the host to a fixed width and reveals it as the slot grows.
+      // When detached, shrink that fixed width by the padding so the host fits
+      // the padded slot content-box instead of overflowing one side. Resolve a
+      // percentage dock.width to px first: a raw % re-resolves against the
+      // padding-reduced content box and un-pins as the slot animates open.
+      const emergeHostWidth = detached
+        ? `calc(${parseDockWidthToPx(dock.width, shell.clientWidth)}px - (2 * ${detachedInset}))`
+        : dock.width;
+      host.style.width = emergeHostWidth;
+      host.style.minWidth = emergeHostWidth;
+      host.style.maxWidth = emergeHostWidth;
       host.style.boxSizing = "border-box";
     }
   }
@@ -518,12 +590,38 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
     resizeObserver = null;
   };
 
+  // Resolved once per config/scheme change; the resize paths reuse this so
+  // getActiveTheme never runs per frame.
+  let detachedSlotStyles: DetachedSlotStyles | null = null;
+  const refreshDetachedSlotStyles = (): void => {
+    detachedSlotStyles =
+      config?.launcher?.detachedPanel === true ? resolveDetachedSlotStyles(config) : null;
+  };
+  refreshDetachedSlotStyles();
+
+  const reapplyDockStyles = (): void => {
+    applyDockStyles(shell, pushTrack, contentSlot, dockSlot, host, config, expanded, detachedSlotStyles);
+  };
+
+  // Scheme-dependent canvas tokens are baked to literals at layout time, so an
+  // OS dark-mode flip leaves a stale canvas until we recompute and re-apply.
+  let cleanupSchemeObserver: (() => void) | null = null;
+  const syncSchemeObserver = (): void => {
+    cleanupSchemeObserver?.();
+    cleanupSchemeObserver = null;
+    if (config?.launcher?.detachedPanel !== true || config?.colorScheme !== "auto") return;
+    cleanupSchemeObserver = createThemeObserver(() => {
+      refreshDetachedSlotStyles();
+      reapplyDockStyles();
+    });
+  };
+
   const syncPushResizeObserver = (): void => {
     disconnectResizeObserver();
     if (resolveDockConfig(config).reveal !== "push") return;
     if (typeof ResizeObserver === "undefined") return;
     resizeObserver = new ResizeObserver(() => {
-      applyDockStyles(shell, pushTrack, contentSlot, dockSlot, host, config, expanded);
+      reapplyDockStyles();
     });
     resizeObserver.observe(shell);
   };
@@ -531,7 +629,7 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
   let heightChainChecked = false;
 
   const layout = (): void => {
-    applyDockStyles(shell, pushTrack, contentSlot, dockSlot, host, config, expanded);
+    reapplyDockStyles();
     syncPushResizeObserver();
     // Check the height chain once, the first time the panel is actually shown
     // in a layout that depends on it (mobile fullscreen is fixed-position and
@@ -562,6 +660,7 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
   }
 
   layout();
+  syncSchemeObserver();
 
   return {
     mode: "docked",
@@ -578,10 +677,14 @@ const createDockedLayout = (target: HTMLElement, config?: AgentWidgetConfig): Wi
       if ((config?.launcher?.enabled ?? true) === false) {
         expanded = true;
       }
+      refreshDetachedSlotStyles();
       layout();
+      syncSchemeObserver();
     },
     destroy() {
       ownerWindow?.removeEventListener("resize", onViewportResize);
+      cleanupSchemeObserver?.();
+      cleanupSchemeObserver = null;
       disconnectResizeObserver();
       if (originalParent.isConnected) {
         if (originalNextSibling && originalNextSibling.parentNode === originalParent) {

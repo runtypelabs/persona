@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   applyArtifactLayoutCssVars,
   applyArtifactPaneAppearance,
@@ -69,10 +69,9 @@ describe("applyArtifactPaneAppearance", () => {
     );
     expect(mount.classList.contains("persona-artifact-appearance-panel")).toBe(true);
     expect(mount.style.getPropertyValue("--persona-artifact-pane-radius")).toBe("");
-    expect(mount.classList.contains("persona-artifact-unified-split")).toBe(false);
   });
 
-  it("adds unified split class and optional outer radius", () => {
+  it("treats unifiedSplitChrome as a no-op and no longer owns the welded outer radius", () => {
     const mount = createFakeMount();
     applyArtifactPaneAppearance(
       mount,
@@ -82,8 +81,11 @@ describe("applyArtifactPaneAppearance", () => {
         },
       })
     );
-    expect(mount.classList.contains("persona-artifact-unified-split")).toBe(true);
-    expect(mount.style.getPropertyValue("--persona-artifact-unified-outer-radius").trim()).toBe("12px");
+    // Welding is now the default (JS-toggled at runtime), so the deprecated
+    // option adds no class here. The welded outer radius is owned by ui.ts
+    // syncPanelChrome (derived from the resolved panel radius), not this function.
+    expect(mount.classList.contains("persona-artifact-unified-split")).toBe(false);
+    expect(mount.style.getPropertyValue("--persona-artifact-welded-outer-radius").trim()).toBe("");
   });
 
   it("adds seamless class and border radius on any mode", () => {
@@ -133,6 +135,79 @@ describe("applyArtifactPaneAppearance", () => {
       })
     );
     expect(mount.classList.contains("persona-artifact-appearance-panel")).toBe(true);
+  });
+
+  it("resolves detached when detachedPanel true and paneAppearance unset", () => {
+    const mount = createFakeMount();
+    applyArtifactPaneAppearance(
+      mount,
+      baseConfig({
+        launcher: { detachedPanel: true },
+        features: { artifacts: { enabled: true } },
+      })
+    );
+    expect(mount.classList.contains("persona-artifact-appearance-detached")).toBe(true);
+    expect(mount.classList.contains("persona-artifact-appearance-panel")).toBe(false);
+  });
+
+  it("explicit panel beats detachedPanel true", () => {
+    const mount = createFakeMount();
+    applyArtifactPaneAppearance(
+      mount,
+      baseConfig({
+        launcher: { detachedPanel: true },
+        features: { artifacts: { enabled: true, layout: { paneAppearance: "panel" } } },
+      })
+    );
+    expect(mount.classList.contains("persona-artifact-appearance-panel")).toBe(true);
+    expect(mount.classList.contains("persona-artifact-appearance-detached")).toBe(false);
+  });
+
+  it("explicit detached works without detachedPanel", () => {
+    const mount = createFakeMount();
+    applyArtifactPaneAppearance(
+      mount,
+      baseConfig({
+        features: { artifacts: { enabled: true, layout: { paneAppearance: "detached" } } },
+      })
+    );
+    expect(mount.classList.contains("persona-artifact-appearance-detached")).toBe(true);
+  });
+
+  it("treats unifiedSplitChrome as a silent no-op when detached", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const mount = createFakeMount();
+    applyArtifactPaneAppearance(
+      mount,
+      baseConfig({
+        features: {
+          artifacts: {
+            enabled: true,
+            layout: { paneAppearance: "detached", unifiedSplitChrome: true },
+          },
+        },
+      })
+    );
+    expect(mount.classList.contains("persona-artifact-appearance-detached")).toBe(true);
+    expect(mount.classList.contains("persona-artifact-unified-split")).toBe(false);
+    // Deprecated no-op: no warning now that welding is the panel/seamless default.
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("keeps explicit paneShadow over detached defaults", () => {
+    const mount = createFakeMount();
+    applyArtifactPaneAppearance(
+      mount,
+      baseConfig({
+        launcher: { detachedPanel: true },
+        features: { artifacts: { enabled: true, layout: { paneShadow: "0 0 0 red" } } },
+      })
+    );
+    expect(mount.classList.contains("persona-artifact-appearance-detached")).toBe(true);
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-shadow").trim()).toBe(
+      "0 0 0 red"
+    );
   });
 });
 
@@ -211,6 +286,38 @@ describe("applyArtifactLayoutCssVars", () => {
     );
     expect(mount.style.getPropertyValue("--persona-artifact-pane-bg").trim()).toBe("#212121");
     expect(mount.style.getPropertyValue("--persona-artifact-pane-padding").trim()).toBe("24px");
+  });
+
+  it("defaults split gap to panel inset when detached, explicit splitGap wins", () => {
+    const detached = createFakeMount();
+    applyArtifactLayoutCssVars(
+      detached,
+      baseConfig({
+        launcher: { detachedPanel: true },
+        features: { artifacts: { enabled: true } },
+      })
+    );
+    expect(detached.style.getPropertyValue("--persona-artifact-split-gap").trim()).toBe(
+      "var(--persona-panel-inset)"
+    );
+
+    const explicit = createFakeMount();
+    applyArtifactLayoutCssVars(
+      explicit,
+      baseConfig({
+        launcher: { detachedPanel: true },
+        features: { artifacts: { enabled: true, layout: { splitGap: "2rem" } } },
+      })
+    );
+    expect(explicit.style.getPropertyValue("--persona-artifact-split-gap").trim()).toBe("2rem");
+
+    // Panel/seamless weld at gap 0 by default.
+    const welded = createFakeMount();
+    applyArtifactLayoutCssVars(
+      welded,
+      baseConfig({ features: { artifacts: { enabled: true } } })
+    );
+    expect(welded.style.getPropertyValue("--persona-artifact-split-gap").trim()).toBe("0");
   });
 
   it("clears pane bg and padding when artifacts disabled", () => {

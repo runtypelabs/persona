@@ -67,6 +67,15 @@ export type RuntypeExecutionStreamEvent = ({
   completedAt?: string;
   content?: string;
   cost?: number;
+  estimatedContextBreakdown?: {
+  categories: Record<string, {
+  chars: number;
+  estimatedTokens: number;
+}>;
+  contextWindowSize?: number;
+  estimatedTotalTokens: number;
+  estimatedUtilizationPercent?: number;
+};
   executionId: string;
   fallback?: {
   attempts: Array<{
@@ -323,6 +332,14 @@ export type RuntypeExecutionStreamEvent = ({
   awaitReason?: string;
   awaitedAt?: string;
   crawlId?: string;
+  elicitation?: {
+  message: string;
+  mode: "form" | "url";
+  pauseCount?: number;
+  requestedSchema?: Record<string, unknown>;
+  serverName?: string;
+  url?: string;
+};
   executionId: string;
   origin?: "webmcp" | "sdk";
   pageOrigin?: string;
@@ -423,6 +440,14 @@ export type RuntypeFlowSSEEvent = {
   awaitReason?: string;
   awaitedAt: string;
   crawlId?: string;
+  elicitation?: {
+  message: string;
+  mode: "form" | "url";
+  pauseCount?: number;
+  requestedSchema?: Record<string, unknown>;
+  serverName?: string;
+  url?: string;
+};
   executionId?: string;
   flowId: string;
   origin?: "webmcp" | "sdk";
@@ -517,13 +542,21 @@ export type RuntypeFlowSSEEvent = {
   totalSteps: number;
   type: "step_skip";
   when: string;
-} | {
+} | ({
+  elicitation?: {
+  message: string;
+  mode: "form" | "url";
+  pauseCount?: number;
+  requestedSchema?: Record<string, unknown>;
+  serverName?: string;
+  url?: string;
+};
   executionId?: string;
   reason?: string;
   seq?: number;
   type: "step_await";
   [key: string]: unknown;
-} | ({
+}) | ({
   agentContext?: {
   executionId: string;
   iteration: number;

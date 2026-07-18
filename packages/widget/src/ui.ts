@@ -1,7 +1,7 @@
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
-import { loadMarkdownParsers, getMarkdownParsersSync } from "./markdown-parsers-loader";
+import { onMarkdownParsersReady, getMarkdownParsersSync } from "./markdown-parsers-loader";
 import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
 import {
   AgentWidgetConfig,
@@ -28,7 +28,9 @@ import {
   VoiceStatus,
   ReadAloudState,
   PersonaArtifactRecord,
-  PersonaArtifactManualUpsert
+  PersonaArtifactManualUpsert,
+  PersonaArtifactFileMeta,
+  PersonaArtifactActionContext
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
@@ -36,6 +38,8 @@ import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./util
 import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
 import { createElement, createElementInDocument } from "./utils/dom";
+import { downloadInfoFor } from "./utils/artifact-file";
+import { artifactCopyText } from "./components/artifact-preview";
 import { morphMessages } from "./utils/morph";
 import { normalizeCopiedSelectionText } from "./utils/copy-selection";
 import {
@@ -107,11 +111,17 @@ import { ThroughputTracker } from "./utils/throughput-tracker";
 import { createEventStreamView } from "./components/event-stream-view";
 import { createArtifactPane, type ArtifactPaneApi } from "./components/artifact-pane";
 import {
+  hasLiveInlineArtifactBlock,
+  updateInlineArtifactBlocks
+} from "./components/artifact-inline";
+import {
   artifactsSidebarEnabled,
   applyArtifactLayoutCssVars,
   applyArtifactPaneAppearance,
+  isArtifactPaneAppearanceDetached,
   shouldExpandLauncherForArtifacts
 } from "./utils/artifact-gate";
+import { resolveArtifactDisplayMode } from "./utils/artifact-display";
 import { readFlexGapPx, resolveArtifactPaneWidthPx } from "./utils/artifact-resize";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
@@ -139,6 +149,8 @@ import {
 // Default localStorage key for chat history (automatically cleared on clear chat)
 const DEFAULT_CHAT_HISTORY_STORAGE_KEY = "persona-chat-history";
 const VOICE_STATE_RESTORE_WINDOW = 30 * 1000;
+// Split desktop boundary; must match widget.css artifact media queries (min-width:641px).
+const ARTIFACT_SPLIT_DESKTOP_MIN = 641;
 
 const IMAGE_FILE_EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   "image/png": "png",
@@ -1670,12 +1682,88 @@ export const createAgentExperience = (
 
   let artifactPaneApi: ArtifactPaneApi | null = null;
   let artifactPanelResizeObs: ResizeObserver | null = null;
+  // Re-runs panel chrome when the split-chrome mode flips (pane
+  // open/close/appearance change). Assigned once applyFullHeightStyles exists.
+  let syncPanelChrome: () => void = () => {};
+  let appliedSplitMode: "none" | "welded" | "detached" = "none";
+  // Resolved welded outer-right radius stashed by applyFullHeightStyles and
+  // applied in syncPanelChrome (after applyArtifactPaneAppearance, which no
+  // longer manages the var, so the two never fight). Null clears it.
+  let weldedOuterRadius: string | null = null;
   let lastArtifactsState: {
     artifacts: PersonaArtifactRecord[];
     selectedId: string | null;
   } = { artifacts: [], selectedId: null };
   let artifactsPaneUserHidden = false;
+  // Runtime-only expand state: pane fills the split root and the chat column
+  // hides. Reset whenever the pane stops being visible (syncArtifactPane).
+  let artifactPaneExpanded = false;
+  // Set when the expansion came from an inline block's Expand button: that is
+  // an explicit "fullscreen this file" request, so it survives the
+  // showExpandToggle gate below (which otherwise collapses the pane for hosts
+  // without the toolbar toggle). Cleared whenever the pane collapses or hides.
+  let artifactPaneExpandedPinned = false;
+  // Whether the user explicitly opened the pane (card click, inline Expand,
+  // showArtifacts(), programmatic upsert). Auto-open is otherwise reserved for
+  // artifacts whose resolved display mode is "panel": "card" keeps the card as
+  // the only affordance and "inline" renders in the transcript. "inline" no
+  // longer *auto*-opens the pane, but its Expand control is a deliberate,
+  // user-driven open (setting artifactsPaneUserOpened, same as a card click);
+  // every mode still writes the session artifact registry (download /
+  // getArtifacts / hydration).
+  let artifactsPaneUserOpened = false;
+  const artifactPaneCanShow = () =>
+    artifactsPaneUserOpened ||
+    lastArtifactsState.artifacts.some(
+      (a) =>
+        resolveArtifactDisplayMode(config.features?.artifacts, a.artifactType) === "panel"
+    );
+  const artifactPaneVisible = () =>
+    lastArtifactsState.artifacts.length > 0 &&
+    !artifactsPaneUserHidden &&
+    artifactPaneCanShow();
   const sessionRef: { current: AgentWidgetSession | null } = { current: null };
+
+  // Resolve an artifact's content for card actions (download + custom actions).
+  // Tries the live session registry first, then falls back to the content
+  // persisted in the card message's rawContent props (session state is gone
+  // after a page refresh). `fromEl` is the clicked element inside the card.
+  const resolveCardArtifactContent = (
+    fromEl: HTMLElement,
+    artifactId: string
+  ): { markdown?: string; title: string; file?: PersonaArtifactFileMeta; artifactType: string } => {
+    const artifact = session.getArtifactById(artifactId);
+    let markdown = artifact?.markdown;
+    let title = artifact?.title || 'artifact';
+    let file: PersonaArtifactFileMeta | undefined = artifact?.file;
+    let artifactType: string = artifact?.artifactType ?? 'markdown';
+    if (!markdown) {
+      // Match both reference cards and inline blocks: inline hydration embeds
+      // the markdown / file source in the same message rawContent, so the parse
+      // below resolves content for inline copy / custom actions after a refresh.
+      const cardEl = fromEl.closest('[data-open-artifact], [data-artifact-inline]');
+      const msgEl = cardEl?.closest('[data-message-id]');
+      const msgId = msgEl?.getAttribute('data-message-id');
+      if (msgId) {
+        const msgs = session.getMessages();
+        const msg = msgs.find(m => m.id === msgId);
+        if (msg?.rawContent) {
+          try {
+            const parsed = JSON.parse(msg.rawContent);
+            markdown = parsed?.props?.markdown;
+            title = parsed?.props?.title || title;
+            if (parsed?.props?.file && typeof parsed.props.file === 'object') {
+              file = parsed.props.file as PersonaArtifactFileMeta;
+            }
+            if (!artifact && typeof parsed?.props?.artifactType === 'string') {
+              artifactType = parsed.props.artifactType;
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    }
+    return { markdown, title, file, artifactType };
+  };
 
   // Click delegation for artifact download buttons
   messagesWrapper.addEventListener('click', (event) => {
@@ -1689,40 +1777,134 @@ export const createAgentExperience = (
     // Let integrator intercept
     const dlPrevented = config.features?.artifacts?.onArtifactAction?.({ type: 'download', artifactId });
     if (dlPrevented === true) return;
-    // Try session state first, fall back to content stored in the card's rawContent props
-    const artifact = session.getArtifactById(artifactId);
-    let markdown = artifact?.markdown;
-    let title = artifact?.title || 'artifact';
-    if (!markdown) {
-      // After page refresh, session state is gone: read from the persisted card message
-      const cardEl = dlBtn.closest('[data-open-artifact]');
-      const msgEl = cardEl?.closest('[data-message-id]');
-      const msgId = msgEl?.getAttribute('data-message-id');
-      if (msgId) {
-        const msgs = session.getMessages();
-        const msg = msgs.find(m => m.id === msgId);
-        if (msg?.rawContent) {
-          try {
-            const parsed = JSON.parse(msg.rawContent);
-            markdown = parsed?.props?.markdown;
-            title = parsed?.props?.title || title;
-          } catch { /* ignore */ }
-        }
-      }
-    }
+    const { markdown, title, file } = resolveCardArtifactContent(dlBtn, artifactId);
     if (!markdown) return;
-    const blob = new Blob([markdown], { type: 'text/markdown' });
+    // File artifacts download the raw unfenced source under their real name/MIME;
+    // non-file markdown artifacts keep the legacy `<title>.md` / text/markdown path.
+    const { filename, mime, content } = downloadInfoFor({ title, markdown, file });
+    const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${title}.md`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  // Click delegation for integrator-supplied card action buttons. Actions are
+  // looked up by id from fresh config at click time so live config updates
+  // apply. Like the download listener, its stopPropagation() cannot block the
+  // card-open listener on the same element, so that listener skips these too.
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const actionBtn = target.closest('[data-artifact-custom-action]') as HTMLElement;
+    if (!actionBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const actionId = actionBtn.getAttribute('data-artifact-custom-action');
+    if (!actionId) return;
+    // The same attribute serves cards and inline chrome; resolve which surface
+    // the button lives in so the action comes from the matching config list and
+    // the artifact id from the matching container attribute.
+    const inlineEl = actionBtn.closest('[data-artifact-inline]');
+    const cardEl = inlineEl ? null : actionBtn.closest('[data-open-artifact]');
+    const artifactId = inlineEl
+      ? inlineEl.getAttribute('data-artifact-inline')
+      : cardEl?.getAttribute('data-open-artifact') ?? null;
+    const actionList = inlineEl
+      ? config.features?.artifacts?.inlineActions
+      : config.features?.artifacts?.cardActions;
+    const action = actionList?.find((a) => a.id === actionId);
+    if (!action) return;
+    const { markdown, title, file, artifactType } = resolveCardArtifactContent(actionBtn, artifactId ?? '');
+    const ctx: PersonaArtifactActionContext = { artifactId, title, artifactType, markdown, file };
+    try {
+      void Promise.resolve(action.onClick(ctx)).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  });
+
+  // Click delegation for the inline chrome Copy button. Like the download /
+  // custom-action listeners, it resolves content from the live registry first,
+  // then falls back to the persisted inline props after a refresh, and its
+  // stopPropagation() cannot block a second listener on the same element (there
+  // is none here, but the pattern is kept consistent).
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const copyBtn = target.closest('[data-copy-artifact]') as HTMLElement;
+    if (!copyBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const artifactId = copyBtn.getAttribute('data-copy-artifact');
+    if (!artifactId) return;
+    // Prefer the live record (covers component JSON); fall back to the persisted
+    // markdown / file source parsed from the inline block's message rawContent.
+    const artifact = session.getArtifactById(artifactId);
+    let text = '';
+    if (artifact) {
+      text = artifactCopyText(artifact);
+    } else {
+      const { markdown, file, artifactType } = resolveCardArtifactContent(copyBtn, artifactId);
+      if (artifactType === 'markdown') {
+        text = artifactCopyText({
+          id: artifactId,
+          artifactType: 'markdown',
+          status: 'complete',
+          markdown: markdown ?? '',
+          ...(file ? { file } : {})
+        });
+      }
+    }
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      // Lightweight feedback: swap the copy glyph for a check briefly.
+      const checkIcon = renderLucideIcon('check', 16, 'currentColor', 2);
+      if (checkIcon) {
+        copyBtn.replaceChildren(checkIcon);
+        setTimeout(() => {
+          const copyIcon = renderLucideIcon('copy', 16, 'currentColor', 2);
+          if (copyIcon) copyBtn.replaceChildren(copyIcon);
+        }, 1500);
+      }
+    }).catch(() => { /* ignore */ });
+  });
+
+  // Click delegation for the inline chrome Expand button: open this artifact in
+  // the pane. Fires onArtifactAction({ type: "open" }) first so hosts can
+  // intercept, then mirrors the card-open path — except the pane opens
+  // expanded (fullscreen), never split: the inline block already shows the
+  // full preview at chat width, so a split pane would only duplicate it, and
+  // the click means "expand this file". The pinned flag keeps it expanded
+  // even when layout.showExpandToggle is off; Close is the exit there.
+  messagesWrapper.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const expandBtn = target.closest('[data-expand-artifact-inline]') as HTMLElement;
+    if (!expandBtn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const artifactId = expandBtn.getAttribute('data-expand-artifact-inline');
+    if (!artifactId) return;
+    const openPrevented = config.features?.artifacts?.onArtifactAction?.({ type: 'open', artifactId });
+    if (openPrevented === true) return;
+    artifactsPaneUserHidden = false;
+    // Expand is an explicit open: it overrides the "inline" auto-open
+    // suppression for as long as artifacts exist (same as a card click).
+    artifactsPaneUserOpened = true;
+    artifactPaneExpanded = true;
+    artifactPaneExpandedPinned = true;
+    session.selectArtifact(artifactId);
+    syncArtifactPane();
   });
 
   // Click delegation for artifact reference cards
   messagesWrapper.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    // Download and custom-action clicks are handled by the listeners above;
+    // their stopPropagation() cannot block a second listener on the same
+    // element, so skip them here explicitly or the card would also open the panel.
+    if (target.closest('[data-download-artifact]')) return;
+    if (target.closest('[data-artifact-custom-action]')) return;
     const card = target.closest('[data-open-artifact]') as HTMLElement;
     if (!card) return;
     const artifactId = card.getAttribute('data-open-artifact');
@@ -1733,15 +1915,24 @@ export const createAgentExperience = (
     event.preventDefault();
     event.stopPropagation();
     artifactsPaneUserHidden = false;
+    // Card click is an explicit open: it overrides the "card"/"inline"
+    // auto-open suppression for as long as artifacts exist.
+    artifactsPaneUserOpened = true;
     session.selectArtifact(artifactId);
     syncArtifactPane();
   });
 
-  // Keyboard support for artifact cards
+  // Keyboard support for artifact cards and the clip-mode inline expand hitbox
+  // (both expose a data-* attribute on a focusable element; Enter/Space forward
+  // to the element's own click, which the delegated click handlers above own).
   messagesWrapper.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const target = event.target as HTMLElement;
-    if (!target.hasAttribute('data-open-artifact')) return;
+    if (
+      !target.hasAttribute('data-open-artifact') &&
+      !target.hasAttribute('data-expand-artifact-inline')
+    )
+      return;
     event.preventDefault();
     target.click();
   });
@@ -2130,6 +2321,12 @@ export const createAgentExperience = (
   let artifactResizeUnbind: (() => void) | null = null;
   let artifactResizeDocEnd: (() => void) | null = null;
   let reconcileArtifactResize: () => void = () => {};
+  // Expanded-state transition tracking: stash the resizer's inline width/maxWidth
+  // (which would otherwise beat the expanded class) once per enter, restore once
+  // per leave.
+  let artifactExpandedApplied = false;
+  let artifactStashedWidth = "";
+  let artifactStashedMaxWidth = "";
 
   function stopArtifactResizePointer() {
     artifactResizeDocEnd?.();
@@ -2139,7 +2336,9 @@ export const createAgentExperience = (
   /** Flush split: overlay handle on the seam so it does not consume flex gap (extension + resizable). */
   const positionExtensionArtifactResizeHandle = () => {
     if (!artifactSplitRoot || !artifactResizeHandle) return;
-    const ext = mount.classList.contains("persona-artifact-appearance-seamless");
+    // Welded splits (panel + seamless) have gap 0, so the handle overlays the seam
+    // instead of consuming flex width; detached keeps a real gap and a flex handle.
+    const ext = mount.classList.contains("persona-artifact-welded-split");
     const ownerWin = mount.ownerDocument.defaultView ?? window;
     const mobile = ownerWin.innerWidth <= 640;
     if (!ext || mount.classList.contains("persona-artifact-narrow-host") || mobile) {
@@ -2159,12 +2358,44 @@ export const createAgentExperience = (
     artifactResizeHandle.style.bottom = "0";
     artifactResizeHandle.style.width = `${hitW}px`;
     artifactResizeHandle.style.zIndex = "5";
-    const left = chat.offsetWidth - hitW / 2;
+    // Center the overlay on the seam: with an explicit welded gap the seam sits
+    // half a gap past the chat's right edge (welded default gap is 0).
+    const gapPx = readFlexGapPx(artifactSplitRoot, ownerWin);
+    const left = chat.offsetWidth + gapPx / 2 - hitW / 2;
     artifactResizeHandle.style.left = `${Math.max(0, left)}px`;
   };
 
   /** No-op until artifact pane is created; replaced below when artifacts are enabled. */
   let applyLauncherArtifactPanelWidth: () => void = () => {};
+
+  // Mobile fullscreen renders a flush, chrome-less panel, so the split chrome
+  // must stand down there. This is the union of the two fullscreen predicates
+  // applyFullHeightStyles/recalcPanelHeight use: launcher fullscreen
+  // (shouldGoFullscreen) and the docked-host variant (dockedHostFullscreen).
+  // Unlike the 641px split breakpoint, it honors the configurable mobileBreakpoint.
+  const isMobileFullscreenActive = (): boolean => {
+    const win = mount.ownerDocument.defaultView ?? window;
+    const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
+    const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
+    if (!mobileFullscreen || win.innerWidth > mobileBreakpoint) return false;
+    return launcherEnabled || isDockedMountMode(config);
+  };
+
+  // Desktop side-by-side split chrome mode. 'welded' = panel|seamless (one card,
+  // border+radius wrap both columns); 'detached' = two floating cards; 'none' when
+  // the pane is closed, the narrow-host drawer, or mobile fullscreen.
+  const splitChromeMode = (): "none" | "welded" | "detached" => {
+    if (!artifactsSidebarEnabled(config)) return "none";
+    if (!artifactPaneVisible()) return "none";
+    if (mount.classList.contains("persona-artifact-narrow-host")) return "none";
+    // A fullscreen panel is flush; welded/detached corner chrome would fight it.
+    if (isMobileFullscreenActive()) return "none";
+    const win = mount.ownerDocument.defaultView ?? window;
+    // Must match the artifact split media queries in widget.css (drawer at
+    // max-width:640, split at min-width:641); mobileBreakpoint does not move it.
+    if (win.innerWidth < ARTIFACT_SPLIT_DESKTOP_MIN) return "none";
+    return isArtifactPaneAppearanceDetached(config) ? "detached" : "welded";
+  };
 
   const syncArtifactPane = () => {
     if (!artifactPaneApi || !artifactsSidebarEnabled(config)) return;
@@ -2174,16 +2405,79 @@ export const createAgentExperience = (
     const threshold = config.features?.artifacts?.layout?.narrowHostMaxWidth ?? 520;
     const w = panel.getBoundingClientRect().width || 0;
     mount.classList.toggle("persona-artifact-narrow-host", w > 0 && w <= threshold);
+    // Thread the single source of truth for "pane surface is shown" into the
+    // pane BEFORE update() so it renders lazily: in inline/card display modes
+    // the pane stays hidden and must not build a second sandboxed artifact
+    // iframe (which would execute artifact scripts twice). The pane records
+    // state while hidden and renders on the next reveal. Set first so an
+    // update() that arrives while hidden is skipped, not rendered-then-hidden.
+    const paneVisible = artifactPaneVisible();
+    artifactPaneApi.setVisible(paneVisible);
     artifactPaneApi.update(lastArtifactsState);
     if (artifactsPaneUserHidden) {
       artifactPaneApi.setMobileOpen(false);
       artifactPaneApi.element.classList.add("persona-hidden");
       artifactPaneApi.backdrop?.classList.add("persona-hidden");
-    } else if (lastArtifactsState.artifacts.length > 0) {
+      artifactPaneExpanded = false;
+      artifactPaneExpandedPinned = false;
+    } else if (lastArtifactsState.artifacts.length > 0 && artifactPaneCanShow()) {
       // User chose “show” again (e.g. programmatic showArtifacts): clear dismiss chrome
       // and force drawer open so narrow-host / mobile slide-out is not stuck off-screen.
+      // Artifacts whose display mode is "card" or "inline" don't auto-open the
+      // pane (artifactPaneCanShow); it stays hidden until an explicit open or
+      // until a "panel"-mode artifact arrives.
       artifactPaneApi.element.classList.remove("persona-hidden");
       artifactPaneApi.setMobileOpen(true);
+    } else {
+      // The pane's own update() unhides itself whenever records exist
+      // (applyLayoutVisibility), so re-assert the gate here: card/inline-mode
+      // artifacts keep the pane hidden until an explicit open.
+      artifactPaneApi.setMobileOpen(false);
+      artifactPaneApi.element.classList.add("persona-hidden");
+      artifactPaneApi.backdrop?.classList.add("persona-hidden");
+      artifactPaneExpanded = false;
+      artifactPaneExpandedPinned = false;
+    }
+    // Re-read the toggle config on every sync so a live config.update() can
+    // reveal/remove the button (the pane itself is built once). Disabling the
+    // toggle while expanded also collapses the pane — unless the expansion is
+    // pinned (inline Expand): that fullscreen request stands on its own and
+    // exits via Close.
+    const expandToggleEnabled = config.features?.artifacts?.layout?.showExpandToggle === true;
+    artifactPaneApi.setExpandToggleVisible(expandToggleEnabled);
+    artifactPaneApi.setCopyButtonVisible(
+      config.features?.artifacts?.layout?.showCopyButton === true
+    );
+    artifactPaneApi.setCustomActions(config.features?.artifacts?.toolbarActions ?? []);
+    artifactPaneApi.setTabFade(config.features?.artifacts?.layout?.tabFade);
+    artifactPaneApi.setRenderTabBar(config.features?.artifacts?.renderTabBar);
+    if (!expandToggleEnabled && !artifactPaneExpandedPinned) artifactPaneExpanded = false;
+    // Run the resizer stash/restore once per expanded-state transition: the
+    // resizer's inline width/maxWidth beats the expanded class, so clear it while
+    // expanded and put it back on collapse.
+    if (artifactPaneExpanded !== artifactExpandedApplied) {
+      const paneEl = artifactPaneApi.element;
+      if (artifactPaneExpanded) {
+        artifactStashedWidth = paneEl.style.width;
+        artifactStashedMaxWidth = paneEl.style.maxWidth;
+        paneEl.style.removeProperty("width");
+        paneEl.style.removeProperty("max-width");
+      } else {
+        if (artifactStashedWidth) paneEl.style.width = artifactStashedWidth;
+        if (artifactStashedMaxWidth) paneEl.style.maxWidth = artifactStashedMaxWidth;
+        artifactStashedWidth = "";
+        artifactStashedMaxWidth = "";
+      }
+      artifactExpandedApplied = artifactPaneExpanded;
+    }
+    mount.classList.toggle("persona-artifact-expanded", artifactPaneExpanded);
+    artifactPaneApi.setExpanded(artifactPaneExpanded);
+    // Recompute panel chrome when the split mode changes (pane open/close or
+    // appearance) so the welded border and detached shadow suppression land.
+    const modeNow = splitChromeMode();
+    if (modeNow !== appliedSplitMode) {
+      appliedSplitMode = modeNow;
+      syncPanelChrome();
     }
     reconcileArtifactResize();
   };
@@ -2203,6 +2497,22 @@ export const createAgentExperience = (
       onSelect: (id) => sessionRef.current?.selectArtifact(id),
       onDismiss: () => {
         artifactsPaneUserHidden = true;
+        syncArtifactPane();
+      },
+      onToggleExpand: () => {
+        const next = !artifactPaneExpanded;
+        const artifactId =
+          lastArtifactsState.selectedId ??
+          lastArtifactsState.artifacts[lastArtifactsState.artifacts.length - 1]?.id ??
+          null;
+        const prevented = config.features?.artifacts?.onArtifactAction?.({
+          type: "expand",
+          artifactId,
+          expanded: next,
+        });
+        if (prevented === true) return;
+        artifactPaneExpanded = next;
+        if (!next) artifactPaneExpandedPinned = false;
         syncArtifactPane();
       }
     });
@@ -2246,6 +2556,7 @@ export const createAgentExperience = (
         const onPointerDown = (e: PointerEvent) => {
           if (!artifactPaneApi || e.button !== 0) return;
           if (mount.classList.contains("persona-artifact-narrow-host")) return;
+          if (mount.classList.contains("persona-artifact-expanded")) return;
           if (win.innerWidth <= 640) return;
           e.preventDefault();
           stopArtifactResizePointer();
@@ -2254,9 +2565,13 @@ export const createAgentExperience = (
           const layout = config.features?.artifacts?.layout;
           const onMove = (ev: PointerEvent) => {
             const splitW = artifactSplitRoot!.getBoundingClientRect().width;
-            const extensionChrome = mount.classList.contains("persona-artifact-appearance-seamless");
-            const gapPx = extensionChrome ? 0 : readFlexGapPx(artifactSplitRoot!, win);
-            const handleW = extensionChrome ? 0 : handle.getBoundingClientRect().width || 6;
+            const weldedChrome = mount.classList.contains("persona-artifact-welded-split");
+            // Read the effective flex gap either way: welded defaults to 0 but an
+            // explicit splitGap opens a real gap that still consumes row width.
+            const gapPx = readFlexGapPx(artifactSplitRoot!, win);
+            // Welded overlays the handle on the seam (out of flow), so it consumes
+            // no width; detached keeps it as an in-flow flex child.
+            const handleW = weldedChrome ? 0 : handle.getBoundingClientRect().width || 6;
             // Handle is left of the artifact: drag left widens artifact, drag right narrows it.
             const next = startW - (ev.clientX - startX);
             const clamped = resolveArtifactPaneWidthPx(
@@ -2301,8 +2616,7 @@ export const createAgentExperience = (
         };
       }
       if (artifactResizeHandle) {
-        const has =
-          lastArtifactsState.artifacts.length > 0 && !artifactsPaneUserHidden;
+        const has = artifactPaneVisible();
         artifactResizeHandle.classList.toggle("persona-hidden", !has);
         positionExtensionArtifactResizeHandle();
       }
@@ -2323,8 +2637,7 @@ export const createAgentExperience = (
       const expanded =
         config.features?.artifacts?.layout?.expandedPanelWidth ??
         "min(720px, calc(100vw - 24px))";
-      const hasVisible =
-        lastArtifactsState.artifacts.length > 0 && !artifactsPaneUserHidden;
+      const hasVisible = artifactPaneVisible();
       if (hasVisible) {
         panel.style.width = expanded;
         panel.style.maxWidth = expanded;
@@ -2417,6 +2730,8 @@ export const createAgentExperience = (
     const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
     /** Script-tag / div embed: launcher off, host supplies a sized mount. */
     const isInlineEmbed = config.launcher?.enabled === false;
+    /** Detached appearance: inset card over a canvas instead of flush chrome. */
+    const isDetached = config.launcher?.detachedPanel === true;
     const panelPartial = config.theme?.components?.panel;
     const activeTheme = getActiveTheme(config);
     const resolvePanelChrome = (raw: string | undefined, fallback: string): string => {
@@ -2431,32 +2746,104 @@ export const createAgentExperience = (
     const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
     const isMobileViewport = ownerWindow.innerWidth <= mobileBreakpoint;
     const shouldGoFullscreen = mobileFullscreen && isMobileViewport && launcherEnabled;
+    // Docked host layout forces fullscreen on mobile even when the launcher is
+    // off (host-layout pins the slot fixed and clears its chrome). Suppress the
+    // detached card so it never paints chrome over a flush fullscreen panel.
+    const dockedHostFullscreen = dockedMode && mobileFullscreen && isMobileViewport;
 
     // Determine panel styling based on mode, with theme overrides
     const position = config.launcher?.position ?? 'bottom-left';
     const isLeftSidebar = position === 'bottom-left' || position === 'top-left';
     const overlayZIndex = config.launcher?.zIndex ?? DEFAULT_OVERLAY_Z_INDEX;
 
-    // Default values based on mode
-    let defaultPanelBorder = (sidebarMode || shouldGoFullscreen) ? 'none' : '1px solid var(--persona-border)';
-    let defaultPanelShadow = shouldGoFullscreen
-      ? 'none'
-      : sidebarMode
-        ? (isLeftSidebar ? 'var(--persona-palette-shadows-sidebar-left, 2px 0 12px rgba(0, 0, 0, 0.08))' : 'var(--persona-palette-shadows-sidebar-right, -2px 0 12px rgba(0, 0, 0, 0.08))')
-        : 'var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25))';
+    // Card chrome defaults (floating look): reused to restore detached chrome.
+    // Defaults chain through the aliases themeToCssVariables emits so explicit
+    // theme.components.panel overrides and these defaults never diverge.
+    const cardBorder = 'var(--persona-panel-border, 1px solid var(--persona-border))';
+    const cardShadow = 'var(--persona-panel-shadow, var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25)))';
+    const cardRadius = 'var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))';
+    /** Detached restores card chrome except when a host layout goes fullscreen. */
+    const detachedCard = isDetached && !shouldGoFullscreen && !dockedHostFullscreen;
+    // Stamp reflects rendered chrome: cleared when a fullscreen host layout
+    // suppresses the card, so the attribute never lies to the detached CSS.
+    if (detachedCard) {
+      mount.setAttribute("data-persona-panel-detached", "true");
+    } else {
+      mount.removeAttribute("data-persona-panel-detached");
+    }
 
-    if (dockedMode && !shouldGoFullscreen) {
+    // Default values based on mode
+    let defaultPanelBorder = detachedCard
+      ? cardBorder
+      : (sidebarMode || shouldGoFullscreen) ? 'none' : cardBorder;
+    let defaultPanelShadow = detachedCard
+      ? cardShadow
+      : shouldGoFullscreen
+        ? 'none'
+        : sidebarMode
+          ? (isLeftSidebar ? 'var(--persona-palette-shadows-sidebar-left, 2px 0 12px rgba(0, 0, 0, 0.08))' : 'var(--persona-palette-shadows-sidebar-right, -2px 0 12px rgba(0, 0, 0, 0.08))')
+          // Flush inline embeds fill their container: no elevation by default
+          // (detachedPanel or components.panel.shadow opts back in).
+          : isInlineEmbed ? 'none' : cardShadow;
+
+    if (dockedMode && !shouldGoFullscreen && !detachedCard) {
       defaultPanelShadow = 'none';
       defaultPanelBorder = 'none';
     }
-    const defaultPanelBorderRadius = (sidebarMode || shouldGoFullscreen)
-      ? '0'
-      : 'var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))';
+    const defaultPanelBorderRadius = detachedCard
+      ? cardRadius
+      : (sidebarMode || shouldGoFullscreen) ? '0' : cardRadius;
 
     // Apply theme overrides or defaults (components.panel.*)
     const panelBorder = resolvePanelChrome(panelPartial?.border, defaultPanelBorder);
     const panelShadow = resolvePanelChrome(panelPartial?.shadow, defaultPanelShadow);
     const panelBorderRadius = resolvePanelChrome(panelPartial?.borderRadius, defaultPanelBorderRadius);
+
+    // Split chrome: 'welded' folds the card border onto the outer panel so it
+    // wraps both columns as one card (shadow/radius already on the panel);
+    // 'detached' pulls them into two individually carded columns.
+    const splitMode = splitChromeMode();
+    const detachedSplitActive = splitMode === "detached";
+    const weldedSplitActive = splitMode === "welded";
+    mount.classList.toggle("persona-artifact-detached-split", detachedSplitActive);
+    mount.classList.toggle("persona-artifact-welded-split", weldedSplitActive);
+    const chatCardShadow =
+      'var(--persona-artifact-chat-shadow, var(--persona-artifact-pane-shadow, var(--persona-panel-shadow, var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25)))))';
+    // Welded moves the chat card border onto the panel, so the chat column goes
+    // borderless; detached cards it individually; otherwise it keeps the border.
+    // 'flush' drops the chat card so the chat is flat flush background and only
+    // the pane floats; 'card' (default) keeps two matched cards. Flush is a
+    // steady state: it applies whether or not a pane is open, so opening or
+    // closing an artifact never flips the chat chrome. Gated to inline embeds
+    // (not docked), matching the card-mode perimeter inset: the flush model only
+    // fits the container-filling embed. Floating/docked/sidebar keep the card look.
+    const rawChatSurface = config.features?.artifacts?.layout?.chatSurface;
+    const resolvedChatSurface = rawChatSurface === "flush" ? "flush" : "card";
+    const chatFlush =
+      resolvedChatSurface === "flush" &&
+      artifactsSidebarEnabled(config) &&
+      isArtifactPaneAppearanceDetached(config) &&
+      isInlineEmbed &&
+      !dockedMode;
+    mount.classList.toggle("persona-artifact-chat-flush", chatFlush);
+    // Flat means flat: flush suppresses the outer panel shadow in every state.
+    const outerPanelShadow = detachedSplitActive || chatFlush ? 'none' : panelShadow;
+    let chatContainerBorder = detachedSplitActive
+      ? cardBorder
+      : weldedSplitActive
+        ? 'none'
+        : panelBorder;
+    let chatContainerRadius = detachedSplitActive ? cardRadius : panelBorderRadius;
+    if (chatFlush) {
+      chatContainerBorder = 'none';
+      chatContainerRadius = '0';
+    }
+    // Flush fills the container flush, so the outer panel squares off by default;
+    // the pane keeps its own rounded radius. An explicit panel.borderRadius wins.
+    const panelRadiusExplicit =
+      panelPartial?.borderRadius != null && panelPartial.borderRadius !== '';
+    const appliedPanelRadius =
+      chatFlush && !panelRadiusExplicit ? '0' : panelBorderRadius;
 
     // Clearing body.style.cssText below wipes the inline `flex: 1 1 0%` /
     // `min-height: 0` / `overflow-y: auto` that make the messages area a
@@ -2577,7 +2964,7 @@ export const createAgentExperience = (
       }
     } else if (dockedMode) {
       const dockReveal = resolveDockConfig(config).reveal;
-      if (dockReveal === "emerge") {
+      if (dockReveal === "emerge" && !isDetached) {
         const dw = resolveDockConfig(config).width;
         panel.style.width = dw;
         panel.style.maxWidth = dw;
@@ -2592,18 +2979,57 @@ export const createAgentExperience = (
     // Box-shadow is applied to panel (parent) instead of container to avoid
     // rendering artifacts when container has overflow:hidden + border-radius
     // Panel also gets border-radius to make the shadow follow the rounded corners
-    panel.style.boxShadow = panelShadow;
-    panel.style.borderRadius = panelBorderRadius;
-    container.style.border = panelBorder;
-    container.style.borderRadius = panelBorderRadius;
+    panel.style.boxShadow = outerPanelShadow;
+    panel.style.borderRadius = appliedPanelRadius;
+    if (detachedSplitActive) panel.style.border = 'none';
+    else if (weldedSplitActive) panel.style.border = panelBorder;
+    container.style.border = chatContainerBorder;
+    container.style.borderRadius = chatContainerRadius;
+    container.style.boxShadow = detachedSplitActive && !chatFlush ? chatCardShadow : '';
+    // Flush chat has no card surface of its own: override the class-painted
+    // container/body/footer backgrounds so the wrapper's canvas shows through.
+    // The footer's top hairline is chat-card chrome, so it goes too. Element
+    // surfaces (bubbles, cards, composer input) keep their own backgrounds.
+    if (chatFlush) {
+      container.style.background = 'transparent';
+      body.style.background = 'transparent';
+      footer.style.background = 'transparent';
+      footer.style.borderTop = 'none';
+    }
 
-    if (dockedMode && !shouldGoFullscreen && panelPartial?.border === undefined) {
+    // Welded outer-right radius: derive the pane's outer corners from the same
+    // resolved value as the chat card's left corners so a custom
+    // components.panel.borderRadius stays symmetric. Explicit
+    // unifiedSplitOuterRadius / paneBorderRadius still win. Applied in
+    // syncPanelChrome after applyArtifactPaneAppearance (which no longer owns it).
+    if (weldedSplitActive) {
+      const wl = config.features?.artifacts?.layout;
+      weldedOuterRadius =
+        wl?.unifiedSplitOuterRadius?.trim() || wl?.paneBorderRadius?.trim() || panelBorderRadius;
+    } else {
+      weldedOuterRadius = null;
+    }
+
+    if (dockedMode && !shouldGoFullscreen && !detachedCard && !detachedSplitActive && !weldedSplitActive && panelPartial?.border === undefined) {
       container.style.border = 'none';
       const dockSide = resolveDockConfig(config).side;
       if (dockSide === 'right') {
         container.style.borderLeft = '1px solid var(--persona-border)';
       } else {
         container.style.borderRight = '1px solid var(--persona-border)';
+      }
+    }
+
+    // Docked + welded: the welded chrome owner is the outer panel, and docked
+    // mode resolves its border to none, so add the dock-facing hairline there so
+    // the split still separates from the host page. Mirrors the flush block's
+    // side choice (right dock => left edge faces the page).
+    if (dockedMode && !shouldGoFullscreen && weldedSplitActive && panelPartial?.border === undefined) {
+      const dockSide = resolveDockConfig(config).side;
+      if (dockSide === 'right') {
+        panel.style.borderLeft = '1px solid var(--persona-border)';
+      } else {
+        panel.style.borderRight = '1px solid var(--persona-border)';
       }
     }
 
@@ -2637,8 +3063,10 @@ export const createAgentExperience = (
       panel.style.minHeight = '0';
       panel.style.maxHeight = '100%';
       panel.style.height = '100%';
-      panel.style.overflow = 'hidden';
-      
+      // Detached split: each card clips its own content and carries its own
+      // shadow, so panel overflow:hidden must not clip the cards' shadows.
+      if (!detachedSplitActive) panel.style.overflow = 'hidden';
+
       // Main container
       container.style.display = 'flex';
       container.style.flexDirection = 'column';
@@ -2655,7 +3083,19 @@ export const createAgentExperience = (
       // Footer (composer) - should not shrink
       footer.style.flexShrink = '0';
     }
-    
+
+    // Inline embed: pad the wrapper so the canvas shows around the card when the
+    // panel is a detached card OR a detached split is open (insets the whole split
+    // from the container edges on all sides). Docked owns its inset via
+    // host-layout, so exclude it (no double gap).
+    // Flush chat must be flush to the container, so it skips the perimeter inset;
+    // the wrapper still paints the canvas so one token colors the whole backdrop,
+    // in every state (flush is steady, so idle must match pane-open).
+    if (isInlineEmbed && (detachedCard || detachedSplitActive || chatFlush) && !dockedMode) {
+      if (!chatFlush) wrapper.style.padding = 'var(--persona-panel-inset)';
+      wrapper.style.background = 'var(--persona-panel-canvas-bg)';
+    }
+
     // Handle positioning classes based on mode
     // First remove all position classes to reset state
     wrapper.classList.remove(
@@ -2672,22 +3112,40 @@ export const createAgentExperience = (
     // Apply sidebar-specific styles
     if (sidebarMode) {
       const sidebarWidth = config.launcher?.sidebarWidth ?? '420px';
-      
-      // Wrapper - fixed position, flush with edges
-      wrapper.style.cssText = `
-        position: fixed !important;
-        top: 0 !important;
-        bottom: 0 !important;
-        width: ${sidebarWidth} !important;
-        height: 100vh !important;
-        max-height: 100vh !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        z-index: ${overlayZIndex} !important;
-        ${isLeftSidebar ? 'left: 0 !important; right: auto !important;' : 'left: auto !important; right: 0 !important;'}
-      `;
+
+      // Wrapper - fixed position. Detached insets the card off the edges and
+      // shrinks its height by the inset on both ends; flush hugs the edges.
+      if (isDetached) {
+        wrapper.style.cssText = `
+          position: fixed !important;
+          top: var(--persona-panel-inset) !important;
+          bottom: var(--persona-panel-inset) !important;
+          width: ${sidebarWidth} !important;
+          height: calc(100vh - (2 * var(--persona-panel-inset))) !important;
+          max-height: calc(100vh - (2 * var(--persona-panel-inset))) !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          z-index: ${overlayZIndex} !important;
+          ${isLeftSidebar ? 'left: var(--persona-panel-inset) !important; right: auto !important;' : 'left: auto !important; right: var(--persona-panel-inset) !important;'}
+        `;
+      } else {
+        wrapper.style.cssText = `
+          position: fixed !important;
+          top: 0 !important;
+          bottom: 0 !important;
+          width: ${sidebarWidth} !important;
+          height: 100vh !important;
+          max-height: 100vh !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          z-index: ${overlayZIndex} !important;
+          ${isLeftSidebar ? 'left: 0 !important; right: auto !important;' : 'left: auto !important; right: 0 !important;'}
+        `;
+      }
       
       // Panel - fill wrapper (override inline width/max-width from panel.ts)
       // Box-shadow is on panel to avoid rendering artifacts with container's overflow:hidden
@@ -2703,15 +3161,16 @@ export const createAgentExperience = (
         min-height: 0 !important;
         margin: 0 !important;
         padding: 0 !important;
-        box-shadow: ${panelShadow} !important;
-        border-radius: ${panelBorderRadius} !important;
+        box-shadow: ${outerPanelShadow} !important;
+        border-radius: ${appliedPanelRadius} !important;
+        ${detachedSplitActive ? 'border: none !important;' : weldedSplitActive ? `border: ${panelBorder} !important;` : ''}
       `;
       // Force override any inline width/maxWidth that may be set elsewhere
       panel.style.setProperty('width', '100%', 'important');
       panel.style.setProperty('max-width', '100%', 'important');
-      
-      // Container - apply configurable styles with sidebar layout
-      // Note: box-shadow is on panel, not container
+
+      // Container - apply configurable styles with sidebar layout. Box-shadow is
+      // normally on panel, but a detached split cards the chat column here.
       container.style.cssText = `
         display: flex !important;
         flex-direction: column !important;
@@ -2721,8 +3180,10 @@ export const createAgentExperience = (
         min-height: 0 !important;
         max-height: 100% !important;
         overflow: hidden !important;
-        border-radius: ${panelBorderRadius} !important;
-        border: ${panelBorder} !important;
+        border-radius: ${chatContainerRadius} !important;
+        border: ${chatContainerBorder} !important;
+        ${detachedSplitActive && !chatFlush ? `box-shadow: ${chatCardShadow} !important;` : ''}
+        ${chatFlush ? 'background: transparent !important;' : ''}
       `;
       
       // Remove footer border in sidebar mode
@@ -2730,6 +3191,7 @@ export const createAgentExperience = (
         flex-shrink: 0 !important;
         border-top: none !important;
         padding: 8px 16px 12px 16px !important;
+        ${chatFlush ? 'background: transparent !important;' : ''}
       `;
     }
     
@@ -2753,6 +3215,22 @@ export const createAgentExperience = (
   applyThemeVariables(mount, config);
   applyArtifactLayoutCssVars(mount, config);
   applyArtifactPaneAppearance(mount, config);
+
+  // applyFullHeightStyles wipes mount.style.cssText, so re-apply the theme +
+  // artifact layout vars after it, mirroring the init sequence above.
+  syncPanelChrome = () => {
+    applyFullHeightStyles();
+    applyThemeVariables(mount, config);
+    applyArtifactLayoutCssVars(mount, config);
+    applyArtifactPaneAppearance(mount, config);
+    // Owned here so it lands after applyArtifactPaneAppearance and derives from
+    // the same resolved panel radius the chat card uses (see applyFullHeightStyles).
+    if (weldedOuterRadius) {
+      mount.style.setProperty("--persona-artifact-welded-outer-radius", weldedOuterRadius);
+    } else {
+      mount.style.removeProperty("--persona-artifact-welded-outer-radius");
+    }
+  };
 
   const destroyCallbacks: Array<() => void> = [];
   // Clean up the document-level digit-key shortcut listener registered earlier.
@@ -4003,15 +4481,57 @@ export const createAgentExperience = (
         if (directive) {
           const lastFp = lastComponentDirectiveFingerprint.get(message.id);
           const needsRebuild = lastFp !== fingerprint;
-          const wrapChrome = config.wrapComponentDirectiveInBubble !== false;
+          // Wrap only when the global default allows it AND the component has
+          // not opted out of bubble chrome (e.g. the artifact card carries its
+          // own border, so it renders bare).
+          const wrapChrome =
+            config.wrapComponentDirectiveInBubble !== false &&
+            componentRegistry.getOptions(directive.component)?.bubbleChrome !== false;
           let liveBubble: HTMLElement | null = null;
 
           if (needsRebuild) {
-            const componentBubble = renderComponentDirective(directive, {
+            let componentBubble = renderComponentDirective(directive, {
               config,
               message,
               transform
             });
+            // Reuse a mounted inline artifact block instead of the fresh
+            // render: replacing it would cut the collapse-to-card animation
+            // short and reload live file-preview iframes.
+            if (
+              componentBubble &&
+              directive.component === "PersonaArtifactInline"
+            ) {
+              const fresh = componentBubble.hasAttribute(
+                "data-artifact-inline"
+              )
+                ? componentBubble
+                : componentBubble.querySelector<HTMLElement>(
+                    "[data-artifact-inline]"
+                  );
+              const artifactId =
+                fresh?.getAttribute("data-artifact-inline") ?? "";
+              const escapedId =
+                typeof CSS !== "undefined" && typeof CSS.escape === "function"
+                  ? CSS.escape(artifactId)
+                  : artifactId;
+              const live = artifactId
+                ? (container
+                    .querySelector<HTMLElement>(`#wrapper-${message.id}`)
+                    ?.querySelector<HTMLElement>(
+                      `[data-artifact-inline="${escapedId}"]`
+                    ) ?? null)
+                : null;
+              if (
+                fresh &&
+                live &&
+                live !== fresh &&
+                hasLiveInlineArtifactBlock(live)
+              ) {
+                if (fresh === componentBubble) componentBubble = live;
+                else fresh.replaceWith(live);
+              }
+            }
             if (componentBubble) {
               if (wrapChrome) {
                 const componentWrapper = document.createElement("div");
@@ -5313,6 +5833,12 @@ export const createAgentExperience = (
       if (lastUserMessage && lastAssistantMessage && activeStreamingTextCandidate) break;
     }
     renderMessagesWithPlugins(messagesWrapper, messages, postprocess);
+    // Freshly (re)built inline artifact blocks render from their persisted
+    // props; sync them with the live registry so a block created after the
+    // last onArtifactsState emission still shows current content.
+    updateInlineArtifactBlocks(messagesWrapper, lastArtifactsState.artifacts, {
+      suppressTransition: isStreaming,
+    });
     ensureToolElapsedTimer();
     renderSuggestions(messages);
     scheduleAutoScroll(!isStreaming);
@@ -5483,6 +6009,20 @@ export const createAgentExperience = (
     },
     onArtifactsState(state) {
       lastArtifactsState = state;
+      // A cleared registry ends any explicit-open override: the next artifact
+      // decides pane visibility purely from its own display mode.
+      if (state.artifacts.length === 0) {
+        artifactsPaneUserOpened = false;
+      }
+      // Route streaming registry updates (artifact_delta / artifact_complete)
+      // into any inline artifact blocks in the transcript. Suppress the
+      // streaming→complete View Transition while the session is still
+      // streaming: it captures the whole document, and cross-fading a stale
+      // snapshot over still-moving message text reads as ghosting/motion blur
+      // on the transcript.
+      updateInlineArtifactBlocks(messagesWrapper, state.artifacts, {
+        suppressTransition: isStreaming,
+      });
       syncArtifactPane();
       persistState();
     },
@@ -6412,17 +6952,35 @@ export const createAgentExperience = (
 
     try {
       if (shouldGoFullscreen) {
-        applyFullHeightStyles();
-        applyThemeVariables(mount, config);
+        // syncPanelChrome re-applies theme + artifact layout vars that the
+        // cssText reset in applyFullHeightStyles wipes; bare re-style flickers.
+        syncPanelChrome();
+        appliedSplitMode = splitChromeMode();
         return;
       }
 
       // Exiting mobile fullscreen (e.g., orientation change to landscape): reset all styles
+      let chromeResynced = false;
       if (wasMobileFullscreen) {
         wasMobileFullscreen = false;
-        applyFullHeightStyles();
-        applyThemeVariables(mount, config);
+        syncPanelChrome();
+        chromeResynced = true;
       }
+
+      // Width-only resize can cross the 640 split boundary without changing
+      // panel geometry (pane ResizeObserver stays silent) or hitting the
+      // fullscreen branches, so resync chrome when the split mode flips.
+      const modeNow = splitChromeMode();
+      if (!chromeResynced && modeNow !== appliedSplitMode) {
+        syncPanelChrome();
+        chromeResynced = true;
+      }
+      appliedSplitMode = modeNow;
+      // syncPanelChrome does not touch the resize handle, so a width-only flip
+      // between welded (seam overlay) and detached/flex handle would leave it in
+      // the old mode. reconcileArtifactResize re-places it; it never re-enters
+      // syncArtifactPane, so no recursion. No-op when artifacts are disabled.
+      if (chromeResynced) reconcileArtifactResize();
 
       if (!launcherEnabled && !dockedMode) {
         panel.style.height = "";
@@ -8401,6 +8959,7 @@ export const createAgentExperience = (
     showArtifacts(): void {
       if (!artifactsSidebarEnabled(config)) return;
       artifactsPaneUserHidden = false;
+      artifactsPaneUserOpened = true;
       syncArtifactPane();
       artifactPaneApi?.setMobileOpen(true);
     },
@@ -8411,8 +8970,20 @@ export const createAgentExperience = (
     },
     upsertArtifact(manual: PersonaArtifactManualUpsert): PersonaArtifactRecord | null {
       if (!artifactsSidebarEnabled(config)) return null;
-      // Programmatic adds should surface the pane even if the user previously hit Close.
-      artifactsPaneUserHidden = false;
+      // Programmatic upserts match the streamed UX: only "panel"-mode
+      // artifacts auto-open the pane (overriding a previous Close), while
+      // "card"/"inline" stay calm — the injected transcript block is the
+      // affordance. Independent of `transcript: false`: pane-only callers
+      // (e.g. the theme editor preview) rely on the panel-default surfacing;
+      // callers that want the pane in a non-panel mode call showArtifacts().
+      const mode = resolveArtifactDisplayMode(
+        config.features?.artifacts,
+        manual.artifactType
+      );
+      if (mode === "panel") {
+        artifactsPaneUserHidden = false;
+        artifactsPaneUserOpened = true;
+      }
       return session.upsertArtifact(manual);
     },
     selectArtifact(id: string): void {
@@ -8806,18 +9377,20 @@ export const createAgentExperience = (
   // bust the message cache and re-render so they pick up real markdown. Bumping
   // `configVersion` + clearing the cache is required because the message
   // content is unchanged, so the fingerprint cache would otherwise reuse the
-  // stale escaped wrappers. No-op for the ESM build (parsers ready at init).
+  // stale escaped wrappers. `onMarkdownParsersReady` no-ops when the parsers are
+  // already loaded (the ESM build, and the CDN build after the first load), so
+  // the `markdownReadyAtInit` guard is redundant — kept only to skip the
+  // subscription bookkeeping on the common eager path.
   if (!markdownReadyAtInit) {
-    loadMarkdownParsers()
-      .then(() => {
-        if (!session) return;
-        configVersion++;
-        messageCache.clear();
-        renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
-      })
-      .catch(() => {
-        /* chunk failed to load (e.g. ad blocker): keep the escaped fallback */
-      });
+    const unsubscribeParsersReady = onMarkdownParsersReady(() => {
+      if (!session) return;
+      configVersion++;
+      messageCache.clear();
+      renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+    });
+    // Drop the subscription on teardown so a late chunk resolution can't clear
+    // the cache and render into a detached `messagesWrapper`.
+    destroyCallbacks.push(unsubscribeParsersReady);
   }
 
   return controller;

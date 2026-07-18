@@ -5,6 +5,10 @@ import {
   DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH,
   DEFAULT_FLOATING_LAUNCHER_WIDTH,
 } from '../defaults';
+import {
+  DEFAULT_PANEL_CANVAS_BACKGROUND,
+  DEFAULT_PANEL_INSET,
+} from '../utils/tokens';
 import { COLOR_FAMILIES } from './color-utils';
 import {
   ROLE_SURFACES,
@@ -180,6 +184,7 @@ const widgetStyleSectionDef: SectionDef = {
       { value: 'palette.shadows.lg', label: 'Large' },
       { value: 'palette.shadows.xl', label: 'Extra Large' },
     ] },
+    { id: 'style-panel-canvas-bg', label: 'Detached Canvas Background', description: 'Fills the region behind a detached panel; defaults to transparent', type: 'token-ref', path: 'theme.components.panel.canvasBackground', defaultValue: DEFAULT_PANEL_CANVAS_BACKGROUND, tokenRef: { tokenType: 'color' } },
     { id: 'style-msg-user-radius', label: 'User Message Radius', type: 'select', path: 'theme.components.message.user.borderRadius', defaultValue: 'palette.radius.lg', options: [
       { value: 'palette.radius.none', label: 'None' },
       { value: 'palette.radius.sm', label: 'Small' },
@@ -295,6 +300,7 @@ const panelLayoutSectionDef: SectionDef = {
       { value: 'palette.shadows.lg', label: 'Large' },
       { value: 'palette.shadows.xl', label: 'Extra Large' },
     ] },
+    { id: 'panel-inset', label: 'Detached Inset', description: 'Gap around the card when launcher.detachedPanel is on', type: 'text', path: 'theme.components.panel.inset', defaultValue: DEFAULT_PANEL_INSET },
   ],
 };
 
@@ -838,9 +844,8 @@ const artifactCustomizationSectionDef: SectionDef = {
     { id: 'art-close-label', label: 'Close Button Label', type: 'text', path: 'features.artifacts.layout.closeButtonLabel', defaultValue: 'Close' },
     { id: 'art-pane-width', label: 'Pane Width', description: 'CSS width (e.g. 40%, 28rem)', type: 'text', path: 'features.artifacts.layout.paneWidth', defaultValue: '40%' },
     { id: 'art-pane-max-width', label: 'Pane Max Width', type: 'text', path: 'features.artifacts.layout.paneMaxWidth', defaultValue: '28rem' },
-    { id: 'art-split-gap', label: 'Split Gap', type: 'text', path: 'features.artifacts.layout.splitGap', defaultValue: '0.5rem' },
+    { id: 'art-split-gap', label: 'Split Gap', type: 'text', path: 'features.artifacts.layout.splitGap', defaultValue: '0' },
     { id: 'art-pane-bg', label: 'Pane Background', type: 'color', path: 'features.artifacts.layout.paneBackground', defaultValue: '' },
-    { id: 'art-unified', label: 'Unified Split Chrome', description: 'Wrap chat and artifact in a single container', type: 'toggle', path: 'features.artifacts.layout.unifiedSplitChrome', defaultValue: false },
     { id: 'art-resizable', label: 'Resizable', description: 'Allow dragging the pane divider', type: 'toggle', path: 'features.artifacts.layout.resizable', defaultValue: false },
     { id: 'art-expand-panel', label: 'Expand Panel When Open', description: 'Widen the launcher panel to fit artifacts', type: 'toggle', path: 'features.artifacts.layout.expandLauncherPanelWhenOpen', defaultValue: true },
   ],

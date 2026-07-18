@@ -13,6 +13,11 @@ import {
   DEFAULT_FLOATING_LAUNCHER_WIDTH,
 } from '../defaults';
 
+// Detached/docked panel defaults, shared by the panel token defaults, the alias
+// fallbacks below, host-layout, the theme editor, and the artifact gate.
+export const DEFAULT_PANEL_INSET = '16px';
+export const DEFAULT_PANEL_CANVAS_BACKGROUND = 'transparent';
+
 export const DEFAULT_PALETTE = {
   colors: {
     primary: {
@@ -287,6 +292,8 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     maxHeight: 'calc(100vh - 80px)',
     borderRadius: 'palette.radius.xl',
     shadow: 'palette.shadows.xl',
+    inset: DEFAULT_PANEL_INSET,
+    canvasBackground: DEFAULT_PANEL_CANVAS_BACKGROUND,
   },
   header: {
     // Header role: solid primary
@@ -742,6 +749,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-panel-shadow'] ??
     cssVars['--persona-palette-shadows-xl'] ??
     '0 25px 50px -12px rgba(0, 0, 0, 0.25)';
+  cssVars['--persona-panel-inset'] =
+    cssVars['--persona-components-panel-inset'] ?? DEFAULT_PANEL_INSET;
+  cssVars['--persona-panel-canvas-bg'] =
+    cssVars['--persona-components-panel-canvasBackground'] ?? DEFAULT_PANEL_CANVAS_BACKGROUND;
   cssVars['--persona-launcher-shadow'] =
     cssVars['--persona-components-launcher-shadow'] ??
     '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)';
@@ -967,6 +978,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (t.iconBorder) cssVars['--persona-artifact-toolbar-icon-border'] = t.iconBorder;
     if (t.toggleGroupGap) cssVars['--persona-artifact-toolbar-toggle-group-gap'] = t.toggleGroupGap;
     if (t.toggleBorderRadius) cssVars['--persona-artifact-toolbar-toggle-radius'] = t.toggleBorderRadius;
+    if (t.toggleGroupPadding) cssVars['--persona-artifact-toolbar-toggle-group-padding'] = t.toggleGroupPadding;
+    if (t.toggleGroupBorder) cssVars['--persona-artifact-toolbar-toggle-group-border'] = t.toggleGroupBorder;
+    if (t.toggleGroupBorderRadius) cssVars['--persona-artifact-toolbar-toggle-group-radius'] = t.toggleGroupBorderRadius;
+    if (t.toggleGroupBackground) cssVars['--persona-artifact-toolbar-toggle-group-bg'] = resolveTokenValue(theme, t.toggleGroupBackground) ?? t.toggleGroupBackground;
     if (t.copyBackground) cssVars['--persona-artifact-toolbar-copy-bg'] = t.copyBackground;
     if (t.copyBorder) cssVars['--persona-artifact-toolbar-copy-border'] = t.copyBorder;
     if (t.copyColor) cssVars['--persona-artifact-toolbar-copy-color'] = t.copyColor;
@@ -1015,6 +1030,80 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
       cssVars['--persona-artifact-toolbar-bg'] = toolbarBg;
     }
   }
+  if (artifact?.card) {
+    const t = artifact.card;
+    if (t.background) cssVars['--persona-artifact-card-bg'] = t.background;
+    if (t.border) cssVars['--persona-artifact-card-border'] = t.border;
+    if (t.borderRadius) cssVars['--persona-artifact-card-radius'] = t.borderRadius;
+    if (t.hoverBackground) cssVars['--persona-artifact-card-hover-bg'] = t.hoverBackground;
+    if (t.hoverBorderColor) cssVars['--persona-artifact-card-hover-border'] = t.hoverBorderColor;
+  }
+  if (artifact?.inline) {
+    const t = artifact.inline;
+    if (t.background) {
+      cssVars['--persona-artifact-inline-bg'] =
+        resolveTokenValue(theme, t.background) ?? t.background;
+    }
+    if (t.border) cssVars['--persona-artifact-inline-border'] = t.border;
+    if (t.borderRadius) cssVars['--persona-artifact-inline-radius'] = t.borderRadius;
+    if (t.chromeBackground) {
+      cssVars['--persona-artifact-inline-chrome-bg'] =
+        resolveTokenValue(theme, t.chromeBackground) ?? t.chromeBackground;
+    }
+    if (t.chromeBorder) {
+      cssVars['--persona-artifact-inline-chrome-border'] =
+        resolveTokenValue(theme, t.chromeBorder) ?? t.chromeBorder;
+    }
+    if (t.titleColor) {
+      cssVars['--persona-artifact-inline-title-color'] =
+        resolveTokenValue(theme, t.titleColor) ?? t.titleColor;
+    }
+    if (t.mutedColor) {
+      cssVars['--persona-artifact-inline-muted-color'] =
+        resolveTokenValue(theme, t.mutedColor) ?? t.mutedColor;
+    }
+    if (t.frameHeight) cssVars['--persona-artifact-inline-frame-height'] = t.frameHeight;
+  }
+
+  // Code (syntax-highlighted artifact source view) tokens.
+  const code = components?.code;
+  if (code) {
+    if (code.keywordColor) cssVars['--persona-code-keyword-color'] = code.keywordColor;
+    if (code.stringColor) cssVars['--persona-code-string-color'] = code.stringColor;
+    if (code.commentColor) cssVars['--persona-code-comment-color'] = code.commentColor;
+    if (code.numberColor) cssVars['--persona-code-number-color'] = code.numberColor;
+    if (code.tagColor) cssVars['--persona-code-tag-color'] = code.tagColor;
+    if (code.attrColor) cssVars['--persona-code-attr-color'] = code.attrColor;
+    if (code.propertyColor) cssVars['--persona-code-property-color'] = code.propertyColor;
+    if (code.lineNumberColor) cssVars['--persona-code-line-number-color'] = code.lineNumberColor;
+    if (code.gutterBorderColor) cssVars['--persona-code-gutter-border-color'] = code.gutterBorderColor;
+    if (code.background)
+      cssVars['--persona-code-bg'] = resolveTokenValue(theme, code.background) ?? code.background;
+  }
+
+  // Interactive-state defaults. The default preset resolves container === surface,
+  // which turns every hover/active rule that falls back to --persona-container
+  // into a visual no-op; anchor those states one gray step down in that case.
+  // Component config emitted above must keep winning, so only fill vars not set.
+  const stateSurface = cssVars['--persona-surface'];
+  const stateContainer = cssVars['--persona-container'];
+  const gray100 = cssVars['--persona-palette-colors-gray-100'] ?? '#f3f4f6';
+  const gray200 = cssVars['--persona-palette-colors-gray-200'] ?? '#e5e7eb';
+  const gray300 = cssVars['--persona-palette-colors-gray-300'] ?? '#d1d5db';
+  const flatTheme = !stateContainer || stateContainer === stateSurface;
+  const hoverBgDefault = flatTheme ? gray100 : stateContainer;
+  const activeBgDefault = flatTheme ? gray200 : stateContainer;
+  cssVars['--persona-icon-btn-hover-bg'] = cssVars['--persona-icon-btn-hover-bg'] ?? hoverBgDefault;
+  cssVars['--persona-icon-btn-active-bg'] = cssVars['--persona-icon-btn-active-bg'] ?? activeBgDefault;
+  if (flatTheme) {
+    cssVars['--persona-icon-btn-active-border'] =
+      cssVars['--persona-icon-btn-active-border'] ?? gray300;
+  }
+  cssVars['--persona-label-btn-hover-bg'] = cssVars['--persona-label-btn-hover-bg'] ?? hoverBgDefault;
+  cssVars['--persona-artifact-tab-hover-bg'] =
+    cssVars['--persona-artifact-tab-hover-bg'] ?? hoverBgDefault;
+  cssVars['--persona-artifact-card-hover-bg'] =
+    cssVars['--persona-artifact-card-hover-bg'] ?? hoverBgDefault;
 
   return cssVars;
 }
@@ -1041,6 +1130,8 @@ export const THEME_ZONES = {
   container: 'Main widget container',
   'artifact-pane': 'Artifact sidebar',
   'artifact-toolbar': 'Artifact toolbar',
+  'artifact-inline': 'Inline artifact block',
+  'artifact-inline-chrome': 'Inline artifact title bar',
 } as const;
 
 export type ThemeZone = keyof typeof THEME_ZONES;

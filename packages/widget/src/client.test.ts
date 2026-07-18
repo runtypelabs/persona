@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AgentWidgetClient, preferFinalStructuredContent } from './client';
-import { AgentWidgetEvent, AgentWidgetMessage } from './types';
+import { AgentWidgetEvent, AgentWidgetMessage, AgentWidgetArtifactsFeature } from './types';
 import { createJsonStreamParser } from './utils/formatting';
 import { VERSION } from './version';
 import { createUnifiedEventWrite } from './utils/__fixtures__/unified-translator.oracle';
@@ -4355,5 +4355,190 @@ describe('AgentWidgetClient - Wire event vocabulary (default in 4.0)', () => {
       expect(last.message.role).toBe('assistant');
       expect(last.message.agentMetadata?.executionId).toBe(execId);
     }
+  });
+});
+
+describe('AgentWidgetClient - Artifact file metadata', () => {
+  const artifactFrames = (fileField: string | null): string[] => [
+    `data: {"type":"artifact_start","id":"a1","artifactType":"markdown","title":"outputs/cat.html"${
+      fileField === null ? '' : ',"file":' + fileField
+    }}\n\n`,
+    `data: {"type":"artifact_delta","id":"a1","delta":${JSON.stringify('```html\n<h1>hi</h1>\n```')}}\n\n`,
+    `data: {"type":"artifact_complete","id":"a1"}\n\n`,
+  ];
+
+  it('propagates valid file metadata to the artifact_start event and card props', async () => {
+    global.fetch = createRawStreamFetch(
+      artifactFrames('{"path":"outputs/cat.html","mimeType":"text/html","language":"html"}')
+    );
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    const startEv = events.find((e) => e.type === 'artifact_start');
+    expect(startEv).toBeDefined();
+    if (startEv?.type === 'artifact_start') {
+      expect(startEv.file).toEqual({
+        path: 'outputs/cat.html',
+        mimeType: 'text/html',
+        language: 'html',
+      });
+    }
+
+    // The completed card message carries the file metadata in its rawContent props.
+    const cardMsgs = events.filter(
+      (e): e is Extract<AgentWidgetEvent, { type: 'message' }> =>
+        e.type === 'message' && e.message.id === 'artifact-ref-a1'
+    );
+    const lastCard = cardMsgs[cardMsgs.length - 1];
+    expect(lastCard).toBeDefined();
+    const props = JSON.parse(lastCard.message.rawContent ?? '{}').props;
+    expect(props.status).toBe('complete');
+    expect(props.file).toEqual({
+      path: 'outputs/cat.html',
+      mimeType: 'text/html',
+      language: 'html',
+    });
+    expect(props.markdown).toBe('```html\n<h1>hi</h1>\n```');
+  });
+
+  it('drops malformed file metadata without error', async () => {
+    global.fetch = createRawStreamFetch(artifactFrames('{"path":123}'));
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+
+    expect(events.some((e) => e.type === 'error')).toBe(false);
+    const startEv = events.find((e) => e.type === 'artifact_start');
+    expect(startEv).toBeDefined();
+    if (startEv?.type === 'artifact_start') {
+      expect(startEv.file).toBeUndefined();
+    }
+    const cardMsgs = events.filter(
+      (e): e is Extract<AgentWidgetEvent, { type: 'message' }> =>
+        e.type === 'message' && e.message.id === 'artifact-ref-a1'
+    );
+    const props = JSON.parse(cardMsgs[cardMsgs.length - 1].message.rawContent ?? '{}').props;
+    expect(props.file).toBeUndefined();
+  });
+});
+
+describe('AgentWidgetClient - Artifact display modes', () => {
+  const markdownArtifactFrames = (id = 'a1'): string[] => [
+    `data: {"type":"artifact_start","id":"${id}","artifactType":"markdown","title":"Notes"}\n\n`,
+    `data: {"type":"artifact_delta","id":"${id}","delta":"# Hello"}\n\n`,
+    `data: {"type":"artifact_complete","id":"${id}"}\n\n`,
+  ];
+  const componentArtifactFrames = (id = 'c1'): string[] => [
+    `data: {"type":"artifact_start","id":"${id}","artifactType":"component","title":"Chart","component":"MyChart"}\n\n`,
+    `data: {"type":"artifact_complete","id":"${id}"}\n\n`,
+  ];
+
+  const dispatchAndCollect = async (
+    frames: string[],
+    artifacts?: AgentWidgetArtifactsFeature
+  ): Promise<AgentWidgetEvent[]> => {
+    global.fetch = createRawStreamFetch(frames);
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      ...(artifacts ? { features: { artifacts } } : {}),
+    });
+    const events: AgentWidgetEvent[] = [];
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+    return events;
+  };
+
+  const blockMessagesFor = (events: AgentWidgetEvent[], artifactId: string) =>
+    events.filter(
+      (e): e is Extract<AgentWidgetEvent, { type: 'message' }> =>
+        e.type === 'message' && e.message.id === `artifact-ref-${artifactId}`
+    );
+
+  const componentNameOf = (msg: AgentWidgetMessage): string =>
+    JSON.parse(msg.rawContent ?? '{}').component;
+
+  it('injects PersonaArtifactCard when display is unset (default "panel")', async () => {
+    const events = await dispatchAndCollect(markdownArtifactFrames());
+    const msgs = blockMessagesFor(events, 'a1');
+    expect(msgs.length).toBeGreaterThan(0);
+    for (const m of msgs) {
+      expect(componentNameOf(m.message)).toBe('PersonaArtifactCard');
+    }
+  });
+
+  it('injects PersonaArtifactCard for display: "card" and display: "panel"', async () => {
+    for (const mode of ['card', 'panel'] as const) {
+      const events = await dispatchAndCollect(markdownArtifactFrames(), {
+        enabled: true,
+        display: mode,
+      });
+      const msgs = blockMessagesFor(events, 'a1');
+      expect(msgs.length).toBeGreaterThan(0);
+      expect(componentNameOf(msgs[0].message)).toBe('PersonaArtifactCard');
+    }
+  });
+
+  it('injects PersonaArtifactInline for display: "inline"', async () => {
+    const events = await dispatchAndCollect(markdownArtifactFrames(), {
+      enabled: true,
+      display: 'inline',
+    });
+    const msgs = blockMessagesFor(events, 'a1');
+    expect(msgs.length).toBeGreaterThan(0);
+    for (const m of msgs) {
+      expect(componentNameOf(m.message)).toBe('PersonaArtifactInline');
+    }
+    const startProps = JSON.parse(msgs[0].message.rawContent ?? '{}').props;
+    expect(startProps).toMatchObject({
+      artifactId: 'a1',
+      artifactType: 'markdown',
+      status: 'streaming',
+    });
+  });
+
+  it('resolves the mode per artifact type via display.byType', async () => {
+    const display: AgentWidgetArtifactsFeature['display'] = {
+      default: 'card',
+      byType: { component: 'inline' },
+    };
+
+    const mdEvents = await dispatchAndCollect(markdownArtifactFrames(), {
+      enabled: true,
+      display,
+    });
+    expect(componentNameOf(blockMessagesFor(mdEvents, 'a1')[0].message)).toBe(
+      'PersonaArtifactCard'
+    );
+
+    const compEvents = await dispatchAndCollect(componentArtifactFrames(), {
+      enabled: true,
+      display,
+    });
+    const compMsgs = blockMessagesFor(compEvents, 'c1');
+    expect(componentNameOf(compMsgs[0].message)).toBe('PersonaArtifactInline');
+    // Inline component artifacts carry the component name for the preview registry.
+    expect(JSON.parse(compMsgs[0].message.rawContent ?? '{}').props.component).toBe('MyChart');
+  });
+
+  it('embeds accumulated markdown and complete status in inline block props on artifact_complete', async () => {
+    const events = await dispatchAndCollect(markdownArtifactFrames(), {
+      enabled: true,
+      display: 'inline',
+    });
+    const msgs = blockMessagesFor(events, 'a1');
+    const last = msgs[msgs.length - 1];
+    expect(last.message.streaming).toBe(false);
+    const props = JSON.parse(last.message.rawContent ?? '{}').props;
+    expect(props.status).toBe('complete');
+    expect(props.markdown).toBe('# Hello');
   });
 });

@@ -19,71 +19,28 @@ const ensureTarget = (target: string | HTMLElement): HTMLElement => {
   return target;
 };
 
-const widgetCssHref = (): string | null => {
-  try {
-    // This works in ESM builds but not in IIFE builds
-    if (typeof import.meta !== "undefined" && import.meta.url) {
-      return new URL("../widget.css", import.meta.url).href;
-    }
-  } catch {
-    // Fallback for IIFE builds where CSS should be loaded separately
-  }
-  return null;
-};
-
+// CSS arrives via the installer's link[data-persona] or a consumer import of
+// @runtypelabs/persona/widget.css; the widget never self-locates its stylesheet.
+// A new URL(..., import.meta.url) here breaks consumer bundlers (webpack
+// resolves the literal at build time), so shadow roots only clone the head link.
 const mountStyles = (root: ShadowRoot | HTMLElement, ownerDocument: Document) => {
-  const href = widgetCssHref();
-
-  const adoptExistingStylesheet = () => {
-    if (!(root instanceof ShadowRoot)) {
-      return;
-    }
-
-    if (root.querySelector('link[data-persona]')) {
-      return;
-    }
-
-    const globalLink = ownerDocument.head.querySelector<HTMLLinkElement>(
-      'link[data-persona]'
-    );
-    if (!globalLink) {
-      return;
-    }
-
-    const clonedLink = globalLink.cloneNode(true) as HTMLLinkElement;
-    root.insertBefore(clonedLink, root.firstChild);
-  };
-
-  if (root instanceof ShadowRoot) {
-    // For shadow DOM, we need to load CSS into the shadow root
-    if (href) {
-      const link = ownerDocument.createElement("link");
-      link.rel = "stylesheet";
-      link.href = href;
-      link.setAttribute("data-persona", "true");
-      root.insertBefore(link, root.firstChild);
-    } else {
-      adoptExistingStylesheet();
-    }
-    // If href is null (IIFE build), CSS should already be loaded globally
-  } else {
-    // For non-shadow DOM, check if CSS is already loaded
-    const existing = ownerDocument.head.querySelector<HTMLLinkElement>(
-      "link[data-persona]"
-    );
-    if (!existing) {
-      if (href) {
-        // ESM build - load CSS dynamically
-        const link = ownerDocument.createElement("link");
-        link.rel = "stylesheet";
-        link.href = href;
-        link.setAttribute("data-persona", "true");
-        ownerDocument.head.appendChild(link);
-      }
-      // IIFE build - CSS should be loaded via <link> tag before script
-      // If not found, we'll assume it's loaded globally or warn in dev
-    }
+  if (!(root instanceof ShadowRoot)) {
+    return;
   }
+
+  if (root.querySelector('link[data-persona]')) {
+    return;
+  }
+
+  const globalLink = ownerDocument.head.querySelector<HTMLLinkElement>(
+    'link[data-persona]'
+  );
+  if (!globalLink) {
+    return;
+  }
+
+  const clonedLink = globalLink.cloneNode(true) as HTMLLinkElement;
+  root.insertBefore(clonedLink, root.firstChild);
 };
 
 export type AgentWidgetInitHandle = AgentWidgetController & { host: HTMLElement };

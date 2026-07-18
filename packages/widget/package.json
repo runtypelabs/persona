@@ -103,8 +103,7 @@
     "idiomorph": "^0.7.4",
     "lucide": "^1.18.0",
     "marked": "^12.0.2",
-    "partial-json": "^0.1.7",
-    "zod": "^3.22.4"
+    "partial-json": "^0.1.7"
   },
   "devDependencies": {
     "@size-limit/file": "^12.1.0",

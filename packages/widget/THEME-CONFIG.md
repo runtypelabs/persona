@@ -311,6 +311,44 @@ Semantic tokens provide intent-based naming that references palette values.
 | `maxHeight` | `calc(100vh - 80px)` |
 | `borderRadius` | `palette.radius.xl` |
 | `shadow` | `palette.shadows.xl` |
+| `inset` | `16px` |
+| `canvasBackground` | `transparent` |
+
+`inset` and `canvasBackground` take effect only when the panel renders as a detached card, i.e. when you set `launcher.detachedPanel: true` or `artifacts.layout.paneAppearance: "detached"`. On a flush panel they are inert. `inset` is the gap between the detached card and the edges of the region it occupies, so the canvas behind it shows on all four sides.
+
+In an inline embed, `paneAppearance: "detached"` insets the whole split from the container edges on all sides once an artifact opens (the chat is flush until then). `launcher.detachedPanel: true` is the way to keep the widget inset even when no artifact is open. The only difference is when the margin exists: on artifact open versus always.
+
+`canvasBackground` fills that revealed region in docked and inline embed modes; it defaults to `transparent`. In sidebar (floating) mode it is a no-op: the gaps must stay click-through for the host page, so the host page shows through the gap the same way a floating panel does, and no canvas can paint over it. When it does apply, set it to the semantic background so the inset reads on any host page, even a solid white one:
+
+```js
+launcher: { mountMode: "docked", detachedPanel: true },
+theme: { components: { panel: { inset: "24px", canvasBackground: "semantic.colors.background" } } }
+```
+
+The existing `borderRadius`, `shadow`, and `border` tokens style the detached card's elevation. See the widget docs for how detached appearance behaves per layout mode.
+
+The `shadow` token's `palette.shadows.xl` default applies to floating panels and detached cards. Flush inline embeds (`launcher.enabled: false` without `detachedPanel`) render with no shadow by default: a panel that fills its container is not a floating card. Set `components.panel.shadow` explicitly to elevate a flush embed anyway.
+
+When the panel renders as a detached card the widget root carries a `data-persona-panel-detached` attribute. It is a stable styling hook: host pages and custom CSS can key off `[data-persona-panel-detached]` to target the detached state without depending on internal class names.
+
+Elevation is per card, not per group. When a detached artifact pane is open beside the chat in the desktop side-by-side layout, the outer panel drops its shadow and each surface carries its own: the chat column and the artifact pane each read as a separate card over the canvas, instead of one outer shadow wrapping both plus the gap between them. `shadow` still tunes that elevation, applied to each card. The mount root carries `persona-artifact-detached-split` while this state is active. To flatten the chat column while the pane stays raised (elevation on the panel only, the Claude.ai look), set `artifacts.layout.chatShadow: "none"`; it drives the `--persona-artifact-chat-shadow` token, a front lookup that only affects the chat card and defaults to the same elevation as the pane when unset.
+
+### Chat surface: card vs flush
+
+With the detached pane appearance, `artifacts.layout.chatSurface` chooses how the chat reads:
+
+- `card` (default): the chat is an inset card matching the artifact pane, so the split shows two matched cards over the canvas.
+- `flush`: the chat is flat, flush background (no border, radius, or shadow) and only the artifact pane insets as a floating card. This is the flat-chat plus floating-pane reference look, elevation on the pane alone. Flush is a steady state: the chat stays flat whether or not a pane is open, so opening or closing an artifact never flips the chat chrome. `chatShadow` is moot here (the chat card is gone). The outer panel fills its container flush, so it squares its corners by default; an explicit `components.panel.borderRadius` still wins.
+
+The flush chat paints no backdrop of its own: the container, messages body, and composer footer backgrounds go transparent (and the footer's top hairline is dropped), so the host page shows through and the chat reads as part of the page with no theme changes. To pin an explicit backdrop color instead, set `components.panel.canvasBackground`; it colors the whole area behind the flush chat and the floating pane. Do not re-tint `semantic.colors.surface` for this: that token is the background of message bubbles, cards, and the composer input, so tinting it bleeds into every element surface. Flush only takes effect on an inline embed (the container-filling case) with the detached pane appearance; in floating, docked, or sidebar modes, and on a panel or seamless appearance, it is a no-op that falls back to the card look.
+
+The artifact pane's `layout.paneAppearance` picks how the desktop split reads:
+
+- `panel` (default): one welded card. The border and radius wrap chat and the artifact pane together, with a hairline divider on the pane's chat-facing edge and no gap.
+- `seamless`: the same welded card with no internal divider or chrome.
+- `detached`: two separate elevated cards with the page canvas showing through the gap (described above).
+
+Panel and seamless carry `persona-artifact-welded-split` on the mount root while active. `unifiedSplitChrome` is a deprecated no-op (welding is the default); `unifiedSplitOuterRadius` still overrides the pane's outer-right corner radius. An explicit `splitGap`, `paneBorder`, `paneBorderLeft`, or `paneShadow` overrides the welded defaults.
 
 ### Header (`components.header.*`)
 
@@ -507,6 +545,17 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-attachment-image-border
 ```
 
+### Panel Aliases
+
+```css
+--persona-panel-border      /* components.panel.border */
+--persona-panel-shadow      /* components.panel.shadow */
+--persona-panel-inset       /* components.panel.inset, default 16px */
+--persona-panel-canvas-bg   /* components.panel.canvasBackground, default transparent */
+```
+
+`--persona-panel-inset` and `--persona-panel-canvas-bg` drive the detached panel appearance (`launcher.detachedPanel: true` or `artifacts.layout.paneAppearance: "detached"`): the inset is the gap around the card and the canvas background fills the region revealed behind it.
+
 ### Intro Card Aliases
 
 ```css
@@ -515,6 +564,138 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-intro-card-padding
 --persona-intro-card-shadow
 ```
+
+### Artifact Card Aliases
+
+```css
+--persona-artifact-card-bg
+--persona-artifact-card-border
+--persona-artifact-card-radius
+--persona-artifact-card-hover-bg
+--persona-artifact-card-hover-border
+```
+
+The artifact reference card is the tappable card rendered inline in the chat thread that opens an artifact. Style it via `components.artifact.card`:
+
+| Property | CSS var | Description |
+|----------|---------|-------------|
+| `card.background` | `--persona-artifact-card-bg` | Resting card background |
+| `card.border` | `--persona-artifact-card-border` | Full border shorthand, e.g. `1px solid #e5e7eb` |
+| `card.borderRadius` | `--persona-artifact-card-radius` | Corner radius. When unset it falls back to the assistant bubble radius (`--persona-message-assistant-radius`), so cards match message bubbles by default |
+| `card.hoverBackground` | `--persona-artifact-card-hover-bg` | Background on hover |
+| `card.hoverBorderColor` | `--persona-artifact-card-hover-border` | Border color on hover |
+
+Interactive-state defaults: the hover and active backgrounds for icon buttons, label buttons, artifact tabs, and the artifact card default to a visible gray step (`gray.100` for hover, `gray.200` for active, `gray.300` for the active icon-button border) whenever the theme's `container` color equals its `surface` color, which is the case for the default preset. When a theme sets `container` to a distinct color, those states anchor to `container` instead. Every one of these stays fully overridable via `components.iconButton`, `components.labelButton`, `components.artifact.tab`, and `components.artifact.card`.
+
+### Artifact Inline Aliases
+
+```css
+--persona-artifact-inline-bg
+--persona-artifact-inline-border
+--persona-artifact-inline-radius
+--persona-artifact-inline-chrome-bg
+--persona-artifact-inline-chrome-border
+--persona-artifact-inline-title-color
+--persona-artifact-inline-muted-color
+--persona-artifact-inline-frame-height
+```
+
+Inline artifact blocks (`display: "inline"`) render a file-preview frame with a flush title/toolbar chrome bar above the preview body. Style it via `components.artifact.inline`:
+
+| Property | CSS var | Description |
+|----------|---------|-------------|
+| `inline.background` | `--persona-artifact-inline-bg` | Preview frame background. Falls back to `semantic.colors.surface` |
+| `inline.border` | `--persona-artifact-inline-border` | Full border shorthand for the frame, e.g. `1px solid #e5e7eb` |
+| `inline.borderRadius` | `--persona-artifact-inline-radius` | Frame corner radius. When unset it falls back to the assistant bubble radius (`--persona-message-assistant-radius`), so inline blocks match message bubbles by default |
+| `inline.chromeBackground` | `--persona-artifact-inline-chrome-bg` | Background of the title/toolbar chrome bar |
+| `inline.chromeBorder` | `--persona-artifact-inline-chrome-border` | Bottom border of the title bar |
+| `inline.titleColor` | `--persona-artifact-inline-title-color` | Title text color (artifact basename) |
+| `inline.mutedColor` | `--persona-artifact-inline-muted-color` | Muted text for the type label / streaming status |
+| `inline.frameHeight` | `--persona-artifact-inline-frame-height` | Preview iframe height inside the inline body (default `320px`) |
+
+Color-family tokens (`background`, `chromeBackground`, `chromeBorder`, `titleColor`, `mutedColor`) accept semantic paths that resolve at build time, e.g. `chromeBackground: "semantic.colors.container"`. Defaults draw from the same semantic `surface` / `border` / text / muted family the card uses, so light and dark themes work with zero config.
+
+The chrome action buttons (copy, expand, and custom `inlineActions`) reuse the document-toolbar button styles, so `components.artifact.toolbar` styles both pane and inline controls — there is no separate inline button token set.
+
+Two `data-persona-theme-zone` regions are exposed for visual editors: `artifact-inline` (the whole inline block) and `artifact-inline-chrome` (the title bar).
+
+Host styling example:
+
+```ts
+theme: {
+  components: {
+    artifact: {
+      inline: {
+        borderRadius: "12px",
+        chromeBackground: "semantic.colors.container",
+        frameHeight: "400px",
+      },
+      toolbar: {
+        iconBorderRadius: "6px",
+      },
+    },
+  },
+}
+```
+
+### Artifact Preview Loading Indicator
+
+While a previewable file artifact (HTML/SVG) renders inside its sandboxed
+iframe, Persona shows a loading overlay. The default indicator is an **icon
+spinner** (no text): icon-first loading is the norm for preview surfaces
+(Sandpack, embeds, v0/ChatGPT) and design systems (Apple HIG, Material, Carbon,
+Geist), and a concise work-naming label is faded in only as an escalation once
+the wait crosses `labelDelayMs` (default 2s). Under `prefers-reduced-motion:
+reduce` the spinner stops rotating (the static arc still reads as a ring) and
+the label fade is dropped.
+
+Style the spinner with plain CSS variables (no theme-token path needed):
+
+| CSS var | Default | Description |
+|---------|---------|-------------|
+| `--persona-artifact-spinner-size` | `28px` | Spinner diameter |
+| `--persona-artifact-spinner-color` | `--persona-accent` → `--persona-primary` → `#171717` | Rotating arc color (the interactive/brand hue) |
+| `--persona-artifact-spinner-track-color` | `--persona-border` → `#e5e7eb` | Faint full ring behind the arc |
+| `--persona-artifact-spinner-speed` | `0.8s` | One full rotation duration |
+| `--persona-artifact-frame-loading-color` | `--persona-text-muted` → `#6b7280` | Escalation label text color |
+
+The spinner element itself uses the reusable class `persona-spinner` (a small
+`<svg>` with `.persona-spinner-track` + `.persona-spinner-arc` circles), so
+these vars also style it anywhere else the spinner is reused.
+
+**Escalation label** (`features.artifacts.filePreview.loading`): set
+`label: "..."` to change the escalation text, or `label: false` for an
+icon-only indicator that never shows text. `labelDelayMs` controls how long
+after the overlay appears the label fades in.
+
+**Full indicator override** (`renderIndicator`): replace the spinner + label
+entirely with your own element (a brand mark, skeleton, custom animation). It
+is called once when the overlay is built:
+
+```ts
+config: {
+  features: {
+    artifacts: {
+      filePreview: {
+        loading: {
+          label: "Building preview…",
+          labelDelayMs: 1500,
+          renderIndicator: ({ artifactId, config }) => {
+            const el = document.createElement("div");
+            el.className = "my-brand-loader";
+            return el; // return null to fall back to the default spinner
+          },
+        },
+      },
+    },
+  },
+}
+```
+
+Returning `null` (or throwing) falls back to the default spinner, mirroring the
+`renderInline` / `renderCard` null-falls-back contract. When a custom indicator
+is used, the escalation-label logic is skipped (the host owns the content); the
+overlay backdrop, timing, and dismissal stay widget-owned either way.
 
 ---
 

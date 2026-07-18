@@ -2,6 +2,7 @@ import { createElement } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { formatUnknownValue, describeToolTitle, resolveToolHeaderText, computeToolElapsed, parseFormattedTemplate } from "../utils/formatting";
 import { renderLucideIcon } from "../utils/icons";
+import { appendCharSpans } from "../utils/tool-loading-animation";
 
 // Expansion state per widget instance
 export const toolExpansionState = new Set<string>();
@@ -258,19 +259,6 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   const completeTemplate = toolCallConfig.completeTextTemplate;
   const currentTemplate = isActive ? activeTemplate : completeTemplate;
   const skipCustomElement = customSummary instanceof HTMLElement;
-
-  // Helper: append text as individual animated character spans
-  const appendCharSpans = (container: HTMLElement, text: string, startIndex: number): number => {
-    let idx = startIndex;
-    for (const char of text) {
-      const span = createElement("span", "persona-tool-char");
-      span.style.setProperty("--char-index", String(idx));
-      span.textContent = char === " " ? "\u00A0" : char;
-      container.appendChild(span);
-      idx++;
-    }
-    return idx;
-  };
 
   /**
    * Renders a template into the title element, handling:

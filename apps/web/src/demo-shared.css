@@ -392,11 +392,39 @@ a {
 }
 .shell-picker-item.is-current .nav-badge { background: var(--signal); color: var(--signal-ink); }
 
-.shell-prevnext {
+.shell-actions {
   margin-left: auto;
   display: flex;
   gap: 0.3rem;
   align-items: center;
+}
+
+.shell-prevnext {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.shell-github {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+.shell-github:hover {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--border-strong);
+}
+.shell-github svg {
+  display: block;
 }
 .shell-prevnext-link {
   display: inline-flex;
@@ -545,7 +573,6 @@ a {
   background: var(--paper);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
@@ -1223,7 +1250,6 @@ body.demo-code-active [data-persona-root] { display: none; }
   background: var(--paper);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 .panel-header {

@@ -1216,6 +1216,8 @@ export function createPreviewManager(
         title: 'Sample Document',
         content:
           '# Sample Artifact\n\nThis is a preview of the artifact sidebar.\n\n## Features\n\n- Markdown rendering\n- Document toolbar\n- Resizable panes',
+        // Pane-only preview: showcase the sidebar without a chat block.
+        transcript: false,
       });
     }
   }
