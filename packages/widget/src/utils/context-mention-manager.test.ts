@@ -221,6 +221,23 @@ describe("ContextMentionManager", () => {
     );
   });
 
+  it("remove() detaches a custom-rendered chip after setStatus swapped its node", async () => {
+    const renderMentionChip = vi.fn((ctx) => {
+      const el = document.createElement("span");
+      el.className = "custom-chip";
+      el.dataset.status = ctx.status;
+      return el;
+    });
+    const resolve = vi.fn(async () => ({ llmAppend: "FILE BODY" }));
+    const { manager, contextRow, source } = makeManager({ renderMentionChip }, resolve);
+    manager.add(source, item("App.tsx"));
+    await tick(); // resolve settles → renderer re-invoked → node replaced
+    expect(contextRow.querySelectorAll(".custom-chip")).toHaveLength(1);
+
+    manager.removeLast();
+    expect(contextRow.querySelectorAll(".custom-chip")).toHaveLength(0);
+  });
+
   it("does not expose a payload to renderMentionChip for resolveOn:'submit' sources", async () => {
     const seen: (AgentWidgetContextMentionPayload | undefined)[] = [];
     const renderMentionChip = vi.fn((ctx) => {

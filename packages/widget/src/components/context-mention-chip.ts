@@ -51,7 +51,14 @@ export function createMentionChip(opts: {
       el.replaceWith(replacement);
       el = replacement;
     };
-    return { el, setStatus };
+    // Getter, not a snapshot: setStatus swaps the node, and the manager's
+    // remove()/clear() must target the live element, not the detached original.
+    return {
+      get el() {
+        return el;
+      },
+      setStatus,
+    };
   }
 
   const iconName = ref.iconName ?? config.chipIconName ?? "at-sign";
