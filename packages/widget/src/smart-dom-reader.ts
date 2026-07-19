@@ -158,6 +158,12 @@ export interface SmartDomMentionSourceOptions extends SmartDomContextOptions {
   ) => AgentWidgetContextMentionItem;
 }
 
+// Empty-query snapshot reuse window: the full Shadow-DOM-piercing scan is
+// synchronous and runs inside the keystroke handler, so rescanning on every `@`
+// / backspace-to-empty stalls the input. Reuse a snapshot this fresh; rescan
+// past it so a menu opened after page changes still sees current content.
+const SNAPSHOT_TTL_MS = 2000;
+
 const iconForInteractivity = (kind: EnrichedPageElement["interactivity"]): string => {
   switch (kind) {
     case "clickable":
@@ -210,19 +216,28 @@ export function createSmartDomMentionSource(
   const id = opts.id ?? "page";
   const label = opts.label ?? "Page";
   let snapshot: AgentWidgetContextMentionItem[] | null = null;
+  let capturedAt = 0;
+
+  const rescan = (): AgentWidgetContextMentionItem[] => {
+    const items = collectSmartDomContext(opts).map((el) => {
+      const defaultItem = elementToMentionItem(el);
+      return opts.mapItem ? opts.mapItem(el, defaultItem) : defaultItem;
+    });
+    capturedAt = Date.now();
+    return items;
+  };
 
   return {
     id,
     label,
     resolveOn: "submit",
     search: (query) => {
-      // Refresh the snapshot whenever the menu (re)opens with an empty query;
-      // reuse it for subsequent keystrokes so we don't re-scan on every key.
-      if (query === "" || !snapshot) {
-        snapshot = collectSmartDomContext(opts).map((el) => {
-          const defaultItem = elementToMentionItem(el);
-          return opts.mapItem ? opts.mapItem(el, defaultItem) : defaultItem;
-        });
+      // Rescan on empty query only when there's no snapshot or it's staler than
+      // the TTL; reopening the menu quickly reuses the snapshot, keystrokes always
+      // filter the existing one, so we never re-scan mid-typing.
+      const stale = !snapshot || Date.now() - capturedAt > SNAPSHOT_TTL_MS;
+      if (!snapshot || (query === "" && stale)) {
+        snapshot = rescan();
       }
       return defaultMentionFilter(snapshot, query);
     },

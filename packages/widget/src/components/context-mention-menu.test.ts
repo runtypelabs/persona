@@ -363,6 +363,109 @@ describe("createMentionMenu", () => {
     expect(input.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("reuses the same row elements when re-rendering an identical result set", () => {
+    const menu = createMentionMenu({
+      config: makeConfig(),
+      listboxId: "lb",
+      onSelectIndex: vi.fn(),
+      onHoverIndex: vi.fn(),
+    });
+    menu.render(vm());
+    const first = Array.from(
+      menu.el.querySelectorAll<HTMLElement>(".persona-mention-option")
+    );
+    menu.render(vm());
+    const second = Array.from(
+      menu.el.querySelectorAll<HTMLElement>(".persona-mention-option")
+    );
+    // Same DOM nodes across renders — no rebuild churn.
+    expect(second[0]).toBe(first[0]);
+    expect(second[1]).toBe(first[1]);
+  });
+
+  it("keeps surviving rows' identity and updates aria-setsize when an item is removed", () => {
+    const menu = createMentionMenu({
+      config: makeConfig(),
+      listboxId: "lb",
+      onSelectIndex: vi.fn(),
+      onHoverIndex: vi.fn(),
+    });
+    menu.render(vm());
+    const firstRow = menu.el.querySelector<HTMLElement>(".persona-mention-option")!;
+    expect(firstRow.getAttribute("aria-setsize")).toBe("2");
+
+    menu.render({
+      query: "ap",
+      groups: [{ source, items: [items[0]], status: "ready", truncated: false }],
+      activeIndex: 0,
+    });
+    const rows = menu.el.querySelectorAll<HTMLElement>(".persona-mention-option");
+    expect(rows).toHaveLength(1);
+    // Surviving row is the very same element, with refreshed setsize.
+    expect(rows[0]).toBe(firstRow);
+    expect(rows[0].getAttribute("aria-setsize")).toBe("1");
+  });
+
+  it("dispatches the correct item after a reorder (no stale flat index in the click handler)", () => {
+    const onSelectIndex = vi.fn();
+    const menu = createMentionMenu({
+      config: makeConfig(),
+      listboxId: "lb",
+      onSelectIndex,
+      onHoverIndex: vi.fn(),
+    });
+    menu.render(vm());
+    const appRow = Array.from(
+      menu.el.querySelectorAll<HTMLElement>(".persona-mention-option")
+    ).find((r) => r.textContent?.includes("App.tsx"))!;
+
+    // Reverse the order: App.tsx (same element) is now the second flat option.
+    menu.render({
+      query: "ap",
+      groups: [{ source, items: [items[1], items[0]], status: "ready", truncated: false }],
+      activeIndex: 0,
+    });
+    // It's the same reused node, now at visual index 1.
+    const rows = Array.from(
+      menu.el.querySelectorAll<HTMLElement>(".persona-mention-option")
+    );
+    expect(rows[1]).toBe(appRow);
+    appRow.dispatchEvent(
+      new MouseEvent("mousedown", { bubbles: true, cancelable: true })
+    );
+    // Handler reads the live index, so it dispatches 1, not the stale 0.
+    expect(onSelectIndex).toHaveBeenCalledWith(1);
+  });
+
+  it("clones cached icons so rows sharing an icon get distinct SVG elements", () => {
+    const menu = createMentionMenu({
+      config: makeConfig(),
+      listboxId: "lb",
+      onSelectIndex: vi.fn(),
+      onHoverIndex: vi.fn(),
+    });
+    // Both items fall back to the same default icon ("at-sign").
+    menu.render({
+      query: "x",
+      groups: [
+        {
+          source,
+          items: [
+            { id: "a", label: "One" },
+            { id: "b", label: "Two" },
+          ],
+          status: "ready",
+          truncated: false,
+        },
+      ],
+      activeIndex: 0,
+    });
+    const svgs = menu.el.querySelectorAll(".persona-mention-option-icon svg");
+    expect(svgs).toHaveLength(2);
+    // Distinct nodes (clones), not the same cached instance shared into two rows.
+    expect(svgs[0]).not.toBe(svgs[1]);
+  });
+
   it("hides the picker search field until showSearch, then wires input/keydown", () => {
     const onSearchInput = vi.fn();
     const onSearchKeydown = vi.fn();

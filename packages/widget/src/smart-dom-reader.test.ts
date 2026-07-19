@@ -4,7 +4,7 @@
 // vendored library under jsdom. The pure-mapper correctness guarantee lives in
 // utils/smart-dom-adapter.test.ts (no DOM, no library); this test confirms the
 // vendored runtime loads and the provider wires up against a real document.
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   collectSmartDomContext,
   createSmartDomReaderContextProvider,
@@ -192,5 +192,71 @@ describe("smart-dom-reader entry (jsdom)", () => {
   it("returns [] for an empty document", () => {
     document.body.innerHTML = "";
     expect(collectSmartDomContext(JSDOM_OPTS)).toEqual([]);
+  });
+
+  const searchCtx = () => ({
+    messages: [],
+    config: {} as never,
+    signal: new AbortController().signal,
+  });
+
+  it("reuses the snapshot across empty-query searches within the TTL (scans once)", async () => {
+    document.body.innerHTML = `<main><button id="go">Continue to checkout</button></main>`;
+    const source = createSmartDomMentionSource({ label: "Page", ...JSDOM_OPTS });
+
+    // Count extractions by observing DOM reads: a spy on querySelectorAll fires
+    // per scan. Simpler and TTL-independent: mutate the DOM between the two empty
+    // searches and assert the second still returns the pre-mutation snapshot.
+    const first = await source.search("", searchCtx());
+    expect(first.some((i) => i.label.includes("Continue"))).toBe(true);
+
+    // Change the page; a rescan would surface the new element.
+    document.body.innerHTML = `<main><button id="new">Brand new action</button></main>`;
+    const second = await source.search("", searchCtx());
+    // Still the cached snapshot: no rescan happened within the TTL.
+    expect(second.some((i) => i.label.includes("Continue"))).toBe(true);
+    expect(second.some((i) => i.label.includes("Brand new"))).toBe(false);
+  });
+
+  it("rescans on an empty query once the TTL has elapsed", async () => {
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML = `<main><button id="go">Continue to checkout</button></main>`;
+      const source = createSmartDomMentionSource({ label: "Page", ...JSDOM_OPTS });
+
+      const first = await source.search("", searchCtx());
+      expect(first.some((i) => i.label.includes("Continue"))).toBe(true);
+
+      // Mutate the page, then advance past the 2s TTL so the next empty query rescans.
+      document.body.innerHTML = `<main><button id="new">Brand new action</button></main>`;
+      vi.advanceTimersByTime(2500);
+
+      const second = await source.search("", searchCtx());
+      expect(second.some((i) => i.label.includes("Brand new"))).toBe(true);
+      expect(second.some((i) => i.label.includes("Continue"))).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resolves an item from a cached snapshot against the live element", async () => {
+    document.body.innerHTML = `<main><button id="go">Continue to checkout</button></main>`;
+    const source = createSmartDomMentionSource({ label: "Page", ...JSDOM_OPTS });
+
+    // Prime the snapshot, then re-search (cached) to get the item without rescanning.
+    await source.search("", searchCtx());
+    const items = await source.search("checkout", searchCtx());
+    const go = items.find((i) => i.label.includes("Continue"));
+    expect(go).toBeTruthy();
+
+    const payload = await source.resolve(go!, {
+      messages: [],
+      config: {} as never,
+      composerText: "",
+      args: "",
+      signal: new AbortController().signal,
+    });
+    expect(payload.llmAppend).toContain("Continue to checkout");
+    expect(payload.context).toMatchObject({ selector: go!.id });
   });
 });
