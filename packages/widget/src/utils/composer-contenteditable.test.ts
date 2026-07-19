@@ -54,6 +54,26 @@ function tokenSpans(root: HTMLElement): HTMLElement[] {
   );
 }
 
+/** Seed one mention token via the product insertion path: `before` text, the
+ *  token, then `after` text. Places a real DOM caret first (jsdom won't focus a
+ *  contenteditable) so the token splices at that offset. Returns the mention id. */
+function seedToken(
+  input: ReturnType<typeof make>["input"],
+  before: string,
+  after: string,
+  ref: AgentWidgetContextMentionRef = appRef
+): string {
+  input.setValueWithCaret(before + after, before.length);
+  const sel = window.getSelection()!;
+  const pos = logicalToDomPosition(input.element, before.length);
+  const range = document.createRange();
+  range.setStart(pos.node, pos.offset);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  return input.insertMentionAtSelection!(ref);
+}
+
 describe("composer-contenteditable caret mapping", () => {
   it("maps between DOM position and logical offset around a token", () => {
     // "Check " + [token] + " end"  → logical "Check ￼ end"
@@ -121,17 +141,11 @@ describe("createContentEditableComposerInput", () => {
 
   it("renders a document with an atomic token and projects text", () => {
     const { input } = make();
-    input.setDocument!({
-      blocks: [
-        { kind: "text", value: "Check " },
-        { kind: "mention", id: "m1", ref: appRef },
-        { kind: "text", value: " now" }
-      ]
-    });
+    const id = seedToken(input, "Check ", " now");
     const spans = tokenSpans(input.element);
     expect(spans).toHaveLength(1);
     expect(spans[0].getAttribute("contenteditable")).toBe("false");
-    expect(spans[0].getAttribute("data-mention-id")).toBe("m1");
+    expect(spans[0].getAttribute("data-mention-id")).toBe(id);
     expect(input.getValue()).toBe("Check @App.tsx now");
     expect(input.getLogicalText()).toBe("Check ￼ now");
   });
@@ -196,31 +210,23 @@ describe("createContentEditableComposerInput", () => {
 
   it("fires onMentionRemoved when a token disappears from the DOM (input)", () => {
     const { input, onMentionRemoved } = make();
-    input.setDocument!({
-      blocks: [
-        { kind: "text", value: "a " },
-        { kind: "mention", id: "m1", ref: appRef },
-        { kind: "text", value: " b" }
-      ]
-    });
+    const id = seedToken(input, "a ", " b");
     // Simulate the user deleting the token node, then the browser firing input.
     tokenSpans(input.element)[0].remove();
     input.element.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(onMentionRemoved).toHaveBeenCalledWith("m1");
+    expect(onMentionRemoved).toHaveBeenCalledWith(id);
   });
 
   it("does not reconcile removals mid-IME-composition", () => {
     const { input, onMentionRemoved } = make();
-    input.setDocument!({
-      blocks: [{ kind: "mention", id: "m1", ref: appRef }]
-    });
+    const id = seedToken(input, "", "");
     input.element.dispatchEvent(new Event("compositionstart"));
     tokenSpans(input.element)[0].remove();
     input.element.dispatchEvent(new Event("input", { bubbles: true }));
     expect(onMentionRemoved).not.toHaveBeenCalled();
     // On composition end the reconcile runs.
     input.element.dispatchEvent(new Event("compositionend"));
-    expect(onMentionRemoved).toHaveBeenCalledWith("m1");
+    expect(onMentionRemoved).toHaveBeenCalledWith(id);
   });
 
   it("coerces paste to plain text (splice fallback)", () => {
@@ -344,13 +350,7 @@ describe("createContentEditableComposerInput", () => {
 
   it("paste fallback preserves an existing token (splices at the document level)", () => {
     const { input, onMentionRemoved } = make();
-    input.setDocument!({
-      blocks: [
-        { kind: "text", value: "a " },
-        { kind: "mention", id: "m1", ref: appRef },
-        { kind: "text", value: "" }
-      ]
-    });
+    seedToken(input, "a ", "");
     const original = document.execCommand;
     // @ts-expect-error force the fallback path
     document.execCommand = undefined;
@@ -377,13 +377,7 @@ describe("createContentEditableComposerInput", () => {
 
   it("replaceLogicalRange rewrites a span while preserving tokens outside it", () => {
     const { input } = make();
-    input.setDocument!({
-      blocks: [
-        { kind: "text", value: "hi " },
-        { kind: "mention", id: "m1", ref: appRef },
-        { kind: "text", value: " /look" }
-      ]
-    });
+    seedToken(input, "hi ", " /look");
     // logical "hi ￼ /look": token at 3, "/look" spans [5, 10).
     input.replaceLogicalRange!(5, 10, "/lookup ");
     expect(tokenSpans(input.element)).toHaveLength(1); // token survived
@@ -395,13 +389,13 @@ describe("createContentEditableComposerInput", () => {
 
   it("setMentionStatus surfaces an accessible title + aria-label on error and restores them", () => {
     const { input } = make();
-    input.setDocument!({ blocks: [{ kind: "mention", id: "m1", ref: appRef }] });
+    const id = seedToken(input, "", "");
     const span = tokenSpans(input.element)[0];
-    input.setMentionStatus!("m1", "error");
+    input.setMentionStatus!(id, "error");
     expect(span.getAttribute("title")).toBe("App.tsx: failed to attach context");
     // The red styling is visual-only; the failure must reach AT via aria-label.
     expect(span.getAttribute("aria-label")).toContain("failed to attach");
-    input.setMentionStatus!("m1", "resolved");
+    input.setMentionStatus!(id, "resolved");
     expect(span.getAttribute("title")).toBe("App.tsx");
     // Non-error restores the normal "{label} mention" name.
     expect(span.getAttribute("aria-label")).toBe("App.tsx mention");
@@ -417,40 +411,34 @@ describe("createContentEditableComposerInput", () => {
         return el;
       }
     });
-    input.setDocument!({ blocks: [{ kind: "mention", id: "m1", ref: appRef }] });
+    const id = seedToken(input, "", "");
     const span = tokenSpans(input.element)[0];
     // resolveOn:"select" success path fires "resolved" without a prior error:
     // the host's accessible name must be left untouched.
-    input.setMentionStatus!("m1", "resolved");
+    input.setMentionStatus!(id, "resolved");
     expect(span.getAttribute("aria-label")).toBe("custom App.tsx");
     expect(span.hasAttribute("title")).toBe(false);
     // Error overrides with the ref label (not scraped builder markup)...
-    input.setMentionStatus!("m1", "error");
+    input.setMentionStatus!(id, "error");
     expect(span.getAttribute("aria-label")).toBe(
       "App.tsx, failed to attach context"
     );
     expect(span.getAttribute("title")).toBe("App.tsx: failed to attach context");
     // ...and recovery restores exactly the pre-error state, absent title included.
-    input.setMentionStatus!("m1", "resolved");
+    input.setMentionStatus!(id, "resolved");
     expect(span.getAttribute("aria-label")).toBe("custom App.tsx");
     expect(span.hasAttribute("title")).toBe(false);
   });
 
   it("setMentionStatus toggles the error class and is a no-op for unknown ids", () => {
     const { input } = make();
-    input.setDocument!({
-      blocks: [
-        { kind: "text", value: "" },
-        { kind: "mention", id: "m1", ref: appRef },
-        { kind: "text", value: "" }
-      ]
-    });
+    const id = seedToken(input, "", "");
     const span = tokenSpans(input.element)[0];
-    input.setMentionStatus!("m1", "error");
+    input.setMentionStatus!(id, "error");
     expect(span.classList.contains("persona-mention-token-error")).toBe(true);
-    input.setMentionStatus!("m1", "resolved");
+    input.setMentionStatus!(id, "resolved");
     expect(span.classList.contains("persona-mention-token-error")).toBe(false);
-    input.setMentionStatus!("m1", "pending");
+    input.setMentionStatus!(id, "pending");
     expect(span.classList.contains("persona-mention-token-error")).toBe(false);
     // Unknown id: silent no-op.
     expect(() => input.setMentionStatus!("nope", "error")).not.toThrow();
@@ -458,7 +446,7 @@ describe("createContentEditableComposerInput", () => {
 
   it("destroy() detaches listeners", () => {
     const { input, onMentionRemoved } = make();
-    input.setDocument!({ blocks: [{ kind: "mention", id: "m1", ref: appRef }] });
+    seedToken(input, "", "");
     input.destroy();
     tokenSpans(input.element)[0].remove();
     input.element.dispatchEvent(new Event("input", { bubbles: true }));

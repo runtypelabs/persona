@@ -725,6 +725,30 @@ describe("ContextMentionController — inline coordinate space", () => {
   const tokenCount = (input: { element: HTMLElement }) =>
     input.element.querySelectorAll(".persona-mention-token").length;
 
+  /** Seed a leading mention token via the product insertion path, followed by
+   *  `after` text. Places a real DOM caret at the start first (jsdom won't focus
+   *  a contenteditable) so the token splices at logical 0. */
+  function seedLeadingToken(
+    input: ReturnType<typeof inlineSetup>["input"],
+    after: string,
+    ref = appRef
+  ): void {
+    input.setValueWithCaret(after, 0);
+    const sel = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(input.element);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    input.insertMentionAtSelection!(ref);
+    // Leave the caret at the end so the controller parses the trailing trigger.
+    const endRange = document.createRange();
+    endRange.selectNodeContents(input.element);
+    endRange.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(endRange);
+  }
+
   it("slash-command completion preserves an earlier mention token (logical splice)", () => {
     const { controller, input } = inlineSetup(
       [],
@@ -733,12 +757,7 @@ describe("ContextMentionController — inline coordinate space", () => {
     // A token on line 1, "/look" being typed on line 2. In DISPLAY text the token
     // is "@App.tsx" (8 chars); in LOGICAL text it is one `￼` — the pre-fix code
     // sliced DISPLAY text with LOGICAL indices and destroyed the token.
-    input.setDocument!({
-      blocks: [
-        { kind: "mention", id: "t1", ref: appRef },
-        { kind: "text", value: "\n/look" },
-      ],
-    });
+    seedLeadingToken(input, "\n/look");
     controller.onInput();
     expect(controller.isOpen()).toBe(true);
     controller.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));
@@ -754,12 +773,7 @@ describe("ContextMentionController — inline coordinate space", () => {
       [],
       slashCfg([{ name: "deploy", kind: "action", action }])
     );
-    input.setDocument!({
-      blocks: [
-        { kind: "mention", id: "t1", ref: appRef },
-        { kind: "text", value: "\n/deploy" },
-      ],
-    });
+    seedLeadingToken(input, "\n/deploy");
     controller.onInput();
     expect(controller.isOpen()).toBe(true);
     controller.handleKeydown(new KeyboardEvent("keydown", { key: "Enter" }));

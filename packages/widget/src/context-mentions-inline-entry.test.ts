@@ -100,7 +100,11 @@ describe("mountInlineComposer", () => {
     const fields = (
       handle.element as unknown as {
         getInlineMessageFields: () => {
-          contentSegments: Array<{ kind: string; label?: string; text?: string }>;
+          contentSegments: Array<{
+            kind: string;
+            text?: string;
+            ref?: { label?: string };
+          }>;
         };
       }
     ).getInlineMessageFields();
@@ -108,7 +112,7 @@ describe("mountInlineComposer", () => {
     const kinds = fields.contentSegments.map((s) => s.kind);
     expect(kinds).toContain("mention");
     const mention = fields.contentSegments.find((s) => s.kind === "mention");
-    expect(mention?.label).toBe("App.tsx");
+    expect(mention?.ref?.label).toBe("App.tsx");
     handle.destroy();
   });
 

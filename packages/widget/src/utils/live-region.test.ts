@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createLiveRegion } from "./live-region";
 
 describe("createLiveRegion", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("sets politeness/atomic/role attributes for a polite region", () => {
@@ -29,15 +33,49 @@ describe("createLiveRegion", () => {
     expect(el.getAttribute("role")).toBe("alert");
   });
 
-  it("announce replaces the text so identical repeats still fire", () => {
+  it("announce clears synchronously then sets the message on the next task", () => {
+    vi.useFakeTimers();
     const host = document.createElement("div");
     document.body.appendChild(host);
     const region = createLiveRegion("polite", host);
     const el = host.querySelector<HTMLElement>("[data-persona-mention-live-region]")!;
     region.announce("2 results");
+    // Cleared synchronously; the message lands only after the macrotask runs.
+    expect(el.textContent).toBe("");
+    vi.runAllTimers();
     expect(el.textContent).toBe("2 results");
+  });
+
+  it("identical consecutive announcements each produce a fresh write", () => {
+    vi.useFakeTimers();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const region = createLiveRegion("polite", host);
+    const el = host.querySelector<HTMLElement>("[data-persona-mention-live-region]")!;
+
     region.announce("2 results");
+    vi.runAllTimers();
     expect(el.textContent).toBe("2 results");
+
+    // A repeat must clear first so the a11y tree re-serializes the reset.
+    region.announce("2 results");
+    expect(el.textContent).toBe("");
+    vi.runAllTimers();
+    expect(el.textContent).toBe("2 results");
+  });
+
+  it("a rapid second announce supersedes the first (old message never lands)", () => {
+    vi.useFakeTimers();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const region = createLiveRegion("polite", host);
+    const el = host.querySelector<HTMLElement>("[data-persona-mention-live-region]")!;
+
+    region.announce("2 results");
+    region.announce("5 results");
+    vi.runAllTimers();
+    // Only the newest message is ever written.
+    expect(el.textContent).toBe("5 results");
   });
 
   it("hosts in the light DOM (document.body) with inline sr-only styles when the host is shadow-rooted", () => {

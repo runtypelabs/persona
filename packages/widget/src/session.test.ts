@@ -394,7 +394,7 @@ describe('AgentWidgetSession - inline contentSegments', () => {
     const session = makeHangingSession();
     const segments: AgentWidgetContentSegment[] = [
       { kind: 'text', text: 'Check ' },
-      { kind: 'mention', sourceId: 'files', itemId: 'app', label: 'App.tsx' },
+      { kind: 'mention', ref: { sourceId: 'files', itemId: 'app', label: 'App.tsx' } },
       { kind: 'text', text: ' please' },
     ];
     void session.sendMessage('Check @App.tsx please', {

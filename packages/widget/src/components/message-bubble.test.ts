@@ -22,7 +22,7 @@ describe("createMessageInlineMentions", () => {
   it("walks segments into prose text nodes + read-only token spans", () => {
     const frag = createMessageInlineMentions([
       { kind: "text", text: "Check " },
-      { kind: "mention", sourceId: "files", itemId: "app", label: "App.tsx" },
+      { kind: "mention", ref: { sourceId: "files", itemId: "app", label: "App.tsx" } },
       { kind: "text", text: " for errors" },
     ]);
     const host = document.createElement("div");
@@ -41,7 +41,7 @@ describe("createMessageInlineMentions", () => {
   it("applies a per-item color as the token accent and honors renderMentionToken", () => {
     // Custom render hook fully replaces the token DOM.
     const custom = createMessageInlineMentions(
-      [{ kind: "mention", sourceId: "files", itemId: "app", label: "App.tsx" }],
+      [{ kind: "mention", ref: { sourceId: "files", itemId: "app", label: "App.tsx" } }],
       ({ ref }) => {
         const el = document.createElement("b");
         el.className = "my-token";
@@ -55,7 +55,7 @@ describe("createMessageInlineMentions", () => {
 
     // Per-item color sets the accent custom property inline.
     const colored = createMessageInlineMentions([
-      { kind: "mention", sourceId: "files", itemId: "app", label: "App.tsx", color: "#e11d48" },
+      { kind: "mention", ref: { sourceId: "files", itemId: "app", label: "App.tsx", color: "#e11d48" } },
     ]);
     const host2 = document.createElement("div");
     host2.appendChild(colored);
@@ -71,7 +71,7 @@ describe("createMessageInlineMentions", () => {
         contextMentions: [{ sourceId: "files", itemId: "app", label: "App.tsx" }],
         contentSegments: [
           { kind: "text", text: "Check " },
-          { kind: "mention", sourceId: "files", itemId: "app", label: "App.tsx" },
+          { kind: "mention", ref: { sourceId: "files", itemId: "app", label: "App.tsx" } },
           { kind: "text", text: " for errors" },
         ],
       }),

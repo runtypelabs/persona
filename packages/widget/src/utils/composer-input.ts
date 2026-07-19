@@ -62,8 +62,6 @@ export interface ComposerInputCapability
 
   /** Canonical document (inline mode). */
   getDocument?: () => ComposerDocument;
-  /** Render a document to the surface, optionally placing the logical caret. */
-  setDocument?: (doc: ComposerDocument, caret?: number) => void;
   /**
    * INLINE ONLY. Replace the active trigger range (`match`, logical coordinates)
    * with an atomic mention token and place the caret after it. Returns the new

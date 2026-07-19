@@ -303,24 +303,39 @@ export function createMentionMenu(opts: {
         section.appendChild(errorRow(group.source));
         listEl.appendChild(section);
       } else if (group.status === "ready" && group.items.length > 0) {
-        const section = groupSection(group.source.label, groupSeq++);
+        // Partition items by `item.group ?? source.label`, preserving item order
+        // and keeping partitions in first-appearance order — each gets its own
+        // header. Flat option indices follow this visual order so keyboard nav,
+        // aria-posinset, and aria-activedescendant stay in sync.
+        const partitions = new Map<string, AgentWidgetContextMentionItem[]>();
         for (const item of group.items) {
-          section.appendChild(
-            buildOption(item, group.source, vm.query, flatCursor++, totalOptions)
-          );
-          readyCount++;
+          const key = item.group ?? group.source.label;
+          const bucket = partitions.get(key);
+          if (bucket) bucket.push(item);
+          else partitions.set(key, [item]);
         }
-        if (group.truncated) {
-          section.appendChild(
-            createNode("div", {
-              className: "persona-mention-hint",
-              // Presentational: a nudge, not a listbox child.
-              attrs: { role: "presentation" },
-              text: "Keep typing to narrow…",
-            })
-          );
-        }
-        listEl.appendChild(section);
+        const partitionList = Array.from(partitions.entries());
+        partitionList.forEach(([label, partitionItems], partIndex) => {
+          const section = groupSection(label, groupSeq++);
+          for (const item of partitionItems) {
+            section.appendChild(
+              buildOption(item, group.source, vm.query, flatCursor++, totalOptions)
+            );
+            readyCount++;
+          }
+          // Truncation hint belongs to the source, so it trails the last partition.
+          if (group.truncated && partIndex === partitionList.length - 1) {
+            section.appendChild(
+              createNode("div", {
+                className: "persona-mention-hint",
+                // Presentational: a nudge, not a listbox child.
+                attrs: { role: "presentation" },
+                text: "Keep typing to narrow…",
+              })
+            );
+          }
+          listEl.appendChild(section);
+        });
       }
       // Empty groups render nothing; a single empty state is shown below.
     }

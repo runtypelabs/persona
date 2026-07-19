@@ -228,6 +228,124 @@ describe("createMentionMenu", () => {
     expect(options[2].getAttribute("aria-posinset")).toBe("3");
   });
 
+  it("renders item.group overrides under their own header while ungrouped items stay under the source label", () => {
+    const menu = createMentionMenu({
+      config: makeConfig(),
+      listboxId: "lb",
+      onSelectIndex: vi.fn(),
+      onHoverIndex: vi.fn(),
+    });
+    menu.render({
+      query: "x",
+      groups: [
+        {
+          source,
+          items: [
+            { id: "a", label: "App.tsx" },
+            { id: "b", label: "Recent doc", group: "Recent" },
+          ],
+          status: "ready",
+          truncated: false,
+        },
+      ],
+      activeIndex: 0,
+    });
+
+    const headers = Array.from(
+      menu.el.querySelectorAll<HTMLElement>(".persona-mention-group-header")
+    ).map((h) => h.textContent);
+    // Source label first (ungrouped item), then the override header.
+    expect(headers).toEqual(["Files", "Recent"]);
+
+    const sections = menu.el.querySelectorAll<HTMLElement>(".persona-mention-group");
+    expect(sections).toHaveLength(2);
+    expect(sections[0].querySelector(".persona-mention-option-label")?.textContent).toBe(
+      "App.tsx"
+    );
+    expect(sections[1].querySelector(".persona-mention-option-label")?.textContent).toBe(
+      "Recent doc"
+    );
+  });
+
+  it("shares one header for items with the same group override", () => {
+    const menu = createMentionMenu({
+      config: makeConfig(),
+      listboxId: "lb",
+      onSelectIndex: vi.fn(),
+      onHoverIndex: vi.fn(),
+    });
+    menu.render({
+      query: "x",
+      groups: [
+        {
+          source,
+          items: [
+            { id: "a", label: "One", group: "Pinned" },
+            { id: "b", label: "Two", group: "Pinned" },
+          ],
+          status: "ready",
+          truncated: false,
+        },
+      ],
+      activeIndex: 0,
+    });
+
+    const headers = menu.el.querySelectorAll<HTMLElement>(".persona-mention-group-header");
+    expect(headers).toHaveLength(1);
+    expect(headers[0].textContent).toBe("Pinned");
+    // Both options live under the single shared header.
+    const section = menu.el.querySelector<HTMLElement>(".persona-mention-group")!;
+    expect(section.querySelectorAll(".persona-mention-option")).toHaveLength(2);
+  });
+
+  it("keeps the flat keyboard order matching visual order across partitions", () => {
+    const menu = createMentionMenu({
+      config: makeConfig(),
+      listboxId: "lb",
+      onSelectIndex: vi.fn(),
+      onHoverIndex: vi.fn(),
+    });
+    document.body.appendChild(menu.el);
+    menu.render({
+      query: "x",
+      groups: [
+        {
+          source,
+          items: [
+            { id: "a", label: "Alpha" },
+            { id: "b", label: "Bravo", group: "Recent" },
+            { id: "c", label: "Charlie" },
+          ],
+          status: "ready",
+          truncated: false,
+        },
+      ],
+      activeIndex: 0,
+    });
+
+    // Partitioning preserves first-appearance order: [Files: Alpha, Charlie],
+    // [Recent: Bravo]. Flat option indices follow that visual order.
+    const options = menu.el.querySelectorAll<HTMLElement>('[role="option"]');
+    expect(Array.from(options).map((o) => o.textContent)).toEqual([
+      "Alpha",
+      "Charlie",
+      "Bravo",
+    ]);
+    // aria-posinset is 1-based flat and monotonic with visual order.
+    expect(Array.from(options).map((o) => o.getAttribute("aria-posinset"))).toEqual([
+      "1",
+      "2",
+      "3",
+    ]);
+    // The listbox's active descendant is the first flat option (visual order).
+    const listbox = menu.el.querySelector<HTMLElement>('[role="listbox"]')!;
+    expect(listbox.getAttribute("aria-activedescendant")).toBe(options[0].id);
+    // Advancing the highlight lands on the second visual option (Charlie).
+    menu.setActiveIndex(1);
+    expect(listbox.getAttribute("aria-activedescendant")).toBe(options[1].id);
+    expect(options[1].textContent).toBe("Charlie");
+  });
+
   it("toggles the search field's aria-expanded with its visibility", () => {
     const menu = createMentionMenu({
       config: makeConfig(),

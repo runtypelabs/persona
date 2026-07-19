@@ -214,14 +214,7 @@ export type AgentWidgetContextMentionRef = {
  */
 export type AgentWidgetContentSegment =
   | { kind: "text"; text: string }
-  | {
-      kind: "mention";
-      sourceId: string;
-      itemId: string;
-      label: string;
-      iconName?: string;
-      color?: string;
-    };
+  | { kind: "mention"; ref: AgentWidgetContextMentionRef };
 
 /**
  * The payload a source returns from `resolve()` for one selected item.

@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   emptyDocument,
   documentFromTextarea,
-  toPlainText,
   toDisplayText,
   toLogicalText,
   logicalLength,
@@ -10,7 +9,6 @@ import {
   insertMention,
   removeMention,
   spliceDocument,
-  blocksFromMessage,
   documentToMessageFields,
   MENTION_PLACEHOLDER,
   type ComposerDocument
@@ -37,7 +35,6 @@ function docOf(...blocks: ComposerDocument["blocks"]): ComposerDocument {
 describe("composer-document projections", () => {
   it("emptyDocument is a single empty text block", () => {
     expect(emptyDocument()).toEqual({ blocks: [{ kind: "text", value: "" }] });
-    expect(toPlainText(emptyDocument())).toBe("");
     expect(toLogicalText(emptyDocument())).toBe("");
   });
 
@@ -53,7 +50,6 @@ describe("composer-document projections", () => {
       { kind: "mention", id: "m1", ref: appRef },
       { kind: "text", value: " for errors" }
     );
-    expect(toPlainText(doc)).toBe("Check  for errors");
     expect(toDisplayText(doc)).toBe("Check @App.tsx for errors");
     expect(toLogicalText(doc)).toBe("Check ￼ for errors");
     expect(logicalLength(doc)).toBe("Check ￼ for errors".length);
@@ -118,7 +114,7 @@ describe("removeMention", () => {
       { kind: "text", value: " now" }
     );
     const { doc: next, caret } = removeMention(doc, "m1");
-    expect(toPlainText(next)).toBe("Check  now");
+    expect(toDisplayText(next)).toBe("Check  now");
     // A single merged text block remains.
     expect(next.blocks).toEqual([{ kind: "text", value: "Check  now" }]);
     // Caret lands where the token used to be.
@@ -162,14 +158,14 @@ describe("spliceDocument", () => {
 
   it("drops a token when the replaced range spans it (multi-block selection)", () => {
     const { doc } = spliceDocument(withToken(), 1, 4, "");
-    expect(toPlainText(doc)).toBe("ab");
+    expect(toDisplayText(doc)).toBe("ab");
     expect(mentionBlocksInOrder(doc)).toHaveLength(0);
   });
 
   it("orders and clamps start/end defensively", () => {
     // Reversed args → treated as [1, 4).
     const reversed = spliceDocument(withToken(), 4, 1, "-");
-    expect(toPlainText(reversed.doc)).toBe("a-b");
+    expect(toDisplayText(reversed.doc)).toBe("a-b");
     expect(reversed.caret).toBe(2);
     // Out-of-range args → clamped to the whole document.
     const whole = spliceDocument(withToken(), -5, 99, "Z");
@@ -219,8 +215,8 @@ describe("duplicate mentions", () => {
   });
 });
 
-describe("blocksFromMessage / documentToMessageFields round-trip", () => {
-  it("round-trips a message with an inline token in document order", () => {
+describe("documentToMessageFields", () => {
+  it("emits content, contextMentions, and contentSegments in document order", () => {
     const doc = docOf(
       { kind: "text", value: "Check " },
       { kind: "mention", id: "m1", ref: appRef },
@@ -231,50 +227,24 @@ describe("blocksFromMessage / documentToMessageFields round-trip", () => {
     expect(fields.contextMentions).toEqual([appRef]);
     expect(fields.contentSegments).toEqual([
       { kind: "text", text: "Check " },
-      {
-        kind: "mention",
-        sourceId: "files",
-        itemId: "app",
-        label: "App.tsx",
-        iconName: undefined
-      },
+      { kind: "mention", ref: appRef },
       { kind: "text", text: " for errors" }
-    ]);
-
-    // Reconstructing from the stored fields yields an equivalent document.
-    const rebuilt = blocksFromMessage({
-      content: fields.content,
-      contentSegments: fields.contentSegments
-    });
-    expect(toDisplayText(rebuilt)).toBe("Check @App.tsx for errors");
-    expect(mentionBlocksInOrder(rebuilt).map((m) => m.ref.itemId)).toEqual([
-      "app"
     ]);
   });
 
-  it("preserves order when the same ref appears twice (reconstruction can't infer it)", () => {
+  it("preserves order and duplicates across multiple tokens", () => {
     const doc = docOf(
       { kind: "mention", id: "m1", ref: appRef },
       { kind: "text", value: " vs " },
       { kind: "mention", id: "m2", ref: utilRef }
     );
     const fields = documentToMessageFields(doc);
-    const rebuilt = blocksFromMessage({
-      content: fields.content,
-      contentSegments: fields.contentSegments
-    });
-    expect(mentionBlocksInOrder(rebuilt).map((m) => m.ref.itemId)).toEqual([
-      "app",
-      "util"
+    expect(fields.contextMentions).toEqual([appRef, utilRef]);
+    expect(fields.contentSegments).toEqual([
+      { kind: "mention", ref: appRef },
+      { kind: "text", text: " vs " },
+      { kind: "mention", ref: utilRef }
     ]);
-    // Ids are regenerated but distinct.
-    const ids = mentionBlocksInOrder(rebuilt).map((m) => m.id);
-    expect(new Set(ids).size).toBe(2);
-  });
-
-  it("falls back to a single text block when no segments are stored", () => {
-    const doc = blocksFromMessage({ content: "just text" });
-    expect(doc).toEqual({ blocks: [{ kind: "text", value: "just text" }] });
   });
 
   it("drops empty text runs from contentSegments", () => {
@@ -286,13 +256,7 @@ describe("blocksFromMessage / documentToMessageFields round-trip", () => {
     );
     const fields = documentToMessageFields(doc);
     expect(fields.contentSegments).toEqual([
-      {
-        kind: "mention",
-        sourceId: "files",
-        itemId: "app",
-        label: "App.tsx",
-        iconName: undefined
-      }
+      { kind: "mention", ref: appRef }
     ]);
     expect(fields.content).toBe("@App.tsx");
   });

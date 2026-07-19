@@ -72,12 +72,22 @@ export function createLiveRegion(
     host.appendChild(el);
   }
 
+  // Clear and set must land in separate tasks: browsers serialize the a11y tree
+  // once per task, so a synchronous clear+set hides the reset and identical
+  // repeats never re-announce.
+  let pendingSet: ReturnType<typeof setTimeout> | undefined;
+
   return {
     announce: (message: string) => {
+      if (pendingSet !== undefined) clearTimeout(pendingSet);
       el.textContent = "";
-      el.textContent = message;
+      pendingSet = setTimeout(() => {
+        pendingSet = undefined;
+        el.textContent = message;
+      }, 0);
     },
     destroy: () => {
+      if (pendingSet !== undefined) clearTimeout(pendingSet);
       el.remove();
     },
   };

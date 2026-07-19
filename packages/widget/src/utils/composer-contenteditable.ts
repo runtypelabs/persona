@@ -455,11 +455,6 @@ export function createContentEditableComposerInput(
     }
   };
 
-  const setDocument = (doc: ComposerDocument, caret?: number): void => {
-    render(doc);
-    setCaret(caret ?? logicalLength(doc));
-  };
-
   /**
    * Token-preserving logical-range replace (the controller's query-strip /
    * slash-completion / prompt-macro rewrites). Splices at the DOCUMENT level so
@@ -613,7 +608,6 @@ export function createContentEditableComposerInput(
       setCaret(value.length, { focus: true });
       dispatchInput();
     },
-    setDocument,
     replaceLogicalRange,
     insertMentionAtTrigger,
     insertMentionAtSelection,

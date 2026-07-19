@@ -10,8 +10,7 @@
  * module owns everything that does not touch the DOM, so it is unit-testable in
  * the Node env exactly like `mention-trigger.ts` and `composer-history.ts`.
  *
- * Three text projections exist, each for a distinct purpose:
- *  - `toPlainText`   — text blocks only (chip-mode `content` shim).
+ * Two text projections exist, each for a distinct purpose:
  *  - `toDisplayText` — text + `@label` per mention (the human-readable, sent
  *                      bubble / model-visible prose).
  *  - `toLogicalText` — text + `￼` (OBJECT REPLACEMENT CHAR) per mention. An
@@ -24,7 +23,6 @@
 import { MENTION_PLACEHOLDER } from "./mention-trigger";
 import type {
   AgentWidgetContentSegment,
-  AgentWidgetContextMentionPayload,
   AgentWidgetContextMentionRef
 } from "../types";
 
@@ -47,20 +45,6 @@ export type ComposerBlock =
 /** Canonical inline-composer state. */
 export type ComposerDocument = {
   blocks: ComposerBlock[];
-};
-
-/**
- * In-memory runtime for one mention while the message is being composed (not
- * stored on the sent message). The manager keys these by `ComposerMentionId` in
- * inline mode, mirroring the chip-mode `PendingMention` list.
- */
-export type ComposerMentionState = {
-  id: ComposerMentionId;
-  ref: AgentWidgetContextMentionRef;
-  status: "resolving" | "ready" | "error";
-  payload?: AgentWidgetContextMentionPayload;
-  abort?: AbortController;
-  resolvePromise?: Promise<void>;
 };
 
 /** A logical-coordinate range `[start, end)` into `toLogicalText(doc)`. */
@@ -121,11 +105,6 @@ export function emptyDocument(): ComposerDocument {
 /** Chip-mode shim: wrap a raw textarea value as a single text block. */
 export function documentFromTextarea(value: string): ComposerDocument {
   return { blocks: [{ kind: "text", value }] };
-}
-
-/** Concatenate text blocks only — the chip-mode `content` projection. */
-export function toPlainText(doc: ComposerDocument): string {
-  return doc.blocks.map((b) => (b.kind === "text" ? b.value : "")).join("");
 }
 
 /** Text blocks + `@label` per mention — human-readable / model-visible prose. */
@@ -275,41 +254,6 @@ export function spliceDocument(
   return { doc: { blocks }, caret: lo + text.length };
 }
 
-/** Structural subset of a message this module reads (avoids a heavy import). */
-type MessageLike = {
-  content?: string;
-  contentSegments?: AgentWidgetContentSegment[];
-};
-
-/**
- * Reconstruct a document from a stored message: prefer `contentSegments` (full
- * fidelity, including token order and duplicates); fall back to a single text
- * block from `content`. Mention ids are regenerated (`m0`, `m1`, …) — they only
- * need to be unique within the recalled document.
- */
-export function blocksFromMessage(msg: MessageLike): ComposerDocument {
-  const segments = msg.contentSegments;
-  if (segments && segments.length > 0) {
-    const blocks: ComposerBlock[] = segments.map((seg, i) =>
-      seg.kind === "text"
-        ? { kind: "text", value: seg.text }
-        : {
-            kind: "mention",
-            id: `m${i}`,
-            ref: {
-              sourceId: seg.sourceId,
-              itemId: seg.itemId,
-              label: seg.label,
-              iconName: seg.iconName,
-              color: seg.color
-            }
-          }
-    );
-    return { blocks: normalizeBlocks(blocks) };
-  }
-  return documentFromTextarea(msg.content ?? "");
-}
-
 /**
  * Produce the display/transcript fields a sent inline-mode message carries.
  * `content` is the human-readable prose (`@label` tokens inline); `contextMentions`
@@ -330,14 +274,7 @@ export function documentToMessageFields(doc: ComposerDocument): {
         contentSegments.push({ kind: "text", text: block.value });
       }
     } else {
-      contentSegments.push({
-        kind: "mention",
-        sourceId: block.ref.sourceId,
-        itemId: block.ref.itemId,
-        label: block.ref.label,
-        iconName: block.ref.iconName,
-        color: block.ref.color
-      });
+      contentSegments.push({ kind: "mention", ref: block.ref });
     }
   }
   return {

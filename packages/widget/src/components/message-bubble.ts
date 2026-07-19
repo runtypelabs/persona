@@ -243,16 +243,7 @@ export const createMessageInlineMentions = (
       continue;
     }
     frag.appendChild(
-      createMentionTokenElement(
-        {
-          sourceId: seg.sourceId,
-          itemId: seg.itemId,
-          label: seg.label,
-          iconName: seg.iconName,
-          color: seg.color,
-        },
-        { readonly: true, render }
-      )
+      createMentionTokenElement(seg.ref, { readonly: true, render })
     );
   }
   return frag;
