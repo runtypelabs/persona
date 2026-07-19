@@ -3,6 +3,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createContextMentionOrchestrator } from "./context-mention-orchestrator";
 import { createStaticMentionSource, createSlashCommandsSource } from "./mention-matcher";
+import * as contextMentionsLoader from "../context-mentions-loader";
 import { loadContextMentions } from "../context-mentions-loader";
 import {
   loadContextMentionsInline,
@@ -267,6 +268,82 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
     expect(result.mentions.refs).toEqual([]);
     const bundle = await result.mentions.finalize();
     expect(bundle.context).toEqual({ cmd: { lookup: { orderId: "1042" } } });
+  });
+
+  it("takeInlineCommand: dispatches a line-start command that leads line 2", async () => {
+    document.body.innerHTML = "";
+    const form = document.createElement("form");
+    const textarea = document.createElement("textarea");
+    form.appendChild(textarea);
+    document.body.appendChild(form);
+    const config = {
+      contextMentions: {
+        enabled: true,
+        sources: [],
+        triggers: [
+          {
+            trigger: "/",
+            triggerPosition: "line-start",
+            sources: [
+              createSlashCommandsSource({
+                id: "cmd",
+                label: "Commands",
+                commands: [
+                  {
+                    name: "lookup",
+                    kind: "server",
+                    argsPlaceholder: "order id",
+                    data: (args) => ({ orderId: args }),
+                  },
+                ],
+              }),
+            ],
+          },
+        ],
+      },
+    } as AgentWidgetConfig;
+    const orchestrator = createContextMentionOrchestrator({
+      config,
+      textarea,
+      anchor: form,
+      getMessages: () => [],
+      announce: vi.fn(),
+    })!;
+
+    // A line-start command leading line 2 (not just line 1) must dispatch — the
+    // eager `looksLikeCommand` gate honors every line start, matching the live parser.
+    const result = await orchestrator.takeInlineCommand("hello there\n/lookup 1042");
+    expect(result?.kind).toBe("server");
+    if (result?.kind !== "server") throw new Error("expected a server command");
+    const bundle = await result.mentions.finalize();
+    expect(bundle.context).toEqual({ cmd: { lookup: { orderId: "1042" } } });
+  });
+
+  it("a transient runtime-chunk failure does not disable mentions for the session", async () => {
+    const { orchestrator, textarea } = setup();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Reject only the FIRST load; later calls fall through to the real loader.
+    const spy = vi
+      .spyOn(contextMentionsLoader, "loadContextMentions")
+      .mockImplementationOnce(() => Promise.reject(new Error("transient chunk failure")));
+
+    // First trigger: the chunk load rejects, so the menu can't open this time.
+    textarea.value = "@";
+    textarea.setSelectionRange(1, 1);
+    orchestrator.handleInput("insertText");
+    await flush();
+    expect(orchestrator.isMenuOpen()).toBe(false);
+
+    // The cached mount promise must have been cleared on failure: a later trigger
+    // retries and, now that the load succeeds, mounts the runtime and opens.
+    textarea.value = "@app";
+    textarea.setSelectionRange(4, 4);
+    orchestrator.handleInput("insertText");
+    await flush();
+    expect(orchestrator.isMenuOpen()).toBe(true);
+
+    spy.mockRestore();
+    warn.mockRestore();
   });
 
   it("degraded inline (chunk load fails): Backspace still removes the last chip", async () => {

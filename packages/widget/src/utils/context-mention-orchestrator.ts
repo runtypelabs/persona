@@ -107,8 +107,14 @@ export function createContextMentionOrchestrator(opts: {
   );
   const looksLikeCommand = (text: string): boolean =>
     commandChannels.some((c) => {
+      if (!c.trigger) return false;
+      // Match the live trigger parser: a line-start command may lead ANY line,
+      // input-start only the first, anywhere the whole text (unchanged).
+      if (c.position === "line-start") {
+        return text.split("\n").some((line) => line.startsWith(c.trigger));
+      }
       const line = c.position === "anywhere" ? text : text.split("\n")[0];
-      return !!c.trigger && line.startsWith(c.trigger);
+      return line.startsWith(c.trigger);
     });
 
   // Analytics: `persona:mention:*` DOM events on window (opened / searched /
@@ -148,7 +154,7 @@ export function createContextMentionOrchestrator(opts: {
   const ensureEngine = (): Promise<ContextMentionEngine | null> => {
     if (engine) return Promise.resolve(engine);
     if (mountPromise) return mountPromise;
-    mountPromise = loadContextMentions()
+    const attempt = loadContextMentions()
       .then((mod) => {
         engine = mod.mountContextMentions({
           mentionConfig,
@@ -172,9 +178,15 @@ export function createContextMentionOrchestrator(opts: {
         if (typeof console !== "undefined") {
           console.warn("[Persona] Failed to load context mentions runtime", err);
         }
+        // A transient chunk-load failure must not disable mentions for the whole
+        // session: clear the cached promise so the next trigger retries (the
+        // chunk loader resets its own loadPromise on rejection). Concurrent
+        // callers awaiting `attempt` still each resolve to null cleanly.
+        if (mountPromise === attempt) mountPromise = null;
         return null;
       });
-    return mountPromise;
+    mountPromise = attempt;
+    return attempt;
   };
 
   // Load the inline chunk and swap the textarea for the contenteditable surface.

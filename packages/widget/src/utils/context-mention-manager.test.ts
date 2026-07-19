@@ -2,6 +2,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { ContextMentionManager, refFromItem } from "./context-mention-manager";
+import * as mentionLlmFormat from "./mention-llm-format";
 import type {
   AgentWidgetConfig,
   AgentWidgetContextMentionConfig,
@@ -347,6 +348,69 @@ describe("ContextMentionManager", () => {
     );
     await tick();
     expect(badReports).toContain("error");
+  });
+
+  it("a throwing block formatter drops that item's block but finalize resolves the others", async () => {
+    const resolve = async (i: AgentWidgetContextMentionItem) => ({
+      llmAppend: `body of ${i.label}`,
+    });
+    const { manager } = makeManager({}, resolve);
+    manager.add(makeSource(resolve, "files"), item("good", "Good.ts"));
+    manager.add(makeSource(resolve, "files"), item("bad", "Bad.ts"));
+    await tick();
+
+    // Force formatMentionBlock to throw for one item: a bad block formatter must
+    // drop that block, not reject the whole bundle and lose every mention.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const spy = vi
+      .spyOn(mentionLlmFormat, "formatMentionBlock")
+      .mockImplementation((entry) => {
+        if (entry.label === "Bad.ts") throw new Error("format boom");
+        return `[[${entry.label}]] ${entry.text}`;
+      });
+
+    const bundle = await manager.collectForSubmit().finalize();
+    expect(bundle.blocks).toEqual(["[[Good.ts]] body of Good.ts"]);
+
+    spy.mockRestore();
+    warn.mockRestore();
+  });
+
+  it("a throwing onMentionResolveError drops that item but finalize resolves the others", async () => {
+    const onMentionResolveError = vi.fn(() => {
+      throw new Error("callback boom");
+    });
+    const { manager } = makeManager({ onMentionResolveError });
+    // Submit-resolve sources: the failing resolve throws inside finalize, so its
+    // catch fires onMentionResolveError there (the throw site the guard protects).
+    const goodSource: AgentWidgetContextMentionSource = {
+      id: "good",
+      label: "Good",
+      search: () => [],
+      resolve: async (i) => ({ llmAppend: `body of ${i.label}` }),
+      resolveOn: "submit",
+    };
+    const badSource: AgentWidgetContextMentionSource = {
+      id: "bad",
+      label: "Bad",
+      search: () => [],
+      resolve: async () => {
+        throw new Error("resolve boom");
+      },
+      resolveOn: "submit",
+    };
+    manager.add(goodSource, item("g", "Good.ts"));
+    manager.add(badSource, item("b", "Bad.ts"));
+    await tick();
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const bundle = await manager.collectForSubmit().finalize();
+    expect(onMentionResolveError).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "b" }),
+      expect.any(Error)
+    );
+    expect(bundle.blocks).toEqual(["```Good.ts\nbody of Good.ts\n```"]);
+    warn.mockRestore();
   });
 });
 

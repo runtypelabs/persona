@@ -1270,6 +1270,12 @@ export class AgentWidgetSession {
     this.appendMessage(userMessage);
     this.setStreaming(true);
 
+    // Assign the fresh controller BEFORE the mention await so cancel() (or a
+    // superseding sendMessage) during finalize() aborts THIS turn, not a stale
+    // prior controller.
+    const controller = new AbortController();
+    this.abortController = controller;
+
     // Resolve + merge mentions AFTER the instant echo but BEFORE dispatch, so
     // the model sees the context while the user's bubble already rendered.
     // `appendMessage` stores a sequence-normalized COPY (see `ensureSequence`),
@@ -1280,11 +1286,14 @@ export class AgentWidgetSession {
       const stored =
         this.messages.find((m) => m.id === userMessageId) ?? userMessage;
       await this.applyMentionBundle(stored, input, options.mentions.finalize);
+      // A cancel() or new sendMessage during finalize aborted this controller
+      // (and replaced/nulled the shared ref). Bail without dispatching and
+      // leave whatever idle/streaming state that caller already set.
+      if (controller.signal.aborted || this.abortController !== controller) {
+        return;
+      }
       this.callbacks.onMessagesChanged([...this.messages]);
     }
-
-    const controller = new AbortController();
-    this.abortController = controller;
 
     const snapshot = [...this.messages];
 

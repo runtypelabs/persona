@@ -350,6 +350,87 @@ describe("ContextMentionController", () => {
     // The first in-flight search was aborted by the second keystroke.
     expect(calls[0].aborted()).toBe(true);
   });
+
+  it("a first-time async source fires exactly one request per token (no debounce double-fetch)", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const asyncSource: AgentWidgetContextMentionSource = {
+        id: "remote",
+        label: "Remote",
+        search: (q) => {
+          calls++;
+          return Promise.resolve([item(q, `r-${q}`)]);
+        },
+        resolve: async () => ({ llmAppend: "x" }),
+      };
+      const { controller, textarea } = setup([asyncSource], { searchDebounceMs: 50 });
+
+      textarea.value = "@a";
+      textarea.setSelectionRange(2, 2);
+      controller.onInput(); // immediate pass invokes the first-time source once
+      expect(calls).toBe(1);
+
+      // Debounce fires for the SAME token: the immediate pass already invoked the
+      // now-known-async source, so it must not fire a second identical request.
+      await vi.advanceTimersByTimeAsync(60);
+      expect(calls).toBe(1);
+
+      // A genuinely changed query re-invokes on the debounced pass.
+      textarea.value = "@ab";
+      textarea.setSelectionRange(3, 3);
+      controller.onInput(); // known-async: immediate shows loading, no invoke yet
+      expect(calls).toBe(1);
+      await vi.advanceTimersByTimeAsync(60);
+      expect(calls).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("switching pickers emits (false, oldTrigger) before (true, newTrigger)", () => {
+    const form = document.createElement("form");
+    const textarea = document.createElement("textarea");
+    form.appendChild(textarea);
+    document.body.appendChild(form);
+    const events: Array<[boolean, string]> = [];
+    const controller = new ContextMentionController({
+      mentionConfig: {
+        enabled: true,
+        sources: [syncSource("files", [item("App.tsx")])],
+        triggers: [
+          {
+            trigger: "/",
+            triggerPosition: "line-start",
+            sources: [
+              createSlashCommandsSource({
+                id: "cmd",
+                label: "Commands",
+                commands: [{ name: "clear", kind: "action", action: vi.fn() }],
+              }),
+            ],
+          },
+        ],
+      },
+      composerInput: createTextareaComposerInput(textarea),
+      anchor: form,
+      getMessages: () => [],
+      getConfig: () => ({}) as AgentWidgetConfig,
+      onSelect: vi.fn(() => true),
+      announce: vi.fn(),
+      onPickerOpenChange: (open, trigger) => events.push([open, trigger]),
+    });
+
+    controller.openFromButton("@");
+    controller.openFromButton("/");
+
+    // Channel B's picker must close A's button first; otherwise A stays expanded.
+    expect(events).toEqual([
+      [true, "@"],
+      [false, "@"],
+      [true, "/"],
+    ]);
+  });
 });
 
 describe("ContextMentionController — slash-commands", () => {
@@ -504,6 +585,18 @@ describe("ContextMentionController — slash-commands", () => {
       { name: "deploy", kind: "action", action, argsPlaceholder: "environment" },
     ]);
     const result = await controller.dispatchInlineCommand("/deploy staging");
+    expect(result).toEqual({ kind: "action" });
+    expect(action).toHaveBeenCalledWith(expect.objectContaining({ args: "staging" }));
+  });
+
+  it("dispatches a line-start command that leads line 2, not just line 1", async () => {
+    const action = vi.fn();
+    const { controller } = slashSetup([
+      { name: "deploy", kind: "action", action, argsPlaceholder: "environment" },
+    ]);
+    // The live parser arms a line-start command at any line start; submit-time
+    // parsing must agree, so a command leading line 2 still dispatches.
+    const result = await controller.dispatchInlineCommand("hello\n/deploy staging");
     expect(result).toEqual({ kind: "action" });
     expect(action).toHaveBeenCalledWith(expect.objectContaining({ args: "staging" }));
   });

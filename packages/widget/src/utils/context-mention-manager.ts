@@ -335,7 +335,15 @@ export class ContextMentionManager {
             if (m.resolvePromise) await m.resolvePromise;
             return m.payload ?? null; // null → select-resolve already failed/dropped
           } catch (error) {
-            this.opts.mentionConfig.onMentionResolveError?.(m.item, error);
+            // A throwing host `onMentionResolveError` must not reject the whole
+            // bundle — guard the callback so one bad item just drops.
+            try {
+              this.opts.mentionConfig.onMentionResolveError?.(m.item, error);
+            } catch (cbError) {
+              if (typeof console !== "undefined") {
+                console.warn("[Persona] onMentionResolveError callback threw", cbError);
+              }
+            }
             this.opts.emit?.("resolve-error", {
               sourceId: m.source.id,
               itemId: m.item.id,
@@ -366,14 +374,21 @@ export class ContextMentionManager {
         if (payload.llmAppend && payload.llmAppend.trim()) {
           // Format each block here (the mention layer owns `mentionConfig`); the
           // block index is its position among contributed blocks so `"document"`
-          // numbering and the function form stay 0-based and gap-free.
-          blocks.push(
-            formatMentionBlock(
-              { label: m.ref.label, text: payload.llmAppend, ref: m.ref, item: m.item },
-              blocks.length,
-              this.opts.mentionConfig.llmFormat
-            )
-          );
+          // numbering and the function form stay 0-based and gap-free. A throwing
+          // host `llmFormat` must drop only this block, not reject the bundle.
+          try {
+            blocks.push(
+              formatMentionBlock(
+                { label: m.ref.label, text: payload.llmAppend, ref: m.ref, item: m.item },
+                blocks.length,
+                this.opts.mentionConfig.llmFormat
+              )
+            );
+          } catch (error) {
+            if (typeof console !== "undefined") {
+              console.warn("[Persona] context-mention llmFormat threw", error);
+            }
+          }
         }
         if (payload.contentParts?.length) {
           contentParts.push(...payload.contentParts);

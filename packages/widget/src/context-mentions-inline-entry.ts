@@ -134,7 +134,10 @@ function mirrorTextareaLook(
  */
 function shimTextareaApi(
   el: HTMLElement,
-  input: ComposerInputCapability
+  input: ComposerInputCapability,
+  // True when the host stamped an explicit aria-label on the textarea. Its
+  // accessible name is authoritative, so placeholder writes must not clobber it.
+  hasHostLabel: boolean
 ): void {
   Object.defineProperty(el, "value", {
     configurable: true,
@@ -150,9 +153,10 @@ function shimTextareaApi(
     },
   });
   // The contenteditable reads its placeholder from `data-placeholder`, so a plain
-  // `.placeholder =` (e.g. `ui.ts` `updateCopy` after the swap) would no-op. Map
-  // the textarea `placeholder` property onto the attribute (and the accessible
-  // name) so post-swap copy updates land.
+  // `.placeholder =` (e.g. `ui.ts` `updateCopy` after the swap, which assigns
+  // truthy placeholder text on every config update) would no-op. Map the textarea
+  // `placeholder` property onto the attribute. Only touch the accessible name when
+  // it is placeholder-derived — an explicit host aria-label must survive.
   Object.defineProperty(el, "placeholder", {
     configurable: true,
     get: () => el.getAttribute("data-placeholder") ?? "",
@@ -160,12 +164,12 @@ function shimTextareaApi(
       if (v) {
         el.setAttribute("data-placeholder", v);
         el.setAttribute("aria-placeholder", v);
-        // Keep the accessible-name fallback in sync (parity with
-        // mirrorTextareaLook, where the name falls back to the placeholder).
-        el.setAttribute("aria-label", v);
+        if (!hasHostLabel) el.setAttribute("aria-label", v);
       } else {
         el.removeAttribute("data-placeholder");
         el.removeAttribute("aria-placeholder");
+        // Clear the placeholder-derived name too, so no stale label lingers.
+        if (!hasHostLabel) el.removeAttribute("aria-label");
       }
     },
   });
@@ -197,8 +201,11 @@ export function mountInlineComposer(
   };
   const capability = createContentEditableComposerInput(options);
   const el = capability.element;
+  // Capture before mirroring/shimming: whether the accessible name is an explicit
+  // host label (authoritative) or placeholder-derived (kept in sync with copy).
+  const hasHostLabel = textarea.getAttribute("aria-label") != null;
   mirrorTextareaLook(textarea, el);
-  shimTextareaApi(el, capability);
+  shimTextareaApi(el, capability, hasHostLabel);
 
   // Expose the ordered document as sent-message fields for the core submit path.
   // Computed here (this chunk owns `composer-document.ts`) so `ui.ts` can attach

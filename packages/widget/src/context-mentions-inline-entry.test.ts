@@ -56,6 +56,41 @@ describe("mountInlineComposer", () => {
     handle.destroy();
   });
 
+  it("preserves an explicit host aria-label when placeholder updates land after swap", () => {
+    const ta = makeTextarea();
+    ta.setAttribute("aria-label", "Message support");
+    ta.setAttribute("placeholder", "Ask about a file…");
+
+    const handle = mountInlineComposer({ textarea: ta, renderToken });
+    const el = handle.element as unknown as HTMLTextAreaElement;
+    expect(handle.element.getAttribute("aria-label")).toBe("Message support");
+
+    // ui.ts updateCopy assigns truthy placeholder text on every config update;
+    // the host's accessible name must survive it.
+    el.placeholder = "Ask about a file…";
+    expect(handle.element.getAttribute("aria-label")).toBe("Message support");
+    expect(handle.element.getAttribute("data-placeholder")).toBe("Ask about a file…");
+    handle.destroy();
+  });
+
+  it("keeps a placeholder-derived aria-label in sync and clears it on empty", () => {
+    const ta = makeTextarea();
+    ta.setAttribute("placeholder", "Type a message");
+    const handle = mountInlineComposer({ textarea: ta, renderToken });
+    const el = handle.element as unknown as HTMLTextAreaElement;
+    expect(handle.element.getAttribute("aria-label")).toBe("Type a message");
+
+    el.placeholder = "First update";
+    expect(handle.element.getAttribute("aria-label")).toBe("First update");
+    el.placeholder = "Second update";
+    expect(handle.element.getAttribute("aria-label")).toBe("Second update");
+
+    // Empty placeholder leaves no stale accessible name behind.
+    el.placeholder = "";
+    expect(handle.element.getAttribute("aria-label")).toBeNull();
+    handle.destroy();
+  });
+
   it("exposes ordered contentSegments via getInlineMessageFields", () => {
     const ta = makeTextarea();
     const handle = mountInlineComposer({ textarea: ta, renderToken });

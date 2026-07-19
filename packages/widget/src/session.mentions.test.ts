@@ -22,6 +22,8 @@ function closedStream(): ReadableStream<Uint8Array> {
 describe("AgentWidgetSession — mention/command submit", () => {
   function makeSession(captured: { payload?: AgentWidgetRequestPayload }) {
     let messages: AgentWidgetMessage[] = [];
+    let status = "idle";
+    let streaming = false;
     const session = new AgentWidgetSession(
       {
         apiUrl: "http://localhost:8000",
@@ -34,14 +36,20 @@ describe("AgentWidgetSession — mention/command submit", () => {
         onMessagesChanged: (m) => {
           messages = m;
         },
-        onStatusChanged: () => {},
-        onStreamingChanged: () => {},
+        onStatusChanged: (s) => {
+          status = s;
+        },
+        onStreamingChanged: (s) => {
+          streaming = s;
+        },
         onError: () => {},
       }
     );
     return {
       session,
       user: () => messages.find((m) => m.role === "user"),
+      status: () => status,
+      streaming: () => streaming,
     };
   }
 
@@ -118,5 +126,50 @@ describe("AgentWidgetSession — mention/command submit", () => {
     await session.sendMessage("", { contentParts });
 
     expect(user()!.content).toBe("[Image]");
+  });
+
+  it("cancel() during a pending mention finalize aborts the turn without dispatching", async () => {
+    const captured: { payload?: AgentWidgetRequestPayload } = {};
+    const { session, status, streaming } = makeSession(captured);
+
+    let releaseFinalize!: (bundle: MentionSubmitBundle) => void;
+    const pending = new Promise<MentionSubmitBundle>((resolve) => {
+      releaseFinalize = resolve;
+    });
+
+    const sent = session.sendMessage("summarize this", {
+      mentions: {
+        refs: [{ sourceId: "files", itemId: "app", label: "App.tsx" }],
+        finalize: () => pending,
+      },
+    });
+
+    // Stop mid-resolution, then let finalize settle: dispatch must not fire.
+    session.cancel();
+    releaseFinalize({ blocks: ["```App.tsx\nBODY\n```"], contentParts: [], context: {} });
+    await sent;
+
+    expect(captured.payload).toBeUndefined();
+    expect(status()).toBe("idle");
+    expect(streaming()).toBe(false);
+  });
+
+  it("dispatches a normal mention submit once finalize resolves", async () => {
+    const captured: { payload?: AgentWidgetRequestPayload } = {};
+    const { session, streaming } = makeSession(captured);
+
+    await session.sendMessage("summarize this", {
+      mentions: {
+        refs: [{ sourceId: "files", itemId: "app", label: "App.tsx" }],
+        finalize: async (): Promise<MentionSubmitBundle> => ({
+          blocks: ["```App.tsx\nBODY\n```"],
+          contentParts: [],
+          context: {},
+        }),
+      },
+    });
+
+    expect(captured.payload).toBeDefined();
+    expect(streaming()).toBe(false);
   });
 });

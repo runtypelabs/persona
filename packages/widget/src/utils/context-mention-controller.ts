@@ -157,6 +157,9 @@ export class ContextMentionController {
   private searchAbort: AbortController | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly knownAsync = new Set<string>();
+  // Source ids invoked in setQuery's immediate pass for the CURRENT token, so the
+  // trailing debounce doesn't re-fire a first-time async source's identical fetch.
+  private readonly invokedForToken = new Set<string>();
   private lastAnnouncedCount = -1;
 
   // Trigger-anchored menu positioning (inline mode). `triggerAnchorOffset` holds
@@ -285,12 +288,19 @@ export class ContextMentionController {
       return;
     }
 
+    // Switching to a different channel's picker while one is already open must
+    // close the previous button's state first; close() later emits false for the
+    // NEW trigger only, so the old button's aria-expanded would stick true.
+    const prevPickerTrigger = this.pickerTrigger;
     this.pickerMode = true;
     this.pickerTrigger = channel.trigger;
     this.triggerMatch = null;
     if (!this.isOpenState) {
       this.open("", channel);
     } else {
+      if (prevPickerTrigger && prevPickerTrigger !== channel.trigger) {
+        this.opts.onPickerOpenChange?.(false, prevPickerTrigger, this.listboxId);
+      }
       this.switchChannel(channel);
       this.setQuery("");
     }
@@ -498,6 +508,7 @@ export class ContextMentionController {
     this.activeIndex = 0;
     this.activeKey = null;
     const token = ++this.searchToken;
+    this.invokedForToken.clear();
     this.searchAbort?.abort();
     this.searchAbort = new AbortController();
 
@@ -507,17 +518,22 @@ export class ContextMentionController {
       if (this.knownAsync.has(source.id)) {
         this.setGroupStatus(source.id, "loading");
       } else {
+        this.invokedForToken.add(source.id);
         this.invokeSource(source, token);
       }
     }
     this.render();
 
-    // Debounced pass: re-invoke the known-async (network) sources only.
+    // Debounced pass: re-invoke the known-async (network) sources, skipping any a
+    // first-time invoke already fired for this token (invokeSource marks a source
+    // async on its first promise — re-invoking here would double-fetch it).
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       if (token !== this.searchToken) return;
       for (const source of this.activeChannel.sources) {
-        if (this.knownAsync.has(source.id)) this.invokeSource(source, token);
+        if (this.knownAsync.has(source.id) && !this.invokedForToken.has(source.id)) {
+          this.invokeSource(source, token);
+        }
       }
     }, this.debounceMs);
   }
@@ -973,14 +989,23 @@ export class ContextMentionController {
   } | null {
     for (const channel of this.channels) {
       if (!channel.trigger) continue;
-      // line-start / input-start commands lead their line — parse the first line.
-      const line = channel.position === "anywhere" ? text : text.split("\n")[0];
-      if (!line.startsWith(channel.trigger)) continue;
-      const { name, args } = splitCommandQuery(line.slice(channel.trigger.length));
-      if (!name) continue;
-      for (const source of channel.sources) {
-        const item = source.matchCommand?.(name);
-        if (item && this.isInlineCommand(item)) return { source, item, args };
+      // Match the live trigger parser: a line-start command may lead ANY line
+      // (not just the first); input-start only the very first; anywhere the whole
+      // text (unchanged). The command line's remainder after the name is the args.
+      const lines =
+        channel.position === "anywhere"
+          ? [text]
+          : channel.position === "line-start"
+            ? text.split("\n")
+            : [text.split("\n")[0]];
+      for (const line of lines) {
+        if (!line.startsWith(channel.trigger)) continue;
+        const { name, args } = splitCommandQuery(line.slice(channel.trigger.length));
+        if (!name) continue;
+        for (const source of channel.sources) {
+          const item = source.matchCommand?.(name);
+          if (item && this.isInlineCommand(item)) return { source, item, args };
+        }
       }
     }
     return null;

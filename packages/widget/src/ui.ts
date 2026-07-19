@@ -39,6 +39,7 @@ import {
   createContextMentionOrchestrator,
   type ContextMentionOrchestrator,
 } from "./utils/context-mention-orchestrator";
+import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import { createLiveRegion, type LiveRegion } from "./utils/live-region";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
@@ -542,6 +543,35 @@ function buildDropOverlay(
   return overlay;
 }
 
+// Deep-merge two mention context maps (`{ [sourceId]: { [itemId]: unknown } }`).
+// A source contributing to both bundles keeps BOTH per-item maps; a shallow
+// spread would let one sourceId's inner map wholesale replace the other's.
+export const mergeMentionContext = (
+  a: MentionSubmitBundle["context"],
+  b: MentionSubmitBundle["context"]
+): MentionSubmitBundle["context"] => {
+  const out: MentionSubmitBundle["context"] = { ...a };
+  for (const [sourceId, items] of Object.entries(b)) {
+    const existing = out[sourceId];
+    out[sourceId] = existing ? { ...existing, ...items } : items;
+  }
+  return out;
+};
+
+// Concatenate the fulfilled halves of two finalize() results (either may be
+// absent when its side rejected), deep-merging their per-source context.
+export const mergeFinalizedMentions = (
+  bundles: MentionSubmitBundle[]
+): MentionSubmitBundle =>
+  bundles.reduce<MentionSubmitBundle>(
+    (acc, b) => ({
+      blocks: [...acc.blocks, ...b.blocks],
+      contentParts: [...acc.contentParts, ...b.contentParts],
+      context: mergeMentionContext(acc.context, b.context),
+    }),
+    { blocks: [], contentParts: [], context: {} }
+  );
+
 export const createAgentExperience = (
   mount: HTMLElement,
   initialConfig?: AgentWidgetConfig,
@@ -847,9 +877,13 @@ export const createAgentExperience = (
     header,
     footer,
     actionsRow: _actionsRow,
-    leftActions,
     rightActions
   } = panelElements;
+  // Nullable + reassignable: a plugin `replaceComposer` swaps the footer, and
+  // `bindComposerRefsFromFooter` must repoint this at the NEW left-action
+  // cluster (or null it so the composerForm fallback fires) — a stale ref would
+  // insert the mention/attachment buttons into the detached old subtree.
+  let leftActions: HTMLElement | null = panelElements.leftActions;
   let setSendButtonMode = panelElements.setSendButtonMode;
 
   // Use mutable references for mic button so we can update them dynamically
@@ -1265,6 +1299,10 @@ export const createAgentExperience = (
       ".persona-widget-composer .persona-flex.persona-items-center.persona-justify-between"
     );
     if (ar) _actionsRow = ar;
+    // Rebind the left-action cluster to the NEW footer (both composer builders
+    // ship this class). Assign unconditionally: when a custom plugin composer
+    // has no left cluster, null lets the button-insert fall back to the form.
+    leftActions = pick<HTMLElement>(".persona-widget-composer__left-actions");
   };
   ensureComposerAttachmentSurface(footer);
   bindComposerRefsFromFooter(footer);
@@ -6251,13 +6289,16 @@ export const createAgentExperience = (
     if (!b) return a;
     return {
       refs: [...a.refs, ...b.refs],
+      // allSettled, not all: one side rejecting must not discard the other
+      // side's already-resolved context (the bubble already echoed its chips).
       finalize: async () => {
-        const [ra, rb] = await Promise.all([a.finalize(), b.finalize()]);
-        return {
-          blocks: [...ra.blocks, ...rb.blocks],
-          contentParts: [...ra.contentParts, ...rb.contentParts],
-          context: { ...ra.context, ...rb.context },
-        };
+        const [ra, rb] = await Promise.allSettled([a.finalize(), b.finalize()]);
+        const fulfilled: MentionSubmitBundle[] = [];
+        if (ra.status === "fulfilled") fulfilled.push(ra.value);
+        else console.warn("[Persona] a mention bundle failed to finalize; sending without it", ra.reason);
+        if (rb.status === "fulfilled") fulfilled.push(rb.value);
+        else console.warn("[Persona] a mention bundle failed to finalize; sending without it", rb.reason);
+        return mergeFinalizedMentions(fulfilled);
       },
     };
   };
@@ -6285,7 +6326,13 @@ export const createAgentExperience = (
     return hasMention ? fields.contentSegments : undefined;
   };
 
-  const doSubmit = async (submitOptions?: { viaVoice?: boolean }) => {
+  // Re-entrancy guard for the async submit path: `takeInlineCommand` awaits (a
+  // lazy chunk load + host resolve) before the composer clears, and
+  // `isStreaming()` is still false in that window, so a second Enter would
+  // otherwise dispatch the same text/command twice.
+  let submitInFlight = false;
+
+  const performSubmit = async (submitOptions?: { viaVoice?: boolean }) => {
     const value = textarea.value.trim();
     const hasAttachments = attachmentManager?.hasAttachments() ?? false;
 
@@ -6358,6 +6405,16 @@ export const createAgentExperience = (
     }
   };
 
+  const doSubmit = async (submitOptions?: { viaVoice?: boolean }) => {
+    if (submitInFlight) return;
+    submitInFlight = true;
+    try {
+      await performSubmit(submitOptions);
+    } finally {
+      submitInFlight = false;
+    }
+  };
+
   const handleSubmit = (event: Event) => {
     event.preventDefault();
 
@@ -6373,6 +6430,7 @@ export const createAgentExperience = (
       return;
     }
 
+    if (submitInFlight) return;
     void doSubmit();
   };
 
@@ -6413,6 +6471,10 @@ export const createAgentExperience = (
   };
 
   const handleComposerInput = (event: Event) => {
+    // The synthetic input from history recall (guarded by `suppressHistoryReset`)
+    // is not user typing: it must neither open the mention menu (an undefined
+    // inputType reads as menu-opening) nor exit history-navigation mode.
+    if (suppressHistoryReset) return;
     // Drive the mention menu (open/update/close) + lazy-load on first trigger.
     // Skip while an IME composition is active: the intermediate value isn't the
     // user's committed text, so it must not open or filter the menu.
@@ -6420,7 +6482,6 @@ export const createAgentExperience = (
       mentionOrchestrator?.handleInput((event as InputEvent).inputType ?? undefined);
     }
     // A real edit leaves history-navigation mode.
-    if (suppressHistoryReset) return;
     resetHistoryNavigation();
   };
 
@@ -6467,6 +6528,12 @@ export const createAgentExperience = (
     // inert (never a stop trigger): the visible Stop button / Esc stop it.
     if (event.key === "Enter" && !event.shiftKey) {
       if (session.isStreaming()) {
+        event.preventDefault();
+        return;
+      }
+      // A submit is already awaiting its async pre-send work; a second Enter in
+      // that window would dispatch the same text twice.
+      if (submitInFlight) {
         event.preventDefault();
         return;
       }
@@ -8670,8 +8737,10 @@ export const createAgentExperience = (
           tooltip.textContent = attachTooltipText;
           attachmentButtonWrapper.appendChild(tooltip);
 
-          // Insert into left actions container
-          leftActions.append(attachmentButtonWrapper);
+          // Insert into left actions container (fall back to the form when a
+          // custom composer has no left cluster).
+          if (leftActions) leftActions.append(attachmentButtonWrapper);
+          else composerForm.appendChild(attachmentButtonWrapper);
 
           // Initialize attachment manager
           if (!attachmentManager && attachmentInput && attachmentPreviewsContainer) {
