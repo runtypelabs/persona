@@ -249,6 +249,68 @@ export const createMessageInlineMentions = (
   return frag;
 };
 
+/* PUA sentinels survive escapeHtml, markdown, and DOMPurify as plain text. */
+const MENTION_PH_OPEN = "\uE000";
+const MENTION_PH_CLOSE = "\uE001";
+
+/**
+ * Render segmented prose through the full message transform (actions, markdown,
+ * postprocess, sanitize): mention slots ride the pipeline as placeholder
+ * sentinels and are swapped for atomic token elements in the parsed output.
+ * Falls back to verbatim segment rendering when a transform drops or rewrites
+ * a slot, so a mention is never lost.
+ */
+export const renderSegmentsWithTransform = (
+  contentDiv: HTMLElement,
+  segments: AgentWidgetContentSegment[],
+  transformSource: (source: string) => string,
+  render?: (
+    ctx: AgentWidgetContextMentionTokenRenderContext
+  ) => HTMLElement
+): void => {
+  // Nonce keeps user-typed sentinel lookalikes from matching a real slot.
+  const nonce = Math.random().toString(36).slice(2, 8);
+  const placeholder = (i: number) =>
+    `${MENTION_PH_OPEN}${nonce}:${i}${MENTION_PH_CLOSE}`;
+  const source = segments
+    .map((seg, i) => (seg.kind === "text" ? seg.text : placeholder(i)))
+    .join("");
+  const html = transformSource(source);
+  // String-level check runs before the parse: a slot that was dropped,
+  // entity-encoded, or split by an inserted tag fails `includes`.
+  const survived = segments.every(
+    (seg, i) => seg.kind === "text" || html.includes(placeholder(i))
+  );
+  if (!survived) {
+    contentDiv.replaceChildren(createMessageInlineMentions(segments, render));
+    return;
+  }
+  contentDiv.innerHTML = html;
+  const pattern = new RegExp(
+    `${MENTION_PH_OPEN}${nonce}:(\\d+)${MENTION_PH_CLOSE}`
+  );
+  const walker = document.createTreeWalker(contentDiv, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    textNodes.push(n as Text);
+  }
+  for (const node of textNodes) {
+    let current = node;
+    for (let match = pattern.exec(current.data); match; match = pattern.exec(current.data)) {
+      const seg = segments[Number(match[1])];
+      const after = current.splitText(match.index);
+      after.data = after.data.slice(match[0].length);
+      if (seg?.kind === "mention") {
+        after.parentNode?.insertBefore(
+          createMentionTokenElement(seg.ref, { readonly: true, render }),
+          after
+        );
+      }
+      current = after;
+    }
+  }
+};
+
 const createMessageImagePreviews = (
   imageParts: ImageContentPart[],
   hasVisibleText: boolean,
@@ -883,11 +945,11 @@ export const createStandardBubble = (
       )
     : (message.content ?? "");
 
-  // The markdown transform + stream-animation wrapping only feed the two text
-  // branches below; the inline-mention branch renders from `contentSegments` and
-  // discards this output. Compute it lazily so segmented user bubbles (rebuilt
-  // every render pass during streaming) don't pay for transform work they throw
-  // away. `bufferedContent` stays eager — the streaming skeleton logic reads it.
+  // Feeds the two text branches below; the inline-mention branch calls the
+  // transform itself with a placeholder-bearing source built from
+  // `contentSegments` instead of `bufferedContent`. Kept lazy so that branch
+  // doesn't pay for output it never reads. `bufferedContent` stays eager —
+  // the streaming skeleton logic reads it.
   const computeAnimatedContent = (): string => {
     const transformedContent = transform({
       text: bufferedContent,
@@ -916,14 +978,21 @@ export const createStandardBubble = (
     textContentDiv.style.display = "none";
     contentDiv.appendChild(textContentDiv);
   } else if (message.contentSegments?.length) {
-    // Inline-mention user bubble: render prose with atomic `@` tokens in place
-    // instead of the opaque display string. The resolved context reached the
-    // model via `llmContent`; these tokens are display-only.
-    contentDiv.replaceChildren(
-      createMessageInlineMentions(
-        message.contentSegments,
-        options?.widgetConfig?.contextMentions?.renderMentionToken
-      )
+    // Inline-mention user bubble: prose runs through the same transform
+    // pipeline as every other bubble (markdown/postprocess/sanitize apply);
+    // mention slots ride through as placeholders and come back as atomic
+    // tokens. The resolved context reached the model via `llmContent`.
+    renderSegmentsWithTransform(
+      contentDiv,
+      message.contentSegments,
+      (source) =>
+        transform({
+          text: source,
+          message,
+          streaming: Boolean(message.streaming),
+          raw: message.rawContent,
+        }),
+      options?.widgetConfig?.contextMentions?.renderMentionToken
     );
   } else {
     contentDiv.innerHTML = computeAnimatedContent();

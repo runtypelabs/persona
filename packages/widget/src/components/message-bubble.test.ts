@@ -81,6 +81,115 @@ describe("createMessageInlineMentions", () => {
     // Inline mode replaces the separate chip row.
     expect(bubble.querySelector("[data-message-mentions]")).toBeNull();
   });
+
+  const segmentedMessage = () =>
+    makeMessage({
+      role: "user",
+      content: "Check @App.tsx for errors",
+      contentSegments: [
+        { kind: "text", text: "Check " },
+        { kind: "mention", ref: { sourceId: "files", itemId: "app", label: "App.tsx" } },
+        { kind: "text", text: " for errors" },
+      ],
+    });
+
+  it("runs segmented prose through the transform so markdown-style output renders", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        role: "user",
+        content: "see **bold** and @App.tsx",
+        contentSegments: [
+          { kind: "text", text: "see **bold** and " },
+          { kind: "mention", ref: { sourceId: "files", itemId: "app", label: "App.tsx" } },
+        ],
+      }),
+      ({ text }) => `<p>${text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")}</p>`
+    );
+    expect(bubble.querySelector("strong")?.textContent).toBe("bold");
+    const token = bubble.querySelector(".persona-mention-token");
+    expect(token).not.toBeNull();
+    // The token landed inside the transform's block element, in prose order.
+    expect(token?.closest("p")).not.toBeNull();
+    expect(bubble.querySelector("p")?.textContent).toBe("see bold and @App.tsx");
+  });
+
+  it("escapes segment text when the transform escapes (default pipeline shape)", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        role: "user",
+        contentSegments: [
+          { kind: "text", text: "<script>alert(1)</script> " },
+          { kind: "mention", ref: { sourceId: "files", itemId: "app", label: "App.tsx" } },
+        ],
+      }),
+      ({ text }) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    );
+    expect(bubble.querySelector("script")).toBeNull();
+    expect(bubble.textContent).toContain("<script>alert(1)</script>");
+    expect(bubble.querySelectorAll(".persona-mention-token")).toHaveLength(1);
+  });
+
+  it("falls back to verbatim segment rendering when a transform drops a mention slot", () => {
+    const bubble = createStandardBubble(segmentedMessage(), () => "rewritten output");
+    // The mention survives via the fallback instead of vanishing with the slot.
+    expect(bubble.querySelectorAll(".persona-mention-token")).toHaveLength(1);
+    expect(bubble.textContent).toContain("Check @App.tsx for errors");
+    expect(bubble.textContent).not.toContain("rewritten output");
+  });
+
+  it("does not swap user-typed sentinel lookalikes", () => {
+    // Real sentinel chars with a wrong nonce: must never match a slot.
+    const lookalike = "\uE000abcdef:0\uE001";
+    const bubble = createStandardBubble(
+      makeMessage({
+        role: "user",
+        contentSegments: [
+          { kind: "text", text: `pasted ${lookalike} ` },
+          { kind: "mention", ref: { sourceId: "files", itemId: "app", label: "App.tsx" } },
+        ],
+      }),
+      ({ text }) => text
+    );
+    // Only the real slot becomes a token; the lookalike stays literal text.
+    expect(bubble.querySelectorAll(".persona-mention-token")).toHaveLength(1);
+    expect(bubble.textContent).toContain(lookalike);
+  });
+
+  it("keeps mention slots through the real DOMPurify sanitizer", async () => {
+    const { createDefaultSanitizer } = await import("../utils/sanitize");
+    const sanitize = createDefaultSanitizer();
+    const bubble = createStandardBubble(
+      segmentedMessage(),
+      ({ text }) => sanitize(`<p>${text}</p>`)
+    );
+    expect(bubble.querySelectorAll(".persona-mention-token")).toHaveLength(1);
+    expect(bubble.querySelector("p")?.textContent).toBe("Check @App.tsx for errors");
+  });
+
+  it("swaps multiple mentions across transform-created blocks", () => {
+    const bubble = createStandardBubble(
+      makeMessage({
+        role: "user",
+        contentSegments: [
+          { kind: "text", text: "compare " },
+          { kind: "mention", ref: { sourceId: "files", itemId: "a", label: "a.ts" } },
+          { kind: "text", text: "\n\nwith " },
+          { kind: "mention", ref: { sourceId: "files", itemId: "b", label: "b.ts" } },
+        ],
+      }),
+      ({ text }) =>
+        text
+          .split("\n\n")
+          .map((p) => `<p>${p}</p>`)
+          .join("")
+    );
+    const tokens = bubble.querySelectorAll(".persona-mention-token");
+    expect(tokens).toHaveLength(2);
+    const paragraphs = bubble.querySelectorAll("p");
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0]?.textContent).toBe("compare @a.ts");
+    expect(paragraphs[1]?.textContent).toBe("with @b.ts");
+  });
 });
 
 describe("isSafeImageSrc", () => {
