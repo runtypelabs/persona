@@ -282,10 +282,8 @@ const buildComposerBarPanel = (
       className: "persona-rounded-2xl persona-p-6",
       attrs: { "data-persona-intro-card": "" },
       style: {
-        background:
-          "var(--persona-intro-card-bg, var(--persona-surface, #ffffff))",
-        boxShadow:
-          "var(--persona-intro-card-shadow, 0 5px 15px rgba(15, 23, 42, 0.08))",
+        background: "var(--persona-intro-card-bg, transparent)",
+        boxShadow: "var(--persona-intro-card-shadow, none)",
       },
     },
     introTitle,
@@ -416,20 +414,19 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
       "Ask anything about your account or products.",
   });
   // Background and box-shadow flow through the themable `components.introCard`
-  // tokens (--persona-intro-card-bg / --persona-intro-card-shadow), each
-  // falling back to its legacy value (`--persona-surface` / `persona-shadow-sm`)
-  // when no token is set. Docked mode keeps a flat shadow by default.
+  // tokens (--persona-intro-card-bg / --persona-intro-card-shadow); both
+  // default to flat (transparent / none). Docked mode always stays flat,
+  // even when a theme sets an introCard shadow.
   const introCard = createNode(
     "div",
     {
       className: "persona-rounded-2xl persona-p-6",
       attrs: { "data-persona-intro-card": "" },
       style: {
-        background:
-          "var(--persona-intro-card-bg, var(--persona-surface, #ffffff))",
+        background: "var(--persona-intro-card-bg, transparent)",
         boxShadow: isDockedMountMode(config)
           ? "none"
-          : "var(--persona-intro-card-shadow, 0 5px 15px rgba(15, 23, 42, 0.08))",
+          : "var(--persona-intro-card-shadow, none)",
       },
     },
     introTitle,

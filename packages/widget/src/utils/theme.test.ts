@@ -337,12 +337,11 @@ describe('theme utils', () => {
     );
   });
 
-  it('falls back to the legacy intro-card shadow when no token is set', () => {
+  it('defaults the intro card to flat (transparent, no shadow) when no token is set', () => {
     const theme = createTheme({});
     const cssVars = themeToCssVariables(theme);
-    expect(cssVars['--persona-intro-card-shadow']).toBe(
-      '0 5px 15px rgba(15, 23, 42, 0.08)'
-    );
+    expect(cssVars['--persona-intro-card-shadow']).toBe('none');
+    expect(cssVars['--persona-intro-card-bg']).toBe('transparent');
   });
 
   it('drives --persona-tool-bubble-shadow from the theme token (config.toolCall.shadow is applied inline on the bubble, not the root var)', () => {
