@@ -69,19 +69,36 @@ describe("insertMention", () => {
       appRef,
       "m1"
     );
+    // The pre-existing space separates; no second one is inserted.
     expect(toDisplayText(doc)).toBe("Check @App.tsx for errors");
-    // caret sits just after the inserted `￼`.
-    expect(caret).toBe(7);
-    expect(toLogicalText(doc)[caret - 1]).toBe("￼");
+    // caret hops the existing separator, landing after `￼ `.
+    expect(caret).toBe(8);
+    expect(toLogicalText(doc)[caret - 2]).toBe("￼");
+    expect(toLogicalText(doc)[caret - 1]).toBe(" ");
   });
 
-  it("inserts at the very end of the document", () => {
+  it("inserts at the very end of the document with a separating space", () => {
     const start = documentFromTextarea("Look at @ap");
-    const { doc } = insertMention(start, { start: 8, end: 11 }, appRef, "m1");
-    expect(toDisplayText(doc)).toBe("Look at @App.tsx");
+    const { doc, caret } = insertMention(start, { start: 8, end: 11 }, appRef, "m1");
+    expect(toDisplayText(doc)).toBe("Look at @App.tsx ");
     const mentions = mentionBlocksInOrder(doc);
     expect(mentions).toHaveLength(1);
     expect(mentions[0].ref).toEqual(appRef);
+    // Caret after the inserted space: typing or a fresh `@` chains directly.
+    expect(caret).toBe(toLogicalText(doc).length);
+  });
+
+  it("chains: a fresh trigger typed right after completion parses immediately", () => {
+    const start = documentFromTextarea("@ap");
+    const { doc, caret } = insertMention(start, { start: 0, end: 3 }, appRef, "m1");
+    // The auto-space satisfies the parser's preceding-whitespace requirement,
+    // so `@` chains without a manual spacebar press.
+    const typed = { blocks: [...doc.blocks, { kind: "text" as const, value: "@u" }] };
+    const logical = toLogicalText(typed);
+    expect(parseMentionTrigger(logical, logical.length)).toEqual({
+      triggerIndex: caret,
+      query: "u",
+    });
   });
 
   it("keeps a text slot between two adjacent inserted tokens (no adjacency)", () => {

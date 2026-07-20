@@ -169,8 +169,9 @@ describe("createContentEditableComposerInput", () => {
       query: "App"
     });
     expect(id).toBe("mid-1");
-    expect(input.getValue()).toBe("Check @App.tsx");
-    expect(input.getLogicalText()).toBe("Check ￼");
+    // Completion appends the separating space (Slack-style).
+    expect(input.getValue()).toBe("Check @App.tsx ");
+    expect(input.getLogicalText()).toBe("Check ￼ ");
     expect(tokenSpans(input.element)).toHaveLength(1);
     expect(onMentionInserted).toHaveBeenCalledWith("mid-1", appRef);
   });
@@ -294,8 +295,8 @@ describe("createContentEditableComposerInput", () => {
       query: "App"
     });
     expect(id).not.toBeNull();
-    expect(input.getValue()).toBe("a\n@App.tsx");
-    expect(input.getLogicalText()).toBe("a\n￼");
+    expect(input.getValue()).toBe("a\n@App.tsx ");
+    expect(input.getLogicalText()).toBe("a\n￼ ");
     expect(tokenSpans(input.element)).toHaveLength(1);
   });
 
@@ -364,9 +365,10 @@ describe("createContentEditableComposerInput", () => {
       sel.addRange(range);
       const evt = new Event("paste", { bubbles: true, cancelable: true });
       Object.defineProperty(evt, "clipboardData", {
-        value: { getData: (t: string) => (t === "text/plain" ? " x" : "") }
+        value: { getData: (t: string) => (t === "text/plain" ? "x" : "") }
       });
       input.element.dispatchEvent(evt);
+      // Seed's auto-space already separates; the paste lands after it.
       expect(input.getValue()).toBe("a @App.tsx x");
       expect(tokenSpans(input.element)).toHaveLength(1);
       expect(onMentionRemoved).not.toHaveBeenCalled();

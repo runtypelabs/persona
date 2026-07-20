@@ -178,8 +178,10 @@ function splitBlocksAt(
 /**
  * Replace the logical range `[range.start, range.end)` (the active `@query`,
  * trigger char through caret) with an atomic mention block for `ref`, keyed by
- * the caller-supplied `id`. Returns the new document and the caret offset just
- * after the inserted token. The caller owns id creation so this stays pure.
+ * the caller-supplied `id`. A separating space follows the token (Slack-style)
+ * unless the next char already is one, so typing and `@`-chaining continue
+ * without a manual spacebar press; the returned caret sits after that space.
+ * The caller owns id creation so this stays pure.
  */
 export function insertMention(
   doc: ComposerDocument,
@@ -189,13 +191,19 @@ export function insertMention(
 ): { doc: ComposerDocument; caret: number } {
   const before = splitBlocksAt(doc.blocks, range.start).left;
   const after = splitBlocksAt(doc.blocks, range.end).right;
+  const next = after[0];
+  const nextChar = next?.kind === "text" ? next.value.charAt(0) : "";
+  // A following newline already separates; keep the caret on the token's line.
+  const needsSpace = nextChar !== " " && nextChar !== "\t" && nextChar !== "\n";
   const blocks = normalizeBlocks([
     ...before,
     { kind: "mention", id, ref },
+    ...(needsSpace ? [{ kind: "text", value: " " } as const] : []),
     ...after
   ]);
-  // `before` spans exactly logical `[0, range.start)`; the token adds one char.
-  const caret = range.start + 1;
+  // `before` spans exactly logical `[0, range.start)`; the token adds one char,
+  // and the caret hops the separator (inserted or pre-existing space/tab).
+  const caret = range.start + 1 + (nextChar === "\n" ? 0 : 1);
   return { doc: { blocks }, caret };
 }
 
