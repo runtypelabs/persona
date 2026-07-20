@@ -41,7 +41,7 @@ function inlineSetup() {
     textarea,
     anchor: form,
     getMessages: () => [],
-    announce: vi.fn(),
+    liveRegionHost: document.body,
   })!;
   return { orchestrator, textarea, form };
 }
@@ -92,7 +92,7 @@ function setup() {
     textarea,
     anchor: form,
     getMessages: () => [],
-    announce: vi.fn(),
+    liveRegionHost: document.body,
   })!;
   // Place the orchestrator DOM like ui.ts does.
   textarea.parentElement!.insertBefore(orchestrator.contextRow, textarea);
@@ -107,7 +107,7 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
       textarea: document.createElement("textarea"),
       anchor: document.createElement("form"),
       getMessages: () => [],
-      announce: () => {},
+      liveRegionHost: document.body,
     });
     expect(o).toBeNull();
   });
@@ -255,7 +255,7 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
       textarea,
       anchor: form,
       getMessages: () => [],
-      announce: vi.fn(),
+      liveRegionHost: document.body,
     })!;
 
     // Plain text never loads the runtime or matches.
@@ -307,7 +307,7 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
       textarea,
       anchor: form,
       getMessages: () => [],
-      announce: vi.fn(),
+      liveRegionHost: document.body,
     })!;
 
     // A line-start command leading line 2 (not just line 1) must dispatch — the
@@ -482,7 +482,7 @@ describe("createContextMentionOrchestrator (lazy-load integration)", () => {
       textarea,
       anchor: form,
       getMessages: () => [],
-      announce: vi.fn(),
+      liveRegionHost: document.body,
     })!;
     orchestrator.onComposerSwap((next, prev) => swaps.push({ next, prev }));
 

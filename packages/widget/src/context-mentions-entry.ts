@@ -17,6 +17,7 @@ import {
   createTextareaComposerInput,
   type ComposerInputCapability,
 } from "./utils/composer-input";
+import { createLiveRegion } from "./utils/live-region";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import type {
   AgentWidgetConfig,
@@ -40,9 +41,12 @@ export interface ContextMentionMountContext {
   contextRow: HTMLElement;
   getMessages: () => AgentWidgetMessage[];
   getConfig: () => AgentWidgetConfig;
-  announce: (message: string) => void;
-  /** Assertive announcer for resolve failures (falls back to `announce`). */
-  announceError?: (message: string) => void;
+  /**
+   * Widget container that hosts the mention live regions (created here, on
+   * engine mount, so the helper stays out of the core bundle). Announcements
+   * can't fire before the engine exists, so lazy creation loses nothing.
+   */
+  liveRegionHost: HTMLElement | ShadowRoot;
   popoverContainer?: HTMLElement | ShadowRoot;
   /**
    * Reflect the affordance-button picker's open state onto the button
@@ -103,14 +107,22 @@ export function mountContextMentions(
   let composerInput =
     ctx.composerInput ?? createTextareaComposerInput(ctx.textarea);
 
+  // Polite region for result-count + add/remove announcements; assertive region
+  // for resolve failures. Hosted via the shared helper so they land in the light
+  // DOM when the widget renders inside a Shadow DOM (see live-region.ts).
+  const liveRegion = createLiveRegion("polite", ctx.liveRegionHost);
+  const errorRegion = createLiveRegion("assertive", ctx.liveRegionHost);
+  const announce = (message: string): void => liveRegion.announce(message);
+  const announceError = (message: string): void => errorRegion.announce(message);
+
   const manager = new ContextMentionManager({
     mentionConfig: ctx.mentionConfig,
     contextRow: ctx.contextRow,
     getMessages: ctx.getMessages,
     getConfig: ctx.getConfig,
     getComposerText: () => composerInput.getValue(),
-    announce: ctx.announce,
-    announceError: ctx.announceError,
+    announce,
+    announceError,
     emit: ctx.emit,
   });
 
@@ -130,7 +142,7 @@ export function mountContextMentions(
           composerInput.setMentionStatus?.(id, status)
         ),
       admitMention: (source, item) => manager.admit(source, item),
-      announce: ctx.announce,
+      announce,
       popoverContainer: ctx.popoverContainer,
       onPickerOpenChange: ctx.onPickerOpenChange,
       emit: ctx.emit,
@@ -163,6 +175,8 @@ export function mountContextMentions(
     destroy: () => {
       controller.destroy();
       manager.clear();
+      liveRegion.destroy();
+      errorRegion.destroy();
     },
   };
 }

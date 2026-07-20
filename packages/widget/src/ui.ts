@@ -40,7 +40,6 @@ import {
   type ContextMentionOrchestrator,
 } from "./utils/context-mention-orchestrator";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
-import { createLiveRegion, type LiveRegion } from "./utils/live-region";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
@@ -1025,10 +1024,6 @@ export const createAgentExperience = (
   // Context mentions orchestrator (core, tiny); lazy-loads the heavy runtime on
   // first use. Null when `contextMentions` is disabled / has no sources.
   let mentionOrchestrator: ContextMentionOrchestrator | null = null;
-  // Mention live regions (polite: add/remove/result-count; assertive: resolve
-  // failures). Torn down with the orchestrator. Hosted in the light DOM under
-  // useShadowDom (see createLiveRegion).
-  const mentionLiveRegions: LiveRegion[] = [];
 
   /** Wired after `handleMicButtonClick` is defined; used by `renderComposer` `onVoiceToggle`. */
   let composerVoiceBridge: (() => void) | null = null;
@@ -1360,14 +1355,6 @@ export const createAgentExperience = (
   // orchestrator returns null when disabled or sourceless.
   const mentionPrefetch = () => mentionOrchestrator?.prefetch();
   if (config.contextMentions?.enabled && textarea) {
-    // Polite live region for result-count + add/remove announcements; assertive
-    // region for resolve failures. Hosted via the shared helper so they land in
-    // the light DOM (with inline sr-only styles) when the widget renders inside a
-    // Shadow DOM, where a nested live region is inconsistently surfaced by AT.
-    const mentionLiveRegion = createLiveRegion("polite", container);
-    const mentionErrorRegion = createLiveRegion("assertive", container);
-    mentionLiveRegions.push(mentionLiveRegion, mentionErrorRegion);
-
     // Slash-command dispatch (prompt macros write text / submit; client actions
     // read/replace the value) and submission are owned by the composer input
     // surface itself — the mention runtime builds a textarea (chip) or
@@ -1378,8 +1365,9 @@ export const createAgentExperience = (
       textarea,
       anchor: composerForm ?? textarea,
       getMessages: () => session.getMessages(),
-      announce: (msg) => mentionLiveRegion.announce(msg),
-      announceError: (msg) => mentionErrorRegion.announce(msg),
+      // The engine chunk creates the mention live regions in this container on
+      // mount, keeping the live-region helper out of the core bundle.
+      liveRegionHost: container,
     });
 
     if (mentionOrchestrator) {
@@ -7668,8 +7656,6 @@ export const createAgentExperience = (
     detachComposerListeners(textarea);
     escStopDoc.removeEventListener("keydown", handleEscStop, true);
     mentionOrchestrator?.destroy();
-    for (const region of mentionLiveRegions) region.destroy();
-    mentionLiveRegions.length = 0;
   });
 
   destroyCallbacks.push(() => {

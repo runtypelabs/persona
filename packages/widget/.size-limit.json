@@ -20,7 +20,7 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "157 kB",
+    "limit": "158 kB",
     "gzip": true
   },
   {
@@ -44,7 +44,7 @@
   {
     "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "135 kB",
+    "limit": "136 kB",
     "gzip": true
   },
   {

@@ -76,9 +76,12 @@ export function createContextMentionOrchestrator(opts: {
   /** Popover anchor — the composer form/pill. */
   anchor: HTMLElement;
   getMessages: () => AgentWidgetMessage[];
-  announce: (message: string) => void;
-  /** Assertive announcer for resolve failures (falls back to `announce`). */
-  announceError?: (message: string) => void;
+  /**
+   * Widget container that will host the mention live regions. The regions are
+   * created inside the lazy engine chunk on mount — never here — so the
+   * live-region helper stays out of the core bundle.
+   */
+  liveRegionHost: HTMLElement | ShadowRoot;
   popoverContainer?: HTMLElement | ShadowRoot;
 }): ContextMentionOrchestrator | null {
   const mentionConfig = opts.config.contextMentions;
@@ -166,8 +169,7 @@ export function createContextMentionOrchestrator(opts: {
           contextRow,
           getMessages: opts.getMessages,
           getConfig: () => opts.config,
-          announce: opts.announce,
-          announceError: opts.announceError,
+          liveRegionHost: opts.liveRegionHost,
           popoverContainer: opts.popoverContainer,
           onPickerOpenChange,
           emit,
