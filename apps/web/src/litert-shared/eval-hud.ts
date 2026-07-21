@@ -3,7 +3,7 @@
 // stream and renders model-load, latency, throughput, and tool-call stats. Pure
 // DOM, no deps — styles live in litert-slides.css (`.lr-hud*`).
 
-import type { MetricEvent, ModelId } from "./litert-engine";
+import type { MetricEvent, ModelId, WeightsPhase } from "./litert-engine";
 import { MODELS } from "./litert-engine";
 
 const fmtMs = (ms: number): string =>
@@ -20,6 +20,7 @@ interface Stats {
   loadReceived: number;
   loadTotal: number;
   loading: boolean;
+  loadPhase: WeightsPhase;
   loadError: string | null;
   fromCache: boolean;
   warming: boolean;
@@ -48,6 +49,7 @@ export function createEvalHud(mount: HTMLElement): EvalHud {
     loadReceived: 0,
     loadTotal: 0,
     loading: false,
+    loadPhase: "download",
     loadError: null,
     fromCache: false,
     warming: false,
@@ -100,7 +102,7 @@ export function createEvalHud(mount: HTMLElement): EvalHud {
       const label = stats.modelId ? MODELS[stats.modelId].label : "model";
       modelEl.innerHTML = `
         <div class="lr-hud-loadrow">
-          <span>Loading ${escapeHtml(label)}…</span>
+          <span>${stats.loadPhase === "cache-read" ? "Reading cached weights" : "Downloading"} ${escapeHtml(label)}…</span>
           <span class="lr-hud-mono">${fmtBytes(stats.loadReceived)}${stats.loadTotal ? ` / ${fmtBytes(stats.loadTotal)}` : ""}</span>
         </div>
         <div class="lr-hud-bar"><div class="lr-hud-bar-fill" style="width:${pct}%"></div></div>`;
@@ -142,6 +144,7 @@ export function createEvalHud(mount: HTMLElement): EvalHud {
       case "load_start":
         stats.modelId = event.modelId;
         stats.loading = true;
+        stats.loadPhase = "download";
         stats.loadError = null;
         stats.loadReceived = 0;
         stats.loadTotal = 0;
@@ -149,6 +152,7 @@ export function createEvalHud(mount: HTMLElement): EvalHud {
       case "load_progress":
         stats.loadReceived = event.received;
         stats.loadTotal = event.total;
+        stats.loadPhase = event.phase;
         break;
       case "load_ready":
         stats.loading = false;

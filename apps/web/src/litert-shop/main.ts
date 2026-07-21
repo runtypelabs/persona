@@ -10,11 +10,11 @@
 // contextProvider (shop_context) — it never needs a read call to know state.
 //
 // The engine (fetch-patching, WebMCP tool loop, durable resume) is shared with
-// the litert-slides / litert-paint demos; see ../litert-slides/litert-engine.ts.
+// the other litert demos; see ../litert-shared/litert-engine.ts.
 import "@runtypelabs/persona/widget.css";
-// litert-slides.css supplies the shared eval-HUD styles (.lr-hud*); shop.css is
-// the light storefront shell.
-import "../litert-slides/litert-slides.css";
+// litert-chrome.css supplies the shared toolbar + eval-HUD styles (.lr-*);
+// shop.css is the light storefront shell.
+import "../litert-shared/litert-chrome.css";
 import "./shop.css";
 
 import {
@@ -27,13 +27,12 @@ import {
 // `document.modelContext`; it must be initialized before tools register.
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 
-import { createEvalHud } from "../litert-slides/eval-hud";
+import { createEvalHud } from "../litert-shared/eval-hud";
 import {
-  MODELS,
   type LiteRtPersonaEngine,
-  type ModelId,
   createLiteRtPersonaEngine,
-} from "../litert-slides/litert-engine";
+} from "../litert-shared/litert-engine";
+import { wireModelLoader } from "../litert-shared/model-loader";
 import {
   CATEGORY_LABEL,
   PRODUCTS,
@@ -119,63 +118,9 @@ const engine = createLiteRtPersonaEngine({
 });
 window.personaLiteRtEngine = engine;
 
-// ---- Model picker (E2B default, swap to E4B) ------------------------------
+// ---- Model picker (shared wiring; E2B default) -----------------------------
 
-const modelSelect = document.querySelector<HTMLSelectElement>("#lr-model-select");
-const loadButton = document.querySelector<HTMLButtonElement>("#lr-load-button");
-const statusEl = document.querySelector<HTMLElement>("#lr-status");
-const webgpuWarning = document.querySelector<HTMLElement>("#lr-webgpu-warning");
-
-const webgpuSupported = typeof navigator !== "undefined" && "gpu" in navigator;
-
-if (modelSelect) {
-  for (const id of Object.keys(MODELS) as ModelId[]) {
-    const info = MODELS[id];
-    const option = document.createElement("option");
-    option.value = id;
-    option.textContent = `${info.label} (${info.approxSize})`;
-    option.title = info.blurb;
-    modelSelect.appendChild(option);
-  }
-  modelSelect.value = "e2b";
-}
-
-const setStatus = (text: string): void => {
-  if (statusEl) statusEl.textContent = text;
-};
-
-async function loadSelectedModel(): Promise<void> {
-  if (!modelSelect || !loadButton) return;
-  const modelId = modelSelect.value as ModelId;
-  loadButton.disabled = true;
-  modelSelect.disabled = true;
-  // loadModel downloads the weights, then warms up the GPU with a throwaway
-  // generation so the first real prompt is fast — that warm-up can take a few
-  // minutes on first run. Set the expectation up front.
-  setStatus(
-    `Loading ${MODELS[modelId].label}… the first load downloads ${MODELS[modelId].approxSize} (cached for next time), then warms up the GPU — the first run can take a few minutes.`,
-  );
-  try {
-    await engine.loadModel(modelId);
-    setStatus(`${MODELS[modelId].label} ready — ask the shop copilot to filter.`);
-    loadButton.textContent = "Reload";
-  } catch (err) {
-    setStatus(`Load failed: ${err instanceof Error ? err.message : String(err)}`);
-  } finally {
-    loadButton.disabled = false;
-    modelSelect.disabled = false;
-  }
-}
-
-if (!webgpuSupported) {
-  webgpuWarning?.removeAttribute("hidden");
-  if (loadButton) loadButton.disabled = true;
-  if (modelSelect) modelSelect.disabled = true;
-  setStatus("WebGPU unavailable");
-} else {
-  loadButton?.addEventListener("click", () => void loadSelectedModel());
-  setStatus("Pick a model and press Load to start (runs fully on-device).");
-}
+wireModelLoader({ engine, readyHint: "ask the shop copilot to filter." });
 
 // ---- Storefront render -----------------------------------------------------
 
@@ -369,7 +314,7 @@ function mountWidget(): void {
       ...DEFAULT_WIDGET_CONFIG,
       // The engine answers this path from the in-browser model (no network).
       apiUrl: API_PATH,
-      // The fetch patch in ../litert-slides/litert-engine handles the fake
+      // The fetch patch in ../litert-shared/litert-engine handles the fake
       // dispatch/resume routes. This early dispatch guard is demo UX: fail fast
       // when the user chats before loading Gemma. (Same pattern as litert-paint.)
       customFetch: async (url, init) => {

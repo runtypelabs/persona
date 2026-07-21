@@ -1,6 +1,6 @@
 /* On-device Intake — a calm, trustworthy claim-form shell. White cards, one
    accent color, generous spacing. The docked Persona panel sits to the right;
-   the shared eval HUD (styles from ../litert-slides/litert-slides.css) stays as
+   the shared eval HUD (styles from ../litert-shared/litert-chrome.css) stays as
    its default dark chip in the corner. */
 
 :root {
