@@ -6,12 +6,12 @@
 // write tool. Fields light up as they land.
 //
 // This is the "small-model recipe" for extraction: a rambling narrative in, a
-// single structured set_fields call out. The engine (../litert-slides/litert-engine)
+// single structured set_fields call out. The engine (../litert-shared/litert-engine)
 // is reused verbatim — the only page-specific pieces are the form, the three
 // tools, the system prompt, and this wiring.
 import "@runtypelabs/persona/widget.css";
-// litert-slides.css supplies the shared eval-HUD styles (`.lr-hud…`).
-import "../litert-slides/litert-slides.css";
+// litert-chrome.css supplies the shared toolbar + eval-HUD styles (`.lr-*`).
+import "../litert-shared/litert-chrome.css";
 import "./intake.css";
 
 import {
@@ -25,13 +25,12 @@ import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 
 import { FIELD_CATALOG, IntakeForm, renderIntakeForm } from "./form";
 import { APPROVAL_REQUIRED_TOOL_NAMES, setupIntakeTools } from "./tools";
-import { createEvalHud } from "../litert-slides/eval-hud";
+import { createEvalHud } from "../litert-shared/eval-hud";
 import {
-  MODELS,
   type LiteRtPersonaEngine,
-  type ModelId,
   createLiteRtPersonaEngine,
-} from "../litert-slides/litert-engine";
+} from "../litert-shared/litert-engine";
+import { wireModelLoader } from "../litert-shared/model-loader";
 
 initializeWebMCPPolyfill();
 
@@ -112,64 +111,17 @@ window.personaLiteRtEngine = engine;
 
 // ---- Model picker (same ids/pattern as litert-paint) -----------------------
 
-const modelSelect = document.querySelector<HTMLSelectElement>("#lr-model-select");
-const loadButton = document.querySelector<HTMLButtonElement>("#lr-load-button");
-const statusEl = document.querySelector<HTMLElement>("#lr-status");
-const webgpuWarning = document.querySelector<HTMLElement>("#lr-webgpu-warning");
-
-const webgpuSupported = typeof navigator !== "undefined" && "gpu" in navigator;
-
-if (modelSelect) {
-  for (const id of Object.keys(MODELS) as ModelId[]) {
-    const info = MODELS[id];
-    const option = document.createElement("option");
-    option.value = id;
-    option.textContent = `${info.label} (${info.approxSize})`;
-    option.title = info.blurb;
-    modelSelect.appendChild(option);
-  }
-  // E4B is the default HERE (unlike the other litert demos): extraction quality
-  // is the demo. Live-tested — E2B misses ~half the facts in a long narrative
-  // and will NOT emit sentence-length strings in tool args (the `description`
-  // field failed 5/5 on E2B), while E4B filled 9/10 required fields in one pass
-  // and resolved "last Tuesday" correctly. E2B stays in the picker for
-  // comparison; the conversational repair loop still converges on it.
-  modelSelect.value = "e4b";
-}
-
-const setStatus = (text: string): void => {
-  if (statusEl) statusEl.textContent = text;
-};
-
-async function loadSelectedModel(): Promise<void> {
-  if (!modelSelect || !loadButton) return;
-  const modelId = modelSelect.value as ModelId;
-  loadButton.disabled = true;
-  modelSelect.disabled = true;
-  setStatus(
-    `Loading ${MODELS[modelId].label}… the first load downloads ${MODELS[modelId].approxSize} (cached for next time), then warms up the GPU — the first run can take a few minutes.`,
-  );
-  try {
-    await engine.loadModel(modelId);
-    setStatus(`${MODELS[modelId].label} ready (warmed up) — tell me what happened.`);
-    loadButton.textContent = "Reload";
-  } catch (err) {
-    setStatus(`Load failed: ${err instanceof Error ? err.message : String(err)}`);
-  } finally {
-    loadButton.disabled = false;
-    modelSelect.disabled = false;
-  }
-}
-
-if (!webgpuSupported) {
-  webgpuWarning?.removeAttribute("hidden");
-  if (loadButton) loadButton.disabled = true;
-  if (modelSelect) modelSelect.disabled = true;
-  setStatus("WebGPU unavailable");
-} else {
-  loadButton?.addEventListener("click", () => void loadSelectedModel());
-  setStatus("Pick a model and press Load to start (runs fully on-device).");
-}
+// E4B is the default HERE (unlike the other litert demos): extraction quality
+// is the demo. Live-tested — E2B misses ~half the facts in a long narrative
+// and will NOT emit sentence-length strings in tool args (the `description`
+// field failed 5/5 on E2B), while E4B filled 9/10 required fields in one pass
+// and resolved "last Tuesday" correctly. E2B stays in the picker for
+// comparison; the conversational repair loop still converges on it.
+wireModelLoader({
+  engine,
+  readyHint: "tell me what happened.",
+  defaultModel: "e4b",
+});
 
 // ---- Persona widget --------------------------------------------------------
 

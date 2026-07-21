@@ -2,11 +2,11 @@
 // but the assistant is Gemma 4 running in the browser via LiteRT-LM (WebGPU) —
 // no proxy, no hosted runtime, no API key. The editor (store, canvas, sorter,
 // presenter, themes, WebMCP tools) is reused verbatim from ../webmcp-slides; the
-// only difference is the engine behind Persona. See ./litert-engine.ts for how
+// only difference is the engine behind Persona. See ../litert-shared/ for how
 // the in-browser model speaks Persona's SSE wire + the WebMCP tool loop.
 import "@runtypelabs/persona/widget.css";
 import "../webmcp-slides/slides.css";
-import "./litert-slides.css";
+import "../litert-shared/litert-chrome.css";
 
 import {
   DEFAULT_WIDGET_CONFIG,
@@ -22,13 +22,12 @@ import { createSorter } from "../webmcp-slides/sorter";
 import { createPresenter } from "../webmcp-slides/presenter";
 import { APPROVAL_REQUIRED_TOOL_NAMES, setupSlidesTools } from "../webmcp-slides/tools";
 
-import { createEvalHud } from "./eval-hud";
+import { createEvalHud } from "../litert-shared/eval-hud";
 import {
-  MODELS,
   type LiteRtPersonaEngine,
-  type ModelId,
   createLiteRtPersonaEngine,
-} from "./litert-engine";
+} from "../litert-shared/litert-engine";
+import { wireModelLoader } from "../litert-shared/model-loader";
 
 initializeWebMCPPolyfill();
 
@@ -136,63 +135,9 @@ const engine = createLiteRtPersonaEngine({
 });
 window.personaLiteRtEngine = engine;
 
-// ---- Model picker (E2B default, swap to E4B) ------------------------------
+// ---- Model picker (shared wiring; E2B default) -----------------------------
 
-const modelSelect = document.querySelector<HTMLSelectElement>("#lr-model-select");
-const loadButton = document.querySelector<HTMLButtonElement>("#lr-load-button");
-const statusEl = document.querySelector<HTMLElement>("#lr-status");
-const webgpuWarning = document.querySelector<HTMLElement>("#lr-webgpu-warning");
-
-const webgpuSupported = typeof navigator !== "undefined" && "gpu" in navigator;
-
-if (modelSelect) {
-  for (const id of Object.keys(MODELS) as ModelId[]) {
-    const info = MODELS[id];
-    const option = document.createElement("option");
-    option.value = id;
-    option.textContent = `${info.label} (${info.approxSize})`;
-    option.title = info.blurb;
-    modelSelect.appendChild(option);
-  }
-  modelSelect.value = "e2b";
-}
-
-const setStatus = (text: string): void => {
-  if (statusEl) statusEl.textContent = text;
-};
-
-async function loadSelectedModel(): Promise<void> {
-  if (!modelSelect || !loadButton) return;
-  const modelId = modelSelect.value as ModelId;
-  loadButton.disabled = true;
-  modelSelect.disabled = true;
-  // loadModel downloads the weights, then warms up the GPU with a throwaway
-  // generation so the first real prompt is fast — that warm-up can take a few
-  // minutes on first run. Set the expectation up front.
-  setStatus(
-    `Loading ${MODELS[modelId].label}… the first load downloads ${MODELS[modelId].approxSize} (cached for next time), then warms up the GPU — the first run can take a few minutes.`,
-  );
-  try {
-    await engine.loadModel(modelId);
-    setStatus(`${MODELS[modelId].label} ready (warmed up) — ask the Copilot to build slides.`);
-    loadButton.textContent = "Reload";
-  } catch (err) {
-    setStatus(`Load failed: ${err instanceof Error ? err.message : String(err)}`);
-  } finally {
-    loadButton.disabled = false;
-    modelSelect.disabled = false;
-  }
-}
-
-if (!webgpuSupported) {
-  webgpuWarning?.removeAttribute("hidden");
-  if (loadButton) loadButton.disabled = true;
-  if (modelSelect) modelSelect.disabled = true;
-  setStatus("WebGPU unavailable");
-} else {
-  loadButton?.addEventListener("click", () => void loadSelectedModel());
-  setStatus("Pick a model and press Load to start (runs fully on-device).");
-}
+wireModelLoader({ engine, readyHint: "ask the Copilot to build slides." });
 
 // ---- Persona widget --------------------------------------------------------
 

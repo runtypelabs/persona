@@ -1,6 +1,6 @@
 /* On-device chrome for the Paint Pal shell: the model picker joins the navy
    title bar as Win98 controls, and the shared eval HUD (styles from
-   ../litert-slides/litert-slides.css) is squared off to match the desktop. */
+   ../litert-shared/litert-chrome.css) is squared off to match the desktop. */
 
 .lp-model-controls {
   display: flex;
